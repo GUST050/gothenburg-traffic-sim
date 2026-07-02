@@ -9,7 +9,8 @@ Göteborgs Stad. Summer project at Chalmers (supervisor: Prof. Miroslaw Staron).
 
 1. **Animate** historical traffic on a real map of Gothenburg (done)
 2. **Forecast** normal flow with an ML model, exported as a 2027 forecast (done)
-3. **Simulate** traffic after incidents / road closures with SUMO (next — the real goal)
+3. **Simulate** traffic after incidents / road closures with SUMO (working slice —
+   calibrated demand, closure rerouting, Monte Carlo confidence, scenario mode in the web app)
 
 ![Web app](plots/daily_profile.png)
 
@@ -56,9 +57,27 @@ make all
 make serve
 ```
 
-Web app controls: play/scrub 2025 traffic, toggle to the 2027 forecast,
-space = play/pause, ←/→ = ±15 min, Shift+←/→ = ±1 day. Hover any road for
-counts and simulation confidence.
+Web app controls: play/scrub 2025 traffic, toggle to the 2027 forecast or a
+SUMO scenario, space = play/pause, ←/→ = ±15 min, Shift+←/→ = ±1 day. Hover
+any road for counts and simulation confidence.
+
+## Incident simulation (SUMO)
+
+```bash
+make sumo-net    # graph.graphml → SUMO network (edge IDs identical to the map)
+make demand      # calibrate demand against the 6 sensors (routeSampler, GEH<5 at all edges)
+make scenario    # baseline + a Skånegatan closure, 3 Monte Carlo seeds each
+# custom closure:
+python3 run_scenario.py --close <edgeId>
+```
+
+Scenarios appear under the **Scenario** toggle in the web app: every simulated
+street is coloured by flow, the closed edge is drawn black-dashed, and each
+edge's confidence combines the distance-to-sensor prior with the spread across
+Monte Carlo seeds. "Total" sensor counts are split 50/50 per direction
+(direction is not recoverable from the delivered data), and only
+sensor-crossing traffic is calibrated — the confidence value says exactly
+where the simulation can and cannot be trusted.
 
 ## Forecast model ("Agent 1")
 
@@ -81,6 +100,9 @@ build_features.py      flow matrix, adjacency, normal profile, train/val/test sp
 build_dataset.py       windowed datasets for a future GNN
 train_agent1.py        LightGBM baseline + holiday factors
 build_agent1_flows.py  2027 forecast → flows_forecast.json
+build_sumo_net.py      graph.graphml → SUMO network (same edge IDs as the map)
+build_sumo_demand.py   sensor counts → calibrated SUMO routes (routeSampler)
+run_scenario.py        baseline/closure runs → web/data/scenarios/*.json
 explore.py             one-off EDA, writes plots/
 tests/                 contract + pipeline tests (python3 -m pytest tests/)
 web/                   static Leaflet app (index.html, provider/state/render/clock/controls)

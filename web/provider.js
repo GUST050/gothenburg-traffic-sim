@@ -22,6 +22,13 @@ class HistoricalProvider {
     this.intervalMinutes = payload.interval_minutes;
     this._flows = payload.flows;
 
+    // Scenario files (from run_scenario.py) carry extra fields; plain
+    // historical/forecast files leave these null.
+    this.isScenario = !!payload.scenario;
+    this.closedEdge = payload.scenario?.closed_edge ?? null;
+    this.label      = payload.scenario?.label ?? null;
+    this.confidence = payload.confidence ?? null;   // per-edge, per-scenario
+
     for (const [edgeId, arr] of Object.entries(this._flows)) {
       const nums = arr.filter(v => v !== null);
       this._maxByEdge[edgeId] = nums.length
@@ -41,6 +48,12 @@ class HistoricalProvider {
 
   maxFlow(edgeId) {
     return this._maxByEdge[edgeId] ?? null;
+  }
+
+  // True if this provider carries data for the edge. Scenario providers have
+  // data for most background edges too — the renderer colours those as well.
+  hasEdge(edgeId) {
+    return Object.prototype.hasOwnProperty.call(this._flows, edgeId);
   }
 
   dateFromQI(qi) {

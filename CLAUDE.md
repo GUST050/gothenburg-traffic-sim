@@ -49,7 +49,13 @@ Goal arc, in order:
 1. DONE — Data foundation: build_data.py → network.geojson + flows.json.
 2. DONE — Animation: Leaflet + provider/state/render/clock/controls, play + scrub over 2025.
 3. DONE — Forecast model ("Agent 1"): LightGBM baseline + Holiday Baseline Adjustment, exported as flows_forecast.json (Prognos 2027 toggle in the web app). GNN deferred.
-4. NEXT — Incident simulation: SUMO on the same OSM graph; calibrate demand against the 6 sensors; ScenarioProvider closes an edge. Present per-edge results weighted by the `confidence` property. Optional ML surrogate for real-time scenario play.
+4. IN PROGRESS — Incident simulation (SUMO). Working vertical slice DONE (2026-07-02):
+   - `build_sumo_net.py`: graph.graphml → plain XML → netconvert → sumo/net.net.xml. SUMO edge IDs are IDENTICAL to our edge IDs (u_v_k) — never break this.
+   - `build_sumo_demand.py`: 15-min sensor counts → randomTrips candidate pool → routeSampler calibration. Fit: 100% GEH<5 at all 11 edges, all intervals. Total sensors are split 50/50 per direction (max-entropy; direction unrecoverable). Only sensor-crossing traffic is calibrated — streets far from sensors carry little traffic, which the confidence value communicates honestly.
+   - `run_scenario.py [--close edgeId]`: Monte Carlo (3 seeds), per-edge 15-min flows + confidence = spatial_prior × exp(-CV) → web/data/scenarios/*.json + index.json manifest. Uses --ignore-route-errors (vehicles destined for the closed edge are dropped).
+   - Web: "Scenario" toggle + dropdown; scenario colours ALL simulated edges (dots stay on sensor edges for perf); closed edge drawn black-dashed; URL params ?mode=scenario&file=&qi=.
+   - Simulation uses the FULL graphml graph (~2 250 edges) so rerouting has real alternatives; the web app displays the subset in network.geojson.
+   REMAINING: leave-one-out validation at the 6 sensors (empirical confidence decay); whole-day windows; more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
 
 ## Rules — do / never
 - DO route all flow access through `flowAt(edgeId, t)`. NEVER fetch data inside render code.
@@ -65,6 +71,7 @@ Goal arc, in order:
 
 ## Files
 - Pipeline (run in order): `build_data.py` → `build_features.py` → [`build_dataset.py` for future GNN] → `train_agent1.py` → `build_agent1_flows.py`. Or just `make all` (Makefile has the raw-data paths; `make serve` starts the web app).
+- SUMO (Phase 3): `make sumo-net` → `make demand` → `make scenario` (or `python3 run_scenario.py --close <edgeId>`). Requires `pip install eclipse-sumo`. Intermediates in `sumo/` (gitignored); web products in `web/data/scenarios/` (tracked).
 - `web/data/graph.graphml` — exact OSM graph snapshot (same node/edge IDs as network.geojson). Phase 3 SUMO/demand work MUST start from this graph, never a fresh OSM download.
 - `explore.py` — one-off data exploration/plots. `tests/` — contract + pipeline tests (`python3 -m pytest tests/`).
 - Generated in `web/data/`: network.geojson, flows.json, flows_forecast.json, normal_profile.json, features/, agent1/.

@@ -57,7 +57,19 @@ const Render = (() => {
   function applyFlowStyle(e, edgeId, count, qi) {
     e.count = count;
 
+    // Closed edge in a scenario — draw as blocked, no cars
+    if (_provider.closedEdge === edgeId) {
+      e.line.setStyle({ color: '#0f172a', weight: 5, opacity: 0.85, dashArray: '4 7' });
+      e.t = null; e.activeCars = 0;
+      return;
+    }
+
     if (count === null) {
+      if (!e.isSensor) {   // background edge without data — keep base look
+        e.line.setStyle(e.baseStyle);
+        e.t = null; e.activeCars = 0;
+        return;
+      }
       e.line.setStyle({ color: '#64748b', weight: 2, opacity: 0.65, dashArray: '5 8' });
       e.t = null; e.activeCars = 0;
       return;
@@ -85,7 +97,14 @@ const Render = (() => {
       t = Math.min(count / (_provider.maxFlow(edgeId) || 1), 1);
     }
     e.t = t;
-    e.line.setStyle({ color: rampColor(t), weight: 4, opacity: 0.85, dashArray: '' });
+    e.line.setStyle({
+      color: rampColor(t),
+      weight: e.isSensor ? 4 : 3,
+      opacity: 0.85, dashArray: '',
+    });
+
+    // Colour-only edges (scenario background streets) have no dot pool
+    if (!e.dots.length) { e.activeCars = 0; return; }
 
     // Cars visible on the edge = flow rate × traversal time
     // Physical formula: N = (count/900 cars/sec) × (lengthM/13.9 sec)
@@ -95,8 +114,17 @@ const Render = (() => {
 
   function updateEdge(edgeId, qi) {
     const e = _edges[edgeId];
-    if (!e || !e.isSensor) return;
-    applyFlowStyle(e, edgeId, _provider.flowAt(edgeId, qi), qi);
+    if (!e) return;
+    if (e.isSensor || _provider.hasEdge(edgeId)) {
+      e.hadData = true;
+      applyFlowStyle(e, edgeId, _provider.flowAt(edgeId, qi), qi);
+    } else if (e.hadData) {
+      // Provider switched away from a scenario — restore the base look once
+      e.hadData = false;
+      e._styleKey = undefined;
+      e.line.setStyle(e.baseStyle);
+      e.t = null; e.activeCars = 0;
+    }
   }
 
   function redraw(qi) {
@@ -123,7 +151,7 @@ const Render = (() => {
     const frac = qiF - qi0;
 
     for (const [id, e] of Object.entries(_edges)) {
-      if (!e.isSensor) continue;
+      if (!e.isSensor && !_provider.hasEdge(id)) continue;
 
       const c0 = _provider.flowAt(id, qi0);
       const c1 = _provider.flowAt(id, qi0 + 1);
@@ -131,8 +159,10 @@ const Render = (() => {
       const styleKey = blended === null ? 'null' : Math.round(blended * 4);
       if (e._styleKey !== styleKey) {
         e._styleKey = styleKey;
+        e.hadData = true;
         applyFlowStyle(e, id, blended, qi0);
       }
+      if (!e.dots.length) continue;   // colour-only edge — no dots to move
 
       const n = e.activeCars ?? 0;
 
@@ -196,11 +226,11 @@ const Render = (() => {
         // Background network is drawn in dark slate so it reads on the light
         // basemap, and faded by confidence — the network dims with distance
         // from the sensors.
-        const bgOpacity = 0.25 + 0.55 * (confidence ?? 0.5);
-        const line = L.polyline(latlngs, isSensor
-          ? { color: '#64748b', weight: 3, opacity: 0.4 }
-          : { color: '#526078', weight: 2, opacity: bgOpacity }
-        ).addTo(isSensor ? fg : bg);
+        const bgOpacity  = 0.25 + 0.55 * (confidence ?? 0.5);
+        const baseStyle  = isSensor
+          ? { color: '#64748b', weight: 3, opacity: 0.4,       dashArray: '' }
+          : { color: '#526078', weight: 2, opacity: bgOpacity, dashArray: '' };
+        const line = L.polyline(latlngs, baseStyle).addTo(isSensor ? fg : bg);
 
         // Confidence = proximity to the nearest sensor (0–1, computed offline).
         // Shown as % so users see how trustworthy a simulation is on this edge.
@@ -211,11 +241,25 @@ const Render = (() => {
           return `<br><span style="color:${col}">Simuleringskonfidens: ${pct} %</span>`;
         };
 
+        // Per-scenario confidence (from the provider) beats the static prior
+        const edgeConf = () =>
+          (_provider.confidence && _provider.confidence[id] != null)
+            ? _provider.confidence[id] : confidence;
+
         if (!isSensor) {
-          line.bindTooltip(
-            () => `<b>${name ?? 'Okänd väg'}</b>${confHtml(confidence)}`,
-            { sticky: true }
-          );
+          line.bindTooltip(() => {
+            const qi = typeof State !== 'undefined' ? State.qi : 0;
+            let html = `<b>${name ?? 'Okänd väg'}</b>`;
+            if (_provider.hasEdge(id)) {
+              const cnt = _provider.flowAt(id, qi);
+              if (_provider.closedEdge === id) {
+                html += `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
+              } else if (cnt !== null) {
+                html += `<br><b style="font-size:1.15em">${cnt}</b> fordon / 15 min <small>(simulerat)</small>`;
+              }
+            }
+            return html + confHtml(edgeConf());
+          }, { sticky: true });
         }
 
         const dots = [];
@@ -252,14 +296,19 @@ const Render = (() => {
             }
             if (level === 'Total') html += '<br><small>Summa båda riktningar</small>';
             if (level === 'S')     html += '<br><small>Singeldetektor</small>';
-            html += confHtml(confidence);
+            if (_provider.closedEdge === id) {
+              html += `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
+            } else if (_provider.isScenario) {
+              html += '<br><small>Simulerat (SUMO)</small>';
+            }
+            html += confHtml(edgeConf());
             return html;
           }, { sticky: true });
         }
 
         _edges[id] = {
-          line, isSensor, latlngs, lengthM,
-          t: 0, count: 0, activeCars: 0,
+          line, isSensor, latlngs, lengthM, baseStyle,
+          t: 0, count: 0, activeCars: 0, hadData: false,
           dots, phase: Math.random(), // random starting phase per edge
         };
       }
@@ -277,6 +326,9 @@ const Render = (() => {
 
     setProvider(p) {
       _provider = p;
+      // Invalidate the per-frame style cache so every edge restyles (or
+      // resets to base look) under the new provider
+      for (const e of Object.values(_edges)) e._styleKey = undefined;
       redraw(typeof State !== 'undefined' ? State.qi : 0);
     },
 

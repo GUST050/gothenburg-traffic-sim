@@ -7,9 +7,23 @@
 DATA_DIR ?= $(HOME)/Downloads/Data till Chalmers_20260618
 COORDS   ?= $(HOME)/Downloads/Mätpunkter_koordinater.csv
 
-.PHONY: all data features agent1 forecast test serve
+.PHONY: all data features agent1 forecast test serve sumo-net demand scenario
 
 all: data features agent1 forecast test
+
+# ── Phase 3: SUMO ──────────────────────────────────────────────────────────
+# make sumo-net && make demand && make scenario
+# Custom closure: python3 run_scenario.py --close <edgeId>
+
+sumo-net:
+	python3 build_sumo_net.py
+
+demand:
+	python3 build_sumo_demand.py
+
+scenario:
+	python3 run_scenario.py
+	python3 run_scenario.py --close 60786979_3575001205_0
 
 data:
 	python3 build_data.py --data_dir "$(DATA_DIR)" --coords "$(COORDS)"

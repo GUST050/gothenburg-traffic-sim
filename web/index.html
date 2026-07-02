@@ -86,6 +86,13 @@
 
     .label { font-size: 0.68rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 
+    #scen-select {
+      background: rgba(15, 23, 42, 0.8); color: var(--ink);
+      border: 1px solid var(--panel-line); border-radius: 9px;
+      padding: 6px 10px; font-size: 0.76rem; cursor: pointer;
+      max-width: 260px;
+    }
+
     #sliders { display: flex; gap: 28px; }
     .slider-group { flex: 1; }
     .slider-head {
@@ -241,7 +248,9 @@
       <div class="seg" id="mode-toggle">
         <button id="btn-hist" class="active">2025 Historisk</button>
         <button id="btn-fore">Prognos 2027</button>
+        <button id="btn-scen">Scenario</button>
       </div>
+      <select id="scen-select" style="display:none"></select>
     </div>
     <div id="sliders">
       <div class="slider-group">
@@ -265,11 +274,11 @@
   <!-- ?v= forces the browser to fetch fresh JS when the HTML updates —
        bump the number whenever the JS files change, or stale cached JS
        can run against new HTML and crash on missing elements -->
-  <script src="state.js?v=4"></script>
-  <script src="provider.js?v=4"></script>
-  <script src="render.js?v=4"></script>
-  <script src="controls.js?v=4"></script>
-  <script src="clock.js?v=4"></script>
+  <script src="state.js?v=5"></script>
+  <script src="provider.js?v=5"></script>
+  <script src="render.js?v=5"></script>
+  <script src="controls.js?v=5"></script>
+  <script src="clock.js?v=5"></script>
   <script>
     (async () => {
       try {
@@ -289,16 +298,24 @@
 
         // ── Mode toggle ───────────────────────────────────────────────────────
         let foreProvider = null;
-        const btnHist = document.getElementById('btn-hist');
-        const btnFore = document.getElementById('btn-fore');
+        let scenIndex    = null;
+        const scenProviders = {};
+        const btnHist    = document.getElementById('btn-hist');
+        const btnFore    = document.getElementById('btn-fore');
+        const btnScen    = document.getElementById('btn-scen');
+        const scenSelect = document.getElementById('scen-select');
 
-        btnHist.addEventListener('click', () => {
-          btnHist.classList.add('active');
-          btnFore.classList.remove('active');
-          Render.setProvider(histProvider);
-          Controls.setProvider(histProvider);
+        function setMode(activeBtn, provider) {
+          for (const b of [btnHist, btnFore, btnScen]) {
+            b.classList.toggle('active', b === activeBtn);
+          }
+          scenSelect.style.display = activeBtn === btnScen ? '' : 'none';
+          Render.setProvider(provider);
+          Controls.setProvider(provider);
           State.setQI(State.qi);   // force date display refresh
-        });
+        }
+
+        btnHist.addEventListener('click', () => setMode(btnHist, histProvider));
 
         btnFore.addEventListener('click', async () => {
           // Lazy-load forecast on first click
@@ -308,20 +325,54 @@
             try {
               foreProvider = await new HistoricalProvider().load('data/flows_forecast.json');
             } catch (e) {
-              btnFore.textContent = 'Prognos 2027';
-              btnFore.disabled = false;
               console.error('Could not load flows_forecast.json — run build_agent1_flows.py', e);
               return;
+            } finally {
+              btnFore.textContent = 'Prognos 2027';
+              btnFore.disabled = false;
             }
-            btnFore.textContent = 'Prognos 2027';
-            btnFore.disabled = false;
           }
-          btnFore.classList.add('active');
-          btnHist.classList.remove('active');
-          Render.setProvider(foreProvider);
-          Controls.setProvider(foreProvider);
-          State.setQI(State.qi);   // force date display refresh to show 2027
+          setMode(btnFore, foreProvider);
         });
+
+        // ── Scenario mode (SUMO output — run run_scenario.py) ─────────────────
+        // Shareable URLs: ?mode=scenario&file=<name>.json&qi=6, ?mode=forecast
+        const params = new URLSearchParams(location.search);
+
+        async function activateScenario(file) {
+          if (!scenProviders[file]) {
+            scenProviders[file] =
+              await new HistoricalProvider().load('data/scenarios/' + file);
+          }
+          setMode(btnScen, scenProviders[file]);
+          // Scenario files start at their own epoch (window start)
+          State.setQI(params.get('qi') ? Number(params.get('qi')) : 0);
+        }
+
+        btnScen.addEventListener('click', async () => {
+          try {
+            if (!scenIndex) {
+              const res = await fetch('data/scenarios/index.json');
+              if (!res.ok) throw new Error(`${res.status}`);
+              scenIndex = await res.json();
+              scenSelect.innerHTML = scenIndex.scenarios.map(s =>
+                `<option value="${s.file}">${s.label} · ${s.window}</option>`
+              ).join('');
+              const wanted = params.get('file');
+              if (wanted && [...scenSelect.options].some(o => o.value === wanted)) {
+                scenSelect.value = wanted;
+              }
+            }
+            await activateScenario(scenSelect.value);
+          } catch (e) {
+            console.error('Inga scenarier — kör run_scenario.py först', e);
+          }
+        });
+
+        scenSelect.addEventListener('change', e => activateScenario(e.target.value));
+
+        if (params.get('mode') === 'scenario') btnScen.click();
+        else if (params.get('mode') === 'forecast') btnFore.click();
 
       } catch (err) {
         document.body.innerHTML =
