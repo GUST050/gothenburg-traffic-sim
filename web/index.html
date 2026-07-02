@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <title>Göteborg Trafikflöde</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      --panel:      rgba(11, 14, 26, 0.88);
+      --panel-line: rgba(148, 163, 184, 0.14);
+      --ink:        #e8edf5;
+      --ink-2:      #94a3b8;
+      --ink-3:      #5b6b82;
+      --accent:     #3b82f6;
+      --accent-2:   #60a5fa;
+      --track:      #1c2740;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #0b0e1a;
+    }
+
+    #map { position: absolute; inset: 0 0 116px 0; background: #f2f2f0; }
+
+    /* ── Title chip ─────────────────────────────────────────────────────── */
+    #brand {
+      position: absolute; top: 14px; left: 56px; z-index: 1000;
+      background: var(--panel); backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-line); border-radius: 12px;
+      padding: 10px 16px; pointer-events: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+    }
+    #brand h1 { font-size: 0.95rem; font-weight: 700; color: var(--ink); letter-spacing: 0.01em; }
+    #brand p  { font-size: 0.68rem; color: var(--ink-3); margin-top: 2px; }
+
+    /* ── Control panel ──────────────────────────────────────────────────── */
+    #controls {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 116px;
+      background: linear-gradient(to top, #0a0d18 30%, var(--panel));
+      backdrop-filter: blur(14px);
+      color: var(--ink);
+      display: flex; flex-direction: column; justify-content: center;
+      gap: 12px; padding: 12px 26px;
+      border-top: 1px solid var(--panel-line);
+    }
+
+    #top-row { display: flex; align-items: center; gap: 18px; }
+
+    #play-btn {
+      background: linear-gradient(135deg, #2563eb, var(--accent));
+      border: none; color: #fff;
+      font-size: 1.05rem; width: 44px; height: 44px; border-radius: 50%;
+      cursor: pointer; flex-shrink: 0;
+      box-shadow: 0 4px 18px rgba(59,130,246,0.4);
+      transition: transform 0.12s, box-shadow 0.12s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #play-btn:hover  { transform: scale(1.07); box-shadow: 0 6px 22px rgba(59,130,246,0.55); }
+    #play-btn:active { transform: scale(0.97); }
+
+    #time-display { display: flex; flex-direction: column; min-width: 200px; gap: 1px; }
+    #td-clock {
+      font-size: 1.45rem; font-weight: 700; color: var(--ink);
+      font-variant-numeric: tabular-nums; letter-spacing: 0.01em; line-height: 1.1;
+    }
+    #td-date { font-size: 0.75rem; color: var(--ink-2); font-weight: 500; }
+
+    .seg {
+      display: flex; gap: 2px;
+      background: rgba(15, 23, 42, 0.8); border: 1px solid var(--panel-line);
+      border-radius: 9px; padding: 3px;
+    }
+    .seg button {
+      background: transparent; border: none; color: var(--ink-3);
+      font-size: 0.76rem; font-weight: 600; padding: 5px 11px; border-radius: 6px;
+      cursor: pointer; transition: background 0.15s, color 0.15s; white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .seg button.active { background: var(--accent); color: #fff; }
+    .seg button:not(.active):hover { color: var(--ink-2); }
+    #mode-toggle { margin-left: auto; }
+    #mode-toggle button.active { background: #1e40af; }
+
+    .label { font-size: 0.68rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+
+    #sliders { display: flex; gap: 28px; }
+    .slider-group { flex: 1; }
+    .slider-head {
+      display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
+    }
+    .slider-head .hint { font-size: 0.66rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 5px; border-radius: 3px; cursor: pointer;
+      background: var(--track); outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 15px; height: 15px; border-radius: 50%;
+      background: #fff; border: 3px solid var(--accent);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      transition: transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+    input[type=range]::-moz-range-thumb {
+      width: 15px; height: 15px; border-radius: 50%;
+      background: #fff; border: 3px solid var(--accent);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+
+    /* ── Legend ─────────────────────────────────────────────────────────── */
+    #legend {
+      position: absolute; top: 14px; right: 14px; z-index: 1000;
+      background: var(--panel); backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-line);
+      border-radius: 12px; padding: 14px 16px;
+      color: #cbd5e1; font-size: 0.74rem;
+      pointer-events: none; width: 205px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+    }
+    #legend-title {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--ink);
+    }
+    .legend-sub { font-size: 0.64rem; color: var(--ink-3); margin: 2px 0 10px; }
+    .legend-bar {
+      position: relative; height: 8px; border-radius: 4px;
+      background: linear-gradient(to right,
+        #1f9d55 0%, #d97706 50%, #dc2626 100%);
+    }
+    .legend-bar-tick {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      top: -3px; bottom: -3px; width: 2px;
+      background: rgba(255,255,255,0.75); border-radius: 1px;
+    }
+    .legend-bar-labels {
+      display: flex; justify-content: space-between;
+      font-size: 0.62rem; color: var(--ink-3); margin-top: 5px; line-height: 1.35;
+    }
+    .legend-bar-labels span:nth-child(2) { text-align: center; color: var(--ink-2); }
+    .legend-bar-labels span:nth-child(3) { text-align: right; }
+    .legend-divider { border-top: 1px solid rgba(255,255,255,0.07); margin: 10px 0; }
+    .legend-row {
+      display: flex; align-items: center;
+      gap: 10px; line-height: 2.0; font-size: 0.72rem; color: var(--ink-2);
+    }
+    .legend-swatch { width: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; }
+    .legend-dot  { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid #fff; }
+    .legend-line { width: 26px; height: 3px; border-radius: 2px; }
+    .legend-dashed { width: 26px; border-top: 2px dashed #8b98ad; }
+    .legend-note { font-size: 0.66rem; color: var(--ink-3); line-height: 1.5; }
+    .legend-note b { color: var(--ink-2); }
+
+    /* ── Tooltip (light, matches the basemap) ───────────────────────────── */
+    .leaflet-tooltip {
+      background: rgba(255, 255, 255, 0.97) !important;
+      border: 1px solid #e5e7eb !important;
+      color: #111827 !important;
+      border-radius: 10px !important;
+      font-size: 0.82rem !important;
+      line-height: 1.7 !important;
+      padding: 9px 13px !important;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.18) !important;
+    }
+    .leaflet-tooltip::before { display: none; }
+
+    .leaflet-control-zoom a {
+      background: var(--panel) !important; color: var(--ink-2) !important;
+      border-color: var(--panel-line) !important;
+    }
+    .leaflet-control-attribution { background: rgba(11,14,26,0.7) !important; color: var(--ink-3) !important; }
+    .leaflet-control-attribution a { color: var(--ink-2) !important; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div id="brand">
+    <h1>Göteborgs trafikflöde</h1>
+    <p>Korsvägen · Götaplatsen — 6 sensorer · 15-min data</p>
+  </div>
+
+  <div id="legend">
+    <div id="legend-title">Trafikflöde</div>
+    <div class="legend-sub">jämfört med lugnt septembersnitt (ej rusning)</div>
+
+    <div class="legend-bar"><div class="legend-bar-tick"></div></div>
+    <div class="legend-bar-labels">
+      <span>Under<br>normalt</span>
+      <span>Normalt</span>
+      <span>Dubbelt<br>normalt+</span>
+    </div>
+
+    <div class="legend-divider"></div>
+
+    <div class="legend-row">
+      <div class="legend-swatch">
+        <div class="legend-dot" style="background:#dc2626"></div>
+        <div class="legend-dot" style="background:#dc2626"></div>
+        <div class="legend-dot" style="background:#dc2626"></div>
+      </div>
+      <span>Fler prickar · snabbare = mer trafik</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-swatch"><div class="legend-line" style="background:#94a3b8"></div></div>
+      <span>Noll fordon</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-swatch"><div class="legend-dashed"></div></div>
+      <span>Data saknas</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-swatch"><div class="legend-line" style="background:#526078;opacity:0.7;height:2px"></div></div>
+      <span>Övriga vägar i nätverket</span>
+    </div>
+
+    <div class="legend-divider"></div>
+    <div class="legend-note">
+      Hovra en väg → <b>simuleringskonfidens</b>.<br>
+      Vägarnas ljusstyrka avtar med avstånd från sensor.
+    </div>
+  </div>
+
+  <div id="controls">
+    <div id="top-row">
+      <button id="play-btn" title="Spela / pausa (mellanslag)">▶</button>
+      <div id="time-display">
+        <span id="td-clock">—</span>
+        <span id="td-date">—</span>
+      </div>
+      <span class="label">Hastighet</span>
+      <div class="seg" id="speed-seg">
+        <button data-speed="1">1×</button>
+        <button data-speed="4">4×</button>
+        <button data-speed="24" class="active">24×</button>
+        <button data-speed="96">96×</button>
+      </div>
+      <div class="seg" id="mode-toggle">
+        <button id="btn-hist" class="active">2025 Historisk</button>
+        <button id="btn-fore">Prognos 2027</button>
+      </div>
+    </div>
+    <div id="sliders">
+      <div class="slider-group">
+        <div class="slider-head">
+          <span class="label">Dag</span>
+          <span class="hint">1 jan — 31 dec</span>
+        </div>
+        <input type="range" id="day-slider" min="0" max="364" value="0">
+      </div>
+      <div class="slider-group">
+        <div class="slider-head">
+          <span class="label">Tid på dygnet</span>
+          <span class="hint">00:00 — 23:45</span>
+        </div>
+        <input type="range" id="tod-slider" min="0" max="95" value="0">
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- ?v= forces the browser to fetch fresh JS when the HTML updates —
+       bump the number whenever the JS files change, or stale cached JS
+       can run against new HTML and crash on missing elements -->
+  <script src="state.js?v=4"></script>
+  <script src="provider.js?v=4"></script>
+  <script src="render.js?v=4"></script>
+  <script src="controls.js?v=4"></script>
+  <script src="clock.js?v=4"></script>
+  <script>
+    (async () => {
+      try {
+        const histProvider = await new HistoricalProvider().load('data/flows.json');
+
+        let normalProfile = null;
+        try {
+          normalProfile = await new NormalProfile().load('data/normal_profile.json');
+        } catch (e) {
+          console.warn('normal_profile.json not found — run build_features.py to enable ratio colouring');
+        }
+
+        await Render.init(document.getElementById('map'), histProvider, normalProfile);
+        Controls.init(histProvider);
+        Clock.start();
+        State.setQI(0);
+
+        // ── Mode toggle ───────────────────────────────────────────────────────
+        let foreProvider = null;
+        const btnHist = document.getElementById('btn-hist');
+        const btnFore = document.getElementById('btn-fore');
+
+        btnHist.addEventListener('click', () => {
+          btnHist.classList.add('active');
+          btnFore.classList.remove('active');
+          Render.setProvider(histProvider);
+          Controls.setProvider(histProvider);
+          State.setQI(State.qi);   // force date display refresh
+        });
+
+        btnFore.addEventListener('click', async () => {
+          // Lazy-load forecast on first click
+          if (!foreProvider) {
+            btnFore.textContent = 'Laddar…';
+            btnFore.disabled = true;
+            try {
+              foreProvider = await new HistoricalProvider().load('data/flows_forecast.json');
+            } catch (e) {
+              btnFore.textContent = 'Prognos 2027';
+              btnFore.disabled = false;
+              console.error('Could not load flows_forecast.json — run build_agent1_flows.py', e);
+              return;
+            }
+            btnFore.textContent = 'Prognos 2027';
+            btnFore.disabled = false;
+          }
+          btnFore.classList.add('active');
+          btnHist.classList.remove('active');
+          Render.setProvider(foreProvider);
+          Controls.setProvider(foreProvider);
+          State.setQI(State.qi);   // force date display refresh to show 2027
+        });
+
+      } catch (err) {
+        document.body.innerHTML =
+          `<div style="padding:40px;color:#f87171;font-family:monospace;white-space:pre-wrap">` +
+          `<b>Fel:</b>\n${err.message}\n\nKör pipeline och starta:\n` +
+          `  python3 build_data.py --data_dir ... --coords ...\n` +
+          `  python3 build_features.py\n` +
+          `  python3 build_agent1_flows.py\n` +
+          `  cd web && python3 -m http.server 8000</div>`;
+        console.error(err);
+      }
+    })();
+  </script>
+</body>
+</html>

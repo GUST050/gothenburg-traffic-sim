@@ -1,0 +1,48 @@
+{
+  "sensor_ids": [
+    "107",
+    "1074",
+    "1076",
+    "133",
+    "134",
+    "2276"
+  ],
+  "results": {
+    "107": {
+      "model": "lightgbm_baseline",
+      "naive_mae": 12.78,
+      "cv_mae": 9.8,
+      "improvement": 23.3
+    },
+    "1074": {
+      "model": "lightgbm_baseline",
+      "naive_mae": 8.09,
+      "cv_mae": 5.81,
+      "improvement": 28.1
+    },
+    "1076": {
+      "model": "lightgbm_baseline",
+      "naive_mae": 9.07,
+      "cv_mae": 7.99,
+      "improvement": 11.9
+    },
+    "133": {
+      "model": "lightgbm_baseline",
+      "naive_mae": 7.44,
+      "cv_mae": 5.33,
+      "improvement": 28.5
+    },
+    "134": {
+      "model": "lightgbm_baseline",
+      "naive_mae": 6.04,
+      "cv_mae": 4.42,
+      "improvement": 26.7
+    },
+    "2276": {
+      "model": "lightgbm_baseline",
+      "naive_mae": 7.71,
+      "cv_mae": 5.64,
+      "improvement": 26.9
+    }
+  }
+}

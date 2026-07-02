@@ -1,0 +1,19 @@
+# OS / editor
+.DS_Store
+.vscode/
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OSMnx download cache (rebuildable; ~MBs of raw API responses)
+cache/
+.osmnx_cache/
+
+# Archived pre-rewrite web experiment — never restore over web/
+archive/
+
+# Redundant human-readable dump of flow_matrix.npz (1.7 MB, rebuildable)
+web/data/features/flow_matrix.csv
