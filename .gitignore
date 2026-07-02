@@ -25,3 +25,4 @@ sumo/
 # dirsplit: raw hourly volumes are large and re-fetchable (open APIs);
 # station metadata, matches and coverage report ARE tracked
 data/dirsplit/volumes/
+data/dirsplit/graphs/
