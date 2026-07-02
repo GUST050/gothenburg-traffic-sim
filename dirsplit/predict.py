@@ -101,12 +101,14 @@ def main() -> None:
             p["_mid_lon"] = (c[0][0] + c[-1][0]) / 2
             sensors.setdefault(str(p["sensor_id"]), []).append(p)
 
-    def predict_hours(model, props: dict, prof: dict) -> np.ndarray:
+    def edge_feats(props: dict) -> dict:
         u, v, k = map(int, props["id"].split("_"))
         data = G.get_edge_data(u, v, k)
         bearing = edge_bearing_from_graph(G, u, v, k, data)
-        feats = edge_features("goteborg", props["_mid_lat"], props["_mid_lon"],
-                              bearing, data)
+        return edge_features("goteborg", props["_mid_lat"], props["_mid_lon"],
+                             bearing, data)
+
+    def predict_hours(model, feats: dict, prof: dict) -> np.ndarray:
         rows = [[feats[c] for c in FEATURE_NAMES]
                 + [prof[c] for c in PROFILE_FEATURES]
                 + [np.sin(2 * np.pi * h / 24), np.cos(2 * np.pi * h / 24), 0.0]
@@ -123,12 +125,26 @@ def main() -> None:
             print(f"{sid:<8} skipped — no model (retrain: make dirsplit-train)")
             continue
         prof = sensor_profile_features(profiles, pair[0]["id"])
-        q = {name: np.clip(predict_hours(m, pair[0], prof), *CLAMP)
+
+        # The model is trained on toward-centre directions ONLY — orient the
+        # pair so the toward-centre edge is predicted, the other mirrored.
+        f0, f1 = edge_feats(pair[0]), edge_feats(pair[1])
+        if f1["radial_cos"] > f0["radial_cos"]:
+            pair = [pair[1], pair[0]]
+            f0 = f1
+        q = {name: np.clip(predict_hours(m, f0, prof), *CLAMP)
              for name, m in sensors_models[sid].items()}
         # quantile crossing guard: enforce q10 ≤ q50 ≤ q90 per hour
         q10 = np.minimum.reduce([q["q10"], q["q50"], q["q90"]])
         q90 = np.maximum.reduce([q["q10"], q["q50"], q["q90"]])
         q50 = np.clip(q["q50"], q10, q90)
+
+        # Shrinkage calibration from leave-city-out validation: the interval
+        # keeps its width but is re-centred on the shrunk point estimate.
+        lam = pkg.get("shrinkage_lambda", 1.0)
+        q50_s = 0.5 + lam * (q50 - 0.5)
+        shift = q50_s - q50
+        q10, q50, q90 = (np.clip(a + shift, *CLAMP) for a in (q10, q50, q90))
 
         e0, e1 = pair[0]["id"], pair[1]["id"]
         s10, s50, s90 = (hourly_to_slots(a) for a in (q10, q50, q90))

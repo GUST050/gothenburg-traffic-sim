@@ -1,6 +1,6 @@
 {
- "n_rows": 2428,
- "bandwidth": 3.362,
+ "n_rows": 1214,
+ "bandwidth": 3.445,
  "input_cols": [
   "hw_rank",
   "speed_kmh",
@@ -24,40 +24,46 @@
  ],
  "cities": {
   "bergen": {
-   "mae_all": 0.0713,
+   "mae_all": 0.0697,
    "base_all": 0.0658,
-   "impr_all_pct": -8.4,
-   "n_domain_stations": 28,
-   "mae_domain": 0.0681,
-   "base_domain": 0.0575,
-   "impr_domain_pct": -18.4
+   "impr_all_pct": -5.9,
+   "n_domain_stations": 13,
+   "mae_domain": 0.0755,
+   "base_domain": 0.0555,
+   "impr_domain_pct": -36.0
   },
   "oslo": {
-   "mae_all": 0.0522,
+   "mae_all": 0.0686,
    "base_all": 0.0564,
-   "impr_all_pct": 7.5,
-   "n_domain_stations": 19,
-   "mae_domain": 0.0519,
-   "base_domain": 0.0583,
-   "impr_domain_pct": 11.1
+   "impr_all_pct": -21.6,
+   "n_domain_stations": 12,
+   "mae_domain": 0.0536,
+   "base_domain": 0.0477,
+   "impr_domain_pct": -12.5
   },
   "stavanger": {
-   "mae_all": 0.0607,
+   "mae_all": 0.0573,
    "base_all": 0.0471,
-   "impr_all_pct": -29.0,
-   "n_domain_stations": 11,
-   "mae_domain": 0.0696,
-   "base_domain": 0.0484,
-   "impr_domain_pct": -43.8
+   "impr_all_pct": -21.8,
+   "n_domain_stations": 6,
+   "mae_domain": 0.0616,
+   "base_domain": 0.0533,
+   "impr_domain_pct": -15.6
   },
   "trondheim": {
-   "mae_all": 0.0797,
+   "mae_all": 0.0752,
    "base_all": 0.0799,
-   "impr_all_pct": 0.3,
-   "n_domain_stations": 24,
-   "mae_domain": 0.0651,
-   "base_domain": 0.0645,
-   "impr_domain_pct": -0.9
+   "impr_all_pct": 5.9,
+   "n_domain_stations": 10,
+   "mae_domain": 0.0689,
+   "base_domain": 0.07,
+   "impr_domain_pct": 1.6
   }
+ },
+ "shrinkage": {
+  "lambda": 0.256,
+  "pooled_mae_raw": 0.0654,
+  "pooled_mae_shrunk": 0.0559,
+  "pooled_mae_5050": 0.0564
  }
 }

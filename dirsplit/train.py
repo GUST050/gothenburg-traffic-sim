@@ -68,10 +68,17 @@ def load_table():
     oneway = {sid for (sid, _), sh in day_shares.items()
               if sh and not 0.15 <= np.mean(sh) <= 0.85}
 
+    rc_i = FEATURE_NAMES.index("radial_cos")
     X, y, cities, keys, w = [], [], [], [], []
     for r in rows:
         if (r["station_id"] in oneway or r["is_weekend"] != "0"
                 or not 6 <= int(r["hour"]) <= 20):
+            continue
+        # ONE row per station-hour: keep only the toward-centre direction.
+        # The two directions are mirrored duplicates (share, 1-share) —
+        # keeping both double-counts every station with perfectly
+        # anticorrelated labels and biases weights and importances.
+        if float(r["radial_cos"]) <= 0:
             continue
         h = float(r["hour"])
         X.append([float(r[c]) for c in FEATURE_NAMES]
@@ -81,7 +88,16 @@ def load_table():
         cities.append(r["city"])
         keys.append((r["station_id"], r["heading"]))
         w.append(float(r["n_obs"]) ** 0.5)
-    print(f"Filter: {len(oneway)} one-way-ish stations dropped, {len(y)} rows kept")
+
+    # Station-level weight normalisation: hourly rows within a station are
+    # strongly correlated, not independent — give every STATION (not every
+    # row) roughly equal total influence.
+    from collections import Counter
+    n_per_station = Counter(k[0] for k in keys)
+    w = [wi / n_per_station[k[0]] for wi, k in zip(w, keys)]
+
+    print(f"Filter: {len(oneway)} one-way-ish stations dropped, {len(y)} rows kept "
+          f"(toward-centre direction only, {len(n_per_station)} stations)")
     return np.array(X), np.array(y), cities, keys, np.array(w)
 
 
@@ -139,6 +155,7 @@ def main() -> None:
           f"({len({k for k, m in zip(keys, domain_row) if m})} station-directions)")
 
     city_arr = np.array(cities)
+    pooled_pred, pooled_y = [], []   # domain-subset LCO pairs → shrinkage λ
     for held in sorted(set(cities)):
         te_all  = city_arr == held
         tr      = ~te_all
@@ -163,6 +180,8 @@ def main() -> None:
             m_loc = make_model()
             m_loc.fit(X[tr], y[tr], sample_weight=(w_obs * w_loc)[tr])
             p = np.clip(m_loc.predict(X[te_st]), 0, 1)
+            pooled_pred.extend(p.tolist())
+            pooled_y.extend(y[te_st].tolist())
             maes.append(float(np.mean(np.abs(p - y[te_st]))))
             bases.append(float(np.mean(np.abs(0.5 - y[te_st]))))
         mae_dom  = float(np.mean(maes)) if maes else float("nan")
@@ -180,6 +199,27 @@ def main() -> None:
         print(f"  {held:<10} alla: MAE {mae_all:.4f} ({r['impr_all_pct']:+.1f}%)"
               f"   domän ({len(held_stations)} st): MAE {mae_dom:.4f} "
               f"({r['impr_domain_pct']:+.1f}%)")
+
+    # ── Shrinkage calibration (James-Stein flavour) ────────────────────────────
+    # Regress observed deviation from 0.5 on predicted deviation (through the
+    # origin) over ALL pooled held-out domain predictions. λ<1 means raw
+    # predictions overshoot; deployment uses 0.5 + λ·(pred−0.5), which is the
+    # MSE-optimal linear correction given the validation evidence. λ≈0 would
+    # honestly collapse the model to 50/50.
+    dp = np.array(pooled_pred) - 0.5
+    dy = np.array(pooled_y) - 0.5
+    lam = float(np.clip((dp @ dy) / max(dp @ dp, 1e-12), 0.0, 1.0))
+    mae_raw    = float(np.mean(np.abs(dp - dy)))
+    mae_shrunk = float(np.mean(np.abs(lam * dp - dy)))
+    base_pool  = float(np.mean(np.abs(dy)))
+    report["shrinkage"] = {
+        "lambda": round(lam, 3),
+        "pooled_mae_raw": round(mae_raw, 4),
+        "pooled_mae_shrunk": round(mae_shrunk, 4),
+        "pooled_mae_5050": round(base_pool, 4),
+    }
+    print(f"\nShrinkage λ = {lam:.3f}   pooled domain-MAE: "
+          f"rå {mae_raw:.4f} → krympt {mae_shrunk:.4f}  (50/50: {base_pool:.4f})")
 
     # ── Deploy: per-sensor locally weighted quantile models ────────────────────
     print("\nTraining per-sensor quantile models …")
@@ -201,7 +241,9 @@ def main() -> None:
         pickle.dump({"sensors": sensors_pkg, "input_cols": INPUT_COLS,
                      "quantiles": [f"q{int(q*100)}" for q in QUANTILES],
                      "scaler": {"mu": mu.tolist(), "sd": sd.tolist()},
-                     "bandwidth": bandwidth}, f)
+                     "bandwidth": bandwidth,
+                     "shrinkage_lambda": lam,
+                     "orientation": "toward_centre"}, f)
     with open(REPORT_PATH, "w") as f:
         json.dump(report, f, indent=1)
     print(f"Wrote {MODEL_PATH} + {REPORT_PATH}")
