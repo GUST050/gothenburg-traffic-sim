@@ -62,8 +62,13 @@ Goal arc, in order:
    - Heading→bearing: station directions are PLACE NAMES; resolved by geocoding both names (Nominatim, cached, 1 req/s) and matching against the OSM edge's two axis bearings, with a consistency requirement (opposite candidates, ≤75° each) — ambiguous stations are EXCLUDED, all decisions stored for audit in stations_matched.json.
    - ONE feature code path (dirsplit/features.py) for training stations and Gothenburg sensor edges: road class/speed/lanes/oneway, dist-to-centre, radial_cos (toward-centre alignment), residential/major street length behind vs ahead within 1 km half-discs (population/activity proxy from the road graph itself — upgrade path: GHS-POP raster). New sensors in network.geojson are picked up automatically.
    - Applicability check (dirsplit/coverage.py): kNN distance of each sensor edge in standardized feature space vs the training cloud; >90th percentile ⇒ flagged EXTRAPOLATION.
-   - make dirsplit-stations / dirsplit-volumes / dirsplit-match / dirsplit-coverage. Raw volumes gitignored (re-fetchable); metadata/matches/coverage tracked.
-   - REMAINING: full multi-city volume+match fetch (hours, throttled), profile features from volumes, LightGBM training with leave-city-out validation, wire predictions into build_sumo_demand (replace estimate_directions), UK DfT integration.
+   - make dirsplit-stations / dirsplit-volumes / dirsplit-match / dirsplit-dataset / dirsplit-train / dirsplit-predict / dirsplit-coverage. Raw volumes gitignored (re-fetchable); metadata/matches/coverage tracked.
+   - TRAINED & DEPLOYED (2026-07-02): 346 stations' volumes, 218 matched, 15 346-row table. KEY FINDINGS (report these honestly):
+     (a) One-way/ramp stations must be filtered (97 dropped) — their 0/1 shares poison training.
+     (b) Real two-way city streets are MILDLY asymmetric: typical weekday-daytime deviation from 50/50 is only 5–8 pp (55/45), NOT the 80/20 the old Gaussian estimate produced. The Gaussian AM/PM decomposition over-attributes — both directions peak in the morning, just slightly unevenly.
+     (c) Leave-city-out MAE ≈ baseline overall (+8.6% Oslo — most Gothenburg-like, +1.8% Trondheim, worse Bergen/Stavanger): the transferable signal is real but small. The model's value is CALIBRATION (mild, empirically-grounded splits) rather than large error reduction.
+     Deployed via dirsplit/predict.py → sumo/direction_split.json (pair-normalised, clamped [0.1,0.9], hourly→96 slots). make demand auto-prefers the model over the Gaussian fallback. Sensor 1074's edges flagged EXTRAPOLATION in coverage (94th pctl) — carried into predictions. estimate_directions.py kept only as fallback when model.pkl is absent.
+   - REMAINING: UK DfT integration for more training breadth; revisit whether Gaussian fallback should be shrunk toward 0.5 given finding (b).
 
 ## Rules — do / never
 - DO route all flow access through `flowAt(edgeId, t)`. NEVER fetch data inside render code.

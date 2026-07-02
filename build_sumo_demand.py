@@ -100,7 +100,7 @@ def write_counts(
     """
     est_shares = load_direction_split()
     if est_shares:
-        print("  Using ESTIMATED time-of-day direction split (estimate_directions.py)")
+        print("  Using ESTIMATED time-of-day direction split (sumo/direction_split.json)")
     else:
         print("  No direction_split.json — falling back to even split")
 

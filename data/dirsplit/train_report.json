@@ -1,0 +1,128 @@
+{
+ "n_rows": 2428,
+ "cities": {
+  "bergen": {
+   "n_test": 898,
+   "mae": 0.0698,
+   "baseline_50_50_mae": 0.0658,
+   "improvement_pct": -6.1
+  },
+  "oslo": {
+   "n_test": 720,
+   "mae": 0.0516,
+   "baseline_50_50_mae": 0.0564,
+   "improvement_pct": 8.6
+  },
+  "stavanger": {
+   "n_test": 270,
+   "mae": 0.0791,
+   "baseline_50_50_mae": 0.0471,
+   "improvement_pct": -68.1
+  },
+  "trondheim": {
+   "n_test": 540,
+   "mae": 0.0785,
+   "baseline_50_50_mae": 0.0799,
+   "improvement_pct": 1.8
+  }
+ },
+ "input_cols": [
+  "hw_rank",
+  "speed_kmh",
+  "lanes",
+  "oneway",
+  "dist_centre_km",
+  "radial_cos",
+  "res_behind_km",
+  "res_ahead_km",
+  "res_asym",
+  "major_behind_km",
+  "major_ahead_km",
+  "major_asym",
+  "am_pm_ratio",
+  "peak_hour_am",
+  "peak_hour_pm",
+  "weekend_ratio",
+  "hour_sin",
+  "hour_cos",
+  "is_weekend"
+ ],
+ "feature_importance": [
+  [
+   "hour_sin",
+   2515
+  ],
+  [
+   "radial_cos",
+   1331
+  ],
+  [
+   "hour_cos",
+   1077
+  ],
+  [
+   "major_behind_km",
+   1055
+  ],
+  [
+   "major_ahead_km",
+   1054
+  ],
+  [
+   "res_asym",
+   985
+  ],
+  [
+   "res_behind_km",
+   941
+  ],
+  [
+   "res_ahead_km",
+   897
+  ],
+  [
+   "major_asym",
+   825
+  ],
+  [
+   "weekend_ratio",
+   588
+  ],
+  [
+   "dist_centre_km",
+   565
+  ],
+  [
+   "am_pm_ratio",
+   495
+  ],
+  [
+   "hw_rank",
+   193
+  ],
+  [
+   "speed_kmh",
+   189
+  ],
+  [
+   "lanes",
+   117
+  ],
+  [
+   "peak_hour_am",
+   81
+  ],
+  [
+   "oneway",
+   57
+  ],
+  [
+   "peak_hour_pm",
+   21
+  ],
+  [
+   "is_weekend",
+   0
+  ]
+ ]
+}

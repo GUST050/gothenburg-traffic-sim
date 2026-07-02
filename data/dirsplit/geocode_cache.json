@@ -577,5 +577,546 @@
 "Etterstad |oslo": [
 59.9112021,
 10.8001908
+],
+"Skjold|bergen": [
+60.3041702,
+5.3332514
+],
+"Bergen|bergen": [
+60.3901395,
+5.333559
+],
+"Fyllingen|bergen": [
+60.364135,
+5.297633
+],
+"Midttun|bergen": [
+60.322761,
+5.3721463
+],
+"Nesttun|bergen": [
+60.3162644,
+5.35439
+],
+"Loddefjord|bergen": [
+60.361483,
+5.2331114
+],
+"Skålevik|bergen": [
+60.3891644,
+5.225044
+],
+"Bråtet|bergen": [
+60.3381672,
+5.3002357
+],
+"Bønes|bergen": [
+60.3333822,
+5.3042464
+],
+"Nygårdstunnelen|bergen": [
+60.3858952,
+5.322389
+],
+"Bergen Sentrum|bergen": [
+60.395078,
+5.31903
+],
+"Godvik/Askøy|bergen": null,
+"Michael Krohns gate|bergen": [
+60.3760934,
+5.3365973
+],
+"Puddefjordsbroen|bergen": [
+60.3844292,
+5.3177555
+],
+"Sotra|bergen": [
+60.382291,
+5.3148073
+],
+"Fløyfjell|bergen": [
+58.8599968,
+9.4751034
+],
+"Danmarksplass|bergen": [
+60.376083,
+5.3398514
+],
+"Sentrum|bergen": [
+60.3933525,
+5.3232005
+],
+"Straume|bergen": [
+60.3244111,
+5.2687361
+],
+"Dokken|bergen": [
+60.388565,
+5.3155261
+],
+"Fløyfjellstunnelen|bergen": null,
+"Bjørndalstræ|bergen": [
+60.3595649,
+5.2436662
+],
+"Stord|bergen": [
+59.8641448,
+5.4106339
+],
+"Strømme|bergen": [
+61.005579,
+4.9628572
+],
+"YTRE SANDVIKEN|bergen": [
+60.4278928,
+5.2889411
+],
+"BERGEN|bergen": [
+60.3901395,
+5.333559
+],
+"Håkonsvern|bergen": null,
+"Sandeidet|bergen": [
+67.4230312,
+14.4147637
+],
+"ÅSANE|bergen": [
+60.4724133,
+5.3389446
+],
+"Løvstakktunnelen|bergen": [
+60.3730797,
+5.3054625
+],
+"Gyldenpris|bergen": [
+60.3808959,
+5.3189987
+],
+"Bergen (Rådal)|bergen": [
+60.2896008,
+5.3175655
+],
+"Bergen lufthavn, Flesland|bergen": [
+60.2899185,
+5.2307159
+],
+"Askøy|bergen": [
+60.3725717,
+5.2124581
+],
+"Puddefjordsbrua|bergen": null,
+"Natland|bergen": [
+60.3487425,
+5.366921
+],
+"Bergen sentrum|bergen": [
+60.395078,
+5.31903
+],
+"Fjøsanger|bergen": [
+60.3467972,
+5.3321972
+],
+"Vetrlidsallmenningen|bergen": [
+60.3963549,
+5.3282605
+],
+"Mariakirken|bergen": [
+60.3989065,
+5.3234392
+],
+"LYNGBØ/GRAVDAL|bergen": [
+60.3871341,
+5.2698782
+],
+"SOTRA|bergen": [
+60.3696326,
+5.1932841
+],
+"Søreide|bergen": [
+60.3146741,
+5.2705315
+],
+"NYGÅRD|bergen": [
+60.3845041,
+5.3326352
+],
+"LYNGBØ|bergen": [
+60.373998,
+5.2657565
+],
+"BIRKELUNDSBAKKEN|bergen": [
+60.3411633,
+5.3586277
+],
+"LANDÅS|bergen": [
+60.3615283,
+5.3719524
+],
+"Bjørndalsøyra|bergen": [
+60.361375,
+5.2326222
+],
+"SANDVIKEN|bergen": [
+60.4109022,
+5.3056623
+],
+"FLØYFJELLSTUNNELEN|bergen": null,
+"Rådal|bergen": [
+60.292417,
+5.3211286
+],
+"Førde|bergen": [
+61.4521759,
+5.8571725
+],
+"Fløyfjelltunnelen|bergen": [
+60.4063752,
+5.3346144
+],
+"Kleppestø|bergen": [
+60.4084337,
+5.2276317
+],
+"Florvåg|bergen": [
+60.420975,
+5.2384861
+],
+"Paradis|bergen": [
+60.3360992,
+5.3469327
+],
+"Landås|bergen": [
+60.3615283,
+5.3719524
+],
+"Åsane|bergen": [
+60.4724133,
+5.3389446
+],
+"Lavik|bergen": [
+60.3987878,
+5.3086909
+],
+"Erdal|bergen": [
+60.3544787,
+5.4257879
+],
+"Natlandsveien|bergen": [
+60.346312,
+5.364128
+],
+"Arna|bergen": [
+60.4200615,
+5.465872
+],
+"Kalandseid|bergen": [
+60.2794439,
+5.4043872
+],
+"Puddefjordbroen|bergen": null,
+"Dolvik|bergen": [
+60.3155248,
+5.259387
+],
+"Dolvik Fyllingsdalsveien|bergen": null,
+"Nøstet|bergen": [
+60.3936722,
+5.3160784
+],
+"Sandeidet Ytrebygdsvegen|bergen": null,
+"Krokås|bergen": [
+59.5033861,
+11.1067805
+],
+"Knappetunnelen|bergen": [
+60.3234767,
+5.2691628
+],
+"Dolvik (rundkjøring)|bergen": null,
+"Lyderhornsveien|bergen": [
+60.3663162,
+5.248507
+],
+"Lyngbø/Loddefjord|bergen": null,
+"Hop|bergen": [
+60.3238654,
+5.3408466
+],
+"Tennebekk|bergen": [
+60.363473,
+5.246889
+],
+"Lyngbø|bergen": [
+60.373998,
+5.2657565
+],
+"Lianakktunnelen|bergen": [
+60.376143,
+5.2558717
+],
+"Bjørndal|bergen": [
+60.3546202,
+5.2473579
+],
+"Sørås|bergen": [
+60.3019525,
+5.3224621
+],
+"Askøybrua|bergen": [
+60.3960104,
+5.214724
+],
+"Lagunen|bergen": [
+60.2959612,
+5.3292933
+],
+"Troldhaugtunnelen og Sørås|bergen": null,
+"Hopskrysset|bergen": [
+60.3251647,
+5.336585
+],
+"Danmarks plass|bergen": [
+60.3755409,
+5.3397457
+],
+"Laksevåg|bergen": [
+60.3648046,
+5.2218609
+],
+"Strusshamn/Askøybrua|bergen": null,
+"Storetveit|bergen": [
+60.3511881,
+5.3460414
+],
+"Strusshamn|bergen": [
+60.4045289,
+5.1923055
+],
+"Bjørnsons gate|bergen": [
+60.3723121,
+5.3497044
+],
+"Troldhaugtunnelen|bergen": [
+60.3212464,
+5.3337668
+],
+"Fanaveien|bergen": [
+60.2632618,
+5.3463453
+],
+"Søreide (rundkjøring)|bergen": null,
+"Holbergstatuen|bergen": [
+60.3943056,
+5.3258126
+],
+"Bryggen|bergen": [
+60.397435,
+5.323536
+],
+"Torget|bergen": [
+60.3946981,
+5.3241638
+],
+"Sandviken|bergen": [
+60.4109022,
+5.3056623
+],
+"Knappetunnelen nord|bergen": null,
+"Lars Hilles gate|bergen": [
+60.3885783,
+5.330448
+],
+"Kaigaten|bergen": [
+60.391799,
+5.3267954
+],
+"Liavann|bergen": null,
+"Gyldenpris og Løvstakktunnelen|bergen": null,
+"Fyllingsdalen|bergen": [
+60.3470096,
+5.2926415
+],
+"Bjørge|bergen": [
+60.3337687,
+5.2494523
+],
+"Sandeidet rundkjøring|bergen": null,
+"FANAVEGEN|bergen": [
+60.2632618,
+5.3463453
+],
+"HALHJEM|bergen": [
+60.1486848,
+5.4298465
+],
+"FLESLAND|bergen": [
+60.2932079,
+5.2113211
+],
+"NORDÅS|bergen": [
+60.3091746,
+5.321553
+],
+"RÅDALSKRYSSET|bergen": [
+60.289191,
+5.325684
+],
+"LAGUNEN|bergen": [
+60.2959612,
+5.3292933
+],
+"Fana|bergen": [
+60.2775035,
+5.3936758
+],
+"DAMSGÅRDSTUNNELEN|bergen": [
+60.3820821,
+5.2737227
+],
+"GRAVDAL/LYNGBØ|bergen": [
+60.380777,
+5.268475
+],
+"Gravdal|bergen": [
+60.3915665,
+5.2553891
+],
+"Sundekr. X Fv409|stavanger": null,
+"Skankeholen|stavanger": null,
+"Kannik X Fv509|stavanger": null,
+"Mariero|stavanger": [
+58.9333051,
+5.754031
+],
+"Åsen|stavanger": [
+58.9446372,
+5.7311077
+],
+"SANDNES|stavanger": [
+58.96951,
+5.7307508
+],
+"STAVANGER|stavanger": [
+58.9665765,
+5.7322159
+],
+"Tjensvollkrysset|stavanger": [
+58.9566121,
+5.7002577
+],
+"Stavanger sentrum|stavanger": [
+58.971132,
+5.736266
+],
+"Mosvangen X E39|stavanger": null,
+"Sunde|stavanger": [
+58.965588,
+5.6096842
+],
+"Randaberg|stavanger": [
+58.9789527,
+5.6943495
+],
+"Hillevåg|stavanger": [
+58.9502543,
+5.7428208
+],
+"Tjensvoll|stavanger": [
+58.9516497,
+5.6977399
+],
+"Stavanger|stavanger": [
+58.9665765,
+5.7322159
+],
+"Kiellandsmyr X E39|stavanger": null,
+"Hinna|stavanger": [
+58.9103232,
+5.7279716
+],
+"Stavanger X Fv509|stavanger": null,
+"Stv.sykehus X Fv509|stavanger": null,
+"Strømsbrua|stavanger": [
+58.9557942,
+5.7467169
+],
+"Banavigå øst|stavanger": null,
+"Tastamyrv. X Fv413|stavanger": null,
+"Boganes|stavanger": [
+58.9105503,
+5.7300941
+],
+"Kiellandsmyr|stavanger": null,
+"Stord|stavanger": [
+59.8641448,
+5.4106339
+],
+"Tananger|stavanger": [
+58.9359135,
+5.5864225
+],
+"Sømmevågen|stavanger": [
+58.9005901,
+5.6370123
+],
+"Hillevåg X Rv44|stavanger": [
+58.9502543,
+5.7428208
+],
+"Auglendsmyra X Fv393|stavanger": null,
+"Sandnes|stavanger": [
+58.96951,
+5.7307508
+],
+"Sundekrossen X Rv509|stavanger": null,
+"Schancheholen|stavanger": [
+58.9519448,
+5.718233
+],
+"Hundvåg|stavanger": [
+58.997502,
+5.7300202
+],
+"Eiganestunnelen|stavanger": [
+58.9671633,
+5.7217099
+],
+"Gamlingen|stavanger": [
+58.9587003,
+5.7231757
+],
+"Tasta|stavanger": [
+59.0432016,
+5.7550444
+],
+"Kannik|stavanger": [
+58.9655074,
+5.7278122
+],
+"Hinna X E39|stavanger": null,
+"Kiellandsmyra|stavanger": null,
+"Ullandhaug|stavanger": [
+58.9403379,
+5.7065902
+],
+"Grødem X E39|stavanger": null,
+"Bjergsted|stavanger": [
+58.9765928,
+5.7169733
+],
+"Vardeneset|stavanger": [
+58.9953041,
+5.6798628
+],
+"Sola/Stavanger gr.|stavanger": null,
+"Hafrsfjord|stavanger": [
+58.9350596,
+5.673546
+],
+"Hafrsfjord |stavanger": [
+58.9350596,
+5.673546
 ]
 }

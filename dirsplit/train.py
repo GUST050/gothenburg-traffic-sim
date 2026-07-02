@@ -39,20 +39,48 @@ INPUT_COLS = FEATURE_NAMES + PROFILE_FEATURES + ["hour_sin", "hour_cos", "is_wee
 
 
 def load_table() -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray]:
-    """Returns (X, y, cities, sample_weight). Weight = sqrt(n_obs)."""
-    X_rows, y, cities, w = [], [], [], []
+    """Returns (X, y, cities, sample_weight). Weight = sqrt(n_obs).
+
+    Training-set filters (the target problem is TWO-WAY city streets in
+    commute hours — the training set must look like the problem):
+      - drop STATIONS that are effectively one-way (any direction's mean
+        daytime share > 0.85): ramps and split carriageways have shares
+        near 0/1 and teach nothing about splitting a two-way total
+      - weekdays only, 06–20 — where the commute signal lives; night
+        shares are noise even after the volume filter
+    """
     with open(TABLE_PATH) as f:
-        for r in csv.DictReader(f):
-            hour = float(r["hour"])
-            feats = ([float(r[c]) for c in FEATURE_NAMES]
-                     + [float(r[c]) for c in PROFILE_FEATURES]
-                     + [np.sin(2 * np.pi * hour / 24),
-                        np.cos(2 * np.pi * hour / 24),
-                        float(r["is_weekend"])])
-            X_rows.append(feats)
-            y.append(float(r["share"]))
-            cities.append(r["city"])
-            w.append(float(r["n_obs"]) ** 0.5)
+        rows = list(csv.DictReader(f))
+
+    # Station-level one-way screen on daytime weekday shares
+    from collections import defaultdict
+    day_shares = defaultdict(list)
+    for r in rows:
+        if r["is_weekend"] == "0" and 6 <= int(r["hour"]) <= 20:
+            day_shares[(r["station_id"], r["heading"])].append(float(r["share"]))
+    oneway_stations = {
+        sid for (sid, _), shares in day_shares.items()
+        if shares and (np.mean(shares) > 0.85 or np.mean(shares) < 0.15)
+    }
+
+    X_rows, y, cities, w = [], [], [], []
+    for r in rows:
+        if r["station_id"] in oneway_stations:
+            continue
+        if r["is_weekend"] != "0" or not (6 <= int(r["hour"]) <= 20):
+            continue
+        hour = float(r["hour"])
+        feats = ([float(r[c]) for c in FEATURE_NAMES]
+                 + [float(r[c]) for c in PROFILE_FEATURES]
+                 + [np.sin(2 * np.pi * hour / 24),
+                    np.cos(2 * np.pi * hour / 24),
+                    float(r["is_weekend"])])
+        X_rows.append(feats)
+        y.append(float(r["share"]))
+        cities.append(r["city"])
+        w.append(float(r["n_obs"]) ** 0.5)
+    print(f"Filter: {len(oneway_stations)} one-way-ish stations dropped, "
+          f"{len(y)} rows kept (weekday 06–20)")
     return (np.array(X_rows), np.array(y), cities, np.array(w))
 
 
