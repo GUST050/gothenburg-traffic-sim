@@ -19,6 +19,7 @@ sumo-net:
 	python3 build_sumo_net.py
 
 demand:
+	python3 estimate_directions.py
 	python3 build_sumo_demand.py
 
 scenario:

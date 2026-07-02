@@ -1,0 +1,139 @@
+{
+ "window": "2025-09-16 06:00–10:00",
+ "n_trips": 4191,
+ "zones": [
+  "Götaplatsen-området",
+  "Infart N",
+  "Infart NO",
+  "Infart NV",
+  "Infart O",
+  "Infart S",
+  "Infart SO",
+  "Infart SV",
+  "Infart V",
+  "Scandinavium-området"
+ ],
+ "matrix": {
+  "Götaplatsen-området": {
+   "Götaplatsen-området": 204,
+   "Infart N": 69,
+   "Infart NO": 192,
+   "Infart NV": 14,
+   "Infart O": 59,
+   "Infart S": 20,
+   "Infart SO": 18,
+   "Infart SV": 14,
+   "Infart V": 7,
+   "Scandinavium-området": 19
+  },
+  "Infart N": {
+   "Götaplatsen-området": 8,
+   "Infart N": 0,
+   "Infart NO": 0,
+   "Infart NV": 3,
+   "Infart O": 29,
+   "Infart S": 41,
+   "Infart SO": 24,
+   "Infart SV": 3,
+   "Infart V": 0,
+   "Scandinavium-området": 20
+  },
+  "Infart NO": {
+   "Götaplatsen-området": 76,
+   "Infart N": 7,
+   "Infart NO": 0,
+   "Infart NV": 69,
+   "Infart O": 4,
+   "Infart S": 145,
+   "Infart SO": 103,
+   "Infart SV": 16,
+   "Infart V": 47,
+   "Scandinavium-området": 27
+  },
+  "Infart NV": {
+   "Götaplatsen-området": 62,
+   "Infart N": 0,
+   "Infart NO": 9,
+   "Infart NV": 0,
+   "Infart O": 21,
+   "Infart S": 83,
+   "Infart SO": 3,
+   "Infart SV": 1,
+   "Infart V": 0,
+   "Scandinavium-området": 12
+  },
+  "Infart O": {
+   "Götaplatsen-området": 38,
+   "Infart N": 70,
+   "Infart NO": 26,
+   "Infart NV": 163,
+   "Infart O": 5,
+   "Infart S": 97,
+   "Infart SO": 51,
+   "Infart SV": 17,
+   "Infart V": 84,
+   "Scandinavium-området": 26
+  },
+  "Infart S": {
+   "Götaplatsen-området": 199,
+   "Infart N": 174,
+   "Infart NO": 179,
+   "Infart NV": 48,
+   "Infart O": 61,
+   "Infart S": 7,
+   "Infart SO": 13,
+   "Infart SV": 3,
+   "Infart V": 18,
+   "Scandinavium-området": 42
+  },
+  "Infart SO": {
+   "Götaplatsen-området": 28,
+   "Infart N": 149,
+   "Infart NO": 32,
+   "Infart NV": 121,
+   "Infart O": 2,
+   "Infart S": 15,
+   "Infart SO": 14,
+   "Infart SV": 13,
+   "Infart V": 46,
+   "Scandinavium-området": 17
+  },
+  "Infart SV": {
+   "Götaplatsen-området": 70,
+   "Infart N": 33,
+   "Infart NO": 68,
+   "Infart NV": 5,
+   "Infart O": 40,
+   "Infart S": 5,
+   "Infart SO": 8,
+   "Infart SV": 0,
+   "Infart V": 6,
+   "Scandinavium-området": 29
+  },
+  "Infart V": {
+   "Götaplatsen-området": 169,
+   "Infart N": 0,
+   "Infart NO": 3,
+   "Infart NV": 0,
+   "Infart O": 6,
+   "Infart S": 45,
+   "Infart SO": 5,
+   "Infart SV": 0,
+   "Infart V": 0,
+   "Scandinavium-området": 32
+  },
+  "Scandinavium-området": {
+   "Götaplatsen-området": 42,
+   "Infart N": 53,
+   "Infart NO": 104,
+   "Infart NV": 89,
+   "Infart O": 28,
+   "Infart S": 60,
+   "Infart SO": 20,
+   "Infart SV": 11,
+   "Infart V": 63,
+   "Scandinavium-området": 10
+  }
+ },
+ "note": "ESTIMATED OD — one plausible matrix consistent with the 6 sensor counts and the estimated direction split; the true OD is not identifiable from 6 counting points."
+}

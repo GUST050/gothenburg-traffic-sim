@@ -65,11 +65,22 @@ any road for counts and simulation confidence.
 
 ```bash
 make sumo-net    # graph.graphml → SUMO network (edge IDs identical to the map)
-make demand      # calibrate demand against the 6 sensors (routeSampler, GEH<5 at all edges)
+make demand      # direction-split estimate + calibrate demand against the 6 sensors
 make scenario    # baseline + a Skånegatan closure, 3 Monte Carlo seeds each
 # custom closure:
 python3 run_scenario.py --close <edgeId>
 ```
+
+**Direction & OD estimation.** The sensors deliver two-way sums, so
+`estimate_directions.py` decomposes each sensor's daily profile into
+off-peak + AM-peak + PM-peak components (least-squares Gaussian fit,
+R² 0.73–0.89) and assigns the AM component to the direction pointing toward
+the city centre — an estimated, time-varying split (~80/20 at peak) instead
+of a naive 50/50. The calibrated routes are then aggregated into an
+origin–destination matrix over zones (the two cluster areas + eight compass
+entry sectors) → `web/data/od_matrix.json`/`.csv`. Both are estimates and
+labelled as such: the true direction split and OD are not identifiable from
+six counting points.
 
 Scenarios appear under the **Scenario** toggle in the web app: every simulated
 street is coloured by flow, the closed edge is drawn black-dashed, and each

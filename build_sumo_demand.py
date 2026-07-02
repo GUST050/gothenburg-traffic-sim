@@ -72,6 +72,19 @@ def load_sensor_edges() -> dict[str, list[str]]:
     return result
 
 
+def load_direction_split() -> dict[str, list[float]]:
+    """{edge_id: [96 shares]} from estimate_directions.py, {} if not built."""
+    path = SUMO_DIR / "direction_split.json"
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        data = json.load(f)
+    shares: dict[str, list[float]] = {}
+    for d in data.values():
+        shares.update(d["edge_shares"])
+    return shares
+
+
 def write_counts(
     flows: dict[str, list],
     sensor_edges: dict[str, list[str]],
@@ -79,16 +92,28 @@ def write_counts(
     n_intervals: int,
     out_path: Path,
 ) -> int:
-    """15-min edgeData intervals; sim time 0 = window start. Returns n written."""
+    """15-min edgeData intervals; sim time 0 = window start. Returns n written.
+
+    Direction share per Total edge comes from estimate_directions.py (AI
+    time-of-day estimate) when available, else an even split. "S" sensor
+    edges always take the full count.
+    """
+    est_shares = load_direction_split()
+    if est_shares:
+        print("  Using ESTIMATED time-of-day direction split (estimate_directions.py)")
+    else:
+        print("  No direction_split.json — falling back to even split")
+
     n_measurements = 0
     with open(out_path, "w") as f:
         f.write("<data>\n")
         for i in range(n_intervals):
-            qi = qi_start + i
+            qi   = qi_start + i
+            slot = qi % 96
             f.write(f'  <interval id="q{qi}" begin="{i * 900}" end="{(i + 1) * 900}">\n')
             for edges in sensor_edges.values():
-                share = 1.0 / len(edges)   # Total → 50/50 split; S → 1.0
                 for edge_id in edges:
+                    share = est_shares.get(edge_id, [1.0 / len(edges)] * 96)[slot]
                     v = flows.get(edge_id, [None])[qi] if qi < len(flows.get(edge_id, [])) else None
                     if v is None:
                         continue
@@ -97,6 +122,99 @@ def write_counts(
             f.write("  </interval>\n")
         f.write("</data>\n")
     return n_measurements
+
+
+SECTORS = ["N", "NO", "O", "SO", "S", "SV", "V", "NV"]
+
+
+def export_od(calib_path: Path, sensor_edges: dict[str, list[str]], meta: dict) -> None:
+    """
+    Aggregate the calibrated routes into an origin/destination matrix.
+
+    The sampled routes ARE trips with origins and destinations, so the OD
+    matrix that falls out is by construction consistent with the sensor
+    counts — one plausible OD among the many the 6 counters cannot
+    distinguish. Zones: the two sensor cluster areas (<400 m from a cluster
+    centre, named by geometry: western = Götaplatsen, eastern = Scandinavium)
+    plus eight compass entry sectors around the network.
+
+    Writes web/data/od_matrix.json + od_matrix.csv.
+    """
+    import xml.etree.ElementTree as ET
+
+    # Edge midpoints in metric EPSG:3007 from the plain edges file
+    mids: dict[str, tuple[float, float]] = {}
+    for e in ET.parse(SUMO_DIR / "plain.edg.xml").getroot().findall("edge"):
+        pts = [tuple(map(float, p.split(","))) for p in e.get("shape").split()]
+        mids[e.get("id")] = (sum(p[0] for p in pts) / len(pts),
+                             sum(p[1] for p in pts) / len(pts))
+
+    # Cluster centres: group sensors whose edges lie within 600 m of each other
+    import math
+    sensor_pos = {sid: mids[edges[0]] for sid, edges in sensor_edges.items()
+                  if edges[0] in mids}
+    clusters: list[list[str]] = []
+    for sid, pos in sensor_pos.items():
+        for cl in clusters:
+            cx = sum(sensor_pos[s][0] for s in cl) / len(cl)
+            cy = sum(sensor_pos[s][1] for s in cl) / len(cl)
+            if math.hypot(pos[0] - cx, pos[1] - cy) < 600:
+                cl.append(sid)
+                break
+        else:
+            clusters.append([sid])
+    centres = [(sum(sensor_pos[s][0] for s in cl) / len(cl),
+                sum(sensor_pos[s][1] for s in cl) / len(cl)) for cl in clusters]
+    # Western cluster = Götaplatsen, eastern = Scandinavium (pure geometry)
+    names = ["Götaplatsen-området", "Scandinavium-området"]
+    cluster_zones = sorted(zip(centres, names))  # sorted by x (west first)
+
+    net_cx = sum(m[0] for m in mids.values()) / len(mids)
+    net_cy = sum(m[1] for m in mids.values()) / len(mids)
+
+    def zone_of(edge_id: str) -> str:
+        mid = mids.get(edge_id)
+        if mid is None:
+            return "okänd"
+        for (cx, cy), zname in cluster_zones:
+            if math.hypot(mid[0] - cx, mid[1] - cy) < 400:
+                return zname
+        ang = math.degrees(math.atan2(mid[0] - net_cx, mid[1] - net_cy)) % 360
+        return f"Infart {SECTORS[int((ang + 22.5) // 45) % 8]}"
+
+    od: dict[tuple[str, str], int] = {}
+    n_trips = 0
+    for veh in ET.parse(calib_path).getroot().findall("vehicle"):
+        edges = veh.find("route").get("edges").split()
+        key = (zone_of(edges[0]), zone_of(edges[-1]))
+        od[key] = od.get(key, 0) + 1
+        n_trips += 1
+
+    zones = sorted({z for pair in od for z in pair})
+    matrix = {o: {d: od.get((o, d), 0) for d in zones} for o in zones}
+
+    out_json = Path("web/data/od_matrix.json")
+    with open(out_json, "w") as f:
+        json.dump({
+            "window":  f"{meta['date']} {meta['begin']}–{meta['end']}",
+            "n_trips": n_trips,
+            "zones":   zones,
+            "matrix":  matrix,
+            "note":    "ESTIMATED OD — one plausible matrix consistent with the "
+                       "6 sensor counts and the estimated direction split; the "
+                       "true OD is not identifiable from 6 counting points.",
+        }, f, ensure_ascii=False, indent=1)
+
+    out_csv = Path("web/data/od_matrix.csv")
+    with open(out_csv, "w") as f:
+        f.write("origin\\destination," + ",".join(zones) + "\n")
+        for o in zones:
+            f.write(o + "," + ",".join(str(matrix[o][d]) for d in zones) + "\n")
+
+    print(f"\nOD-matris ({n_trips} kalibrerade resor) → {out_json} + {out_csv}")
+    top = sorted(od.items(), key=lambda kv: -kv[1])[:8]
+    for (o, d), n in top:
+        print(f"  {o:<22} → {d:<22} {n:>5}")
 
 
 def run_tool(script: str, args: list[str], home: Path) -> None:
@@ -164,12 +282,16 @@ def main() -> None:
         "qi_start": qi_start, "n_intervals": n_intervals,
         # ISO with 'T' — Safari/Firefox reject "YYYY-MM-DD HH:MM" in new Date()
         "epoch_sim": t0.isoformat(),
-        "note": "Total sensor counts split 50/50 over the two directed edges "
-                "(direction not recoverable from delivered data).",
+        "direction_split": "estimated" if load_direction_split() else "even",
+        "note": "Total sensor counts split over the two directed edges using "
+                "the estimated time-of-day split (estimate_directions.py); "
+                "direction is not measured in the delivered data.",
     }
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")
+
+    export_od(calib_path, sensor_edges, meta)
 
 
 if __name__ == "__main__":
