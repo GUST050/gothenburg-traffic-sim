@@ -40,3 +40,28 @@ def radial_cos(travel_bearing: float, bearing_to_centre: float) -> float:
 def in_bbox(lat: float, lon: float, bbox: tuple[float, float, float, float]) -> bool:
     s, w, n, e = bbox
     return s <= lat <= n and w <= lon <= e
+
+
+def point_to_polyline_m(lat: float, lon: float,
+                        coords: list[tuple[float, float]]) -> float:
+    """Min distance (m) from a point to a polyline of (lon, lat) pairs.
+
+    Uses a local equirectangular frame around the point — accurate to well
+    under a metre at city scale, and correct for long straight segments
+    where vertex-only distance would overestimate badly (tunnels).
+    """
+    klat = 110_540.0
+    klon = 111_320.0 * math.cos(math.radians(lat))
+
+    def to_xy(p: tuple[float, float]) -> tuple[float, float]:
+        return ((p[0] - lon) * klon, (p[1] - lat) * klat)
+
+    best = float("inf")
+    pts = [to_xy(p) for p in coords]
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+        dx, dy = x2 - x1, y2 - y1
+        seg2 = dx * dx + dy * dy
+        t = 0.0 if seg2 == 0 else max(0.0, min(1.0, (-(x1 * dx + y1 * dy)) / seg2))
+        px, py = x1 + t * dx, y1 + t * dy
+        best = min(best, math.hypot(px, py))
+    return best

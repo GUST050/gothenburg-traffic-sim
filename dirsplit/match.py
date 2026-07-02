@@ -30,7 +30,7 @@ import osmnx as ox
 
 from .config import GEOCODE_CACHE, STATIONS_OK, STATIONS_RAW
 from .features import edge_bearing_from_graph, load_city_graph
-from .geo import ang_diff_deg, bearing_deg, haversine_m
+from .geo import ang_diff_deg, bearing_deg, point_to_polyline_m
 
 MAX_SNAP_M    = 60    # station must lie near its OSM edge
 MAX_HEAD_DIFF = 75    # heading-geocode bearing vs road axis tolerance (deg)
@@ -74,9 +74,15 @@ def match_station(st: dict, G, cache: dict) -> dict:
     out = dict(st)
     u, v, k = ox.nearest_edges(G, X=st["lon"], Y=st["lat"])
     data = G.get_edge_data(u, v, k)
-    mid_lat = (G.nodes[u]["y"] + G.nodes[v]["y"]) / 2
-    mid_lon = (G.nodes[u]["x"] + G.nodes[v]["x"]) / 2
-    snap_m = haversine_m(st["lat"], st["lon"], mid_lat, mid_lon)
+    # TRUE perpendicular distance to the edge geometry, computed ourselves —
+    # midpoint distance wrongly rejects stations on long edges (tunnels), and
+    # osmnx's return_dist unit depends on graph projection.
+    if "geometry" in data:
+        coords = list(data["geometry"].coords)
+    else:
+        coords = [(G.nodes[u]["x"], G.nodes[u]["y"]),
+                  (G.nodes[v]["x"], G.nodes[v]["y"])]
+    snap_m = point_to_polyline_m(st["lat"], st["lon"], coords)
 
     theta = edge_bearing_from_graph(G, u, v, k, data)
     candidates = {0: theta, 1: (theta + 180) % 360}

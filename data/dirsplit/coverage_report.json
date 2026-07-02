@@ -1,0 +1,262 @@
+{
+ "knn_k": 10,
+ "n_train": 70,
+ "feature_names": [
+  "hw_rank",
+  "speed_kmh",
+  "lanes",
+  "oneway",
+  "dist_centre_km",
+  "radial_cos",
+  "res_behind_km",
+  "res_ahead_km",
+  "res_asym",
+  "major_behind_km",
+  "major_ahead_km",
+  "major_asym"
+ ],
+ "edges": [
+  {
+   "edge": "26355153_96523321_0",
+   "sensor": "134",
+   "name": "Gibraltargatan",
+   "knn_dist": 3.384,
+   "train_percentile": 71.4,
+   "status": "OK",
+   "features": {
+    "hw_rank": 4.0,
+    "speed_kmh": 50.0,
+    "lanes": 1.0,
+    "oneway": 0.0,
+    "dist_centre_km": 1.5433040464054546,
+    "radial_cos": -0.9967992945259888,
+    "res_behind_km": 21.422,
+    "res_ahead_km": 30.179,
+    "res_asym": -0.1697,
+    "major_behind_km": 2.707,
+    "major_ahead_km": 2.129,
+    "major_asym": 0.1196
+   }
+  },
+  {
+   "edge": "26355153_91615277_0",
+   "sensor": "2276",
+   "name": "Läraregatan",
+   "knn_dist": 3.151,
+   "train_percentile": 60.0,
+   "status": "OK",
+   "features": {
+    "hw_rank": 4.0,
+    "speed_kmh": 50.0,
+    "lanes": 2.0,
+    "oneway": 0.0,
+    "dist_centre_km": 1.5020451759657467,
+    "radial_cos": -0.13758613435942937,
+    "res_behind_km": 24.746,
+    "res_ahead_km": 26.66,
+    "res_asym": -0.0372,
+    "major_behind_km": 3.082,
+    "major_ahead_km": 1.675,
+    "major_asym": 0.2957
+   }
+  },
+  {
+   "edge": "26355153_26842525_0",
+   "sensor": "133",
+   "name": "Läraregatan",
+   "knn_dist": 3.235,
+   "train_percentile": 68.6,
+   "status": "OK",
+   "features": {
+    "hw_rank": 4.0,
+    "speed_kmh": 50.0,
+    "lanes": 1.0,
+    "oneway": 0.0,
+    "dist_centre_km": 1.4878940311361128,
+    "radial_cos": 0.1602949759621341,
+    "res_behind_km": 26.111,
+    "res_ahead_km": 23.491,
+    "res_asym": 0.0528,
+    "major_behind_km": 1.009,
+    "major_ahead_km": 4.213,
+    "major_asym": -0.6134
+   }
+  },
+  {
+   "edge": "26842525_26355153_0",
+   "sensor": "133",
+   "name": "Läraregatan",
+   "knn_dist": 3.235,
+   "train_percentile": 68.6,
+   "status": "OK",
+   "features": {
+    "hw_rank": 4.0,
+    "speed_kmh": 50.0,
+    "lanes": 1.0,
+    "oneway": 0.0,
+    "dist_centre_km": 1.4878940311361128,
+    "radial_cos": -0.1602949759621342,
+    "res_behind_km": 23.491,
+    "res_ahead_km": 26.111,
+    "res_asym": -0.0528,
+    "major_behind_km": 4.213,
+    "major_ahead_km": 1.009,
+    "major_asym": 0.6134
+   }
+  },
+  {
+   "edge": "60786979_3575001205_0",
+   "sensor": "107",
+   "name": "Skånegatan",
+   "knn_dist": 3.346,
+   "train_percentile": 71.4,
+   "status": "OK",
+   "features": {
+    "hw_rank": 3.0,
+    "speed_kmh": 50.0,
+    "lanes": 1.0,
+    "oneway": 1.0,
+    "dist_centre_km": 1.3092055871603077,
+    "radial_cos": 0.6110186364788854,
+    "res_behind_km": 19.519,
+    "res_ahead_km": 11.289,
+    "res_asym": 0.2671,
+    "major_behind_km": 3.628,
+    "major_ahead_km": 7.749,
+    "major_asym": -0.3622
+   }
+  },
+  {
+   "edge": "60790252_60790253_0",
+   "sensor": "1074",
+   "name": "Valhallagatan",
+   "knn_dist": 3.533,
+   "train_percentile": 80.0,
+   "status": "OK",
+   "features": {
+    "hw_rank": 5.0,
+    "speed_kmh": 40.0,
+    "lanes": 1.0,
+    "oneway": 0.0,
+    "dist_centre_km": 1.523320613023357,
+    "radial_cos": 0.7976055266017807,
+    "res_behind_km": 18.831,
+    "res_ahead_km": 15.675,
+    "res_asym": 0.0915,
+    "major_behind_km": 2.229,
+    "major_ahead_km": 7.009,
+    "major_asym": -0.5174
+   }
+  },
+  {
+   "edge": "60790253_60790252_0",
+   "sensor": "1074",
+   "name": "Valhallagatan",
+   "knn_dist": 3.533,
+   "train_percentile": 80.0,
+   "status": "OK",
+   "features": {
+    "hw_rank": 5.0,
+    "speed_kmh": 40.0,
+    "lanes": 1.0,
+    "oneway": 0.0,
+    "dist_centre_km": 1.523320613023357,
+    "radial_cos": -0.7976055266017807,
+    "res_behind_km": 15.675,
+    "res_ahead_km": 18.831,
+    "res_asym": -0.0915,
+    "major_behind_km": 7.009,
+    "major_ahead_km": 2.229,
+    "major_asym": 0.5174
+   }
+  },
+  {
+   "edge": "91615277_26355153_0",
+   "sensor": "2276",
+   "name": "Läraregatan",
+   "knn_dist": 3.151,
+   "train_percentile": 60.0,
+   "status": "OK",
+   "features": {
+    "hw_rank": 4.0,
+    "speed_kmh": 50.0,
+    "lanes": 2.0,
+    "oneway": 0.0,
+    "dist_centre_km": 1.5020451759657467,
+    "radial_cos": 0.13758613435942882,
+    "res_behind_km": 26.66,
+    "res_ahead_km": 24.746,
+    "res_asym": 0.0372,
+    "major_behind_km": 1.675,
+    "major_ahead_km": 3.082,
+    "major_asym": -0.2957
+   }
+  },
+  {
+   "edge": "96523321_26355153_0",
+   "sensor": "134",
+   "name": "Gibraltargatan",
+   "knn_dist": 3.384,
+   "train_percentile": 71.4,
+   "status": "OK",
+   "features": {
+    "hw_rank": 4.0,
+    "speed_kmh": 50.0,
+    "lanes": 1.0,
+    "oneway": 0.0,
+    "dist_centre_km": 1.5433040464054546,
+    "radial_cos": 0.9967992945259888,
+    "res_behind_km": 30.179,
+    "res_ahead_km": 21.422,
+    "res_asym": 0.1697,
+    "major_behind_km": 2.129,
+    "major_ahead_km": 2.707,
+    "major_asym": -0.1196
+   }
+  },
+  {
+   "edge": "559960490_1305379743_0",
+   "sensor": "1076",
+   "name": "Skånegatan",
+   "knn_dist": 3.173,
+   "train_percentile": 62.9,
+   "status": "OK",
+   "features": {
+    "hw_rank": 3.0,
+    "speed_kmh": 50.0,
+    "lanes": 3.0,
+    "oneway": 1.0,
+    "dist_centre_km": 1.527262130445895,
+    "radial_cos": 0.8108341473949966,
+    "res_behind_km": 23.164,
+    "res_ahead_km": 14.26,
+    "res_asym": 0.2379,
+    "major_behind_km": 3.403,
+    "major_ahead_km": 4.258,
+    "major_asym": -0.1116
+   }
+  },
+  {
+   "edge": "1455801464_18241874_0",
+   "sensor": "107",
+   "name": "Skånegatan",
+   "knn_dist": 3.018,
+   "train_percentile": 48.6,
+   "status": "OK",
+   "features": {
+    "hw_rank": 3.0,
+    "speed_kmh": 50.0,
+    "lanes": 2.0,
+    "oneway": 1.0,
+    "dist_centre_km": 1.2885572185562006,
+    "radial_cos": -0.5864470641293177,
+    "res_behind_km": 11.793,
+    "res_ahead_km": 19.341,
+    "res_asym": -0.2424,
+    "major_behind_km": 7.548,
+    "major_ahead_km": 3.847,
+    "major_asym": 0.3249
+   }
+  }
+ ]
+}

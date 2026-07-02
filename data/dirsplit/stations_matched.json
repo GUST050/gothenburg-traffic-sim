@@ -1,0 +1,1721 @@
+[
+ {
+  "id": "14772V41375",
+  "name": "Bjørndalsbrua vest",
+  "city": "trondheim",
+  "lat": 63.370898,
+  "lon": 10.362795,
+  "road_ref": "FV6650 S2D1 m9465",
+  "heading_from": "Granåsen",
+  "heading_to": "Tonstad",
+  "first_data": "2012-11-20T10:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "105318_1473008203_0",
+  "snap_dist_m": 0.1,
+  "road_bearing": 90.3,
+  "matched": false,
+  "reject_reason": "heading 'Granåsen' 77° from road axis",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Granåsen": {
+    "geocoded": [
+     63.2493472,
+     10.421411
+    ],
+    "bearing_to_place": 167.8,
+    "diff_deg": 77.5
+   }
+  }
+ },
+ {
+  "id": "03476V41818",
+  "name": "Jakobslivegen ved Skovgård",
+  "city": "trondheim",
+  "lat": 63.428215,
+  "lon": 10.495455,
+  "road_ref": "KV3330 S1D1 m70",
+  "heading_from": "Skovgård",
+  "heading_to": "Charlottenlund",
+  "first_data": "2017-09-07T16:00:00+02:00",
+  "latest_data": "2024-08-21T15:00:00+02:00",
+  "osm_edge": "129988321_162124856_0",
+  "snap_dist_m": 0.2,
+  "road_bearing": 45.2,
+  "matched": false,
+  "reject_reason": "both headings resolved to the same direction",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Skovgård": {
+    "geocoded": [
+     63.4281167,
+     10.4951917
+    ],
+    "bearing_to_place": 230.2,
+    "diff_deg": 5.0
+   },
+   "Charlottenlund": {
+    "geocoded": [
+     63.4269746,
+     10.4945954
+    ],
+    "bearing_to_place": 197.2,
+    "diff_deg": 27.9
+   }
+  }
+ },
+ {
+  "id": "06970V72811",
+  "name": "Kroppanbrua",
+  "city": "trondheim",
+  "lat": 63.391793,
+  "lon": 10.384529,
+  "road_ref": "EV6 S75D1 m2632",
+  "heading_from": "Oppdal",
+  "heading_to": "Trondheim (Sluppen)",
+  "first_data": "1987-12-31T23:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "6549109942_6549109953_0",
+  "snap_dist_m": 7.6,
+  "road_bearing": 212.8,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Oppdal": 212.8,
+   "Trondheim (Sluppen)": 32.8
+  },
+  "heading_audit": {
+   "Oppdal": {
+    "geocoded": [
+     62.5351785,
+     9.6233763
+    ],
+    "bearing_to_place": 202.0,
+    "diff_deg": 10.8
+   },
+   "Trondheim (Sluppen)": {
+    "geocoded": [
+     63.3964325,
+     10.3962974
+    ],
+    "bearing_to_place": 48.6,
+    "diff_deg": 15.9
+   }
+  }
+ },
+ {
+  "id": "75341V41863",
+  "name": "Jonsvannsveien vest for Steinanvegen",
+  "city": "trondheim",
+  "lat": 63.408473,
+  "lon": 10.446718,
+  "road_ref": "FV6660 S1D1 m351",
+  "heading_from": "Moholt",
+  "heading_to": "Heggdalen",
+  "first_data": "2017-11-16T10:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "5198102207_220683574_0",
+  "snap_dist_m": 0.2,
+  "road_bearing": 270.1,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Moholt": 270.1,
+   "Heggdalen": 90.1
+  },
+  "heading_audit": {
+   "Moholt": {
+    "geocoded": [
+     63.4100728,
+     10.4357532
+    ],
+    "bearing_to_place": 288.1,
+    "diff_deg": 18.0
+   },
+   "Heggdalen": {
+    "geocoded": [
+     63.4068334,
+     10.4498666
+    ],
+    "bearing_to_place": 139.3,
+    "diff_deg": 49.3
+   }
+  }
+ },
+ {
+  "id": "44656V72812",
+  "name": "Elgeseter gate ved Abels gate",
+  "city": "trondheim",
+  "lat": 63.416095,
+  "lon": 10.397616,
+  "road_ref": "FV6690 S3D1 m1650",
+  "heading_from": "Heimdal",
+  "heading_to": "Sentrum",
+  "first_data": "2017-01-12T12:00:00+01:00",
+  "latest_data": "2023-10-31T13:00:00+01:00",
+  "osm_edge": "10075840658_78278_0",
+  "snap_dist_m": 6.4,
+  "road_bearing": 347.0,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Heimdal": 167.0,
+   "Sentrum": 347.0
+  },
+  "heading_audit": {
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 160.0,
+    "diff_deg": 7.0
+   },
+   "Sentrum": {
+    "geocoded": [
+     63.4363265,
+     10.4623532
+    ],
+    "bearing_to_place": 55.1,
+    "diff_deg": 68.1
+   }
+  }
+ },
+ {
+  "id": "01676V41944",
+  "name": "Leirbrua ved Granåsen",
+  "city": "trondheim",
+  "lat": 63.379764,
+  "lon": 10.31614,
+  "road_ref": "FV6650 S2D1 m6716",
+  "heading_from": "Ila",
+  "heading_to": "Heimdal",
+  "first_data": "2012-11-08T13:00:00+01:00",
+  "latest_data": "2024-08-25T13:00:00+02:00",
+  "osm_edge": "5981436582_60950979_0",
+  "snap_dist_m": 0.4,
+  "road_bearing": 332.9,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Ila": 332.9,
+   "Heimdal": 152.9
+  },
+  "heading_audit": {
+   "Ila": {
+    "geocoded": [
+     63.4303737,
+     10.3719429
+    ],
+    "bearing_to_place": 26.3,
+    "diff_deg": 53.3
+   },
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 129.3,
+    "diff_deg": 23.6
+   }
+  }
+ },
+ {
+  "id": "36935V72359",
+  "name": "Selsbakk",
+  "city": "trondheim",
+  "lat": 63.392565,
+  "lon": 10.382986,
+  "road_ref": "RV706 S1D1 m1175",
+  "heading_from": "Heimdal",
+  "heading_to": "Sluppen",
+  "first_data": "1987-12-31T23:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "192644540_11155359908_0",
+  "snap_dist_m": 0.1,
+  "road_bearing": 30.4,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Heimdal": 210.4,
+   "Sluppen": 30.4
+  },
+  "heading_audit": {
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 150.0,
+    "diff_deg": 60.3
+   },
+   "Sluppen": {
+    "geocoded": [
+     63.401921,
+     10.395796
+    ],
+    "bearing_to_place": 31.5,
+    "diff_deg": 1.2
+   }
+  }
+ },
+ {
+  "id": "06750V2429605",
+  "name": "Bromstadvegens forlengelse",
+  "city": "trondheim",
+  "lat": 63.436718,
+  "lon": 10.459066,
+  "road_ref": "FV6664 S1D1 m4434",
+  "heading_from": "Strindheim",
+  "heading_to": "Lade",
+  "first_data": "2016-03-23T10:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "12023658578_61127301_0",
+  "snap_dist_m": 0.1,
+  "road_bearing": 35.8,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Strindheim": 215.8,
+   "Lade": 35.8
+  },
+  "heading_audit": {
+   "Strindheim": {
+    "geocoded": [
+     63.4268906,
+     10.453351
+    ],
+    "bearing_to_place": 194.6,
+    "diff_deg": 21.2
+   },
+   "Lade": {
+    "geocoded": [
+     63.4462827,
+     10.4434496
+    ],
+    "bearing_to_place": 323.9,
+    "diff_deg": 71.9
+   }
+  }
+ },
+ {
+  "id": "17961V72812",
+  "name": "Holtermanns veg nord for Bratsbergvegen",
+  "city": "trondheim",
+  "lat": 63.405447,
+  "lon": 10.39726,
+  "road_ref": "FV6690 S3D1 m2854",
+  "heading_from": "Heimdal",
+  "heading_to": "Sentrum",
+  "first_data": "2017-01-04T18:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "9779233317_8198875120_0",
+  "snap_dist_m": 6.1,
+  "road_bearing": 191.4,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Heimdal": 191.4,
+   "Sentrum": 11.4
+  },
+  "heading_audit": {
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 157.6,
+    "diff_deg": 33.7
+   },
+   "Sentrum": {
+    "geocoded": [
+     63.4363265,
+     10.4623532
+    ],
+    "bearing_to_place": 43.3,
+    "diff_deg": 32.0
+   }
+  }
+ },
+ {
+  "id": "90656V41781",
+  "name": "Haakon VII gt øst",
+  "city": "trondheim",
+  "lat": 63.439888,
+  "lon": 10.461562,
+  "road_ref": "FV6668 S1D1 m3063",
+  "heading_from": "Lade",
+  "heading_to": "Leangen",
+  "first_data": "2013-11-18T17:00:00+01:00",
+  "latest_data": "2026-06-19T10:00:00+02:00",
+  "osm_edge": "243359618_219258411_0",
+  "snap_dist_m": 1.2,
+  "road_bearing": 124.6,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Lade": 304.6,
+   "Leangen": 124.6
+  },
+  "heading_audit": {
+   "Lade": {
+    "geocoded": [
+     63.4462827,
+     10.4434496
+    ],
+    "bearing_to_place": 308.3,
+    "diff_deg": 3.7
+   },
+   "Leangen": {
+    "geocoded": [
+     63.437586,
+     10.4614617
+    ],
+    "bearing_to_place": 181.1,
+    "diff_deg": 56.5
+   }
+  }
+ },
+ {
+  "id": "46684V1842951",
+  "name": "Marienborgtunnelen",
+  "city": "trondheim",
+  "lat": 63.419947,
+  "lon": 10.372673,
+  "road_ref": "RV706 S1D1 m4530",
+  "heading_from": "Selsbakk",
+  "heading_to": "Ila",
+  "first_data": "2010-09-15T10:00:00+02:00",
+  "latest_data": "2026-02-06T12:00:00+01:00",
+  "osm_edge": "9680831210_753985045_0",
+  "snap_dist_m": 0.0,
+  "road_bearing": 146.9,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Selsbakk": 146.9,
+   "Ila": 326.9
+  },
+  "heading_audit": {
+   "Selsbakk": {
+    "geocoded": [
+     63.3893955,
+     10.3733563
+    ],
+    "bearing_to_place": 179.4,
+    "diff_deg": 32.5
+   },
+   "Ila": {
+    "geocoded": [
+     63.4303737,
+     10.3719429
+    ],
+    "bearing_to_place": 358.2,
+    "diff_deg": 31.3
+   }
+  }
+ },
+ {
+  "id": "78492V2394249",
+  "name": "Rotvollekra",
+  "city": "trondheim",
+  "lat": 63.431276,
+  "lon": 10.480316,
+  "road_ref": "RV706 S2D1 m6338",
+  "heading_from": "Trondheim",
+  "heading_to": "Stjørdal",
+  "first_data": "2015-05-06T13:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "1935204463_2642873756_0",
+  "snap_dist_m": 4.5,
+  "road_bearing": 102.7,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Trondheim": 282.7,
+   "Stjørdal": 102.7
+  },
+  "heading_audit": {
+   "Trondheim": {
+    "geocoded": [
+     63.4365032,
+     10.3980694
+    ],
+    "bearing_to_place": 278.1,
+    "diff_deg": 4.7
+   },
+   "Stjørdal": {
+    "geocoded": [
+     63.4627028,
+     11.1344723
+    ],
+    "bearing_to_place": 83.9,
+    "diff_deg": 18.9
+   }
+  }
+ },
+ {
+  "id": "30904V72218",
+  "name": "Moholt rampe fra Moholt",
+  "city": "trondheim",
+  "lat": 63.408653,
+  "lon": 10.43991,
+  "road_ref": "EV6 S76D1 m3522 KD4 m81",
+  "heading_from": "Moholt",
+  "heading_to": "Heimdal",
+  "first_data": "2015-04-09T13:00:00+02:00",
+  "latest_data": "2021-06-24T14:00:00+02:00",
+  "osm_edge": "220666886_33199528_0",
+  "snap_dist_m": 0.4,
+  "road_bearing": 170.0,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Moholt": 350.0,
+   "Heimdal": 170.0
+  },
+  "heading_audit": {
+   "Moholt": {
+    "geocoded": [
+     63.4100728,
+     10.4357532
+    ],
+    "bearing_to_place": 307.3,
+    "diff_deg": 42.6
+   },
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 170.0,
+    "diff_deg": 0.0
+   }
+  }
+ },
+ {
+  "id": "17909V41450",
+  "name": "Byåsveien ved Nyveibakken",
+  "city": "trondheim",
+  "lat": 63.426199,
+  "lon": 10.368463,
+  "road_ref": "FV6650 S2D1 m219",
+  "heading_from": "Ila",
+  "heading_to": "Heimdal",
+  "first_data": "2013-11-06T14:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "5839056923_248522286_0",
+  "snap_dist_m": 0.4,
+  "road_bearing": 331.5,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Ila": 331.5,
+   "Heimdal": 151.5
+  },
+  "heading_audit": {
+   "Ila": {
+    "geocoded": [
+     63.4303737,
+     10.3719429
+    ],
+    "bearing_to_place": 20.4,
+    "diff_deg": 48.9
+   },
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 155.6,
+    "diff_deg": 4.1
+   }
+  }
+ },
+ {
+  "id": "10236V72161",
+  "name": "Innherredsveien ved Bakke kirke",
+  "city": "trondheim",
+  "lat": 63.433012,
+  "lon": 10.410409,
+  "road_ref": "FV6690 S1D1 m452",
+  "heading_from": "Sentrum",
+  "heading_to": "Lade",
+  "first_data": "2013-11-25T13:00:00+01:00",
+  "latest_data": "2026-06-29T07:00:00+02:00",
+  "osm_edge": "11524246745_1074801729_0",
+  "snap_dist_m": 2.8,
+  "road_bearing": 232.1,
+  "matched": false,
+  "reject_reason": "both headings resolved to the same direction",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Sentrum": {
+    "geocoded": [
+     63.4363265,
+     10.4623532
+    ],
+    "bearing_to_place": 81.9,
+    "diff_deg": 29.8
+   },
+   "Lade": {
+    "geocoded": [
+     63.4462827,
+     10.4434496
+    ],
+    "bearing_to_place": 48.1,
+    "diff_deg": 4.0
+   }
+  }
+ },
+ {
+  "id": "20570V72811",
+  "name": "Sundland",
+  "city": "trondheim",
+  "lat": 63.402291,
+  "lon": 10.406712,
+  "road_ref": "EV6 S76D1 m1530",
+  "heading_from": "Trondheim (Sluppen)",
+  "heading_to": "Stjørdal",
+  "first_data": "1990-02-08T11:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "10141606_10141092_0",
+  "snap_dist_m": 3.8,
+  "road_bearing": 56.2,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Trondheim (Sluppen)": 236.2,
+   "Stjørdal": 56.2
+  },
+  "heading_audit": {
+   "Trondheim (Sluppen)": {
+    "geocoded": [
+     63.3964325,
+     10.3962974
+    ],
+    "bearing_to_place": 218.5,
+    "diff_deg": 17.7
+   },
+   "Stjørdal": {
+    "geocoded": [
+     63.4627028,
+     11.1344723
+    ],
+    "bearing_to_place": 79.5,
+    "diff_deg": 23.3
+   }
+  }
+ },
+ {
+  "id": "81077V72158",
+  "name": "Havnegata",
+  "city": "trondheim",
+  "lat": 63.43891,
+  "lon": 10.406326,
+  "road_ref": "RV706 S1D1 m8464",
+  "heading_from": "Ila",
+  "heading_to": "Lademoen",
+  "first_data": "2010-08-31T13:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "755630710_1077665448_0",
+  "snap_dist_m": 4.3,
+  "road_bearing": 319.9,
+  "matched": false,
+  "reject_reason": "heading 'Ila' 79° from road axis",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Ila": {
+    "geocoded": [
+     63.4303737,
+     10.3719429
+    ],
+    "bearing_to_place": 241.0,
+    "diff_deg": 78.9
+   }
+  }
+ },
+ {
+  "id": "81008V41567",
+  "name": "Festningsgata",
+  "city": "trondheim",
+  "lat": 63.428405,
+  "lon": 10.416203,
+  "road_ref": "FV6666 S1D1 m1869",
+  "heading_from": "Samfundet",
+  "heading_to": "Rosenborg",
+  "first_data": "2012-11-08T18:00:00+01:00",
+  "latest_data": "2024-09-25T11:00:00+02:00",
+  "osm_edge": "79199_79198_0",
+  "snap_dist_m": 0.0,
+  "road_bearing": 353.0,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Samfundet": 173.0,
+   "Rosenborg": 353.0
+  },
+  "heading_audit": {
+   "Samfundet": {
+    "geocoded": [
+     63.422434,
+     10.3954047
+    ],
+    "bearing_to_place": 237.3,
+    "diff_deg": 64.3
+   },
+   "Rosenborg": {
+    "geocoded": [
+     63.4342105,
+     10.4230927
+    ],
+    "bearing_to_place": 28.0,
+    "diff_deg": 34.9
+   }
+  }
+ },
+ {
+  "id": "04300V72813",
+  "name": "Innherredsveien ved Fjæregata",
+  "city": "trondheim",
+  "lat": 63.436143,
+  "lon": 10.420846,
+  "road_ref": "FV6692 S2D1 m160",
+  "heading_from": "Sentrum",
+  "heading_to": "Lade",
+  "first_data": "2014-11-01T00:00:00+01:00",
+  "latest_data": "2023-04-11T10:00:00+02:00",
+  "osm_edge": "5821634874_10090038133_0",
+  "snap_dist_m": 4.0,
+  "road_bearing": 81.1,
+  "matched": false,
+  "reject_reason": "both headings resolved to the same direction",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Sentrum": {
+    "geocoded": [
+     63.4363265,
+     10.4623532
+    ],
+    "bearing_to_place": 89.4,
+    "diff_deg": 8.3
+   },
+   "Lade": {
+    "geocoded": [
+     63.4462827,
+     10.4434496
+    ],
+    "bearing_to_place": 44.9,
+    "diff_deg": 36.2
+   }
+  }
+ },
+ {
+  "id": "34938V72813",
+  "name": "Innherredsveien ved Saxenborg alle",
+  "city": "trondheim",
+  "lat": 63.43778,
+  "lon": 10.4432,
+  "road_ref": "FV6692 S2D1 m1291",
+  "heading_from": "Sentrum",
+  "heading_to": "Rotvoll",
+  "first_data": "2014-11-01T00:00:00+01:00",
+  "latest_data": "2025-10-02T11:00:00+02:00",
+  "osm_edge": "248470758_80593_0",
+  "snap_dist_m": 0.2,
+  "road_bearing": 95.1,
+  "matched": false,
+  "reject_reason": "both headings resolved to the same direction",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Sentrum": {
+    "geocoded": [
+     63.4363265,
+     10.4623532
+    ],
+    "bearing_to_place": 99.6,
+    "diff_deg": 4.6
+   },
+   "Rotvoll": {
+    "geocoded": [
+     63.4399721,
+     10.4841649
+    ],
+    "bearing_to_place": 83.2,
+    "diff_deg": 11.9
+   }
+  }
+ },
+ {
+  "id": "27372V72852",
+  "name": "Søndre Ilevollen",
+  "city": "trondheim",
+  "lat": 63.428921,
+  "lon": 10.370042,
+  "road_ref": "FV6650 S1D1 m1153",
+  "heading_from": "Sentrum",
+  "heading_to": "Byåsen",
+  "first_data": "2013-09-11T11:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "2332949094_2368947071_0",
+  "snap_dist_m": 0.1,
+  "road_bearing": 240.0,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Sentrum": 60.0,
+   "Byåsen": 240.0
+  },
+  "heading_audit": {
+   "Sentrum": {
+    "geocoded": [
+     63.4363265,
+     10.4623532
+    ],
+    "bearing_to_place": 79.8,
+    "diff_deg": 19.8
+   },
+   "Byåsen": {
+    "geocoded": [
+     63.4013856,
+     10.357421
+    ],
+    "bearing_to_place": 191.6,
+    "diff_deg": 48.5
+   }
+  }
+ },
+ {
+  "id": "91594V1677415",
+  "name": "Marienborgtunnelen nord",
+  "city": "trondheim",
+  "lat": 63.430084,
+  "lon": 10.360325,
+  "road_ref": "RV706 S1D1 m5823",
+  "heading_from": "Marienborgtunnelen",
+  "heading_to": "Ilsvikrkj",
+  "first_data": "2008-07-10T12:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "9680854142_9680854145_0",
+  "snap_dist_m": 0.0,
+  "road_bearing": 334.9,
+  "matched": false,
+  "reject_reason": "geocode failed: Ilsvikrkj",
+  "heading_bearings": {}
+ },
+ {
+  "id": "09604V1677439",
+  "name": "Ilsviktunnelen",
+  "city": "trondheim",
+  "lat": 63.430638,
+  "lon": 10.361299,
+  "road_ref": "RV706 S1D1 m5889",
+  "heading_from": "Ilsvikrkj",
+  "heading_to": "Ilsviktunnelen",
+  "first_data": "2008-07-10T12:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "150833401_150833387_0",
+  "snap_dist_m": 0.0,
+  "road_bearing": 264.6,
+  "matched": false,
+  "reject_reason": "geocode failed: Ilsvikrkj",
+  "heading_bearings": {}
+ },
+ {
+  "id": "40649V2411511",
+  "name": "Grillstadtunnelen fra Rotvoll",
+  "city": "trondheim",
+  "lat": 63.430976,
+  "lon": 10.494077,
+  "road_ref": "EV6 S76D1 m6959 KD2 m325",
+  "heading_from": "Trondheim",
+  "heading_to": "Stjørdal",
+  "first_data": "2015-06-23T10:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "10142357_1138330059_0",
+  "snap_dist_m": 0.0,
+  "road_bearing": 87.5,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Trondheim": 267.5,
+   "Stjørdal": 87.5
+  },
+  "heading_audit": {
+   "Trondheim": {
+    "geocoded": [
+     63.4365032,
+     10.3980694
+    ],
+    "bearing_to_place": 277.3,
+    "diff_deg": 9.8
+   },
+   "Stjørdal": {
+    "geocoded": [
+     63.4627028,
+     11.1344723
+    ],
+    "bearing_to_place": 83.7,
+    "diff_deg": 3.8
+   }
+  }
+ },
+ {
+  "id": "94210V2411536",
+  "name": "Grillstadtunnelen vest",
+  "city": "trondheim",
+  "lat": 63.430953,
+  "lon": 10.495009,
+  "road_ref": "EV6 S76D1 m7308",
+  "heading_from": "Trondheim",
+  "heading_to": "Stjørdal",
+  "first_data": "2014-11-10T12:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "1138286182_1138330078_0",
+  "snap_dist_m": 8.8,
+  "road_bearing": 299.2,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Trondheim": 299.2,
+   "Stjørdal": 119.2
+  },
+  "heading_audit": {
+   "Trondheim": {
+    "geocoded": [
+     63.4365032,
+     10.3980694
+    ],
+    "bearing_to_place": 277.3,
+    "diff_deg": 21.9
+   },
+   "Stjørdal": {
+    "geocoded": [
+     63.4627028,
+     11.1344723
+    ],
+    "bearing_to_place": 83.7,
+    "diff_deg": 35.5
+   }
+  }
+ },
+ {
+  "id": "44210V2411509",
+  "name": "Grillstadtunnelen til Rotvoll",
+  "city": "trondheim",
+  "lat": 63.431344,
+  "lon": 10.49369,
+  "road_ref": "EV6 S76D1 m6959 KD6 m100",
+  "heading_from": "Stjørdal",
+  "heading_to": "Trondheim",
+  "first_data": "2015-06-23T10:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "1138286182_1138330078_0",
+  "snap_dist_m": 5.5,
+  "road_bearing": 299.2,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Stjørdal": 119.2,
+   "Trondheim": 299.2
+  },
+  "heading_audit": {
+   "Stjørdal": {
+    "geocoded": [
+     63.4627028,
+     11.1344723
+    ],
+    "bearing_to_place": 83.8,
+    "diff_deg": 35.4
+   },
+   "Trondheim": {
+    "geocoded": [
+     63.4365032,
+     10.3980694
+    ],
+    "bearing_to_place": 276.9,
+    "diff_deg": 22.3
+   }
+  }
+ },
+ {
+  "id": "21571V2394246",
+  "name": "Strindheimtunnelen retning Nyhavna",
+  "city": "trondheim",
+  "lat": 63.433298,
+  "lon": 10.435819,
+  "road_ref": "RV706 S2D1 m3938",
+  "heading_from": "Rotvoll",
+  "heading_to": "Nyhavna",
+  "first_data": "2014-07-14T13:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "2459493741_2476631143_0",
+  "snap_dist_m": 0.1,
+  "road_bearing": 281.6,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Rotvoll": 101.6,
+   "Nyhavna": 281.6
+  },
+  "heading_audit": {
+   "Rotvoll": {
+    "geocoded": [
+     63.4399721,
+     10.4841649
+    ],
+    "bearing_to_place": 72.8,
+    "diff_deg": 28.8
+   },
+   "Nyhavna": {
+    "geocoded": [
+     63.439925,
+     10.4170583
+    ],
+    "bearing_to_place": 308.3,
+    "diff_deg": 26.7
+   }
+  }
+ },
+ {
+  "id": "04211V1677432",
+  "name": "Nye Ilsvikøra",
+  "city": "trondheim",
+  "lat": 63.430506,
+  "lon": 10.359534,
+  "road_ref": "FV715 S1D1 m21",
+  "heading_from": "Ila",
+  "heading_to": "Flakk",
+  "first_data": "2019-06-13T14:00:00+02:00",
+  "latest_data": "2021-11-03T12:00:00+01:00",
+  "osm_edge": "252596135_1078388867_0",
+  "snap_dist_m": 0.4,
+  "road_bearing": 108.3,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Ila": 108.3,
+   "Flakk": 288.3
+  },
+  "heading_audit": {
+   "Ila": {
+    "geocoded": [
+     63.4303737,
+     10.3719429
+    ],
+    "bearing_to_place": 91.4,
+    "diff_deg": 16.9
+   },
+   "Flakk": {
+    "geocoded": [
+     63.4456314,
+     10.1936993
+    ],
+    "bearing_to_place": 281.5,
+    "diff_deg": 6.8
+   }
+  }
+ },
+ {
+  "id": "03960V1677432",
+  "name": "Ilsvika",
+  "city": "trondheim",
+  "lat": 63.430504,
+  "lon": 10.359574,
+  "road_ref": "FV715 S1D1 m19",
+  "heading_from": "Ilsvikrkj",
+  "heading_to": "Flakk",
+  "first_data": "2008-07-10T12:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "252596135_1078388867_0",
+  "snap_dist_m": 0.8,
+  "road_bearing": 108.3,
+  "matched": false,
+  "reject_reason": "geocode failed: Ilsvikrkj",
+  "heading_bearings": {}
+ },
+ {
+  "id": "44660V72811",
+  "name": "Moholt ved Vegamot",
+  "city": "trondheim",
+  "lat": 63.411011,
+  "lon": 10.444889,
+  "road_ref": "EV6 S76D1 m3829",
+  "heading_from": "Trondheim (Sluppen)",
+  "heading_to": "Stjørdal",
+  "first_data": "2011-02-02T12:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "33199553_35651709_0",
+  "snap_dist_m": 4.6,
+  "road_bearing": 42.2,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Trondheim (Sluppen)": 222.2,
+   "Stjørdal": 42.2
+  },
+  "heading_audit": {
+   "Trondheim (Sluppen)": {
+    "geocoded": [
+     63.3964325,
+     10.3962974
+    ],
+    "bearing_to_place": 236.2,
+    "diff_deg": 13.9
+   },
+   "Stjørdal": {
+    "geocoded": [
+     63.4627028,
+     11.1344723
+    ],
+    "bearing_to_place": 80.5,
+    "diff_deg": 38.2
+   }
+  }
+ },
+ {
+  "id": "88356V72157",
+  "name": "Jernbanebrua",
+  "city": "trondheim",
+  "lat": 63.435088,
+  "lon": 10.400117,
+  "road_ref": "FV6692 S1D1 m197",
+  "heading_from": "Fjordgata",
+  "heading_to": "Trondheim S.",
+  "first_data": "2014-01-16T11:00:00+01:00",
+  "latest_data": "2022-03-07T10:00:00+01:00",
+  "osm_edge": "1139001521_78337_0",
+  "snap_dist_m": 0.4,
+  "road_bearing": 175.7,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Fjordgata": 175.7,
+   "Trondheim S.": 355.7
+  },
+  "heading_audit": {
+   "Fjordgata": {
+    "geocoded": [
+     63.4344452,
+     10.3963715
+    ],
+    "bearing_to_place": 249.0,
+    "diff_deg": 73.3
+   },
+   "Trondheim S.": {
+    "geocoded": [
+     63.4365967,
+     10.399955
+    ],
+    "bearing_to_place": 357.3,
+    "diff_deg": 1.5
+   }
+  }
+ },
+ {
+  "id": "78481V42532",
+  "name": "Stiklestadveien mot Jarleveien",
+  "city": "trondheim",
+  "lat": 63.441599,
+  "lon": 10.431559,
+  "road_ref": "FV6668 S1D1 m1072",
+  "heading_from": "Lademoen",
+  "heading_to": "Lade",
+  "first_data": "2017-10-19T13:00:00+02:00",
+  "latest_data": "2023-08-10T11:00:00+02:00",
+  "osm_edge": "250749646_78429_0",
+  "snap_dist_m": 0.7,
+  "road_bearing": 104.8,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Lademoen": 284.8,
+   "Lade": 104.8
+  },
+  "heading_audit": {
+   "Lademoen": {
+    "geocoded": [
+     63.4374166,
+     10.425008
+    ],
+    "bearing_to_place": 215.0,
+    "diff_deg": 69.8
+   },
+   "Lade": {
+    "geocoded": [
+     63.4462827,
+     10.4434496
+    ],
+    "bearing_to_place": 48.6,
+    "diff_deg": 56.2
+   }
+  }
+ },
+ {
+  "id": "21703V2404412",
+  "name": "E6 TILLER VED XXL",
+  "city": "trondheim",
+  "lat": 63.356171,
+  "lon": 10.371026,
+  "road_ref": "EV6 S74D1 m2062",
+  "heading_from": "Klett",
+  "heading_to": "Tonstad",
+  "first_data": "2014-06-30T22:00:00+02:00",
+  "latest_data": "2017-07-20T02:00:00+02:00",
+  "osm_edge": "3547307376_267531959_0",
+  "snap_dist_m": 31.0,
+  "road_bearing": 348.3,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Klett": 168.3,
+   "Tonstad": 348.3
+  },
+  "heading_audit": {
+   "Klett": {
+    "geocoded": [
+     63.3248119,
+     10.3073017
+    ],
+    "bearing_to_place": 222.4,
+    "diff_deg": 54.1
+   },
+   "Tonstad": {
+    "geocoded": [
+     63.3841271,
+     10.1687944
+    ],
+    "bearing_to_place": 287.1,
+    "diff_deg": 61.2
+   }
+  }
+ },
+ {
+  "id": "21801V72158",
+  "name": "Brattørbrua",
+  "city": "trondheim",
+  "lat": 63.434645,
+  "lon": 10.40504,
+  "road_ref": "FV6692 S1D20 m51",
+  "heading_from": "Kjøpmannsgata",
+  "heading_to": "Trondheim S.",
+  "first_data": "2014-03-27T13:00:00+01:00",
+  "latest_data": "2024-07-22T19:00:00+02:00",
+  "osm_edge": "78323_34959130_0",
+  "snap_dist_m": 0.1,
+  "road_bearing": 20.2,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Kjøpmannsgata": 200.2,
+   "Trondheim S.": 20.2
+  },
+  "heading_audit": {
+   "Kjøpmannsgata": {
+    "geocoded": [
+     63.43394,
+     10.4044312
+    ],
+    "bearing_to_place": 201.1,
+    "diff_deg": 0.9
+   },
+   "Trondheim S.": {
+    "geocoded": [
+     63.4365967,
+     10.399955
+    ],
+    "bearing_to_place": 310.6,
+    "diff_deg": 69.6
+   }
+  }
+ },
+ {
+  "id": "65625V41945",
+  "name": "Kong Øysteins veg ved Eberg",
+  "city": "trondheim",
+  "lat": 63.419155,
+  "lon": 10.436016,
+  "road_ref": "FV6664 S1D1 m2143",
+  "heading_from": "Moholt",
+  "heading_to": "Bromstad",
+  "first_data": "2013-11-06T11:00:00+01:00",
+  "latest_data": "2020-03-17T15:00:00+01:00",
+  "osm_edge": "1736914938_616826252_0",
+  "snap_dist_m": 0.9,
+  "road_bearing": 28.0,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Moholt": 208.0,
+   "Bromstad": 28.0
+  },
+  "heading_audit": {
+   "Moholt": {
+    "geocoded": [
+     63.4100728,
+     10.4357532
+    ],
+    "bearing_to_place": 180.7,
+    "diff_deg": 27.2
+   },
+   "Bromstad": {
+    "geocoded": [
+     63.4274917,
+     10.4559359
+    ],
+    "bearing_to_place": 46.9,
+    "diff_deg": 19.0
+   }
+  }
+ },
+ {
+  "id": "35002V72811",
+  "name": "Moholtlia",
+  "city": "trondheim",
+  "lat": 63.407889,
+  "lon": 10.428457,
+  "road_ref": "EV6 S76D1 m2823",
+  "heading_from": "Heimdal",
+  "heading_to": "Ranheim",
+  "first_data": "1990-02-08T11:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "10141043_148298474_0",
+  "snap_dist_m": 4.0,
+  "road_bearing": 84.5,
+  "matched": false,
+  "reject_reason": "heading 'Heimdal' 82° from road axis",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 166.6,
+    "diff_deg": 82.1
+   }
+  }
+ },
+ {
+  "id": "77022V72359",
+  "name": "Oslovegen",
+  "city": "trondheim",
+  "lat": 63.403985,
+  "lon": 10.387335,
+  "road_ref": "RV706 S1D1 m2515",
+  "heading_from": "Selsbakk",
+  "heading_to": "Ila",
+  "first_data": "1992-02-10T14:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "13451992328_105891_0",
+  "snap_dist_m": 0.1,
+  "road_bearing": 354.8,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Selsbakk": 174.8,
+   "Ila": 354.8
+  },
+  "heading_audit": {
+   "Selsbakk": {
+    "geocoded": [
+     63.3893955,
+     10.3733563
+    ],
+    "bearing_to_place": 203.2,
+    "diff_deg": 28.5
+   },
+   "Ila": {
+    "geocoded": [
+     63.4303737,
+     10.3719429
+    ],
+    "bearing_to_place": 345.4,
+    "diff_deg": 9.4
+   }
+  }
+ },
+ {
+  "id": "63028V72219",
+  "name": "Moholt rampe til Moholt",
+  "city": "trondheim",
+  "lat": 63.408842,
+  "lon": 10.440245,
+  "road_ref": "EV6 S76D1 m3522 KD3 m121",
+  "heading_from": "Ranheim",
+  "heading_to": "Moholt",
+  "first_data": "2011-02-03T12:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "105245_220666869_0",
+  "snap_dist_m": 0.5,
+  "road_bearing": 274.5,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Ranheim": 94.5,
+   "Moholt": 274.5
+  },
+  "heading_audit": {
+   "Ranheim": {
+    "geocoded": [
+     63.4274654,
+     10.5300119
+    ],
+    "bearing_to_place": 65.1,
+    "diff_deg": 29.3
+   },
+   "Moholt": {
+    "geocoded": [
+     63.4100728,
+     10.4357532
+    ],
+    "bearing_to_place": 301.5,
+    "diff_deg": 27.0
+   }
+  }
+ },
+ {
+  "id": "73951V2394243",
+  "name": "Strindheimtunnelen retning Rotvoll",
+  "city": "trondheim",
+  "lat": 63.433091,
+  "lon": 10.435694,
+  "road_ref": "RV706 S2D1 m1340",
+  "heading_from": "Nyhavna",
+  "heading_to": "Rotvoll",
+  "first_data": "2014-07-14T13:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "1805180017_2459493732_0",
+  "snap_dist_m": 0.3,
+  "road_bearing": 101.6,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Nyhavna": 281.6,
+   "Rotvoll": 101.6
+  },
+  "heading_audit": {
+   "Nyhavna": {
+    "geocoded": [
+     63.439925,
+     10.4170583
+    ],
+    "bearing_to_place": 309.4,
+    "diff_deg": 27.8
+   },
+   "Rotvoll": {
+    "geocoded": [
+     63.4399721,
+     10.4841649
+    ],
+    "bearing_to_place": 72.4,
+    "diff_deg": 29.2
+   }
+  }
+ },
+ {
+  "id": "84826V42881",
+  "name": "Tungasletta mot I. Ystgaardsv.",
+  "city": "trondheim",
+  "lat": 63.419533,
+  "lon": 10.464411,
+  "road_ref": "KV7703 S3D1 m62",
+  "heading_from": "Granåsen",
+  "heading_to": "Tungasletta",
+  "first_data": "2017-11-16T11:00:00+01:00",
+  "latest_data": "2018-04-11T12:00:00+02:00",
+  "osm_edge": "5825346095_6400790012_0",
+  "snap_dist_m": 4.6,
+  "road_bearing": 320.0,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Granåsen": 140.0,
+   "Tungasletta": 320.0
+  },
+  "heading_audit": {
+   "Granåsen": {
+    "geocoded": [
+     63.2493472,
+     10.421411
+    ],
+    "bearing_to_place": 186.5,
+    "diff_deg": 46.5
+   },
+   "Tungasletta": {
+    "geocoded": [
+     63.4213619,
+     10.4611619
+    ],
+    "bearing_to_place": 321.5,
+    "diff_deg": 1.5
+   }
+  }
+ },
+ {
+  "id": "16219V72812",
+  "name": "Prinsens gt nord for Elgeseter bru",
+  "city": "trondheim",
+  "lat": 63.424987,
+  "lon": 10.393782,
+  "road_ref": "FV6690 S3D1 m640",
+  "heading_from": "Sluppen",
+  "heading_to": "Sentrum",
+  "first_data": "2012-12-12T19:00:00+01:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "78275_3051860254_0",
+  "snap_dist_m": 0.7,
+  "road_bearing": 352.6,
+  "matched": false,
+  "reject_reason": "heading 'Sentrum' 77° from road axis",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Sluppen": {
+    "geocoded": [
+     63.401921,
+     10.395796
+    ],
+    "bearing_to_place": 177.8,
+    "diff_deg": 5.2
+   },
+   "Sentrum": {
+    "geocoded": [
+     63.4363265,
+     10.4623532
+    ],
+    "bearing_to_place": 69.7,
+    "diff_deg": 77.1
+   }
+  }
+ },
+ {
+  "id": "17647V72199",
+  "name": "Tempevegen v Nydalsbrua - rampe KD2 fra E6",
+  "city": "trondheim",
+  "lat": 63.39818,
+  "lon": 10.392531,
+  "road_ref": "EV6 S76D1 m117 KD2 m154",
+  "heading_from": "Omkjøringsvegen",
+  "heading_to": "Nydalsbrua",
+  "first_data": "2024-06-10T13:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "6549852638_8025564979_0",
+  "snap_dist_m": 0.6,
+  "road_bearing": 218.8,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Omkjøringsvegen": 38.8,
+   "Nydalsbrua": 218.8
+  },
+  "heading_audit": {
+   "Omkjøringsvegen": {
+    "geocoded": [
+     63.4007653,
+     10.3971287
+    ],
+    "bearing_to_place": 38.5,
+    "diff_deg": 0.3
+   },
+   "Nydalsbrua": {
+    "geocoded": [
+     63.3976404,
+     10.3884421
+    ],
+    "bearing_to_place": 253.6,
+    "diff_deg": 34.8
+   }
+  }
+ },
+ {
+  "id": "33066V72372",
+  "name": "Sluppenvegen v hovedbrannstasjonen",
+  "city": "trondheim",
+  "lat": 63.397378,
+  "lon": 10.391879,
+  "road_ref": "RV706 S1D20 m232",
+  "heading_from": "Nydalsbrua",
+  "heading_to": "Sluppen",
+  "first_data": "2024-06-13T10:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "192644411_11155359928_0",
+  "snap_dist_m": 0.3,
+  "road_bearing": 304.0,
+  "matched": false,
+  "reject_reason": "heading 'Sluppen' 77° from road axis",
+  "heading_bearings": {},
+  "heading_audit": {
+   "Nydalsbrua": {
+    "geocoded": [
+     63.3976404,
+     10.3884421
+    ],
+    "bearing_to_place": 279.7,
+    "diff_deg": 24.4
+   },
+   "Sluppen": {
+    "geocoded": [
+     63.401921,
+     10.395796
+    ],
+    "bearing_to_place": 21.1,
+    "diff_deg": 77.1
+   }
+  }
+ },
+ {
+  "id": "16826V3508288",
+  "name": "Nydalsbrua vest",
+  "city": "trondheim",
+  "lat": 63.395661,
+  "lon": 10.385005,
+  "road_ref": "RV706 S1D1 m1550",
+  "heading_from": "Heimdal",
+  "heading_to": "Marienborg",
+  "first_data": "2024-05-29T14:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "8025564887_11155359915_0",
+  "snap_dist_m": 0.1,
+  "road_bearing": 182.5,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Heimdal": 182.5,
+   "Marienborg": 2.5
+  },
+  "heading_audit": {
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 151.6,
+    "diff_deg": 30.9
+   },
+   "Marienborg": {
+    "geocoded": [
+     63.4186484,
+     10.3826835
+    ],
+    "bearing_to_place": 357.4,
+    "diff_deg": 5.1
+   }
+  }
+ },
+ {
+  "id": "17418V3508286",
+  "name": "Nydalsbrua vest - rampe KD1",
+  "city": "trondheim",
+  "lat": 63.395653,
+  "lon": 10.38512,
+  "road_ref": "RV706 S1D1 m1753 KD1 m85",
+  "heading_from": "Heimdal",
+  "heading_to": "Sluppen",
+  "first_data": "2024-05-29T14:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "8025564887_11155359915_0",
+  "snap_dist_m": 5.6,
+  "road_bearing": 182.5,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Heimdal": 182.5,
+   "Sluppen": 2.5
+  },
+  "heading_audit": {
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 151.6,
+    "diff_deg": 30.9
+   },
+   "Sluppen": {
+    "geocoded": [
+     63.401921,
+     10.395796
+    ],
+    "bearing_to_place": 37.3,
+    "diff_deg": 34.8
+   }
+  }
+ },
+ {
+  "id": "80278V3508285",
+  "name": "Nydalsbrua vest - rampe KD4",
+  "city": "trondheim",
+  "lat": 63.395687,
+  "lon": 10.384903,
+  "road_ref": "RV706 S1D1 m1753 KD4 m198",
+  "heading_from": "Sluppen",
+  "heading_to": "Heimdal",
+  "first_data": "2024-05-29T14:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "8025564887_11155359915_0",
+  "snap_dist_m": 5.8,
+  "road_bearing": 182.5,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Sluppen": 2.5,
+   "Heimdal": 182.5
+  },
+  "heading_audit": {
+   "Sluppen": {
+    "geocoded": [
+     63.401921,
+     10.395796
+    ],
+    "bearing_to_place": 38.0,
+    "diff_deg": 35.5
+   },
+   "Heimdal": {
+    "geocoded": [
+     63.3216469,
+     10.4742217
+    ],
+    "bearing_to_place": 151.6,
+    "diff_deg": 30.9
+   }
+  }
+ },
+ {
+  "id": "69607V3508276",
+  "name": "Tempevegen v Nydalsbrua",
+  "city": "trondheim",
+  "lat": 63.398274,
+  "lon": 10.391223,
+  "road_ref": "KV7440 S2D1 m1212",
+  "heading_from": "Tempe",
+  "heading_to": "Nydalsbrua",
+  "first_data": "2024-06-10T13:00:00+02:00",
+  "latest_data": "2026-07-02T16:00:00+02:00",
+  "osm_edge": "8025564963_9779233290_0",
+  "snap_dist_m": 0.0,
+  "road_bearing": 15.0,
+  "matched": true,
+  "reject_reason": null,
+  "heading_bearings": {
+   "Tempe": 15.0,
+   "Nydalsbrua": 195.0
+  },
+  "heading_audit": {
+   "Tempe": {
+    "geocoded": [
+     63.4085445,
+     10.3970833
+    ],
+    "bearing_to_place": 14.3,
+    "diff_deg": 0.7
+   },
+   "Nydalsbrua": {
+    "geocoded": [
+     63.3976404,
+     10.3884421
+    ],
+    "bearing_to_place": 243.0,
+    "diff_deg": 48.0
+   }
+  }
+ }
+]

@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dirsplit.geo import (ang_diff_deg, bearing_deg, haversine_m, in_bbox,
-                          is_ahead, radial_cos)
+                          is_ahead, point_to_polyline_m, radial_cos)
 
 
 class TestBearing:
@@ -73,6 +73,25 @@ class TestMisc:
     def test_bbox(self):
         assert in_bbox(63.4, 10.4, (63.35, 10.25, 63.46, 10.55))
         assert not in_bbox(63.5, 10.4, (63.35, 10.25, 63.46, 10.55))
+
+
+class TestPointToPolyline:
+    def test_point_on_line(self):
+        line = [(11.0, 57.0), (11.01, 57.0)]   # (lon, lat), ~600 m east-west
+        assert point_to_polyline_m(57.0, 11.005, line) == pytest.approx(0.0, abs=0.5)
+
+    def test_point_beside_long_segment_midpoint(self):
+        # Station 100 m north of the middle of a 2 km segment: vertex-based
+        # distance would report ~1000 m; segment projection must give ~100 m.
+        line = [(11.0, 57.0), (11.033, 57.0)]
+        d = point_to_polyline_m(57.0009, 11.0165, line)
+        assert d == pytest.approx(100.0, rel=0.05)
+
+    def test_point_past_endpoint(self):
+        # Beyond the end, distance is to the endpoint, never negative-t
+        line = [(11.0, 57.0), (11.001, 57.0)]
+        d = point_to_polyline_m(57.0, 11.003, line)
+        assert d == pytest.approx(haversine_m(57.0, 11.003, 57.0, 11.001), rel=0.02)
 
 
 class TestSharedFeatureContract:
