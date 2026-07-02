@@ -26,6 +26,21 @@ scenario:
 	python3 run_scenario.py
 	python3 run_scenario.py --close 60786979_3575001205_0
 
+# ── Direction-split model (dirsplit/) ─────────────────────────────────────
+# Full fetch takes hours (394 stations, throttled APIs) — run overnight.
+
+dirsplit-stations:
+	python3 -m dirsplit.fetch_norway --stations
+
+dirsplit-volumes:
+	python3 -m dirsplit.fetch_norway --volumes
+
+dirsplit-match:
+	python3 -m dirsplit.match
+
+dirsplit-coverage:
+	python3 -m dirsplit.coverage
+
 data:
 	python3 build_data.py --data_dir "$(DATA_DIR)" --coords "$(COORDS)"
 

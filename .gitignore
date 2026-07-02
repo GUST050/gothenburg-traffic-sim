@@ -21,3 +21,7 @@ web/data/features/flow_matrix.csv
 # SUMO intermediates (rebuildable via make sumo-net/demand/scenario);
 # the web-facing products live in web/data/scenarios/ and ARE tracked
 sumo/
+
+# dirsplit: raw hourly volumes are large and re-fetchable (open APIs);
+# station metadata, matches and coverage report ARE tracked
+data/dirsplit/volumes/

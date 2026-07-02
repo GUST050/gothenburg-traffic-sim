@@ -82,6 +82,33 @@ entry sectors) → `web/data/od_matrix.json`/`.csv`. Both are estimates and
 labelled as such: the true direction split and OD are not identifiable from
 six counting points.
 
+## Trained direction-split model (`dirsplit/`, in progress)
+
+Instead of guessing the split, a model is trained on cities where hourly
+**directional** counts are open data: Statens vegvesen's
+[trafikkdata API](https://trafikkdata.atlas.vegvesen.no/om-api) (394 stations
+in Oslo, Bergen, Trondheim, Stavanger). One shared feature pipeline describes
+every directed edge — road class, speed, lanes, toward-centre alignment,
+residential streets behind vs destinations ahead — identically for Norwegian
+stations and Gothenburg sensor edges, so adding a sensor requires nothing but
+a row in `network.geojson`. Station directions arrive as place names; they
+are resolved to bearings by geocoding + road-axis matching with a consistency
+requirement, and ambiguous stations are excluded (all decisions stored for
+audit). An applicability-domain check (kNN in standardized feature space)
+verifies the Gothenburg edges lie inside the training distribution before any
+prediction is trusted.
+
+```bash
+make dirsplit-stations   # station metadata (open API, no key)
+make dirsplit-volumes    # hourly volumes by direction (resumable)
+make dirsplit-match      # OSM matching + heading→bearing resolution
+make dirsplit-coverage   # are our sensor edges inside the training cloud?
+```
+
+Planned: profile features from the fetched volumes, LightGBM training with
+leave-city-out validation, then wiring predictions into the SUMO demand
+calibration in place of `estimate_directions.py`.
+
 Scenarios appear under the **Scenario** toggle in the web app: every simulated
 street is coloured by flow, the closed edge is drawn black-dashed, and each
 edge's confidence combines the distance-to-sensor prior with the spread across

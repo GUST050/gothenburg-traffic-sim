@@ -57,6 +57,13 @@ Goal arc, in order:
    - Web: "Scenario" toggle + dropdown; scenario colours ALL simulated edges (dots stay on sensor edges for perf); closed edge drawn black-dashed; URL params ?mode=scenario&file=&qi=.
    - Simulation uses the FULL graphml graph (~2 250 edges) so rerouting has real alternatives; the web app displays the subset in network.geojson.
    REMAINING: leave-one-out validation at the 6 sensors (empirical confidence decay); whole-day windows; more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
+5. IN PROGRESS — Trained direction-split model (`dirsplit/` package), replacing the AM/PM-Gaussian guess in estimate_directions.py:
+   - Training data: OPEN hourly directional counts from Statens vegvesen's trafikkdata GraphQL API (no key) — 394 stations in Oslo/Bergen/Trondheim/Stavanger bboxes; volumes fetched per station for 4 ISO weeks (36,37,20,45) of its newest available year. UK DfT raw counts identified as secondary source (hourly 07–19 by direction, bulk CSV) — not yet integrated.
+   - Heading→bearing: station directions are PLACE NAMES; resolved by geocoding both names (Nominatim, cached, 1 req/s) and matching against the OSM edge's two axis bearings, with a consistency requirement (opposite candidates, ≤75° each) — ambiguous stations are EXCLUDED, all decisions stored for audit in stations_matched.json.
+   - ONE feature code path (dirsplit/features.py) for training stations and Gothenburg sensor edges: road class/speed/lanes/oneway, dist-to-centre, radial_cos (toward-centre alignment), residential/major street length behind vs ahead within 1 km half-discs (population/activity proxy from the road graph itself — upgrade path: GHS-POP raster). New sensors in network.geojson are picked up automatically.
+   - Applicability check (dirsplit/coverage.py): kNN distance of each sensor edge in standardized feature space vs the training cloud; >90th percentile ⇒ flagged EXTRAPOLATION.
+   - make dirsplit-stations / dirsplit-volumes / dirsplit-match / dirsplit-coverage. Raw volumes gitignored (re-fetchable); metadata/matches/coverage tracked.
+   - REMAINING: full multi-city volume+match fetch (hours, throttled), profile features from volumes, LightGBM training with leave-city-out validation, wire predictions into build_sumo_demand (replace estimate_directions), UK DfT integration.
 
 ## Rules — do / never
 - DO route all flow access through `flowAt(edgeId, t)`. NEVER fetch data inside render code.
