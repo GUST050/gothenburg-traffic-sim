@@ -18,8 +18,14 @@ all: data features agent1 forecast test
 sumo-net:
 	python3 build_sumo_net.py
 
+# Direction split: use the TRAINED dirsplit model when it exists,
+# fall back to the Gaussian AM/PM estimate otherwise.
 demand:
-	python3 estimate_directions.py
+	@if [ -f data/dirsplit/model.pkl ]; then \
+		python3 -m dirsplit.predict; \
+	else \
+		python3 estimate_directions.py; \
+	fi
 	python3 build_sumo_demand.py
 
 scenario:
@@ -40,6 +46,15 @@ dirsplit-match:
 
 dirsplit-coverage:
 	python3 -m dirsplit.coverage
+
+dirsplit-dataset:
+	python3 -m dirsplit.dataset
+
+dirsplit-train:
+	python3 -m dirsplit.train
+
+dirsplit-predict:
+	python3 -m dirsplit.predict
 
 data:
 	python3 build_data.py --data_dir "$(DATA_DIR)" --coords "$(COORDS)"

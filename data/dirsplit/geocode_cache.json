@@ -147,5 +147,435 @@
 "Tempe|trondheim": [
 63.4085445,
 10.3970833
+],
+"Øst|oslo": [
+59.916967,
+10.806318
+],
+"Vest|oslo": [
+59.9176785,
+10.6355821
+],
+"Ulven|oslo": [
+59.9221304,
+10.8144254
+],
+"Sinsen|oslo": [
+59.9338917,
+10.7851417
+],
+"Sentrum|oslo": [
+59.9099697,
+10.743309
+],
+"Lodalen|oslo": [
+59.9047223,
+10.7747357
+],
+"Bjørvika|oslo": [
+59.9083819,
+10.7545531
+],
+"MISSING DIRECTION|oslo": null,
+"Ryen|oslo": [
+59.8956702,
+10.8047288
+],
+"Ekebergtunnelen|oslo": [
+59.9018348,
+10.7815933
+],
+"Alnabru|oslo": [
+59.9287861,
+10.8376972
+],
+"Teisen|oslo": [
+59.9145933,
+10.8181601
+],
+"Oslo|oslo": [
+59.9723975,
+10.7757292
+],
+"Drammen|oslo": [
+59.9171557,
+10.8281935
+],
+"Havnelageret|oslo": [
+59.9074645,
+10.7465587
+],
+"Framnes|oslo": [
+59.9113042,
+10.7117003
+],
+"Oslo (Alnabru)|oslo": [
+59.9210622,
+10.8308298
+],
+"Gardermoen|oslo": [
+60.1931498,
+11.0968156
+],
+"Brobekk|oslo": [
+59.9429673,
+10.8216528
+],
+"Helsfyr|oslo": [
+59.9127328,
+10.801005
+],
+"Gjelleråsen|oslo": [
+59.9837167,
+10.9262583
+],
+"Økern|oslo": [
+59.9282615,
+10.8062778
+],
+"Moss|oslo": [
+59.4462641,
+10.6833726
+],
+"Oslo (Sinsen)|oslo": [
+59.9322271,
+10.786509
+],
+"Grua|oslo": [
+60.2590571,
+10.6649485
+],
+"Smestad|oslo": [
+59.9372195,
+10.6841674
+],
+"Lysaker|oslo": [
+59.9132296,
+10.6421281
+],
+"STRØMSVEIEN|oslo": [
+59.907697,
+10.7815385
+],
+"ØSTRE AKER VEI|oslo": [
+59.9412106,
+10.8612572
+],
+"Grorud|oslo": [
+59.9623428,
+10.8752898
+],
+"Bjerke|oslo": [
+59.9413947,
+10.8292085
+],
+"Holmenkollen|oslo": [
+59.9603535,
+10.6649715
+],
+"Tunnel|oslo": [
+59.9263215,
+10.8142609
+],
+"Bogerud|oslo": [
+59.8762194,
+10.8421165
+],
+"Ulsrud|oslo": [
+59.8895783,
+10.8494443
+],
+"Etterstad|oslo": [
+59.9112021,
+10.8001908
+],
+"Mustad|oslo": [
+60.8089742,
+10.474616
+],
+"Bekkelaget|oslo": [
+59.8814224,
+10.7757743
+],
+"Ullevål|oslo": [
+59.9413211,
+10.7373109
+],
+"Nydalen|oslo": [
+59.9494009,
+10.7659732
+],
+"Askim|oslo": [
+59.5818705,
+11.1411375
+],
+"Oslo (Sørenga)|oslo": [
+59.9067935,
+10.7610162
+],
+"Majorstuen|oslo": [
+59.9292711,
+10.7155691
+],
+"Gaustad|oslo": [
+59.945882,
+10.7101747
+],
+"Hausmannsgate|oslo": [
+59.9181884,
+10.752701
+],
+"Waldemar Tranes Gt.|oslo": null,
+"Bryn|oslo": [
+59.9083893,
+10.8194377
+],
+"Furuset|oslo": [
+59.9410674,
+10.8963987
+],
+"Storo|oslo": [
+59.945133,
+10.7769677
+],
+"Risløkka|oslo": [
+59.9325069,
+10.8231305
+],
+"Abildsø|oslo": [
+59.8863315,
+10.8197203
+],
+"Sandstuveien|oslo": [
+59.8856127,
+10.7852835
+],
+"Solli Plass|oslo": [
+59.9146823,
+10.7177382
+],
+"Skøyen|oslo": [
+59.9224287,
+10.6784991
+],
+"Galgeberg|oslo": [
+59.9072293,
+10.7789547
+],
+"Carl Berner|oslo": [
+59.9261264,
+10.7759385
+],
+"Kaldbakken|oslo": [
+59.9547781,
+10.8669584
+],
+"Kjellsrud|oslo": [
+60.8381378,
+10.5941912
+],
+"Lindeberg, HF FRA Lindeberg|oslo": null,
+"Granfoss|oslo": [
+59.91777,
+10.6322875
+],
+"Ullern|oslo": [
+59.9258182,
+10.6651318
+],
+"Alna|oslo": [
+59.9308926,
+10.8620504
+],
+"Karihaugen|oslo": [
+59.9376333,
+10.9282055
+],
+"Nordstrandveien|oslo": [
+59.8624679,
+10.8286858
+],
+"MORTENSRUD|oslo": [
+59.8492866,
+10.8296983
+],
+"Oslo (Alna)|oslo": [
+59.9210622,
+10.8308298
+],
+"Ekeberg|oslo": [
+59.8960812,
+10.7738639
+],
+"Festning|oslo": [
+59.9060955,
+10.7376704
+],
+"Bryn Senter|oslo": [
+59.9030765,
+10.8216091
+],
+"Oppsal|oslo": [
+59.8929922,
+10.839837
+],
+"Haugenstua|oslo": [
+59.9514742,
+10.9085404
+],
+"Lørenskog|oslo": [
+60.0477231,
+10.8132363
+],
+"Skårer|oslo": [
+59.9183801,
+10.9552079
+],
+"Hvam|oslo": [
+59.9795401,
+11.002178
+],
+"C.Adelers gate|oslo": [
+59.9130031,
+10.723803
+],
+"Tveita|oslo": [
+59.9140313,
+10.8422413
+],
+"Lindeberg|oslo": [
+59.9331552,
+10.882706
+],
+"Vækerø|oslo": [
+59.9151017,
+10.6553595
+],
+"Jar|oslo": [
+59.9257716,
+10.6183135
+],
+"Stovner|oslo": [
+59.9621403,
+10.9228232
+],
+"haugenstua|oslo": [
+59.9514742,
+10.9085404
+],
+"Østre Aker vei|oslo": [
+59.940579,
+10.8580195
+],
+"Nedre Kaldbakkvei|oslo": null,
+"Sandakerveien|oslo": [
+59.9517418,
+10.7679351
+],
+"Maridalsveien|oslo": [
+59.9246507,
+10.7504712
+],
+"Majorstua|oslo": [
+59.9292711,
+10.7155691
+],
+"Grorud, HF FRA Grorud|oslo": null,
+"Avrampe E6 Sydgående|oslo": null,
+"Avrampe fra E6  Nordgående, Pårampe E6 Nordgående|oslo": null,
+"Avrampe fra E6 Nordgående|oslo": null,
+"Pårampe E6 Nordgående|oslo": null,
+"LODALEN|oslo": [
+59.9047223,
+10.7747357
+],
+"BJØRVIKA|oslo": [
+59.9083819,
+10.7545531
+],
+"RYEN|oslo": [
+59.8956702,
+10.8047288
+],
+"SINSEN|oslo": [
+59.9338917,
+10.7851417
+],
+"ØKERN|oslo": [
+59.9282615,
+10.8062778
+],
+"morgedalsveien|oslo": [
+59.9377361,
+10.6688074
+],
+"Filipstad|oslo": [
+59.910825,
+10.7168611
+],
+"Sæter|oslo": [
+59.8605292,
+10.8005349
+],
+"Skullerud|oslo": [
+59.8667959,
+10.8401513
+],
+"LINSTOWS GATE|oslo": [
+59.91931,
+10.7318185
+],
+"PARKVEIEN|oslo": [
+59.9207003,
+10.7285358
+],
+"H. Svartes gt|oslo": [
+59.923257,
+10.7016178
+],
+"Verkstedveien|oslo": [
+59.9208157,
+10.6853778
+],
+"Festningtunnelen|oslo": null,
+"ULLERNCHAUSSEEN|oslo": [
+59.9318481,
+10.6609167
+],
+"Økernveien|oslo": [
+59.9237554,
+10.7906264
+],
+"Påkjøring Til Ulven pl.|oslo": null,
+"Påkjøring til EV 6|oslo": null,
+"Bryn, HF FRA Bryn|oslo": null,
+"HF FRA Alnabru, Alnabru|oslo": null,
+"påkjøring fra Furuset|oslo": null,
+"Hammersborgstunnelen|oslo": null,
+"Kongshavn|oslo": [
+59.8940309,
+10.756077
+],
+"Tøyenbekken|oslo": [
+59.9109163,
+10.761468
+],
+"Haakon VIIs gate|oslo": [
+59.9129791,
+10.7312382
+],
+"Oslo gate|oslo": [
+59.9079471,
+10.7677966
+],
+"Havnegata|oslo": [
+63.4404342,
+10.4032281
+],
+"Avkjøring fra  Alnabru|oslo": null,
+"Dronnings Mauds gate|oslo": null,
+"Etterstad |oslo": [
+59.9112021,
+10.8001908
 ]
 }

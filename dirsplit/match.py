@@ -144,17 +144,24 @@ def main() -> None:
 
     cache = _load_cache()
     results: list[dict] = []
-    # keep previous results for other cities (incremental runs)
+    # Resume: keep all previous results. --city means "redo that city".
     if STATIONS_OK.exists():
         with open(STATIONS_OK) as f:
-            results = [s for s in json.load(f)
-                       if args.city and s["city"] != args.city]
+            prev = json.load(f)
+        results = [s for s in prev
+                   if not (args.city and s["city"] == args.city)]
 
     by_city: dict[str, list] = {}
     for st in stations:
         by_city.setdefault(st["city"], []).append(st)
 
+    # Skip stations already matched in a previous (possibly interrupted) run
+    done_ids = {s["id"] for s in results}
+
     for city, sts in by_city.items():
+        sts = [s for s in sts if s["id"] not in done_ids]
+        if not sts:
+            continue
         print(f"── {city} — {len(sts)} stations, loading OSM graph …")
         G = load_city_graph(city)
         ok = 0
@@ -166,10 +173,11 @@ def main() -> None:
             else:
                 print(f"    ✗ {m['id']} {m['name'][:30]:<30} — {m['reject_reason']}")
         _save_cache(cache)
-        print(f"    {ok}/{len(sts)} matched")
-
-    with open(STATIONS_OK, "w") as f:
-        json.dump(results, f, ensure_ascii=False, indent=1)
+        # Save after EVERY city — an interrupted run loses at most one city,
+        # and the rerun skips everything already done.
+        with open(STATIONS_OK, "w") as f:
+            json.dump(results, f, ensure_ascii=False, indent=1)
+        print(f"    {ok}/{len(sts)} matched — saved")
     n_ok = sum(1 for r in results if r["matched"])
     print(f"Wrote {STATIONS_OK}  ({n_ok}/{len(results)} matched)")
 

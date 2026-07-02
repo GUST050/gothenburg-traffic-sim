@@ -84,4 +84,4 @@ Goal arc, in order:
 - `explore.py` — one-off data exploration/plots. `tests/` — contract + pipeline tests (`python3 -m pytest tests/`).
 - Generated in `web/data/`: network.geojson, flows.json, flows_forecast.json, normal_profile.json, features/, agent1/.
 - Web app: `web/` (index.html, provider.js, state.js, render.js, controls.js, clock.js). Serve with `cd web && python3 -m http.server 8000`.
-- `archive/web_update_2026-06-27/` — an older web experiment incl. sim_provider.js sketch; NOT current code, never copy it over web/.
+- (The old `archive/web_update_2026-06-27/` experiment was deleted 2026-07-02 — superseded by the real scenario system.)
