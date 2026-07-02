@@ -72,8 +72,13 @@ def load_sensor_edges() -> dict[str, list[str]]:
     return result
 
 
-def load_direction_split() -> dict[str, list[float]]:
-    """{edge_id: [96 shares]} from estimate_directions.py, {} if not built."""
+def load_direction_split(key: str = "edge_shares") -> dict[str, list[float]]:
+    """{edge_id: [96 shares]} from the estimated split file, {} if not built.
+
+    key selects the quantile: "edge_shares" (q50 point estimate) or
+    "edge_shares_q10"/"edge_shares_q90" (interval bounds from
+    dirsplit/predict.py — used to build demand VARIANTS so Monte Carlo
+    includes direction uncertainty)."""
     path = SUMO_DIR / "direction_split.json"
     if not path.exists():
         return {}
@@ -81,8 +86,17 @@ def load_direction_split() -> dict[str, list[float]]:
         data = json.load(f)
     shares: dict[str, list[float]] = {}
     for d in data.values():
-        shares.update(d["edge_shares"])
+        shares.update(d.get(key) or d["edge_shares"])
     return shares
+
+
+def has_split_quantiles() -> bool:
+    path = SUMO_DIR / "direction_split.json"
+    if not path.exists():
+        return False
+    with open(path) as f:
+        data = json.load(f)
+    return any("edge_shares_q10" in d for d in data.values())
 
 
 def write_counts(
@@ -91,16 +105,17 @@ def write_counts(
     qi_start: int,
     n_intervals: int,
     out_path: Path,
+    split_key: str = "edge_shares",
 ) -> int:
     """15-min edgeData intervals; sim time 0 = window start. Returns n written.
 
-    Direction share per Total edge comes from estimate_directions.py (AI
-    time-of-day estimate) when available, else an even split. "S" sensor
-    edges always take the full count.
+    Direction share per Total edge comes from the estimated split file
+    (dirsplit model or Gaussian fallback) when available, else an even
+    split. "S" sensor edges always take the full count.
     """
-    est_shares = load_direction_split()
+    est_shares = load_direction_split(split_key)
     if est_shares:
-        print("  Using ESTIMATED time-of-day direction split (sumo/direction_split.json)")
+        print(f"  Using ESTIMATED direction split ({split_key})")
     else:
         print("  No direction_split.json — falling back to even split")
 
@@ -248,10 +263,6 @@ def main() -> None:
     sensor_edges = load_sensor_edges()
     print(f"Sensors: { {sid: len(e) for sid, e in sensor_edges.items()} }")
 
-    counts_path = SUMO_DIR / "counts.xml"
-    n = write_counts(flows, sensor_edges, qi_start, n_intervals, counts_path)
-    print(f"Wrote {counts_path}  ({n} edge×interval measurements)")
-
     home = sumo_home()
 
     print("\nGenerating candidate route pool (randomTrips + duarouter) …")
@@ -267,15 +278,29 @@ def main() -> None:
         "--validate",
     ], home)
 
-    print("Sampling routes to match sensor counts (routeSampler) …")
+    # ── Calibrate: one route set per direction-split variant ───────────────────
+    # q50 = the default (calibrated.rou.xml). If the split file carries
+    # quantile bounds, two extra variants are built — run_scenario spreads
+    # its Monte Carlo seeds over them so direction uncertainty reaches the
+    # per-edge confidence numbers.
+    variants = [("", "edge_shares")]
+    if has_split_quantiles():
+        variants += [("_v1", "edge_shares_q10"), ("_v2", "edge_shares_q90")]
+
     calib_path = SUMO_DIR / "calibrated.rou.xml"
-    run_tool("routeSampler.py", [
-        "-r", str(cand_path),
-        "--edgedata-files", str(counts_path),
-        "--edgedata-attribute", "count",
-        "-o", str(calib_path),
-        "--seed", str(args.seed),
-    ], home)
+    for suffix, key in variants:
+        counts_path = SUMO_DIR / f"counts{suffix}.xml"
+        n = write_counts(flows, sensor_edges, qi_start, n_intervals,
+                         counts_path, split_key=key)
+        print(f"Wrote {counts_path}  ({n} edge×interval measurements)")
+        print(f"Sampling routes to match counts ({key}) …")
+        run_tool("routeSampler.py", [
+            "-r", str(cand_path),
+            "--edgedata-files", str(counts_path),
+            "--edgedata-attribute", "count",
+            "-o", str(SUMO_DIR / f"calibrated{suffix}.rou.xml"),
+            "--seed", str(args.seed),
+        ], home)
 
     meta = {
         "date": args.date, "begin": args.begin, "end": args.end,
@@ -283,6 +308,7 @@ def main() -> None:
         # ISO with 'T' — Safari/Firefox reject "YYYY-MM-DD HH:MM" in new Date()
         "epoch_sim": t0.isoformat(),
         "direction_split": "estimated" if load_direction_split() else "even",
+        "n_variants": len(variants),
         "note": "Total sensor counts split over the two directed edges using "
                 "the estimated time-of-day split (estimate_directions.py); "
                 "direction is not measured in the delivered data.",

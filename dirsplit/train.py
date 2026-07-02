@@ -1,22 +1,36 @@
 """
-Train the direction-split model with leave-city-out validation.
+Train the direction-split model: similarity-weighted, per-sensor, quantile.
 
 Usage (after dataset.py):
   python3 -m dirsplit.train
 
-Model: LightGBM regression, target = direction share (0–1) per
-(station-direction, hour, day-type). Inputs = the shared edge features +
-profile-shape features + hour/day-type — everything computable for the
-Gothenburg sensor edges too.
+Three ideas on top of plain LightGBM:
 
-Validation: LEAVE-CITY-OUT — train on three cities, predict the fourth.
-This directly measures what we will do to Gothenburg (predict an unseen
-city), so the reported MAE is an honest transfer error, not a fit score.
-Baseline to beat: always predicting 0.5.
+1. SIMILARITY WEIGHTING — every training row is weighted by how much its
+   street resembles OUR sensor edges (Gaussian kernel on standardized static
+   features, bandwidth = median distance). Motorways still contribute a
+   little; central mixed-use streets dominate. This is classic covariate-
+   shift correction: train where you predict.
+
+2. PER-SENSOR MODELS — each Gothenburg sensor pair gets its own model,
+   weighted toward ITS feature vector ("each road trained for itself").
+   New sensors in network.geojson are picked up automatically on retrain.
+
+3. QUANTILE REGRESSION (q10/q50/q90) — the split is predicted as an
+   INTERVAL, not a point. Downstream, demand variants are built at the
+   interval bounds so the Monte Carlo scenario spread — and therefore the
+   confidence number on the map — includes direction uncertainty.
+
+Validation: leave-city-out as before, but the headline metric is computed
+on the DOMAIN SUBSET — held-out stations whose features resemble our sensor
+edges (distance below the median) — because that is the population we
+actually predict. Each domain-subset station is predicted by a model
+locally weighted toward that station, mirroring exactly what we do to
+Gothenburg.
 
 Writes:
-  data/dirsplit/model.pkl          — final model trained on ALL cities
-  data/dirsplit/train_report.json  — per-city MAE, baseline, feature importance
+  data/dirsplit/model.pkl          — {sensor_id: {q10,q50,q90}} + global fallback
+  data/dirsplit/train_report.json  — overall + domain-subset MAE per city
 """
 
 from __future__ import annotations
@@ -36,106 +50,158 @@ MODEL_PATH  = DATA_DIR / "model.pkl"
 REPORT_PATH = DATA_DIR / "train_report.json"
 
 INPUT_COLS = FEATURE_NAMES + PROFILE_FEATURES + ["hour_sin", "hour_cos", "is_weekend"]
+QUANTILES   = (0.1, 0.5, 0.9)
+N_STATIC    = len(FEATURE_NAMES)
 
 
-def load_table() -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray]:
-    """Returns (X, y, cities, sample_weight). Weight = sqrt(n_obs).
-
-    Training-set filters (the target problem is TWO-WAY city streets in
-    commute hours — the training set must look like the problem):
-      - drop STATIONS that are effectively one-way (any direction's mean
-        daytime share > 0.85): ramps and split carriageways have shares
-        near 0/1 and teach nothing about splitting a two-way total
-      - weekdays only, 06–20 — where the commute signal lives; night
-        shares are noise even after the volume filter
-    """
+def load_table():
+    """Returns (X, y, cities, station_keys, w_obs). Weekday 06–20 rows from
+    two-way streets only (one-way-ish stations screened out)."""
     with open(TABLE_PATH) as f:
         rows = list(csv.DictReader(f))
 
-    # Station-level one-way screen on daytime weekday shares
     from collections import defaultdict
     day_shares = defaultdict(list)
     for r in rows:
         if r["is_weekend"] == "0" and 6 <= int(r["hour"]) <= 20:
             day_shares[(r["station_id"], r["heading"])].append(float(r["share"]))
-    oneway_stations = {
-        sid for (sid, _), shares in day_shares.items()
-        if shares and (np.mean(shares) > 0.85 or np.mean(shares) < 0.15)
-    }
+    oneway = {sid for (sid, _), sh in day_shares.items()
+              if sh and not 0.15 <= np.mean(sh) <= 0.85}
 
-    X_rows, y, cities, w = [], [], [], []
+    X, y, cities, keys, w = [], [], [], [], []
     for r in rows:
-        if r["station_id"] in oneway_stations:
+        if (r["station_id"] in oneway or r["is_weekend"] != "0"
+                or not 6 <= int(r["hour"]) <= 20):
             continue
-        if r["is_weekend"] != "0" or not (6 <= int(r["hour"]) <= 20):
-            continue
-        hour = float(r["hour"])
-        feats = ([float(r[c]) for c in FEATURE_NAMES]
+        h = float(r["hour"])
+        X.append([float(r[c]) for c in FEATURE_NAMES]
                  + [float(r[c]) for c in PROFILE_FEATURES]
-                 + [np.sin(2 * np.pi * hour / 24),
-                    np.cos(2 * np.pi * hour / 24),
-                    float(r["is_weekend"])])
-        X_rows.append(feats)
+                 + [np.sin(2 * np.pi * h / 24), np.cos(2 * np.pi * h / 24), 0.0])
         y.append(float(r["share"]))
         cities.append(r["city"])
+        keys.append((r["station_id"], r["heading"]))
         w.append(float(r["n_obs"]) ** 0.5)
-    print(f"Filter: {len(oneway_stations)} one-way-ish stations dropped, "
-          f"{len(y)} rows kept (weekday 06–20)")
-    return (np.array(X_rows), np.array(y), cities, np.array(w))
+    print(f"Filter: {len(oneway)} one-way-ish stations dropped, {len(y)} rows kept")
+    return np.array(X), np.array(y), cities, keys, np.array(w)
 
 
-def make_model():
+def target_static_features() -> dict[str, np.ndarray]:
+    """{sensor_id: static feature vector} for every Total sensor pair
+    (mean of the pair's two directed edges — they differ only in sign-ish
+    fields). Imported lazily to avoid loading OSM graphs on module import."""
+    from .coverage import target_matrix
+    X_tgt, meta = target_matrix()
+    by_sensor: dict[str, list[np.ndarray]] = {}
+    for row, m in zip(X_tgt, meta):
+        by_sensor.setdefault(m["sensor"], []).append(row)
+    return {sid: np.mean(rows, axis=0) for sid, rows in by_sensor.items()}
+
+
+def kernel_weights(X_static_z: np.ndarray, centre_z: np.ndarray,
+                   bandwidth: float) -> np.ndarray:
+    d = np.sqrt(((X_static_z - centre_z) ** 2).sum(axis=1))
+    return np.exp(-0.5 * (d / bandwidth) ** 2)
+
+
+def make_model(alpha: float | None = None):
     import lightgbm as lgb
-    return lgb.LGBMRegressor(
-        n_estimators=600, learning_rate=0.04,
-        max_depth=6, num_leaves=63,
-        subsample=0.8, colsample_bytree=0.8,
-        min_child_samples=20, random_state=42,
-        n_jobs=-1, verbose=-1,
-    )
+    kw = dict(n_estimators=400, learning_rate=0.05, max_depth=5, num_leaves=31,
+              subsample=0.8, colsample_bytree=0.8, min_child_samples=20,
+              random_state=42, n_jobs=-1, verbose=-1)
+    if alpha is not None:
+        kw.update(objective="quantile", alpha=alpha)
+    return lgb.LGBMRegressor(**kw)
 
 
 def main() -> None:
-    X, y, cities, w = load_table()
-    city_set = sorted(set(cities))
-    print(f"{len(y)} rows, {len(city_set)} cities: {city_set}")
-    if len(city_set) < 2:
-        print("WARNING: <2 cities — leave-city-out impossible; fit score only.")
+    X, y, cities, keys, w_obs = load_table()
+    Xs = X[:, :N_STATIC]                       # static street features
+    mu, sd = Xs.mean(axis=0), Xs.std(axis=0)
+    sd[sd < 1e-9] = 1.0
+    Xs_z = (Xs - mu) / sd
 
-    report: dict = {"n_rows": len(y), "cities": {}, "input_cols": INPUT_COLS}
+    # Median pairwise-ish bandwidth: distances to the overall centroid
+    d0 = np.sqrt(((Xs_z - Xs_z.mean(axis=0)) ** 2).sum(axis=1))
+    bandwidth = float(np.median(d0))
+    print(f"{len(y)} rows, bandwidth={bandwidth:.2f}")
 
-    # ── Leave-city-out ─────────────────────────────────────────────────────────
-    for held in city_set:
-        tr = np.array([c != held for c in cities])
-        te = ~tr
-        if tr.sum() == 0 or te.sum() == 0:
-            continue
+    report: dict = {"n_rows": len(y), "bandwidth": round(bandwidth, 3),
+                    "input_cols": INPUT_COLS, "cities": {}}
+
+    # ── Leave-city-out, locally weighted per held-out station ─────────────────
+    # Domain subset: station-directions closer than the median distance to the
+    # GOTHENBURG target centroid — the population we actually care about.
+    targets = target_static_features()
+    tgt_centroid_z = (np.mean(list(targets.values()), axis=0) - mu) / sd
+    d_tgt = np.sqrt(((Xs_z - tgt_centroid_z) ** 2).sum(axis=1))
+    domain_row = d_tgt <= np.median(d_tgt)
+    print(f"Domain subset: {int(domain_row.sum())} rows "
+          f"({len({k for k, m in zip(keys, domain_row) if m})} station-directions)")
+
+    city_arr = np.array(cities)
+    for held in sorted(set(cities)):
+        te_all  = city_arr == held
+        tr      = ~te_all
+        te_dom  = te_all & domain_row
+
+        # overall: one similarity-weighted model toward the Gothenburg centroid
+        w_sim = kernel_weights(Xs_z, tgt_centroid_z, bandwidth)
         mdl = make_model()
-        mdl.fit(X[tr], y[tr], sample_weight=w[tr])
-        pred = np.clip(mdl.predict(X[te]), 0.0, 1.0)
-        mae      = float(np.mean(np.abs(pred - y[te])))
-        base_mae = float(np.mean(np.abs(0.5 - y[te])))
-        report["cities"][held] = {
-            "n_test": int(te.sum()),
-            "mae": round(mae, 4),
-            "baseline_50_50_mae": round(base_mae, 4),
-            "improvement_pct": round(100 * (1 - mae / base_mae), 1) if base_mae else 0,
-        }
-        print(f"  hold out {held:<10}  MAE {mae:.4f}  (50/50-baseline {base_mae:.4f}, "
-              f"{report['cities'][held]['improvement_pct']:+.1f}%)")
+        mdl.fit(X[tr], y[tr], sample_weight=(w_obs * w_sim)[tr])
+        pred_all = np.clip(mdl.predict(X[te_all]), 0, 1)
+        mae_all  = float(np.mean(np.abs(pred_all - y[te_all])))
+        base_all = float(np.mean(np.abs(0.5 - y[te_all])))
 
-    # ── Final model on all cities ──────────────────────────────────────────────
-    final = make_model()
-    final.fit(X, y, sample_weight=w)
-    importance = sorted(
-        zip(INPUT_COLS, final.feature_importances_.tolist()),
-        key=lambda t: -t[1],
-    )
-    report["feature_importance"] = importance
-    print("\nTop features:", [f"{n}:{v}" for n, v in importance[:6]])
+        # domain subset: each held-out station predicted by a model locally
+        # weighted toward THAT station — mirrors the Gothenburg deployment
+        maes, bases = [], []
+        held_stations = sorted({k for k, m in zip(keys, te_dom) if m})
+        for st_key in held_stations:
+            te_st = np.array([k == st_key for k in keys]) & te_dom
+            centre = Xs_z[te_st].mean(axis=0)
+            w_loc = kernel_weights(Xs_z, centre, bandwidth)
+            m_loc = make_model()
+            m_loc.fit(X[tr], y[tr], sample_weight=(w_obs * w_loc)[tr])
+            p = np.clip(m_loc.predict(X[te_st]), 0, 1)
+            maes.append(float(np.mean(np.abs(p - y[te_st]))))
+            bases.append(float(np.mean(np.abs(0.5 - y[te_st]))))
+        mae_dom  = float(np.mean(maes)) if maes else float("nan")
+        base_dom = float(np.mean(bases)) if bases else float("nan")
+
+        report["cities"][held] = {
+            "mae_all": round(mae_all, 4), "base_all": round(base_all, 4),
+            "impr_all_pct": round(100 * (1 - mae_all / base_all), 1),
+            "n_domain_stations": len(held_stations),
+            "mae_domain": round(mae_dom, 4), "base_domain": round(base_dom, 4),
+            "impr_domain_pct": (round(100 * (1 - mae_dom / base_dom), 1)
+                                if base_dom > 0 else None),
+        }
+        r = report["cities"][held]
+        print(f"  {held:<10} alla: MAE {mae_all:.4f} ({r['impr_all_pct']:+.1f}%)"
+              f"   domän ({len(held_stations)} st): MAE {mae_dom:.4f} "
+              f"({r['impr_domain_pct']:+.1f}%)")
+
+    # ── Deploy: per-sensor locally weighted quantile models ────────────────────
+    print("\nTraining per-sensor quantile models …")
+    sensors_pkg: dict[str, dict] = {}
+    for sid, feat_vec in sorted(targets.items()):
+        centre_z = (feat_vec - mu) / sd
+        w_loc = kernel_weights(Xs_z, centre_z, bandwidth)
+        sw = w_obs * w_loc
+        qmodels = {}
+        for q in QUANTILES:
+            m = make_model(alpha=q)
+            m.fit(X, y, sample_weight=sw)
+            qmodels[f"q{int(q * 100)}"] = m
+        sensors_pkg[sid] = qmodels
+        print(f"  sensor {sid}: eff. träningsvikt {sw.sum():.0f} "
+              f"(av {w_obs.sum():.0f})")
 
     with open(MODEL_PATH, "wb") as f:
-        pickle.dump({"model": final, "input_cols": INPUT_COLS}, f)
+        pickle.dump({"sensors": sensors_pkg, "input_cols": INPUT_COLS,
+                     "quantiles": [f"q{int(q*100)}" for q in QUANTILES],
+                     "scaler": {"mu": mu.tolist(), "sd": sd.tolist()},
+                     "bandwidth": bandwidth}, f)
     with open(REPORT_PATH, "w") as f:
         json.dump(report, f, indent=1)
     print(f"Wrote {MODEL_PATH} + {REPORT_PATH}")

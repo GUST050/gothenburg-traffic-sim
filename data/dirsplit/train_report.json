@@ -1,31 +1,6 @@
 {
  "n_rows": 2428,
- "cities": {
-  "bergen": {
-   "n_test": 898,
-   "mae": 0.0698,
-   "baseline_50_50_mae": 0.0658,
-   "improvement_pct": -6.1
-  },
-  "oslo": {
-   "n_test": 720,
-   "mae": 0.0516,
-   "baseline_50_50_mae": 0.0564,
-   "improvement_pct": 8.6
-  },
-  "stavanger": {
-   "n_test": 270,
-   "mae": 0.0791,
-   "baseline_50_50_mae": 0.0471,
-   "improvement_pct": -68.1
-  },
-  "trondheim": {
-   "n_test": 540,
-   "mae": 0.0785,
-   "baseline_50_50_mae": 0.0799,
-   "improvement_pct": 1.8
-  }
- },
+ "bandwidth": 3.362,
  "input_cols": [
   "hw_rank",
   "speed_kmh",
@@ -47,82 +22,42 @@
   "hour_cos",
   "is_weekend"
  ],
- "feature_importance": [
-  [
-   "hour_sin",
-   2515
-  ],
-  [
-   "radial_cos",
-   1331
-  ],
-  [
-   "hour_cos",
-   1077
-  ],
-  [
-   "major_behind_km",
-   1055
-  ],
-  [
-   "major_ahead_km",
-   1054
-  ],
-  [
-   "res_asym",
-   985
-  ],
-  [
-   "res_behind_km",
-   941
-  ],
-  [
-   "res_ahead_km",
-   897
-  ],
-  [
-   "major_asym",
-   825
-  ],
-  [
-   "weekend_ratio",
-   588
-  ],
-  [
-   "dist_centre_km",
-   565
-  ],
-  [
-   "am_pm_ratio",
-   495
-  ],
-  [
-   "hw_rank",
-   193
-  ],
-  [
-   "speed_kmh",
-   189
-  ],
-  [
-   "lanes",
-   117
-  ],
-  [
-   "peak_hour_am",
-   81
-  ],
-  [
-   "oneway",
-   57
-  ],
-  [
-   "peak_hour_pm",
-   21
-  ],
-  [
-   "is_weekend",
-   0
-  ]
- ]
+ "cities": {
+  "bergen": {
+   "mae_all": 0.0713,
+   "base_all": 0.0658,
+   "impr_all_pct": -8.4,
+   "n_domain_stations": 28,
+   "mae_domain": 0.0681,
+   "base_domain": 0.0575,
+   "impr_domain_pct": -18.4
+  },
+  "oslo": {
+   "mae_all": 0.0522,
+   "base_all": 0.0564,
+   "impr_all_pct": 7.5,
+   "n_domain_stations": 19,
+   "mae_domain": 0.0519,
+   "base_domain": 0.0583,
+   "impr_domain_pct": 11.1
+  },
+  "stavanger": {
+   "mae_all": 0.0607,
+   "base_all": 0.0471,
+   "impr_all_pct": -29.0,
+   "n_domain_stations": 11,
+   "mae_domain": 0.0696,
+   "base_domain": 0.0484,
+   "impr_domain_pct": -43.8
+  },
+  "trondheim": {
+   "mae_all": 0.0797,
+   "base_all": 0.0799,
+   "impr_all_pct": 0.3,
+   "n_domain_stations": 24,
+   "mae_domain": 0.0651,
+   "base_domain": 0.0645,
+   "impr_domain_pct": -0.9
+  }
+ }
 }

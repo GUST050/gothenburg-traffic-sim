@@ -85,13 +85,26 @@ def write_additional(path: Path, edgedata_file: Path, close_edge: str | None,
         f.write("</additional>\n")
 
 
-def run_sumo(seed: int, add_path: Path, duration_s: int, home: Path) -> None:
+def demand_variants() -> list[Path]:
+    """Calibrated route sets — q50 plus (if built) the q10/q90 direction-
+    split variants. Monte Carlo seeds are spread over them so the seed
+    spread — and the confidence — includes direction uncertainty."""
+    paths = [SUMO_DIR / "calibrated.rou.xml"]
+    for suffix in ("_v1", "_v2"):
+        p = SUMO_DIR / f"calibrated{suffix}.rou.xml"
+        if p.exists():
+            paths.append(p)
+    return paths
+
+
+def run_sumo(seed: int, route_path: Path, add_path: Path,
+             duration_s: int, home: Path) -> None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
     cmd = [
         str(home / "bin" / "sumo"),
         "-n", str(NET_PATH.resolve()),
-        "-r", str((SUMO_DIR / "calibrated.rou.xml").resolve()),
+        "-r", str(route_path.resolve()),
         "-a", str(add_path.resolve()),
         "--seed", str(seed),
         "--begin", "0",
@@ -150,15 +163,21 @@ def main() -> None:
 
     print(f"Scenario '{name}'  ({label})  —  {args.seeds} seeds × {n_intervals} × 15 min")
 
+    variants = demand_variants()
+    if len(variants) > 1:
+        print(f"  {len(variants)} demand variants (q50 + direction-split bounds)")
+
     per_seed: list[dict[str, np.ndarray]] = []
     for s in range(args.seeds):
         seed = 1000 + s
+        route_path = variants[s % len(variants)]
         ed_file  = SUMO_DIR / f"edgedata_{name}_{seed}.xml"
         add_path = SUMO_DIR / f"additional_{name}_{seed}.add.xml"
         write_additional(add_path, ed_file, args.close, net_edges, duration_s)
-        run_sumo(seed, add_path, duration_s, home)
+        run_sumo(seed, route_path, add_path, duration_s, home)
         per_seed.append(parse_edgedata(ed_file, n_intervals))
-        print(f"  seed {seed}: {len(per_seed[-1])} edges with traffic")
+        print(f"  seed {seed} ({route_path.name}): "
+              f"{len(per_seed[-1])} edges with traffic")
 
     # ── Aggregate: mean flows + Monte Carlo confidence ─────────────────────────
     web_edges = set(prior)   # only edges the map can draw
