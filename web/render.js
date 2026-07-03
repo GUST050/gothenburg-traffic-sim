@@ -294,8 +294,8 @@ const Render = (() => {
             } else {
               html += `<br><span style="color:#9ca3af">Data saknas</span>`;
             }
-            if (level === 'Total') html += '<br><small>Summa båda riktningar</small>';
-            if (level === 'S')     html += '<br><small>Singeldetektor</small>';
+            if (level === 'Total')  html += '<br><small>Summa båda riktningar</small>';
+            else if (level)         html += `<br><small>Enkelriktad mätning (${level})</small>`;
             if (_provider.closedEdge === id) {
               html += `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
             } else if (_provider.isScenario) {

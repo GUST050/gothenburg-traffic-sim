@@ -92,10 +92,30 @@ def eid(u: int, v: int, k: int = 0) -> str:
     return f"{u}_{v}_{k}"
 
 
-# Single-direction sensors carry a compass letter in `level` — confirmed via
-# Göteborgs Stad's trafikmängder report: "S" = södergående (southbound).
-# The snapped directed edge MUST point that way, or the counts end up on the
-# opposite direction of travel.
+# ── Measured directions — SOURCE OF TRUTH ─────────────────────────────────────
+# Verified 2026-07-03 against Göteborgs Stad's trafikmängder catalogue
+# (Power BI): the delivered CSV's "level" column is UNRELIABLE — it shows the
+# catalogue's Total row, which for single-direction stations simply equals
+# the one measured direction. Per station the catalogue shows:
+#   107  Skånegatan      N + S + Total  → genuinely two-way (D-factor 48–52%)
+#   1074 Valhallagatan   V = Total      → westbound only
+#   1076 Skånegatan      S = Total      → southbound only
+#   133  Läraregatan     V = Total      → westbound only
+#   134  Gibraltargatan  SO = Total     → southeastbound only
+#   2276 Läraregatan     V = Total      → westbound only
+# Daily means in our data match the catalogue's ÅMVD per station (±3%).
+# New sensors: add them here after checking the catalogue.
+SENSOR_MEASURED_DIRECTION: dict[str, str] = {
+    "107":  "Total",
+    "1074": "V",
+    "1076": "S",
+    "133":  "V",
+    "134":  "SO",
+    "2276": "V",
+}
+
+# Compass letter → travel bearing. The snapped directed edge MUST point this
+# way, or the counts end up on the opposite direction of travel.
 COMPASS_BEARING_DEG = {
     "N": 0, "NO": 45, "O": 90, "Ö": 90, "SO": 135,
     "S": 180, "SV": 225, "V": 270, "NV": 315,
@@ -508,6 +528,19 @@ def main() -> None:
            .set_index("matplats")["level"]
            .to_dict()
     )
+
+    # Override the delivered level with the verified measured direction —
+    # the delivery calls single-direction stations "Total" (see table above).
+    for sid, true_level in SENSOR_MEASURED_DIRECTION.items():
+        delivered = sensor_level.get(sid)
+        if delivered is not None and delivered != true_level:
+            print(f"  level override: sensor {sid} delivered '{delivered}' "
+                  f"→ measured direction '{true_level}' (city catalogue)")
+            sensor_level[sid] = true_level
+    unknown = set(sensor_level) - set(SENSOR_MEASURED_DIRECTION)
+    if unknown:
+        print(f"  ⚠  sensors not in SENSOR_MEASURED_DIRECTION (check the city "
+              f"catalogue and add them): {sorted(unknown)}")
 
     print("Loading coordinates …")
     coords = load_coords(coords_path)
