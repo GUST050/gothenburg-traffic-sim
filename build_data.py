@@ -92,6 +92,27 @@ def eid(u: int, v: int, k: int = 0) -> str:
     return f"{u}_{v}_{k}"
 
 
+# Single-direction sensors carry a compass letter in `level` — confirmed via
+# Göteborgs Stad's trafikmängder report: "S" = södergående (southbound).
+# The snapped directed edge MUST point that way, or the counts end up on the
+# opposite direction of travel.
+COMPASS_BEARING_DEG = {
+    "N": 0, "NO": 45, "O": 90, "Ö": 90, "SO": 135,
+    "S": 180, "SV": 225, "V": 270, "NV": 315,
+}
+
+
+def edge_bearing_deg(G, u: int, v: int) -> float:
+    """Travel bearing of directed edge u→v in degrees (0=N, 90=E)."""
+    return math.degrees(bearing_rad(
+        G.nodes[u]["y"], G.nodes[u]["x"], G.nodes[v]["y"], G.nodes[v]["x"]
+    )) % 360
+
+
+def ang_diff_deg(a: float, b: float) -> float:
+    return abs((a - b + 180) % 360 - 180)
+
+
 def scalar(val: object) -> object:
     """Return val[0] if val is a list (OSM name/highway can be lists)."""
     return val[0] if isinstance(val, list) else val
@@ -349,6 +370,31 @@ def snap_sensors(
             continue
 
         u, v, k = auto_snapped[i]
+
+        # Direction-aware snap for single-direction sensors: if the sensor's
+        # compass letter points opposite to the snapped edge, take the
+        # reverse/antiparallel edge instead.
+        want = COMPASS_BEARING_DEG.get(level)
+        if want is not None:
+            have = edge_bearing_deg(G, u, v)
+            if ang_diff_deg(have, want) > 90:
+                # Wider search than for Total pairs: divided carriageways can
+                # sit further apart than CARRIAGEWAY_M (Skånegatan: 52 m).
+                if G.has_edge(v, u):
+                    rev = (v, u, min(G[v][u].keys()))
+                else:
+                    rev = find_antiparallel_edge(
+                        G, u, v, k, lats[i], lons[i],
+                        max_dist_m=2 * CARRIAGEWAY_M,
+                    )
+                if rev is None:
+                    print(f"  ⚠  {sensor_id}: level '{level}' opposes snapped edge "
+                          f"({have:.0f}°) but no opposite edge found — keeping snap, CHECK MANUALLY")
+                else:
+                    u, v, k = rev
+                    print(f"  {sensor_id}: level '{level}' ({want}°) opposes snapped "
+                          f"edge ({have:.0f}°) — using opposite {eid(u, v, k)}")
+
         edge_id  = eid(u, v, k)
         if edge_id in edge_sensor:
             print(f"  ⚠  {sensor_id}: auto-snap {edge_id} already claimed by {edge_sensor[edge_id]}")

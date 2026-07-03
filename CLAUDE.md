@@ -21,7 +21,7 @@ Goal arc, in order:
   - Götaplatsen area (physically ~400 m SW of the square, near Viktor Rydbergsgatan/Vasaparken): 133, 134, 2276
   - Scandinavium area: 107, 1074, 1076
 - Raw inputs (what build_data.py actually reads): quarterly CSVs in `~/Downloads/Data till Chalmers_20260618/` + `~/Downloads/Mätpunkter_koordinater.csv`. (`clean.csv` was an exploration intermediate and is not part of the pipeline.)
-- `level`: five sensors = "Total" (both directions summed). 1076 = "S" (single direction only; NOT comparable to the Totals).
+- `level`: five sensors = "Total" (both directions summed). 1076 = "S" = SÖDERGÅENDE (southbound — CONFIRMED 2026-07-03 by Gustav via Göteborgs Stad's trafikmängder Power BI, where direction labels use compass letters). Single direction; NOT comparable to the Totals. build_data.py snaps compass-labelled sensors direction-aware: the snapped directed edge must match the letter's bearing, else the opposite carriageway is used (Skånegatan's southbound carriageway is 52 m from the sensor point — wider search than the Total-pair 40 m).
 - Coordinates: source file was mislabelled "SWEREF99TM" but is actually SWEREF99 12 00 (EPSG:3007). build_data.py converts to WGS84. DO NOT reconvert as TM.
 - Direction is NOT recoverable from the delivered two-way totals (geometry + conservation is underdetermined). DECIDED: Felicia will NOT deliver a directional re-export — treat all "Total" values as two-way sums permanently; both directed edges of a Total sensor carry the same summed count.
 - Known limitation (DST): timestamps are Swedish local time. 2025-03-30 has a missing hour (becomes `null`), 2025-10-26 has a duplicated hour — build_data.py keeps the last value ("last wins"), so 4 slots of real data are dropped there.
