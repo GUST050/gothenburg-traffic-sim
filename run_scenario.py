@@ -53,6 +53,9 @@ def parse_args() -> argparse.Namespace:
                    help="Scenario name (default: 'baseline' or 'close_<edge…>')")
     p.add_argument("--seeds", type=int, default=3,
                    help="Monte Carlo runs (default 3)")
+    p.add_argument("--micro", action="store_true",
+                   help="Use microscopic simulation (default: mesoscopic — "
+                        "~20x faster, adequate for 15-min edge flows)")
     return p.parse_args()
 
 
@@ -78,11 +81,38 @@ def write_edgedata_additional(path: Path, edgedata_file: Path,
         f.write("</additional>\n")
 
 
+REROUTER_RADIUS_M = 400
+
+
+def edges_near(close_edges: list[str], radius_m: float) -> list[str]:
+    """Edges whose midpoint lies within radius_m of a closed edge's midpoint.
+
+    The rerouter is attached to THESE edges only. Attaching it to all 2 251
+    edges makes every vehicle re-check its route on every edge entry —
+    measured cost: 11.5 min per whole-day seed vs ~1 min with a local
+    rerouter. Locality is also behaviourally reasonable: drivers divert when
+    they encounter the closure area, not telepathically at departure.
+    """
+    import math
+    import xml.etree.ElementTree as ET
+    mids: dict[str, tuple[float, float]] = {}
+    for e in ET.parse(SUMO_DIR / "plain.edg.xml").getroot().findall("edge"):
+        pts = [tuple(map(float, p.split(","))) for p in e.get("shape").split()]
+        mids[e.get("id")] = (sum(p[0] for p in pts) / len(pts),
+                             sum(p[1] for p in pts) / len(pts))
+    centres = [mids[ce] for ce in close_edges if ce in mids]
+    out = set(close_edges)
+    for eid, (x, y) in mids.items():
+        if any(math.hypot(x - cx, y - cy) <= radius_m for cx, cy in centres):
+            out.add(eid)
+    return sorted(out)
+
+
 def write_closure_additional(path: Path, close_edges: list[str],
                              all_edges: list[str], duration_s: int) -> None:
-    """One shared closure file per scenario (the rerouter edge list is big).
-    Rerouter on every edge: any vehicle whose remaining route uses a closed
-    edge recomputes as soon as it enters its next edge."""
+    """One shared closure file per scenario. Vehicles whose remaining route
+    uses a closed edge recompute when they enter a rerouter edge (the
+    closure's neighbourhood)."""
     with open(path, "w") as f:
         f.write("<additional>\n")
         f.write(f'  <rerouter id="closure" edges="{" ".join(all_edges)}">\n')
@@ -107,11 +137,15 @@ def demand_variants() -> list[Path]:
 
 
 def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
-             duration_s: int, home: Path) -> None:
+             duration_s: int, home: Path, micro: bool = False) -> None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
+    # Mesoscopic by default: our product is 15-min edge flows, which does not
+    # need microscopic car-following — meso is ~20x faster (whole-day seed:
+    # minutes → seconds), which is what makes interactive closures possible.
     cmd = [
         str(home / "bin" / "sumo"),
+        *([] if micro else ["--mesosim", "true", "--meso-junction-control", "true"]),
         "-n", str(NET_PATH.resolve()),
         "-r", str(route_path.resolve()),
         "-a", ",".join(str(p.resolve()) for p in add_paths),
@@ -192,8 +226,11 @@ def main() -> None:
 
     closure_add: list[Path] = []
     if args.close:
+        rerouter_edges = edges_near(args.close, REROUTER_RADIUS_M)
+        print(f"  rerouter on {len(rerouter_edges)} edges within "
+              f"{REROUTER_RADIUS_M} m of the closure")
         cpath = SUMO_DIR / f"closure_{name}.add.xml"
-        write_closure_additional(cpath, args.close, net_edges, duration_s)
+        write_closure_additional(cpath, args.close, rerouter_edges, duration_s)
         closure_add = [cpath]
 
     per_seed: list[dict[str, np.ndarray]] = []
@@ -203,7 +240,8 @@ def main() -> None:
         ed_file  = SUMO_DIR / f"edgedata_{name}_{seed}.xml"
         add_path = SUMO_DIR / f"additional_{name}_{seed}.add.xml"
         write_edgedata_additional(add_path, ed_file, duration_s)
-        run_sumo(seed, route_path, [add_path] + closure_add, duration_s, home)
+        run_sumo(seed, route_path, [add_path] + closure_add, duration_s, home,
+                 micro=args.micro)
         per_seed.append(parse_edgedata(ed_file, n_intervals))
         print(f"  seed {seed} ({route_path.name}): "
               f"{len(per_seed[-1])} edges with traffic")

@@ -55,7 +55,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--date",  default="2025-09-16",
                    help="Simulation date (default: Tue 2025-09-16 — normal September weekday)")
     p.add_argument("--begin", default="06:00", help="Window start HH:MM (default 06:00)")
-    p.add_argument("--end",   default="10:00", help="Window end HH:MM (default 10:00)")
+    p.add_argument("--end",   default="10:00",
+                   help="Window end HH:MM; '24:00' = whole day (default 10:00)")
     p.add_argument("--seed",  type=int, default=42)
     return p.parse_args()
 
@@ -252,7 +253,10 @@ def main() -> None:
         sys.exit("sumo/net.net.xml missing — run build_sumo_net.py first")
 
     t0 = pd.Timestamp(f"{args.date} {args.begin}")
-    t1 = pd.Timestamp(f"{args.date} {args.end}")
+    if args.end == "24:00":   # whole day — pandas rejects hour 24
+        t1 = t0.normalize() + pd.Timedelta(days=1)
+    else:
+        t1 = pd.Timestamp(f"{args.date} {args.end}")
     qi_start    = int((t0 - EPOCH) / INTERVAL)
     n_intervals = int((t1 - t0) / INTERVAL)
     duration_s  = n_intervals * 900
@@ -266,13 +270,16 @@ def main() -> None:
     home = sumo_home()
 
     print("\nGenerating candidate route pool (randomTrips + duarouter) …")
+    # The pool needs DIVERSITY, not volume — cap it so whole-day windows
+    # don't produce 40k candidates that routeSampler then has to chew through.
+    period = max(CANDIDATE_PERIOD_S, duration_s / 10_000)
     cand_path = SUMO_DIR / "candidates.rou.xml"
     run_tool("randomTrips.py", [
         "-n", str(NET_PATH),
         "-r", str(cand_path),
         "-o", str(SUMO_DIR / "trips.trips.xml"),
         "-b", "0", "-e", str(duration_s),
-        "-p", str(CANDIDATE_PERIOD_S),
+        "-p", str(period),
         "--fringe-factor", "5",       # favor through-traffic entering at the edge of the net
         "--seed", str(args.seed),
         "--validate",

@@ -28,6 +28,10 @@ demand:
 	else \
 		python3 estimate_directions.py; \
 	fi
+	python3 build_sumo_demand.py --begin 00:00 --end 24:00
+
+# Fast variant: morning window only (quicker sims while iterating)
+demand-morning:
 	python3 build_sumo_demand.py
 
 scenario:

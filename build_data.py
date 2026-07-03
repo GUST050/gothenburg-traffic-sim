@@ -133,6 +133,20 @@ def ang_diff_deg(a: float, b: float) -> float:
     return abs((a - b + 180) % 360 - 180)
 
 
+def true_snap_dist_m(G, u: int, v: int, k: int, lat: float, lon: float) -> float:
+    """Distance from a point to the edge GEOMETRY — never the midpoint, which
+    wrongly reports ~100 m for a sensor sitting ON a long edge (1074 taught
+    us this: 1 m true distance, 130 m midpoint distance)."""
+    from dirsplit.geo import point_to_polyline_m
+    d = G.get_edge_data(u, v, k)
+    if "geometry" in d:
+        coords = list(d["geometry"].coords)
+    else:
+        coords = [(G.nodes[u]["x"], G.nodes[u]["y"]),
+                  (G.nodes[v]["x"], G.nodes[v]["y"])]
+    return point_to_polyline_m(lat, lon, coords)
+
+
 def scalar(val: object) -> object:
     """Return val[0] if val is a list (OSM name/highway can be lists)."""
     return val[0] if isinstance(val, list) else val
@@ -420,15 +434,14 @@ def snap_sensors(
             print(f"  ⚠  {sensor_id}: auto-snap {edge_id} already claimed by {edge_sensor[edge_id]}")
         edge_sensor[edge_id] = sensor_id
 
-        mlat, mlon = edge_midpoint(G, u, v, k)
-        dist = haversine_m(lats[i], lons[i], mlat, mlon)
+        dist = true_snap_dist_m(G, u, v, k, lats[i], lons[i])
         warn = f"  ⚠ {dist:.0f}m — check snap" if dist > SNAP_WARN_M else ""
         print(f"  {sensor_id}: auto     {edge_id}  ({level})  {dist:.0f}m{warn}")
 
         if level == "Total":
             rev = _find_second_edge(G, u, v, k, sensor_id, lats[i], lons[i])
             edge_sensor[rev] = sensor_id
-            rev_dist = haversine_m(lats[i], lons[i], *edge_midpoint(G, *_parse_eid(rev)))
+            rev_dist = true_snap_dist_m(G, *_parse_eid(rev), lats[i], lons[i])
             print(f"      ↔  {rev}  ({rev_dist:.0f}m)")
 
     return edge_sensor
