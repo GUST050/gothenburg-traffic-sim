@@ -485,12 +485,36 @@ def build_flows(
 
 # ── Argument parsing ───────────────────────────────────────────────────────────
 
+DROP_DIR = Path("data_in")   # drop new quarterly CSV deliveries here
+DEFAULT_DATA_DIR = "~/Downloads/Data till Chalmers_20260618"
+DEFAULT_COORDS   = "~/Downloads/Mätpunkter_koordinater.csv"
+
+
+def discover_data_dir() -> str:
+    """data_in/ wins when it contains sensor CSVs — the drop-folder workflow."""
+    if DROP_DIR.is_dir() and any(
+        p for p in DROP_DIR.glob("*.csv") if "koordinat" not in p.name.lower()
+    ):
+        return str(DROP_DIR)
+    return DEFAULT_DATA_DIR
+
+
+def discover_coords() -> str:
+    if DROP_DIR.is_dir():
+        hits = [p for p in DROP_DIR.glob("*.csv") if "koordinat" in p.name.lower()]
+        if hits:
+            return str(hits[0])
+    return DEFAULT_COORDS
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--data_dir",    required=True,
-                   help="Directory containing sensor CSV files")
-    p.add_argument("--coords",      required=True,
-                   help="Sensor coordinates CSV (SWEREF99 12 00 / EPSG:3007)")
+    p.add_argument("--data_dir",    default=None,
+                   help="Directory containing sensor CSV files "
+                        "(default: data_in/ if it has CSVs, else the original delivery)")
+    p.add_argument("--coords",      default=None,
+                   help="Sensor coordinates CSV, SWEREF99 12 00 / EPSG:3007 "
+                        "(default: *koordinat*.csv in data_in/, else the original)")
     p.add_argument("--out_dir",     default="web/data",
                    help="Output directory (default: web/data)")
     p.add_argument("--clip_radius", type=float, default=400,
@@ -504,8 +528,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args        = parse_args()
-    data_dir    = Path(args.data_dir).expanduser()
-    coords_path = Path(args.coords).expanduser()
+    data_dir    = Path(args.data_dir or discover_data_dir()).expanduser()
+    coords_path = Path(args.coords or discover_coords()).expanduser()
+    print(f"Data: {data_dir}\nCoords: {coords_path}")
     out_dir     = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 

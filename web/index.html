@@ -93,6 +93,18 @@
       max-width: 260px;
     }
 
+    .action-btn {
+      background: rgba(15, 23, 42, 0.8); color: var(--ink-2);
+      border: 1px solid var(--panel-line); border-radius: 9px;
+      padding: 6px 12px; font-size: 0.76rem; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .action-btn:hover { color: var(--ink); }
+    .action-btn.active { background: #b91c1c; color: #fff; border-color: #b91c1c; }
+    .action-btn.run { background: #b91c1c; color: #fff; border-color: #b91c1c; }
+    .action-btn.run:disabled { opacity: 0.65; cursor: wait; }
+
     #sliders { display: flex; gap: 28px; }
     .slider-group { flex: 1; }
     .slider-head {
@@ -251,6 +263,9 @@
         <button id="btn-scen">Scenario</button>
       </div>
       <select id="scen-select" style="display:none"></select>
+      <button id="close-mode-btn" class="action-btn" style="display:none"
+              title="Klicka på vägar i kartan och simulera en avstängning">🚧 Stäng väg</button>
+      <button id="close-run-btn" class="action-btn run" style="display:none"></button>
     </div>
     <div id="sliders">
       <div class="slider-group">
@@ -274,11 +289,11 @@
   <!-- ?v= forces the browser to fetch fresh JS when the HTML updates —
        bump the number whenever the JS files change, or stale cached JS
        can run against new HTML and crash on missing elements -->
-  <script src="state.js?v=5"></script>
-  <script src="provider.js?v=5"></script>
-  <script src="render.js?v=5"></script>
-  <script src="controls.js?v=5"></script>
-  <script src="clock.js?v=5"></script>
+  <script src="state.js?v=6"></script>
+  <script src="provider.js?v=6"></script>
+  <script src="render.js?v=6"></script>
+  <script src="controls.js?v=6"></script>
+  <script src="clock.js?v=6"></script>
   <script>
     (async () => {
       try {
@@ -339,10 +354,26 @@
         // Shareable URLs: ?mode=scenario&file=<name>.json&qi=6, ?mode=forecast
         const params = new URLSearchParams(location.search);
 
-        async function activateScenario(file) {
+        async function loadScenIndex(force = false) {
+          if (scenIndex && !force) return;
+          // no-store: re-runs overwrite index.json and scenario files in place
+          const res = await fetch('data/scenarios/index.json', { cache: 'no-store' });
+          if (!res.ok) throw new Error(`${res.status}`);
+          scenIndex = await res.json();
+          const current = scenSelect.value;
+          scenSelect.innerHTML = scenIndex.scenarios.map(s =>
+            `<option value="${s.file}">${s.label} · ${s.window}</option>`
+          ).join('');
+          if ([...scenSelect.options].some(o => o.value === current)) {
+            scenSelect.value = current;
+          }
+        }
+
+        async function activateScenario(file, { fresh = false } = {}) {
+          if (fresh) delete scenProviders[file];   // file was overwritten on disk
           if (!scenProviders[file]) {
-            scenProviders[file] =
-              await new HistoricalProvider().load('data/scenarios/' + file);
+            scenProviders[file] = await new HistoricalProvider()
+              .load('data/scenarios/' + file + '?t=' + Date.now());
           }
           setMode(btnScen, scenProviders[file]);
           // Scenario files start at their own epoch (window start)
@@ -351,17 +382,10 @@
 
         btnScen.addEventListener('click', async () => {
           try {
-            if (!scenIndex) {
-              const res = await fetch('data/scenarios/index.json');
-              if (!res.ok) throw new Error(`${res.status}`);
-              scenIndex = await res.json();
-              scenSelect.innerHTML = scenIndex.scenarios.map(s =>
-                `<option value="${s.file}">${s.label} · ${s.window}</option>`
-              ).join('');
-              const wanted = params.get('file');
-              if (wanted && [...scenSelect.options].some(o => o.value === wanted)) {
-                scenSelect.value = wanted;
-              }
+            await loadScenIndex();
+            const wanted = params.get('file');
+            if (wanted && [...scenSelect.options].some(o => o.value === wanted)) {
+              scenSelect.value = wanted;
             }
             await activateScenario(scenSelect.value);
           } catch (e) {
@@ -370,6 +394,57 @@
         });
 
         scenSelect.addEventListener('change', e => activateScenario(e.target.value));
+
+        // ── Klicka-och-stäng vägar (kräver serve.py, inte statisk server) ─────
+        const btnClose = document.getElementById('close-mode-btn');
+        const btnRun   = document.getElementById('close-run-btn');
+        const selected = new Set();
+        let closureMode = false;
+
+        function refreshCloseUI() {
+          btnClose.classList.toggle('active', closureMode);
+          btnClose.textContent = closureMode ? '✕ Avbryt' : '🚧 Stäng väg';
+          btnRun.style.display = (closureMode && selected.size) ? '' : 'none';
+          btnRun.textContent = `Simulera avstängning (${selected.size})`;
+          Render.setPending([...selected]);
+        }
+
+        // Feature-detect the API — hidden when served statically
+        fetch('/api/ping').then(r => {
+          if (r.ok) btnClose.style.display = '';
+        }).catch(() => {});
+
+        btnClose.addEventListener('click', () => {
+          closureMode = !closureMode;
+          if (!closureMode) selected.clear();
+          refreshCloseUI();
+        });
+
+        Render.onEdgeClick(id => {
+          if (!closureMode) return;
+          selected.has(id) ? selected.delete(id) : selected.add(id);
+          refreshCloseUI();
+        });
+
+        btnRun.addEventListener('click', async () => {
+          btnRun.disabled = true;
+          btnRun.textContent = 'Simulerar… (~1 min)';
+          try {
+            const res  = await fetch('/api/close?edges=' + [...selected].join(','));
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            closureMode = false;
+            selected.clear();
+            await loadScenIndex(true);
+            scenSelect.value = data.file;
+            await activateScenario(data.file, { fresh: true });
+          } catch (e) {
+            alert('Simuleringen misslyckades: ' + e.message);
+          } finally {
+            btnRun.disabled = false;
+            refreshCloseUI();
+          }
+        });
 
         if (params.get('mode') === 'scenario') btnScen.click();
         else if (params.get('mode') === 'forecast') btnFore.click();

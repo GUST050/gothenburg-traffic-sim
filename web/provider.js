@@ -23,11 +23,12 @@ class HistoricalProvider {
     this._flows = payload.flows;
 
     // Scenario files (from run_scenario.py) carry extra fields; plain
-    // historical/forecast files leave these null.
-    this.isScenario = !!payload.scenario;
-    this.closedEdge = payload.scenario?.closed_edge ?? null;
-    this.label      = payload.scenario?.label ?? null;
-    this.confidence = payload.confidence ?? null;   // per-edge, per-scenario
+    // historical/forecast files leave these empty.
+    this.isScenario  = !!payload.scenario;
+    this.closedEdges = payload.scenario?.closed_edges
+                       ?? (payload.scenario?.closed_edge ? [payload.scenario.closed_edge] : []);
+    this.label       = payload.scenario?.label ?? null;
+    this.confidence  = payload.confidence ?? null;  // per-edge, per-scenario
 
     for (const [edgeId, arr] of Object.entries(this._flows)) {
       const nums = arr.filter(v => v !== null);

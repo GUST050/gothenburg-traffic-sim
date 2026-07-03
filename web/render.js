@@ -2,7 +2,11 @@ const Render = (() => {
   let _map           = null;
   let _provider      = null;
   let _normalProfile = null;
+  let _onEdgeClick   = null;   // closure-mode callback (set by index.html)
   const _edges       = {};
+  const _pending     = new Set();   // edges selected for closure, not yet simulated
+
+  const PENDING_STYLE = { color: '#b91c1c', weight: 5, opacity: 0.9, dashArray: '2 6' };
 
   const MAX_CARS      = 15;    // dot pool per sensor edge
   const CAR_SPEED_M_S = 13.9;  // 50 km/h in m/s — used for density estimate
@@ -57,8 +61,16 @@ const Render = (() => {
   function applyFlowStyle(e, edgeId, count, qi) {
     e.count = count;
 
+    // Selected for closure (not yet simulated) — must win over per-frame
+    // flow styling or the selection highlight is overwritten instantly
+    if (_pending.has(edgeId)) {
+      e.line.setStyle(PENDING_STYLE);
+      e.t = null; e.activeCars = 0;
+      return;
+    }
+
     // Closed edge in a scenario — draw as blocked, no cars
-    if (_provider.closedEdge === edgeId) {
+    if (_provider.closedEdges && _provider.closedEdges.includes(edgeId)) {
       e.line.setStyle({ color: '#0f172a', weight: 5, opacity: 0.85, dashArray: '4 7' });
       e.t = null; e.activeCars = 0;
       return;
@@ -231,6 +243,7 @@ const Render = (() => {
           ? { color: '#64748b', weight: 3, opacity: 0.4,       dashArray: '' }
           : { color: '#526078', weight: 2, opacity: bgOpacity, dashArray: '' };
         const line = L.polyline(latlngs, baseStyle).addTo(isSensor ? fg : bg);
+        line.on('click', () => { if (_onEdgeClick) _onEdgeClick(id); });
 
         // Confidence = proximity to the nearest sensor (0–1, computed offline).
         // Shown as % so users see how trustworthy a simulation is on this edge.
@@ -252,7 +265,7 @@ const Render = (() => {
             let html = `<b>${name ?? 'Okänd väg'}</b>`;
             if (_provider.hasEdge(id)) {
               const cnt = _provider.flowAt(id, qi);
-              if (_provider.closedEdge === id) {
+              if (_provider.closedEdges && _provider.closedEdges.includes(id)) {
                 html += `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
               } else if (cnt !== null) {
                 html += `<br><b style="font-size:1.15em">${cnt}</b> fordon / 15 min <small>(simulerat)</small>`;
@@ -296,7 +309,7 @@ const Render = (() => {
             }
             if (level === 'Total')  html += '<br><small>Summa båda riktningar</small>';
             else if (level)         html += `<br><small>Enkelriktad mätning (${level})</small>`;
-            if (_provider.closedEdge === id) {
+            if (_provider.closedEdges && _provider.closedEdges.includes(id)) {
               html += `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
             } else if (_provider.isScenario) {
               html += '<br><small>Simulerat (SUMO)</small>';
@@ -334,6 +347,25 @@ const Render = (() => {
 
     setNormalProfile(np) {
       _normalProfile = np;
+      redraw(typeof State !== 'undefined' ? State.qi : 0);
+    },
+
+    onEdgeClick(fn) {
+      _onEdgeClick = fn;
+    },
+
+    // Highlight edges selected for closure; pass [] to clear
+    setPending(ids) {
+      _pending.clear();
+      for (const id of ids) _pending.add(id);
+      for (const [id, e] of Object.entries(_edges)) {
+        e._styleKey = undefined;   // force per-frame restyle
+        if (_pending.has(id)) {
+          e.line.setStyle(PENDING_STYLE);
+        } else if (!e.isSensor && !_provider.hasEdge(id)) {
+          e.line.setStyle(e.baseStyle);   // background edge: restore base look
+        }
+      }
       redraw(typeof State !== 'undefined' ? State.qi : 0);
     },
   };

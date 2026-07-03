@@ -1,19 +1,21 @@
 # Gothenburg traffic pipeline — run steps in order with `make all`.
 # Individual steps: make data / features / agent1 / forecast / test / serve
 #
-# Override raw-data paths if they move:
-#   make data DATA_DIR="/path/to/csvs" COORDS="/path/to/koordinater.csv"
+# New sensor data? Drop it in data_in/ (see data_in/README.md), add the
+# station to SENSOR_MEASURED_DIRECTION in build_data.py, then `make refresh`.
+# Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
-DATA_DIR ?= $(HOME)/Downloads/Data till Chalmers_20260618
-COORDS   ?= $(HOME)/Downloads/Mätpunkter_koordinater.csv
-
-.PHONY: all data features agent1 forecast test serve sumo-net demand scenario
+.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario
 
 all: data features agent1 forecast test
 
+# Full re-run after new data: rebuild everything from raw CSVs to scenarios.
+refresh: data features agent1 forecast dirsplit-coverage sumo-net demand scenario test
+	@echo "Refresh klar — starta med: make serve"
+
 # ── Phase 3: SUMO ──────────────────────────────────────────────────────────
 # make sumo-net && make demand && make scenario
-# Custom closure: python3 run_scenario.py --close <edgeId>
+# Custom closure: python3 run_scenario.py --close <edgeId> [<edgeId> …]
 
 sumo-net:
 	python3 build_sumo_net.py
@@ -57,7 +59,7 @@ dirsplit-predict:
 	python3 -m dirsplit.predict
 
 data:
-	python3 build_data.py --data_dir "$(DATA_DIR)" --coords "$(COORDS)"
+	python3 build_data.py $(if $(DATA_DIR),--data_dir "$(DATA_DIR)") $(if $(COORDS),--coords "$(COORDS)")
 
 features:
 	python3 build_features.py
@@ -71,5 +73,6 @@ forecast:
 test:
 	python3 -m pytest tests/ -q
 
+# Web app + scenario API (click-to-close in the map needs this server)
 serve:
-	cd web && python3 -m http.server 8000
+	python3 serve.py

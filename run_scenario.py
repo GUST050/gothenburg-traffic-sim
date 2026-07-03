@@ -46,10 +46,11 @@ OUT_DIR   = Path("web/data/scenarios")
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--close", default=None, metavar="EDGE_ID",
-                   help="Edge to close (must exist in network.geojson). Omit for baseline.")
+    p.add_argument("--close", nargs="*", default=[], metavar="EDGE_ID",
+                   help="Edge(s) to close (must exist in network.geojson). "
+                        "Omit for baseline.")
     p.add_argument("--name",  default=None,
-                   help="Scenario name (default: 'baseline' or 'close_<edge>')")
+                   help="Scenario name (default: 'baseline' or 'close_<edge…>')")
     p.add_argument("--seeds", type=int, default=3,
                    help="Monte Carlo runs (default 3)")
     return p.parse_args()
@@ -68,20 +69,28 @@ def load_geojson_meta() -> tuple[dict[str, float], dict[str, str]]:
     return prior, names
 
 
-def write_additional(path: Path, edgedata_file: Path, close_edge: str | None,
-                     all_edges: list[str], duration_s: int) -> None:
+def write_edgedata_additional(path: Path, edgedata_file: Path,
+                              duration_s: int) -> None:
     with open(path, "w") as f:
         f.write("<additional>\n")
         f.write(f'  <edgeData id="ed" file="{edgedata_file.name}" period="900" '
                 f'begin="0" end="{duration_s}" excludeEmpty="true"/>\n')
-        if close_edge:
-            # Rerouter on every edge: any vehicle whose remaining route uses the
-            # closed edge recomputes as soon as it enters its next edge.
-            f.write(f'  <rerouter id="closure" edges="{" ".join(all_edges)}">\n')
-            f.write(f'    <interval begin="0" end="{duration_s + 3600}">\n')
-            f.write(f'      <closingReroute id="{close_edge}" disallow="all"/>\n')
-            f.write("    </interval>\n")
-            f.write("  </rerouter>\n")
+        f.write("</additional>\n")
+
+
+def write_closure_additional(path: Path, close_edges: list[str],
+                             all_edges: list[str], duration_s: int) -> None:
+    """One shared closure file per scenario (the rerouter edge list is big).
+    Rerouter on every edge: any vehicle whose remaining route uses a closed
+    edge recomputes as soon as it enters its next edge."""
+    with open(path, "w") as f:
+        f.write("<additional>\n")
+        f.write(f'  <rerouter id="closure" edges="{" ".join(all_edges)}">\n')
+        f.write(f'    <interval begin="0" end="{duration_s + 3600}">\n')
+        for ce in close_edges:
+            f.write(f'      <closingReroute id="{ce}" disallow="all"/>\n')
+        f.write("    </interval>\n")
+        f.write("  </rerouter>\n")
         f.write("</additional>\n")
 
 
@@ -97,7 +106,7 @@ def demand_variants() -> list[Path]:
     return paths
 
 
-def run_sumo(seed: int, route_path: Path, add_path: Path,
+def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              duration_s: int, home: Path) -> None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
@@ -105,7 +114,7 @@ def run_sumo(seed: int, route_path: Path, add_path: Path,
         str(home / "bin" / "sumo"),
         "-n", str(NET_PATH.resolve()),
         "-r", str(route_path.resolve()),
-        "-a", str(add_path.resolve()),
+        "-a", ",".join(str(p.resolve()) for p in add_paths),
         "--seed", str(seed),
         "--begin", "0",
         "--end", str(duration_s + 1800),   # let last departures finish
@@ -150,12 +159,26 @@ def main() -> None:
     duration_s  = n_intervals * 900
 
     prior, names = load_geojson_meta()
-    if args.close and args.close not in prior:
-        sys.exit(f"--close {args.close}: not an edge in network.geojson")
+    for ce in args.close:
+        if ce not in prior:
+            sys.exit(f"--close {ce}: not an edge in network.geojson")
 
-    name  = args.name or (f"close_{args.close}" if args.close else "baseline")
-    label = (f"Avstängning: {names[args.close]}" if args.close
-             else "Baslinje (ingen avstängning)")
+    if args.name:
+        name = args.name
+    elif args.close:
+        name = "close_" + "+".join(args.close)
+        if len(name) > 80:   # many edges → keep the filename sane
+            import hashlib
+            name = f"close_{len(args.close)}edges_" + \
+                   hashlib.sha1("+".join(args.close).encode()).hexdigest()[:8]
+    else:
+        name = "baseline"
+
+    if args.close:
+        streets = sorted({names[ce] for ce in args.close})
+        label = "Avstängning: " + ", ".join(streets)
+    else:
+        label = "Baslinje (ingen avstängning)"
 
     # Edge list for the rerouter (net edge IDs = plain edge IDs, no internals)
     net_edges = [e.get("id") for e in ET.parse(NET_PATH).getroot().findall("edge")
@@ -167,14 +190,20 @@ def main() -> None:
     if len(variants) > 1:
         print(f"  {len(variants)} demand variants (q50 + direction-split bounds)")
 
+    closure_add: list[Path] = []
+    if args.close:
+        cpath = SUMO_DIR / f"closure_{name}.add.xml"
+        write_closure_additional(cpath, args.close, net_edges, duration_s)
+        closure_add = [cpath]
+
     per_seed: list[dict[str, np.ndarray]] = []
     for s in range(args.seeds):
         seed = 1000 + s
         route_path = variants[s % len(variants)]
         ed_file  = SUMO_DIR / f"edgedata_{name}_{seed}.xml"
         add_path = SUMO_DIR / f"additional_{name}_{seed}.add.xml"
-        write_additional(add_path, ed_file, args.close, net_edges, duration_s)
-        run_sumo(seed, route_path, add_path, duration_s, home)
+        write_edgedata_additional(add_path, ed_file, duration_s)
+        run_sumo(seed, route_path, [add_path] + closure_add, duration_s, home)
         per_seed.append(parse_edgedata(ed_file, n_intervals))
         print(f"  seed {seed} ({route_path.name}): "
               f"{len(per_seed[-1])} edges with traffic")
@@ -200,7 +229,7 @@ def main() -> None:
         "generated_at":     pd.Timestamp.now().isoformat(timespec="seconds"),
         "scenario": {
             "name": name, "label": label,
-            "closed_edge": args.close,
+            "closed_edges": args.close,
             "date": meta["date"], "begin": meta["begin"], "end": meta["end"],
             "seeds": args.seeds,
         },
@@ -218,7 +247,7 @@ def main() -> None:
     index["scenarios"] = [s for s in index["scenarios"] if s["name"] != name]
     index["scenarios"].append({
         "name": name, "label": label, "file": f"{name}.json",
-        "closed_edge": args.close,
+        "closed_edges": args.close,
         "window": f"{meta['date']} {meta['begin']}–{meta['end']}",
     })
     index["scenarios"].sort(key=lambda s: s["name"])

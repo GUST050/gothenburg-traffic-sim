@@ -50,12 +50,25 @@ behind the same interface without touching map code.
 ```bash
 pip install -r requirements.txt
 
-# Full pipeline (raw CSV paths are set in the Makefile, override if needed)
+# Full pipeline (auto-discovers data_in/, falls back to the original delivery)
 make all
 
-# Web app → http://localhost:8000
+# Web app + scenario API → http://localhost:8000
 make serve
 ```
+
+**Close roads from the map:** with `make serve` running, click **🚧 Stäng väg**,
+select any streets on the map, and hit *Simulera* — the server runs the SUMO
+Monte Carlo on demand (~1 min) and the map switches to the resulting scenario,
+closed edges drawn black-dashed and diverted traffic recoloured. Multiple
+simultaneous closures are supported (`run_scenario.py --close e1 e2 …` from
+the CLI does the same).
+
+**Feeding it new data:** drop new quarterly sensor CSVs in `data_in/`
+(see `data_in/README.md`), check the station's measured direction in the
+city's traffic catalogue, add it to `SENSOR_MEASURED_DIRECTION`, and run
+`make refresh` — the new sensor gets an edge on the map, a coverage check,
+its own direction model and a place in the demand calibration automatically.
 
 Web app controls: play/scrub 2025 traffic, toggle to the 2027 forecast or a
 SUMO scenario, space = play/pause, ←/→ = ±15 min, Shift+←/→ = ±1 day. Hover

@@ -68,10 +68,10 @@ def test_scenario_files_satisfy_flow_contract(index, geo_edge_ids):
 
 
 @needs_scenarios
-def test_closed_edge_has_reduced_flow(index):
-    """The closed edge must carry (almost) no traffic in its own scenario."""
+def test_closed_edges_have_reduced_flow(index):
+    """Every closed edge must carry (almost) no traffic in its own scenario."""
     files = {s["name"]: s for s in index["scenarios"]}
-    closures = [s for s in files.values() if s.get("closed_edge")]
+    closures = [s for s in files.values() if s.get("closed_edges")]
     if not closures or "baseline" not in files:
         pytest.skip("need baseline + at least one closure scenario")
 
@@ -80,10 +80,10 @@ def test_closed_edge_has_reduced_flow(index):
     for s in closures:
         with open(SCEN_DIR / s["file"]) as f:
             closed = json.load(f)["flows"]
-        ce = s["closed_edge"]
-        base_total   = sum(v or 0 for v in base.get(ce, []))
-        closed_total = sum(v or 0 for v in closed.get(ce, []))
-        assert closed_total < 0.2 * max(base_total, 1), (
-            f"{s['name']}: closed edge still carries {closed_total} "
-            f"(baseline {base_total})"
-        )
+        for ce in s["closed_edges"]:
+            base_total   = sum(v or 0 for v in base.get(ce, []))
+            closed_total = sum(v or 0 for v in closed.get(ce, []))
+            assert closed_total < 0.2 * max(base_total, 1), (
+                f"{s['name']}: closed edge {ce} still carries {closed_total} "
+                f"(baseline {base_total})"
+            )
