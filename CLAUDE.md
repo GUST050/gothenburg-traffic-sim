@@ -2,6 +2,11 @@
 
 Persistent project context for Claude Code. Keep this file in the repo root.
 
+**ARCHITECTURE.md is the source of truth for the program's structure** (six
+stages: Intake → Observability → Forecast → Demand → Simulation → Confidence,
+with contracts, gates and build order). This file holds project context,
+history and rules; when they disagree about structure, ARCHITECTURE.md wins.
+
 ## What this project is
 Summer project for Prof. Miroslaw Staron (Chalmers). Owner: Gustav (student).
 Goal arc, in order:
