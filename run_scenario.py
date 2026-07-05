@@ -56,6 +56,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--micro", action="store_true",
                    help="Use microscopic simulation (default: mesoscopic — "
                         "~20x faster, adequate for 15-min edge flows)")
+    p.add_argument("--no-trajectories", action="store_true",
+                   help="Skip the per-vehicle trajectory export (one extra "
+                        "seed-1000 run with vehroute exit-times)")
     return p.parse_args()
 
 
@@ -171,6 +174,75 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         sys.exit(f"sumo failed (seed {seed})")
 
 
+def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
+                        duration_s: int, home: Path,
+                        web_edges: set[str]) -> str | None:
+    """One extra meso run with vehroute exit-times → a compact per-vehicle
+    edge-timeline the web animates: EVERY DOT IS A REAL SIMULATED VEHICLE
+    with its origin, destination, route and congestion-accurate timing.
+
+    Format (indices into a shared edge list, times in whole seconds):
+      {"edges": [...], "vehicles": [{"d": depart, "e": [i...], "x": [t...]}]}
+    """
+    vr_file = SUMO_DIR / f"vehroutes_{name}.xml"
+    cmd = [
+        str(home / "bin" / "sumo"),
+        "--mesosim", "true", "--meso-junction-control", "false",
+        "-n", str(NET_PATH.resolve()),
+        "-r", str(route_path.resolve()),
+        *(("-a", ",".join(str(p.resolve()) for p in closure_add))
+          if closure_add else ()),
+        "--vehroute-output", vr_file.name,
+        "--vehroute-output.exit-times", "true",
+        "--begin", "0", "--end", str(duration_s + 3600),
+        "--no-step-log", "true", "--no-warnings", "true",
+        "--ignore-route-errors", "true", "--seed", "1000",
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True,
+                         cwd=str(SUMO_DIR), env={"SUMO_HOME": str(home)})
+    if res.returncode != 0:
+        print(res.stderr[-800:])
+        return None
+
+    edge_index: dict[str, int] = {}
+    vehicles = []
+    for veh in ET.parse(vr_file).getroot().iter("vehicle"):
+        route = veh.find("route")
+        if route is None or not route.get("exitTimes"):
+            continue
+        edges = route.get("edges").split()
+        exits = [int(float(t)) for t in route.get("exitTimes").split()]
+        if len(edges) != len(exits):
+            continue
+        # keep only edges the map can draw (all net edges are in the geojson,
+        # but guard against internal/unknown ids)
+        idxs = []
+        for e in edges:
+            if e not in edge_index:
+                if e not in web_edges:
+                    idxs = None
+                    break
+                edge_index[e] = len(edge_index)
+            idxs.append(edge_index[e])
+        if not idxs:
+            continue
+        vehicles.append({"d": int(float(veh.get("depart"))),
+                         "e": idxs, "x": exits})
+
+    vehicles.sort(key=lambda v: v["d"])
+    inv = [None] * len(edge_index)
+    for e, i in edge_index.items():
+        inv[i] = e
+    traj_name = f"{name}_traj.json"
+    with open(OUT_DIR / traj_name, "w") as f:
+        json.dump({"edges": inv, "vehicles": vehicles}, f,
+                  separators=(",", ":"))
+    size_mb = (OUT_DIR / traj_name).stat().st_size / 1e6
+    print(f"  trajectories: {len(vehicles)} vehicles → {traj_name} "
+          f"({size_mb:.1f} MB)")
+    return traj_name
+
+
 def parse_edgedata(path: Path, n_intervals: int) -> dict[str, np.ndarray]:
     """{edge_id: array of 'entered' counts per 15-min interval}."""
     flows: dict[str, np.ndarray] = {}
@@ -267,10 +339,16 @@ def main() -> None:
         cv   = float((stack.std(axis=0)[busy] / mean[busy]).mean()) if busy.any() else 0.0
         conf_out[eid] = round(prior[eid] * float(np.exp(-cv)), 3)
 
+    traj_name = None
+    if not args.no_trajectories:
+        traj_name = export_trajectories(name, variants[0], closure_add,
+                                        duration_s, home, web_edges)
+
     payload = {
         "epoch":            meta["epoch_sim"],
         "interval_minutes": 15,
         "generated_at":     pd.Timestamp.now().isoformat(timespec="seconds"),
+        "trajectories":     traj_name,
         "scenario": {
             "name": name, "label": label,
             "closed_edges": args.close,

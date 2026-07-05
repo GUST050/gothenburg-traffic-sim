@@ -25,6 +25,7 @@ class HistoricalProvider {
     // Scenario files (from run_scenario.py) carry extra fields; plain
     // historical/forecast files leave these empty.
     this.isScenario  = !!payload.scenario;
+    this.trajectories = payload.trajectories ?? null;   // per-vehicle playback file
     this.closedEdges = payload.scenario?.closed_edges
                        ?? (payload.scenario?.closed_edge ? [payload.scenario.closed_edge] : []);
     this.label       = payload.scenario?.label ?? null;

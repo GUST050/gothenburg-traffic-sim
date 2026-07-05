@@ -147,6 +147,26 @@ def ensure_bounds(date: str, begin: str, end: str) -> dict:
         return json.load(f)
 
 
+def ensure_observability() -> dict:
+    """Fresh Agent-B products (derived flows, corridor priors) for THIS graph."""
+    path = Path("web/data/observability.json")
+    with open(GEO_PATH) as f:
+        n_now = len(json.load(f)["features"])
+    if path.exists():
+        with open(path) as f:
+            d = json.load(f)
+        if d.get("graph_edges") == n_now:
+            return d
+    print("Running observability (Agent B) …")
+    res = subprocess.run([sys.executable, "observability.py"],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stderr[-800:])
+        return {"corridor_priors": {}, "derived_flows": {}}
+    with open(path) as f:
+        return json.load(f)
+
+
 def ensure_priors(date: str) -> dict:
     """Level-3 learned priors for unmeasured opposite directions."""
     path = Path("sumo/prior_flows.json")
@@ -367,6 +387,11 @@ def main() -> None:
         import pfe
         bounds_data = ensure_bounds(args.date, args.begin, args.end)
         priors_data = ensure_priors(args.date)
+        obs_data    = ensure_observability()
+        corridor    = obs_data.get("corridor_priors", {})
+        if corridor:
+            print(f"  corridor coupling: {len(corridor)} edges between "
+                  f"sensor pairs get data-derived priors")
         prior_variant = {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
 
         for suffix, key in variants:
@@ -388,6 +413,15 @@ def main() -> None:
                     lo = d["prior_low"][slot] or 0.0
                     hi = d["prior_high"][slot] or val
                     pq[e] = (float(val), 1.0 / max(1.0, hi - lo))
+                # Sensors helping each other: corridor blends between sensor
+                # pairs — data-derived, so their (narrow) band gives them
+                # naturally higher weight than the learned priors
+                for e, d in corridor.items():
+                    qi = qi_start + i
+                    if qi >= len(d["prior"]) or d["prior"][qi] is None:
+                        continue
+                    band = d["band"][qi] or 8.0
+                    pq[e] = (float(d["prior"][qi]), 1.0 / max(1.0, band))
                 bounds_pq.append(bq)
                 priors_pq.append(pq)
 

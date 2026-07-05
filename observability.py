@@ -163,6 +163,64 @@ def corridor_alarms(G, known: dict[str, np.ndarray]) -> list[dict]:
     return alarms
 
 
+def corridor_priors(G, measured: dict[str, np.ndarray]) -> dict[str, dict]:
+    """SENSORS HELPING EACH OTHER: two same-direction stations linked by a
+    short directed path bound the flow on every edge BETWEEN them — traffic
+    there is the upstream series plus/minus the (bounded) side-street
+    exchange. Emitted as data-derived soft priors: value = position-weighted
+    blend of the two measured series, band = |s1 − s2| + ABS_TOL."""
+    import networkx as nx
+
+    from build_data import edge_bearing_deg
+    from dirsplit.geo import ang_diff_deg
+    out: dict[str, dict] = {}
+    ids = sorted(measured)
+    for e1 in ids:
+        for e2 in ids:
+            if e1 == e2:
+                continue
+            u1, v1, _ = e1.split("_")
+            u2, v2, _ = e2.split("_")
+            b1 = edge_bearing_deg(G, int(u1), int(v1))
+            b2 = edge_bearing_deg(G, int(u2), int(v2))
+            if ang_diff_deg(b1, b2) > 60:
+                continue   # not the same direction of travel
+            try:
+                path = nx.shortest_path(G, int(v1), int(u2), weight="length")
+            except nx.NetworkXNoPath:
+                continue
+            length = sum(G.get_edge_data(a, b, 0).get("length", 0)
+                         for a, b in zip(path, path[1:]))
+            if not path or length > 900:
+                continue
+
+            s1, s2 = measured[e1], measured[e2]
+            band = np.abs(s1 - s2) + ABS_TOL
+            n_seg = max(1, len(path) - 1)
+            b_corr = (b1 + b2) / 2 if ang_diff_deg(b1, b2) < 90 else b1
+            for j, (a, b) in enumerate(zip(path, path[1:])):
+                # the corridor must CONTINUE in the sensors' direction —
+                # a path looping via side streets must not inherit their flow
+                if ang_diff_deg(edge_bearing_deg(G, a, b), b_corr) > 60:
+                    continue
+                for k in G[a][b]:
+                    e_mid = edge_id(a, b, k)
+                    if e_mid in measured or e_mid in out:
+                        continue
+                    w = (j + 0.5) / n_seg          # position along the corridor
+                    blend = (1 - w) * s1 + w * s2
+                    out[e_mid] = {
+                        "from_sensor_edge": e1, "to_sensor_edge": e2,
+                        "prior": [None if np.isnan(x) else round(float(x), 1)
+                                  for x in blend],
+                        "band":  [None if np.isnan(x) else round(float(x), 1)
+                                  for x in band],
+                    }
+            print(f"  corridor {e1} → {e2}: {n_seg} segments coupled "
+                  f"({length:.0f} m)")
+    return out
+
+
 def lane_capacity(G) -> dict[str, float]:
     caps = {}
     for u, v, k, d in G.edges(keys=True, data=True):
@@ -298,6 +356,10 @@ def main() -> None:
         print(f"  derived {e}: daily mean "
               f"{np.nansum(s) / max(1, (~np.isnan(s)).sum() / 96):.0f} veh")
 
+    corridors = corridor_priors(G, measured)
+    print(f"Corridor coupling: {len(corridors)} intermediate edges get "
+          f"data-derived priors")
+
     alarms = neg_alarms + corridor_alarms(G, {**measured, **derived})
     for a in alarms:
         flag = "⚠" if a.get("severity") == "ALARM" or a["type"] == "negative_derivation" else "·"
@@ -316,10 +378,12 @@ def main() -> None:
         json.dump({
             "epoch": epoch,
             "interval_minutes": 15,
+            "graph_edges": G.number_of_edges(),   # cache fingerprint
             "classes": classes,
             "derived_flows": {e: [None if np.isnan(x) else round(float(x), 1)
                                   for x in s]
                               for e, s in derived.items()},
+            "corridor_priors": corridors,
             "capacity_veh_per_quarter": {e: c for e, c in caps.items()},
             "alarms": alarms,
             "note": "Level-2 products (exact only). Derived = uniquely "

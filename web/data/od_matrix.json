@@ -1,6 +1,6 @@
 {
  "window": "2025-09-16 00:00–24:00",
- "n_trips": 16011,
+ "n_trips": 16572,
  "zones": [
   "Götaplatsen-området",
   "Infart N",
@@ -17,13 +17,13 @@
   "Götaplatsen-området": {
    "Götaplatsen-området": 0,
    "Infart N": 0,
-   "Infart NO": 953,
+   "Infart NO": 4,
    "Infart NV": 0,
-   "Infart O": 43,
-   "Infart S": 1487,
+   "Infart O": 0,
+   "Infart S": 1115,
    "Infart SO": 0,
-   "Infart SV": 243,
-   "Infart V": 47,
+   "Infart SV": 1161,
+   "Infart V": 24,
    "Scandinavium-området": 0
   },
   "Infart N": {
@@ -36,82 +36,70 @@
    "Infart SO": 0,
    "Infart SV": 0,
    "Infart V": 0,
-   "Scandinavium-området": 126
+   "Scandinavium-området": 7
   },
   "Infart NO": {
-   "Götaplatsen-området": 1058,
-   "Infart N": 0,
-   "Infart NO": 0,
-   "Infart NV": 0,
-   "Infart O": 0,
-   "Infart S": 41,
-   "Infart SO": 2060,
-   "Infart SV": 0,
-   "Infart V": 0,
-   "Scandinavium-området": 1623
-  },
-  "Infart NV": {
-   "Götaplatsen-området": 264,
+   "Götaplatsen-området": 113,
    "Infart N": 0,
    "Infart NO": 0,
    "Infart NV": 0,
    "Infart O": 0,
    "Infart S": 0,
-   "Infart SO": 0,
+   "Infart SO": 2119,
+   "Infart SV": 0,
+   "Infart V": 0,
+   "Scandinavium-området": 829
+  },
+  "Infart NV": {
+   "Götaplatsen-området": 1156,
+   "Infart N": 0,
+   "Infart NO": 0,
+   "Infart NV": 0,
+   "Infart O": 0,
+   "Infart S": 0,
+   "Infart SO": 3,
    "Infart SV": 0,
    "Infart V": 0,
    "Scandinavium-området": 0
   },
   "Infart O": {
-   "Götaplatsen-området": 2295,
+   "Götaplatsen-området": 1799,
    "Infart N": 0,
    "Infart NO": 0,
    "Infart NV": 0,
    "Infart O": 0,
-   "Infart S": 474,
-   "Infart SO": 263,
+   "Infart S": 897,
+   "Infart SO": 514,
    "Infart SV": 0,
-   "Infart V": 36,
+   "Infart V": 2,
    "Scandinavium-området": 0
   },
   "Infart S": {
-   "Götaplatsen-området": 166,
+   "Götaplatsen-området": 885,
    "Infart N": 0,
-   "Infart NO": 35,
+   "Infart NO": 1,
    "Infart NV": 0,
-   "Infart O": 1943,
-   "Infart S": 0,
-   "Infart SO": 0,
-   "Infart SV": 0,
-   "Infart V": 0,
-   "Scandinavium-området": 86
-  },
-  "Infart SO": {
-   "Götaplatsen-området": 2,
-   "Infart N": 0,
-   "Infart NO": 0,
-   "Infart NV": 0,
-   "Infart O": 92,
-   "Infart S": 0,
-   "Infart SO": 0,
-   "Infart SV": 17,
-   "Infart V": 10,
-   "Scandinavium-området": 269
-  },
-  "Infart SV": {
-   "Götaplatsen-området": 36,
-   "Infart N": 0,
-   "Infart NO": 0,
-   "Infart NV": 0,
-   "Infart O": 0,
+   "Infart O": 112,
    "Infart S": 0,
    "Infart SO": 0,
    "Infart SV": 0,
    "Infart V": 0,
    "Scandinavium-området": 0
   },
-  "Infart V": {
-   "Götaplatsen-området": 54,
+  "Infart SO": {
+   "Götaplatsen-området": 0,
+   "Infart N": 0,
+   "Infart NO": 0,
+   "Infart NV": 0,
+   "Infart O": 1121,
+   "Infart S": 0,
+   "Infart SO": 0,
+   "Infart SV": 37,
+   "Infart V": 0,
+   "Scandinavium-området": 83
+  },
+  "Infart SV": {
+   "Götaplatsen-området": 26,
    "Infart N": 0,
    "Infart NO": 0,
    "Infart NV": 0,
@@ -120,18 +108,30 @@
    "Infart SO": 0,
    "Infart SV": 0,
    "Infart V": 0,
-   "Scandinavium-området": 60
+   "Scandinavium-området": 2
+  },
+  "Infart V": {
+   "Götaplatsen-området": 332,
+   "Infart N": 0,
+   "Infart NO": 0,
+   "Infart NV": 0,
+   "Infart O": 0,
+   "Infart S": 0,
+   "Infart SO": 0,
+   "Infart SV": 0,
+   "Infart V": 0,
+   "Scandinavium-området": 25
   },
   "Scandinavium-området": {
    "Götaplatsen-området": 0,
-   "Infart N": 80,
-   "Infart NO": 345,
+   "Infart N": 4,
+   "Infart NO": 1200,
    "Infart NV": 0,
-   "Infart O": 65,
-   "Infart S": 1358,
+   "Infart O": 839,
+   "Infart S": 1711,
    "Infart SO": 0,
-   "Infart SV": 0,
-   "Infart V": 380,
+   "Infart SV": 37,
+   "Infart V": 414,
    "Scandinavium-området": 0
   }
  },

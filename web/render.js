@@ -8,6 +8,15 @@ const Render = (() => {
 
   const PENDING_STYLE = { color: '#b91c1c', weight: 5, opacity: 0.9, dashArray: '2 6' };
 
+  // ── Vehicle playback state (every dot = one simulated car with real OD) ──
+  let _traj        = null;   // {edges:[ids], vehicles:[{d,e,x}]} sorted by depart
+  let _vehicleMode = false;
+  let _vehCanvas   = null, _vehCtx = null;
+  let _vehCursor   = 0;      // sliding window into the depart-sorted list
+  let _vehActive   = [];     // [{v, j}] currently driving (j = edge index hint)
+  let _vehLastT    = -1;
+  const _geomCache = {};     // edgeId → {pts, cum, total} for along-line interp
+
   const MAX_CARS      = 15;    // dot pool per sensor edge
   const CAR_SPEED_M_S = 13.9;  // 50 km/h in m/s — used for density estimate
 
@@ -143,6 +152,77 @@ const Render = (() => {
     for (const id of Object.keys(_edges)) updateEdge(id, qi);
   }
 
+  // ── Vehicle playback helpers ──────────────────────────────────────────────────
+
+  function edgeGeom(id) {
+    let g = _geomCache[id];
+    if (!g) {
+      const ll = _edges[id]?.latlngs;
+      if (!ll || ll.length < 2) return null;
+      const cum = [0];
+      for (let i = 1; i < ll.length; i++) {
+        cum.push(cum[i - 1] + haversineM(ll[i - 1], ll[i]));
+      }
+      g = _geomCache[id] = { pts: ll, cum, total: Math.max(cum[cum.length - 1], 1) };
+    }
+    return g;
+  }
+
+  function pointAlong(g, frac) {
+    const target = frac * g.total;
+    let i = 1;
+    while (i < g.cum.length - 1 && g.cum[i] < target) i++;
+    const seg = g.cum[i] - g.cum[i - 1] || 1;
+    const f = (target - g.cum[i - 1]) / seg;
+    const a = g.pts[i - 1], b = g.pts[i];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  }
+
+  function drawVehicles(tSec) {
+    if (!_traj || !_vehCtx) return;
+    const vs = _traj.vehicles;
+
+    if (tSec < _vehLastT) {           // scrubbed backwards — rebuild window
+      _vehCursor = 0;
+      _vehActive = [];
+    }
+    _vehLastT = tSec;
+    while (_vehCursor < vs.length && vs[_vehCursor].d <= tSec) {
+      _vehActive.push({ v: vs[_vehCursor], j: 0 });
+      _vehCursor++;
+    }
+
+    const size = _map.getSize();
+    _vehCanvas.width = size.x; _vehCanvas.height = size.y;
+    const ctx = _vehCtx;
+    ctx.clearRect(0, 0, size.x, size.y);
+    ctx.fillStyle = '#1d4ed8';
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1;
+
+    const alive = [];
+    for (const a of _vehActive) {
+      const { v } = a;
+      const arrival = v.x[v.x.length - 1];
+      if (arrival <= tSec) continue;   // reached its destination
+      alive.push(a);
+      while (a.j < v.x.length - 1 && v.x[a.j] <= tSec) a.j++;
+      const enter = a.j === 0 ? v.d : v.x[a.j - 1];
+      const exit  = v.x[a.j];
+      const g = edgeGeom(_traj.edges[v.e[a.j]]);
+      if (!g || exit <= enter) continue;
+      const frac = Math.min(1, Math.max(0, (tSec - enter) / (exit - enter)));
+      const ll = pointAlong(g, frac);
+      const p = _map.latLngToContainerPoint(ll);
+      if (p.x < -10 || p.y < -10 || p.x > size.x + 10 || p.y > size.y + 10) continue;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.6, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+    }
+    _vehActive = alive;
+  }
+
   // ── Animation loop ────────────────────────────────────────────────────────────
   // Conveyor-belt: N cars evenly spaced along the edge, moving in phase.
   // N comes from the real density estimate. Speed rises with traffic level.
@@ -176,9 +256,10 @@ const Render = (() => {
       }
       if (!e.dots.length) continue;   // colour-only edge — no dots to move
 
-      const n = e.activeCars ?? 0;
+      const n = _vehicleMode ? 0 : (e.activeCars ?? 0);
 
       // No traffic or missing data — hide all dots
+      // (vehicle mode replaces the conveyor illustration with REAL cars)
       if (n === 0 || e.t === null) {
         for (const d of e.dots) d.setStyle({ opacity: 0, fillOpacity: 0 });
         continue;
@@ -202,6 +283,10 @@ const Render = (() => {
         }
       }
     }
+    if (_vehicleMode) {
+      drawVehicles(qiF * 900);   // sim seconds since the scenario epoch
+    }
+
     requestAnimationFrame(animLoop);
   }
 
@@ -331,6 +416,13 @@ const Render = (() => {
         };
       }
 
+      // Vehicle-playback overlay canvas (above tiles/paths, below the panels)
+      _vehCanvas = document.createElement('canvas');
+      _vehCanvas.style.cssText =
+        'position:absolute;inset:0;pointer-events:none;z-index:600';
+      mapEl.appendChild(_vehCanvas);
+      _vehCtx = _vehCanvas.getContext('2d');
+
       // Frame the whole network (two cluster areas) instead of a hardcoded view
       const allLatLngs = Object.values(_edges).flatMap(e => e.latlngs);
       if (allLatLngs.length) {
@@ -357,6 +449,19 @@ const Render = (() => {
 
     onEdgeClick(fn) {
       _onEdgeClick = fn;
+    },
+
+    setTrajectories(data) {
+      _traj = data;                 // null clears
+      _vehCursor = 0; _vehActive = []; _vehLastT = -1;
+    },
+
+    setVehicleMode(on) {
+      _vehicleMode = on;
+      _vehCursor = 0; _vehActive = []; _vehLastT = -1;
+      if (_vehCtx && !on) {
+        _vehCtx.clearRect(0, 0, _vehCanvas.width, _vehCanvas.height);
+      }
     },
 
     // Highlight edges selected for closure; pass [] to clear

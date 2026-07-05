@@ -263,6 +263,8 @@
         <button id="btn-scen">Scenario</button>
       </div>
       <select id="scen-select" style="display:none"></select>
+      <button id="veh-btn" class="action-btn" style="display:none"
+              title="Visa varje simulerad bil som en egen prick (verklig OD och rutt)">🚗 Bilar</button>
       <button id="close-mode-btn" class="action-btn" style="display:none"
               title="Klicka på vägar i kartan och simulera en avstängning">🚧 Stäng väg</button>
       <button id="close-run-btn" class="action-btn run" style="display:none"></button>
@@ -289,11 +291,11 @@
   <!-- ?v= forces the browser to fetch fresh JS when the HTML updates —
        bump the number whenever the JS files change, or stale cached JS
        can run against new HTML and crash on missing elements -->
-  <script src="state.js?v=7"></script>
-  <script src="provider.js?v=7"></script>
-  <script src="render.js?v=7"></script>
-  <script src="controls.js?v=7"></script>
-  <script src="clock.js?v=7"></script>
+  <script src="state.js?v=8"></script>
+  <script src="provider.js?v=8"></script>
+  <script src="render.js?v=8"></script>
+  <script src="controls.js?v=8"></script>
+  <script src="clock.js?v=8"></script>
   <script>
     (async () => {
       try {
@@ -320,15 +322,49 @@
         const btnScen    = document.getElementById('btn-scen');
         const scenSelect = document.getElementById('scen-select');
 
+        const vehBtn = document.getElementById('veh-btn');
+        const trajCache = {};
+        let vehicleMode = false;
+
+        async function refreshVehicleUI(provider) {
+          // The 🚗 toggle exists only when the scenario ships trajectories
+          vehBtn.style.display = provider.trajectories ? '' : 'none';
+          if (!provider.trajectories && vehicleMode) {
+            vehicleMode = false;
+            Render.setVehicleMode(false);
+          }
+          vehBtn.classList.toggle('active', vehicleMode);
+          if (vehicleMode && provider.trajectories) {
+            if (!trajCache[provider.trajectories]) {
+              vehBtn.textContent = '🚗 Laddar…';
+              const res = await fetch('data/scenarios/' + provider.trajectories
+                                      + '?t=' + Date.now());
+              trajCache[provider.trajectories] = await res.json();
+              vehBtn.textContent = '🚗 Bilar';
+            }
+            Render.setTrajectories(trajCache[provider.trajectories]);
+            Render.setVehicleMode(true);
+          }
+        }
+
+        let currentProvider = histProvider;
+
         function setMode(activeBtn, provider) {
+          currentProvider = provider;
           for (const b of [btnHist, btnFore, btnScen]) {
             b.classList.toggle('active', b === activeBtn);
           }
           scenSelect.style.display = activeBtn === btnScen ? '' : 'none';
           Render.setProvider(provider);
           Controls.setProvider(provider);
+          refreshVehicleUI(provider);
           State.setQI(State.qi);   // force date display refresh
         }
+
+        vehBtn.addEventListener('click', () => {
+          vehicleMode = !vehicleMode;
+          refreshVehicleUI(currentProvider);
+        });
 
         btnHist.addEventListener('click', () => setMode(btnHist, histProvider));
 
@@ -446,6 +482,7 @@
           }
         });
 
+        if (params.get('cars') === '1') vehicleMode = true;   // shareable/testable
         if (params.get('mode') === 'scenario') btnScen.click();
         else if (params.get('mode') === 'forecast') btnFore.click();
 
