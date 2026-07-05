@@ -142,6 +142,19 @@
     }
     .action-btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
 
+    #day-banner {
+      display: none; align-items: center; gap: 12px; flex: 1;
+    }
+    #day-banner.show { display: flex; }
+    #day-banner .hint { font-size: 0.76rem; color: var(--sim-2); font-weight: 600; }
+    #new-date-input {
+      background: rgba(15, 23, 42, 0.85); color: var(--ink);
+      border: 1px solid var(--panel-line); border-radius: 8px;
+      padding: 5px 9px; font-size: 0.76rem;
+      color-scheme: dark;
+    }
+    #sim-day-hint { font-size: 0.72rem; color: var(--ink-3); }
+
     #sliders { display: flex; gap: 28px; }
     .slider-group { flex: 1; transition: opacity 0.15s; }
     .slider-group.disabled { opacity: 0.35; pointer-events: none; }
@@ -309,17 +322,29 @@
     <div id="sim-panel">
       <span class="label">Simulering</span>
       <select id="scen-select"></select>
-      <button id="veh-btn" class="action-btn" style="display:none"
-              title="Visa varje simulerad bil som en egen prick (verklig OD och rutt)">🚗 Bilar</button>
+      <span class="hint" id="sim-day-hint" title="Byt med knappen till höger — kräver ny kalibrering, ~5–10 min"></span>
       <div class="v-divider"></div>
       <button id="close-mode-btn" class="action-btn"
               title="Klicka på vägar i kartan för att simulera en avstängning">+ Ny avstängning</button>
+      <button id="change-day-btn" class="action-btn"
+              title="Kalibrera om simuleringen mot ett annat datum (tar ~5–10 min)">📅 Byt dag</button>
 
       <div id="pick-banner">
         <span class="hint">Klicka på vägar i kartan att stänga</span>
         <span id="pick-count">0 valda</span>
         <button id="close-run-btn" class="action-btn primary" disabled>Simulera avstängning</button>
         <button id="close-cancel-btn" class="action-btn">Avbryt</button>
+      </div>
+
+      <div id="day-banner">
+        <div class="seg" id="source-seg">
+          <button data-source="historical" class="active">Historik 2025</button>
+          <button data-source="forecast">Prognos 2027</button>
+        </div>
+        <input type="date" id="new-date-input" value="2025-09-16"
+               min="2025-01-01" max="2025-12-31">
+        <button id="day-run-btn" class="action-btn primary">Räkna om (~5–10 min)</button>
+        <button id="day-cancel-btn" class="action-btn">Avbryt</button>
       </div>
     </div>
 
@@ -379,29 +404,23 @@
         const dayGroup   = document.getElementById('day-group');
         const dayHint    = document.getElementById('day-hint');
 
-        const vehBtn = document.getElementById('veh-btn');
         const trajCache = {};
-        let vehicleMode = false;
 
-        async function refreshVehicleUI(provider) {
-          // The 🚗 toggle exists only when the scenario ships trajectories
-          vehBtn.style.display = provider.trajectories ? '' : 'none';
-          if (!provider.trajectories && vehicleMode) {
-            vehicleMode = false;
+        // Vehicles ARE the simulation now — no separate toggle. Whenever a
+        // scenario provider has trajectories, they're loaded and shown
+        // automatically; leaving Simulering turns them off automatically.
+        async function loadVehiclesFor(provider) {
+          if (!provider.trajectories) {
             Render.setVehicleMode(false);
+            return;
           }
-          vehBtn.classList.toggle('active', vehicleMode);
-          if (vehicleMode && provider.trajectories) {
-            if (!trajCache[provider.trajectories]) {
-              vehBtn.textContent = '🚗 Laddar…';
-              const res = await fetch('data/scenarios/' + provider.trajectories
-                                      + '?t=' + Date.now());
-              trajCache[provider.trajectories] = await res.json();
-              vehBtn.textContent = '🚗 Bilar';
-            }
-            Render.setTrajectories(trajCache[provider.trajectories]);
-            Render.setVehicleMode(true);
+          if (!trajCache[provider.trajectories]) {
+            const res = await fetch('data/scenarios/' + provider.trajectories
+                                    + '?t=' + Date.now());
+            trajCache[provider.trajectories] = await res.json();
           }
+          Render.setTrajectories(trajCache[provider.trajectories]);
+          Render.setVehicleMode(true);
         }
 
         let currentProvider = histProvider;
@@ -422,16 +441,34 @@
             // panel row appeared/disappeared → map's flex box resized
             requestAnimationFrame(() => Render.invalidateSize());
           }
+          // BUG FIX: playback used to advance/wrap against the whole
+          // YEAR's length (35 040 quarters) even for a one-day scenario
+          // (96 quarters) — past quarter 96 the scenario has no data, so
+          // at normal speeds the map would sit on "ingen data" for the
+          // remaining ~99% of a fake extra year before ever looping back
+          // to the start. Vehicles looked like they "never went away"
+          // because entering/leaving them is driven by the same clock.
+          State.setMaxQI(isSim ? provider.numQuarters : null);
+          Controls.setSpeedMode(isSim);   // real-time seconds vs fast quarter-scrubbing
           Render.setProvider(provider);
           Controls.setProvider(provider);
-          refreshVehicleUI(provider);
-          State.setQI(State.qi);   // force date display refresh
+          if (isSim) loadVehiclesFor(provider); else Render.setVehicleMode(false);
+          // Entering a scenario always starts at its own beginning (qi=0
+          // in the OLD provider could be past the scenario's own length).
+          // Switching between Historisk <-> Prognos keeps the scrubbed
+          // position instead — comparing the same day/time is useful.
+          State.setQI(isSim ? 0 : State.qi);
+          // Read the ACTUAL calibrated date off the scenario's own epoch —
+          // not a variable that only updated when "Byt dag" was clicked
+          // (otherwise a page reload after a day-change showed the old
+          // hardcoded date even though the backend had a new one deployed).
+          if (isSim && provider.epoch) {
+            currentSimDate = provider.epoch.toISOString().slice(0, 10);
+            currentSimSource = provider.source || 'historical';
+            const srcLabel = currentSimSource === 'forecast' ? 'Prognos' : 'Historik';
+            simDayHint.textContent = `${srcLabel}: ${currentSimDate}`;
+          }
         }
-
-        vehBtn.addEventListener('click', () => {
-          vehicleMode = !vehicleMode;
-          refreshVehicleUI(currentProvider);
-        });
 
         btnHist.addEventListener('click', () => setMode(btnHist, histProvider));
 
@@ -508,9 +545,27 @@
         let closureMode = false;
         let apiAvailable = false;
 
+        // ── Byt simuleringsdag — den andra halvan av "vilka dagar vill jag
+        // simulera": en långsammare, uppenbart annorlunda åtgärd (~5–10 min,
+        // kalibrerar om HELA dygnets efterfrågan) än att bara stänga en väg.
+        const btnDay     = document.getElementById('change-day-btn');
+        const dayBanner  = document.getElementById('day-banner');
+        const dateInput  = document.getElementById('new-date-input');
+        const btnDayRun  = document.getElementById('day-run-btn');
+        const btnDayCancel = document.getElementById('day-cancel-btn');
+        const simDayHint = document.getElementById('sim-day-hint');
+        let dayPickMode = false;
+        let currentSimDate = '2025-09-16';
+        let currentSimSource = 'historical';
+
         function refreshCloseUI() {
-          btnClose.style.display = closureMode ? 'none' : '';
+          const showNormal = !closureMode && !dayPickMode;
+          scenSelect.style.display   = showNormal ? '' : 'none';
+          simDayHint.style.display   = showNormal ? '' : 'none';
+          btnClose.style.display     = showNormal ? '' : 'none';
+          btnDay.style.display       = showNormal ? '' : 'none';
           pickBanner.classList.toggle('show', closureMode);
+          dayBanner.classList.toggle('show', dayPickMode);
           pickCount.textContent = `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
           btnRun.disabled = selected.size === 0;
           Render.setPending([...selected]);
@@ -527,15 +582,50 @@
           refreshCloseUI();
         }
 
-        // Feature-detect the API — the "+ Ny avstängning" entry point is
-        // hidden entirely when served statically (no server to simulate with)
+        // Feature-detect the API — the "+ Ny avstängning" / "Byt dag" entry
+        // points are hidden entirely when served statically (no server to
+        // simulate with)
         fetch('/api/ping').then(r => {
           apiAvailable = r.ok;
-          btnClose.style.display = r.ok ? '' : 'none';
+          refreshCloseUI();
         }).catch(() => {});
 
         btnClose.addEventListener('click', enterPicking);
         btnCancel.addEventListener('click', exitPicking);
+
+        // "Simulate the future": Historik 2025 calibrates against actual
+        // sensor counts; Prognos 2027 calibrates against Agent 1's
+        // LightGBM forecast for a chosen 2027 date instead — the date
+        // input's range switches to match whichever is selected.
+        const sourceBtns = document.querySelectorAll('#source-seg button');
+        let currentSource = 'historical';
+        const DATE_RANGES = {
+          historical: { min: '2025-01-01', max: '2025-12-31', fallback: '2025-09-16' },
+          forecast:   { min: '2027-01-01', max: '2027-12-31', fallback: '2027-09-16' },
+        };
+        sourceBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            currentSource = btn.dataset.source;
+            sourceBtns.forEach(b => b.classList.toggle('active', b === btn));
+            const r = DATE_RANGES[currentSource];
+            dateInput.min = r.min; dateInput.max = r.max;
+            dateInput.value = (currentSimSource === currentSource) ? currentSimDate : r.fallback;
+          });
+        });
+
+        btnDay.addEventListener('click', () => {
+          dayPickMode = true;
+          currentSource = currentSimSource;
+          sourceBtns.forEach(b => b.classList.toggle('active', b.dataset.source === currentSource));
+          const r = DATE_RANGES[currentSource];
+          dateInput.min = r.min; dateInput.max = r.max;
+          dateInput.value = currentSimDate;
+          refreshCloseUI();
+        });
+        btnDayCancel.addEventListener('click', () => {
+          dayPickMode = false;
+          refreshCloseUI();
+        });
 
         Render.onEdgeClick(id => {
           if (!closureMode) return;
@@ -551,7 +641,6 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
             exitPicking();
-            btnClose.style.display = apiAvailable ? '' : 'none';
             await loadScenIndex(true);
             scenSelect.value = data.file;
             await activateScenario(data.file, { fresh: true });
@@ -563,7 +652,35 @@
           }
         });
 
-        if (params.get('cars') === '1') vehicleMode = true;   // shareable/testable
+        btnDayRun.addEventListener('click', async () => {
+          btnDayRun.disabled = true;
+          btnDayCancel.disabled = true;
+          btnDayRun.textContent = 'Kalibrerar om… (~5–10 min)';
+          try {
+            const res  = await fetch('/api/recalibrate?date=' + dateInput.value
+                                     + '&source=' + currentSource);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            currentSimDate = data.date;
+            currentSimSource = data.source;
+            const srcLabel = data.source === 'forecast' ? 'Prognos' : 'Historik';
+            simDayHint.textContent = `${srcLabel}: ${data.date}`;
+            dayPickMode = false;
+            refreshCloseUI();
+            await loadScenIndex(true);
+            scenSelect.value = data.file;
+            await activateScenario(data.file, { fresh: true });
+          } catch (e) {
+            alert('Omkalibreringen misslyckades: ' + e.message);
+          } finally {
+            btnDayRun.disabled = false;
+            btnDayCancel.disabled = false;
+            btnDayRun.textContent = 'Räkna om (~5–10 min)';
+          }
+        });
+
+        simDayHint.textContent = `Historik: ${currentSimDate}`;
+
         if (params.get('mode') === 'scenario') btnScen.click();
         else if (params.get('mode') === 'forecast') btnFore.click();
 

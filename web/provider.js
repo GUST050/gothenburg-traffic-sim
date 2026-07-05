@@ -29,7 +29,14 @@ class HistoricalProvider {
     this.closedEdges = payload.scenario?.closed_edges
                        ?? (payload.scenario?.closed_edge ? [payload.scenario.closed_edge] : []);
     this.label       = payload.scenario?.label ?? null;
+    this.source      = payload.scenario?.source ?? 'historical';  // 'forecast' = simulated 2027
     this.confidence  = payload.confidence ?? null;  // per-edge, per-scenario
+    // Length in quarters (96 for a one-day scenario, 35 040 for a full
+    // year) — State.setMaxQI() uses this so playback loops within THIS
+    // provider's own data instead of the year-long default.
+    this.numQuarters = payload.n_quarters
+      ?? Object.values(this._flows)[0]?.length
+      ?? 35040;
 
     for (const [edgeId, arr] of Object.entries(this._flows)) {
       const nums = arr.filter(v => v !== null);

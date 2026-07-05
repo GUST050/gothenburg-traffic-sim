@@ -12,6 +12,13 @@ Endpoints:
                                 Carlo, ~30–90 s) and returns
                                 {"file": "<scenario>.json", "label": ...}.
                                 One simulation at a time (409 while busy).
+  GET /api/recalibrate?date=YYYY-MM-DD — re-runs the whole-day PFE demand
+                                calibration for a NEW date (~5–10 min: PFE
+                                + assignment-prior bounds + a fresh
+                                baseline scenario), discarding old
+                                scenarios/closures since they reflect the
+                                previous date's demand. Returns
+                                {"file": "baseline.json", "date": ...}.
 
 The API shells out to the same run_scenario.py used from the command line —
 the server adds no simulation logic of its own, so CLI and UI can never
@@ -21,6 +28,7 @@ drift apart.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -28,6 +36,8 @@ import urllib.parse
 from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 ROOT     = Path(__file__).parent
 WEB_DIR  = ROOT / "web"
@@ -65,6 +75,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {"ok": True})
         if self.path.startswith("/api/close"):
             return self._close()
+        if self.path.startswith("/api/recalibrate"):
+            return self._recalibrate()
         return super().do_GET()
 
     def _close(self) -> None:
@@ -99,6 +111,57 @@ class Handler(SimpleHTTPRequestHandler):
         if match is None:
             return self._json(500, {"error": "scenariot skrevs inte — se serverloggen"})
         return self._json(200, match)
+
+    def _recalibrate(self) -> None:
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        date   = qs.get("date", [""])[0]
+        source = qs.get("source", ["historical"])[0]
+        if not DATE_RE.match(date):
+            return self._json(400, {"error": "datum måste vara YYYY-MM-DD"})
+        if source not in ("historical", "forecast"):
+            return self._json(400, {"error": "source måste vara historical eller forecast"})
+
+        if not _sim_lock.acquire(blocking=False):
+            return self._json(409, {"error": "en simulering kör redan — vänta"})
+        try:
+            res = subprocess.run(
+                [sys.executable, "build_sumo_demand.py",
+                 "--date", date, "--source", source,
+                 "--begin", "00:00", "--end", "24:00"],
+                cwd=str(ROOT), capture_output=True, text=True, timeout=1200,
+            )
+            if res.returncode != 0:
+                print(res.stdout[-2000:], res.stderr[-2000:])
+                # sys.exit("short message") in build_sumo_demand.py (e.g. a
+                # date/year mismatch) prints just that one line to stderr —
+                # surface it directly instead of a generic "see the log".
+                last_line = res.stderr.strip().splitlines()[-1] if res.stderr.strip() else ""
+                msg = last_line if len(last_line) < 200 else "omkalibreringen misslyckades — se serverloggen"
+                return self._json(500, {"error": msg})
+
+            # Old scenarios/closures reflect the PREVIOUS date's demand —
+            # discard them rather than leave stale, silently-wrong entries
+            # in the picker (a scenario file has no version marker to tell
+            # them apart from a fresh one otherwise).
+            for f in SCEN_DIR.glob("*.json"):
+                f.unlink()
+
+            res2 = subprocess.run(
+                [sys.executable, "run_scenario.py"],
+                cwd=str(ROOT), capture_output=True, text=True, timeout=300,
+            )
+            if res2.returncode != 0:
+                print(res2.stdout[-2000:], res2.stderr[-2000:])
+                return self._json(500, {"error": "ny baslinje kunde inte byggas "
+                                                  "— se serverloggen"})
+        except subprocess.TimeoutExpired:
+            return self._json(500, {"error": "omkalibreringen tog för lång tid "
+                                              "— avbruten"})
+        finally:
+            _sim_lock.release()
+
+        known_edges.cache_clear()   # network.geojson is unchanged but be safe
+        return self._json(200, {"file": "baseline.json", "date": date, "source": source})
 
 
 def main() -> None:

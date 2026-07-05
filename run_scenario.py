@@ -352,7 +352,8 @@ def main() -> None:
         "scenario": {
             "name": name, "label": label,
             "closed_edges": args.close,
-            "date": meta["date"], "begin": meta["begin"], "end": meta["end"],
+            "date": meta["date"], "source": meta.get("source", "historical"),
+            "begin": meta["begin"], "end": meta["end"],
             "seeds": args.seeds,
         },
         "flows":      flows_out,
@@ -367,10 +368,11 @@ def main() -> None:
     index_path = OUT_DIR / "index.json"
     index = json.load(open(index_path)) if index_path.exists() else {"scenarios": []}
     index["scenarios"] = [s for s in index["scenarios"] if s["name"] != name]
+    src_tag = " · Prognos" if meta.get("source") == "forecast" else ""
     index["scenarios"].append({
         "name": name, "label": label, "file": f"{name}.json",
         "closed_edges": args.close,
-        "window": f"{meta['date']} {meta['begin']}–{meta['end']}",
+        "window": f"{meta['date']} {meta['begin']}–{meta['end']}{src_tag}",
     })
     index["scenarios"].sort(key=lambda s: s["name"])
     with open(index_path, "w") as f:

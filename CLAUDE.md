@@ -46,6 +46,51 @@ Goal arc, in order:
   free variable-wise). Replicated LOSO result: median recovery 0.09 → 0.15
   (+65-70%, confirmed twice). Enabled by default
   (`--no-assignment-prior` to disable for comparison).
+- WEB UI + SIMULATION FIXES (2026-07-05/06, from Gustav's direct testing
+  feedback — "bilar vorde alltid vara simuleringen", "prickarna syns hela
+  tiden", "jag vill kunna välja vilka dagar", "simuleringen ska ske i
+  framtiden så 2027", "sekund för sekund"):
+  - ROOT CAUSE of "dots always visible": `state.js`'s playback clock
+    wrapped against the YEAR's length (35 040 quarters, `MAX_QI`) even in
+    Simulering mode, where a scenario is only ~96 quarters (one day) —
+    past quarter 96 there's no data, so at normal speed the map sat on
+    "ingen data" for a fake extra ~364 days before ever looping back to
+    the start. Fixed: `State.setMaxQI(n)`, called on every provider
+    switch with the ACTIVE provider's own length (`numQuarters`, derived
+    from its flow-array length) — Historical/Forecast keep the year-long
+    default, Simulering gets its own scenario's length.
+  - Vehicles are now ALWAYS the Simulering view (no more 🚗 toggle) — the
+    conveyor-dot illustration never shows in that mode.
+  - UI unified into one "Simulering" panel (was a confusing split between
+    a "Scenario" mode toggle and a separately-floating "Stäng väg"
+    button) — scenario picker, "+ Ny avstängning", "📅 Byt dag" all live
+    together; #map/#controls now flexbox so the panel can grow/shrink
+    without ever overlapping the map (`Render.invalidateSize()` called on
+    the transition).
+  - "Simulate the future" (`--source historical|forecast` on
+    build_sumo_demand.py, `/api/recalibrate?date=&source=` on serve.py):
+    calibrates the PFE's hard-count TARGETS against
+    `flows_forecast.json` (Agent 1's LightGBM 2027 forecast) instead of
+    actual 2025 counts. DESIGN DECISION: bounds/priors/corridor-coupling
+    are NOT recomputed per date — they're structural (conservation math,
+    learned direction-shares, spatial ratios), and there's no network-
+    wide "2027 historical" ground truth to derive them from (the
+    forecast only has point estimates AT the 6 sensors) — so they always
+    come from the fixed real reference `STRUCTURAL_REFERENCE_DATE =
+    "2025-09-16"` regardless of which date/source is actually being
+    simulated. Only the target values switch. Recalibrating (either
+    source) takes ~7-14 min and wipes old scenario files (they'd
+    silently reflect the previous date's demand otherwise) — screenshot-
+    verified end-to-end for 2027-09-14 forecast (100% GEH<5, vehicles
+    moving, correct labels).
+  - Real-time playback: speed presets are now MODE-DEPENDENT
+    (`Controls.setSpeedMode`) — Historisk/Prognos keep the fast quarter-
+    scrubbing presets (1×/4×/24×/96×, quarters/sec, for browsing a year
+    of 15-min flow buckets); Simulering gets presets anchored to actual
+    elapsed seconds (Realtid/10×/60×/300×, where "Realtid" = 1 real
+    second per 1 simulated second) for watching individual vehicles.
+    Clock display now shows HH:MM:SS (was HH:MM) using the fractional
+    quarter index so seconds visibly tick.
 
 ## The data
 - Source: Göteborgs Stad (Felicia Gauffin Jatta, Stadsbyggnadsförvaltningen). 15-minute two-way vehicle counts ("Antal passager"), all of 2025.

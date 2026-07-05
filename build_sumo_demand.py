@@ -37,13 +37,21 @@ import pandas as pd
 
 from build_sumo_net import sumo_home
 
-FLOWS_PATH = Path("web/data/flows.json")
+FLOWS_PATH          = Path("web/data/flows.json")
+FLOWS_FORECAST_PATH = Path("web/data/flows_forecast.json")
 GEO_PATH   = Path("web/data/network.geojson")
 SUMO_DIR   = Path("sumo")
 NET_PATH   = SUMO_DIR / "net.net.xml"
 
-EPOCH    = pd.Timestamp("2025-01-01T00:00:00")
 INTERVAL = pd.Timedelta(minutes=15)
+
+# Bounds/priors/corridor coupling encode STRUCTURAL relationships (network
+# conservation math, learned direction-shares, spatial corridor ratios) —
+# not date-specific facts. There's no network-wide "2027 historical" data
+# to recompute them from (the forecast only has point estimates AT the 6
+# sensors), so simulating a forecast date reuses these as-is from a fixed
+# real reference date rather than trying to derive them from the forecast.
+STRUCTURAL_REFERENCE_DATE = "2025-09-16"
 
 # Candidate-pool density: one random trip every N seconds of the window.
 # The pool needs route DIVERSITY, not volume — routeSampler repeats routes.
@@ -54,6 +62,15 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--date",  default="2025-09-16",
                    help="Simulation date (default: Tue 2025-09-16 — normal September weekday)")
+    p.add_argument("--source", choices=["historical", "forecast"], default="historical",
+                   help="historical = calibrate against actual 2025 sensor "
+                        "counts (--date must be in 2025); forecast = "
+                        "calibrate against Agent 1's LightGBM forecast for "
+                        "2027 (--date must be in 2027) — 'simulate the "
+                        "future'. Bounds/priors/corridor coupling are "
+                        "structural and always come from the real 2025-09-16 "
+                        "reference regardless of --source (see "
+                        "STRUCTURAL_REFERENCE_DATE).")
     p.add_argument("--begin", default="06:00", help="Window start HH:MM (default 06:00)")
     p.add_argument("--end",   default="10:00",
                    help="Window end HH:MM; '24:00' = whole day (default 10:00)")
@@ -376,18 +393,26 @@ def main() -> None:
     if not NET_PATH.exists():
         sys.exit("sumo/net.net.xml missing — run build_sumo_net.py first")
 
+    flows_path = FLOWS_FORECAST_PATH if args.source == "forecast" else FLOWS_PATH
+    with open(flows_path) as f:
+        flows_payload = json.load(f)
+    source_epoch = pd.Timestamp(flows_payload["epoch"])
+    flows        = flows_payload["flows"]
+
     t0 = pd.Timestamp(f"{args.date} {args.begin}")
     if args.end == "24:00":   # whole day — pandas rejects hour 24
         t1 = t0.normalize() + pd.Timedelta(days=1)
     else:
         t1 = pd.Timestamp(f"{args.date} {args.end}")
-    qi_start    = int((t0 - EPOCH) / INTERVAL)
+    if not (source_epoch <= t0 < source_epoch + pd.Timedelta(days=365)):
+        sys.exit(f"--date {args.date} is outside the {args.source} data's "
+                 f"year ({source_epoch.year}) — pass a {source_epoch.year} "
+                 f"date, or --source historical for a 2025 date")
+    qi_start    = int((t0 - source_epoch) / INTERVAL)
     n_intervals = int((t1 - t0) / INTERVAL)
     duration_s  = n_intervals * 900
-    print(f"Window: {t0} → {t1}  ({n_intervals} × 15 min)")
+    print(f"Window: {t0} → {t1}  ({n_intervals} × 15 min)  source={args.source}")
 
-    with open(FLOWS_PATH) as f:
-        flows = json.load(f)["flows"]
     sensor_edges = load_sensor_edges()
     print(f"Sensors: { {sid: len(e) for sid, e in sensor_edges.items()} }")
 
@@ -437,8 +462,10 @@ def main() -> None:
     if args.engine == "pfe":
         # ── The full hierarchy: hard counts + conservation bounds + priors ────
         import pfe
-        bounds_data = ensure_bounds(args.date, args.begin, args.end)
-        priors_data = ensure_priors(args.date)
+        # Structural (see STRUCTURAL_REFERENCE_DATE) — always the real 2025
+        # reference date, even when simulating a --source forecast date.
+        bounds_data = ensure_bounds(STRUCTURAL_REFERENCE_DATE, args.begin, args.end)
+        priors_data = ensure_priors(STRUCTURAL_REFERENCE_DATE)
         obs_data    = ensure_observability()
         corridor    = obs_data.get("corridor_priors", {})
         if corridor:
@@ -525,7 +552,7 @@ def main() -> None:
             ], home)
 
     meta = {
-        "date": args.date, "begin": args.begin, "end": args.end,
+        "date": args.date, "source": args.source, "begin": args.begin, "end": args.end,
         "qi_start": qi_start, "n_intervals": n_intervals,
         # ISO with 'T' — Safari/Firefox reject "YYYY-MM-DD HH:MM" in new Date()
         "epoch_sim": t0.isoformat(),

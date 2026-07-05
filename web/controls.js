@@ -8,6 +8,21 @@ const Controls = (() => {
   let _tdDate    = null;
   let _daySlider = null;
   let _todSlider = null;
+  let _speedBtns = null;
+
+  // "Speed" is quarters (900 s of simulated time) advanced per real second.
+  // The historical/forecast flow view is a 15-min-bucket conveyor — there's
+  // no meaning to "real time" there, so it uses fast scrubbing presets.
+  // Vehicle playback in Simulering is individual cars moving continuously,
+  // so it gets presets anchored to actual elapsed seconds instead.
+  const QUARTER_SPEEDS  = [
+    { label: '1×',  speed: 1 },   { label: '4×',  speed: 4 },
+    { label: '24×', speed: 24 },  { label: '96×', speed: 96 },
+  ];
+  const REALTIME_SPEEDS = [
+    { label: 'Realtid', speed: 1 / 900 },  { label: '10×',  speed: 10 / 900 },
+    { label: '60×',     speed: 60 / 900 }, { label: '300×', speed: 300 / 900 },
+  ];
 
   const DAYS   = ['Sön','Mån','Tis','Ons','Tor','Fre','Lör'];
   const MONTHS = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
@@ -20,10 +35,16 @@ const Controls = (() => {
   }
 
   function onTick({ detail: { qi, playing } }) {
-    const d = _provider.dateFromQI(qi);
+    // Use the FRACTIONAL quarter index (not the rounded one in the event)
+    // for the clock — real-time vehicle playback needs actual seconds to
+    // visibly move; at 1 real-time speed a whole quarter takes 15 real
+    // minutes; without this the displayed clock would sit on the same
+    // minute the entire time.
+    const d = _provider.dateFromQI(State.qiFloat);
     const h = String(d.getUTCHours()).padStart(2, '0');
     const m = String(d.getUTCMinutes()).padStart(2, '0');
-    _tdClock.textContent = `${h}:${m}`;
+    const s = String(d.getUTCSeconds()).padStart(2, '0');
+    _tdClock.textContent = `${h}:${m}:${s}`;
     // Year is always shown — otherwise 2025/2027 modes are indistinguishable
     _tdDate.textContent =
       `${DAYS[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, '0')} ` +
@@ -41,6 +62,20 @@ const Controls = (() => {
       _provider = p;
     },
 
+    // Call when entering/leaving Simulering — swaps the 4 speed buttons
+    // between real-time-anchored presets (watching cars move) and the
+    // fast quarter-scrubbing presets (browsing a year of flow data).
+    setSpeedMode(realtime) {
+      const presets = realtime ? REALTIME_SPEEDS : QUARTER_SPEEDS;
+      _speedBtns.forEach((btn, i) => {
+        btn.textContent = presets[i].label;
+        btn.dataset.speed = presets[i].speed;
+      });
+      const def = realtime ? presets[1] : presets[2];   // "10×" / "24×"
+      State.setSpeed(def.speed);
+      _speedBtns.forEach(b => b.classList.toggle('active', Number(b.dataset.speed) === def.speed));
+    },
+
     init(provider) {
       _provider  = provider;
       _playBtn   = document.getElementById('play-btn');
@@ -51,12 +86,14 @@ const Controls = (() => {
 
       _playBtn.addEventListener('click', () => State.toggle());
 
-      // Speed — segmented buttons
-      const speedBtns = document.querySelectorAll('#speed-seg button');
-      speedBtns.forEach(btn => {
+      // Speed — segmented buttons. The 4 DOM nodes are reused for both
+      // preset sets (setSpeedMode swaps label/data-speed in place) so the
+      // listeners attached here keep working after a mode switch.
+      _speedBtns = document.querySelectorAll('#speed-seg button');
+      _speedBtns.forEach(btn => {
         btn.addEventListener('click', () => {
           State.setSpeed(Number(btn.dataset.speed));
-          speedBtns.forEach(b => b.classList.toggle('active', b === btn));
+          _speedBtns.forEach(b => b.classList.toggle('active', b === btn));
         });
       });
 
