@@ -1,0 +1,78 @@
+{
+ "window": "2025-09-16 00:00\u201324:00",
+ "note": "leave-one-station-out \u2014 simulated vs measured at the held-out station; level-2 bounds excluded in all folds (they would leak the full measurement set)",
+ "stations": {
+  "107": {
+   "edges": {
+    "60786979_3575001205_0": {
+     "measured_total": 3168,
+     "simulated_total": 702,
+     "ratio": 0.222,
+     "geh_ok_pct": 20.8
+    },
+    "1455801464_18241874_0": {
+     "measured_total": 3239,
+     "simulated_total": 1229,
+     "ratio": 0.379,
+     "geh_ok_pct": 37.5
+    }
+   },
+   "pfe_geh_pct": 94.1
+  },
+  "1074": {
+   "edges": {
+    "60790252_60790253_0": {
+     "measured_total": 2875,
+     "simulated_total": 173,
+     "ratio": 0.06,
+     "geh_ok_pct": 16.7
+    }
+   },
+   "pfe_geh_pct": 98.6
+  },
+  "1076": {
+   "edges": {
+    "30420757_30421744_0": {
+     "measured_total": 4820,
+     "simulated_total": 992,
+     "ratio": 0.206,
+     "geh_ok_pct": 8.3
+    }
+   },
+   "pfe_geh_pct": 91.6
+  },
+  "133": {
+   "edges": {
+    "26842525_26355153_0": {
+     "measured_total": 3569,
+     "simulated_total": 2960,
+     "ratio": 0.829,
+     "geh_ok_pct": 70.8
+    }
+   },
+   "pfe_geh_pct": 97.9
+  },
+  "134": {
+   "edges": {
+    "26355153_96523321_0": {
+     "measured_total": 3141,
+     "simulated_total": 1006,
+     "ratio": 0.32,
+     "geh_ok_pct": 41.7
+    }
+   },
+   "pfe_geh_pct": 95.1
+  },
+  "2276": {
+   "edges": {
+    "26355153_91615277_0": {
+     "measured_total": 4473,
+     "simulated_total": 2637,
+     "ratio": 0.59,
+     "geh_ok_pct": 45.8
+    }
+   },
+   "pfe_geh_pct": 91.6
+  }
+ }
+}

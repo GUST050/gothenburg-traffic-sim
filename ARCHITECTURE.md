@@ -99,7 +99,19 @@ SUMO **mesoscopic** Monte Carlo (43× faster than micro at equal/better
 sensor delivery, 0.87–0.96), identical edge IDs, local rerouters for
 closures, interactive API. Gate: baseline delivery ≥ 0.85 at stations.
 
-### F — Confidence (`validate_sim.py`) — TO BUILD
+### F — Confidence (`validate_sim.py`) — CORE BUILT
+LOSO results (2026-07-05, whole day): the program recovers a median 32 %
+of a hidden station's traffic (range 0.06–0.83). The spread IS the
+observability story quantified: 133 recovers 0.83 (its twin 2276 measures
+the same street across the junction), isolated 1074 recovers 0.06 (nothing
+infers it). Two consequences, both by design: (1) unmeasured streets carry
+LOW confidence unless redundantly sensed — the map must say so; (2) the
+parsimony bias (LP under-fills unconstrained streets) is measured, and the
+constructive levers are the gravity OD prior and real network-wide level
+data (city catalogue ÅMVD / FCD). Learned volume-LEVEL priors were tested
+and REJECTED: leave-city-out error factor 4.5–14× (volume_priors.py kept
+as the documented negative study) — levels do not transfer across cities,
+shares do.
 Per-edge confidence = f(provenance level, leave-one-station-out error curve,
 Monte Carlo spread, B's interval width). The 107 direction split (city-
 measured 52/48) is a standing validation anchor for "can the program infer
