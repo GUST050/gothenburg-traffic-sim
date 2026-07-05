@@ -26,3 +26,4 @@ sumo/
 # station metadata, matches and coverage report ARE tracked
 data/dirsplit/volumes/
 data/dirsplit/graphs/
+data_in/deso/osm_pois.geojson
