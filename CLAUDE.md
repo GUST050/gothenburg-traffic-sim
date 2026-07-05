@@ -26,6 +26,14 @@ Goal arc, in order:
   be ungrounded extrapolation" concern: the extrapolation is now labelled.)
 - Sensor edge IDs verified IDENTICAL across the expansion — all contracts
   survived.
+- OD/candidate generation is GROUNDED (2026-07-05): SCB DeSO population +
+  OSM POI proxy + RVU Västra Götaland behaviour — see ARCHITECTURE.md's
+  "C — Candidate generation" section for the full story, including the
+  GEH-saturation finding, the θ freeze, and the controlled LOSO comparison
+  (grounded 0.093 vs legacy uniform 0.076, same city network — a real but
+  modest win). Do NOT compare this to the old "0.32" LOSO figure anywhere
+  in project history — that was measured on the small two-cluster network
+  and is not comparable (see the CONFOUND WARNING in ARCHITECTURE.md).
 
 ## The data
 - Source: Göteborgs Stad (Felicia Gauffin Jatta, Stadsbyggnadsförvaltningen). 15-minute two-way vehicle counts ("Antal passager"), all of 2025.

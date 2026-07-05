@@ -90,6 +90,71 @@ intervals. Gate: GEH < 5 at ≥ 85 % of measured hourly values — the FHWA
 calibration criterion. Current whole-day: 92–93 % GEH, delivery at
 measured edges mean 0.88, opposite-direction priors delivered 0.64–1.01.
 
+### C — Candidate generation (`build_candidates.py`) — GROUNDED (2026-07-05)
+The route-candidate pool (what PFE selects among) is now the standard
+**subarea/cordon** structure (FHWA/state-DOT subarea-analysis practice;
+Cascetta's quasi-dynamic OD) with REAL data at every endpoint, replacing
+uniform `randomTrips`:
+  - **E-E** (through) — gate→gate, gate weight ∝ approach-road class
+    (motorway/trunk draw more than a residential fringe street — the only
+    local proxy available; no external cordon counts exist to calibrate
+    gate weights better — disclosed limitation).
+  - **E-I / I-E / I-I** — PAIRED tours (the return leg is the same tour's
+    second half, not a fresh sample — this is what makes AM/PM directional
+    balance structural). Purpose sampled from RVU's split (43/33/24 %);
+    destination drawn from that purpose's activity mass with a gravity
+    deterrence.
+  - **HOME mass** = real 2023 population per DeSO zone (`fetch_deso.py`:
+    SCB open WFS for DeSO-2025 boundaries + PXWeb API for population,
+    both live, no key needed), spread over each zone's residential-street
+    length. 116 of 129 inner-city DeSO zones have data (13 are brand-new
+    2025-boundary splits not yet back-filled by SCB — disclosed, not
+    silently dropped).
+  - **ACTIVITY mass** = OSM POIs in 3 categories matching RVU's purpose
+    categories (arbete/service/fritid). DOCUMENTED PROXY: true workplace-
+    location microdata (RAMS) was checked and confirmed NOT free below
+    kommun level (SCB's day-population-by-workplace tables stop at 312
+    kommun codes) — POI density is the honest substitute, same spirit as
+    the road-attribute proxies used elsewhere in this project.
+  - **Departure times** = our OWN measured `normal_profile.json` shape
+    (finer-grained than RVU's coarse bins, and independently consistent
+    with RVU's reported AM 7-8h / PM 16-17h peaks — a genuine cross-check,
+    not a coincidence, since both measure the same city).
+  - **θ (through_fraction, gravity_km)**: a 3×3 bounded grid search
+    (`calibrate_theta.py`) — the proportionate version of simulation-based
+    calibration (SPSA/metamodel methods, see references) for exactly 2 free
+    parameters. FINDING: GEH-based scoring on a fast morning window
+    SATURATED at 100 % for all 9 combinations — it only checks fit at
+    MEASURED edges, which the PFE achieves regardless of candidate
+    composition given enough route diversity; it cannot discriminate θ.
+    Replaced with a trip-length fit against RVU's measured distance bins
+    (table 2, p.12): gravity_km=2.6 minimizes the over-concentration of
+    unrealistically short trips (21 % in 0–1 km vs 32 % at gravity_km=1.0;
+    RVU's own share is 9 %, but genuine >10 km trips are structurally
+    absent from a 2 km-wide canvas — through-trips absorb that mass by
+    construction). through_fraction has NO local ground truth to
+    discriminate it against — frozen at 0.5, disclosed as an unidentifiable
+    neutral prior, not a calibrated value.
+  - **Validation — controlled A/B via `--legacy-random-pool`**: median LOSO
+    recovery on the SAME city-scale network, same corridor coupling, same
+    shape pool: grounded 0.093 vs legacy uniform pool 0.076 — a modest
+    (+22 % relative) but genuine improvement, dominated by one edge (107's
+    toward-centre direction, 0.95 vs 0.06) with a mixed, noisy picture
+    elsewhere (n=7 measured directed edges). NOT a leakage artifact:
+    verified `validate_sim.py` does not consume `corridor_priors` at all
+    (a real gap vs the deployed pipeline, noted below).
+    CONFOUND WARNING for anyone reading project history: an EARLIER LOSO
+    number (0.32 median) was measured on the small two-cluster network,
+    before the city-scale expansion, corridor coupling, and the PFE
+    shape-pool fix — it is NOT comparable to the 0.09/0.093 figures above,
+    which are both on today's full inner-city network. Recovery is
+    structurally harder at city scale (vastly more unconstrained
+    alternative paths) — lower numbers here are not a regression.
+  - KNOWN GAP: `validate_sim.py` does not wire in `corridor_priors` from
+    observability.json (only `prior_flows.json`'s direction priors) — the
+    LOSO figures above are a slight underestimate of the deployed
+    pipeline's actual behaviour. Fix alongside the next Agent F work.
+
 ### D — Forecast (`train_agent1.py`, `build_agent1_flows.py`) — built
 Per-station baseline + holiday factors; beats seasonal-naïve +12–29 %.
 For future dates, C consumes D's series instead of history — same code path.

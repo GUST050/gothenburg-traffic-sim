@@ -62,6 +62,22 @@ def parse_args() -> argparse.Namespace:
                    help="Calibration engine: pfe = the level-1/2/3 hierarchy "
                         "(hard counts, conservation bounds, learned priors); "
                         "routesampler = reference implementation (counts only)")
+    p.add_argument("--legacy-random-pool", action="store_true",
+                   help="Use uniform randomTrips instead of the subarea/DeSO/"
+                        "RVU candidate generator (build_candidates.py). Kept "
+                        "only for comparison; the grounded generator is default.")
+    p.add_argument("--through-fraction", type=float, default=0.5,
+                   help="θ passed to build_candidates.py. NOT locally "
+                        "identifiable (no external cordon counts exist to "
+                        "discriminate it) — 0.5 is a disclosed neutral prior, "
+                        "not a calibrated value.")
+    p.add_argument("--gravity-km", type=float, default=2.6,
+                   help="θ passed to build_candidates.py. Frozen from a "
+                        "trip-length fit against RVU Västra Götaland's "
+                        "measured distance bins (see calibrate_theta.py's "
+                        "docstring and the trip-length check it replaced "
+                        "GEH-based scoring with — GEH saturated at 100% for "
+                        "all 9 grid points and could not discriminate θ).")
     return p.parse_args()
 
 
@@ -355,21 +371,35 @@ def main() -> None:
 
     home = sumo_home()
 
-    print("\nGenerating candidate route pool (randomTrips + duarouter) …")
-    # The pool needs DIVERSITY, not volume — cap it so whole-day windows
-    # don't produce 40k candidates that routeSampler then has to chew through.
-    period = max(CANDIDATE_PERIOD_S, duration_s / 10_000)
     cand_path = SUMO_DIR / "candidates.rou.xml"
-    run_tool("randomTrips.py", [
-        "-n", str(NET_PATH),
-        "-r", str(cand_path),
-        "-o", str(SUMO_DIR / "trips.trips.xml"),
-        "-b", "0", "-e", str(duration_s),
-        "-p", str(period),
-        "--fringe-factor", "5",       # favor through-traffic entering at the edge of the net
-        "--seed", str(args.seed),
-        "--validate",
-    ], home)
+    if args.legacy_random_pool:
+        print("\nGenerating candidate route pool (LEGACY: uniform randomTrips) …")
+        # The pool needs DIVERSITY, not volume — cap it so whole-day windows
+        # don't produce 40k candidates that routeSampler then has to chew through.
+        period = max(CANDIDATE_PERIOD_S, duration_s / 10_000)
+        run_tool("randomTrips.py", [
+            "-n", str(NET_PATH),
+            "-r", str(cand_path),
+            "-o", str(SUMO_DIR / "trips.trips.xml"),
+            "-b", "0", "-e", str(duration_s),
+            "-p", str(period),
+            "--fringe-factor", "5",
+            "--seed", str(args.seed),
+            "--validate",
+        ], home)
+    else:
+        print("\nGenerating candidate route pool (subarea/DeSO/RVU generator) …")
+        n_total = max(6000, int(12000 * duration_s / 86400))
+        res = subprocess.run(
+            [sys.executable, "build_candidates.py",
+             "--through-fraction", str(args.through_fraction),
+             "--gravity-km", str(args.gravity_km),
+             "--n-total", str(n_total), "--seed", str(args.seed)],
+            capture_output=True, text=True)
+        print(res.stdout[-1200:])
+        if res.returncode != 0:
+            print(res.stderr[-1500:])
+            sys.exit("build_candidates.py failed")
 
     # ── Calibrate: one route set per direction-split variant ───────────────────
     # q50 = the default (calibrated.rou.xml). If the split file carries
