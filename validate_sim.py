@@ -19,6 +19,8 @@ Writes web/data/loso_report.json.
 
 from __future__ import annotations
 
+import argparse
+
 import json
 import subprocess
 import xml.etree.ElementTree as ET
@@ -42,7 +44,11 @@ def load_inputs():
         meta = json.load(f)
     with open(SUMO_DIR / "prior_flows.json") as f:
         priors = json.load(f)["edges"]
-    return flows, meta, priors
+    assign = {"weight": 0.0, "flows": {}}
+    if Path(SUMO_DIR / "assignment_priors.json").exists():
+        with open(SUMO_DIR / "assignment_priors.json") as f:
+            assign = json.load(f)
+    return flows, meta, priors, assign
 
 
 def run_meso(route_file: Path, ed_file: Path, duration_s: int) -> None:
@@ -76,7 +82,15 @@ def simulated_series(ed_file: Path, edge: str, nq: int) -> np.ndarray:
 
 
 def main() -> None:
-    flows, meta, all_priors = load_inputs()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--no-assignment-prior", action="store_true",
+                   help="controlled A/B: disable the gravity-assignment "
+                        "prior to isolate its effect on recovery")
+    args = ap.parse_args()
+
+    flows, meta, all_priors, assign = load_inputs()
+    assign_w     = 0.0 if args.no_assignment_prior else assign.get("weight", 0.0)
+    assign_flows = assign.get("flows", {})
     sensor_edges = load_sensor_edges()
     qi_start, nq = meta["qi_start"], meta["n_intervals"]
     duration_s = nq * 900
@@ -96,7 +110,7 @@ def main() -> None:
         drop = build_targets(flows, se, qi_start, nq)
         targets = drop
 
-        priors_pq = []
+        priors_pq, bounds_pq = [], []
         for i in range(nq):
             slot = (qi_start + i) % 96
             pq = {}
@@ -110,10 +124,20 @@ def main() -> None:
                 hi = d["prior_high"][slot] or val
                 pq[e] = (float(val), 1.0 / max(1.0, hi - lo))
             priors_pq.append(pq)
+            # Assignment field as a WIDE BOUND (see build_sumo_demand.py for
+            # why: soft priors cost 2 LP variables each — 6500 of them made
+            # a whole-day solve intractable; a bound is free variable-wise).
+            # Structural (population/POI/gates), no leakage from held station.
+            bq = {}
+            if assign_w > 0:
+                for e, series in assign_flows.items():
+                    if e in pq or slot >= len(series) or series[slot] is None:
+                        continue
+                    bq[e] = (0.0, max(5.0, 5.0 * series[slot]))
+            bounds_pq.append(bq)
 
         rou = SUMO_DIR / f"loso_{held}.rou.xml"
-        rep = pfe.calibrate(cand_path, rou, targets,
-                            [{} for _ in range(nq)], priors_pq)
+        rep = pfe.calibrate(cand_path, rou, targets, bounds_pq, priors_pq)
         ed = SUMO_DIR / f"loso_ed_{held}.xml"
         run_meso(rou, SUMO_DIR / f"loso_ed_{held}.xml", duration_s)
 

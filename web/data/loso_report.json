@@ -6,15 +6,15 @@
    "edges": {
     "60786979_3575001205_0": {
      "measured_total": 3168,
-     "simulated_total": 184,
-     "ratio": 0.058,
-     "geh_ok_pct": 33.3
+     "simulated_total": 3021,
+     "ratio": 0.954,
+     "geh_ok_pct": 95.8
     },
     "1455801464_18241874_0": {
      "measured_total": 3239,
-     "simulated_total": 25,
-     "ratio": 0.008,
-     "geh_ok_pct": 16.7
+     "simulated_total": 301,
+     "ratio": 0.093,
+     "geh_ok_pct": 33.3
     }
    },
    "pfe_geh_pct": 100.0
@@ -23,8 +23,8 @@
    "edges": {
     "60790252_60790253_0": {
      "measured_total": 2875,
-     "simulated_total": 0,
-     "ratio": 0.0,
+     "simulated_total": 75,
+     "ratio": 0.026,
      "geh_ok_pct": 16.7
     }
    },
@@ -34,8 +34,8 @@
    "edges": {
     "30420757_30421744_0": {
      "measured_total": 4820,
-     "simulated_total": 1027,
-     "ratio": 0.213,
+     "simulated_total": 131,
+     "ratio": 0.027,
      "geh_ok_pct": 8.3
     }
    },
@@ -45,9 +45,9 @@
    "edges": {
     "26842525_26355153_0": {
      "measured_total": 3569,
-     "simulated_total": 4420,
-     "ratio": 1.238,
-     "geh_ok_pct": 75.0
+     "simulated_total": 2368,
+     "ratio": 0.663,
+     "geh_ok_pct": 41.7
     }
    },
    "pfe_geh_pct": 100.0
@@ -56,9 +56,9 @@
    "edges": {
     "26355153_96523321_0": {
      "measured_total": 3141,
-     "simulated_total": 239,
-     "ratio": 0.076,
-     "geh_ok_pct": 33.3
+     "simulated_total": 197,
+     "ratio": 0.063,
+     "geh_ok_pct": 25.0
     }
    },
    "pfe_geh_pct": 100.0
@@ -67,9 +67,9 @@
    "edges": {
     "26355153_91615277_0": {
      "measured_total": 4473,
-     "simulated_total": 703,
-     "ratio": 0.157,
-     "geh_ok_pct": 20.8
+     "simulated_total": 994,
+     "ratio": 0.222,
+     "geh_ok_pct": 29.2
     }
    },
    "pfe_geh_pct": 100.0

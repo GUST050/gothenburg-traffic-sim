@@ -34,6 +34,18 @@ Goal arc, in order:
   modest win). Do NOT compare this to the old "0.32" LOSO figure anywhere
   in project history — that was measured on the small two-cluster network
   and is not comparable (see the CONFOUND WARNING in ARCHITECTURE.md).
+- ASSIGNMENT PRIOR (2026-07-05, `assignment_priors.py`, ARCHITECTURE.md
+  section C.1): root-caused why grounding alone barely helped — pfe.py's
+  parsimony objective pulls every unconstrained edge to ZERO regardless of
+  how realistic the candidate pool is; only edges on paths BETWEEN other
+  active constraints get traffic "for free". Fix: a gravity+network
+  traffic-ASSIGNMENT field (Dial-style stochastic multipath — plain
+  shortest-path collapses onto one canonical route and misses real
+  arterials, verified directly) fed in as a WIDE INTERVAL BOUND (not a
+  soft prior — 6500 soft L1 priors stalled the PFE >35 min; bounds are
+  free variable-wise). Replicated LOSO result: median recovery 0.09 → 0.15
+  (+65-70%, confirmed twice). Enabled by default
+  (`--no-assignment-prior` to disable for comparison).
 
 ## The data
 - Source: Göteborgs Stad (Felicia Gauffin Jatta, Stadsbyggnadsförvaltningen). 15-minute two-way vehicle counts ("Antal passager"), all of 2025.

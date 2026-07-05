@@ -78,6 +78,10 @@ def parse_args() -> argparse.Namespace:
                         "docstring and the trip-length check it replaced "
                         "GEH-based scoring with — GEH saturated at 100% for "
                         "all 9 grid points and could not discriminate θ).")
+    p.add_argument("--no-assignment-prior", action="store_true",
+                   help="Disable the weak gravity-assignment prior "
+                        "(assignment_priors.py) — kept for the controlled "
+                        "A/B comparison; the prior is on by default.")
     return p.parse_args()
 
 
@@ -179,6 +183,24 @@ def ensure_observability() -> dict:
     if res.returncode != 0:
         print(res.stderr[-800:])
         return {"corridor_priors": {}, "derived_flows": {}}
+    with open(path) as f:
+        return json.load(f)
+
+
+def ensure_assignment_priors() -> dict:
+    """Weak gravity-assignment prior for every otherwise-unconstrained edge
+    (assignment_priors.py) — replaces the PFE's implicit 'pull to zero'
+    (parsimony term) with 'pull toward the gravity-implied realistic
+    level' everywhere a real measurement, bound, direction prior or
+    corridor coupling doesn't already apply."""
+    path = Path("sumo/assignment_priors.json")
+    if not path.exists():
+        print("Computing assignment priors (assignment_priors.py) …")
+        res = subprocess.run([sys.executable, "assignment_priors.py"],
+                             capture_output=True, text=True)
+        if res.returncode != 0:
+            print(res.stderr[-800:])
+            return {"weight": 0.0, "flows": {}}
     with open(path) as f:
         return json.load(f)
 
@@ -422,6 +444,12 @@ def main() -> None:
         if corridor:
             print(f"  corridor coupling: {len(corridor)} edges between "
                   f"sensor pairs get data-derived priors")
+        assign_data = ensure_assignment_priors() if not args.no_assignment_prior else {"weight": 0.0, "flows": {}}
+        assign_w    = assign_data.get("weight", 0.0)
+        assign_flows = assign_data.get("flows", {})
+        if assign_flows:
+            print(f"  gravity-assignment prior: {len(assign_flows)} otherwise-"
+                  f"unconstrained edges get a weak (w={assign_w}) realistic pull")
         prior_variant = {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
 
         for suffix, key in variants:
@@ -452,6 +480,24 @@ def main() -> None:
                         continue
                     band = d["band"][qi] or 8.0
                     pq[e] = (float(d["prior"][qi]), 1.0 / max(1.0, band))
+                # Gravity-assignment field: a WIDE INTERVAL BOUND (not a
+                # soft L1 prior) on edges no stronger source covers. A prior
+                # costs 2 extra LP variables + a row EACH — at ~6 500 edges
+                # that made the per-quarter LP intractable (a whole-day
+                # solve stalled >35 min with 0 progress, killed). A bound is
+                # 1-2 inequality rows with NO new variables — the same
+                # mechanism level-2 bounds already use — and is arguably
+                # more honest anyway: this field is a rough plausibility
+                # range, not a confident target.
+                if assign_w > 0:
+                    slot = (qi_start + i) % 96
+                    for e, series in assign_flows.items():
+                        if e in bq or e in pq or slot >= len(series):
+                            continue
+                        v = series[slot]
+                        if v is None:
+                            continue
+                        bq[e] = (0.0, max(5.0, 5.0 * v))
                 bounds_pq.append(bq)
                 priors_pq.append(pq)
 

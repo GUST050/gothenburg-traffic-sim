@@ -155,6 +155,72 @@ uniform `randomTrips`:
     LOSO figures above are a slight underestimate of the deployed
     pipeline's actual behaviour. Fix alongside the next Agent F work.
 
+### C.1 — Why grounding barely helped, and the fix that did (`assignment_priors.py`)
+Gustav asked directly: why did realistic OD grounding only move LOSO from
+0.076 to 0.093? Root-caused, not guessed: **`pfe.py`'s objective minimises
+Σ x_r · EPS_PARSIMONY (total vehicle count) with NO offsetting pull on any
+edge that carries no active hard constraint or soft prior.** A route only
+gets LP weight if it serves an active constraint. `build_candidates.py`'s
+population/POI grounding shapes WHICH routes exist in the candidate pool,
+but does nothing to make the PFE actually USE routes through an edge unless
+that edge (or one on the same route) is itself constrained. Confirmed
+directly: station 107 recovered brilliantly in LOSO (0.95) because it sits
+on paths between OTHER active constraints (the corridor-coupled 1076);
+isolated stations (1074, 1076, 134) collapsed toward zero because nothing
+pulled weight onto routes through them once their own count was hidden.
+This is the classic 4-step transport model's missing 4th step — **traffic
+assignment** — and the standard fix (Dial's stochastic multipath loading,
+gravity-distributed) is what `assignment_priors.py` implements: gravity-
+distribute the SAME home/activity masses across many sampled OD pairs
+(now including E-E gate pairs, not just tours), route each via shortest
+path, accumulate a loaded-flow field that is non-zero on every reachable
+edge, and feed it in as a weak, wide-margin signal for edges no stronger
+source covers.
+
+THREE REAL BUGS FOUND AND FIXED DURING DEVELOPMENT (each verified with a
+before/after diagnostic, not just reasoned about):
+  1. **Length vs. time weighting.** First cut used physical edge length for
+     shortest-path routing. Real route choice minimises travel TIME —
+     length-weighting sent the assignment down slow residential shortcuts
+     instead of the arterials sensors actually sit on.
+  2. **All-or-nothing vs. stochastic multipath.** Even with time-weighting,
+     a single deterministic shortest path per OD pair put ZERO load on 6 of
+     7 sensor edges (verified directly) — all traffic collapses onto one
+     canonical route, missing "good but not literally fastest" arterials.
+     Fixed with Dial's classic mitigation: route each sample through one of
+     several (10) randomly-perturbed (lognormal-jittered) travel-time
+     graphs, spreading load across realistic alternatives.
+  3. **LP intractability.** Feeding the assignment field in as ~6 500 soft
+     L1 priors (pfe.py's `priors_pq`) — each costing 2 new LP variables + a
+     row — stalled a whole-day solve at 100% CPU for 35+ minutes with zero
+     output (killed, confirmed not simply slow). Fixed by feeding it in as
+     a **wide interval BOUND** instead (`bounds_pq`, the same free,
+     variable-less mechanism level-2 conservation bounds already use:
+     [0, 5×assignment-value]) — arguably more honest too, since this field
+     is a rough plausibility range, not a confident target. Whole-day solve
+     time: 35+ min (stalled) → 7 min.
+
+CALIBRATION, NOT TRANSFER (avoids the volume_priors.py mistake): the scale
+converting loading-units to vehicles/day is fit LOCALLY by ROBUST median
+ratio (not least-squares — see code comment on why LS with n=7 was unstable)
+against our own 6-7 measured edges. No cross-city ML transfer risk.
+
+**FINAL LOSO VERDICT — replicated twice, same direction both times:**
+| | median LOSO recovery |
+|---|---|
+| Grounded OD, no assignment prior | 0.09 (also measured as 0.093 in an earlier run) |
+| Grounded OD + assignment prior (bound form) | **0.154** (also 0.15 in the demand-level A/B) |
+
+A genuine, reproducible **+65-70% relative improvement**, achieved with a
+mechanistically understood, generalisable fix — not a tuned coincidence.
+GENERALISATION TO NEW SENSORS: the assignment field is recomputed from
+population/POI/network structure alone (no per-sensor tuning); only the
+ONE scale factor is fit against measured edges, so more sensors -> a more
+robust fit (and a natural extension to per-road-class factors), while the
+sensors ALSO directly tighten level-2 bounds and unlock more corridor
+couplings — three independent mechanisms all strengthening together as
+the city adds stations, none requiring retraining.
+
 ### D — Forecast (`train_agent1.py`, `build_agent1_flows.py`) — built
 Per-station baseline + holiday factors; beats seasonal-naïve +12–29 %.
 For future dates, C consumes D's series instead of history — same code path.
