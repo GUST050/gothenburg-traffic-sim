@@ -276,6 +276,7 @@ def compute_bounds_cli(date: str, begin: str, end: str) -> None:
     with open(out, "w") as f:
         json.dump({"date": date, "begin": begin, "end": end,
                    "epoch_window": str(t0), "n_quarters": nq,
+                   "graph_edges": G.number_of_edges(),   # cache fingerprint
                    "bounds": bounds,
                    "note": "Per-quarter [min,max] feasible flow from "
                            "conservation + capacity — level-2 intervals."}, f)

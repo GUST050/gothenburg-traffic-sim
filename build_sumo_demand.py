@@ -133,7 +133,12 @@ def ensure_bounds(date: str, begin: str, end: str) -> dict:
     if path.exists():
         with open(path) as f:
             d = json.load(f)
-        if (d["date"], d["begin"], d["end"]) == (date, begin, end):
+        with open(GEO_PATH) as f:
+            n_now = len(json.load(f)["features"])
+        # date/window AND graph fingerprint must match — stale bounds from a
+        # different network silently poison the calibration as infeasibility
+        if ((d["date"], d["begin"], d["end"]) == (date, begin, end)
+                and d.get("graph_edges") == n_now):
             return d
     print("Computing level-2 bounds (observability LP) …")
     from observability import compute_bounds_cli

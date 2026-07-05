@@ -39,6 +39,10 @@ N_QUARTERS     = 365 * 96   # 35 040 — 2025 is not a leap year
 SNAP_WARN_M    = 100         # print a warning if snap midpoint is this far from sensor
 CARRIAGEWAY_M  = 40          # max distance to search for the opposite carriageway
 
+# Inner-city canvas (south, west, north, east) — decided 2026-07-05.
+# Covers Vallgraven→Gårda west–east and the river→Krokslätt north–south.
+INNER_CITY_BBOX = (57.665, 11.920, 57.722, 12.020)
+
 # Simulation confidence: confidence = exp(-d² / 2σ²) where d = distance from
 # the edge midpoint to the NEAREST sensor.  1.0 at a sensor, ~0.6 at σ metres,
 # ~0.1 at 2σ.  Written to network.geojson so the web app and future
@@ -530,10 +534,11 @@ def parse_args() -> argparse.Namespace:
                         "(default: *koordinat*.csv in data_in/, else the original)")
     p.add_argument("--out_dir",     default="web/data",
                    help="Output directory (default: web/data)")
-    p.add_argument("--clip_radius", type=float, default=400,
+    p.add_argument("--clip_radius", type=float, default=0,
                    help="Drop non-sensor OSM edges further than this from the "
-                        "NEAREST sensor (default: 400 m). Gives one small area "
-                        "around each sensor cluster — the agreed scope.")
+                        "nearest sensor; 0 = no clip (default — the whole "
+                        "inner-city canvas is displayed, the confidence "
+                        "gradient communicates trust instead of hiding roads)")
     return p.parse_args()
 
 
@@ -589,15 +594,18 @@ def main() -> None:
     lons = [coords[s][1] for s in sensors]
     print(f"  {len(sensors)} matched: {sensors}")
 
-    # ── Download OSM graph ─────────────────────────────────────────────────────
-    clat   = sum(lats) / len(lats)
-    clon   = sum(lons) / len(lons)
-    # +900 m beyond the outermost sensor so nearby alternative routes are included
-    radius = max(haversine_m(clat, clon, la, lo) for la, lo in zip(lats, lons)) + 900
-    print(f"OSM graph  radius={radius:.0f} m  (cached in cache/) …")
-    G = ox.graph_from_point(
-        center_point=(clat, clon),
-        dist=radius,
+    # ── Download OSM graph — GOTHENBURG INNER CITY ─────────────────────────────
+    # Decided 2026-07-05: the canvas is the whole inner city (Vallgraven,
+    # Haga/Linné, Vasastaden, Heden, Gårda, Johanneberg/Landala, Korsvägen–
+    # Scandinavium), bounded by the river in the north; bridges and the big
+    # approaches become through-traffic gates. Accuracy is a GRADIENT: hard
+    # near sensors, prior-driven elsewhere — the confidence map says which.
+    clat = sum(lats) / len(lats)
+    clon = sum(lons) / len(lons)
+    s, w, n, e = INNER_CITY_BBOX
+    print(f"OSM graph  inner-city bbox {INNER_CITY_BBOX}  (cached in cache/) …")
+    G = ox.graph_from_bbox(
+        bbox=(w, s, e, n),          # osmnx 2.x: (left, bottom, right, top)
         network_type="drive",
         simplify=True,
     )
@@ -654,7 +662,7 @@ def main() -> None:
         )
 
         if sensor_id is None:
-            if d_sensor > clip_r:
+            if clip_r and d_sensor > clip_r:
                 continue
 
         coords_geom = (

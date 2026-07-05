@@ -14,11 +14,18 @@ Goal arc, in order:
 2. Train an AI model to forecast normal flow.
 3. Simulate traffic after incidents (road closures) — the real goal.
 
-## Scope — DECIDED
-- NOT the whole city, and NOT one continuous corridor. Scope = TWO small areas, one around each sensor cluster (Götaplatsen cluster and Scandinavium cluster), a few hundred metres around the sensors.
-- Implemented in build_data.py: background edges are kept only within `--clip_radius` (default 400 m) of the NEAREST sensor.
-- Reason: only 6 sensors exist. You can only validate/calibrate where there is ground truth; a citywide claim would be ungrounded extrapolation.
-- Every edge carries a simulation confidence (see Contracts) that decays with distance from the nearest sensor — simulated results far from ground truth must be presented as less trustworthy.
+## Scope — RE-DECIDED 2026-07-05 (supersedes the two-cluster scope)
+- The canvas is GOTHENBURG'S INNER CITY (INNER_CITY_BBOX in build_data.py:
+  river→Krokslätt, Vallgraven→Gårda; ~7 100 directed edges, bridges and big
+  approaches as through-traffic gates). No display clip.
+- The product promise: accuracy is a GRADIENT — hard (measured/PFE-
+  constrained) near sensors, prior-driven elsewhere — and every sensor the
+  city adds raises accuracy wherever it is placed. The confidence map is
+  the product's honesty: we SIMULATE everywhere but CLAIM only what the
+  per-edge confidence supports. (This resolves the original "citywide would
+  be ungrounded extrapolation" concern: the extrapolation is now labelled.)
+- Sensor edge IDs verified IDENTICAL across the expansion — all contracts
+  survived.
 
 ## The data
 - Source: Göteborgs Stad (Felicia Gauffin Jatta, Stadsbyggnadsförvaltningen). 15-minute two-way vehicle counts ("Antal passager"), all of 2025.

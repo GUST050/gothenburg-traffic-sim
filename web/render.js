@@ -215,7 +215,10 @@ const Render = (() => {
       // Light basemap. The traffic ramp (dark green→amber→red) is validated
       // against a light surface: contrast ≥3:1, CVD separation 16.9 — do not
       // change the colours without re-running the validation.
-      _map = L.map(mapEl, { zoomControl: true }).setView([57.697, 11.983], 15);
+      // preferCanvas: the inner-city network is ~7 000 edges — SVG DOM nodes
+      // would crawl; canvas renders and hit-tests them smoothly.
+      _map = L.map(mapEl, { zoomControl: true, preferCanvas: true })
+        .setView([57.697, 11.983], 14);
       L.tileLayer(
         'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
         { attribution: '© OSM © CARTO', subdomains: 'abcd', maxZoom: 19 }
@@ -238,10 +241,12 @@ const Render = (() => {
         // Background network is drawn in dark slate so it reads on the light
         // basemap, and faded by confidence — the network dims with distance
         // from the sensors.
-        const bgOpacity  = 0.25 + 0.55 * (confidence ?? 0.5);
+        // City-scale canvas: the confidence gradient IS the base layer —
+        // near-sensor streets read clearly, the far background stays airy.
+        const bgOpacity  = 0.10 + 0.65 * (confidence ?? 0.3);
         const baseStyle  = isSensor
-          ? { color: '#64748b', weight: 3, opacity: 0.4,       dashArray: '' }
-          : { color: '#526078', weight: 2, opacity: bgOpacity, dashArray: '' };
+          ? { color: '#64748b', weight: 3,   opacity: 0.45,      dashArray: '' }
+          : { color: '#526078', weight: 1.5, opacity: bgOpacity, dashArray: '' };
         const line = L.polyline(latlngs, baseStyle).addTo(isSensor ? fg : bg);
         line.on('click', () => { if (_onEdgeClick) _onEdgeClick(id); });
 
