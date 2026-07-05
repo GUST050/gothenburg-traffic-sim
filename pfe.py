@@ -143,15 +143,23 @@ def calibrate(
     bounds_per_q: list[dict[str, tuple[float, float]]],
     priors_per_q: list[dict[str, tuple[float, float]]],
 ) -> dict:
-    """Solve all intervals; write a .rou.xml; return a fit report."""
+    """Solve all intervals; write a .rou.xml; return a fit report.
+
+    SHARED SHAPE POOL: a route's geometry is drivable at any hour, so every
+    interval solves over ALL distinct candidate shapes of the day (departure
+    times are assigned when a shape is chosen). Bucketing candidates by
+    their original depart time starved sparse quarters of shape diversity —
+    2–3 overlapping corridor routes per sensor made the LP infeasible."""
     cands = load_candidates(candidates_path)
     nq = len(targets_per_q)
 
-    by_q: dict[int, list[Candidate]] = {i: [] for i in range(nq)}
+    # Dedupe to distinct shapes — the LP variables
+    seen: dict[str, Candidate] = {}
     for cand in cands:
-        i = int(cand.depart // 900)
-        if 0 <= i < nq:
-            by_q[i].append(cand)
+        seen.setdefault(" ".join(cand.edges), cand)
+    shapes = list(seen.values())
+    print(f"  shape pool: {len(shapes)} distinct routes "
+          f"(from {len(cands)} candidates)")
 
     achieved: dict[str, list[float]] = {}
     vid = 0
@@ -162,13 +170,13 @@ def calibrate(
             # Relaxation ladder: exact → widened tolerances → without the
             # level-2 bounds. An interval must never end up EMPTY just
             # because one constraint combination is unlucky.
-            sol = solve_interval(by_q[i], targets_per_q[i],
+            sol = solve_interval(shapes, targets_per_q[i],
                                  bounds_per_q[i], priors_per_q[i])
             if sol is None:
                 for tol_mult, use_bounds in ((2.0, True), (4.0, True),
                                              (4.0, False)):
                     sol = solve_interval(
-                        by_q[i], targets_per_q[i],
+                        shapes, targets_per_q[i],
                         bounds_per_q[i] if use_bounds else {},
                         priors_per_q[i], tol_mult=tol_mult)
                     if sol is not None:
@@ -180,7 +188,7 @@ def calibrate(
             # SUMO requires the route file sorted by depart — collect the
             # interval's departures first, then write in ascending order.
             departures: list[tuple[float, str]] = []
-            for cand, k in zip(by_q[i], counts):
+            for cand, k in zip(shapes, counts):
                 for dup in range(int(k)):
                     depart = i * 900 + (dup + 0.5) * 900 / max(1, k)
                     departures.append((depart, " ".join(cand.edges)))
