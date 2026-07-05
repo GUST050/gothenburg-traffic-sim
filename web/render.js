@@ -442,6 +442,14 @@ const Render = (() => {
       redraw(typeof State !== 'undefined' ? State.qi : 0);
     },
 
+    // Call after the control panel's height changes (e.g. the Simulering
+    // panel showing/hiding) — the map container is flex-sized, so Leaflet
+    // needs to be told its box changed or tiles/clicks misalign until the
+    // next manual pan/zoom.
+    invalidateSize() {
+      if (_map) _map.invalidateSize();
+    },
+
     setNormalProfile(np) {
       _normalProfile = np;
       redraw(typeof State !== 'undefined' ? State.qi : 0);

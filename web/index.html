@@ -7,13 +7,17 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     :root {
-      --panel:      rgba(11, 14, 26, 0.88);
+      --panel:      rgba(11, 14, 26, 0.92);
+      --panel-2:    rgba(20, 27, 45, 0.85);
       --panel-line: rgba(148, 163, 184, 0.14);
       --ink:        #e8edf5;
       --ink-2:      #94a3b8;
       --ink-3:      #5b6b82;
       --accent:     #3b82f6;
       --accent-2:   #60a5fa;
+      --sim:        #7c3aed;
+      --sim-2:      #a78bfa;
+      --danger:     #dc2626;
       --track:      #1c2740;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -22,8 +26,11 @@
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       background: #0b0e1a;
     }
-
-    #map { position: absolute; inset: 0 0 116px 0; background: #f2f2f0; }
+    /* Flex column so #controls can grow (Simulering panel adds a row)
+       without ever overlapping or leaving a gap under the map — no
+       hardcoded height to keep in sync. */
+    body { display: flex; flex-direction: column; }
+    #map { flex: 1 1 auto; min-height: 0; position: relative; background: #f2f2f0; }
 
     /* ── Title chip ─────────────────────────────────────────────────────── */
     #brand {
@@ -38,16 +45,16 @@
 
     /* ── Control panel ──────────────────────────────────────────────────── */
     #controls {
-      position: absolute; bottom: 0; left: 0; right: 0; height: 116px;
-      background: linear-gradient(to top, #0a0d18 30%, var(--panel));
+      position: relative; z-index: 900; flex: 0 0 auto;
+      background: linear-gradient(to top, #0a0d18 40%, var(--panel));
       backdrop-filter: blur(14px);
       color: var(--ink);
-      display: flex; flex-direction: column; justify-content: center;
-      gap: 12px; padding: 12px 26px;
+      display: flex; flex-direction: column;
+      gap: 10px; padding: 12px 26px 14px;
       border-top: 1px solid var(--panel-line);
     }
 
-    #top-row { display: flex; align-items: center; gap: 18px; }
+    #playback-row { display: flex; align-items: center; gap: 16px; }
 
     #play-btn {
       background: linear-gradient(135deg, #2563eb, var(--accent));
@@ -61,12 +68,14 @@
     #play-btn:hover  { transform: scale(1.07); box-shadow: 0 6px 22px rgba(59,130,246,0.55); }
     #play-btn:active { transform: scale(0.97); }
 
-    #time-display { display: flex; flex-direction: column; min-width: 200px; gap: 1px; }
+    #time-display { display: flex; flex-direction: column; min-width: 190px; gap: 1px; }
     #td-clock {
-      font-size: 1.45rem; font-weight: 700; color: var(--ink);
+      font-size: 1.4rem; font-weight: 700; color: var(--ink);
       font-variant-numeric: tabular-nums; letter-spacing: 0.01em; line-height: 1.1;
     }
-    #td-date { font-size: 0.75rem; color: var(--ink-2); font-weight: 500; }
+    #td-date { font-size: 0.74rem; color: var(--ink-2); font-weight: 500; }
+
+    .v-divider { width: 1px; align-self: stretch; background: var(--panel-line); }
 
     .seg {
       display: flex; gap: 2px;
@@ -75,38 +84,67 @@
     }
     .seg button {
       background: transparent; border: none; color: var(--ink-3);
-      font-size: 0.76rem; font-weight: 600; padding: 5px 11px; border-radius: 6px;
+      font-size: 0.76rem; font-weight: 600; padding: 6px 12px; border-radius: 6px;
       cursor: pointer; transition: background 0.15s, color 0.15s; white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
     .seg button.active { background: var(--accent); color: #fff; }
     .seg button:not(.active):hover { color: var(--ink-2); }
     #mode-toggle { margin-left: auto; }
-    #mode-toggle button.active { background: #1e40af; }
+    #mode-toggle button[data-mode="sim"].active { background: var(--sim); }
 
-    .label { font-size: 0.68rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+    .label {
+      font-size: 0.66rem; color: var(--ink-3); text-transform: uppercase;
+      letter-spacing: 0.08em; font-weight: 700; white-space: nowrap;
+    }
+
+    /* ── Simulation panel — one coherent area for everything scenario-related ── */
+    #sim-panel {
+      display: none;
+      align-items: center; gap: 12px;
+      background: var(--panel-2);
+      border: 1px solid rgba(124, 58, 237, 0.28);
+      border-left: 3px solid var(--sim);
+      border-radius: 10px;
+      padding: 8px 14px;
+    }
+    #sim-panel.show { display: flex; }
 
     #scen-select {
-      background: rgba(15, 23, 42, 0.8); color: var(--ink);
-      border: 1px solid var(--panel-line); border-radius: 9px;
+      background: rgba(15, 23, 42, 0.85); color: var(--ink);
+      border: 1px solid var(--panel-line); border-radius: 8px;
       padding: 6px 10px; font-size: 0.76rem; cursor: pointer;
-      max-width: 260px;
+      max-width: 280px; flex: 1;
     }
 
     .action-btn {
-      background: rgba(15, 23, 42, 0.8); color: var(--ink-2);
-      border: 1px solid var(--panel-line); border-radius: 9px;
+      background: rgba(15, 23, 42, 0.85); color: var(--ink-2);
+      border: 1px solid var(--panel-line); border-radius: 8px;
       padding: 6px 12px; font-size: 0.76rem; font-weight: 600;
       cursor: pointer; white-space: nowrap;
-      transition: background 0.15s, color 0.15s;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    .action-btn:hover { color: var(--ink); }
-    .action-btn.active { background: #b91c1c; color: #fff; border-color: #b91c1c; }
-    .action-btn.run { background: #b91c1c; color: #fff; border-color: #b91c1c; }
-    .action-btn.run:disabled { opacity: 0.65; cursor: wait; }
+    .action-btn:hover { color: var(--ink); border-color: rgba(148,163,184,0.3); }
+    .action-btn.active { background: var(--sim); color: #fff; border-color: var(--sim); }
+    .action-btn.primary { background: var(--sim); color: #fff; border-color: var(--sim); }
+    .action-btn:disabled { opacity: 0.55; cursor: wait; }
+
+    /* Picking sub-state inside the sim panel */
+    #pick-banner {
+      display: none; align-items: center; gap: 12px; flex: 1;
+    }
+    #pick-banner.show { display: flex; }
+    #pick-banner .hint { font-size: 0.76rem; color: var(--sim-2); font-weight: 600; }
+    #pick-count {
+      background: rgba(124,58,237,0.18); color: var(--sim-2);
+      border-radius: 999px; padding: 2px 9px; font-size: 0.72rem; font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .action-btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
 
     #sliders { display: flex; gap: 28px; }
-    .slider-group { flex: 1; }
+    .slider-group { flex: 1; transition: opacity 0.15s; }
+    .slider-group.disabled { opacity: 0.35; pointer-events: none; }
     .slider-head {
       display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
     }
@@ -244,12 +282,13 @@
   </div>
 
   <div id="controls">
-    <div id="top-row">
+    <div id="playback-row">
       <button id="play-btn" title="Spela / pausa (mellanslag)">▶</button>
       <div id="time-display">
         <span id="td-clock">—</span>
         <span id="td-date">—</span>
       </div>
+      <div class="v-divider"></div>
       <span class="label">Hastighet</span>
       <div class="seg" id="speed-seg">
         <button data-speed="1">1×</button>
@@ -258,22 +297,37 @@
         <button data-speed="96">96×</button>
       </div>
       <div class="seg" id="mode-toggle">
-        <button id="btn-hist" class="active">2025 Historisk</button>
-        <button id="btn-fore">Prognos 2027</button>
-        <button id="btn-scen">Scenario</button>
+        <button id="btn-hist" data-mode="hist" class="active">2025 Historisk</button>
+        <button id="btn-fore" data-mode="fore">Prognos 2027</button>
+        <button id="btn-scen" data-mode="sim">Simulering</button>
       </div>
-      <select id="scen-select" style="display:none"></select>
+    </div>
+
+    <!-- Everything simulation-related lives in ONE panel: pick an existing
+         scenario, or start a new one by closing roads. Only visible in
+         Simulering mode — no floating buttons that mean nothing elsewhere. -->
+    <div id="sim-panel">
+      <span class="label">Simulering</span>
+      <select id="scen-select"></select>
       <button id="veh-btn" class="action-btn" style="display:none"
               title="Visa varje simulerad bil som en egen prick (verklig OD och rutt)">🚗 Bilar</button>
-      <button id="close-mode-btn" class="action-btn" style="display:none"
-              title="Klicka på vägar i kartan och simulera en avstängning">🚧 Stäng väg</button>
-      <button id="close-run-btn" class="action-btn run" style="display:none"></button>
+      <div class="v-divider"></div>
+      <button id="close-mode-btn" class="action-btn"
+              title="Klicka på vägar i kartan för att simulera en avstängning">+ Ny avstängning</button>
+
+      <div id="pick-banner">
+        <span class="hint">Klicka på vägar i kartan att stänga</span>
+        <span id="pick-count">0 valda</span>
+        <button id="close-run-btn" class="action-btn primary" disabled>Simulera avstängning</button>
+        <button id="close-cancel-btn" class="action-btn">Avbryt</button>
+      </div>
     </div>
+
     <div id="sliders">
-      <div class="slider-group">
+      <div class="slider-group" id="day-group">
         <div class="slider-head">
           <span class="label">Dag</span>
-          <span class="hint">1 jan — 31 dec</span>
+          <span class="hint" id="day-hint">1 jan — 31 dec</span>
         </div>
         <input type="range" id="day-slider" min="0" max="364" value="0">
       </div>
@@ -291,11 +345,11 @@
   <!-- ?v= forces the browser to fetch fresh JS when the HTML updates —
        bump the number whenever the JS files change, or stale cached JS
        can run against new HTML and crash on missing elements -->
-  <script src="state.js?v=8"></script>
-  <script src="provider.js?v=8"></script>
-  <script src="render.js?v=8"></script>
-  <script src="controls.js?v=8"></script>
-  <script src="clock.js?v=8"></script>
+  <script src="state.js?v=9"></script>
+  <script src="provider.js?v=9"></script>
+  <script src="render.js?v=9"></script>
+  <script src="controls.js?v=9"></script>
+  <script src="clock.js?v=9"></script>
   <script>
     (async () => {
       try {
@@ -321,6 +375,9 @@
         const btnFore    = document.getElementById('btn-fore');
         const btnScen    = document.getElementById('btn-scen');
         const scenSelect = document.getElementById('scen-select');
+        const simPanel   = document.getElementById('sim-panel');
+        const dayGroup   = document.getElementById('day-group');
+        const dayHint    = document.getElementById('day-hint');
 
         const vehBtn = document.getElementById('veh-btn');
         const trajCache = {};
@@ -354,7 +411,17 @@
           for (const b of [btnHist, btnFore, btnScen]) {
             b.classList.toggle('active', b === activeBtn);
           }
-          scenSelect.style.display = activeBtn === btnScen ? '' : 'none';
+          const isSim = activeBtn === btnScen;
+          const panelWasShown = simPanel.classList.contains('show');
+          simPanel.classList.toggle('show', isSim);
+          // "Dag" only makes sense for the full-year historical/forecast
+          // data — a scenario is always a single fixed date.
+          dayGroup.classList.toggle('disabled', isSim);
+          dayHint.textContent = isSim ? '(scenariots datum är fast)' : '1 jan — 31 dec';
+          if (isSim !== panelWasShown) {
+            // panel row appeared/disappeared → map's flex box resized
+            requestAnimationFrame(() => Render.invalidateSize());
+          }
           Render.setProvider(provider);
           Controls.setProvider(provider);
           refreshVehicleUI(provider);
@@ -386,7 +453,7 @@
           setMode(btnFore, foreProvider);
         });
 
-        // ── Scenario mode (SUMO output — run run_scenario.py) ─────────────────
+        // ── Simulering (SUMO output — run run_scenario.py) ────────────────────
         // Shareable URLs: ?mode=scenario&file=<name>.json&qi=6, ?mode=forecast
         const params = new URLSearchParams(location.search);
 
@@ -431,30 +498,44 @@
 
         scenSelect.addEventListener('change', e => activateScenario(e.target.value));
 
-        // ── Klicka-och-stäng vägar (kräver serve.py, inte statisk server) ─────
-        const btnClose = document.getElementById('close-mode-btn');
-        const btnRun   = document.getElementById('close-run-btn');
+        // ── Klicka-och-stäng vägar — nu en del av Simulering-panelen ──────────
+        const btnClose   = document.getElementById('close-mode-btn');
+        const btnRun     = document.getElementById('close-run-btn');
+        const btnCancel  = document.getElementById('close-cancel-btn');
+        const pickBanner = document.getElementById('pick-banner');
+        const pickCount  = document.getElementById('pick-count');
         const selected = new Set();
         let closureMode = false;
+        let apiAvailable = false;
 
         function refreshCloseUI() {
-          btnClose.classList.toggle('active', closureMode);
-          btnClose.textContent = closureMode ? '✕ Avbryt' : '🚧 Stäng väg';
-          btnRun.style.display = (closureMode && selected.size) ? '' : 'none';
-          btnRun.textContent = `Simulera avstängning (${selected.size})`;
+          btnClose.style.display = closureMode ? 'none' : '';
+          pickBanner.classList.toggle('show', closureMode);
+          pickCount.textContent = `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
+          btnRun.disabled = selected.size === 0;
           Render.setPending([...selected]);
         }
 
-        // Feature-detect the API — hidden when served statically
+        function enterPicking() {
+          closureMode = true;
+          selected.clear();
+          refreshCloseUI();
+        }
+        function exitPicking() {
+          closureMode = false;
+          selected.clear();
+          refreshCloseUI();
+        }
+
+        // Feature-detect the API — the "+ Ny avstängning" entry point is
+        // hidden entirely when served statically (no server to simulate with)
         fetch('/api/ping').then(r => {
-          if (r.ok) btnClose.style.display = '';
+          apiAvailable = r.ok;
+          btnClose.style.display = r.ok ? '' : 'none';
         }).catch(() => {});
 
-        btnClose.addEventListener('click', () => {
-          closureMode = !closureMode;
-          if (!closureMode) selected.clear();
-          refreshCloseUI();
-        });
+        btnClose.addEventListener('click', enterPicking);
+        btnCancel.addEventListener('click', exitPicking);
 
         Render.onEdgeClick(id => {
           if (!closureMode) return;
@@ -469,8 +550,8 @@
             const res  = await fetch('/api/close?edges=' + [...selected].join(','));
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            closureMode = false;
-            selected.clear();
+            exitPicking();
+            btnClose.style.display = apiAvailable ? '' : 'none';
             await loadScenIndex(true);
             scenSelect.value = data.file;
             await activateScenario(data.file, { fresh: true });
@@ -478,7 +559,7 @@
             alert('Simuleringen misslyckades: ' + e.message);
           } finally {
             btnRun.disabled = false;
-            refreshCloseUI();
+            btnRun.textContent = 'Simulera avstängning';
           }
         });
 
