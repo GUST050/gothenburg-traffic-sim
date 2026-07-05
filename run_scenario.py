@@ -145,13 +145,19 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
     # minutes → seconds), which is what makes interactive closures possible.
     cmd = [
         str(home / "bin" / "sumo"),
-        *([] if micro else ["--mesosim", "true", "--meso-junction-control", "true"]),
+        # meso junction control DISABLED: it models signal delays we have no
+        # signal plans for, and measurably throttles below the flows reality
+        # carried (107-N delivery 0.57 with, 0.92 without). Re-enable when
+        # the city provides signal timings.
+        *([] if micro else ["--mesosim", "true", "--meso-junction-control", "false"]),
         "-n", str(NET_PATH.resolve()),
         "-r", str(route_path.resolve()),
         "-a", ",".join(str(p.resolve()) for p in add_paths),
         "--seed", str(seed),
         "--begin", "0",
-        "--end", str(duration_s + 1800),   # let last departures finish
+        # generous flush: meso insertion queues delay departures (measured
+        # ~170 s avg backlog); a short flush silently drops the tail
+        "--end", str(duration_s + 3600),
         "--no-step-log", "true",
         "--no-warnings", "true",
         # Vehicles whose destination IS the closed edge have no valid route —

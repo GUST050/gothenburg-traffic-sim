@@ -175,6 +175,115 @@ def lane_capacity(G) -> dict[str, float]:
     return caps
 
 
+# ── Interval bounds (the level-2 product that bites at low sensor density) ────
+
+def neighbour_targets(G, measured: set[str]) -> list[str]:
+    """Unmeasured directed edges sharing a junction with a measured edge —
+    the edges where conservation bounds are tight enough to matter."""
+    nodes = set()
+    for e in measured:
+        u, v, _ = e.split("_")
+        nodes.update((int(u), int(v)))
+    targets = []
+    for u, v, k in G.edges(keys=True):
+        e = edge_id(u, v, k)
+        if e not in measured and (u in nodes or v in nodes):
+            targets.append(e)
+    return sorted(targets)
+
+
+def flow_bounds(G, measured_q: dict[str, float], caps: dict[str, float],
+                targets: list[str]) -> dict[str, tuple[float, float]]:
+    """Min/max feasible flow per target edge for ONE quarter, via LP:
+    conservation (with slack for driveways/parking) at every internal node,
+    measured edges fixed, 0 ≤ flow ≤ lane capacity."""
+    from scipy.optimize import linprog
+    from scipy.sparse import lil_matrix
+
+    edges = [edge_id(u, v, k) for u, v, k in G.edges(keys=True)]
+    idx = {e: i for i, e in enumerate(edges)}
+    n = len(edges)
+
+    # Conservation rows: sum(in) − sum(out) = slack, |slack| ≤ tol(node)
+    rows, tols = [], []
+    for node in G.nodes:
+        ins, outs = node_edges(G, node)
+        if not ins or not outs:
+            continue
+        r = lil_matrix((1, n))
+        meas_here = 0.0
+        for e in ins:
+            r[0, idx[e]] = 1
+            meas_here += measured_q.get(e, 0)
+        for e in outs:
+            r[0, idx[e]] = -1
+            meas_here += measured_q.get(e, 0)
+        rows.append(r)
+        tols.append(ABS_TOL + REL_TOL * meas_here)
+
+    from scipy.sparse import vstack
+    A = vstack(rows).tocsc()
+    tol = np.array(tols)
+    A_ub = vstack([A, -A]).tocsc()          # |A x| ≤ tol
+    b_ub = np.concatenate([tol, tol])
+
+    lb = np.zeros(n)
+    ub = np.array([caps.get(e, CAP_VEH_Q) for e in edges])
+    for e, v in measured_q.items():
+        if e in idx and not np.isnan(v):
+            lb[idx[e]] = ub[idx[e]] = v
+    var_bounds = list(zip(lb, ub))
+
+    out: dict[str, tuple[float, float]] = {}
+    for e in targets:
+        c = np.zeros(n)
+        c[idx[e]] = 1.0
+        lo = linprog(c,  A_ub=A_ub, b_ub=b_ub, bounds=var_bounds, method="highs")
+        hi = linprog(-c, A_ub=A_ub, b_ub=b_ub, bounds=var_bounds, method="highs")
+        if lo.success and hi.success:
+            out[e] = (max(0.0, float(lo.fun)), float(-hi.fun))
+    return out
+
+
+def compute_bounds_cli(date: str, begin: str, end: str) -> None:
+    """CLI: per-quarter bounds for the neighbour targets over a window.
+    Writes web/data/observability_bounds.json (consumed by Agent C)."""
+    import pandas as pd
+    G, measured, epoch = load_network()
+    caps = lane_capacity(G)
+    targets = neighbour_targets(G, set(measured))
+    print(f"Bounds for {len(targets)} neighbour edges")
+
+    t0 = pd.Timestamp(f"{date} {begin}")
+    t1 = (t0.normalize() + pd.Timedelta(days=1)) if end == "24:00" \
+        else pd.Timestamp(f"{date} {end}")
+    q0 = int((t0 - pd.Timestamp(epoch)) / pd.Timedelta(minutes=15))
+    nq = int((t1 - t0) / pd.Timedelta(minutes=15))
+
+    bounds: dict[str, list] = {e: [] for e in targets}
+    for i in range(nq):
+        measured_q = {e: float(s[q0 + i]) for e, s in measured.items()
+                      if not np.isnan(s[q0 + i])}
+        bq = flow_bounds(G, measured_q, caps, targets)
+        for e in targets:
+            lo_hi = bq.get(e)
+            bounds[e].append([round(lo_hi[0], 1), round(lo_hi[1], 1)]
+                             if lo_hi else None)
+        if i % 8 == 0:
+            print(f"  quarter {i + 1}/{nq}")
+
+    out = Path("web/data/observability_bounds.json")
+    with open(out, "w") as f:
+        json.dump({"date": date, "begin": begin, "end": end,
+                   "epoch_window": str(t0), "n_quarters": nq,
+                   "bounds": bounds,
+                   "note": "Per-quarter [min,max] feasible flow from "
+                           "conservation + capacity — level-2 intervals."}, f)
+    tight = sum(1 for e in targets
+                for b in bounds[e] if b and b[1] - b[0] < CAP_VEH_Q * 0.5)
+    print(f"Wrote {out}  ({tight} edge-quarters tighter than half capacity)")
+
+
 def main() -> None:
     G, measured, epoch = load_network()
     n_slots = len(next(iter(measured.values())))
@@ -221,4 +330,14 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--bounds", action="store_true",
+                    help="also compute per-quarter interval bounds (LP)")
+    ap.add_argument("--date",  default="2025-09-16")
+    ap.add_argument("--begin", default="00:00")
+    ap.add_argument("--end",   default="24:00")
+    args = ap.parse_args()
     main()
+    if args.bounds:
+        compute_bounds_cli(args.date, args.begin, args.end)

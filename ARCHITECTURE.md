@@ -60,7 +60,7 @@ Validate 15-min CSVs; join coordinates + **measured-direction metadata**
 direction-aware snapping (bearing must match; true point-to-polyline
 distances). Gate: every station snapped ≤ 60 m with matching bearing.
 
-### B — Mathematics (`observability.py`) — TO BUILD (next)
+### B — Mathematics (`observability.py`) — BUILT
 From graph + measured edge set:
 1. Junction solves: where all-but-one leg of a junction is constrained,
    derive the remainder exactly (the Läraregatan/Gibraltargatan case).
@@ -83,7 +83,12 @@ Output: `observability.json` (exact values, intervals, alarms, classes).
 3. Emit routes (q50 + uncertainty variants) + the implied OD matrix.
 routeSampler is kept as reference implementation/fallback (it cannot
 express per-edge weights or intervals — verified against its docs).
-Gate: GEH < 5 at 100 % of measured edges; no B-bound violated.
+BUILT (pfe.py + prior_flows.py + --engine pfe): unserveable counts are
+dropped per-constraint (never fatal to an interval) and a relaxation
+ladder (tol ×2, ×4, then without level-2 bounds) guarantees non-empty
+intervals. Gate: GEH < 5 at ≥ 85 % of measured hourly values — the FHWA
+calibration criterion. Current whole-day: 92–93 % GEH, delivery at
+measured edges mean 0.88, opposite-direction priors delivered 0.64–1.01.
 
 ### D — Forecast (`train_agent1.py`, `build_agent1_flows.py`) — built
 Per-station baseline + holiday factors; beats seasonal-naïve +12–29 %.

@@ -58,6 +58,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--end",   default="10:00",
                    help="Window end HH:MM; '24:00' = whole day (default 10:00)")
     p.add_argument("--seed",  type=int, default=42)
+    p.add_argument("--engine", choices=["pfe", "routesampler"], default="pfe",
+                   help="Calibration engine: pfe = the level-1/2/3 hierarchy "
+                        "(hard counts, conservation bounds, learned priors); "
+                        "routesampler = reference implementation (counts only)")
     return p.parse_args()
 
 
@@ -98,6 +102,63 @@ def has_split_quantiles() -> bool:
     with open(path) as f:
         data = json.load(f)
     return any("edge_shares_q10" in d for d in data.values())
+
+
+def build_targets(
+    flows: dict[str, list],
+    sensor_edges: dict[str, list[str]],
+    qi_start: int,
+    n_intervals: int,
+    split_key: str = "edge_shares",
+) -> list[dict[str, float]]:
+    """Per-quarter measured targets {edge: count} — the level-1 constraints."""
+    est_shares = load_direction_split(split_key)
+    out: list[dict[str, float]] = []
+    for i in range(n_intervals):
+        qi, slot = qi_start + i, (qi_start + i) % 96
+        t: dict[str, float] = {}
+        for edges in sensor_edges.values():
+            for edge_id in edges:
+                share = est_shares.get(edge_id, [1.0 / len(edges)] * 96)[slot]
+                v = flows.get(edge_id, [None])[qi] if qi < len(flows.get(edge_id, [])) else None
+                if v is not None:
+                    t[edge_id] = v * share
+        out.append(t)
+    return out
+
+
+def ensure_bounds(date: str, begin: str, end: str) -> dict:
+    """Level-2 interval bounds for this window — computed on demand."""
+    path = Path("web/data/observability_bounds.json")
+    if path.exists():
+        with open(path) as f:
+            d = json.load(f)
+        if (d["date"], d["begin"], d["end"]) == (date, begin, end):
+            return d
+    print("Computing level-2 bounds (observability LP) …")
+    from observability import compute_bounds_cli
+    compute_bounds_cli(date, begin, end)
+    with open(path) as f:
+        return json.load(f)
+
+
+def ensure_priors(date: str) -> dict:
+    """Level-3 learned priors for unmeasured opposite directions."""
+    path = Path("sumo/prior_flows.json")
+    if path.exists():
+        with open(path) as f:
+            d = json.load(f)
+        if d.get("date") == date:
+            return d
+    print("Computing level-3 priors (prior_flows) …")
+    res = subprocess.run([sys.executable, "prior_flows.py", "--date", date],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stderr[-1000:])
+        print("  (no priors available — continuing without level 3)")
+        return {"edges": {}}
+    with open(path) as f:
+        return json.load(f)
 
 
 def write_counts(
@@ -295,19 +356,58 @@ def main() -> None:
         variants += [("_v1", "edge_shares_q10"), ("_v2", "edge_shares_q90")]
 
     calib_path = SUMO_DIR / "calibrated.rou.xml"
-    for suffix, key in variants:
-        counts_path = SUMO_DIR / f"counts{suffix}.xml"
-        n = write_counts(flows, sensor_edges, qi_start, n_intervals,
-                         counts_path, split_key=key)
-        print(f"Wrote {counts_path}  ({n} edge×interval measurements)")
-        print(f"Sampling routes to match counts ({key}) …")
-        run_tool("routeSampler.py", [
-            "-r", str(cand_path),
-            "--edgedata-files", str(counts_path),
-            "--edgedata-attribute", "count",
-            "-o", str(SUMO_DIR / f"calibrated{suffix}.rou.xml"),
-            "--seed", str(args.seed),
-        ], home)
+
+    if args.engine == "pfe":
+        # ── The full hierarchy: hard counts + conservation bounds + priors ────
+        import pfe
+        bounds_data = ensure_bounds(args.date, args.begin, args.end)
+        priors_data = ensure_priors(args.date)
+        prior_variant = {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
+
+        for suffix, key in variants:
+            targets = build_targets(flows, sensor_edges, qi_start,
+                                    n_intervals, split_key=key)
+            bounds_pq, priors_pq = [], []
+            for i in range(n_intervals):
+                bq = {}
+                for e, arr in bounds_data["bounds"].items():
+                    if i < len(arr) and arr[i]:
+                        bq[e] = (arr[i][0], arr[i][1])
+                pq = {}
+                slot = (qi_start + i) % 96
+                pkey = prior_variant.get(suffix, "prior")
+                for e, d in priors_data.get("edges", {}).items():
+                    val = d[pkey][slot]
+                    if val is None:
+                        continue
+                    lo = d["prior_low"][slot] or 0.0
+                    hi = d["prior_high"][slot] or val
+                    pq[e] = (float(val), 1.0 / max(1.0, hi - lo))
+                bounds_pq.append(bq)
+                priors_pq.append(pq)
+
+            out = SUMO_DIR / f"calibrated{suffix}.rou.xml"
+            report = pfe.calibrate(cand_path, out, targets,
+                                   bounds_pq, priors_pq)
+            print(f"  PFE {key:<16} {report['vehicles']:>6} veh  "
+                  f"GEH<5: {report['geh_pct']}%  "
+                  f"(infeasible intervals: {report['infeasible_intervals']})")
+            if report["geh_pct"] < 100:
+                print("  ⚠ measured-edge fit below gate — inspect before use")
+    else:
+        for suffix, key in variants:
+            counts_path = SUMO_DIR / f"counts{suffix}.xml"
+            n = write_counts(flows, sensor_edges, qi_start, n_intervals,
+                             counts_path, split_key=key)
+            print(f"Wrote {counts_path}  ({n} edge×interval measurements)")
+            print(f"Sampling routes to match counts ({key}) …")
+            run_tool("routeSampler.py", [
+                "-r", str(cand_path),
+                "--edgedata-files", str(counts_path),
+                "--edgedata-attribute", "count",
+                "-o", str(SUMO_DIR / f"calibrated{suffix}.rou.xml"),
+                "--seed", str(args.seed),
+            ], home)
 
     meta = {
         "date": args.date, "begin": args.begin, "end": args.end,
