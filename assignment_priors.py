@@ -80,6 +80,43 @@ OUT_PATH   = Path("sumo/assignment_priors.json")
 WEIGHT     = 0.15   # << direction/corridor priors' typical 1/band weight — stays weak
 
 
+def build_perturbed_variants(
+    base_time: dict[tuple[int, int], float], n_variants: int, sigma: float, rng,
+) -> list[nx.DiGraph]:
+    """Dial-style stochastic multipath stand-in (see module docstring, bug
+    #2): a single deterministic shortest-path graph puts zero load on most
+    sensor edges, since real route choice spreads over several "good but not
+    literally fastest" alternatives. n_variants independently lognormal-
+    jittered copies of the base travel-time graph let different samples take
+    different plausible routes instead of collapsing onto one canonical
+    path."""
+    edge_keys = list(base_time)
+    variants = []
+    for _ in range(n_variants):
+        noise = rng.lognormal(0, sigma, size=len(edge_keys))
+        DGi = nx.DiGraph()
+        for (u, v), n in zip(edge_keys, noise):
+            DGi.add_edge(u, v, weight=base_time[(u, v)] * n)
+        variants.append(DGi)
+    return variants
+
+
+def robust_scale(x_load: np.ndarray, y_meas: np.ndarray) -> tuple[float, float]:
+    """Calibrate ONE global loading-unit -> veh/day scale factor by the
+    median measured/load ratio (not least-squares — with only 6-7
+    calibration points a single noisy edge can drag a least-squares fit
+    badly; verified LS gave R² -4 to -8 across attempts, dominated by one or
+    two high-leverage points). Returns (scale, R²) — R² is informational
+    only, this is a WEAK prior (weight≈0.15) that needs the right order of
+    magnitude and spatial shape, not a tight per-edge fit."""
+    ratios = y_meas / np.maximum(x_load, 1e-9)
+    scale = float(np.median(ratios))
+    resid = y_meas - scale * x_load
+    fit_r2 = 1 - (resid @ resid) / max(((y_meas - y_meas.mean()) @
+                                        (y_meas - y_meas.mean())), 1e-9)
+    return scale, float(fit_r2)
+
+
 def daily_shape() -> np.ndarray:
     with open("web/data/normal_profile.json") as f:
         profiles = json.load(f)["profiles"]
@@ -123,14 +160,8 @@ def main() -> None:
 
     print(f"Building {args.n_variants} randomly-perturbed travel-time graphs "
           f"(stochastic multipath stand-in) …")
-    variants = []
-    edge_keys = list(base_time)
-    for _ in range(args.n_variants):
-        noise = rng.lognormal(0, args.perturb_sigma, size=len(edge_keys))
-        DGi = nx.DiGraph()
-        for (u, v), n in zip(edge_keys, noise):
-            DGi.add_edge(u, v, weight=base_time[(u, v)] * n)
-        variants.append(DGi)
+    variants = build_perturbed_variants(base_time, args.n_variants,
+                                        args.perturb_sigma, rng)
 
     edges = load_graph_edges(G)
     edge_ids = [e["id"] for e in edges]
@@ -232,19 +263,7 @@ def main() -> None:
         x_load.append(load[eid])
         y_meas.append(daily_mean)
     x_load, y_meas = np.array(x_load), np.array(y_meas)
-    # ROBUST scale: median(measured/load) rather than least-squares. With
-    # only 6-7 calibration points, a single noisy edge (assignment loading
-    # is itself a stochastic estimate) can drag a least-squares fit badly —
-    # verified: LS gave R²=-4 to -8 across attempts, dominated by one or two
-    # high-leverage points, while the median ratio is stable and the
-    # intended use (a WEAK prior, weight≈0.15, everywhere the PFE would
-    # otherwise default to zero) does not need a tight per-edge fit, only
-    # the right order of magnitude and the right spatial SHAPE.
-    ratios = y_meas / np.maximum(x_load, 1e-9)
-    scale = float(np.median(ratios))
-    resid = y_meas - scale * x_load
-    fit_r2 = 1 - (resid @ resid) / max(((y_meas - y_meas.mean()) @
-                                        (y_meas - y_meas.mean())), 1e-9)
+    scale, fit_r2 = robust_scale(x_load, y_meas)
     print(f"Scale factor (robust median ratio) on {len(x_load)} measured "
           f"edges: scale={scale:.3f} veh/day per loading-unit, "
           f"R²={fit_r2:.2f} (informational only — see docstring)")
