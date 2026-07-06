@@ -12,13 +12,33 @@ Endpoints:
                                 Carlo, ~30–90 s) and returns
                                 {"file": "<scenario>.json", "label": ...}.
                                 One simulation at a time (409 while busy).
-  GET /api/recalibrate?date=YYYY-MM-DD — re-runs the whole-day PFE demand
-                                calibration for a NEW date (~5–10 min: PFE
-                                + assignment-prior bounds + a fresh
-                                baseline scenario), discarding old
-                                scenarios/closures since they reflect the
-                                previous date's demand. Returns
-                                {"file": "baseline.json", "date": ...}.
+  GET /api/recalibrate?date=YYYY-MM-DD&source=historical|forecast
+                              — starts the whole-day PFE demand recalibration
+                                for a NEW date/source (~5–14 min) in a
+                                BACKGROUND THREAD and returns immediately
+                                ({"status": "started"}) — see the note below
+                                on why this is async rather than one long
+                                blocking request.
+  GET /api/recalibrate/status — {"status": "idle"|"running"|"done"|"error", ...}.
+                                The frontend polls this instead of holding
+                                one request open for the whole 5–14 min, and
+                                a fresh page load checks it once too, so a
+                                job started from one tab/session is visible
+                                from any other and survives a dropped
+                                connection, laptop sleep, or closed tab.
+
+WHY ASYNC (found from a real failure): a 5–14 min job tied to a single
+blocking HTTP GET is fragile — a browser's own request timeout, a closed
+tab, a sleeping laptop, or a dropped wifi connection all abandon the
+CLIENT side while the SERVER keeps computing regardless (subprocess.run
+doesn't know or care that nobody is listening anymore). That happened
+twice during development: once to the developer (a curl --max-time
+timeout produced a BrokenPipeError when the finished response couldn't be
+delivered to a dead connection) and once to the actual user testing "Byt
+dag" in a real browser tab — the recalibration succeeded server-side
+~10 minutes after they'd already given up and navigated away, silently
+leaving the site calibrated against a date/source they never confirmed
+seeing. Polling decouples the job's lifetime from any one connection's.
 
 The API shells out to the same run_scenario.py used from the command line —
 the server adds no simulation logic of its own, so CLI and UI can never
@@ -32,6 +52,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import urllib.parse
 from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -44,7 +65,9 @@ WEB_DIR  = ROOT / "web"
 SCEN_DIR = WEB_DIR / "data" / "scenarios"
 PORT     = 8000
 
-_sim_lock = threading.Lock()
+_sim_lock   = threading.Lock()     # one simulation (close OR recalibrate) at a time
+_recal_lock = threading.Lock()     # guards _recal_state below
+_recal_state: dict = {"status": "idle"}
 
 
 @lru_cache(maxsize=1)
@@ -75,6 +98,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {"ok": True})
         if self.path.startswith("/api/close"):
             return self._close()
+        if self.path.startswith("/api/recalibrate/status"):
+            return self._recalibrate_status()
         if self.path.startswith("/api/recalibrate"):
             return self._recalibrate()
         return super().do_GET()
@@ -123,6 +148,18 @@ class Handler(SimpleHTTPRequestHandler):
 
         if not _sim_lock.acquire(blocking=False):
             return self._json(409, {"error": "en simulering kör redan — vänta"})
+        # Lock stays held for the WHOLE job — released by the background
+        # thread, not here. The request handler returns immediately; the
+        # job's lifetime is no longer tied to this one HTTP connection.
+        with _recal_lock:
+            _recal_state.clear()
+            _recal_state.update(status="running", date=date, source=source,
+                                started_at=time.time())
+        threading.Thread(target=self._run_recalibrate, args=(date, source),
+                         daemon=True).start()
+        return self._json(202, {"status": "started", "date": date, "source": source})
+
+    def _run_recalibrate(self, date: str, source: str) -> None:
         try:
             res = subprocess.run(
                 [sys.executable, "build_sumo_demand.py",
@@ -132,12 +169,11 @@ class Handler(SimpleHTTPRequestHandler):
             )
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])
-                # sys.exit("short message") in build_sumo_demand.py (e.g. a
-                # date/year mismatch) prints just that one line to stderr —
-                # surface it directly instead of a generic "see the log".
                 last_line = res.stderr.strip().splitlines()[-1] if res.stderr.strip() else ""
                 msg = last_line if len(last_line) < 200 else "omkalibreringen misslyckades — se serverloggen"
-                return self._json(500, {"error": msg})
+                with _recal_lock:
+                    _recal_state.update(status="error", error=msg)
+                return
 
             # Old scenarios/closures reflect the PREVIOUS date's demand —
             # discard them rather than leave stale, silently-wrong entries
@@ -152,16 +188,29 @@ class Handler(SimpleHTTPRequestHandler):
             )
             if res2.returncode != 0:
                 print(res2.stdout[-2000:], res2.stderr[-2000:])
-                return self._json(500, {"error": "ny baslinje kunde inte byggas "
-                                                  "— se serverloggen"})
+                with _recal_lock:
+                    _recal_state.update(status="error",
+                                        error="ny baslinje kunde inte byggas — se serverloggen")
+                return
         except subprocess.TimeoutExpired:
-            return self._json(500, {"error": "omkalibreringen tog för lång tid "
-                                              "— avbruten"})
+            with _recal_lock:
+                _recal_state.update(status="error",
+                                    error="omkalibreringen tog för lång tid — avbruten")
+            return
         finally:
             _sim_lock.release()
 
         known_edges.cache_clear()   # network.geojson is unchanged but be safe
-        return self._json(200, {"file": "baseline.json", "date": date, "source": source})
+        with _recal_lock:
+            _recal_state.update(status="done", file="baseline.json",
+                                date=date, source=source)
+
+    def _recalibrate_status(self) -> None:
+        with _recal_lock:
+            state = dict(_recal_state)
+        if state.get("status") == "running":
+            state["elapsed_s"] = round(time.time() - state["started_at"])
+        return self._json(200, state)
 
 
 def main() -> None:

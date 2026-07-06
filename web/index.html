@@ -652,26 +652,63 @@
           }
         });
 
+        // The recalibration takes 5-14 min — a single held-open fetch for
+        // that long is fragile (browser timeout, closed tab, sleeping
+        // laptop, dropped wifi all abandon the CLIENT while the SERVER
+        // keeps computing regardless). This is what actually happened
+        // during testing: a job outlived the request that started it and
+        // silently finished ~10 min after the tab had given up. Poll a
+        // status endpoint instead, so the job's lifetime is independent of
+        // any one connection, and a fresh page load can discover an
+        // already-running (or already-finished) job rather than assuming
+        // idle.
+        async function applyFinishedRecalibration(data) {
+          currentSimDate = data.date;
+          currentSimSource = data.source;
+          const srcLabel = data.source === 'forecast' ? 'Prognos' : 'Historik';
+          simDayHint.textContent = `${srcLabel}: ${data.date}`;
+          await loadScenIndex(true);
+          scenSelect.value = data.file;
+          await activateScenario(data.file, { fresh: true });
+        }
+
+        async function pollRecalibration() {
+          for (;;) {
+            await new Promise(r => setTimeout(r, 4000));
+            let status;
+            try {
+              status = await (await fetch('/api/recalibrate/status')).json();
+            } catch (e) {
+              continue;   // transient network hiccup — keep polling
+            }
+            if (status.status === 'running') {
+              btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s}s)`;
+              continue;
+            }
+            if (status.status === 'error') {
+              alert('Omkalibreringen misslyckades: ' + status.error);
+            } else if (status.status === 'done') {
+              await applyFinishedRecalibration(status);
+            }
+            return;
+          }
+        }
+
         btnDayRun.addEventListener('click', async () => {
           btnDayRun.disabled = true;
           btnDayCancel.disabled = true;
-          btnDayRun.textContent = 'Kalibrerar om… (~5–10 min)';
+          btnDayRun.textContent = 'Startar…';
           try {
             const res  = await fetch('/api/recalibrate?date=' + dateInput.value
                                      + '&source=' + currentSource);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            currentSimDate = data.date;
-            currentSimSource = data.source;
-            const srcLabel = data.source === 'forecast' ? 'Prognos' : 'Historik';
-            simDayHint.textContent = `${srcLabel}: ${data.date}`;
             dayPickMode = false;
             refreshCloseUI();
-            await loadScenIndex(true);
-            scenSelect.value = data.file;
-            await activateScenario(data.file, { fresh: true });
+            btnDayRun.textContent = 'Kalibrerar om… (0s)';
+            await pollRecalibration();
           } catch (e) {
-            alert('Omkalibreringen misslyckades: ' + e.message);
+            alert('Kunde inte starta omkalibreringen: ' + e.message);
           } finally {
             btnDayRun.disabled = false;
             btnDayCancel.disabled = false;
@@ -680,6 +717,29 @@
         });
 
         simDayHint.textContent = `Historik: ${currentSimDate}`;
+
+        // A job started from THIS tab, another tab, or a session that has
+        // since closed is still visible here — check once on load instead
+        // of assuming idle (this is exactly the gap that caused the site
+        // to silently end up on a forecast date nobody saw finish).
+        (async () => {
+          try {
+            const status = await (await fetch('/api/recalibrate/status')).json();
+            if (status.status === 'running') {
+              dayPickMode = true;
+              refreshCloseUI();
+              btnDayRun.disabled = true;
+              btnDayCancel.disabled = true;
+              btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s}s)`;
+              await pollRecalibration();
+              btnDayRun.disabled = false;
+              btnDayCancel.disabled = false;
+              btnDayRun.textContent = 'Räkna om (~5–10 min)';
+            } else if (status.status === 'done' && status.date !== currentSimDate) {
+              await applyFinishedRecalibration(status);
+            }
+          } catch (e) { /* serve.py not running (static hosting) — ignore */ }
+        })();
 
         if (params.get('mode') === 'scenario') btnScen.click();
         else if (params.get('mode') === 'forecast') btnFore.click();

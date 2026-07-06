@@ -91,6 +91,36 @@ Goal arc, in order:
     second per 1 simulated second) for watching individual vehicles.
     Clock display now shows HH:MM:SS (was HH:MM) using the fractional
     quarter index so seconds visibly tick.
+- PRODUCTION INCIDENT (2026-07-06): Gustav reported "testa i webbläsaren
+  det fungerade inte för mig". pytest doesn't cover frontend JS, so this
+  needed BROWSER testing — set up headless Chrome + Chrome DevTools
+  Protocol over a raw websocket (`pip install websocket-client`; launch
+  with `--remote-debugging-port=9222 --remote-allow-origins=*` — newer
+  Chrome rejects the CDP socket without that second flag) to actually
+  drive the app and capture real console errors/exceptions/network
+  failures, which a plain `--dump-dom` screenshot cannot see. FOUND: the
+  live deployed site was sitting on 2027-09-16 FORECAST, not the
+  documented 2025-09-16 historical default. ROOT CAUSE (via serve.py's
+  own log): a real `/api/recalibrate?date=2027-09-16&source=forecast`
+  call at 06:31:32 that morning — Gustav had tried the new "Byt dag"
+  feature himself. It succeeded server-side, but the OLD design held one
+  HTTP GET blocked for the full 5-14 minutes; a browser tab almost
+  certainly doesn't survive that (timeout, closed tab, sleeping laptop),
+  so he saw nothing happen and moved on — while the site silently
+  finished recalibrating ~10 minutes later with no one watching. This is
+  the SAME class of bug the developer hit earlier the same day (a
+  BrokenPipeError from a client curl timeout on the same endpoint) —
+  found twice before it was actually fixed. FIX: `/api/recalibrate` now
+  starts a background thread and returns 202 immediately;
+  `/api/recalibrate/status` reports running/done/error + elapsed
+  seconds; the frontend polls with live elapsed-time button text AND
+  checks status once on every page load, so a job started from any tab/
+  session (including one whose tab has since closed) is still visible
+  and correctly shows "still calibrating" instead of a misleadingly idle
+  UI. Verified with a real CDP test that reloaded the page mid-job.
+  LESSON: no admin action whose server-side work outlives a reasonable
+  browser request lifetime should ever be tied to a single blocking HTTP
+  call — start + poll, always.
 
 ## The data
 - Source: Göteborgs Stad (Felicia Gauffin Jatta, Stadsbyggnadsförvaltningen). 15-minute two-way vehicle counts ("Antal passager"), all of 2025.
