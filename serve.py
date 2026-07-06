@@ -85,6 +85,20 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/"):
             super().log_message(fmt, *args)
 
+    def end_headers(self):
+        # SimpleHTTPRequestHandler sends NO cache-control header at all —
+        # browsers then apply their own heuristic caching and can silently
+        # keep serving a stale index.html (with old ?v=N script tags, so
+        # even the JS cache-busting never kicks in) across edits. Found via
+        # browser testing: a real fix committed to disk didn't reach the
+        # page because the HTML document itself was served from cache, not
+        # just the scripts it references. no-cache (not no-store) still
+        # lets the server answer with a fast 304 via If-Modified-Since —
+        # this only forces a revalidation round-trip, not a real refetch,
+        # so it costs nothing at this app's scale.
+        self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def _json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload).encode()
         self.send_response(status)

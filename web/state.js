@@ -39,7 +39,12 @@ const State = (() => {
       emit();
     },
 
-    setSpeed(s) { _speed = Math.max(0.25, Number(s)); },
+    // Floor just above zero (never stuck/negative) — NOT 0.25 as before,
+    // which predated real-time playback and silently clamped "Realtid"
+    // (1/900 quarters/sec, true 1:1 real time) up to 0.25 = 225× real-time
+    // speed, defeating the whole feature. Caught via browser testing —
+    // pytest can't see State.speed after a UI click.
+    setSpeed(s) { _speed = Math.max(1 / 900 / 10, Number(s)); },
 
     play()   { _playing = true;  emit(); },
     pause()  { _playing = false; emit(); },
