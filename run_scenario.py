@@ -148,11 +148,26 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
     # minutes → seconds), which is what makes interactive closures possible.
     cmd = [
         str(home / "bin" / "sumo"),
-        # meso junction control DISABLED: it models signal delays we have no
-        # signal plans for, and measurably throttles below the flows reality
-        # carried (107-N delivery 0.57 with, 0.92 without). Re-enable when
-        # the city provides signal timings.
-        *([] if micro else ["--mesosim", "true", "--meso-junction-control", "false"]),
+        # meso junction control: LIMITED mode only, not fully off. Full
+        # control models signal delays from GUESSED (not real) timing plans
+        # and measurably throttles below the flows reality (107-N delivery
+        # 0.57 with plain junction-control, 0.92 without — both re-verified
+        # 2026-07-06, along with --tls.default-type actuated and
+        # --meso-tls-penalty, neither of which changed the result: SUMO's
+        # mesoscopic engine doesn't model actuated programs at all, and the
+        # penalty had no measurable effect either). --meso-junction-control
+        # .limited only engages control at junctions actually approaching
+        # saturation ("this prevents faulty traffic lights from hindering
+        # flow in low-traffic situations" — SUMO docs) — re-measured
+        # delivery identical to fully-off (0.822 mean either way) at today's
+        # demand, so it costs nothing, while still being ready to model a
+        # signal's real capacity limit if a scenario ever pushes a junction
+        # into genuine saturation (e.g. a closure that concentrates flow).
+        # Re-enable plain (unlimited) junction control when the city
+        # provides real signal timings.
+        *([] if micro else ["--mesosim", "true",
+                            "--meso-junction-control", "true",
+                            "--meso-junction-control.limited", "true"]),
         "-n", str(NET_PATH.resolve()),
         "-r", str(route_path.resolve()),
         "-a", ",".join(str(p.resolve()) for p in add_paths),
@@ -187,7 +202,9 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
     vr_file = SUMO_DIR / f"vehroutes_{name}.xml"
     cmd = [
         str(home / "bin" / "sumo"),
-        "--mesosim", "true", "--meso-junction-control", "false",
+        "--mesosim", "true",
+        "--meso-junction-control", "true",
+        "--meso-junction-control.limited", "true",
         "-n", str(NET_PATH.resolve()),
         "-r", str(route_path.resolve()),
         *(("-a", ",".join(str(p.resolve()) for p in closure_add))
