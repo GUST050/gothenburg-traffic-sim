@@ -100,6 +100,12 @@ def main() -> None:
     out = {
         "year": POP_YEAR,
         "source": "SCB BE0101Y/FolkmDesoAldKon via PXWeb API",
+        "inner_city_bbox": list(INNER_CITY_BBOX),   # staleness marker: a later
+                                                     # bbox change must trigger
+                                                     # a refetch, not silently
+                                                     # reuse zones scoped to
+                                                     # the old canvas — see
+                                                     # build_candidates.ensure_deso()
         "n_zones_with_data": len(pop),
         "n_zones_missing": len(missing),
         "missing_codes": missing,

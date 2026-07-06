@@ -27,7 +27,6 @@ import pickle
 from pathlib import Path
 
 import numpy as np
-import osmnx as ox
 import pandas as pd
 
 from build_data import find_antiparallel_edge

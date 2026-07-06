@@ -173,7 +173,20 @@ class Handler(SimpleHTTPRequestHandler):
                          daemon=True).start()
         return self._json(202, {"status": "started", "date": date, "source": source})
 
+    @staticmethod
+    def _set_recal(**kw) -> None:
+        with _recal_lock:
+            _recal_state.update(**kw)
+
     def _run_recalibrate(self, date: str, source: str) -> None:
+        # NOTE: every exit path calls _set_recal BEFORE the finally block
+        # releases _sim_lock. Doing it the other way around (release, then
+        # update state) leaves a race window where a second recalibration
+        # can acquire the freed lock and start (status="running") before
+        # this thread's trailing "done"/"error" write lands — which would
+        # then stomp the SECOND job's running state with the FIRST job's
+        # result. Found in review, not by a failing test — the window is a
+        # handful of bytecode instructions wide, easy to miss.
         try:
             res = subprocess.run(
                 [sys.executable, "build_sumo_demand.py",
@@ -185,8 +198,7 @@ class Handler(SimpleHTTPRequestHandler):
                 print(res.stdout[-2000:], res.stderr[-2000:])
                 last_line = res.stderr.strip().splitlines()[-1] if res.stderr.strip() else ""
                 msg = last_line if len(last_line) < 200 else "omkalibreringen misslyckades — se serverloggen"
-                with _recal_lock:
-                    _recal_state.update(status="error", error=msg)
+                self._set_recal(status="error", error=msg)
                 return
 
             # Old scenarios/closures reflect the PREVIOUS date's demand —
@@ -202,22 +214,18 @@ class Handler(SimpleHTTPRequestHandler):
             )
             if res2.returncode != 0:
                 print(res2.stdout[-2000:], res2.stderr[-2000:])
-                with _recal_lock:
-                    _recal_state.update(status="error",
-                                        error="ny baslinje kunde inte byggas — se serverloggen")
+                self._set_recal(status="error",
+                                error="ny baslinje kunde inte byggas — se serverloggen")
                 return
+
+            known_edges.cache_clear()   # network.geojson is unchanged but be safe
+            self._set_recal(status="done", file="baseline.json",
+                            date=date, source=source)
         except subprocess.TimeoutExpired:
-            with _recal_lock:
-                _recal_state.update(status="error",
-                                    error="omkalibreringen tog för lång tid — avbruten")
-            return
+            self._set_recal(status="error",
+                            error="omkalibreringen tog för lång tid — avbruten")
         finally:
             _sim_lock.release()
-
-        known_edges.cache_clear()   # network.geojson is unchanged but be safe
-        with _recal_lock:
-            _recal_state.update(status="done", file="baseline.json",
-                                date=date, source=source)
 
     def _recalibrate_status(self) -> None:
         with _recal_lock:

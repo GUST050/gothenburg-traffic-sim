@@ -5,13 +5,19 @@
 # station to SENSOR_MEASURED_DIRECTION in build_data.py, then `make refresh`.
 # Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
-.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario
+.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso
 
 all: data features agent1 forecast test
 
 # Full re-run after new data: rebuild everything from raw CSVs to scenarios.
+# (fetch_deso.py is NOT listed here — build_candidates.py auto-fetches it on
+# first use if data_in/deso/ is missing; `make deso` below is for an explicit
+# manual re-run, e.g. after the inner-city bbox changes.)
 refresh: data features agent1 forecast dirsplit-coverage sumo-net demand scenario test
 	@echo "Refresh klar — starta med: make serve"
+
+deso:
+	python3 fetch_deso.py
 
 # ── Phase 3: SUMO ──────────────────────────────────────────────────────────
 # make sumo-net && make demand && make scenario
@@ -36,7 +42,7 @@ demand-morning:
 
 scenario:
 	python3 run_scenario.py
-	python3 run_scenario.py --close 60786979_3575001205_0
+	python3 run_scenario.py --close 60786979_3575001205_0 1455801464_18241874_0
 
 # ── Direction-split model (dirsplit/) ─────────────────────────────────────
 # Full fetch takes hours (394 stations, throttled APIs) — run overnight.

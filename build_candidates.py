@@ -83,6 +83,7 @@ import numpy as np
 import osmnx as ox
 from shapely.geometry import Point, shape
 
+from build_data import INNER_CITY_BBOX
 from build_sumo_net import sumo_home
 
 SUMO_DIR   = Path("sumo")
@@ -133,12 +134,44 @@ def load_graph_edges(G):
     return edges
 
 
+def ensure_deso() -> tuple[list[dict], dict[str, int]]:
+    """fetch_deso.py's outputs are a prerequisite for home_mass() — auto-fetch
+    if missing (data_in/deso/ accidentally cleaned), same ensure_* staleness-
+    check pattern as ensure_bounds()/ensure_observability() in
+    build_sumo_demand.py. Staleness here specifically means the fetched
+    population no longer matches INNER_CITY_BBOX: fetch_deso.py only queries
+    DeSO codes that intersect the bbox AT FETCH TIME, so a later bbox change
+    (already happened once, 2026-07-05) would otherwise silently leave the
+    newly-in-scope zones with zero home mass forever, with existing files
+    on disk masking the mismatch. Returns the loaded (zones, population)
+    so callers never re-touch these files themselves."""
+    geo_path, pop_path = DESO_DIR / "deso_goteborg.geojson", DESO_DIR / "population_2023.json"
+    if geo_path.exists() and pop_path.exists():
+        with open(pop_path) as f:
+            pop_doc = json.load(f)
+        if pop_doc.get("inner_city_bbox") == list(INNER_CITY_BBOX):
+            with open(geo_path) as f:
+                return json.load(f)["features"], pop_doc["population"]
+        print("data_in/deso/ was fetched for a different INNER_CITY_BBOX — refetching …")
+    else:
+        print("Fetching SCB DeSO population (fetch_deso.py) — first run only …")
+    try:
+        res = subprocess.run([sys.executable, "fetch_deso.py"],
+                             capture_output=True, text=True, timeout=420)
+    except subprocess.TimeoutExpired:
+        sys.exit("fetch_deso.py timed out after 420s (SCB API slow/unreachable?) — see above")
+    if res.returncode != 0:
+        print(res.stderr[-1500:])
+        sys.exit("fetch_deso.py failed — see above")
+    with open(geo_path) as f:
+        zones = json.load(f)["features"]
+    return zones, load_deso_population()
+
+
 def home_mass(edges: list[dict]) -> np.ndarray:
     """Real 2023 SCB population per DeSO, spread over each zone's
     residential-street length — a headcount, not a density guess."""
-    with open(DESO_DIR / "deso_goteborg.geojson") as f:
-        zones = json.load(f)["features"]
-    pop = load_deso_population()
+    zones, pop = ensure_deso()
 
     mass = np.zeros(len(edges))
     res_len_by_zone: dict[str, float] = {}

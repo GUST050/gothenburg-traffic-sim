@@ -17310,7 +17310,7 @@
     <edge source="147385" target="1314228867" id="0">
       <data key="d10">[116614212, 116614205]</data>
       <data key="d11">motorway</data>
-      <data key="d12">['5', '4']</data>
+      <data key="d12">['4', '5']</data>
       <data key="d13">70</data>
       <data key="d14">True</data>
       <data key="d18">E 6</data>
@@ -17365,7 +17365,7 @@
     <edge source="147406" target="147398" id="0">
       <data key="d10">[286430792, 1022912233, 1022912234, 1022912235, 1022912236, 1258722959, 1022912250]</data>
       <data key="d11">motorway</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">70</data>
       <data key="d14">True</data>
       <data key="d18">E 6;E 20</data>
@@ -17376,7 +17376,7 @@
     <edge source="147407" target="60911657" id="0">
       <data key="d10">[285893670, 1023578345, 1023578346, 11028014, 182725136]</data>
       <data key="d11">motorway_link</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">['50', '70']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -18177,7 +18177,7 @@
       <data key="d10">[806863882, 1023578491, 1023578490, 4550262]</data>
       <data key="d11">motorway_link</data>
       <data key="d12">['2', '1']</data>
-      <data key="d13">['80', '50']</data>
+      <data key="d13">['50', '80']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">288.5275051455643</data>
@@ -18219,7 +18219,7 @@
     <edge source="520175" target="520172" id="0">
       <data key="d10">[40814690, 1355289734, 1355289735, 989735080, 785337126, 1023578484, 1023578485]</data>
       <data key="d11">motorway</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">70</data>
       <data key="d14">True</data>
       <data key="d18">E 6;E 20</data>
@@ -18252,7 +18252,7 @@
     <edge source="520180" target="520177" id="0">
       <data key="d10">[1023578528, 164689857, 1023578529, 989735084, 806863924]</data>
       <data key="d11">motorway</data>
-      <data key="d12">['5', '4']</data>
+      <data key="d12">['4', '5']</data>
       <data key="d13">70</data>
       <data key="d14">True</data>
       <data key="d18">E 6;E 20</data>
@@ -18263,7 +18263,7 @@
     <edge source="7373665" target="1338661498" id="0">
       <data key="d10">[1023578474, 286430804, 286430807]</data>
       <data key="d11">motorway_link</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -18293,7 +18293,7 @@
     <edge source="7373669" target="60890012" id="0">
       <data key="d10">[566213441, 1302674529, 1364200871, 1023578444, 186108596, 186108597, 300184724]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '4', '3']</data>
+      <data key="d12">['4', '3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Ullevigatan</data>
       <data key="d14">True</data>
@@ -18331,7 +18331,7 @@
       <data key="d15">False</data>
       <data key="d16">187.68136900317813</data>
       <data key="d20">yes</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d17">LINESTRING (11.9739521 57.707281, 11.9740841 57.7072835, 11.9745914 57.7072904, 11.9750233 57.7072911, 11.9750758 57.7072912, 11.9751379 57.7072913, 11.975265 57.7072915, 11.9763172 57.7072932, 11.9771111 57.7072873)</data>
     </edge>
     <edge source="7373673" target="1021143641" id="0">
@@ -18459,7 +18459,7 @@
       <data key="d10">[8119269, 1368308439, 45360851, 1197785207, 132318908]</data>
       <data key="d11">unclassified</data>
       <data key="d13">50</data>
-      <data key="d21">['Gårdavägen', 'Levgrensvägen']</data>
+      <data key="d21">['Levgrensvägen', 'Gårdavägen']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">278.02776733687466</data>
@@ -18567,7 +18567,7 @@
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Fiskhamnsmotet', 'Djurgårdsgatan']</data>
+      <data key="d21">['Djurgårdsgatan', 'Fiskhamnsmotet']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">58.163822720032634</data>
@@ -19316,7 +19316,7 @@
       <data key="d10">[4731267, 4731302]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Parmmätaregatan', 'Väderkvarnsgatan']</data>
+      <data key="d21">['Väderkvarnsgatan', 'Parmmätaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">140.77159731473355</data>
@@ -19345,7 +19345,7 @@
       <data key="d10">[4731267, 4731302]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Parmmätaregatan', 'Väderkvarnsgatan']</data>
+      <data key="d21">['Väderkvarnsgatan', 'Parmmätaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">140.77159731473355</data>
@@ -19547,7 +19547,7 @@
       <data key="d10">[834013768, 1125225235, 4040452, 4040453]</data>
       <data key="d11">motorway_link</data>
       <data key="d12">1</data>
-      <data key="d13">['70', '60']</data>
+      <data key="d13">['60', '70']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">213.85602297460565</data>
@@ -19668,7 +19668,7 @@
     <edge source="25587532" target="1375971945" id="0">
       <data key="d10">[997282420, 997282421]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Ullevigatan</data>
       <data key="d14">True</data>
@@ -19759,8 +19759,8 @@
     </edge>
     <edge source="25599366" target="135705006" id="0">
       <data key="d10">[1364747782, 29103273, 29105911, 1133758262, 29108087, 168286106, 168286107, 1131598813]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d21">['Kungsportsbron', 'Kungsportsavenyen', 'Basargatan']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d21">['Kungsportsavenyen', 'Kungsportsbron', 'Basargatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">254.67062829076144</data>
@@ -19964,7 +19964,7 @@
       <data key="d10">[309560937, 1243065683, 166913363, 1243065684, 1022934301, 1022934302]</data>
       <data key="d11">primary</data>
       <data key="d12">2</data>
-      <data key="d13">['70', '60']</data>
+      <data key="d13">['60', '70']</data>
       <data key="d21">Dag Hammarskjöldsleden</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -20007,7 +20007,7 @@
     <edge source="25658728" target="321376250" id="0">
       <data key="d10">[1355290884, 620132342, 28661415]</data>
       <data key="d11">primary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Dag Hammarskjöldsleden</data>
       <data key="d14">True</data>
@@ -20117,8 +20117,8 @@
     </edge>
     <edge source="25688160" target="25688833" id="0">
       <data key="d10">[118470600, 28540460, 28393810, 1149832914, 4303190, 166913403, 28540316, 28540319]</data>
-      <data key="d11">['primary_link', 'secondary']</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d11">['secondary', 'primary_link']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">['50', '70']</data>
       <data key="d21">Högsboleden</data>
       <data key="d14">True</data>
@@ -20408,9 +20408,9 @@
     </edge>
     <edge source="25706065" target="25706069" id="0">
       <data key="d10">[4273242, 123569253]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
-      <data key="d21">['Norra Hamngatan', 'Packhusplatsen']</data>
+      <data key="d21">['Packhusplatsen', 'Norra Hamngatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">218.0302476985945</data>
@@ -20447,8 +20447,8 @@
     </edge>
     <edge source="25706069" target="25706065" id="0">
       <data key="d10">[4273242, 123569253]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d21">['Norra Hamngatan', 'Packhusplatsen']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d21">['Packhusplatsen', 'Norra Hamngatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">218.03024769859454</data>
@@ -20560,7 +20560,7 @@
       <data key="d11">secondary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Nya Allén', 'Norra Allégatan']</data>
+      <data key="d21">['Norra Allégatan', 'Nya Allén']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">438.3850842084272</data>
@@ -20568,7 +20568,7 @@
     </edge>
     <edge source="25708788" target="1500574973" id="0">
       <data key="d10">[1216125162, 4770500, 1216125508, 4770181]</data>
-      <data key="d11">['residential', 'unclassified', 'tertiary']</data>
+      <data key="d11">['tertiary', 'unclassified', 'residential']</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
       <data key="d21">['Magasinsgatan', 'Viktoriagatan', 'Viktoriabron']</data>
@@ -21099,7 +21099,7 @@
       <data key="d10">[4773384, 1364685346, 338954405]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Kungsgatan', 'Surbrunnsgatan']</data>
+      <data key="d21">['Surbrunnsgatan', 'Kungsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">78.88461215413423</data>
@@ -21178,9 +21178,9 @@
     </edge>
     <edge source="25734033" target="25735061" id="0">
       <data key="d10">[29190393, 1365685556, 4276189, 1122584191]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
-      <data key="d21">['Vasagatan', 'Teatergatan']</data>
+      <data key="d21">['Teatergatan', 'Vasagatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">190.31514030895966</data>
@@ -21313,7 +21313,7 @@
     <edge source="25734041" target="3473721571" id="0">
       <data key="d10">[491954483, 491966843, 300980558]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Engelbrektsgatan</data>
       <data key="d14">False</data>
@@ -21562,9 +21562,9 @@
     </edge>
     <edge source="25735062" target="25734036" id="0">
       <data key="d10">[1368773144, 28764731, 29122796, 1368773143]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
-      <data key="d21">['Vasagatan', 'Teatergatan']</data>
+      <data key="d21">['Teatergatan', 'Vasagatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">191.37297109951476</data>
@@ -21861,7 +21861,7 @@
     <edge source="26022231" target="25658722" id="0">
       <data key="d10">[1355350497, 1022934313, 1022934314, 295475343, 1022934321, 1022934322, 166913362]</data>
       <data key="d11">primary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">70</data>
       <data key="d21">Dag Hammarskjöldsleden</data>
       <data key="d14">True</data>
@@ -21923,7 +21923,7 @@
     <edge source="26024466" target="26024500" id="0">
       <data key="d10">[1023039464, 1023039465, 993287795, 4350177]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Wieselgrensplatsen</data>
       <data key="d14">True</data>
@@ -22139,7 +22139,7 @@
     </edge>
     <edge source="26038988" target="26193170" id="0">
       <data key="d10">[1046584449, 1046584450, 224283395, 28873156]</data>
-      <data key="d11">['secondary', 'tertiary']</data>
+      <data key="d11">['tertiary', 'secondary']</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
       <data key="d21">Guldhedsgatan</data>
@@ -22151,8 +22151,8 @@
     <edge source="26193170" target="309917366" id="0">
       <data key="d10">[642954304, 642954305, 1355351276, 166881459, 28552057]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d12">['3', '2']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Per Dubbsgatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -22348,7 +22348,7 @@
       <data key="d10">[842377048, 15800916]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Danska Vägen', 'Odinslundsgatan']</data>
+      <data key="d21">['Odinslundsgatan', 'Danska Vägen']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">320.8305572483647</data>
@@ -22452,7 +22452,7 @@
     <edge source="26194219" target="26193259" id="0">
       <data key="d10">[286430819, 4317101, 1023578545, 1023578547, 1023578548, 1369881432]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '4', '3']</data>
+      <data key="d12">['4', '3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Örgrytevägen</data>
       <data key="d14">True</data>
@@ -23303,7 +23303,7 @@
     </edge>
     <edge source="28393084" target="135460337" id="0">
       <data key="d10">[838829098, 838829099, 14175349]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
       <data key="d21">Kallebäcks källväg</data>
       <data key="d14">False</data>
@@ -24423,7 +24423,7 @@
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Fjällgatan', 'Jungmansgatan']</data>
+      <data key="d21">['Jungmansgatan', 'Fjällgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">304.5036915940661</data>
@@ -25130,7 +25130,7 @@
       <data key="d10">[4731301, 4733494]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Vågmästaregatan', 'Virvelvindsgatan']</data>
+      <data key="d21">['Virvelvindsgatan', 'Vågmästaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">418.37968675847327</data>
@@ -25249,8 +25249,8 @@
     </edge>
     <edge source="30153745" target="290228076" id="0">
       <data key="d10">[26481800, 1091316235]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d21">['Villa Parkudden', 'Rambergsvägen']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d21">['Rambergsvägen', 'Villa Parkudden']</data>
       <data key="d22">['6', '3']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
@@ -25828,7 +25828,7 @@
       <data key="d10">[4731301, 4733494]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Vågmästaregatan', 'Virvelvindsgatan']</data>
+      <data key="d21">['Virvelvindsgatan', 'Vågmästaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">418.3796867584733</data>
@@ -26189,7 +26189,7 @@
     <edge source="30179872" target="1039327880" id="0">
       <data key="d10">[300994856, 48425041]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '4']</data>
+      <data key="d12">['4', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
@@ -26200,7 +26200,7 @@
     <edge source="30180063" target="9176641555" id="0">
       <data key="d10">[993287820, 4303532]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
@@ -26587,7 +26587,7 @@
     <edge source="30420895" target="10248537886" id="0">
       <data key="d10">[1136293168, 231094765, 941932790]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '4']</data>
+      <data key="d12">['4', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Berzeliigatan</data>
       <data key="d14">False</data>
@@ -26640,7 +26640,7 @@
     <edge source="30420899" target="366911" id="0">
       <data key="d10">[554968120, 941932804]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Engelbrektsgatan</data>
       <data key="d14">False</data>
@@ -26698,7 +26698,7 @@
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">188.5850605840471</data>
-      <data key="d22">['3.3', '4.5']</data>
+      <data key="d22">['4.5', '3.3']</data>
       <data key="d17">LINESTRING (11.9863765 57.6983109, 11.9864413 57.6980704, 11.9864912 57.6978775, 11.9865133 57.6977018, 11.9865254 57.6976099, 11.986533 57.6975756, 11.9865627 57.6974622, 11.9866071 57.6973011, 11.9866225 57.697245, 11.9866362 57.697162, 11.9866352 57.6971288, 11.9866263 57.6970961, 11.986593 57.6970607, 11.9865506 57.6970344, 11.9865163 57.6970196, 11.9863814 57.6969802, 11.9860845 57.696896, 11.9860251 57.6968801, 11.9859926 57.6968607, 11.9859829 57.6968432, 11.9859855 57.6968108)</data>
     </edge>
     <edge source="30440868" target="2865625520" id="0">
@@ -27222,7 +27222,7 @@
       <data key="d10">[269132329, 4767555]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Frigångsgatan', 'Kaponjärgatan']</data>
+      <data key="d21">['Kaponjärgatan', 'Frigångsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">304.44795893237034</data>
@@ -28335,7 +28335,7 @@
       <data key="d10">[1421497732, 1144349574, 1297682889, 4770769, 4770868]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Västergatan', 'Föreningsgatan']</data>
+      <data key="d21">['Föreningsgatan', 'Västergatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">243.56620225318756</data>
@@ -28500,7 +28500,7 @@
     </edge>
     <edge source="30486087" target="3445583249" id="0">
       <data key="d10">[991784161, 377547895]</data>
-      <data key="d11">['secondary_link', 'unclassified']</data>
+      <data key="d11">['unclassified', 'secondary_link']</data>
       <data key="d12">['2', '1']</data>
       <data key="d13">50</data>
       <data key="d21">Frihamnsmotet</data>
@@ -28512,7 +28512,7 @@
     <edge source="30486087" target="377889" id="0">
       <data key="d10">[991784168, 991784169, 165809810, 1022919164, 1022919165]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
@@ -28953,7 +28953,7 @@
     <edge source="30491840" target="30491859" id="0">
       <data key="d10">[176492608, 1126580860, 370773796, 264205981, 1148779148, 995019504, 995019505, 165831514, 1126580859, 32720092, 1292623197]</data>
       <data key="d11">motorway</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">70</data>
       <data key="d21">Lundbyleden</data>
       <data key="d14">True</data>
@@ -29056,7 +29056,7 @@
       <data key="d11">residential</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Bangatan', 'Hålekärrsgatan']</data>
+      <data key="d21">['Hålekärrsgatan', 'Bangatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">111.83869232662877</data>
@@ -29078,7 +29078,7 @@
       <data key="d11">residential</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Bangatan', 'Hålekärrsgatan']</data>
+      <data key="d21">['Hålekärrsgatan', 'Bangatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">111.83869232662877</data>
@@ -29163,7 +29163,7 @@
       <data key="d11">residential</data>
       <data key="d12">3</data>
       <data key="d13">50</data>
-      <data key="d21">['Landsvägsgatan', 'Prinsgatan']</data>
+      <data key="d21">['Prinsgatan', 'Landsvägsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">13.983762550265494</data>
@@ -29477,7 +29477,7 @@
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">134.26487932649906</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d17">LINESTRING (11.950215 57.6926303, 11.9503342 57.6926308, 11.9504224 57.6926318, 11.950711 57.6926303, 11.9515224 57.6926262, 11.9516523 57.6926255, 11.9517432 57.692625, 11.9519153 57.6926241, 11.9521969 57.6926227, 11.9522882 57.6926222, 11.9523784 57.6926218, 11.9524741 57.6926208)</data>
     </edge>
     <edge source="31098724" target="31098738" id="0">
@@ -29780,7 +29780,7 @@
     <edge source="31304346" target="3419402597" id="0">
       <data key="d10">[334826272, 334826274, 1023942960, 1362555670, 1362555671, 334826271]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Danska Vägen</data>
       <data key="d14">True</data>
@@ -30287,7 +30287,7 @@
       <data key="d10">[9862369, 372302166]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Carl Grimbergsgatan', 'Spekebergsgatan']</data>
+      <data key="d21">['Spekebergsgatan', 'Carl Grimbergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">156.59248824024294</data>
@@ -30324,7 +30324,7 @@
     </edge>
     <edge source="33411351" target="2481971672" id="0">
       <data key="d10">[234592612, 165238886]</data>
-      <data key="d11">['unclassified', 'tertiary']</data>
+      <data key="d11">['tertiary', 'unclassified']</data>
       <data key="d21">Södra Allégatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -31118,7 +31118,7 @@
     <edge source="34944347" target="34944358" id="0">
       <data key="d10">[223805256, 1273822430, 1273822431]</data>
       <data key="d11">tertiary</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Djurgårdsgatan</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -31159,7 +31159,7 @@
     <edge source="34944358" target="34944347" id="0">
       <data key="d10">[223805256, 1273822430, 1273822431]</data>
       <data key="d11">tertiary</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Djurgårdsgatan</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -31284,7 +31284,7 @@
       <data key="d11">residential</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Karl Johansgatan', 'Kommendörsgatan', 'Skeppsgossegatan']</data>
+      <data key="d21">['Kommendörsgatan', 'Skeppsgossegatan', 'Karl Johansgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">207.62469157535077</data>
@@ -31304,7 +31304,7 @@
       <data key="d10">[223805250, 297719476]</data>
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Djurgårdsgatan</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -31412,7 +31412,7 @@
     <edge source="34944449" target="34944405" id="0">
       <data key="d10">[223805250, 297719476]</data>
       <data key="d11">tertiary</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Djurgårdsgatan</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -31934,7 +31934,7 @@
       <data key="d10">[300338350, 5554993, 1368677945, 1105343486, 1105343487]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Såggatan', 'Skeppsgossegatan']</data>
+      <data key="d21">['Skeppsgossegatan', 'Såggatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">228.40341739308283</data>
@@ -32046,7 +32046,7 @@
       <data key="d10">[552423488, 5555401, 5555323]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Amiralitetsgatan', 'Galateagatan', 'Mariebergsgatan']</data>
+      <data key="d21">['Amiralitetsgatan', 'Mariebergsgatan', 'Galateagatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">185.51693784737725</data>
@@ -32220,7 +32220,7 @@
       <data key="d10">[552423488, 5555401, 5555323]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Amiralitetsgatan', 'Galateagatan', 'Mariebergsgatan']</data>
+      <data key="d21">['Amiralitetsgatan', 'Mariebergsgatan', 'Galateagatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">185.51693784737722</data>
@@ -32836,7 +32836,7 @@
     <edge source="60128114" target="1305379788" id="0">
       <data key="d10">[1195939382, 608458247]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Parkgatan</data>
       <data key="d14">True</data>
@@ -33483,7 +33483,7 @@
     <edge source="60682990" target="13312124403" id="0">
       <data key="d10">[995019496, 18463526, 81961167]</data>
       <data key="d11">unclassified</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Cronackersgatan</data>
       <data key="d14">False</data>
@@ -33686,7 +33686,7 @@
     <edge source="60789862" target="10248537886" id="0">
       <data key="d10">[218923280, 231094765, 4392911]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '4']</data>
+      <data key="d12">['4', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Berzeliigatan</data>
       <data key="d14">False</data>
@@ -33719,7 +33719,7 @@
     <edge source="60790252" target="1751665080" id="0">
       <data key="d10">[8119297, 1248037609]</data>
       <data key="d11">unclassified</data>
-      <data key="d21">['Valhallagatan', 'Sven Rydells Gata']</data>
+      <data key="d21">['Sven Rydells Gata', 'Valhallagatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">184.314032465883</data>
@@ -33846,7 +33846,7 @@
     <edge source="60890006" target="3579707437" id="0">
       <data key="d10">[8117056, 1432101179, 318199333, 1292395255]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Polhemsplatsen</data>
       <data key="d14">True</data>
@@ -33870,7 +33870,7 @@
       <data key="d11">secondary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Parkgatan', 'Polhemsplatsen', 'Östra Stampbron']</data>
+      <data key="d21">['Östra Stampbron', 'Polhemsplatsen', 'Parkgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">41.748892160336055</data>
@@ -33930,7 +33930,7 @@
     <edge source="60891316" target="60893001" id="0">
       <data key="d10">[48310128, 552991727]</data>
       <data key="d11">['residential', 'living_street']</data>
-      <data key="d13">['walk', '40']</data>
+      <data key="d13">['40', 'walk']</data>
       <data key="d21">Burggrevegatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -34242,7 +34242,7 @@
       <data key="d10">[8117772, 8118070]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Norra Ågatan', 'Garverigatan']</data>
+      <data key="d21">['Garverigatan', 'Norra Ågatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">121.17695713338281</data>
@@ -34997,10 +34997,10 @@
     </edge>
     <edge source="60911677" target="6883685425" id="0">
       <data key="d10">[151654833, 999330185]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
-      <data key="d21">['J Sigfrid Edströms Gata', 'Johan Willins Gata']</data>
+      <data key="d21">['Johan Willins Gata', 'J Sigfrid Edströms Gata']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">324.29085856076097</data>
@@ -35009,7 +35009,7 @@
     <edge source="60911678" target="2487024336" id="0">
       <data key="d10">[123203588, 999719621, 999719620, 331667690, 123203580, 50824185, 1023578459, 1023578460]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Ullevigatan</data>
       <data key="d14">True</data>
@@ -35583,7 +35583,7 @@
       <data key="d10">[38534406, 25032199]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Pärlstickaregatan', 'Liedstrandsgatan']</data>
+      <data key="d21">['Liedstrandsgatan', 'Pärlstickaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">142.58962992145229</data>
@@ -35828,8 +35828,8 @@
     <edge source="71611137" target="71611538" id="0">
       <data key="d10">[25677032, 9404193]</data>
       <data key="d11">residential</data>
-      <data key="d13">['30', '50']</data>
-      <data key="d21">['Dalhemsgatan', 'Soltorpsgatan']</data>
+      <data key="d13">['50', '30']</data>
+      <data key="d21">['Soltorpsgatan', 'Dalhemsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">269.7265585097963</data>
@@ -35995,8 +35995,8 @@
     <edge source="71611538" target="71611137" id="0">
       <data key="d10">[25677032, 9404193]</data>
       <data key="d11">residential</data>
-      <data key="d13">['30', '50']</data>
-      <data key="d21">['Dalhemsgatan', 'Soltorpsgatan']</data>
+      <data key="d13">['50', '30']</data>
+      <data key="d21">['Soltorpsgatan', 'Dalhemsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">269.72655850979623</data>
@@ -36013,8 +36013,8 @@
     </edge>
     <edge source="71611568" target="133222320" id="0">
       <data key="d10">[14034456, 9404197]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">['Soltorpsgatan', 'Åbäcksgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -36078,7 +36078,7 @@
       <data key="d10">[1131417443, 1094274573, 1062875797, 1062875798, 4273719, 145067901, 145067966]</data>
       <data key="d11">secondary</data>
       <data key="d12">2</data>
-      <data key="d13">['70', '60']</data>
+      <data key="d13">['60', '70']</data>
       <data key="d21">['Göteborgsvägen', 'Mölndalsvägen']</data>
       <data key="d14">True</data>
       <data key="d18">O 514</data>
@@ -36111,7 +36111,7 @@
     <edge source="71611807" target="9945755724" id="0">
       <data key="d10">[712642941, 1365539637, 712642942, 145067887]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">['50', '60']</data>
       <data key="d21">Göteborgsvägen</data>
       <data key="d14">True</data>
@@ -36144,7 +36144,7 @@
     <edge source="71611847" target="71611881" id="0">
       <data key="d10">[58819264, 712639863, 712636271]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">['50', '60']</data>
       <data key="d21">Mölndalsvägen</data>
       <data key="d14">True</data>
@@ -36175,12 +36175,12 @@
     <edge source="71611881" target="71611807" id="0">
       <data key="d10">[1131417444, 9404207, 1196118040, 145067894, 712639864, 145067961, 1196118041, 712641567]</data>
       <data key="d11">secondary</data>
-      <data key="d13">['50', '70', '60']</data>
-      <data key="d21">['Mölndalsvägen', 'Göteborgsvägen']</data>
+      <data key="d13">['50', '60', '70']</data>
+      <data key="d21">['Göteborgsvägen', 'Mölndalsvägen']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">454.5021667033734</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d18">O 514</data>
       <data key="d17">LINESTRING (12.0026539 57.6799963, 12.0027506 57.6798527, 12.0031174 57.6793228, 12.0033433 57.6790064, 12.003462 57.678851, 12.0036431 57.6786352, 12.0038579 57.6784097, 12.0039725 57.6782894, 12.0040427 57.6782325, 12.0042869 57.6780144, 12.0043626 57.6779532, 12.0043944 57.677926, 12.0045928 57.6777828, 12.0045989 57.6777777, 12.0046656 57.6777272, 12.0048222 57.6776087, 12.0053507 57.6772089, 12.0057739 57.6769279, 12.0061553 57.6766731, 12.0064196 57.6764755)</data>
     </edge>
@@ -36209,7 +36209,7 @@
     <edge source="71611900" target="7545353622" id="0">
       <data key="d10">[1023578563, 1023578564, 1361108070, 308294791, 308294794, 308294798]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '4', '3']</data>
+      <data key="d12">['4', '3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Mölndalsvägen</data>
       <data key="d14">True</data>
@@ -36230,7 +36230,7 @@
     <edge source="71612237" target="71611900" id="0">
       <data key="d10">[308294792, 1142125063]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Mölndalsvägen</data>
       <data key="d14">True</data>
@@ -36444,7 +36444,7 @@
       <data key="d11">residential</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Västergatan', 'Föreningsgatan']</data>
+      <data key="d21">['Föreningsgatan', 'Västergatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">243.56620225318753</data>
@@ -36474,7 +36474,7 @@
       <data key="d10">[33754872, 1313908390, 1135684238, 1313908391]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Carl Grimbergsgatan', 'Spekebergsgatan']</data>
+      <data key="d21">['Spekebergsgatan', 'Carl Grimbergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">112.68822899628776</data>
@@ -36494,7 +36494,7 @@
       <data key="d10">[9862369, 372302166]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Carl Grimbergsgatan', 'Spekebergsgatan']</data>
+      <data key="d21">['Spekebergsgatan', 'Carl Grimbergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">156.59248824024291</data>
@@ -36676,7 +36676,7 @@
       <data key="d11">residential</data>
       <data key="d12">3</data>
       <data key="d13">50</data>
-      <data key="d21">['Landsvägsgatan', 'Prinsgatan']</data>
+      <data key="d21">['Prinsgatan', 'Landsvägsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">13.983762550265494</data>
@@ -37726,7 +37726,7 @@
       <data key="d10">[288161868, 122780829, 1455313223]</data>
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
-      <data key="d13">['40', '50']</data>
+      <data key="d13">['50', '40']</data>
       <data key="d21">['Soltorpsgatan', 'Mäster Bengtsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -37950,7 +37950,7 @@
     <edge source="91615275" target="8710974792" id="0">
       <data key="d10">[940587011, 164334055]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Aschebergsgatan</data>
       <data key="d14">True</data>
@@ -38657,7 +38657,7 @@
     <edge source="94155745" target="25710729" id="0">
       <data key="d10">[41292673, 187010490, 24965009]</data>
       <data key="d11">unclassified</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Skårs led</data>
       <data key="d14">False</data>
@@ -38792,9 +38792,9 @@
     </edge>
     <edge source="94609729" target="94609738" id="0">
       <data key="d10">[10682355, 229946052]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d13">['30', '50']</data>
-      <data key="d21">['Engdahlsgatan', 'Sven Hultins Plats']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d13">['50', '30']</data>
+      <data key="d21">['Sven Hultins Plats', 'Engdahlsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">199.67492283652405</data>
@@ -38821,9 +38821,9 @@
     </edge>
     <edge source="94609738" target="94609729" id="0">
       <data key="d10">[10682355, 229946052]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d13">['30', '50']</data>
-      <data key="d21">['Engdahlsgatan', 'Sven Hultins Plats']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d13">['50', '30']</data>
+      <data key="d21">['Sven Hultins Plats', 'Engdahlsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">199.67492283652413</data>
@@ -38843,7 +38843,7 @@
       <data key="d10">[367556794, 1368308330, 1133100556, 367556789, 1369521145, 1369521146]</data>
       <data key="d11">unclassified</data>
       <data key="d12">2</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Sven Hultins Gata</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -39525,7 +39525,7 @@
       <data key="d10">[1449307819, 1449307820, 1305524817, 1365676759, 40776507, 1084471101]</data>
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
-      <data key="d13">['40', '50', '60']</data>
+      <data key="d13">['50', '40', '60']</data>
       <data key="d21">['Toltorpsgatan', 'Ehrenströmsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -40087,7 +40087,7 @@
     <edge source="96144931" target="3051049625" id="0">
       <data key="d10">[317628512, 227319524, 1054153770, 1054153771, 1157709623, 993287806, 298748607]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
@@ -40180,7 +40180,7 @@
       <data key="d10">[28037145, 28037147, 10818244, 28037143]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Malmstensgatan', 'Landalagatan', 'Skomakaregatan', 'Hantverkaregatan']</data>
+      <data key="d21">['Skomakaregatan', 'Landalagatan', 'Hantverkaregatan', 'Malmstensgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">239.10969741296003</data>
@@ -40262,7 +40262,7 @@
       <data key="d11">residential</data>
       <data key="d13">50</data>
       <data key="d21">Ängemarken</data>
-      <data key="d22">['7.9', '6.9']</data>
+      <data key="d22">['6.9', '7.9']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">78.33152688152218</data>
@@ -40318,7 +40318,7 @@
       <data key="d13">50</data>
       <data key="d21">Raketgatan</data>
       <data key="d14">True</data>
-      <data key="d22">['5', '5.5', '5.3', '9.2']</data>
+      <data key="d22">['9.2', '5', '5.3', '5.5']</data>
       <data key="d15">False</data>
       <data key="d16">378.6640996459712</data>
       <data key="d17">LINESTRING (11.9675347 57.6901534, 11.9675632 57.6901591, 11.9676052 57.6901602, 11.967635 57.6901588, 11.9676746 57.6901532, 11.9677181 57.6901441, 11.9677478 57.6901378, 11.9678164 57.6901211, 11.968036 57.6900762, 11.9681733 57.690049, 11.9682109 57.6900439, 11.9682483 57.6900401, 11.9682836 57.690038, 11.9683158 57.6900378, 11.9683483 57.6900398, 11.9683812 57.6900434, 11.9684173 57.690049, 11.9684463 57.6900548, 11.9684709 57.6900609, 11.9684971 57.6900679, 11.9685267 57.6900772, 11.9685524 57.6900863, 11.9685696 57.6900929, 11.9685853 57.6901002, 11.9686051 57.6901112, 11.9686245 57.690123, 11.9686403 57.6901336, 11.9686514 57.6901436, 11.9686659 57.6901583, 11.968679 57.6901733, 11.9686863 57.6901839, 11.9686929 57.6901947, 11.9687019 57.6902136, 11.9687065 57.6902346, 11.9687078 57.6902545, 11.9687065 57.6902767, 11.968704 57.6902951, 11.9686971 57.6903221, 11.9686854 57.6903481, 11.9686598 57.6904053, 11.9686017 57.6905115, 11.9685865 57.6905428, 11.9685589 57.6905917, 11.9684794 57.6906819, 11.9684325 57.6907201, 11.9683837 57.690751, 11.9682768 57.6908012, 11.9679584 57.6909355, 11.967865 57.6909729, 11.9678041 57.6909959, 11.9677437 57.6910192, 11.9675924 57.6910792, 11.9675307 57.6911039, 11.9674761 57.6911271, 11.9674419 57.6911456, 11.9674217 57.6911566, 11.9674064 57.6911679, 11.9673883 57.6911799, 11.9673752 57.691191, 11.9673455 57.6912173, 11.9673318 57.6912335, 11.967323 57.691248, 11.9673068 57.691276, 11.9673009 57.6912886, 11.9672875 57.6913225, 11.9672824 57.6913551, 11.9672761 57.6913848, 11.9672637 57.6914157, 11.9672534 57.6914337, 11.9672363 57.6914564, 11.9672185 57.6914742, 11.9672006 57.691491, 11.967182 57.6915032, 11.9671591 57.6915163, 11.9671293 57.6915292, 11.9671038 57.6915379, 11.9670854 57.6915439, 11.9670637 57.6915499, 11.9670427 57.691555, 11.9670218 57.6915587, 11.9669975 57.691562, 11.9669788 57.6915634, 11.96695 57.6915651, 11.966925 57.6915658, 11.966899 57.6915653, 11.9668609 57.6915632, 11.9667696 57.6915557, 11.9666651 57.6915472, 11.9662465 57.6915093, 11.9659771 57.6914892, 11.9658576 57.691479, 11.9658229 57.691476, 11.9657111 57.6914662, 11.9656507 57.69146, 11.9656191 57.6914558, 11.965585 57.6914506, 11.9655536 57.6914431, 11.9655156 57.6914338, 11.9655011 57.6914287, 11.9654521 57.6914115, 11.9653646 57.6913773, 11.9652801 57.6913619)</data>
@@ -40618,7 +40618,7 @@
       <data key="d10">[1123570602, 1368773154, 28164731, 10864382]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Bengt Lidnersgatan', 'Skyttegatan', 'Ekmansgatan']</data>
+      <data key="d21">['Bengt Lidnersgatan', 'Ekmansgatan', 'Skyttegatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">273.52773810284197</data>
@@ -40647,7 +40647,7 @@
       <data key="d10">[1123570602, 28164731, 1368773154, 10864382]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Bengt Lidnersgatan', 'Skyttegatan', 'Ekmansgatan']</data>
+      <data key="d21">['Bengt Lidnersgatan', 'Ekmansgatan', 'Skyttegatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">273.5277381028419</data>
@@ -40686,7 +40686,7 @@
       <data key="d10">[115752177, 229224011, 229224012]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Helmutsrogatan', 'Milpålegatan', 'Thorburnsgatan']</data>
+      <data key="d21">['Helmutsrogatan', 'Thorburnsgatan', 'Milpålegatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">260.5526779579872</data>
@@ -41037,7 +41037,7 @@
       <data key="d11">residential</data>
       <data key="d13">50</data>
       <data key="d21">Egnahemsvägen</data>
-      <data key="d22">['8.7', '6.7', '7.1', '4.5']</data>
+      <data key="d22">['4.5', '8.7', '6.7', '7.1']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">181.6642620161535</data>
@@ -41063,7 +41063,7 @@
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">181.6642620161535</data>
-      <data key="d22">['8.7', '6.7', '7.1', '4.5']</data>
+      <data key="d22">['4.5', '8.7', '6.7', '7.1']</data>
       <data key="d20">viaduct</data>
       <data key="d17">LINESTRING (11.9700573 57.6911675, 11.9700909 57.6911133, 11.9701432 57.6910169, 11.9701562 57.6909712, 11.9702173 57.6906368, 11.9702668 57.6901685, 11.9702743 57.6901047, 11.9702787 57.6900775, 11.9702992 57.6897665, 11.9702911 57.6896057, 11.9702873 57.689544)</data>
     </edge>
@@ -41073,7 +41073,7 @@
       <data key="d13">50</data>
       <data key="d21">Kolonigatan</data>
       <data key="d14">True</data>
-      <data key="d22">['6.1', '8.8', '9']</data>
+      <data key="d22">['8.8', '6.1', '9']</data>
       <data key="d15">False</data>
       <data key="d16">314.75155255222484</data>
       <data key="d17">LINESTRING (11.9714123 57.6894882, 11.9716021 57.6894841, 11.9720817 57.6894739, 11.972214 57.6894757, 11.9723076 57.6894808, 11.9731099 57.6885964, 11.9734374 57.6882803, 11.9738665 57.6878738, 11.9743249 57.6874996, 11.9744161 57.6874201)</data>
@@ -41492,7 +41492,7 @@
     <edge source="101345158" target="101345040" id="0">
       <data key="d10">[993287797, 11389974, 1023039455]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Inlandsgatan</data>
       <data key="d14">True</data>
@@ -41837,7 +41837,7 @@
       <data key="d11">residential</data>
       <data key="d13">50</data>
       <data key="d21">Vildapelsgatan</data>
-      <data key="d22">['5.5', '5.6', '5.7']</data>
+      <data key="d22">['5.6', '5.7', '5.5']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">92.87304472597746</data>
@@ -41848,7 +41848,7 @@
       <data key="d11">residential</data>
       <data key="d13">50</data>
       <data key="d21">Ängemarken</data>
-      <data key="d22">['8', '7', '6.9']</data>
+      <data key="d22">['6.9', '8', '7']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">161.46851351297732</data>
@@ -41870,7 +41870,7 @@
       <data key="d11">residential</data>
       <data key="d13">50</data>
       <data key="d21">Ängemarken</data>
-      <data key="d22">['8', '7', '6.9']</data>
+      <data key="d22">['6.9', '8', '7']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">161.4685135129773</data>
@@ -41943,7 +41943,7 @@
       <data key="d11">residential</data>
       <data key="d13">50</data>
       <data key="d21">Vildapelsgatan</data>
-      <data key="d22">['5.5', '5.6', '5.7']</data>
+      <data key="d22">['5.6', '5.7', '5.5']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">92.87304472597746</data>
@@ -42392,7 +42392,7 @@
       <data key="d10">[28037145, 28037147, 10818244, 28037143]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Landalagatan', 'Skomakaregatan', 'Hantverkaregatan', 'Malmstensgatan']</data>
+      <data key="d21">['Skomakaregatan', 'Landalagatan', 'Hantverkaregatan', 'Malmstensgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">239.1096974129601</data>
@@ -42563,7 +42563,7 @@
       <data key="d10">[11983942, 25618375]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Orrspelsgatan', 'Borraregatan']</data>
+      <data key="d21">['Borraregatan', 'Orrspelsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">198.77279751833655</data>
@@ -43187,7 +43187,7 @@
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">178.54464057243425</data>
-      <data key="d22">['5', '4']</data>
+      <data key="d22">['4', '5']</data>
       <data key="d17">LINESTRING (11.9778018 57.6880452, 11.9774604 57.6884295, 11.9772841 57.6886541, 11.9769942 57.6889843, 11.9767694 57.6892896, 11.9766468 57.6894527, 11.9765938 57.6895146)</data>
     </edge>
     <edge source="130926812" target="94609729" id="0">
@@ -43220,7 +43220,7 @@
     <edge source="130929198" target="9144075275" id="0">
       <data key="d10">[1152667500, 13900247]</data>
       <data key="d11">living_street</data>
-      <data key="d21">['Origovägen', 'Rännvägen']</data>
+      <data key="d21">['Rännvägen', 'Origovägen']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">298.6418213826233</data>
@@ -43583,7 +43583,7 @@
       <data key="d13">50</data>
       <data key="d21">Egnahemsvägen</data>
       <data key="d14">True</data>
-      <data key="d22">['4.9', '5.3', '7.3', '6.9']</data>
+      <data key="d22">['7.3', '6.9', '5.3', '4.9']</data>
       <data key="d15">False</data>
       <data key="d16">229.39523009340618</data>
       <data key="d17">LINESTRING (11.971254 57.6874172, 11.971238 57.6874652, 11.9712058 57.6875433, 11.9711501 57.6876489, 11.9709887 57.6878397, 11.9709724 57.6878548, 11.9709572 57.6878688, 11.970844 57.6879808, 11.970766 57.688058, 11.9706215 57.6882028, 11.9705123 57.6883123, 11.9703696 57.6884645, 11.9702885 57.6885778, 11.970216 57.6887125, 11.9701597 57.6888401, 11.9701409 57.6889319, 11.9701302 57.6890509, 11.9701456 57.6892158, 11.9701521 57.6892947, 11.9701411 57.6893263, 11.9701239 57.6893525)</data>
@@ -44230,7 +44230,7 @@
       <data key="d10">[28146200, 16679362]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Bäckeforsgatan', 'Högalidsgatan']</data>
+      <data key="d21">['Högalidsgatan', 'Bäckeforsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">190.44103676466798</data>
@@ -44576,8 +44576,8 @@
     </edge>
     <edge source="133222320" target="71611568" id="0">
       <data key="d10">[14034456, 9404197]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">['Soltorpsgatan', 'Åbäcksgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -45007,7 +45007,7 @@
     </edge>
     <edge source="135460337" target="28393084" id="0">
       <data key="d10">[838829098, 838829099, 14175349]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
       <data key="d21">Kallebäcks källväg</data>
       <data key="d14">False</data>
@@ -45128,7 +45128,7 @@
     <edge source="135468307" target="33955249" id="0">
       <data key="d10">[50538714, 308294803, 58819263]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Sankt Sigfridsgatan</data>
       <data key="d14">True</data>
@@ -45199,7 +45199,7 @@
     <edge source="135471119" target="89348914" id="0">
       <data key="d10">[308294788, 25618382]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Fredriksdalsgatan</data>
       <data key="d14">False</data>
@@ -45440,8 +45440,8 @@
       <data key="d10">[288161868, 122780829, 1455313223]</data>
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
-      <data key="d13">['40', '50']</data>
-      <data key="d21">['Mäster Bengtsgatan', 'Soltorpsgatan']</data>
+      <data key="d13">['50', '40']</data>
+      <data key="d21">['Soltorpsgatan', 'Mäster Bengtsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">123.45984591047193</data>
@@ -45451,7 +45451,7 @@
       <data key="d10">[14176435, 288208932]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Odinsgatan', 'Soltorpsgatan']</data>
+      <data key="d21">['Soltorpsgatan', 'Odinsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">228.04766500139755</data>
@@ -45461,7 +45461,7 @@
       <data key="d10">[28146200, 16679362]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Bäckeforsgatan', 'Högalidsgatan']</data>
+      <data key="d21">['Högalidsgatan', 'Bäckeforsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">190.4410367646679</data>
@@ -45662,7 +45662,7 @@
       <data key="d10">[288208931, 288229934]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Matildebergsgatan', 'Fredriksdalsgatan']</data>
+      <data key="d21">['Fredriksdalsgatan', 'Matildebergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">229.16922712761829</data>
@@ -45680,7 +45680,7 @@
     </edge>
     <edge source="135704976" target="99139692" id="0">
       <data key="d10">[1158436719, 1131598811, 1136139174, 230776039]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
       <data key="d21">['Vasagatan', 'Kungsportsavenyen']</data>
       <data key="d14">True</data>
@@ -45805,7 +45805,7 @@
       <data key="d10">[29103272, 4263151, 237325903, 168286108, 168286109]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Kungsportsbron', 'Stora Nygatan', 'Kungsportsavenyen']</data>
+      <data key="d21">['Stora Nygatan', 'Kungsportsbron', 'Kungsportsavenyen']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">235.41354311229028</data>
@@ -46077,7 +46077,7 @@
       <data key="d10">[14194914, 14194979, 1368991214, 1368991215]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Wijkandersgatan', 'Walleriusgatan']</data>
+      <data key="d21">['Walleriusgatan', 'Wijkandersgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">213.97706034396</data>
@@ -46382,7 +46382,7 @@
       <data key="d10">[132087661, 15084470]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Santessonsgatan', 'Bäckeliden']</data>
+      <data key="d21">['Bäckeliden', 'Santessonsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">224.94644556327685</data>
@@ -47619,7 +47619,7 @@
     <edge source="145181108" target="649088405" id="0">
       <data key="d10">[8068766, 50901790]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Härlandavägen</data>
       <data key="d14">True</data>
@@ -47804,7 +47804,7 @@
     <edge source="148573571" target="371275" id="0">
       <data key="d10">[990532259, 46828069, 50113223, 1023059921, 1023059922, 1023059926, 1023059927]</data>
       <data key="d11">trunk</data>
-      <data key="d12">['2', '4', '3']</data>
+      <data key="d12">['4', '3', '2']</data>
       <data key="d13">70</data>
       <data key="d21">Marieholmsleden</data>
       <data key="d14">True</data>
@@ -48171,7 +48171,7 @@
       <data key="d10">[27314956, 22970039]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Brunkebergsgatan', 'Jenny Lindsgatan']</data>
+      <data key="d21">['Jenny Lindsgatan', 'Brunkebergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">174.00118568315244</data>
@@ -49507,7 +49507,7 @@
       <data key="d10">[842377048, 15800916]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Danska Vägen', 'Odinslundsgatan']</data>
+      <data key="d21">['Odinslundsgatan', 'Danska Vägen']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">320.8305572483647</data>
@@ -49976,7 +49976,7 @@
     <edge source="159083000" target="2034433007" id="0">
       <data key="d10">[993287808, 993287807]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
@@ -50069,7 +50069,7 @@
       <data key="d10">[1213733779, 1148270670, 129413863]</data>
       <data key="d11">secondary</data>
       <data key="d12">2</data>
-      <data key="d13">['40', '50', '60']</data>
+      <data key="d13">['50', '40', '60']</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -50494,7 +50494,7 @@
       <data key="d10">[171223678, 171223558]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Baldersgatan', 'Torsgatan']</data>
+      <data key="d21">['Torsgatan', 'Baldersgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">301.0262685622427</data>
@@ -50504,7 +50504,7 @@
       <data key="d10">[171223678, 171223558]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Baldersgatan', 'Torsgatan']</data>
+      <data key="d21">['Torsgatan', 'Baldersgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">301.02626856224276</data>
@@ -50533,7 +50533,7 @@
       <data key="d10">[288208931, 288229934]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Matildebergsgatan', 'Fredriksdalsgatan']</data>
+      <data key="d21">['Fredriksdalsgatan', 'Matildebergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">229.16922712761823</data>
@@ -50645,7 +50645,7 @@
       <data key="d10">[288034869, 16679805]</data>
       <data key="d11">residential</data>
       <data key="d13">30</data>
-      <data key="d21">['Lilla Bergsbogatan', 'Bergsbogatan']</data>
+      <data key="d21">['Bergsbogatan', 'Lilla Bergsbogatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">181.9877791234502</data>
@@ -50817,7 +50817,7 @@
       <data key="d10">[1449307819, 1449307820, 1305524817, 1365676759, 40776507, 1084471101]</data>
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
-      <data key="d13">['40', '50', '60']</data>
+      <data key="d13">['50', '40', '60']</data>
       <data key="d21">['Toltorpsgatan', 'Ehrenströmsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -51297,7 +51297,7 @@
       <data key="d24">no</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Torggatan', 'Västra Sjöfarten']</data>
+      <data key="d21">['Västra Sjöfarten', 'Torggatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">51.98725173597375</data>
@@ -51457,7 +51457,7 @@
       <data key="d10">[16944923, 32871395]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Kvarnbergsgatan', 'Övre Spannmålsgatan']</data>
+      <data key="d21">['Övre Spannmålsgatan', 'Kvarnbergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">88.41118880816904</data>
@@ -51577,7 +51577,7 @@
       <data key="d10">[16944923, 32871395]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Kvarnbergsgatan', 'Övre Spannmålsgatan']</data>
+      <data key="d21">['Övre Spannmålsgatan', 'Kvarnbergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">88.41118880816904</data>
@@ -51749,7 +51749,7 @@
     </edge>
     <edge source="181796883" target="2266863484" id="0">
       <data key="d10">[1366070112, 1373015201, 1298516008, 1366070111, 5012831]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
       <data key="d21">Konstepidemins Väg</data>
       <data key="d14">False</data>
@@ -51812,10 +51812,10 @@
     </edge>
     <edge source="181800324" target="2266863484" id="0">
       <data key="d10">[218024997, 28398158, 1081748527, 1081748528, 257603152, 1081748531, 1313908372, 1313908373, 1081748532, 1081748533, 1298041179, 1298041180, 5012831]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Seminariegatan', 'Konstepidemins Väg']</data>
+      <data key="d21">['Konstepidemins Väg', 'Seminariegatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">484.60288530696795</data>
@@ -52085,7 +52085,7 @@
     <edge source="190497843" target="1393186592" id="0">
       <data key="d10">[19202369, 1023578404, 292692741, 642934373, 166331047]</data>
       <data key="d11">trunk_link</data>
-      <data key="d12">['2', '1', '4', '3']</data>
+      <data key="d12">['4', '3', '2', '1']</data>
       <data key="d13">50</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -52365,7 +52365,7 @@
       <data key="d10">[20167442, 1368679718, 1368679719]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Lilla Fridhemsgatan', 'Fågelfängaregatan']</data>
+      <data key="d21">['Fågelfängaregatan', 'Lilla Fridhemsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">97.86728030441088</data>
@@ -52374,7 +52374,7 @@
     <edge source="210861493" target="504312736" id="0">
       <data key="d10">[1292623171, 538390951, 1023578394, 517416461, 1131116018, 118487578, 1023578393, 400413914]</data>
       <data key="d11">tertiary</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Emigrantvägen</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -52463,7 +52463,7 @@
       <data key="d10">[20167442, 1368679718, 1368679719]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Fågelfängaregatan', 'Lilla Fridhemsgatan']</data>
+      <data key="d21">['Lilla Fridhemsgatan', 'Fågelfängaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">97.8672803044109</data>
@@ -53166,7 +53166,7 @@
     <edge source="259428405" target="259428433" id="0">
       <data key="d10">[732070280, 23927467, 23927470, 732070279]</data>
       <data key="d11">unclassified</data>
-      <data key="d21">['Trollhättegatan', 'Torsgatan']</data>
+      <data key="d21">['Torsgatan', 'Trollhättegatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">461.13351733303</data>
@@ -53197,7 +53197,7 @@
     <edge source="259428433" target="259428405" id="0">
       <data key="d10">[732070280, 23927467, 23927470, 732070279]</data>
       <data key="d11">unclassified</data>
-      <data key="d21">['Trollhättegatan', 'Torsgatan']</data>
+      <data key="d21">['Torsgatan', 'Trollhättegatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">461.13351733303</data>
@@ -53228,7 +53228,7 @@
     <edge source="264570078" target="293701857" id="0">
       <data key="d10">[1292623201, 81961219, 1292623203, 1125606954, 1200480564]</data>
       <data key="d11">unclassified</data>
-      <data key="d13">['40', '50']</data>
+      <data key="d13">['50', '40']</data>
       <data key="d21">Sannegårdsgatan</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -53402,7 +53402,7 @@
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Hamntorgsgatan', 'Gullbergs Strandgata']</data>
+      <data key="d21">['Gullbergs Strandgata', 'Hamntorgsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">219.91677889554518</data>
@@ -53753,7 +53753,7 @@
       <data key="d10">[38534406, 25032199]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Pärlstickaregatan', 'Liedstrandsgatan']</data>
+      <data key="d21">['Liedstrandsgatan', 'Pärlstickaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">142.5896299214523</data>
@@ -53813,7 +53813,7 @@
       <data key="d10">[25051012, 28307942]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Lillängsgatan', 'Bågskyttestigen']</data>
+      <data key="d21">['Bågskyttestigen', 'Lillängsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">476.0582946360289</data>
@@ -54308,7 +54308,7 @@
       <data key="d10">[1355289729, 1022912210, 1022912211, 1125225234, 168975994]</data>
       <data key="d11">motorway_link</data>
       <data key="d12">1</data>
-      <data key="d13">['70', '60']</data>
+      <data key="d13">['60', '70']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">148.30123554112376</data>
@@ -55295,9 +55295,9 @@
     </edge>
     <edge source="290228076" target="30153745" id="0">
       <data key="d10">[26481800, 1091316235]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
-      <data key="d21">['Villa Parkudden', 'Rambergsvägen']</data>
+      <data key="d21">['Rambergsvägen', 'Villa Parkudden']</data>
       <data key="d22">['3', '6']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
@@ -55307,7 +55307,7 @@
     <edge source="291884011" target="2698615509" id="0">
       <data key="d10">[165831520, 32720065, 165831522, 370773795, 995019499, 28569209, 1292623195, 1292623196, 176492606]</data>
       <data key="d11">motorway</data>
-      <data key="d12">['3', '4', '2']</data>
+      <data key="d12">['4', '3', '2']</data>
       <data key="d13">70</data>
       <data key="d21">Lundbyleden</data>
       <data key="d14">True</data>
@@ -55588,7 +55588,7 @@
       <data key="d11">secondary</data>
       <data key="d12">1</data>
       <data key="d13">50</data>
-      <data key="d21">['Slottsskogsgatan', 'Högsboleden']</data>
+      <data key="d21">['Högsboleden', 'Slottsskogsgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">389.28619437879513</data>
@@ -55624,7 +55624,7 @@
     <edge source="292885246" target="292889283" id="0">
       <data key="d10">[27549123, 27549124, 27315226, 114913435, 691605402]</data>
       <data key="d11">living_street</data>
-      <data key="d21">['Skeppsgränd', 'Kemigården', 'Kemivägen']</data>
+      <data key="d21">['Kemivägen', 'Skeppsgränd', 'Kemigården']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">167.4084008656466</data>
@@ -55668,7 +55668,7 @@
     <edge source="292889283" target="292885246" id="0">
       <data key="d10">[27549123, 27549124, 27315226, 114913435, 691605402]</data>
       <data key="d11">living_street</data>
-      <data key="d21">['Skeppsgränd', 'Kemigården', 'Kemivägen']</data>
+      <data key="d21">['Kemivägen', 'Skeppsgränd', 'Kemigården']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">167.4084008656466</data>
@@ -55805,7 +55805,7 @@
     <edge source="293701857" target="264570078" id="0">
       <data key="d10">[1292623201, 81961219, 1292623203, 1125606954, 1200480564]</data>
       <data key="d11">unclassified</data>
-      <data key="d13">['40', '50']</data>
+      <data key="d13">['50', '40']</data>
       <data key="d21">Sannegårdsgatan</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -56337,7 +56337,7 @@
       <data key="d10">[26833730, 26833731]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Sterlingsgatan', 'Dollargatan']</data>
+      <data key="d21">['Dollargatan', 'Sterlingsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">188.65084692151052</data>
@@ -56579,7 +56579,7 @@
       <data key="d10">[269132329, 4767555]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Frigångsgatan', 'Kaponjärgatan']</data>
+      <data key="d21">['Kaponjärgatan', 'Frigångsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">304.44795893237034</data>
@@ -57005,7 +57005,7 @@
       <data key="d10">[261545747, 27263246]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Solbacken', 'Margretelundsgatan']</data>
+      <data key="d21">['Margretelundsgatan', 'Solbacken']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">167.02108342631155</data>
@@ -57067,7 +57067,7 @@
       <data key="d10">[27263065, 27263100]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Jakobsdalsgatan', 'Påskbergsgatan']</data>
+      <data key="d21">['Påskbergsgatan', 'Jakobsdalsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">47.75414819412225</data>
@@ -57321,7 +57321,7 @@
       <data key="d10">[1147860298, 125285510, 15800716, 1213420926]</data>
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
-      <data key="d13">['40', '50']</data>
+      <data key="d13">['50', '40']</data>
       <data key="d21">Sankt Sigfridsgatan</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -57531,7 +57531,7 @@
       <data key="d10">[261545747, 27263246]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Solbacken', 'Margretelundsgatan']</data>
+      <data key="d21">['Margretelundsgatan', 'Solbacken']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">167.02108342631155</data>
@@ -59859,7 +59859,7 @@
       <data key="d10">[173756403, 15068943]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Lundgatan', 'Jenny Lindsgatan']</data>
+      <data key="d21">['Jenny Lindsgatan', 'Lundgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">136.7029721713165</data>
@@ -60138,7 +60138,7 @@
       <data key="d10">[151174510, 1278813743]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Bielkegatan', 'de Geersgatan']</data>
+      <data key="d21">['de Geersgatan', 'Bielkegatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">329.35933102052866</data>
@@ -60673,7 +60673,7 @@
     <edge source="301424345" target="5220571130" id="0">
       <data key="d10">[231076592, 1355329860, 539515645]</data>
       <data key="d11">trunk</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">70</data>
       <data key="d21">['Götatunneln', 'Mårten Krakowgatan']</data>
       <data key="d14">True</data>
@@ -60688,7 +60688,7 @@
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Hamntorgsgatan', 'Gullbergs Strandgata']</data>
+      <data key="d21">['Gullbergs Strandgata', 'Hamntorgsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">219.91677889554515</data>
@@ -60795,7 +60795,7 @@
       <data key="d10">[828090995, 15084475]</data>
       <data key="d11">secondary</data>
       <data key="d13">50</data>
-      <data key="d21">['Mölndalsvägen', 'Södra Vägen']</data>
+      <data key="d21">['Södra Vägen', 'Mölndalsvägen']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">383.8332209863099</data>
@@ -60908,7 +60908,7 @@
     </edge>
     <edge source="301822218" target="1275935040" id="0">
       <data key="d10">[1023942962, 28054306]</data>
-      <data key="d11">['unclassified', 'tertiary']</data>
+      <data key="d11">['tertiary', 'unclassified']</data>
       <data key="d21">Örngatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -61060,7 +61060,7 @@
     <edge source="302399565" target="496248275" id="0">
       <data key="d10">[328402924, 328402925]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Mölndalsvägen</data>
       <data key="d14">True</data>
@@ -61199,7 +61199,7 @@
       <data key="d10">[27841840, 28165207]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Pontus Wiknersgatan', 'Sylvestergatan']</data>
+      <data key="d21">['Sylvestergatan', 'Pontus Wiknersgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">20.998496609454172</data>
@@ -62050,7 +62050,7 @@
       <data key="d10">[203992547, 296997213, 296997214]</data>
       <data key="d11">secondary</data>
       <data key="d12">2</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Per Dubbsgatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -62060,7 +62060,7 @@
     <edge source="309917376" target="1753135318" id="0">
       <data key="d10">[697402464, 697402465, 1041673580, 1041673581]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Ehrenströmsgatan</data>
       <data key="d14">True</data>
@@ -62621,7 +62621,7 @@
       <data key="d10">[28312108, 1511023262]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Änggårdsplatsen', 'Särögatan']</data>
+      <data key="d21">['Särögatan', 'Änggårdsplatsen']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">202.03023371535113</data>
@@ -62718,7 +62718,7 @@
     </edge>
     <edge source="310902748" target="8730000944" id="0">
       <data key="d10">[218892488, 1288174434]</data>
-      <data key="d11">['secondary_link', 'secondary']</data>
+      <data key="d11">['secondary', 'secondary_link']</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
       <data key="d21">Per Dubbsgatan</data>
@@ -62740,7 +62740,7 @@
       <data key="d10">[28312108, 1511023262]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Änggårdsplatsen', 'Särögatan']</data>
+      <data key="d21">['Särögatan', 'Änggårdsplatsen']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">202.0302337153511</data>
@@ -63108,7 +63108,7 @@
     </edge>
     <edge source="311886629" target="26038980" id="0">
       <data key="d10">[218892488, 4305085]</data>
-      <data key="d11">['primary_link', 'secondary_link']</data>
+      <data key="d11">['secondary_link', 'primary_link']</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
       <data key="d21">Per Dubbsgatan</data>
@@ -63184,7 +63184,7 @@
       <data key="d10">[28412129, 28412126]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Nickelmyntsgatan', 'Penninggatan']</data>
+      <data key="d21">['Penninggatan', 'Nickelmyntsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">191.2575537860658</data>
@@ -63423,10 +63423,10 @@
     </edge>
     <edge source="312999712" target="1708738944" id="0">
       <data key="d10">[4770114, 940599435]</data>
-      <data key="d11">['residential', 'tertiary']</data>
+      <data key="d11">['tertiary', 'residential']</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Storgatan', 'Vasaplatsen']</data>
+      <data key="d21">['Vasaplatsen', 'Storgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">19.873718860799023</data>
@@ -63562,7 +63562,7 @@
       <data key="d10">[1125852904, 1087521824, 28490204, 1087521823]</data>
       <data key="d11">tertiary</data>
       <data key="d13">50</data>
-      <data key="d21">['Aschebergsgatan', 'Vasaplatsen']</data>
+      <data key="d21">['Vasaplatsen', 'Aschebergsgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">232.3421559122735</data>
@@ -63843,7 +63843,7 @@
       <data key="d11">['primary_link', 'secondary']</data>
       <data key="d12">2</data>
       <data key="d13">['50', '70']</data>
-      <data key="d21">['Dag Hammarskjöldsleden', 'Högsboleden']</data>
+      <data key="d21">['Högsboleden', 'Dag Hammarskjöldsleden']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">334.978490308578</data>
@@ -64026,7 +64026,7 @@
     <edge source="314759192" target="314759711" id="0">
       <data key="d10">[28663475, 28638795, 164334061, 1216124766]</data>
       <data key="d11">unclassified</data>
-      <data key="d21">['Västra Hamngatan', 'Raoul Wallenbergs Gata', 'Vasabron']</data>
+      <data key="d21">['Vasabron', 'Västra Hamngatan', 'Raoul Wallenbergs Gata']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">178.50968156420646</data>
@@ -64142,7 +64142,7 @@
     <edge source="316821206" target="94232943" id="0">
       <data key="d10">[1355290883, 118485800, 309560938, 1154350826, 28501358, 295475345, 1060671835, 1060671836]</data>
       <data key="d11">primary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Dag Hammarskjöldsleden</data>
       <data key="d14">True</data>
@@ -64672,7 +64672,7 @@
     <edge source="321846280" target="301427208" id="0">
       <data key="d10">[990532258, 1023361864, 474185644, 1023059924, 1023059925]</data>
       <data key="d11">trunk</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">70</data>
       <data key="d21">Marieholmsleden</data>
       <data key="d14">True</data>
@@ -65116,7 +65116,7 @@
     <edge source="331886532" target="299244625" id="0">
       <data key="d10">[1213420926, 15800716, 1147860298, 125285510]</data>
       <data key="d11">tertiary</data>
-      <data key="d13">['40', '50']</data>
+      <data key="d13">['50', '40']</data>
       <data key="d21">Sankt Sigfridsgatan</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -65261,7 +65261,7 @@
       <data key="d10">[4731184, 4731185]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Hallegatan', 'Stavstigen']</data>
+      <data key="d21">['Stavstigen', 'Hallegatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">360.52850382941295</data>
@@ -65280,10 +65280,10 @@
     </edge>
     <edge source="343828118" target="954993265" id="0">
       <data key="d10">[13550154, 8099790, 1159616175, 1159616242, 81961245]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d12">2</data>
-      <data key="d13">['30', '50']</data>
-      <data key="d21">['Stenbocksgatan', 'Miraallén']</data>
+      <data key="d13">['50', '30']</data>
+      <data key="d21">['Miraallén', 'Stenbocksgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">166.16666693392813</data>
@@ -65543,7 +65543,7 @@
       <data key="d10">[1096384873, 1096254090, 1096254091, 13550165]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Plåtslagaregatan', 'Slottsberget']</data>
+      <data key="d21">['Slottsberget', 'Plåtslagaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">355.0762363401071</data>
@@ -65686,7 +65686,7 @@
       <data key="d10">[33754872, 1135684238, 1313908390, 1313908391]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Carl Grimbergsgatan', 'Spekebergsgatan']</data>
+      <data key="d21">['Spekebergsgatan', 'Carl Grimbergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">112.68822899628776</data>
@@ -65806,7 +65806,7 @@
       <data key="d10">[34597296, 1363028859, 34597292]</data>
       <data key="d11">unclassified</data>
       <data key="d13">50</data>
-      <data key="d21">['Arvid Wallgrens Backe', 'Änggårdsbacken']</data>
+      <data key="d21">['Änggårdsbacken', 'Arvid Wallgrens Backe']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">226.04277846814753</data>
@@ -65844,7 +65844,7 @@
       <data key="d10">[34597296, 1363028859, 34597292]</data>
       <data key="d11">unclassified</data>
       <data key="d13">50</data>
-      <data key="d21">['Arvid Wallgrens Backe', 'Änggårdsbacken']</data>
+      <data key="d21">['Änggårdsbacken', 'Arvid Wallgrens Backe']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">226.04277846814756</data>
@@ -65970,8 +65970,8 @@
     <edge source="412885454" target="7545352954" id="0">
       <data key="d10">[1023578597, 1023578598, 125285511, 1023578600, 1023578602, 1023578603, 806863919, 4040634]</data>
       <data key="d11">motorway_link</data>
-      <data key="d12">['2', '1', '3']</data>
-      <data key="d13">['80', '50']</data>
+      <data key="d12">['3', '2', '1']</data>
+      <data key="d13">['50', '80']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">262.16540007483843</data>
@@ -66583,7 +66583,7 @@
       <data key="d11">secondary</data>
       <data key="d12">['2', '1']</data>
       <data key="d13">50</data>
-      <data key="d21">['Mölndalsvägen', 'Korsvägen', 'Södra Vägen']</data>
+      <data key="d21">['Korsvägen', 'Södra Vägen', 'Mölndalsvägen']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">514.8734943755345</data>
@@ -66631,7 +66631,7 @@
     <edge source="504312736" target="210861493" id="0">
       <data key="d10">[1292623171, 538390951, 400413914, 517416461, 1131116018, 118487578, 1023578393, 1023578394]</data>
       <data key="d11">tertiary</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Emigrantvägen</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -66738,9 +66738,9 @@
     <edge source="559960490" target="1305379743" id="0">
       <data key="d10">[314179469, 8110606, 286430799, 1050469432, 566212953, 1050469433]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '1', '3']</data>
+      <data key="d12">['3', '2', '1']</data>
       <data key="d13">50</data>
-      <data key="d21">['Örgrytevägen', 'Skånegatan']</data>
+      <data key="d21">['Skånegatan', 'Örgrytevägen']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">285.4957378269702</data>
@@ -66863,7 +66863,7 @@
     <edge source="598141911" target="148573571" id="0">
       <data key="d10">[46827873, 1023059908, 46827848, 1023059914, 1023059915, 621696172, 46827832, 230824476, 1361248543]</data>
       <data key="d11">trunk</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">['50', '70']</data>
       <data key="d21">['Marieholmsleden', 'Mårten Krakowgatan']</data>
       <data key="d14">True</data>
@@ -67054,7 +67054,7 @@
       <data key="d10">[26833730, 26833731]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Sterlingsgatan', 'Dollargatan']</data>
+      <data key="d21">['Dollargatan', 'Sterlingsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">188.65084692151046</data>
@@ -67760,13 +67760,13 @@
     </edge>
     <edge source="954993265" target="343828118" id="0">
       <data key="d10">[13550154, 8099790, 1159616175, 1159616242, 81961245]</data>
-      <data key="d11">['residential', 'unclassified']</data>
-      <data key="d21">['Stenbocksgatan', 'Miraallén']</data>
+      <data key="d11">['unclassified', 'residential']</data>
+      <data key="d21">['Miraallén', 'Stenbocksgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">166.16666693392813</data>
       <data key="d12">2</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d17">LINESTRING (11.9298282 57.7091379, 11.929707 57.7090074, 11.9296806 57.708977, 11.9296482 57.7089397, 11.9294351 57.7086496, 11.9293487 57.7085192, 11.9292828 57.7083881, 11.9292206 57.7082409, 11.929211 57.7082181, 11.9291851 57.7081572, 11.9291565 57.7080899, 11.9291381 57.7080465, 11.9291211 57.7080081, 11.9289995 57.7077166)</data>
     </edge>
     <edge source="954993265" target="954994545" id="0">
@@ -68246,7 +68246,7 @@
       <data key="d10">[14194914, 14194979, 1368991214, 1368991215]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Wijkandersgatan', 'Walleriusgatan']</data>
+      <data key="d21">['Walleriusgatan', 'Wijkandersgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">213.97706034396</data>
@@ -69084,7 +69084,7 @@
     <edge source="1073105206" target="314640226" id="0">
       <data key="d10">[1063040195, 1063040196, 210820518, 1195949993, 1195949994, 295469978]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Högsboleden</data>
       <data key="d14">True</data>
@@ -69696,7 +69696,7 @@
     <edge source="1277475370" target="7373669" id="0">
       <data key="d10">[181599218, 181599223, 241024055, 8117496, 8117499]</data>
       <data key="d11">secondary</data>
-      <data key="d13">['40', '50']</data>
+      <data key="d13">['50', '40']</data>
       <data key="d21">Folkungagatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -70116,7 +70116,7 @@
       <data key="d10">[323471880, 83669398]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Övre Buråsliden', 'Gyllenkrooksgatan']</data>
+      <data key="d21">['Gyllenkrooksgatan', 'Övre Buråsliden']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">274.186004413518</data>
@@ -70825,7 +70825,7 @@
       <data key="d10">[176492598, 176492600, 116352355, 116352374]</data>
       <data key="d20">yes</data>
       <data key="d11">motorway_link</data>
-      <data key="d12">['2', '1', '3']</data>
+      <data key="d12">['3', '2', '1']</data>
       <data key="d13">['50', '70']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -70890,7 +70890,7 @@
     <edge source="1311857203" target="480080091" id="0">
       <data key="d10">[1022919174, 1022919175, 991784173, 218651377, 790308914, 991784149]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
@@ -71252,7 +71252,7 @@
     <edge source="1333859017" target="465608602" id="0">
       <data key="d10">[311088481, 236128323, 1023059956, 1023059957, 1023059965, 1023059966]</data>
       <data key="d11">motorway</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">70</data>
       <data key="d14">True</data>
       <data key="d18">E 20</data>
@@ -71642,7 +71642,7 @@
     <edge source="1374678216" target="60911666" id="0">
       <data key="d10">[1023578464, 1023578465, 123203590, 123203592, 566213449, 1413495978, 1368308459, 331667688, 1023578461, 1023578462]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Ullevigatan</data>
       <data key="d14">True</data>
@@ -71654,7 +71654,7 @@
     <edge source="1374678229" target="7373670" id="0">
       <data key="d10">[1023578438, 1023578439, 312492934, 1363028873, 1364685351, 237642417, 1362532789]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Skånegatan</data>
       <data key="d14">True</data>
@@ -71741,7 +71741,7 @@
     <edge source="1375955281" target="2487024325" id="0">
       <data key="d10">[241024080, 8119252, 241024070]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '4', '6']</data>
+      <data key="d12">['4', '6', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Ullevigatan</data>
       <data key="d14">True</data>
@@ -72071,7 +72071,7 @@
       <data key="d10">[16679805, 288034869]</data>
       <data key="d11">residential</data>
       <data key="d13">30</data>
-      <data key="d21">['Lilla Bergsbogatan', 'Bergsbogatan']</data>
+      <data key="d21">['Bergsbogatan', 'Lilla Bergsbogatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">181.98777912345022</data>
@@ -72113,7 +72113,7 @@
       <data key="d11">residential</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Riddaregatan', 'Storkgatan']</data>
+      <data key="d21">['Storkgatan', 'Riddaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">178.4870057894612</data>
@@ -72255,7 +72255,7 @@
     <edge source="1455778254" target="14774909" id="0">
       <data key="d10">[1197785207, 8119269, 45360851, 1368308439, 132318908]</data>
       <data key="d11">unclassified</data>
-      <data key="d21">['Gårdavägen', 'Levgrensvägen']</data>
+      <data key="d21">['Levgrensvägen', 'Gårdavägen']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">278.02776733687455</data>
@@ -72354,7 +72354,7 @@
       <data key="d11">residential</data>
       <data key="d12">1</data>
       <data key="d13">50</data>
-      <data key="d21">['Santessonsgatan', 'Bäckeliden']</data>
+      <data key="d21">['Bäckeliden', 'Santessonsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">224.9464455632769</data>
@@ -72447,7 +72447,7 @@
       <data key="d10">[19202353, 4766436, 1023578412, 1023578413]</data>
       <data key="d11">tertiary</data>
       <data key="d13">50</data>
-      <data key="d21">['Järnvågsgatan', 'Första Långgatan']</data>
+      <data key="d21">['Första Långgatan', 'Järnvågsgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">192.54073186636785</data>
@@ -72646,7 +72646,7 @@
       <data key="d11">residential</data>
       <data key="d12">['2', '1']</data>
       <data key="d13">50</data>
-      <data key="d21">['Såggatan', 'Skeppsgossegatan']</data>
+      <data key="d21">['Skeppsgossegatan', 'Såggatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">228.40341739308278</data>
@@ -72675,7 +72675,7 @@
     </edge>
     <edge source="1500574973" target="25708788" id="0">
       <data key="d10">[1216125162, 4770500, 4770181, 1216125508]</data>
-      <data key="d11">['residential', 'unclassified', 'tertiary']</data>
+      <data key="d11">['tertiary', 'unclassified', 'residential']</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
       <data key="d21">['Magasinsgatan', 'Viktoriagatan', 'Viktoriabron']</data>
@@ -72699,7 +72699,7 @@
     <edge source="1504541784" target="30137139" id="0">
       <data key="d10">[549147151, 569077840, 967871987, 997282422, 997282423]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Burggrevegatan</data>
       <data key="d14">True</data>
@@ -72859,7 +72859,7 @@
       <data key="d10">[1096384873, 1096254090, 1096254091, 13550165]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Plåtslagaregatan', 'Slottsberget']</data>
+      <data key="d21">['Slottsberget', 'Plåtslagaregatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">355.07623634010696</data>
@@ -72979,7 +72979,7 @@
     <edge source="1576319356" target="11959266100" id="0">
       <data key="d10">[835893008, 144049460]</data>
       <data key="d11">unclassified</data>
-      <data key="d21">['Gullbergsvassgatan', 'Kruthusgatan']</data>
+      <data key="d21">['Kruthusgatan', 'Gullbergsvassgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">687.0228572590621</data>
@@ -73225,7 +73225,7 @@
     <edge source="1577473234" target="11472719431" id="0">
       <data key="d10">[158587512, 36909113]</data>
       <data key="d11">unclassified</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Marklandsgatan</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -73574,7 +73574,7 @@
     <edge source="1587095305" target="12926128128" id="0">
       <data key="d10">[111560228, 779842407, 307853768, 307853769, 307853772]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Södra Sjöfarten</data>
       <data key="d14">True</data>
@@ -73863,7 +73863,7 @@
       <data key="d10">[151174510, 1278813743]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Bielkegatan', 'de Geersgatan']</data>
+      <data key="d21">['de Geersgatan', 'Bielkegatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">329.3593310205287</data>
@@ -74054,7 +74054,7 @@
       <data key="d10">[151178254, 151178255]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Nobelgatan', 'Nobelplatsen']</data>
+      <data key="d21">['Nobelplatsen', 'Nobelgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">153.2213326311572</data>
@@ -74124,7 +74124,7 @@
       <data key="d10">[151178254, 151178255]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Nobelgatan', 'Nobelplatsen']</data>
+      <data key="d21">['Nobelplatsen', 'Nobelgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">153.22133263115717</data>
@@ -74227,7 +74227,7 @@
     <edge source="1639994633" target="1639994625" id="0">
       <data key="d10">[166334552, 1359601828, 1359601829, 953899959]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Härlandavägen</data>
       <data key="d14">False</data>
@@ -75280,7 +75280,7 @@
     <edge source="1739118993" target="3387695723" id="0">
       <data key="d10">[8119256, 999675091]</data>
       <data key="d11">unclassified</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Rantorget</data>
       <data key="d14">True</data>
@@ -75868,7 +75868,7 @@
       <data key="d10">[242496415, 171963927]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Sankt Pauli Trappor', 'Wrangels Trappgata']</data>
+      <data key="d21">['Wrangels Trappgata', 'Sankt Pauli Trappor']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">103.89889455879214</data>
@@ -75878,7 +75878,7 @@
       <data key="d10">[171963927, 242496415]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Sankt Pauli Trappor', 'Wrangels Trappgata']</data>
+      <data key="d21">['Wrangels Trappgata', 'Sankt Pauli Trappor']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">103.89889455879214</data>
@@ -76913,7 +76913,7 @@
       <data key="d10">[183065342, 183065335]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Gösta Sandelsgatan', 'Björkfeldtsgatan']</data>
+      <data key="d21">['Björkfeldtsgatan', 'Gösta Sandelsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">122.75755049760829</data>
@@ -76943,7 +76943,7 @@
       <data key="d10">[183065340, 183065335]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Gösta Sandelsgatan', 'Aroseniusgatan']</data>
+      <data key="d21">['Aroseniusgatan', 'Gösta Sandelsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">124.93662323492407</data>
@@ -76992,7 +76992,7 @@
       <data key="d10">[183065342, 183065335]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Gösta Sandelsgatan', 'Björkfeldtsgatan']</data>
+      <data key="d21">['Björkfeldtsgatan', 'Gösta Sandelsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">122.75755049760829</data>
@@ -77002,7 +77002,7 @@
       <data key="d10">[183065340, 183065335]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Gösta Sandelsgatan', 'Aroseniusgatan']</data>
+      <data key="d21">['Aroseniusgatan', 'Gösta Sandelsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">124.93662323492407</data>
@@ -77118,10 +77118,10 @@
     </edge>
     <edge source="1943102983" target="1277604318" id="0">
       <data key="d10">[112400488, 1148778957, 207208436, 207208437, 29112413]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d12">1</data>
       <data key="d13">50</data>
-      <data key="d21">['Hotellplatsen', 'Nils Ericsonsgatan']</data>
+      <data key="d21">['Nils Ericsonsgatan', 'Hotellplatsen']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">136.76276849112722</data>
@@ -77333,7 +77333,7 @@
     <edge source="2034413982" target="12384353041" id="0">
       <data key="d10">[993287802, 165831499, 993287803]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
@@ -77782,9 +77782,9 @@
     </edge>
     <edge source="2266863484" target="181800324" id="0">
       <data key="d10">[218024997, 28398158, 1081748527, 257603152, 1081748528, 1081748531, 1081748532, 1081748533, 1313908373, 1313908372, 1298041179, 1298041180, 5012831]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
-      <data key="d21">['Seminariegatan', 'Konstepidemins Väg']</data>
+      <data key="d21">['Konstepidemins Väg', 'Seminariegatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">484.60288530696795</data>
@@ -77793,7 +77793,7 @@
     </edge>
     <edge source="2266863484" target="181796883" id="0">
       <data key="d10">[1366070112, 1373015201, 5012831, 1298516008, 1366070111]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d13">50</data>
       <data key="d21">Konstepidemins Väg</data>
       <data key="d14">False</data>
@@ -78069,7 +78069,7 @@
       <data key="d10">[4773384, 1364685346, 338954405]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Kungsgatan', 'Surbrunnsgatan']</data>
+      <data key="d21">['Surbrunnsgatan', 'Kungsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">78.88461215413425</data>
@@ -78436,7 +78436,7 @@
     <edge source="2481971675" target="11631647410" id="0">
       <data key="d10">[292683569, 594528683]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Nya Allén</data>
       <data key="d14">True</data>
@@ -78784,7 +78784,7 @@
       <data key="d11">tertiary</data>
       <data key="d12">['3', '1']</data>
       <data key="d13">50</data>
-      <data key="d21">['Flatåsmotet', 'Tunnlandsgatan']</data>
+      <data key="d21">['Tunnlandsgatan', 'Flatåsmotet']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">109.55710880004331</data>
@@ -79050,7 +79050,7 @@
       <data key="d11">secondary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Järnvågsgatan', 'Norra Allégatan']</data>
+      <data key="d21">['Norra Allégatan', 'Järnvågsgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">108.00476612785928</data>
@@ -79330,7 +79330,7 @@
     <edge source="2998549532" target="520168" id="0">
       <data key="d10">[1023578496, 1259387617, 1259387618, 1023578499, 1023578500, 296093125, 972789118, 806863917, 806960345, 296093118, 1023578495]</data>
       <data key="d11">motorway</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">80</data>
       <data key="d21">Kungsbackaleden</data>
       <data key="d14">True</data>
@@ -79406,7 +79406,7 @@
     <edge source="3051049627" target="9163431230" id="0">
       <data key="d10">[563105003, 48425037, 993287828, 993287831, 991784185]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '4', '3']</data>
+      <data key="d12">['4', '3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
@@ -79755,7 +79755,7 @@
       <data key="d10">[277008313, 1290396979, 786953892, 61950438]</data>
       <data key="d11">tertiary</data>
       <data key="d13">50</data>
-      <data key="d21">['Operagatan', 'Stora Badhusgatan', 'Residensbron']</data>
+      <data key="d21">['Residensbron', 'Operagatan', 'Stora Badhusgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">57.043912966014915</data>
@@ -79858,7 +79858,7 @@
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Fjällgatan', 'Jungmansgatan']</data>
+      <data key="d21">['Jungmansgatan', 'Fjällgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">304.5036915940661</data>
@@ -80183,7 +80183,7 @@
     <edge source="3473721571" target="25734041" id="0">
       <data key="d10">[491954483, 491966843, 300980558]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Engelbrektsgatan</data>
       <data key="d14">False</data>
@@ -80247,11 +80247,11 @@
     <edge source="3499249064" target="6482686247" id="0">
       <data key="d10">[316761210, 343000268, 1081709334, 1081709335, 4273082]</data>
       <data key="d11">unclassified</data>
-      <data key="d21">['Rosenlundsgatan', 'Rosenlundsplatsen']</data>
+      <data key="d21">['Rosenlundsplatsen', 'Rosenlundsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">430.7459299981669</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d17">LINESTRING (11.9550814 57.7021169, 11.9551215 57.702107, 11.9551595 57.7020986, 11.95518 57.702094, 11.9552195 57.7020819, 11.9554009 57.7020212, 11.9555095 57.7019818, 11.9555913 57.7019356, 11.9556224 57.7019143, 11.9556825 57.7018732, 11.9558179 57.7017593, 11.9561478 57.7014386, 11.9562203 57.7013992, 11.9563168 57.7013637, 11.9564147 57.7013426, 11.9565006 57.7013336, 11.9569364 57.7012802, 11.9571794 57.70125, 11.9575684 57.7012025, 11.9578195 57.7011677, 11.9581839 57.7011245, 11.9582841 57.7011131, 11.9583685 57.7011011, 11.9585642 57.7010779, 11.9587194 57.7010638, 11.9591167 57.7010352, 11.9593419 57.7010187, 11.9594576 57.7010091, 11.9596972 57.7009938, 11.9598184 57.7010081, 11.9599298 57.7008625, 11.9601484 57.7007944, 11.9602758 57.7007722, 11.9603562 57.700765, 11.9605105 57.7007557, 11.9606741 57.7007564, 11.9608927 57.700765, 11.9610026 57.7007829, 11.9611099 57.7008202, 11.9612954 57.7008636)</data>
     </edge>
     <edge source="3499249064" target="3499249072" id="0">
@@ -80463,9 +80463,9 @@
     <edge source="3579707437" target="1375971934" id="0">
       <data key="d10">[1292395256, 166612441, 166612430, 1292395255]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
-      <data key="d21">['Västra Stampbron', 'Polhemsplatsen', 'Nya Allén']</data>
+      <data key="d21">['Polhemsplatsen', 'Västra Stampbron', 'Nya Allén']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">28.7503281089729</data>
@@ -81039,7 +81039,7 @@
       <data key="d11">secondary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Södra Allégatan', 'Parkgatan']</data>
+      <data key="d21">['Parkgatan', 'Södra Allégatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">236.62208053813498</data>
@@ -81661,9 +81661,9 @@
     <edge source="5627309991" target="3797446524" id="0">
       <data key="d10">[400413920, 781539201, 363570925, 363570932, 1290396981, 372859547]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '1', '4']</data>
+      <data key="d12">['4', '2', '1']</data>
       <data key="d13">50</data>
-      <data key="d21">['Operagatan', 'Stora Badhusgatan', 'Residensbron']</data>
+      <data key="d21">['Residensbron', 'Operagatan', 'Stora Badhusgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">61.52620424414472</data>
@@ -82684,7 +82684,7 @@
     <edge source="6061755657" target="11452297149" id="0">
       <data key="d10">[715786708, 644573383]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['6', '4']</data>
+      <data key="d12">['4', '6']</data>
       <data key="d13">50</data>
       <data key="d21">Kämpegatan</data>
       <data key="d14">True</data>
@@ -82703,7 +82703,7 @@
     <edge source="6087701479" target="9249508250" id="0">
       <data key="d10">[1142097923, 643175251, 1142097924, 657079622]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Gullbergsvassgatan</data>
       <data key="d14">False</data>
@@ -82910,7 +82910,7 @@
     <edge source="6137876657" target="27591176" id="0">
       <data key="d10">[1355564377, 756571033, 539515646]</data>
       <data key="d11">trunk</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">['50', '70']</data>
       <data key="d21">Mårten Krakowgatan</data>
       <data key="d14">True</data>
@@ -83218,7 +83218,7 @@
     <edge source="6137877016" target="6137877004" id="0">
       <data key="d10">[655070762, 655070772]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Norra Sjöfarten</data>
       <data key="d14">True</data>
@@ -83251,7 +83251,7 @@
     <edge source="6137877018" target="6061755657" id="0">
       <data key="d10">[634365192, 918802404, 644573383]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['5', '4', '6']</data>
+      <data key="d12">['4', '6', '5']</data>
       <data key="d13">50</data>
       <data key="d21">Kämpegatan</data>
       <data key="d14">True</data>
@@ -83274,7 +83274,7 @@
     <edge source="6137877024" target="6137877018" id="0">
       <data key="d10">[655070756, 754283077, 655070768, 682004732, 682004733]</data>
       <data key="d11">trunk_link</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">70</data>
       <data key="d21">Norra Sjöfarten</data>
       <data key="d14">True</data>
@@ -83395,8 +83395,8 @@
     <edge source="6482686247" target="3499249064" id="0">
       <data key="d10">[4273082, 343000268, 1081709334, 1081709335, 316761210]</data>
       <data key="d11">unclassified</data>
-      <data key="d13">['30', '50']</data>
-      <data key="d21">['Rosenlundsgatan', 'Rosenlundsplatsen']</data>
+      <data key="d13">['50', '30']</data>
+      <data key="d21">['Rosenlundsplatsen', 'Rosenlundsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">430.74592999816684</data>
@@ -83566,7 +83566,7 @@
       <data key="d10">[1411477562, 1060111173, 1302637646]</data>
       <data key="d11">tertiary</data>
       <data key="d12">1</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Redbergsvägen</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -83650,10 +83650,10 @@
     </edge>
     <edge source="6883685425" target="60911677" id="0">
       <data key="d10">[999330185, 151654833]</data>
-      <data key="d11">['residential', 'unclassified']</data>
+      <data key="d11">['unclassified', 'residential']</data>
       <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
-      <data key="d21">['J Sigfrid Edströms Gata', 'Johan Willins Gata']</data>
+      <data key="d21">['Johan Willins Gata', 'J Sigfrid Edströms Gata']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">324.29085856076097</data>
@@ -83824,7 +83824,7 @@
       <data key="d10">[28394128, 740844500]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Torggatan', 'Västra Sjöfarten']</data>
+      <data key="d21">['Västra Sjöfarten', 'Torggatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">51.98725173597375</data>
@@ -83937,7 +83937,7 @@
     <edge source="7041867533" target="9460653479" id="0">
       <data key="d10">[1026120521, 918802402]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '4']</data>
+      <data key="d12">['4', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Kämpegatan</data>
       <data key="d14">True</data>
@@ -84226,7 +84226,7 @@
     <edge source="7545352971" target="7545353567" id="0">
       <data key="d10">[1023578586, 806863898, 1023578585, 806863885]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Sankt Sigfridsgatan</data>
       <data key="d14">True</data>
@@ -84343,7 +84343,7 @@
     <edge source="7545353583" target="489115" id="0">
       <data key="d10">[806863897, 166331030]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Sankt Sigfridsgatan</data>
       <data key="d14">True</data>
@@ -84391,7 +84391,7 @@
       <data key="d10">[806863904, 806863909, 806863910, 1023578574, 1023578575]</data>
       <data key="d20">yes</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '4', '3']</data>
+      <data key="d12">['4', '3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Sankt Sigfridsgatan</data>
       <data key="d14">True</data>
@@ -84424,7 +84424,7 @@
     <edge source="7545353618" target="25710729" id="0">
       <data key="d10">[308294797, 58819261, 1361107853]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Mölndalsvägen</data>
       <data key="d14">True</data>
@@ -84533,7 +84533,7 @@
       <data key="d11">tertiary</data>
       <data key="d12">2</data>
       <data key="d13">50</data>
-      <data key="d21">['Fiskhamnsmotet', 'Djurgårdsgatan']</data>
+      <data key="d21">['Djurgårdsgatan', 'Fiskhamnsmotet']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">26.25480509594575</data>
@@ -84658,7 +84658,7 @@
       <data key="d24">no</data>
       <data key="d11">secondary</data>
       <data key="d13">50</data>
-      <data key="d21">['Stadstjänaregatan', 'Bergslagsgatan']</data>
+      <data key="d21">['Bergslagsgatan', 'Stadstjänaregatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">85.62874244268214</data>
@@ -84850,7 +84850,7 @@
     <edge source="8706000431" target="25658728" id="0">
       <data key="d10">[1156620192, 1160426528, 1160426529, 1046584426, 25050961, 213218678, 620132343, 218892476]</data>
       <data key="d11">primary</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Dag Hammarskjöldsleden</data>
       <data key="d14">True</data>
@@ -84973,7 +84973,7 @@
     <edge source="8709855510" target="94609738" id="0">
       <data key="d10">[367556794, 1368308330, 1133100556, 367556789, 1369521145, 1369521146]</data>
       <data key="d11">unclassified</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Sven Hultins Gata</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
@@ -84997,7 +84997,7 @@
       <data key="d11">residential</data>
       <data key="d13">50</data>
       <data key="d21">Reutersgatan</data>
-      <data key="d22">['11.8', '11.7']</data>
+      <data key="d22">['11.7', '11.8']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">66.20970968828352</data>
@@ -85085,7 +85085,7 @@
       <data key="d22">6</data>
       <data key="d15">False</data>
       <data key="d16">140.36595295365564</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d17">LINESTRING (11.9776588 57.7005165, 11.9781068 57.7003328, 11.9786054 57.7000793, 11.9789072 57.6999302, 11.9792149 57.6997848, 11.9792605 57.6997621, 11.9794157 57.6996748)</data>
     </edge>
     <edge source="8712821188" target="8712821187" id="0">
@@ -85248,7 +85248,7 @@
     </edge>
     <edge source="8722747991" target="30420758" id="0">
       <data key="d10">[163450561, 4763153]</data>
-      <data key="d11">['residential', 'tertiary']</data>
+      <data key="d11">['tertiary', 'residential']</data>
       <data key="d12">1</data>
       <data key="d13">50</data>
       <data key="d21">['Tegnérsgatan', 'Södra Vägen']</data>
@@ -85282,7 +85282,7 @@
       <data key="d10">[1013299009, 4317014, 163643990, 296997215]</data>
       <data key="d11">secondary</data>
       <data key="d12">2</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Per Dubbsgatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -85300,7 +85300,7 @@
     <edge source="8730000972" target="401625549" id="0">
       <data key="d10">[4305083, 1157849940]</data>
       <data key="d11">['primary_link', 'secondary']</data>
-      <data key="d12">['2', '3']</data>
+      <data key="d12">['3', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Per Dubbsgatan</data>
       <data key="d14">True</data>
@@ -85431,7 +85431,7 @@
       <data key="d10">[26675658, 26675659]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Stubbeledsgatan', 'Kungsladugårdsgatan']</data>
+      <data key="d21">['Kungsladugårdsgatan', 'Stubbeledsgatan']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">337.87507613134335</data>
@@ -86042,7 +86042,7 @@
     <edge source="9144075275" target="130929198" id="0">
       <data key="d10">[1152667500, 13900247]</data>
       <data key="d11">living_street</data>
-      <data key="d21">['Origovägen', 'Rännvägen']</data>
+      <data key="d21">['Rännvägen', 'Origovägen']</data>
       <data key="d22">4</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -86053,7 +86053,7 @@
       <data key="d10">[107919121, 1363646570, 1152667500]</data>
       <data key="d11">living_street</data>
       <data key="d21">Rännvägen</data>
-      <data key="d22">['5', '4']</data>
+      <data key="d22">['4', '5']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">178.54464057243425</data>
@@ -86161,7 +86161,7 @@
       <data key="d10">[1361222914, 587949243, 27880770]</data>
       <data key="d11">unclassified</data>
       <data key="d12">2</data>
-      <data key="d21">['Partihandelsgatan', 'Blomstergatan']</data>
+      <data key="d21">['Blomstergatan', 'Partihandelsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">323.28426044825216</data>
@@ -86325,8 +86325,8 @@
     <edge source="9203753665" target="1027776730" id="0">
       <data key="d10">[298748610, 1217074789, 298748584, 129413864, 1256596632, 1256596633]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['2', '1', '4']</data>
-      <data key="d13">['40', '50', '60']</data>
+      <data key="d12">['4', '2', '1']</data>
+      <data key="d13">['50', '40', '60']</data>
       <data key="d21">Hjalmar Brantingsgatan</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
@@ -86927,7 +86927,7 @@
       <data key="d11">trunk_link</data>
       <data key="d12">2</data>
       <data key="d13">70</data>
-      <data key="d21">['Södra Sjöfarten', 'Mårten Krakowgatan']</data>
+      <data key="d21">['Mårten Krakowgatan', 'Södra Sjöfarten']</data>
       <data key="d14">True</data>
       <data key="d15">False</data>
       <data key="d16">225.81933232605357</data>
@@ -87321,7 +87321,7 @@
       <data key="d11">residential</data>
       <data key="d13">50</data>
       <data key="d21">Reutersgatan</data>
-      <data key="d22">['11.8', '11.7']</data>
+      <data key="d22">['11.7', '11.8']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">66.20970968828352</data>
@@ -87372,7 +87372,7 @@
     <edge source="10248537886" target="60789862" id="0">
       <data key="d10">[218923280, 231094765, 4392911]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '4']</data>
+      <data key="d12">['4', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Berzeliigatan</data>
       <data key="d14">False</data>
@@ -87383,7 +87383,7 @@
     <edge source="10248537886" target="30420895" id="0">
       <data key="d10">[1136293168, 231094765, 941932790]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '4']</data>
+      <data key="d12">['4', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Berzeliigatan</data>
       <data key="d14">False</data>
@@ -88306,7 +88306,7 @@
       <data key="d10">[529656632, 1355359907, 1355359908, 1226752508]</data>
       <data key="d11">unclassified</data>
       <data key="d13">50</data>
-      <data key="d21">['Lisebergsgatan', 'Elisabeth Lambergs Gångstig']</data>
+      <data key="d21">['Elisabeth Lambergs Gångstig', 'Lisebergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">True</data>
       <data key="d16">450.94998858602264</data>
@@ -88326,7 +88326,7 @@
     <edge source="11452297149" target="7041867542" id="0">
       <data key="d10">[918802403, 715786708]</data>
       <data key="d11">tertiary</data>
-      <data key="d12">['2', '4']</data>
+      <data key="d12">['4', '2']</data>
       <data key="d13">50</data>
       <data key="d21">Kämpegatan</data>
       <data key="d14">True</data>
@@ -88446,7 +88446,7 @@
     <edge source="11472719431" target="1577473234" id="0">
       <data key="d10">[158587512, 36909113]</data>
       <data key="d11">unclassified</data>
-      <data key="d13">['30', '50']</data>
+      <data key="d13">['50', '30']</data>
       <data key="d21">Marklandsgatan</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
@@ -88467,7 +88467,7 @@
       <data key="d10">[11983942, 25618375]</data>
       <data key="d11">residential</data>
       <data key="d13">50</data>
-      <data key="d21">['Orrspelsgatan', 'Borraregatan']</data>
+      <data key="d21">['Borraregatan', 'Orrspelsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">198.77279751833657</data>
@@ -88815,7 +88815,7 @@
       <data key="d10">[835893008, 144049460]</data>
       <data key="d11">unclassified</data>
       <data key="d12">2</data>
-      <data key="d21">['Gullbergsvassgatan', 'Kruthusgatan']</data>
+      <data key="d21">['Kruthusgatan', 'Gullbergsvassgatan']</data>
       <data key="d14">False</data>
       <data key="d15">[False, True]</data>
       <data key="d16">687.022857259062</data>
@@ -89534,7 +89534,7 @@
     </edge>
     <edge source="12603781404" target="302665554" id="0">
       <data key="d10">[988305165, 24456159]</data>
-      <data key="d11">['unclassified', 'trunk_link']</data>
+      <data key="d11">['trunk_link', 'unclassified']</data>
       <data key="d13">50</data>
       <data key="d21">Oskarsgatan</data>
       <data key="d14">True</data>
@@ -89547,7 +89547,7 @@
       <data key="d11">trunk</data>
       <data key="d12">2</data>
       <data key="d13">70</data>
-      <data key="d21">['Oscarsleden', 'Andréegatan']</data>
+      <data key="d21">['Andréegatan', 'Oscarsleden']</data>
       <data key="d14">True</data>
       <data key="d18">E 45</data>
       <data key="d15">False</data>
@@ -89703,7 +89703,7 @@
     <edge source="12926128137" target="2330517042" id="0">
       <data key="d10">[1501773472, 1294963682, 734782663]</data>
       <data key="d11">secondary</data>
-      <data key="d12">['3', '4']</data>
+      <data key="d12">['4', '3']</data>
       <data key="d13">50</data>
       <data key="d21">Södra Sjöfarten</data>
       <data key="d14">True</data>
@@ -89763,7 +89763,7 @@
       <data key="d24">no</data>
       <data key="d11">unclassified</data>
       <data key="d13">50</data>
-      <data key="d21">['Lisebergsgatan', 'Elisabeth Lambergs Gångstig']</data>
+      <data key="d21">['Elisabeth Lambergs Gångstig', 'Lisebergsgatan']</data>
       <data key="d14">False</data>
       <data key="d15">False</data>
       <data key="d16">450.9499885860226</data>
@@ -90053,7 +90053,7 @@
       <data key="d16">90.5132470541514</data>
       <data key="d17">LINESTRING (11.9659999 57.710696, 11.9660517 57.7107558, 11.966174 57.7107994, 11.966571 57.7108659, 11.9669079 57.7109301, 11.9670946 57.7109404, 11.9673721 57.7108919)</data>
     </edge>
-    <data key="d0">2026-07-05 15:11:38</data>
+    <data key="d0">2026-07-06 13:21:52</data>
     <data key="d1">OSMnx 2.0.7</data>
     <data key="d2">epsg:4326</data>
     <data key="d3">True</data>

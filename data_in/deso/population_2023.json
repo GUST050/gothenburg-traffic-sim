@@ -1,6 +1,12 @@
 {
  "year": "2023",
  "source": "SCB BE0101Y/FolkmDesoAldKon via PXWeb API",
+ "inner_city_bbox": [
+  57.665,
+  11.92,
+  57.722,
+  12.02
+ ],
  "n_zones_with_data": 116,
  "n_zones_missing": 13,
  "missing_codes": [

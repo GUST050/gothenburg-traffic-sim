@@ -65,7 +65,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
 
 import networkx as nx
@@ -74,7 +73,7 @@ import osmnx as ox
 
 from build_candidates import (PURPOSE_SHARES, activity_mass, find_gates,
                               gate_weights, home_mass, load_graph_edges)
-from build_sumo_net import DEFAULT_SPEED_KMH, parse_speed_ms
+from build_sumo_net import parse_speed_ms
 
 GRAPH_PATH = Path("web/data/graph.graphml")
 OUT_PATH   = Path("sumo/assignment_priors.json")

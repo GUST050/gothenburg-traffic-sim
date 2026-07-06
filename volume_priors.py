@@ -27,7 +27,6 @@ from pathlib import Path
 import numpy as np
 
 from dirsplit.config import DATA_DIR
-from dirsplit.dataset import PROFILE_FEATURES
 from dirsplit.features import (FEATURE_NAMES, edge_bearing_from_graph,
                                edge_features, load_city_graph)
 
