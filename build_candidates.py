@@ -77,6 +77,7 @@ import json
 import math
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -85,6 +86,7 @@ from shapely.geometry import Point, shape
 
 from build_data import INNER_CITY_BBOX
 from build_sumo_net import sumo_home
+from dirsplit.geo import bearing_deg, is_ahead
 
 SUMO_DIR   = Path("sumo")
 NET_PATH   = SUMO_DIR / "net.net.xml"
@@ -279,6 +281,70 @@ def gate_weights(G, gates: list[tuple[str, int]]) -> np.ndarray:
     return w / w.sum()
 
 
+def reverse_edge_id(eid: str) -> str:
+    u, v, k = eid.split("_")
+    return f"{v}_{u}_{k}"
+
+
+def drop_uturn_routes(path: Path) -> None:
+    """Direction-aware gates + a stiff turnaround penalty (see main()) cut
+    literal U-turns from ~80% to ~10% of via-forced candidates — not zero,
+    because a straight-line gate filter is only an approximation of what the
+    road network can actually deliver, and duarouter still minimises cost
+    rather than forbidding turnarounds outright. The PFE then makes it WORSE:
+    its parsimony objective reuses whichever candidates touch a measured edge
+    as heavily as needed to hit the hard count, so a residual 10% U-turn rate
+    in the pool becomes ~24% of actually-simulated vehicles at sensor edges
+    (measured directly). Rather than chase the gate/penalty heuristics
+    further, enforce the actual invariant directly: no candidate reaching the
+    PFE may contain edge e immediately followed by reverse(e)."""
+    tree = ET.parse(path)
+    root = tree.getroot()
+    dropped = 0
+    for veh in list(root):
+        route = veh.find("route")
+        edges = route.get("edges").split()
+        if any(edges[i + 1] == reverse_edge_id(edges[i]) for i in range(len(edges) - 1)):
+            dropped += 1
+            root.remove(veh)
+    if dropped:
+        tree.write(path)
+    print(f"  dropped {dropped} candidates containing a literal U-turn "
+          f"(edge immediately followed by its reverse)")
+
+
+def upstream_downstream_gates(
+    G, m_edge: str, entries: list[tuple[str, int]], exits: list[tuple[str, int]],
+) -> tuple[list[str], list[str]]:
+    """Restrict entry/exit gates for a via-forced trip through m_edge to ones
+    that make it a plausible THROUGH-MOVEMENT in m_edge's own travel
+    direction, instead of an arbitrary detour.
+
+    A gate picked with no regard for m_edge's location forces duarouter to
+    solve entry -> m_edge -> exit as two unrelated shortest-path legs; when
+    the via edge isn't on the way, the cheapest solution is often to drive to
+    it and immediately take its antiparallel counterpart back the way it
+    came — a literal U-turn (verified directly in sumo/candidates.rou.xml:
+    edge e immediately followed by reverse(e) at the via point, for the
+    majority of via-trips sampled). Filtering to gates roughly "behind"
+    (entry) and "ahead" (exit) of m_edge's own bearing keeps every via-trip a
+    genuine corridor movement — the same road-class gate weighting already
+    used for real E-E through-trips, just localised to one edge's heading."""
+    u, v, k = map(int, m_edge.split("_"))
+    ulat, ulon = G.nodes[u]["y"], G.nodes[u]["x"]
+    vlat, vlon = G.nodes[v]["y"], G.nodes[v]["x"]
+    via_bearing = bearing_deg(ulat, ulon, vlat, vlon)
+    mlat, mlon = (ulat + vlat) / 2, (ulon + vlon) / 2
+
+    ins = [eid for eid, n in entries
+           if is_ahead(bearing_deg(G.nodes[n]["y"], G.nodes[n]["x"], mlat, mlon),
+                      via_bearing)]
+    outs = [eid for eid, n in exits
+           if is_ahead(bearing_deg(mlat, mlon, G.nodes[n]["y"], G.nodes[n]["x"]),
+                      via_bearing)]
+    return (ins or [eid for eid, _ in entries]), (outs or [eid for eid, _ in exits])
+
+
 def daily_shape() -> np.ndarray:
     """Our OWN measured departure-time distribution (normal_profile.json) —
     more local and finer-grained than RVU's regional bins, and consistent
@@ -304,6 +370,15 @@ def main() -> None:
     ap.add_argument("--n-total", type=int, default=12000)
     ap.add_argument("--n-sensor-via", type=int, default=900,
                     help="via-trips per measured edge (coverage guarantee)")
+    ap.add_argument("--route-diversity", type=float, default=2.0,
+                    help="duarouter --weights.random-factor: per-trip edge-"
+                        "weight jitter drawn from [1, X) so similar OD pairs "
+                        "spread across several realistic routes instead of "
+                        "collapsing onto one canonical shortest path — the "
+                        "same failure mode assignment_priors.py's Dial-style "
+                        "stochastic multipath was built to fix, applied here "
+                        "natively via duarouter instead of a re-implemented "
+                        "networkx shortest-path loop")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out-suffix", default="",
                     help="internal use by calibrate_theta.py")
@@ -369,13 +444,18 @@ def main() -> None:
                       edges[a_i]["id"], edges[h_i]["id"]))
 
     # ── Coverage guarantee: via-trips through every measured sensor edge ───────
+    # Gates are restricted to ones upstream/downstream of m_edge's OWN travel
+    # direction (see upstream_downstream_gates) — an unrestricted random
+    # entry/exit pair turns this into a forced detour that duarouter often
+    # resolves with a literal U-turn at the via point.
     with open("web/data/flows.json") as f:
         measured = list(json.load(f)["flows"])
     for m_edge in measured:
+        in_ids, out_ids = upstream_downstream_gates(G, m_edge, entries, exits)
         hrs = rng.choice(24, size=args.n_sensor_via, p=shape_hourly)
         for h in hrs:
-            e_in  = entry_ids[rng.integers(len(entry_ids))]
-            e_out = exit_ids[rng.integers(len(exit_ids))]
+            e_in  = in_ids[rng.integers(len(in_ids))]
+            e_out = out_ids[rng.integers(len(out_ids))]
             trips.append(((h + rng.random()) * 3600, e_in, e_out, m_edge))
 
     trips.sort(key=lambda t: t[0])
@@ -395,11 +475,22 @@ def main() -> None:
     res = subprocess.run(
         [str(home / "bin" / "duarouter"), "-n", str(NET_PATH),
          "--route-files", str(trips_path), "-o", str(out),
+         "--weights.random-factor", str(args.route_diversity),
+         # Default 5s barely discourages a literal U-turn at a via point when
+         # it's duarouter's cheapest way to satisfy a forced via constraint
+         # (verified: still ~14% of via-trips before this) — direction-aware
+         # gate selection (above) handles the common case, this catches the
+         # residual ones where a coarse straight-line gate filter still
+         # picked a technically-"ahead" exit that the road network can't
+         # reach without turning back.
+         "--weights.turnaround-penalty", "300",
+         "--seed", str(args.seed),
          "--ignore-errors", "--no-warnings", "--repair", "--remove-loops"],
         capture_output=True, text=True)
     if res.returncode != 0:
         print(res.stderr[-1500:])
         sys.exit("duarouter failed")
+    drop_uturn_routes(out)
     n = sum(1 for line in open(out) if "<vehicle" in line)
     print(f"Wrote {out}  ({n} routed candidates)")
 
