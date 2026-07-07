@@ -101,9 +101,22 @@ uniform `randomTrips`:
     gate weights better — disclosed limitation).
   - **E-I / I-E / I-I** — PAIRED tours (the return leg is the same tour's
     second half, not a fresh sample — this is what makes AM/PM directional
-    balance structural). Purpose sampled from RVU's split (43/33/24 %);
-    destination drawn from that purpose's activity mass with a gravity
-    deterrence.
+    balance structural). CORRECTED 2026-07-09: this line described E-I/I-E
+    as already working from this doc's original 2026-07-05 lock — false;
+    only I-I (both ends internal) was ever implemented until 2026-07-08/09,
+    which structurally capped tour length at the canvas's own diameter (see
+    the θ entry below). E-I/I-E (one end a boundary gate) are now real,
+    added via `--cross-fraction` (disclosed neutral prior, same status as
+    through_fraction).
+    Purpose is sampled from RVU's split (43/33/24 %, its WEEKLY average —
+    Fig.11 has no day-type qualifier), but NOT as one flat number: split
+    into weekday/weekend/holiday profiles AND by hour of departure (e.g.
+    08h is ~81 % arbete on a weekday, 20h ~35 % fritid) — triangulated from
+    RVU's total plus two external sources with real weekday/weekend/hourly
+    granularity (NHTS 2017, UK NTS 2019), solved so the annual average
+    reproduces RVU's 43/33/24 exactly (`build_candidates.PURPOSE_HOURLY_
+    WEEKDAY/WEEKEND`). Destination drawn from that purpose's activity mass
+    with a gravity deterrence.
   - **HOME mass** = real 2023 population per DeSO zone (`fetch_deso.py`:
     SCB open WFS for DeSO-2025 boundaries + PXWeb API for population,
     both live, no key needed), spread over each zone's residential-street
@@ -120,21 +133,35 @@ uniform `randomTrips`:
     (finer-grained than RVU's coarse bins, and independently consistent
     with RVU's reported AM 7-8h / PM 16-17h peaks — a genuine cross-check,
     not a coincidence, since both measure the same city).
-  - **θ (through_fraction, gravity_km)**: a 3×3 bounded grid search
-    (`calibrate_theta.py`) — the proportionate version of simulation-based
-    calibration (SPSA/metamodel methods, see references) for exactly 2 free
-    parameters. FINDING: GEH-based scoring on a fast morning window
-    SATURATED at 100 % for all 9 combinations — it only checks fit at
-    MEASURED edges, which the PFE achieves regardless of candidate
-    composition given enough route diversity; it cannot discriminate θ.
-    Replaced with a trip-length fit against RVU's measured distance bins
-    (table 2, p.12): gravity_km=2.6 minimizes the over-concentration of
-    unrealistically short trips (21 % in 0–1 km vs 32 % at gravity_km=1.0;
-    RVU's own share is 9 %, but genuine >10 km trips are structurally
-    absent from a 2 km-wide canvas — through-trips absorb that mass by
-    construction). through_fraction has NO local ground truth to
-    discriminate it against — frozen at 0.5, disclosed as an unidentifiable
-    neutral prior, not a calibrated value.
+  - **θ (through_fraction, gravity_km, cross_fraction)**: a 3×3 bounded grid
+    search (`calibrate_theta.py`) — the proportionate version of
+    simulation-based calibration (SPSA/metamodel methods, see references)
+    for a small number of free parameters. FINDING: GEH-based scoring on a
+    fast morning window SATURATED at 100 % for all 9 combinations — it only
+    checks fit at MEASURED edges, which the PFE achieves regardless of
+    candidate composition given enough route diversity; it cannot
+    discriminate θ. CORRECTED 2026-07-09: this doc (and calibrate_theta.py's
+    own commit message) had claimed since 2026-07-05 that GEH-scoring was
+    "replaced with a trip-length fit against RVU's measured distance bins"
+    — that fit was never actually implemented until 2026-07-08; re-running
+    it for real gave gravity_km=2.6 as the best of the original 3×3 grid
+    (L1=0.5947 against RVU's short bins), though a wider manual sweep found
+    gravity_km=12 fits marginally better (L1=0.5812) — an interior optimum,
+    not monotonic. HARD CEILING, verified by direct measurement (not the
+    "2 km-wide canvas" this doc previously and incorrectly claimed): this
+    network's own diameter — gate-to-gate (E-E) AND gate-to-interior (E-I/
+    I-E) alike — never exceeds ~7.8 km. RVU's 5.1-10km/>10km bins (51 % of
+    all real trips) describe a WHOLE-REGION survey including long regional
+    commutes; most of a trip like that happens on roads outside this graph
+    entirely, so no θ value can close this gap — it is a scope mismatch
+    (distance-within-this-graph vs. real door-to-door distance), not a
+    mistuned parameter. E-I/I-E tours (added 2026-07-08/09, see above) are
+    a genuine, if modest, improvement on this front (5.1-10km share:
+    ~1-4 % I-I-only → 8.4 % E-I/I-E-only) since a gate-anchored end can span
+    the full canvas diameter, unlike a purely internal I-I tour.
+    through_fraction and cross_fraction have NO local ground truth to
+    discriminate them against — frozen at 0.5 and 0.3, disclosed as
+    unidentifiable neutral priors, not calibrated values.
   - **Validation — controlled A/B via `--legacy-random-pool`**: median LOSO
     recovery on the SAME city-scale network, same corridor coupling, same
     shape pool: grounded 0.093 vs legacy uniform pool 0.076 — a modest
@@ -150,10 +177,25 @@ uniform `randomTrips`:
     which are both on today's full inner-city network. Recovery is
     structurally harder at city scale (vastly more unconstrained
     alternative paths) — lower numbers here are not a regression.
-  - KNOWN GAP: `validate_sim.py` does not wire in `corridor_priors` from
-    observability.json (only `prior_flows.json`'s direction priors) — the
-    LOSO figures above are a slight underestimate of the deployed
-    pipeline's actual behaviour. Fix alongside the next Agent F work.
+    STALE AS OF 2026-07-09 — PENDING RE-VALIDATION: every LOSO figure on
+    this page (0.093/0.076 here, 0.09/0.154 in C.1, 0.32 in section F) was
+    measured BEFORE E-I/I-E tours and hour/day-type-aware purpose sampling
+    existed — the candidate-generation mechanism these numbers describe
+    has materially changed since. Not yet re-run (a real compute cost, a
+    deliberate choice to defer rather than guess at updated figures) — do
+    not treat these as the current system's validated behaviour until
+    `validate_sim.py` is re-run against the current pipeline.
+  - FIXED 2026-07-09: `validate_sim.py` now wires in `corridor_priors`
+    (`corridor_priors_for_fold()`, excluded per-fold whenever either anchor
+    sensor is the one being held out — same leakage-prevention principle
+    as `prior_flows.json`'s direction priors). The underlying mechanism was
+    already fully general (scans every PAIR of measured sensors, no
+    hardcoded IDs — new stations get corridor priors automatically), so
+    this was a validation-ACCURACY gap only, not a scalability one; the
+    real, deployed pipeline already had this. The LOSO figures above still
+    predate the fix (see PENDING RE-VALIDATION above) — re-running will
+    now also reflect corridor coupling, closing this specific
+    underestimate alongside the E-I/I-E and hour/day-type-purpose changes.
 
 ### C.1 — Why grounding barely helped, and the fix that did (`assignment_priors.py`)
 Gustav asked directly: why did realistic OD grounding only move LOSO from
@@ -220,6 +262,9 @@ robust fit (and a natural extension to per-road-class factors), while the
 sensors ALSO directly tighten level-2 bounds and unlock more corridor
 couplings — three independent mechanisms all strengthening together as
 the city adds stations, none requiring retraining.
+STALE AS OF 2026-07-09 — see the PENDING RE-VALIDATION note in section C:
+these figures predate E-I/I-E tours and hour/day-type-aware purpose
+sampling.
 
 ### D — Forecast (`train_agent1.py`, `build_agent1_flows.py`) — built
 Per-station baseline + holiday factors; beats seasonal-naïve +12–29 %.
@@ -232,7 +277,16 @@ closures, interactive API. Gate: baseline delivery ≥ 0.85 at stations.
 
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
-of a hidden station's traffic (range 0.06–0.83). The spread IS the
+of a hidden station's traffic (range 0.06–0.83). CONFOUND WARNING (missing
+from this section until 2026-07-09 — an internal inconsistency with
+section C's own caveat, which this exact figure is the subject of): this
+0.32 was measured on the SMALL TWO-CLUSTER network, before the city-scale
+expansion, corridor coupling, and the PFE shape-pool fix — it is NOT
+comparable to section C's 0.09/0.093/0.154 figures (all on today's full
+inner-city network, and themselves now also pending re-validation against
+E-I/I-E + hour/day-type purposes). Kept here for the station-level pattern
+it illustrates (which sensors are structurally easy/hard to infer), not as
+a current headline number. The spread IS the
 observability story quantified: 133 recovers 0.83 (its twin 2276 measures
 the same street across the junction), isolated 1074 recovers 0.06 (nothing
 infers it). Two consequences, both by design: (1) unmeasured streets carry

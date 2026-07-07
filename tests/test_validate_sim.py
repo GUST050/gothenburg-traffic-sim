@@ -1,0 +1,85 @@
+"""Unit tests for validate_sim.py's LOSO corridor-prior wiring.
+
+FIXED 2026-07-09 (found while auditing the whole codebase): corridor_priors
+("sensors helping each other" — same-direction station pairs linked by a
+short path bound the edges between them, observability.corridor_priors)
+were computed and used by the real, deployed build_sumo_demand.py pipeline,
+but never wired into this validation script at all — every LOSO figure on
+record understated the deployed system's actual recovery. The mechanism
+itself was already fully general (scans every PAIR of measured sensors, no
+hardcoded IDs), so this was a validation-accuracy gap, not a scalability
+one. corridor_priors_for_fold() is the extracted, testable leakage-
+exclusion logic: a corridor prior anchored (from OR to) on the held-out
+station must be dropped from that station's own fold."""
+
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from validate_sim import corridor_priors_for_fold
+
+
+def make_corridor(from_edge, to_edge, prior, band):
+    return {"mid_edge": {"from_sensor_edge": from_edge, "to_sensor_edge": to_edge,
+                         "prior": prior, "band": band}}
+
+
+class TestCorridorPriorsForFold:
+    def test_included_when_neither_anchor_is_held_out(self):
+        corridor = make_corridor("eA", "eB", [10.0], [2.0])
+        edge_to_sensor = {"eA": "107", "eB": "1076"}
+        out = corridor_priors_for_fold(corridor, edge_to_sensor, held="133", qi=0)
+        assert out == {"mid_edge": (10.0, 0.5)}
+
+    def test_excluded_when_from_edge_belongs_to_held_out_station(self):
+        corridor = make_corridor("eA", "eB", [10.0], [2.0])
+        edge_to_sensor = {"eA": "107", "eB": "1076"}
+        out = corridor_priors_for_fold(corridor, edge_to_sensor, held="107", qi=0)
+        assert out == {}
+
+    def test_excluded_when_to_edge_belongs_to_held_out_station(self):
+        corridor = make_corridor("eA", "eB", [10.0], [2.0])
+        edge_to_sensor = {"eA": "107", "eB": "1076"}
+        out = corridor_priors_for_fold(corridor, edge_to_sensor, held="1076", qi=0)
+        assert out == {}
+
+    def test_null_value_at_this_quarter_is_skipped(self):
+        corridor = make_corridor("eA", "eB", [None], [2.0])
+        edge_to_sensor = {"eA": "107", "eB": "1076"}
+        out = corridor_priors_for_fold(corridor, edge_to_sensor, held="133", qi=0)
+        assert out == {}
+
+    def test_quarter_index_beyond_array_length_is_skipped(self):
+        corridor = make_corridor("eA", "eB", [10.0], [2.0])
+        edge_to_sensor = {"eA": "107", "eB": "1076"}
+        out = corridor_priors_for_fold(corridor, edge_to_sensor, held="133", qi=5)
+        assert out == {}
+
+    def test_weight_is_inverse_of_band_floored_at_one(self):
+        """A near-zero band (two near-identical sensor readings) must not
+        blow the weight up unboundedly -- floored the same way
+        build_sumo_demand.py's own corridor application is."""
+        corridor = make_corridor("eA", "eB", [10.0], [0.1])
+        edge_to_sensor = {"eA": "107", "eB": "1076"}
+        out = corridor_priors_for_fold(corridor, edge_to_sensor, held="133", qi=0)
+        assert out["mid_edge"] == pytest.approx((10.0, 1.0))
+
+    def test_missing_band_falls_back_to_default_of_8(self):
+        corridor = make_corridor("eA", "eB", [10.0], [None])
+        edge_to_sensor = {"eA": "107", "eB": "1076"}
+        out = corridor_priors_for_fold(corridor, edge_to_sensor, held="133", qi=0)
+        assert out["mid_edge"] == pytest.approx((10.0, 1.0 / 8.0))
+
+    def test_multiple_corridor_edges_independently_filtered(self):
+        corridor = {
+            "mid1": {"from_sensor_edge": "eA", "to_sensor_edge": "eB",
+                     "prior": [10.0], "band": [2.0]},
+            "mid2": {"from_sensor_edge": "eC", "to_sensor_edge": "eD",
+                     "prior": [20.0], "band": [4.0]},
+        }
+        edge_to_sensor = {"eA": "107", "eB": "1076", "eC": "133", "eD": "134"}
+        out = corridor_priors_for_fold(corridor, edge_to_sensor, held="107", qi=0)
+        assert "mid1" not in out   # anchored on held-out 107
+        assert out["mid2"] == pytest.approx((20.0, 0.25))

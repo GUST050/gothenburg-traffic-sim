@@ -120,15 +120,18 @@ def robust_scale(x_load: np.ndarray, y_meas: np.ndarray) -> tuple[float, float]:
 
 
 def daily_shape() -> np.ndarray:
+    """96-quarter WEEKDAY-only shape (unlike build_candidates.daily_shape,
+    a separate implementation at hourly resolution with an is_weekend
+    param) — deliberately weekday-only, since this module is calibrated
+    once against the fixed STRUCTURAL_REFERENCE_DATE (2025-09-16, a
+    weekday), not per simulated date."""
     with open("web/data/normal_profile.json") as f:
         profiles = json.load(f)["profiles"]
     acc = np.zeros(96)
-    n = 0
     for p in profiles.values():
         wd = p.get("weekday") or []
         if any(v is not None for v in wd):
             acc += [v or 0 for v in wd]
-            n += 1
     return acc / acc.sum()
 
 

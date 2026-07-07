@@ -502,31 +502,60 @@ def reverse_edge_id(eid: str) -> str:
     return f"{v}_{u}_{k}"
 
 
+def route_visits_a_node_twice(edges: list[str]) -> bool:
+    """True if this edge sequence passes through the same intersection more
+    than once — a strict superset of a literal U-turn (edge e immediately
+    followed by reverse(e) means the node BETWEEN them repeats one step
+    later; a route that leaves a node, loops round the block, and returns
+    to it repeats the same node several edges later instead) — so this one
+    check replaces the narrower adjacent-only version below."""
+    if not edges:
+        return False
+    nodes = [edges[0].split("_")[0]] + [e.split("_")[1] for e in edges]
+    return len(nodes) != len(set(nodes))
+
+
 def drop_uturn_routes(path: Path) -> None:
     """Direction-aware gates + a stiff turnaround penalty (see main()) cut
     literal U-turns from ~80% to ~10% of via-forced candidates — not zero,
     because a straight-line gate filter is only an approximation of what the
     road network can actually deliver, and duarouter still minimises cost
-    rather than forbidding turnarounds outright. The PFE then makes it WORSE:
-    its parsimony objective reuses whichever candidates touch a measured edge
-    as heavily as needed to hit the hard count, so a residual 10% U-turn rate
-    in the pool becomes ~24% of actually-simulated vehicles at sensor edges
-    (measured directly). Rather than chase the gate/penalty heuristics
-    further, enforce the actual invariant directly: no candidate reaching the
-    PFE may contain edge e immediately followed by reverse(e)."""
+    rather than forbidding turnarounds outright (its own --remove-loops flag
+    doesn't catch this either — verified directly, see below). The PFE then
+    makes it WORSE: its parsimony objective reuses whichever candidates
+    touch a measured edge as heavily as needed to hit the hard count, so a
+    residual U-turn rate in the pool becomes hugely overrepresented among
+    actually-simulated vehicles at sensor edges (measured directly). Rather
+    than chase the gate/penalty heuristics further, enforce the actual
+    invariant directly.
+
+    WIDENED 2026-07-10 (Gustav, watching the live simulation: "det ser ut
+    som att vissa åker in i sensorn och åker tillbaka igen" — found to be
+    real, not a rendering artifact): the ORIGINAL check here only caught a
+    literal U-turn (edge e immediately followed by reverse(e)). Measured
+    directly in a live candidate pool: 9.1% of candidates revisit some
+    OTHER node a few edges later instead — duarouter's --weights.random-
+    factor jitter finding a small, pointless loop around a block (leave a
+    node, wander a handful of edges, come back to the SAME node, continue)
+    that its own --remove-loops flag does not remove. One specific such
+    loop, sitting on a sensor edge, was reused by PFE for ~100 of ~2100
+    simulated vehicles in one run (repeated node check below now drops it
+    from the pool before PFE ever sees it, same mechanism as the original
+    literal-U-turn fix, since a literal U-turn is the special case where
+    the repeated node is exactly one step back)."""
     tree = ET.parse(path)
     root = tree.getroot()
     dropped = 0
     for veh in list(root):
         route = veh.find("route")
         edges = route.get("edges").split()
-        if any(edges[i + 1] == reverse_edge_id(edges[i]) for i in range(len(edges) - 1)):
+        if route_visits_a_node_twice(edges):
             dropped += 1
             root.remove(veh)
     if dropped:
         tree.write(path)
-    print(f"  dropped {dropped} candidates containing a literal U-turn "
-          f"(edge immediately followed by its reverse)")
+    print(f"  dropped {dropped} candidates revisiting the same intersection "
+          f"twice (a literal U-turn is the special case one step back)")
 
 
 def upstream_downstream_gates(
@@ -559,6 +588,61 @@ def upstream_downstream_gates(
            if is_ahead(bearing_deg(mlat, mlon, G.nodes[n]["y"], G.nodes[n]["x"]),
                       via_bearing)]
     return (ins or [eid for eid, _ in entries]), (outs or [eid for eid, _ in exits])
+
+
+def via_naturally_on_path(G, entry_v: int, exit_u: int, m_u: int, m_v: int) -> bool:
+    """True if the via edge (m_u -> m_v) lies consecutively on the shortest
+    (by length) path from entry_v to exit_u — i.e. forcing the trip through
+    it as a via constraint doesn't require a detour, since it's already on
+    the way there."""
+    import networkx as nx
+    try:
+        path = nx.shortest_path(G, entry_v, exit_u, weight="length")
+    except nx.NetworkXNoPath:
+        return False
+    return any(path[i] == m_u and path[i + 1] == m_v for i in range(len(path) - 1))
+
+
+def verified_via_gate_pairs(G, m_edge: str, in_ids: list[str], out_ids: list[str]
+                            ) -> list[tuple[str, str]]:
+    """Of all (entry, exit) gate pairs for a via-forced trip through
+    m_edge, keep only those where m_edge genuinely lies on the shortest
+    entry->exit path — so the SOURCE of a via-trip is a real, natural
+    corridor movement, not just one that survives a post-hoc U-turn/loop
+    filter.
+
+    WHY THIS EXISTS (Gustav, watching the live simulation, 2026-07-10:
+    "man ska väl inte behöva välja en sån här rutt... processen säger väl
+    du kommer härifrån och du ska dit, ta den snabbaste vägen" — you
+    shouldn't have to pick a route like that, the process says you come
+    from here and go there, take the fastest way). He's right that a
+    single genuine shortest-path computation with non-negative edge
+    weights can NEVER revisit a node — Dijkstra/A* only ever return simple
+    paths. The loops found (drop_uturn_routes' widened check, same day)
+    aren't duarouter computing a bad shortest path; they're a via-forced
+    trip being solved as TWO INDEPENDENT shortest-path legs (entry->via,
+    via->exit) concatenated — each leg alone IS optimal, but the
+    concatenation isn't, when the via point isn't actually on the way.
+    upstream_downstream_gates()'s straight-line-bearing filter is a real
+    improvement but only an approximation of what the ACTUAL road network
+    connects without a detour (its own docstring says so) — this checks
+    the real claim on the real graph instead of trusting the bearing
+    proxy, so a bad via-trip is never GENERATED in the first place rather
+    than generated and then discarded (which just shrinks that sensor's
+    effective coverage pool by however many looped).
+    Falls back to ALL candidate pairs if none verify (extremely rare, all
+    gates on a genuinely awkward via edge) — drop_uturn_routes' node-repeat
+    check remains the safety net either way."""
+    u_m, v_m, _ = m_edge.split("_")
+    u_m, v_m = int(u_m), int(v_m)
+    good = []
+    for e_in in in_ids:
+        v_in = int(e_in.split("_")[1])
+        for e_out in out_ids:
+            u_out = int(e_out.split("_")[0])
+            if via_naturally_on_path(G, v_in, u_out, u_m, v_m):
+                good.append((e_in, e_out))
+    return good or [(e_in, e_out) for e_in in in_ids for e_out in out_ids]
 
 
 def daily_shape(is_weekend: bool = False) -> np.ndarray:
@@ -816,17 +900,21 @@ def main() -> None:
 
     # ── Coverage guarantee: via-trips through every measured sensor edge ───────
     # Gates are restricted to ones upstream/downstream of m_edge's OWN travel
-    # direction (see upstream_downstream_gates) — an unrestricted random
-    # entry/exit pair turns this into a forced detour that duarouter often
-    # resolves with a literal U-turn at the via point.
+    # direction (see upstream_downstream_gates), THEN verified against the
+    # real graph (verified_via_gate_pairs) — the bearing filter alone still
+    # let some pairs through that force duarouter's independent entry->via
+    # and via->exit legs to backtrack through each other; verifying m_edge
+    # is genuinely on the entry->exit path stops a bad via-trip from being
+    # generated at all, rather than generating it and relying on
+    # drop_uturn_routes to discard it afterward.
     with open("web/data/flows.json") as f:
         measured = list(json.load(f)["flows"])
     for m_edge in measured:
         in_ids, out_ids = upstream_downstream_gates(G, m_edge, entries, exits)
+        good_pairs = verified_via_gate_pairs(G, m_edge, in_ids, out_ids)
         hrs = rng.choice(24, size=args.n_sensor_via, p=shape_hourly)
         for h in hrs:
-            e_in  = in_ids[rng.integers(len(in_ids))]
-            e_out = out_ids[rng.integers(len(out_ids))]
+            e_in, e_out = good_pairs[rng.integers(len(good_pairs))]
             trips.append(((h + rng.random()) * 3600, e_in, e_out, m_edge))
 
     trips.sort(key=lambda t: t[0])

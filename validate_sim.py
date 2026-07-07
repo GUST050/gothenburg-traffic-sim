@@ -14,6 +14,21 @@ Level-2 bounds are excluded in all folds (they are derived from the full
 measurement set and would leak the held-out station). Level 3 keeps only
 priors NOT derived from the held-out station.
 
+FIXED 2026-07-09 (found while auditing the whole codebase, confirmed still
+open per ARCHITECTURE.md's own "KNOWN GAP" note): corridor_priors (Agent
+B's "sensors helping each other" — same-direction station pairs linked by
+a short path bound the edges BETWEEN them, see observability.corridor_
+priors) were computed and used by the real, deployed build_sumo_demand.py
+pipeline, but never wired into THIS validation script — meaning every LOSO
+figure on record understated the deployed system's actual recovery. The
+mechanism itself was already fully general (it scans every PAIR of
+currently-measured sensors, no hardcoded IDs — new stations get corridor
+priors automatically, no code changes), so this was a validation-accuracy
+gap only, not a scalability one. A corridor prior is excluded from a
+station's own LOSO fold whenever EITHER of its two anchor sensors is the
+held-out one (same leakage-prevention principle already applied to
+prior_flows.json's direction priors below).
+
 Writes web/data/loso_report.json.
 """
 
@@ -30,7 +45,7 @@ import numpy as np
 import pandas as pd
 
 import pfe
-from build_sumo_demand import build_targets, load_sensor_edges
+from build_sumo_demand import build_targets, ensure_observability, load_sensor_edges
 from build_sumo_net import sumo_home
 
 SUMO_DIR = Path("sumo")
@@ -48,7 +63,8 @@ def load_inputs():
     if Path(SUMO_DIR / "assignment_priors.json").exists():
         with open(SUMO_DIR / "assignment_priors.json") as f:
             assign = json.load(f)
-    return flows, meta, priors, assign
+    corridor = ensure_observability().get("corridor_priors", {})
+    return flows, meta, priors, assign, corridor
 
 
 def run_meso(route_file: Path, ed_file: Path, duration_s: int) -> None:
@@ -72,6 +88,23 @@ def run_meso(route_file: Path, ed_file: Path, duration_s: int) -> None:
                    check=True, timeout=300)
 
 
+def corridor_priors_for_fold(corridor: dict, edge_to_sensor: dict[str, str],
+                            held: str, qi: int) -> dict[str, tuple[float, float]]:
+    """This fold's corridor-derived priors {edge: (value, weight)} — every
+    corridor entry anchored on the held-out station (from OR to) is
+    excluded, since it blends in that station's own measurement."""
+    out: dict[str, tuple[float, float]] = {}
+    for e, d in corridor.items():
+        if (edge_to_sensor.get(d["from_sensor_edge"]) == held or
+                edge_to_sensor.get(d["to_sensor_edge"]) == held):
+            continue
+        if qi >= len(d["prior"]) or d["prior"][qi] is None:
+            continue
+        band = d["band"][qi] or 8.0
+        out[e] = (float(d["prior"][qi]), 1.0 / max(1.0, band))
+    return out
+
+
 def simulated_series(ed_file: Path, edge: str, nq: int) -> np.ndarray:
     out = np.zeros(nq)
     for iv in ET.parse(ed_file).getroot().findall("interval"):
@@ -91,13 +124,22 @@ def main() -> None:
                         "prior to isolate its effect on recovery")
     args = ap.parse_args()
 
-    flows, meta, all_priors, assign = load_inputs()
+    flows, meta, all_priors, assign, corridor = load_inputs()
     assign_w     = 0.0 if args.no_assignment_prior else assign.get("weight", 0.0)
     assign_flows = assign.get("flows", {})
     sensor_edges = load_sensor_edges()
     qi_start, nq = meta["qi_start"], meta["n_intervals"]
     duration_s = nq * 900
     cand_path = SUMO_DIR / "candidates.rou.xml"
+    if corridor:
+        print(f"  corridor coupling: {len(corridor)} edges between sensor "
+              f"pairs get data-derived priors (excluded per-fold when "
+              f"either anchor is the held-out station)")
+
+    # edge -> sensor, so a corridor prior anchored on the held-out station's
+    # own edges can be excluded (same leakage-prevention principle as
+    # all_priors' d["sensor"] == held check below).
+    edge_to_sensor = {e: sid for sid, edges in sensor_edges.items() for e in edges}
 
     report = {"window": f"{meta['date']} {meta['begin']}–{meta['end']}",
               "note": "leave-one-station-out — simulated vs measured at the "
@@ -116,6 +158,7 @@ def main() -> None:
         priors_pq, bounds_pq = [], []
         for i in range(nq):
             slot = (qi_start + i) % 96
+            qi = qi_start + i
             pq = {}
             for e, d in all_priors.items():
                 if d["sensor"] == held:
@@ -126,6 +169,10 @@ def main() -> None:
                 lo = d["prior_low"][slot] or 0.0
                 hi = d["prior_high"][slot] or val
                 pq[e] = (float(val), 1.0 / max(1.0, hi - lo))
+            # Sensors helping each other: corridor blends between sensor
+            # pairs, same as build_sumo_demand.py — excluded here whenever
+            # either anchor sensor is the one being held out this fold.
+            pq.update(corridor_priors_for_fold(corridor, edge_to_sensor, held, qi))
             priors_pq.append(pq)
             # Assignment field as a WIDE BOUND (see build_sumo_demand.py for
             # why: soft priors cost 2 LP variables each — 6500 of them made

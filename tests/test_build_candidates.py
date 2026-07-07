@@ -70,6 +70,38 @@ class TestDropUturnRoutes:
         bc.drop_uturn_routes(path)
         assert read_vehicle_ids(path) == []
 
+    def test_loop_around_the_block_with_no_literal_reversal_is_now_caught(self, tmp_path):
+        """WIDENED 2026-07-10, found live: Gustav watched the simulation and
+        saw vehicles enter a sensor edge and come back out — a real,
+        confirmed pattern in sumo/calibrated.rou.xml (not a rendering
+        artifact): node 2 revisited 7 edges later via a small pointless
+        loop, no adjacent edge/reverse-edge pair anywhere in the route, so
+        the OLD check missed it entirely."""
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [
+            ("clean", ["1_2_0", "2_3_0", "3_4_0"]),
+            ("loop", ["1_2_0", "2_8_0", "8_9_0", "9_2_0", "2_3_0"]),  # node 2 twice
+        ])
+        bc.drop_uturn_routes(path)
+        assert read_vehicle_ids(path) == ["clean"]
+
+
+class TestRouteVisitsANodeTwice:
+    def test_straight_route_has_no_repeat(self):
+        assert not bc.route_visits_a_node_twice(["1_2_0", "2_3_0", "3_4_0"])
+
+    def test_literal_uturn_is_a_repeat(self):
+        assert bc.route_visits_a_node_twice(["1_2_0", "2_1_0", "1_5_0"])
+
+    def test_loop_around_the_block_is_a_repeat(self):
+        assert bc.route_visits_a_node_twice(["1_2_0", "2_8_0", "8_9_0", "9_2_0"])
+
+    def test_empty_route_is_not_a_repeat(self):
+        assert not bc.route_visits_a_node_twice([])
+
+    def test_single_edge_is_not_a_repeat(self):
+        assert not bc.route_visits_a_node_twice(["1_2_0"])
+
 
 class TestUpstreamDownstreamGates:
     def make_via_edge_graph(self):
@@ -125,6 +157,70 @@ class TestUpstreamDownstreamGates:
         entries = [("2_10_0", 2)]               # no valid "behind" gate at all
         ins, _ = bc.upstream_downstream_gates(G, "10_11_0", entries, [])
         assert ins == ["2_10_0"]   # fallback: the full (unfiltered) entry list
+
+
+class TestViaNaturallyOnPath:
+    """Found 2026-07-10 (Gustav, watching the live simulation, saw vehicles
+    enter a sensor and drive straight back out — real, confirmed via
+    sumo/calibrated.rou.xml, not a rendering artifact): a via-forced trip
+    is solved by duarouter as TWO INDEPENDENT shortest-path legs (entry->
+    via, via->exit) concatenated. Each leg alone is genuinely optimal —
+    Dijkstra/A* with non-negative weights can never revisit a node — but
+    the CONCATENATION isn't, when the via point isn't actually on the
+    natural entry->exit path. This checks the real claim on the real graph
+    instead of trusting upstream_downstream_gates' straight-line-bearing
+    proxy."""
+
+    def test_via_edge_on_the_direct_chain_is_detected(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)    # entry: 1_10_0, entry_v=10
+        G.add_edge(10, 11, key=0, length=10.0)   # via: 10_11_0
+        G.add_edge(11, 20, key=0, length=10.0)   # exit: 11_20_0, exit_u=11
+        assert bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+    def test_via_edge_bypassed_by_a_shorter_route_is_not_on_path(self):
+        """A much shorter alternative (10->99->11) exists, so the shortest
+        path from 10 to 11 skips the via edge entirely -- forcing the trip
+        through it anyway is exactly what creates the backtrack."""
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=1000.0)   # the "official" via edge -- long
+        G.add_edge(11, 20, key=0, length=10.0)
+        G.add_edge(10, 99, key=0, length=1.0)      # much shorter bypass
+        G.add_edge(99, 11, key=0, length=1.0)
+        assert not bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+    def test_no_path_at_all_returns_false_not_an_exception(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(11, 20, key=0, length=10.0)   # disconnected from node 10
+        assert not bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+
+class TestVerifiedViaGatePairs:
+    def test_keeps_only_pairs_where_via_is_naturally_on_the_path(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)      # good entry: 1_10_0
+        G.add_edge(2, 30, key=0, length=10.0)      # bad entry: 2_30_0 (no path to via)
+        G.add_edge(10, 11, key=0, length=10.0)     # via: 10_11_0
+        G.add_edge(11, 20, key=0, length=10.0)     # good exit: 11_20_0
+
+        pairs = bc.verified_via_gate_pairs(G, "10_11_0", ["1_10_0", "2_30_0"], ["11_20_0"])
+        assert pairs == [("1_10_0", "11_20_0")]
+
+    def test_falls_back_to_all_pairs_when_none_verify(self):
+        """Better to occasionally rely on drop_uturn_routes' safety net
+        than generate zero via-trips for a sensor whose gates are all
+        genuinely awkward."""
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=1000.0)
+        G.add_edge(11, 20, key=0, length=10.0)
+        G.add_edge(10, 99, key=0, length=1.0)     # bypass -- via never verifies
+        G.add_edge(99, 11, key=0, length=1.0)
+
+        pairs = bc.verified_via_gate_pairs(G, "10_11_0", ["1_10_0"], ["11_20_0"])
+        assert pairs == [("1_10_0", "11_20_0")]   # fallback: the one candidate pair anyway
 
 
 class TestFindGates:
