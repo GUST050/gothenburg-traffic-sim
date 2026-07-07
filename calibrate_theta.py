@@ -13,11 +13,23 @@ grounding fixed everything else. A 3×3 grid (9 evaluations) is the
 proportionate, transparent version of the same idea, and is documented as
 such rather than dressed up as more than it is.
 
-Each evaluation: generate candidates(θ) → PFE calibrate on a fast morning
-window (06-10, not the full day — this is the cheap inner-loop signal) →
-score = GEH<5 percentage, tie-broken by fewer infeasible intervals. The
-WINNING θ is then validated properly with the full whole-day LOSO
-(validate_sim.py) — that expensive step runs ONCE, not 9 times.
+Each evaluation: generate candidates(θ) → score PRIMARILY by the trip-
+length fit against RVU Västra Götaland's measured distance bins
+(build_candidates.trip_length_fit), tie-broken by PFE's GEH<5 percentage on
+a fast morning window (06-10, cheap inner-loop signal only). GEH ALONE
+cannot rank θ (found 2026-07-05: saturates at 100% for every combination —
+PFE's hard sensor constraints make measured-edge fit achievable regardless
+of candidate composition, so it carries no signal about which θ is more
+REALISTIC away from sensors). CORRECTED 2026-07-08: this file's docstring
+and the project history had claimed since 2026-07-05 that GEH-scoring was
+"replaced with a trip-length fit" — it never actually was; this script only
+ever implemented GEH-only scoring. The frozen defaults (gravity_km=2.6,
+through_fraction=0.5) predate this fix and were not reproducibly derived
+from a real trip-length fit — re-running this script now is the first time
+that fit has actually been computed.
+
+The WINNING θ should then be validated properly with the full whole-day
+LOSO (validate_sim.py) — that expensive step runs ONCE, not 9 times.
 
 Writes sumo/theta_search.json (all 9 results, for the record).
 """
@@ -47,7 +59,10 @@ def main() -> None:
                       "--through-fraction", str(tf), "--gravity-km", str(gk),
                       "--n-total", "6000", "--n-sensor-via", "400",
                       "--out-suffix", "_theta"])
-            print(out[-400:])
+            print(out[-800:])
+
+            with open(f"sumo/trip_length_fit_theta.json") as f:
+                fit = json.load(f)
 
             Path("sumo/candidates.rou.xml").write_bytes(
                 Path("sumo/candidates_theta.rou.xml").read_bytes())
@@ -66,19 +81,29 @@ def main() -> None:
                                      .split(")")[0].strip())
                     break
             results.append({"through_fraction": tf, "gravity_km": gk,
+                            "trip_length_l1": fit["l1_distance"],
+                            "trip_length_shares": fit["shares"],
+                            "over_10km_pct": fit.get("over_10km_pct"),
                             "geh_pct": geh_pct, "infeasible": infeasible})
 
-    results.sort(key=lambda r: (-(r["geh_pct"] or 0), r["infeasible"] or 99))
+    # PRIMARY: trip-length L1 distance (lower = closer to RVU's real short-
+    # bin shares). SECONDARY: GEH validity check / infeasible-interval count
+    # — a candidate composition that can't even fit the hard sensor counts
+    # shouldn't win regardless of its trip-length fit.
+    results.sort(key=lambda r: (r["trip_length_l1"],
+                                -(r["geh_pct"] or 0), r["infeasible"] or 99))
     with open("sumo/theta_search.json", "w") as f:
         json.dump(results, f, indent=1)
 
-    print("\n=== Ranking ===")
+    print("\n=== Ranking (by trip-length fit to RVU, then GEH) ===")
     for r in results:
         print(f"  tf={r['through_fraction']}  gk={r['gravity_km']}  "
+              f"trip_length_L1={r['trip_length_l1']}  "
               f"GEH<5={r['geh_pct']}%  infeasible={r['infeasible']}")
     best = results[0]
     print(f"\nBest θ: through_fraction={best['through_fraction']} "
-          f"gravity_km={best['gravity_km']}")
+          f"gravity_km={best['gravity_km']}  "
+          f"(trip_length_L1={best['trip_length_l1']})")
 
 
 if __name__ == "__main__":

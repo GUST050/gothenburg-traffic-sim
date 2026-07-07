@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from build_agent1_flows import (HOLIDAY_MAPPING_2027_TO_2025,
-                                apply_holiday_factors)
+                                apply_holiday_factors, dow_correction_ratios)
 from train_agent1 import (build_features, compute_holiday_factors,
                           features_for_datetime, impute_column,
                           leave_weeks_out_mae, seasonal_naive_mae)
@@ -190,6 +190,62 @@ class TestApplyHolidayFactors:
         factors = {"2025-01-01": {"S1": [2.0] * 96, "avg": [2.0] * 96}}
         apply_holiday_factors(ts, baseline, factors, "S1")
         np.testing.assert_allclose(baseline, 10.0)
+
+    def test_dow_correction_is_applied_on_top_of_the_stored_factor(self):
+        ts = pd.date_range("2027-01-01", periods=96, freq="15min")
+        baseline = np.full(96, 10.0)
+        factors = {"2025-01-01": {"S1": [2.0] * 96, "avg": [2.0] * 96}}
+        dow_corrections = {"2025-01-01": {"S1": [0.25] * 96}}
+        out = apply_holiday_factors(ts, baseline, factors, "S1", dow_corrections)
+        np.testing.assert_allclose(out, 10.0 * 2.0 * 0.25)
+
+    def test_no_correction_entry_for_date_leaves_factor_unchanged(self):
+        """dow_corrections only has entries for MISMATCHED mappings —
+        a date absent from it (dow already matches) must behave exactly
+        like passing no dow_corrections at all."""
+        ts = pd.date_range("2027-01-01", periods=96, freq="15min")
+        baseline = np.full(96, 10.0)
+        factors = {"2025-01-01": {"S1": [2.0] * 96, "avg": [2.0] * 96}}
+        out = apply_holiday_factors(ts, baseline, factors, "S1", dow_corrections={})
+        np.testing.assert_allclose(out, 20.0)
+
+
+class FakeAgent1DowAware:
+    """predict_synthetic returns a value depending only on day-of-week —
+    enough to test dow_correction_ratios() without a real trained model."""
+    def __init__(self, value_by_dow: dict[int, float]):
+        self.value_by_dow = value_by_dow
+
+    @property
+    def sensor_ids(self):
+        return ["S1"]
+
+    def predict_synthetic(self, hour, dayofweek, month):
+        return {"S1": self.value_by_dow[dayofweek]}
+
+
+class TestDowCorrectionRatios:
+    """Found 2026-07-09 testing real_day_shape() against all 30 2025/2027
+    holidays: 2027-05-01 (Saturday) forecast from 2025-05-01 (Thursday)'s
+    factor peaked at 01:00, near-zero at 06-08 — the factor was calibrated
+    relative to a Thursday's baseline shape and misapplied to a Saturday's."""
+
+    def test_matching_dow_needs_no_correction(self):
+        agent = FakeAgent1DowAware({3: 10.0})
+        # 2025-01-02 and 2027-01-07 are both Thursdays.
+        ratios = dow_correction_ratios(agent, "2025-01-02", "2027-01-07")
+        assert ratios == {}
+
+    def test_mismatched_dow_ratio_is_source_over_target(self):
+        # 2025-05-01 is a Thursday (dow=3), 2027-05-01 is a Saturday (dow=5).
+        agent = FakeAgent1DowAware({3: 10.0, 5: 40.0})
+        ratios = dow_correction_ratios(agent, "2025-05-01", "2027-05-01")
+        assert ratios["S1"] == pytest.approx([0.25] * 96)
+
+    def test_near_zero_target_baseline_avoids_blowup(self):
+        agent = FakeAgent1DowAware({3: 10.0, 5: 0.5})   # target pred < 1.0
+        ratios = dow_correction_ratios(agent, "2025-05-01", "2027-05-01")
+        assert ratios["S1"] == pytest.approx([1.0] * 96)
 
 
 class TestHolidayMapping:

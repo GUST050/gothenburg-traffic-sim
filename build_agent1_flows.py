@@ -5,12 +5,23 @@ Holiday Baseline Adjustment method:
   - Non-holiday days:  prediction = baseline_model(2027 date/time)
   - Holiday days:      prediction = baseline_model(2027 date/time)
                                   × holiday_factor(matching 2025 holiday, slot)
+                                  × dow_correction(slot)  [only when needed]
 
 The factor absorbs the full holiday deviation (low morning, NYE midnight spike,
-etc.) from actual 2025 observations. The baseline automatically handles the
-day-of-week shift between years (e.g., Julafton 2025=Wednesday, 2027=Friday).
+etc.) from actual 2025 observations.
 
-No manual corrections needed — factors capture everything.
+CORRECTED 2026-07-09 (previously claimed here since inception: "the baseline
+automatically handles the day-of-week shift between years ... no manual
+corrections needed — factors capture everything" — FALSE, found while testing
+real_day_shape() against all 30 2025/2027 holidays): the stored factor is
+actual_2025[slot] / baseline(SOURCE holiday's OWN actual day-of-week, slot) —
+only valid to reapply unchanged when the mapped 2027 date shares that same
+day-of-week. When it doesn't (Första maj: Thursday 2025 -> Saturday 2027), the
+factor was calibrated against the wrong baseline shape and badly distorts the
+result (2027-05-01 forecast peaked at 01:00, near-zero at 06-08). dow_correction
+(dow_correction_ratios() below) re-derives the factor relative to the TARGET's
+own day-of-week instead, and is a no-op (ratio 1.0) whenever the two dates
+already share a day-of-week — the majority case, unaffected by this fix.
 
 Reads:
   web/data/agent1/models/sensor_*.pkl
@@ -29,7 +40,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from train_agent1 import build_features, load_agent1
+from train_agent1 import Agent1, build_features, load_agent1
 
 GEOJSON_PATH   = Path("web/data/network.geojson")
 OUT_PATH       = Path("web/data/flows_forecast.json")
@@ -66,15 +77,61 @@ _DATE_TO_FACTOR_KEY: dict = {
 }
 
 
+def dow_correction_ratios(agent1: Agent1, source_date: str, target_date: str
+                         ) -> dict[str, list[float]]:
+    """Per-sensor, per-slot multiplicative correction:
+    baseline(source's own day-of-week, slot) / baseline(target's day-of-
+    week, slot). holiday_factors.json's stored factor was computed as
+    actual_2025[slot] / baseline(SOURCE's own actual day-of-week, slot) —
+    correct for a real holiday, but only valid to reapply as-is when the
+    TARGET year's mapped date falls on the SAME day-of-week. When it
+    doesn't (e.g. Första maj: Thursday in 2025, Saturday in 2027), the
+    factor was calibrated against the wrong baseline shape entirely.
+
+    FOUND 2026-07-09 (testing real_day_shape() against all 30 2025/2027
+    holidays): 2027-05-01 forecast peaked at 01:00 and dropped to near-
+    zero at 06-08 — because 2025-05-01's factor (2-4x overnight, since a
+    normal THURSDAY baseline is near-zero then; 0.17-0.34x at the 6-9
+    commute hours, since a normal Thursday commutes) got multiplied onto
+    a SATURDAY baseline that's already only modestly low overnight and
+    already has no commute peak to suppress — double-distorting both ends.
+
+    Returns {} (meaning: no correction, ratio 1.0) when the two dates
+    share a day-of-week — the common case (this file's own docstring had
+    claimed since inception 'the baseline automatically handles the
+    day-of-week shift... no manual corrections needed', which is simply
+    false whenever the mapped dates don't share a day-of-week; this file
+    is the actual mechanism that has to do that work)."""
+    source_dow = pd.Timestamp(source_date).dayofweek
+    target_dow = pd.Timestamp(target_date).dayofweek
+    if source_dow == target_dow:
+        return {}
+    month = pd.Timestamp(source_date).month
+    ratios: dict[str, list[float]] = {sid: [] for sid in agent1.sensor_ids}
+    for slot in range(96):
+        hour = slot * 0.25
+        source_pred = agent1.predict_synthetic(hour, source_dow, month)
+        target_pred = agent1.predict_synthetic(hour, target_dow, month)
+        for sid in agent1.sensor_ids:
+            tp = target_pred[sid]
+            ratios[sid].append(source_pred[sid] / tp if tp >= 1.0 else 1.0)
+    return ratios
+
+
 def apply_holiday_factors(
     ts: pd.DatetimeIndex,
     baseline: np.ndarray,
     factors: dict,
     sensor_id: str,
+    dow_corrections: dict[str, dict[str, list[float]]] | None = None,
 ) -> np.ndarray:
     """
     Multiply baseline by holiday factor for each slot that falls on a holiday.
     Uses per-sensor factors when available, falls back to cross-sensor average.
+
+    dow_corrections: {2025_source_date: {sensor_id: [96 ratios]}} from
+    dow_correction_ratios(), applied on top of the stored factor whenever
+    the mapped target date's day-of-week differs from the source's.
     """
     out = baseline.copy()
     for i, t in enumerate(ts):
@@ -90,7 +147,14 @@ def apply_holiday_factors(
         # Per-sensor preferred; fall back to cross-sensor average
         per_sensor = day_factors.get(sensor_id) or day_factors.get("avg")
         if per_sensor and slot_idx < len(per_sensor):
-            out[i] *= per_sensor[slot_idx]
+            factor = per_sensor[slot_idx]
+            if dow_corrections:
+                day_corr = dow_corrections.get(factor_key)
+                if day_corr:
+                    corr = day_corr.get(sensor_id)
+                    if corr:
+                        factor *= corr[slot_idx]
+            out[i] *= factor
 
     return out
 
@@ -105,6 +169,17 @@ def main() -> None:
         factors: dict = json.load(f)
     print(f"  {len(factors)} holiday days loaded")
 
+    print("Computing day-of-week corrections for mismatched holiday mappings …")
+    dow_corrections: dict[str, dict[str, list[float]]] = {}
+    for d27, d25 in HOLIDAY_MAPPING_2027_TO_2025.items():
+        ratios = dow_correction_ratios(agent1, d25, d27)
+        if ratios:
+            dow_corrections[d25] = ratios
+            print(f"  {d25} ({pd.Timestamp(d25).day_name()}) -> {d27} "
+                  f"({pd.Timestamp(d27).day_name()}): correction applied")
+    if not dow_corrections:
+        print("  none needed — every mapping shares a day-of-week")
+
     print("Building 2027 baseline features (no holiday flags) …")
     feat_df = build_features(T, epoch=EPOCH_2027)
 
@@ -112,7 +187,7 @@ def main() -> None:
     sensor_preds: dict[str, list[int]] = {}
     for sid, model in agent1._models.items():
         baseline   = model.predict(feat_df)
-        adjusted   = apply_holiday_factors(ts, baseline, factors, sid)
+        adjusted   = apply_holiday_factors(ts, baseline, factors, sid, dow_corrections)
         sensor_preds[sid] = [max(0, round(float(v))) for v in adjusted]
 
     # ── Spot-check ────────────────────────────────────────────────────────────
@@ -120,7 +195,7 @@ def main() -> None:
     if sid_check in agent1._models:
         model_107 = agent1._models[sid_check]
         raw_107   = model_107.predict(feat_df)
-        adj_107   = apply_holiday_factors(ts, raw_107, factors, sid_check)
+        adj_107   = apply_holiday_factors(ts, raw_107, factors, sid_check, dow_corrections)
 
         checks = [
             ("Julafton     Dec 24 10:00", "2027-12-24 10:00"),

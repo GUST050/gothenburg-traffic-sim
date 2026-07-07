@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from pfe import Candidate, calibrate, largest_remainder_round, solve_interval
+from pfe import (Candidate, EPS_PARSIMONY, calibrate, largest_remainder_round,
+                 path_size_weights, solve_interval)
 
 
 def cand(*edges):
@@ -56,6 +57,48 @@ class TestSolveInterval:
         cands = [cand("b")]
         x = solve_interval(cands, {}, {"b": (25.0, 500.0)}, {})
         assert served(x, cands, "b") >= 25.0 - 1e-6
+
+
+class TestPathSizeWeights:
+    """Path Size (Ben-Akiva & Bierlaire 1999, Ramming 2002 link-count
+    variant): without this, every candidate route satisfying the same
+    counts is equally "free" in the objective, so PFE's choice among
+    overlapping alternatives is an arbitrary LP-solver artifact rather than
+    the real preference for a distinctive route. Added 2026-07-08."""
+
+    def test_unique_route_gets_base_cost(self):
+        w = path_size_weights([cand("a", "b")])
+        assert w[0] == pytest.approx(EPS_PARSIMONY)
+
+    def test_fully_overlapping_routes_cost_more(self):
+        w = path_size_weights([cand("a", "b"), cand("a", "b")])
+        assert w[0] == pytest.approx(2 * EPS_PARSIMONY)
+        assert w[1] == pytest.approx(2 * EPS_PARSIMONY)
+
+    def test_partial_overlap_is_intermediate(self):
+        w_unique  = path_size_weights([cand("a", "b")])[0]
+        w_overlap = path_size_weights([cand("a", "b"), cand("a", "b")])[0]
+        w_partial = path_size_weights([cand("a", "b"), cand("a", "c")])[0]
+        assert w_unique < w_partial < w_overlap
+
+    def test_extreme_overlap_is_floored_not_unbounded(self):
+        # 20 routes all sharing one edge -> raw path size 1/20 = 0.05,
+        # clipped to the 0.15 floor rather than blowing the cost up ~20x.
+        w = path_size_weights([cand("shared") for _ in range(20)])
+        assert w[0] == pytest.approx(EPS_PARSIMONY / 0.15)
+
+
+class TestRouteCostAffectsSolution:
+    def test_cheaper_route_preferred_when_otherwise_tied(self):
+        """Two routes touch only the same prior edge -- the prior
+        constrains their SUM alone, so route_cost is the only thing that
+        can decide the split. The cheaper (lower route_cost) route must
+        carry the load."""
+        cands = [cand("x"), cand("x")]
+        route_cost = np.array([5 * EPS_PARSIMONY, EPS_PARSIMONY])
+        x = solve_interval(cands, {}, {}, {"x": (10.0, 1.0)}, route_cost=route_cost)
+        assert x[1] > x[0]
+        assert served(x, cands, "x") == pytest.approx(10, rel=0.1)
 
 
 class TestCalibrateGEH:

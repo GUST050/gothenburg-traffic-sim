@@ -8,7 +8,15 @@ A Path-Flow-Estimator-style LP (Bell & Shield 1996 lineage) solved per
   HARD         |Σ_{r∋e} x_r − c_e| ≤ tol_e     for MEASURED edges e (level 1)
   HARD         L_e ≤ Σ_{r∋e} x_r ≤ U_e         for BOUNDED edges (level 2)
   SOFT         minimise Σ_p w_p·|Σ_{r∋p} x_r − P_p|   toward PRIORS (level 3)
-               + ε·Σ_r x_r        (parsimony: no unwarranted traffic)
+               + Σ_r ε_r·x_r      (parsimony: no unwarranted traffic)
+
+ε_r is a per-route PATH SIZE weight (Ben-Akiva & Bierlaire 1999, Ramming
+2002 link-count variant), not a flat constant: routes that overlap heavily
+with many other candidates in the pool cost more, routes using largely
+distinctive edges cost the base rate. Without this, every route the LP
+could use to satisfy the same counts is equally "free", so PFE's choice
+among overlapping alternatives is an arbitrary LP-solver artifact rather
+than the real preference for a distinctive route real drivers show.
 
 Route continuity makes conservation hold by construction, so the solution
 is always network-consistent. Solved with scipy HiGHS; fractional route
@@ -47,12 +55,41 @@ def load_candidates(path: Path) -> list[Candidate]:
     return out
 
 
+# Path size is bounded below to keep the parsimony penalty a gentle
+# tie-breaker (never more than ~7x the base rate) rather than something
+# that could fight the hard/soft constraints above it in the hierarchy.
+PATH_SIZE_FLOOR = 0.15
+
+
+def path_size_weights(shapes: list[Candidate]) -> np.ndarray:
+    """Per-route parsimony cost (Ben-Akiva & Bierlaire 1999 Path Size,
+    Ramming 2002's link-count-based simplification — no route/link lengths
+    needed, just how many OTHER candidates in the pool share each edge):
+
+        PS_r = (1/|r|) · Σ_{e∈r} 1/N_e         N_e = #candidates using e
+
+    PS_r → 1 for a route on largely distinctive edges, → small for one that
+    overlaps heavily with many alternatives. Returned as EPS_PARSIMONY/PS_r
+    so it drops straight into c_obj in place of the flat EPS_PARSIMONY."""
+    edge_route_count: dict[str, int] = {}
+    for cand in shapes:
+        for e in set(cand.edges):
+            edge_route_count[e] = edge_route_count.get(e, 0) + 1
+    ps = np.ones(len(shapes))
+    for i, cand in enumerate(shapes):
+        if cand.edges:
+            ps[i] = sum(1.0 / edge_route_count[e] for e in cand.edges) / len(cand.edges)
+    return EPS_PARSIMONY / np.clip(ps, PATH_SIZE_FLOOR, 1.0)
+
+
 def solve_interval(
     cands: list[Candidate],
     measured: dict[str, float],
     bounds: dict[str, tuple[float, float]],
     priors: dict[str, tuple[float, float]],   # edge → (target, weight)
     tol_mult: float = 1.0,
+    route_cost: np.ndarray | None = None,     # per-route parsimony cost;
+                                              # flat EPS_PARSIMONY if None
 ) -> np.ndarray | None:
     """Return route-use vector for one interval, or None if infeasible."""
     n = len(cands)
@@ -75,6 +112,8 @@ def solve_interval(
     n_prior = len(priors)
     N = n + 2 * n_prior                     # x_r  +  (d⁺, d⁻) per prior
     c_obj = np.full(N, EPS_PARSIMONY)
+    if route_cost is not None:
+        c_obj[:n] = route_cost
     rows_ub, b_ub = [], []
     rows_eq, b_eq = [], []
 
@@ -160,6 +199,7 @@ def calibrate(
     shapes = list(seen.values())
     print(f"  shape pool: {len(shapes)} distinct routes "
           f"(from {len(cands)} candidates)")
+    route_cost = path_size_weights(shapes)
 
     achieved: dict[str, list[float]] = {}
     vid = 0
@@ -171,14 +211,16 @@ def calibrate(
             # level-2 bounds. An interval must never end up EMPTY just
             # because one constraint combination is unlucky.
             sol = solve_interval(shapes, targets_per_q[i],
-                                 bounds_per_q[i], priors_per_q[i])
+                                 bounds_per_q[i], priors_per_q[i],
+                                 route_cost=route_cost)
             if sol is None:
                 for tol_mult, use_bounds in ((2.0, True), (4.0, True),
                                              (4.0, False)):
                     sol = solve_interval(
                         shapes, targets_per_q[i],
                         bounds_per_q[i] if use_bounds else {},
-                        priors_per_q[i], tol_mult=tol_mult)
+                        priors_per_q[i], tol_mult=tol_mult,
+                        route_cost=route_cost)
                     if sol is not None:
                         break
             if sol is None:
@@ -220,4 +262,5 @@ def calibrate(
                 geh_ok += geh < 5
     return {"vehicles": vid, "infeasible_intervals": infeasible,
             "geh_ok": geh_ok, "geh_total": geh_all,
-            "geh_pct": round(100 * geh_ok / max(1, geh_all), 1)}
+            "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
+            "achieved": achieved}

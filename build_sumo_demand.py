@@ -31,11 +31,15 @@ import argparse
 import json
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from build_sumo_net import sumo_home
+from train_agent1 import HOLIDAY_DATES_2025
+from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
 
 FLOWS_PATH          = Path("web/data/flows.json")
 FLOWS_FORECAST_PATH = Path("web/data/flows_forecast.json")
@@ -89,17 +93,112 @@ def parse_args() -> argparse.Namespace:
                         "discriminate it) — 0.5 is a disclosed neutral prior, "
                         "not a calibrated value.")
     p.add_argument("--gravity-km", type=float, default=2.6,
-                   help="θ passed to build_candidates.py. Frozen from a "
-                        "trip-length fit against RVU Västra Götaland's "
-                        "measured distance bins (see calibrate_theta.py's "
-                        "docstring and the trip-length check it replaced "
-                        "GEH-based scoring with — GEH saturated at 100% for "
-                        "all 9 grid points and could not discriminate θ).")
+                   help="θ passed to build_candidates.py. CORRECTED "
+                        "2026-07-08: this had claimed since 2026-07-05 to be "
+                        "'frozen from a trip-length fit against RVU' — that "
+                        "fit was never actually implemented (calibrate_theta.py "
+                        "only ever did GEH-based scoring, which saturates at "
+                        "100% and carries no signal). Now that the real fit "
+                        "exists (build_candidates.trip_length_fit), 2.6 sits "
+                        "near a real but shallow optimum (L1=0.59, vs 0.58 "
+                        "best found up to 12km) — a genuine, if modest, "
+                        "improvement over the untested claim, not a precise "
+                        "calibration. See calibrate_theta.py's docstring for "
+                        "why the RVU 5.1-10km/>10km bins cannot be matched "
+                        "regardless of θ: this network's own diameter is "
+                        "~7.8 km, a hard geometric ceiling.")
+    p.add_argument("--cross-fraction", type=float, default=0.3,
+                   help="θ passed to build_candidates.py: share of tours "
+                        "that are E-I/I-E cross-boundary commuting (one end "
+                        "at a gate) rather than pure I-I. Disclosed-"
+                        "unidentifiable neutral prior, same status as "
+                        "through-fraction.")
     p.add_argument("--no-assignment-prior", action="store_true",
                    help="Disable the weak gravity-assignment prior "
                         "(assignment_priors.py) — kept for the controlled "
                         "A/B comparison; the prior is on by default.")
+    p.add_argument("--congestion-iterations", type=int, default=1,
+                   help="Re-generate candidate routes against each "
+                        "iteration's own MEASURED (congested) travel time "
+                        "and re-solve PFE, instead of routing once against "
+                        "free-flow cost and freezing it (research review "
+                        "2026-07-08: simultaneous count+equilibrium "
+                        "calibration beats one-shot sequential). Stops early "
+                        "if GEH stabilizes. DEFAULT IS 1 (today's exact "
+                        "one-shot behaviour, no extra runtime) because each "
+                        "extra iteration re-runs the full whole-day PFE "
+                        "solve (~7-19 min observed) plus a feedback step — "
+                        "raise this deliberately, and raise serve.py's "
+                        "/api/recalibrate subprocess timeout to match if "
+                        "triggering it through the web app.")
+    p.add_argument("--congestion-method", choices=["bpr", "simulate"], default="bpr",
+                   help="How each congestion-feedback iteration measures "
+                        "travel time. 'bpr' (default): the standard Bureau-"
+                        "of-Public-Roads volume-delay function computed "
+                        "directly from PFE's own solved flow — ~1000x "
+                        "cheaper than a real simulation, which is what "
+                        "makes enough iterations to actually converge "
+                        "(literature: MSA/Frank-Wolfe typically need 10-25+, "
+                        "not 1-2) practical. 'simulate': a real meso pass "
+                        "per iteration (more accurate per step, far slower — "
+                        "use for a final accuracy check, not routine runs).")
     return p.parse_args()
+
+
+def classify_day(date_str: str, dayofweek: int) -> tuple[bool, str]:
+    """(use_weekend_shape, day_kind) for build_candidates.py's departure-
+    time profile choice. A holiday on a weekday (Midsommarafton, Juldagen,
+    ...) has nothing like a normal commute peak either — normal_profile.json
+    has no separate holiday shape to read, so 'weekend' (later start, no
+    sharp AM/PM peaks) is the closest real analog available, reusing Agent
+    1's own HOLIDAY_DATES_2025/HOLIDAY_MAPPING_2027_TO_2025 rather than
+    re-deciding what a holiday is a second time. Found 2026-07-09: the first
+    weekday/weekend fix didn't check this, so a holiday Tuesday would still
+    get the sharp commute shape. dayofweek: pandas convention, Mon=0..Sun=6."""
+    is_weekend = dayofweek >= 5
+    is_holiday = date_str in HOLIDAY_DATES_2025 or date_str in HOLIDAY_MAPPING_2027_TO_2025
+    if is_weekend:
+        return True, "weekend"
+    if is_holiday:
+        return True, "holiday"
+    return False, "weekday"
+
+
+REAL_DAY_SHAPE_MIN_VALID_HOURS = 18   # of 24 — below this, the day's own
+                                     # data is too gappy to trust at all
+
+
+def real_day_shape(flows: dict[str, list], sensor_edges: dict[str, list[str]],
+                   qi_start: int) -> np.ndarray | None:
+    """The REAL (or, for --source forecast, Agent 1's forecast) departure-
+    time shape measured at the 6 sensors on the EXACT calendar day being
+    simulated — not a bucket average. Directly captures whatever actually
+    happened that day (a holiday, a school break that isn't a public
+    holiday, a snow day, a local event, ...) without needing a maintained
+    holiday list or any day-type classification at all: the real data
+    already IS the classification. Falls back to None (caller blends with
+    classify_day()'s smoothed average, or uses it outright) if too much of
+    the day is missing to trust a single day's measurement.
+
+    qi_start may point anywhere inside the target day (e.g. a 06:00-10:00
+    window's start) — this always pulls the FULL 96-quarter day containing
+    it, since departure-time shape must cover all 24 hours regardless of
+    the calibration window."""
+    day_qi_start = qi_start - (qi_start % 96)
+    hourly = np.zeros(24)
+    valid_hours = np.zeros(24, dtype=bool)
+    for edges in sensor_edges.values():
+        for e in edges:
+            arr = flows.get(e, [])
+            for h in range(24):
+                qis = range(day_qi_start + h * 4, day_qi_start + h * 4 + 4)
+                vals = [arr[qi] for qi in qis if qi < len(arr) and arr[qi] is not None]
+                if vals:
+                    hourly[h] += sum(vals) / len(vals)
+                    valid_hours[h] = True
+    if valid_hours.sum() < REAL_DAY_SHAPE_MIN_VALID_HOURS or hourly.sum() <= 0:
+        return None
+    return hourly / hourly.sum()
 
 
 def load_sensor_edges() -> dict[str, list[str]]:
@@ -297,8 +396,6 @@ def export_od(calib_path: Path, sensor_edges: dict[str, list[str]], meta: dict) 
 
     Writes web/data/od_matrix.json + od_matrix.csv.
     """
-    import xml.etree.ElementTree as ET
-
     # Edge midpoints in metric EPSG:3007 from the plain edges file
     mids: dict[str, tuple[float, float]] = {}
     for e in ET.parse(SUMO_DIR / "plain.edg.xml").getroot().findall("edge"):
@@ -374,6 +471,173 @@ def export_od(calib_path: Path, sensor_edges: dict[str, list[str]], meta: dict) 
         print(f"  {o:<22} → {d:<22} {n:>5}")
 
 
+FEEDBACK_SIM_TIMEOUT_S = 300
+
+
+def run_feedback_simulation(route_path: Path, duration_s: int, home: Path,
+                            iteration: int) -> Path:
+    """One meso pass over the CURRENT calibrated routes, aggregated into a
+    single interval spanning the whole window, to get each edge's actual
+    (congestion-adjusted) travel time. This is the missing half of the
+    calibration: PFE picks route USE COUNTS to match sensor totals, but the
+    candidate routes it picks from were generated against FREE-FLOW cost —
+    a route that's actually congested under the calibrated demand never
+    gets deprioritized. Feeding this back into duarouter (as --weight-files)
+    for the next candidate-generation pass closes that loop.
+
+    Research check (2026-07-08): simultaneous count+equilibrium calibration
+    is documented to significantly outperform a one-shot sequential run —
+    hence iterating this a few times rather than doing it once and freezing.
+    """
+    ed_file = SUMO_DIR / f"feedback_edgedata_{iteration}.xml"
+    add_file = SUMO_DIR / f"feedback_additional_{iteration}.add.xml"
+    with open(add_file, "w") as f:
+        f.write(f'<additional><edgeData id="fb" file="{ed_file.name}" '
+                f'begin="0" end="{duration_s}"/></additional>\n')
+    cmd = [
+        str(home / "bin" / "sumo"),
+        "--mesosim", "true",
+        "--meso-junction-control", "true",
+        "--meso-junction-control.limited", "true",
+        "-n", str(NET_PATH.resolve()),
+        "-r", str(route_path.resolve()),
+        "-a", str(add_file.resolve()),
+        "--begin", "0", "--end", str(duration_s + 3600),
+        "--no-step-log", "true", "--no-warnings", "true",
+        "--ignore-route-errors", "true", "--seed", "1000",
+    ]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True,
+                             cwd=str(SUMO_DIR), env={"SUMO_HOME": str(home)},
+                             timeout=FEEDBACK_SIM_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"feedback simulation timed out after {FEEDBACK_SIM_TIMEOUT_S}s")
+    if res.returncode != 0:
+        print(res.stderr[-2000:])
+        sys.exit("feedback simulation failed")
+    return ed_file
+
+
+# BPR (Bureau of Public Roads 1964) volume-delay function: t = t_free *
+# (1 + alpha*(v/c)^beta) — the standard closed-form Frank-Wolfe/MSA traffic
+# assignment travel-time estimate, computed directly from PFE's own solved
+# flow with NO extra simulation needed. ~1000x cheaper per iteration than
+# run_feedback_simulation (a real meso pass), which is what makes iterating
+# enough times to actually converge (research: MSA/Frank-Wolfe typically
+# need 10-25+ iterations, not 1-2) practical instead of prohibitively slow.
+BPR_ALPHA = 0.15
+BPR_BETA  = 4.0
+# HCM-consistent effective urban-street capacity per lane (veh/h) — signals/
+# turning movements make this well below highway free-flow capacity (~1900
+# pcu/h/lane); matches build_sumo_net.py's DEFAULT_SPEED_KMH/DEFAULT_LANES
+# road-type granularity.
+CAPACITY_PER_LANE_VPH = {
+    "motorway": 1900, "motorway_link": 1500, "trunk": 1700, "trunk_link": 1300,
+    "primary": 900, "primary_link": 800, "secondary": 800, "secondary_link": 700,
+    "tertiary": 700, "tertiary_link": 600,
+    "residential": 500, "living_street": 300, "unclassified": 600,
+}
+DEFAULT_CAPACITY_PER_LANE_VPH = 600
+
+
+BPR_PERIOD_S = 3600.0   # 1 hour: fine enough to catch a rush-hour peak
+                        # without so many periods duarouter's routing table
+                        # rebuild (--weight-period) gets expensive.
+
+
+def bpr_travel_times(achieved: dict[str, list[float]], quarter_s: float = 900.0,
+                     net_path: Path = NET_PATH, geo_path: Path = GEO_PATH,
+                     period_s: float = BPR_PERIOD_S,
+                     ) -> dict[str, list[float]]:
+    """{edge_id: [travel_time_s per period_s-sized period]} from PFE's own
+    achieved per-quarter flow — no simulation needed. A SINGLE flat average
+    over the whole calibration window (the first version of this function)
+    dilutes a sharp rush-hour peak into a mild multi-hour average — real
+    dynamic/time-dependent traffic assignment practice computes this PER
+    PERIOD, which is what lets duarouter (--weight-period) route trips
+    against the congestion that's actually present when they depart,
+    instead of a watered-down daily mean. Free-flow time + lane count come
+    from the SUMO net (the routing graph itself); road type (for capacity)
+    from network.geojson."""
+    net = ET.parse(net_path).getroot()
+    freeflow: dict[str, float] = {}
+    lanes: dict[str, int] = {}
+    for edge in net.findall("edge"):
+        if edge.get("function") == "internal":
+            continue
+        lane_els = edge.findall("lane")
+        if not lane_els:
+            continue
+        eid = edge.get("id")
+        length = float(lane_els[0].get("length"))
+        speed = float(lane_els[0].get("speed"))
+        freeflow[eid] = length / speed if speed > 0 else 1.0
+        lanes[eid] = len(lane_els)
+
+    highway: dict[str, str] = {}
+    with open(geo_path) as f:
+        for feat in json.load(f)["features"]:
+            p = feat["properties"]
+            highway[p["id"]] = p.get("highway") or "unclassified"
+
+    quarters_per_period = max(1, round(period_s / quarter_s))
+    tt: dict[str, list[float]] = {}
+    for eid, series in achieved.items():
+        if eid not in freeflow:
+            continue
+        cap_per_lane = CAPACITY_PER_LANE_VPH.get(highway.get(eid),
+                                                 DEFAULT_CAPACITY_PER_LANE_VPH)
+        capacity = max(1, lanes[eid]) * cap_per_lane
+        t_free = freeflow[eid]
+        periods = []
+        for start in range(0, len(series), quarters_per_period):
+            chunk = series[start:start + quarters_per_period]
+            v_per_hour = sum(chunk) / (len(chunk) * quarter_s / 3600.0)
+            periods.append(t_free * (1 + BPR_ALPHA * (v_per_hour / capacity) ** BPR_BETA))
+        tt[eid] = periods
+    return tt
+
+
+def damp_travel_times(
+    new: dict[str, list[float]], prev: dict[str, list[float]] | None,
+    iteration: int,
+) -> dict[str, list[float]]:
+    """Method of Successive Averages step, applied per period: blend this
+    iteration's estimate with the running average instead of fully
+    replacing it. A full replacement each round is a known-worse
+    convergence strategy than even plain MSA (let alone Frank-Wolfe) — it
+    can oscillate between two congestion patterns instead of settling.
+    Step size 1/(iteration+1) is the classic MSA schedule."""
+    if prev is None:
+        return {eid: list(periods) for eid, periods in new.items()}
+    step = 1.0 / (iteration + 1)
+    out = {eid: list(periods) for eid, periods in prev.items()}
+    for eid, new_periods in new.items():
+        prev_periods = prev.get(eid, new_periods)
+        out[eid] = [(1 - step) * p + step * n
+                   for p, n in zip(prev_periods, new_periods)]
+    return out
+
+
+def write_weight_file(travel_times: dict[str, list[float]], out_path: Path,
+                      period_s: float = BPR_PERIOD_S) -> None:
+    """meandata XML, one <interval> per period — the format
+    run_feedback_simulation's real edgeData output also produces (as
+    consecutive 900s intervals), so duarouter -w/--weight-attribute
+    traveltime --weight-period reads either interchangeably."""
+    n_periods = max((len(p) for p in travel_times.values()), default=0)
+    with open(out_path, "w") as f:
+        f.write("<meandata>\n")
+        for i in range(n_periods):
+            f.write(f'  <interval begin="{i * period_s:.2f}" '
+                    f'end="{(i + 1) * period_s:.2f}">\n')
+            for eid, periods in travel_times.items():
+                if i < len(periods):
+                    f.write(f'    <edge id="{eid}" traveltime="{periods[i]:.2f}"/>\n')
+            f.write("  </interval>\n")
+        f.write("</meandata>\n")
+
+
 def run_tool(script: str, args: list[str], home: Path) -> None:
     cmd = [sys.executable, str(home / "tools" / script), *args]
     env = {
@@ -411,42 +675,68 @@ def main() -> None:
     qi_start    = int((t0 - source_epoch) / INTERVAL)
     n_intervals = int((t1 - t0) / INTERVAL)
     duration_s  = n_intervals * 900
-    print(f"Window: {t0} → {t1}  ({n_intervals} × 15 min)  source={args.source}")
+    use_weekend_shape, day_kind = classify_day(args.date, t0.dayofweek)
+    print(f"Window: {t0} → {t1}  ({n_intervals} × 15 min)  source={args.source}"
+          f"  {day_kind}")
 
     sensor_edges = load_sensor_edges()
     print(f"Sensors: { {sid: len(e) for sid, e in sensor_edges.items()} }")
 
+    # Prefer the day's OWN measured (or, for --source forecast, Agent 1's
+    # forecast) shape over a generic weekday/weekend/holiday bucket average
+    # — it directly reflects whatever actually happened/will happen that
+    # exact date (captures e.g. a school-break Friday that isn't a public
+    # holiday, with no list to maintain) rather than an assumption about it.
+    real_shape = real_day_shape(flows, sensor_edges, qi_start)
+    day_shape_path = None
+    if real_shape is not None:
+        day_shape_path = SUMO_DIR / "real_day_shape.json"
+        day_shape_path.write_text(json.dumps(real_shape.tolist()))
+        print(f"  real day-shape: {int((real_shape > 0).sum())}/24 hours with "
+              f"data — blended with the {day_kind} fallback in build_candidates.py")
+    else:
+        print(f"  real day-shape: too sparse, using {day_kind} fallback only")
+
     home = sumo_home()
 
     cand_path = SUMO_DIR / "candidates.rou.xml"
-    if args.legacy_random_pool:
-        print("\nGenerating candidate route pool (LEGACY: uniform randomTrips) …")
-        # The pool needs DIVERSITY, not volume — cap it so whole-day windows
-        # don't produce 40k candidates that routeSampler then has to chew through.
-        period = max(CANDIDATE_PERIOD_S, duration_s / 10_000)
-        run_tool("randomTrips.py", [
-            "-n", str(NET_PATH),
-            "-r", str(cand_path),
-            "-o", str(SUMO_DIR / "trips.trips.xml"),
-            "-b", "0", "-e", str(duration_s),
-            "-p", str(period),
-            "--fringe-factor", "5",
-            "--seed", str(args.seed),
-            "--validate",
-        ], home)
-    else:
-        print("\nGenerating candidate route pool (subarea/DeSO/RVU generator) …")
-        n_total = max(6000, int(12000 * duration_s / 86400))
-        res = subprocess.run(
-            [sys.executable, "build_candidates.py",
-             "--through-fraction", str(args.through_fraction),
-             "--gravity-km", str(args.gravity_km),
-             "--n-total", str(n_total), "--seed", str(args.seed)],
-            capture_output=True, text=True)
-        print(res.stdout[-1200:])
-        if res.returncode != 0:
-            print(res.stderr[-1500:])
-            sys.exit("build_candidates.py failed")
+
+    def generate_candidates(weight_file: Path | None = None) -> None:
+        if args.legacy_random_pool:
+            print("\nGenerating candidate route pool (LEGACY: uniform randomTrips) …")
+            # The pool needs DIVERSITY, not volume — cap it so whole-day windows
+            # don't produce 40k candidates that routeSampler then has to chew through.
+            period = max(CANDIDATE_PERIOD_S, duration_s / 10_000)
+            run_tool("randomTrips.py", [
+                "-n", str(NET_PATH),
+                "-r", str(cand_path),
+                "-o", str(SUMO_DIR / "trips.trips.xml"),
+                "-b", "0", "-e", str(duration_s),
+                "-p", str(period),
+                "--fringe-factor", "5",
+                "--seed", str(args.seed),
+                "--validate",
+            ], home)
+        else:
+            print("\nGenerating candidate route pool (subarea/DeSO/RVU generator) …")
+            n_total = max(6000, int(12000 * duration_s / 86400))
+            cmd = [sys.executable, "build_candidates.py",
+                  "--through-fraction", str(args.through_fraction),
+                  "--gravity-km", str(args.gravity_km),
+                  "--cross-fraction", str(args.cross_fraction),
+                  "--n-total", str(n_total), "--seed", str(args.seed)]
+            if use_weekend_shape:
+                cmd += ["--is-weekend"]
+            if day_shape_path is not None:
+                cmd += ["--real-day-shape-file", str(day_shape_path)]
+            if weight_file is not None:
+                cmd += ["--weight-file", str(weight_file),
+                       "--weight-period", str(BPR_PERIOD_S)]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            print(res.stdout[-1200:])
+            if res.returncode != 0:
+                print(res.stderr[-1500:])
+                sys.exit("build_candidates.py failed")
 
     # ── Calibrate: one route set per direction-split variant ───────────────────
     # q50 = the default (calibrated.rou.xml). If the split file carries
@@ -479,9 +769,7 @@ def main() -> None:
                   f"unconstrained edges get a weak (w={assign_w}) realistic pull")
         prior_variant = {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
 
-        for suffix, key in variants:
-            targets = build_targets(flows, sensor_edges, qi_start,
-                                    n_intervals, split_key=key)
+        def build_bounds_priors(suffix: str) -> tuple[list[dict], list[dict]]:
             bounds_pq, priors_pq = [], []
             for i in range(n_intervals):
                 bq = {}
@@ -527,7 +815,80 @@ def main() -> None:
                         bq[e] = (0.0, max(5.0, 5.0 * v))
                 bounds_pq.append(bq)
                 priors_pq.append(pq)
+            return bounds_pq, priors_pq
 
+        # ── Congestion-feedback loop (primary "" / q50 variant only) ──────────
+        # PFE picks route USE COUNTS to match sensor totals, but the candidate
+        # routes it picks from were generated against FREE-FLOW cost — a route
+        # that's actually congested under the calibrated demand never gets
+        # deprioritized (one-shot sequential: calibrate once, freeze). Research
+        # (2026-07-08 review) shows SIMULTANEOUS count+equilibrium calibration
+        # significantly beats a one-shot sequential run, so re-generate
+        # candidates against each iteration's own MEASURED travel time and
+        # re-solve, stopping once GEH stabilizes. Skipped for
+        # --legacy-random-pool (randomTrips has no weight-file support).
+        n_iter = 1 if args.legacy_random_pool else args.congestion_iterations
+        weight_file = None
+        prev_geh = None
+        prev_tt_raw = None    # last iteration's un-damped BPR estimate
+        damped_tt = None      # MSA running average actually written out
+        report = None
+        for iteration in range(n_iter):
+            generate_candidates(weight_file)
+            targets = build_targets(flows, sensor_edges, qi_start,
+                                    n_intervals, split_key="edge_shares")
+            bounds_pq, priors_pq = build_bounds_priors("")
+            report = pfe.calibrate(cand_path, calib_path, targets,
+                                   bounds_pq, priors_pq)
+            tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
+            print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
+                  f"GEH<5: {report['geh_pct']}%  "
+                  f"(infeasible intervals: {report['infeasible_intervals']})")
+            if iteration == n_iter - 1:
+                break
+
+            if args.congestion_method == "simulate":
+                # Simple GEH-based early stop — this method is meant for an
+                # occasional, more-accurate check, not a many-iteration loop.
+                if prev_geh is not None and abs(report["geh_pct"] - prev_geh) < 0.5:
+                    print("  GEH stable across iterations — converged early, "
+                          "skipping remaining congestion-feedback rounds")
+                    break
+                prev_geh = report["geh_pct"]
+                weight_file = run_feedback_simulation(calib_path, duration_s, home, iteration)
+            else:
+                # BPR is cheap enough to use the real MSA/Frank-Wolfe
+                # convergence criterion — has travel time itself settled —
+                # rather than only watching GEH (which can hit 100% while
+                # routes are still shifting under it).
+                new_tt = bpr_travel_times(report["achieved"])
+                shared = set(new_tt) & set(prev_tt_raw or {})
+                if shared:
+                    diffs = [abs(a - b) / b
+                            for e in shared
+                            for a, b in zip(new_tt[e], prev_tt_raw[e]) if b]
+                    rel_change = sum(diffs) / len(diffs) if diffs else 0.0
+                    print(f"  mean relative travel-time change vs previous "
+                          f"iteration: {rel_change:.1%}")
+                    if rel_change < 0.02:
+                        print("  travel times converged — skipping remaining "
+                              "congestion-feedback rounds")
+                        break
+                prev_tt_raw = new_tt
+                damped_tt = damp_travel_times(new_tt, damped_tt, iteration)
+                weight_file = SUMO_DIR / f"feedback_weights_{iteration}.xml"
+                write_weight_file(damped_tt, weight_file)
+        if report["geh_pct"] < 100:
+            print("  ⚠ measured-edge fit below gate — inspect before use")
+
+        # ── Direction-split quantile variants: reuse the FINAL converged
+        # candidate pool, single pass each — they exist for Monte Carlo
+        # direction-uncertainty spread, not the count/equilibrium tension
+        # the feedback loop above resolves.
+        for suffix, key in variants[1:]:
+            targets = build_targets(flows, sensor_edges, qi_start,
+                                    n_intervals, split_key=key)
+            bounds_pq, priors_pq = build_bounds_priors(suffix)
             out = SUMO_DIR / f"calibrated{suffix}.rou.xml"
             report = pfe.calibrate(cand_path, out, targets,
                                    bounds_pq, priors_pq)
@@ -537,6 +898,7 @@ def main() -> None:
             if report["geh_pct"] < 100:
                 print("  ⚠ measured-edge fit below gate — inspect before use")
     else:
+        generate_candidates()
         for suffix, key in variants:
             counts_path = SUMO_DIR / f"counts{suffix}.xml"
             n = write_counts(flows, sensor_edges, qi_start, n_intervals,

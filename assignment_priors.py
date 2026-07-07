@@ -72,7 +72,7 @@ import numpy as np
 import osmnx as ox
 
 from build_sumo_demand import load_direction_split
-from build_candidates import (PURPOSE_SHARES, activity_mass, find_gates,
+from build_candidates import (PURPOSE_SHARES_WEEKDAY, activity_mass, find_gates,
                               gate_weights, gravity_distance_km, home_mass,
                               load_graph_edges)
 from build_sumo_net import parse_speed_ms
@@ -213,8 +213,8 @@ def main() -> None:
 
     # E-I / I-E / I-I: home ↔ activity, gravity-weighted
     home_idx = rng.choice(len(edges), size=n_tours, p=pH)
-    purposes = rng.choice(list(PURPOSE_SHARES), size=n_tours,
-                          p=list(PURPOSE_SHARES.values()))
+    purposes = rng.choice(list(PURPOSE_SHARES_WEEKDAY), size=n_tours,
+                          p=list(PURPOSE_SHARES_WEEKDAY.values()))
     for h_i, purpose in zip(home_idx, purposes):
         w = amass[purpose]
         if w.sum() == 0:

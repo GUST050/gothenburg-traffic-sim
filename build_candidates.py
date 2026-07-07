@@ -42,10 +42,31 @@ page references to the extracted report text):
     service 33 %, fritid 24 % — used to choose which activity-mass category
     an internal destination is drawn from.
   - trip-length bins (p.12, table 2): 0–1 km 9 %, 1.1–5 km 31 %,
-    5.1–10 km 19 %, >10 km 41 % — reported as a fit check on generated
-    tour lengths (not force-matched: our origins are ALL inside one small
-    canvas, so the >10 km tail cannot occur locally — through-trips absorb
-    the long end of that distribution by construction).
+    5.1–10 km 19 %, >10 km 41 % — a fit check on generated tour lengths
+    (calibrate_theta.py, build_candidates.trip_length_fit — NOT force-
+    matched, since the true OD isn't locally identifiable either); the fit
+    check renormalizes RVU's three SHORT bins and compares only those.
+    HARD CEILING, verified 2026-07-08 by direct measurement: this graph's
+    own diameter — gate-to-gate (E-E) AND gate-to-interior (E-I/I-E) both
+    — never exceeds ~7.8 km. An EARLIER version of this comment claimed
+    E-E through-trips "absorb the long end of the distribution by
+    construction" — that was never actually measured and is FALSE; E-E's
+    own gate-to-gate span maxes out at the same ~7.8 km. RVU's 5.1-10km/
+    >10km bins (51% of all real trips combined) describe a WHOLE-REGION
+    survey including long regional commutes (e.g. Kungsbacka/Partille into
+    the city) — most of a trip like that happens on roads outside this
+    graph entirely; only the last couple of km inside the inner-city
+    canvas is ever generated here. Comparing generated-tour length against
+    RVU's full regional distribution is therefore comparing two different
+    quantities (distance-within-this-graph vs. real door-to-door
+    distance), not a mistuned parameter — no θ value can close this gap.
+    E-I/I-E tours (added 2026-07-08 — previously documented here but never
+    actually implemented; every tour silently collapsed to I-I only) are
+    still a real, worthwhile realism improvement (actual cross-boundary
+    commuter behaviour, not just closed internal loops) and measurably
+    raise the 5.1-10km share (best found: ~1-4% I-I-only -> 8.4% E-I/I-E-
+    only, cross_fraction=1.0, gravity_km=8) — genuine progress, just not
+    enough to approach RVU's 19% for that bin, because of the ceiling above.
   - departure-time shape: RVU reports (p.11) a 6–9 AM plateau (23 % of all
     trips) peaking 7–8, and an 16–17 PM peak (11 %) — CONSISTENT with our
     OWN measured sensor profile (normal_profile.json), which is used
@@ -100,8 +121,119 @@ GATE_WEIGHT = {          # proxy: approach-road class → relative through-flow
     "tertiary": 1, "tertiary_link": 1,
 }
 
-# RVU Västra Götaland 2022-2023, fig. 11 (p.21), home leg excluded
-PURPOSE_SHARES = {"arbete": 0.43, "service": 0.33, "fritid": 0.24}
+# RVU Västra Götaland 2022-2023, fig. 11 (p.21), home leg excluded — the
+# WEEKLY AVERAGE (43/33/24), not a weekday-specific figure (Fig.11's own
+# caption has no day-type qualifier, and the underlying diary survey spans
+# all 7 days). Added 2026-07-09: this was used as a FLAT constant regardless
+# of day_kind (weekday/weekend/holiday) — meaning every simulated day, even
+# a Sunday, silently drew purposes from a 7-day BLEND, overstating "arbete"
+# on real weekends/holidays and understating it on real weekdays.
+#
+# PURPOSE_SHARES_WEEKDAY/WEEKEND below split this back into day-type-
+# specific shares. RVU has no such split directly, so the SHAPE of the
+# weekday->weekend shift is TRIANGULATED from TWO independent, verified
+# external sources (2026-07-09 — checked against a second source after the
+# first cut used NHTS alone):
+#   NHTS 2017 (US, fhwa.dot.gov/policyinformation, "Travel Trips by
+#   Purpose", home-based categories, non-home-based excluded — no analog
+#   here): work 17%wd/6%we (ratio 0.353); shop+other ("service" analog —
+#   includes family/personal-business/medical/other, matching RVU's own
+#   service definition) 41%wd/46%we (ratio 1.122); social ("fritid" analog)
+#   10%wd/17%we (ratio 1.700).
+#   UK NTS 2019 (gov.uk, table NTSQ04007, car/van-driver trips, AM+PM rush
+#   hour): commuting ratio 0.359 (independently matches NHTS's 0.353 almost
+#   exactly); shopping+personal-business+escort ("service" analog) ratio
+#   1.056 (close to NHTS's 1.122); leisure (visit friends + sport/
+#   entertainment, holiday/day-trips excluded as out of scope for an urban
+#   daily-tour model) ratio 2.251 (same direction as NHTS's fritid ratio,
+#   larger magnitude — likely a wider category definition).
+# Averaged ratio per category: arbete 0.356, service 1.089, fritid 1.976.
+# These RATIOS (not either source's absolute levels — different survey/
+# category methodology, and neither is Swedish) are applied to back out
+# weekday/weekend shares CONSTRAINED so the ANNUAL average reproduces RVU's
+# own real 43/33/24 exactly (solved numerically, scipy fsolve) — using the
+# EXACT 2025 day-type composition (249 true-weekday days + 116 weekend-
+# shaped days [104 real weekend + 12 weekday-that-are-holidays] out of 365,
+# not a naive 5/7-2/7 week, since ~12 weekday holidays a year measurably
+# shift the composition). The assumption is that the *proportional*
+# weekday->weekend shift is broadly similar across (car-oriented, northern-
+# European-or-comparable) cities — a much weaker, more defensible claim
+# than importing either source's absolute levels would be — while the
+# total stays anchored to what RVU actually measured in Västra Götaland.
+# Holidays reuse the weekend split — the closest real analog available
+# (same reasoning as departure-time shape's day_kind fallback), no data to
+# split it further; this is exactly what the annual-composition weighting
+# above already assumes.
+PURPOSE_SHARES_WEEKDAY = {"arbete": 0.5277, "service": 0.3032, "fritid": 0.1691}
+PURPOSE_SHARES_WEEKEND = {"arbete": 0.2204, "service": 0.3875, "fritid": 0.3921}
+
+
+def purpose_shares_for(is_weekend: bool) -> dict[str, float]:
+    return PURPOSE_SHARES_WEEKEND if is_weekend else PURPOSE_SHARES_WEEKDAY
+
+
+# PURPOSE_HOURLY_WEEKDAY/WEEKEND (2026-07-09): purpose ALSO varies by hour,
+# not just by day-type — "kl 8 nästan 100% jobb" (the original observation
+# that prompted this whole line of work). Neither RVU nor either day-type
+# source above has a joint purpose×hour table, so this is calibrated from a
+# THIRD external source with genuine hourly granularity:
+#   UK NTS table NTSQ03018 (gov.uk, "Trip purpose by trip start time for
+#   car/van drivers only, Monday to Friday only", England 2015/2019) — a
+#   real 24-hour × 8-purpose-category breakdown. Mapped to our 3 categories
+#   (arbete = Commuting+Business+Education+Escort education; service =
+#   Shopping+Other work/escort/personal business; fritid = Visiting
+#   friends/entertainment/sport+Holiday/day trip/other) using each
+#   category's own trip-volume total (the table gives, per purpose, what %
+#   of THAT purpose's trips fall in each hour — converted to "what % of
+#   THIS HOUR's trips are each purpose" via each purpose's absolute daily
+#   volume, then renormalized per hour).
+# WEEKDAY: this UK hourly SHAPE is rescaled (2 free constants, scipy
+# fsolve) so that, weighted by daily_shape() — our own REAL measured
+# Gothenburg hourly departure profile — it integrates to exactly
+# PURPOSE_SHARES_WEEKDAY. Result: arbete peaks at 92.8% (05h, though volume
+# there is tiny) / 85.9% at the real 07h commute peak; service peaks
+# ~50-54% mid-morning/midday; fritid peaks ~35-39% in the evening (19-21h).
+# WEEKEND: the UK table is Mon-Fri only — no full weekend/Saturday hourly
+# table was found (checked NHTS, UK NTS ad-hoc series, DE/NO/DK/NL surveys,
+# 2026-07-09). Naively rescaling the WEEKDAY hourly shape for weekends
+# overshot badly against real anchors (UK NTS table NTSQ04007's weekend
+# AM/PM-rush purpose mix: 17.9%/51.4%/30.6% arbete/service/fritid AM,
+# 11.6%/44.6%/43.8% PM — a synchronised commute peak just doesn't exist on
+# weekends to drive the same hour-to-hour swing). Tested a 3-parameter
+# per-category dampening fit against those 2 real anchors (least squares)
+# vs. a 1-parameter fit where arbete/service are held at their flat daily
+# mean and ONLY fritid varies by hour: both converged to essentially the
+# SAME residual (0.0289 vs 0.0287) — the extra 2 parameters bought nothing,
+# so the simpler model is used. Story: weekend "arbete"/"service" trips
+# aren't commute-synchronised so carry little real hour-of-day signal;
+# "fritid" still concentrates in the evening (37-53%, vs 21-25% midday).
+PURPOSE_HOURLY_WEEKDAY: list[tuple[float, float, float]] = [
+    (0.729, 0.131, 0.140), (0.855, 0.067, 0.078), (0.910, 0.049, 0.041),
+    (0.884, 0.075, 0.041), (0.912, 0.059, 0.029), (0.928, 0.046, 0.026),
+    (0.887, 0.076, 0.037), (0.859, 0.113, 0.028), (0.808, 0.157, 0.035),
+    (0.455, 0.387, 0.158), (0.257, 0.536, 0.207), (0.280, 0.521, 0.199),
+    (0.340, 0.458, 0.202), (0.394, 0.417, 0.189), (0.505, 0.344, 0.151),
+    (0.665, 0.232, 0.103), (0.619, 0.261, 0.120), (0.650, 0.234, 0.116),
+    (0.470, 0.301, 0.229), (0.300, 0.360, 0.340), (0.331, 0.324, 0.345),
+    (0.359, 0.254, 0.387), (0.459, 0.177, 0.364), (0.491, 0.181, 0.328),
+]
+PURPOSE_HOURLY_WEEKEND: list[tuple[float, float, float]] = [
+    (0.222, 0.391, 0.387), (0.248, 0.437, 0.315), (0.272, 0.479, 0.249),
+    (0.273, 0.479, 0.248), (0.283, 0.497, 0.220), (0.284, 0.499, 0.217),
+    (0.276, 0.485, 0.239), (0.285, 0.501, 0.214), (0.280, 0.492, 0.228),
+    (0.228, 0.401, 0.371), (0.219, 0.385, 0.396), (0.221, 0.389, 0.390),
+    (0.218, 0.383, 0.399), (0.220, 0.387, 0.393), (0.229, 0.402, 0.369),
+    (0.243, 0.428, 0.329), (0.237, 0.416, 0.347), (0.237, 0.417, 0.346),
+    (0.204, 0.358, 0.438), (0.184, 0.323, 0.493), (0.181, 0.319, 0.500),
+    (0.172, 0.302, 0.526), (0.171, 0.301, 0.528), (0.177, 0.311, 0.512),
+]
+PURPOSE_CATEGORIES = ("arbete", "service", "fritid")
+
+
+def purpose_shares_for_hour(hour: int, is_weekend: bool) -> dict[str, float]:
+    table = PURPOSE_HOURLY_WEEKEND if is_weekend else PURPOSE_HOURLY_WEEKDAY
+    a, s, f = table[int(hour) % 24]
+    return {"arbete": a, "service": s, "fritid": f}
 
 POI_TAGS = {
     "arbete": {"office": True, "building": ["industrial", "commercial"],
@@ -134,6 +266,61 @@ def gravity_distance_km(lats: np.ndarray, lons: np.ndarray,
     — the approximation gravity models use at city scale."""
     return np.sqrt(((lats - lat0) * KLAT_M / 1000.0) ** 2
                   + ((lons - lon0) * KLON_M / 1000.0) ** 2)
+
+
+# RVU Västra Götaland 2022-2023 (VGR Analys 2023:56), p.12 table 2 — ALL
+# trips (home leg included), 0-1/1.1-5/5.1-10/>10 km = 9/31/19/41%. The >10
+# km bin structurally cannot occur for a HOME-BASED TOUR whose both ends are
+# inside this small inner-city canvas (through-trips carry the long end of
+# the real distribution instead — see docstring above) — so the fit check
+# renormalizes RVU's THREE short bins to sum to 1 and compares only those.
+RVU_SHORT_BIN_EDGES_KM = (1.0, 5.0, 10.0)
+_rvu_short_raw = (0.09, 0.31, 0.19)
+RVU_SHORT_BIN_SHARES = tuple(v / sum(_rvu_short_raw) for v in _rvu_short_raw)
+
+
+def trip_length_fit(lengths_km: list[float]) -> dict:
+    """Bin generated home-based-tour lengths into RVU's short bins and score
+    the L1 distance to RVU's real (renormalized) shares — actually
+    implements the fit build_candidates.py's own docstring has claimed
+    since 2026-07-05 ("replaced [GEH scoring] with a trip-length fit"),
+    which calibrate_theta.py never did (confirmed 2026-07-08: it only ever
+    scored by GEH, which saturates at 100% for every θ combination and
+    carries no signal to pick between them)."""
+    n = len(lengths_km)
+    if n == 0:
+        return {"shares": [0.0, 0.0, 0.0], "l1_distance": float("inf"), "n": 0}
+    counts = [0, 0, 0]
+    over_10km = 0
+    for d in lengths_km:
+        if d <= RVU_SHORT_BIN_EDGES_KM[0]:
+            counts[0] += 1
+        elif d <= RVU_SHORT_BIN_EDGES_KM[1]:
+            counts[1] += 1
+        elif d <= RVU_SHORT_BIN_EDGES_KM[2]:
+            counts[2] += 1
+        else:
+            over_10km += 1
+    n_short = n - over_10km
+    shares = [c / n_short for c in counts] if n_short > 0 else [0.0, 0.0, 0.0]
+    l1 = sum(abs(s - r) for s, r in zip(shares, RVU_SHORT_BIN_SHARES))
+    return {"shares": [round(s, 4) for s in shares], "l1_distance": round(l1, 4),
+           "n": n, "over_10km_pct": round(100 * over_10km / n, 1)}
+
+
+def duarouter_weight_args(weight_file: str | None,
+                          weight_period: float | None = None) -> list[str]:
+    """duarouter CLI args to route by MEASURED travel time from a prior
+    iteration's own edgeData/BPR output instead of free-flow cost — []
+    (route by free-flow speed/length, duarouter's default) when None.
+    weight_period tells duarouter the file has multiple time-varying
+    <interval> blocks (e.g. hourly) rather than one flat average."""
+    if not weight_file:
+        return []
+    args = ["--weight-files", weight_file, "--weight-attribute", "traveltime"]
+    if weight_period:
+        args += ["--weight-period", str(weight_period)]
+    return args
 
 
 def load_deso_population() -> dict[str, int]:
@@ -298,6 +485,18 @@ def gate_weights(G, gates: list[tuple[str, int]]) -> np.ndarray:
     return w / w.sum()
 
 
+def gate_latlon(G, gates: list[tuple[str, int]]) -> tuple[np.ndarray, np.ndarray]:
+    """Midpoint lat/lon per gate edge — same u/v-midpoint convention as
+    load_graph_edges(), needed to gravity-weight E-I/I-E cross-boundary
+    tours by distance from the gate, not just by road class."""
+    lats, lons = [], []
+    for eid, _ in gates:
+        u, v, k = map(int, eid.split("_"))
+        lats.append((G.nodes[u]["y"] + G.nodes[v]["y"]) / 2)
+        lons.append((G.nodes[u]["x"] + G.nodes[v]["x"]) / 2)
+    return np.array(lats), np.array(lons)
+
+
 def reverse_edge_id(eid: str) -> str:
     u, v, k = eid.split("_")
     return f"{v}_{u}_{k}"
@@ -362,20 +561,44 @@ def upstream_downstream_gates(
     return (ins or [eid for eid, _ in entries]), (outs or [eid for eid, _ in exits])
 
 
-def daily_shape() -> np.ndarray:
+def daily_shape(is_weekend: bool = False) -> np.ndarray:
     """Our OWN measured departure-time distribution (normal_profile.json) —
     more local and finer-grained than RVU's regional bins, and consistent
-    with them (both show the 7-8h / 16-17h peaks RVU reports on p.11)."""
+    with them (both show the 7-8h / 16-17h peaks RVU reports on p.11).
+
+    FIXED 2026-07-09: this unconditionally read the 'weekday' profile
+    regardless of which --date was actually being calibrated — normal_
+    profile.json has ALWAYS carried a separate, real 'weekend' profile
+    (RVU's own Fig.1 confirms weekday and weekend departure-time shapes
+    differ substantially: weekend starts later and peaks broader, ~16:00,
+    vs weekday's sharp AM/PM peaks), it just was never read here."""
     with open("web/data/normal_profile.json") as f:
         profiles = json.load(f)["profiles"]
+    key = "weekend" if is_weekend else "weekday"
     acc = np.zeros(24)
     for p in profiles.values():
-        wd = p.get("weekday") or []
+        wd = p.get(key) or []
         for h in range(24):
             vals = [v for v in wd[h * 4:(h + 1) * 4] if v is not None]
             if vals:
                 acc[h] += sum(vals) / len(vals)
     return acc / acc.sum()
+
+
+REAL_DAY_SHAPE_WEIGHT = 0.7   # fixed shrinkage toward --real-day-shape-file's
+                             # measured/forecast shape, applied even when
+                             # that day's data is complete — hedges against
+                             # ONE day's sampling noise across just 6-7
+                             # sensors, same "always some shrinkage"
+                             # principle as dirsplit's James-Stein lambda.
+
+
+def blend_day_shape(real: np.ndarray, fallback: np.ndarray,
+                    weight: float = REAL_DAY_SHAPE_WEIGHT) -> np.ndarray:
+    """weight toward the real/forecast day's own measured shape, (1-weight)
+    toward the smoothed weekday/weekend/holiday fallback."""
+    blended = weight * real + (1 - weight) * fallback
+    return blended / blended.sum()
 
 
 def main() -> None:
@@ -384,6 +607,46 @@ def main() -> None:
                     help="θ: share of trips that are E-E through traffic")
     ap.add_argument("--gravity-km", type=float, default=1.8,
                     help="θ: distance-deterrence scale (km) for tours")
+    ap.add_argument("--cross-fraction", type=float, default=0.3,
+                    help="θ: share of the (non-through) tour budget that is "
+                        "E-I/I-E cross-boundary commuting (one end at a "
+                        "gate, one end an internal home/activity edge) "
+                        "rather than pure I-I (both ends internal). "
+                        "Disclosed-unidentifiable neutral prior, same "
+                        "status as through-fraction — no local cordon "
+                        "count exists to calibrate a real split. Added "
+                        "2026-07-08: E-I/I-E were documented in this "
+                        "docstring's METHOD section from the start but "
+                        "never actually implemented — every 'tour' was "
+                        "silently I-I only (both ends drawn from `edges`, "
+                        "never a gate), which structurally caps tour "
+                        "length at the small inner-city canvas's own "
+                        "diameter and cannot reach RVU's 5.1-10km trip "
+                        "share (confirmed: best fit across gravity_km "
+                        "1-15km still under 5%, vs RVU's 32%).")
+    ap.add_argument("--is-weekend", action="store_true",
+                    help="Use normal_profile.json's WEEKEND departure-time "
+                        "shape instead of weekday (later start, broader "
+                        "single ~16:00 peak vs weekday's sharp AM/PM peaks — "
+                        "RVU Fig.1). Passed through from build_sumo_demand.py "
+                        "based on the actual --date being calibrated — found "
+                        "2026-07-08: this script had no notion of which "
+                        "date/day-of-week it was building for at all, always "
+                        "silently assuming an average weekday even when "
+                        "calibrating a Saturday/Sunday.")
+    ap.add_argument("--real-day-shape-file", default=None,
+                    help="JSON array of 24 hourly shares — the ACTUAL "
+                        "measured (or, for a forecast date, Agent 1's "
+                        "forecast) departure-time shape for the EXACT "
+                        "calendar day being calibrated, written by "
+                        "build_sumo_demand.py's real_day_shape(). Preferred "
+                        "over --is-weekend's bucket average where available "
+                        "(blended with it, REAL_DAY_SHAPE_WEIGHT toward the "
+                        "real day) — it directly reflects whatever actually "
+                        "happened that specific date (a school-break Friday, "
+                        "a snow day, a local event, ...) rather than an "
+                        "assumption about it, with no holiday list to "
+                        "maintain. Added 2026-07-09.")
     ap.add_argument("--n-total", type=int, default=12000)
     ap.add_argument("--n-sensor-via", type=int, default=900,
                     help="via-trips per measured edge (coverage guarantee)")
@@ -399,6 +662,22 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out-suffix", default="",
                     help="internal use by calibrate_theta.py")
+    ap.add_argument("--weight-file", default=None,
+                    help="a SUMO meandata XML (e.g. a BPR estimate from a "
+                        "prior iteration's own achieved flow) giving MEASURED "
+                        "travel times to route by, instead of free-flow "
+                        "speed/length. Used by build_sumo_demand.py's "
+                        "congestion-feedback loop: routing on free-flow cost "
+                        "alone means candidate routes never avoid streets "
+                        "that are actually congested under the calibrated "
+                        "demand.")
+    ap.add_argument("--weight-period", type=float, default=None,
+                    help="Aggregation period (s) of --weight-file's "
+                        "<interval> blocks, if it has more than one (a "
+                        "time-varying/per-hour weight file, not one flat "
+                        "average for the whole window) — passed straight to "
+                        "duarouter so trips are routed against the "
+                        "congestion of the period they actually depart in.")
     args = ap.parse_args()
     rng = np.random.default_rng(args.seed)
 
@@ -413,15 +692,23 @@ def main() -> None:
     exit_ids  = [e for e, _ in exits]
     w_entry = gate_weights(G, entries)
     w_exit  = gate_weights(G, exits)
-    shape_hourly = daily_shape()
+    shape_hourly = daily_shape(args.is_weekend)
+    if args.real_day_shape_file:
+        with open(args.real_day_shape_file) as f:
+            real_shape = np.array(json.load(f))
+        shape_hourly = blend_day_shape(real_shape, shape_hourly)
     print(f"{len(entries)} entry gates, {len(exits)} exit gates")
 
     if hmass.sum() == 0:
         sys.exit("home_mass is all-zero — check data_in/deso/ (run fetch_deso.py)")
     pH = hmass / hmass.sum()
 
-    n_through = int(args.n_total * args.through_fraction)
-    n_tours   = (args.n_total - n_through) // 2   # paired -> half as many tours
+    n_through     = int(args.n_total * args.through_fraction)
+    n_tours_total = (args.n_total - n_through) // 2   # paired -> half as many tours
+    n_cross    = int(n_tours_total * args.cross_fraction)
+    n_internal = n_tours_total - n_cross
+    n_ei = n_cross // 2          # gate (home-side) -> internal activity
+    n_ie = n_cross - n_ei        # internal home -> gate (activity-side)
 
     trips: list[tuple[float, str, str]] = []
 
@@ -432,13 +719,31 @@ def main() -> None:
         e_out = exit_ids[rng.choice(len(exit_ids), p=w_exit)]
         trips.append(((h + rng.random()) * 3600, e_in, e_out))
 
-    # ── E-I / I-E / I-I: purpose-sampled, gravity-weighted, PAIRED tours ───────
-    home_idx = rng.choice(len(edges), size=n_tours, p=pH)
-    purposes = rng.choice(list(PURPOSE_SHARES), size=n_tours,
-                          p=list(PURPOSE_SHARES.values()))
     edge_lats = np.array([e["lat"] for e in edges])
     edge_lons = np.array([e["lon"] for e in edges])
-    for h_i, purpose in zip(home_idx, purposes):
+    entry_lats, entry_lons = gate_latlon(G, entries)
+    exit_lats,  exit_lons  = gate_latlon(G, exits)
+    tour_lengths_km: list[float] = []
+
+    def am_pm_hours():
+        """Outbound ~ AM-weighted draw from OUR shape; return ~ PM-weighted
+        (shared by all three tour classes: I-I, E-I, I-E)."""
+        h_out = rng.choice(24, p=shape_hourly)
+        pm_shape = shape_hourly * (np.arange(24) >= 12)
+        pm_shape = pm_shape / pm_shape.sum() if pm_shape.sum() > 0 else shape_hourly
+        h_ret = max(h_out + 1, rng.choice(24, p=pm_shape))
+        return h_out, min(h_ret, 23)
+
+    # ── I-I: purpose-sampled (hour-of-day AND day-type aware — the departure
+    # hour is drawn FIRST, then purpose conditional on it via
+    # purpose_shares_for_hour(), since e.g. 08h is ~86% arbete on a weekday
+    # while 20h is ~35% fritid; see PURPOSE_HOURLY_WEEKDAY/WEEKEND above),
+    # gravity-weighted, PAIRED internal tours ──────────────────────────────
+    home_idx = rng.choice(len(edges), size=n_internal, p=pH)
+    for h_i in home_idx:
+        h_out, h_ret = am_pm_hours()
+        purpose_shares = purpose_shares_for_hour(int(h_out), args.is_weekend)
+        purpose = rng.choice(PURPOSE_CATEGORIES, p=list(purpose_shares.values()))
         w = amass[purpose].copy()
         if w.sum() == 0:
             continue
@@ -449,17 +754,65 @@ def main() -> None:
         if w.sum() == 0:
             continue
         a_i = rng.choice(len(edges), p=w / w.sum())
-
-        # Outbound ~ AM-weighted draw from OUR shape; return ~ PM-weighted.
-        h_out = rng.choice(24, p=shape_hourly)
-        pm_shape = shape_hourly * (np.arange(24) >= 12)
-        pm_shape = pm_shape / pm_shape.sum() if pm_shape.sum() > 0 else shape_hourly
-        h_ret = max(h_out + 1, rng.choice(24, p=pm_shape))
+        tour_lengths_km.append(float(d_km[a_i]))
 
         trips.append(((h_out + rng.random()) * 3600,
                       edges[h_i]["id"], edges[a_i]["id"]))
-        trips.append(((min(h_ret, 23) + rng.random()) * 3600,
+        trips.append(((h_ret + rng.random()) * 3600,
                       edges[a_i]["id"], edges[h_i]["id"]))
+
+    # ── E-I: commuter from OUTSIDE the canvas, entering via a gate to an
+    # internal activity — documented in this file's METHOD section since
+    # 2026-07-05 but never implemented until now (confirmed 2026-07-08: every
+    # "tour" was silently I-I only, both ends drawn from `edges`, which
+    # structurally caps tour length at the small canvas's own diameter and
+    # cannot reach RVU's 5.1-10km trip share no matter how gravity_km is
+    # tuned — a gate-anchored end can plausibly span that far). Paired:
+    # arrive via one gate, leave via an independently-drawn gate (same
+    # independence E-E's through trips already use for entry vs exit).
+    gate_idx_ei = rng.choice(len(entries), size=n_ei, p=w_entry)
+    for gi in gate_idx_ei:
+        h_out, h_ret = am_pm_hours()
+        purpose_shares = purpose_shares_for_hour(int(h_out), args.is_weekend)
+        purpose = rng.choice(PURPOSE_CATEGORIES, p=list(purpose_shares.values()))
+        w = amass[purpose].copy()
+        if w.sum() == 0:
+            continue
+        d_km = gravity_distance_km(edge_lats, edge_lons,
+                                   entry_lats[gi], entry_lons[gi])
+        w = w * np.exp(-d_km / args.gravity_km)
+        if w.sum() == 0:
+            continue
+        a_i = rng.choice(len(edges), p=w / w.sum())
+        tour_lengths_km.append(float(d_km[a_i]))
+
+        g_out = exit_ids[rng.choice(len(exit_ids), p=w_exit)]
+        trips.append(((h_out + rng.random()) * 3600,
+                      entry_ids[gi], edges[a_i]["id"]))
+        trips.append(((h_ret + rng.random()) * 3600,
+                      edges[a_i]["id"], g_out))
+
+    # ── I-E: internal home, commuting OUT to something outside the canvas
+    # via a gate — the mirror image of E-I. Destination gate is weighted by
+    # BOTH road class (w_exit, same prior E-E uses) AND gravity distance
+    # from home (nearer gates preferred, all else equal) — E-E's gate draws
+    # have no "distance from" anchor to weight by, this does.
+    home_idx_ie = rng.choice(len(edges), size=n_ie, p=pH)
+    for h_i in home_idx_ie:
+        d_km = gravity_distance_km(exit_lats, exit_lons,
+                                   edges[h_i]["lat"], edges[h_i]["lon"])
+        w = w_exit * np.exp(-d_km / args.gravity_km)
+        if w.sum() == 0:
+            continue
+        g_i = rng.choice(len(exits), p=w / w.sum())
+        tour_lengths_km.append(float(d_km[g_i]))
+
+        g_in = entry_ids[rng.choice(len(entry_ids), p=w_entry)]
+        h_out, h_ret = am_pm_hours()
+        trips.append(((h_out + rng.random()) * 3600,
+                      edges[h_i]["id"], exit_ids[g_i]))
+        trips.append(((h_ret + rng.random()) * 3600,
+                      g_in, edges[h_i]["id"]))
 
     # ── Coverage guarantee: via-trips through every measured sensor edge ───────
     # Gates are restricted to ones upstream/downstream of m_edge's OWN travel
@@ -485,14 +838,30 @@ def main() -> None:
             f.write(f'  <trip id="t{i}" depart="{t[0]:.1f}" '
                     f'from="{t[1]}" to="{t[2]}"{via}/>\n')
         f.write("</routes>\n")
-    print(f"{len(trips)} trips ({n_through} through, {n_tours} paired tours "
-          f"= {n_tours*2} legs, {len(measured)*args.n_sensor_via} coverage)")
+    print(f"{len(trips)} trips ({n_through} E-E through, "
+          f"{n_internal} I-I + {n_ei} E-I + {n_ie} I-E paired tours "
+          f"= {(n_internal+n_ei+n_ie)*2} legs, "
+          f"{len(measured)*args.n_sensor_via} coverage)")
+
+    fit = trip_length_fit(tour_lengths_km)
+    fit["through_fraction"] = args.through_fraction
+    fit["gravity_km"] = args.gravity_km
+    with open(SUMO_DIR / f"trip_length_fit{args.out_suffix}.json", "w") as f:
+        json.dump(fit, f, indent=1)
+    print(f"  trip-length fit vs RVU short bins {RVU_SHORT_BIN_SHARES}: "
+          f"generated {fit['shares']}  L1={fit['l1_distance']}  "
+          f"(>10km: {fit.get('over_10km_pct', 0)}%)")
 
     home = sumo_home()
     out = SUMO_DIR / f"candidates{args.out_suffix}.rou.xml"
+    weight_args = duarouter_weight_args(args.weight_file, args.weight_period)
+    if args.weight_file:
+        print(f"  routing by MEASURED travel time from {args.weight_file} "
+              f"(congestion-feedback iteration)")
     res = subprocess.run(
         [str(home / "bin" / "duarouter"), "-n", str(NET_PATH),
          "--route-files", str(trips_path), "-o", str(out),
+         *weight_args,
          "--weights.random-factor", str(args.route_diversity),
          # Default 5s barely discourages a literal U-turn at a via point when
          # it's duarouter's cheapest way to satisfy a forced via constraint

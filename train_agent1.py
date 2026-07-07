@@ -101,20 +101,26 @@ def build_features(n: int, *, epoch: pd.Timestamp = EPOCH) -> pd.DataFrame:
     })
 
 
+def features_for_synthetic(hour: float, dayofweek: int, month: int) -> pd.DataFrame:
+    """One-row feature DataFrame from EXPLICIT (hour, day-of-week, month)
+    components, rather than requiring one consistent real calendar date —
+    needed to ask the baseline model "what would a normal <day-of-week>
+    look like" for a day-of-week that didn't actually occur on that date
+    (see corrected_holiday_factor() in build_agent1_flows.py)."""
+    return pd.DataFrame([{
+        "hour_sin":   float(np.sin(2 * np.pi * hour / 24)),
+        "hour_cos":   float(np.cos(2 * np.pi * hour / 24)),
+        "dow_sin":    float(np.sin(2 * np.pi * dayofweek /  7)),
+        "dow_cos":    float(np.cos(2 * np.pi * dayofweek /  7)),
+        "month_sin":  float(np.sin(2 * np.pi * (month - 1) / 12)),
+        "month_cos":  float(np.cos(2 * np.pi * (month - 1) / 12)),
+        "is_weekend": float(dayofweek >= 5),
+    }])
+
+
 def features_for_datetime(dt: pd.Timestamp) -> pd.DataFrame:
     """One-row feature DataFrame for a single datetime."""
-    h  = dt.hour + dt.minute / 60
-    dw = dt.dayofweek
-    mo = dt.month
-    return pd.DataFrame([{
-        "hour_sin":   float(np.sin(2 * np.pi * h  / 24)),
-        "hour_cos":   float(np.cos(2 * np.pi * h  / 24)),
-        "dow_sin":    float(np.sin(2 * np.pi * dw /  7)),
-        "dow_cos":    float(np.cos(2 * np.pi * dw /  7)),
-        "month_sin":  float(np.sin(2 * np.pi * (mo - 1) / 12)),
-        "month_cos":  float(np.cos(2 * np.pi * (mo - 1) / 12)),
-        "is_weekend": float(dw >= 5),
-    }])
+    return features_for_synthetic(dt.hour + dt.minute / 60, dt.dayofweek, dt.month)
 
 
 # ── Imputation ────────────────────────────────────────────────────────────────
@@ -371,6 +377,14 @@ class Agent1:
     def predict(self, dt: pd.Timestamp) -> dict[str, float]:
         """Baseline prediction (no holiday adjustment)."""
         feat = features_for_datetime(dt)
+        return {sid: max(0.0, float(m.predict(feat)[0]))
+                for sid, m in self._models.items()}
+
+    def predict_synthetic(self, hour: float, dayofweek: int, month: int) -> dict[str, float]:
+        """Baseline prediction from explicit (hour, day-of-week, month) —
+        "what would a normal <day-of-week> look like", independent of
+        which real calendar date that day-of-week actually falls on."""
+        feat = features_for_synthetic(hour, dayofweek, month)
         return {sid: max(0.0, float(m.predict(feat)[0]))
                 for sid, m in self._models.items()}
 
