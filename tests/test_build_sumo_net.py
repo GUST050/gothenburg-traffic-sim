@@ -45,6 +45,13 @@ class TestParseLanes:
     def test_oneway_bool_true_not_halved(self):
         assert parse_lanes({"lanes": "3", "highway": "primary", "oneway": True}) == 3
 
+    def test_oneway_as_scalar_list_not_halved(self):
+        # osmnx graph simplification can merge several original OSM ways into
+        # one edge, leaving a list-valued tag when they disagree — a
+        # genuinely one-way street must not get its lane count halved just
+        # because the tag came back as ["yes"] instead of "yes".
+        assert parse_lanes({"lanes": "3", "highway": "primary", "oneway": ["yes"]}) == 3
+
     def test_odd_twoway_lane_count_floors_and_stays_at_least_one(self):
         assert parse_lanes({"lanes": "1", "highway": "primary"}) == 1
 

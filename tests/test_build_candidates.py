@@ -228,3 +228,27 @@ class TestHomeMass:
         edges = [{"id": "far", "lat": 0.0, "lon": 0.0, "hw": "residential", "len": 100.0}]
         mass = bc.home_mass(edges)
         assert mass[0] == 0.0
+
+
+class TestGravityDistanceKm:
+    """A bare degree-distance treats 1° lat and 1° lon as equal in km, which
+    is wrong at Gothenburg's latitude (cos(57.7°)≈0.535) and overstates
+    east-west distance ~1.87x relative to north-south — found 2026-07-06,
+    biasing gravity-weighted OD generation and the assignment-prior field
+    against E-W trips."""
+
+    def test_one_degree_north_south_is_about_110_km(self):
+        d = bc.gravity_distance_km(np.array([58.7]), np.array([11.5]), 57.7, 11.5)
+        assert d[0] == pytest.approx(110.54, rel=0.01)
+
+    def test_one_degree_east_west_is_cos_corrected_not_110_km(self):
+        d = bc.gravity_distance_km(np.array([57.7]), np.array([12.5]), 57.7, 11.5)
+        assert d[0] == pytest.approx(111.32 * np.cos(np.radians(57.7)), rel=0.01)
+        assert d[0] < 70.0   # NOT ~111 km, the bare-degree bug's answer
+
+    def test_equal_lat_lon_offsets_give_unequal_km_distance(self):
+        # Same 0.1 degree offset in each axis must NOT produce equal km
+        # distances (that would mean the cos-correction silently vanished).
+        d_ns = bc.gravity_distance_km(np.array([57.8]), np.array([11.5]), 57.7, 11.5)
+        d_ew = bc.gravity_distance_km(np.array([57.7]), np.array([11.6]), 57.7, 11.5)
+        assert d_ns[0] > d_ew[0]

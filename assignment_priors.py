@@ -71,8 +71,10 @@ import networkx as nx
 import numpy as np
 import osmnx as ox
 
+from build_sumo_demand import load_direction_split
 from build_candidates import (PURPOSE_SHARES, activity_mass, find_gates,
-                              gate_weights, home_mass, load_graph_edges)
+                              gate_weights, gravity_distance_km, home_mass,
+                              load_graph_edges)
 from build_sumo_net import parse_speed_ms
 
 GRAPH_PATH = Path("web/data/graph.graphml")
@@ -218,7 +220,7 @@ def main() -> None:
         if w.sum() == 0:
             vi += 1
             continue
-        d_km = np.sqrt((lats - lats[h_i]) ** 2 + (lons - lons[h_i]) ** 2) * 111.0
+        d_km = gravity_distance_km(lats, lons, lats[h_i], lons[h_i])
         wgt = w * np.exp(-d_km / args.gravity_km)
         wgt[h_i] = 0
         if wgt.sum() == 0:
@@ -249,17 +251,25 @@ def main() -> None:
     level = {f["properties"]["id"]: f["properties"].get("level")
              for f in geo["features"] if f["properties"].get("sensor_id")}
 
+    # Total (two-way) sensors: split the raw count by the ESTIMATED direction
+    # share, same as build_sumo_demand.build_targets/write_counts — not a
+    # blind 50/50, which was a real, avoidable divergence from that fix
+    # (found 2026-07-06 alongside the sensor-107 reporting-artifact review).
+    est_shares = load_direction_split()
     x_load, y_meas = [], []
     for eid, lv in level.items():
         arr = flows.get(eid)
         if not arr:
             continue
-        vals = [v for v in arr if v is not None]
+        if lv == "Total":
+            shares = est_shares.get(eid)
+            vals = [v * (shares[i % 96] if shares else 0.5)
+                   for i, v in enumerate(arr) if v is not None]
+        else:
+            vals = [v for v in arr if v is not None]
         if not vals or load.get(eid, 0) == 0:
             continue
         daily_mean = sum(vals) / len(vals) * 96          # → veh/day equivalent
-        if lv == "Total":
-            daily_mean /= 2                               # split across the pair
         x_load.append(load[eid])
         y_meas.append(daily_mean)
     x_load, y_meas = np.array(x_load), np.array(y_meas)

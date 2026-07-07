@@ -102,15 +102,23 @@ def load_table():
 
 
 def target_static_features() -> dict[str, np.ndarray]:
-    """{sensor_id: static feature vector} for every Total sensor pair
-    (mean of the pair's two directed edges — they differ only in sign-ish
-    fields). Imported lazily to avoid loading OSM graphs on module import."""
+    """{sensor_id: static feature vector} for every sensor. For a two-way
+    ("Total") sensor's pair, use the TOWARD-CENTRE edge's own row — NOT the
+    mean of both directed edges. radial_cos (the model's key feature, per
+    features.py) and the asymmetry/ahead-behind features flip sign between
+    a pair's two directions; averaging them doesn't produce a direction-
+    agnostic descriptor, it cancels radial_cos toward ~0 (verified: sensor
+    107's pair is +0.61/-0.59, averaging to 0.01 instead of the real ~0.6
+    toward-centre alignment). This is the same toward-centre convention
+    predict.py and prior_flows.py use when orienting a pair before
+    prediction. Imported lazily to avoid loading OSM graphs on import."""
     from .coverage import target_matrix
     X_tgt, meta = target_matrix()
+    rc_i = FEATURE_NAMES.index("radial_cos")
     by_sensor: dict[str, list[np.ndarray]] = {}
     for row, m in zip(X_tgt, meta):
         by_sensor.setdefault(m["sensor"], []).append(row)
-    return {sid: np.mean(rows, axis=0) for sid, rows in by_sensor.items()}
+    return {sid: max(rows, key=lambda r: r[rc_i]) for sid, rows in by_sensor.items()}
 
 
 def kernel_weights(X_static_z: np.ndarray, centre_z: np.ndarray,

@@ -48,6 +48,20 @@ def opposite_edge(G, e: str, lat: float, lon: float) -> str | None:
     return f"{opp[0]}_{opp[1]}_{opp[2]}" if opp else None
 
 
+def measured_edge_shares(
+    rc_meas: float, rc_opp: float,
+    q10: np.ndarray, q50: np.ndarray, q90: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The model (q10/q50/q90) was predicted on whichever edge of the pair
+    points toward the centre (train.py keeps radial_cos > 0 rows only).
+    Re-derive e_meas's OWN share: unchanged if e_meas is that toward-centre
+    edge, else the complement — with the q10/q90 band swapping too, since
+    e_meas's upper bound is the canonical edge's LOWER bound and vice versa."""
+    if rc_meas >= rc_opp:
+        return q10, q50, q90
+    return 1 - q90, 1 - q50, 1 - q10
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--date", default="2025-09-16")
@@ -63,6 +77,7 @@ def main() -> None:
         flows = json.load(f)["flows"]
     with open(PROFILE_PATH) as f:
         profiles = json.load(f)["profiles"]
+    geo_by_id = {feat["properties"]["id"]: feat for feat in geo["features"]}
 
     G = load_city_graph("goteborg")
     epoch = pd.Timestamp("2025-01-01")
@@ -88,11 +103,32 @@ def main() -> None:
             print(f"{sid:<7} {e_meas}: no opposite edge (one-way street?) — skipped")
             continue
 
-        # Predict the toward-centre share hourly, orient it to the measured edge
+        # The model is trained on toward-centre directions ONLY (train.py
+        # keeps radial_cos > 0 rows exclusively) — predict.py's Total-sensor
+        # pairs are reoriented before every prediction for exactly this
+        # reason. e_meas is NOT always the toward-centre edge (verified: 4 of
+        # 5 single-direction sensors' measured edge points AWAY from centre,
+        # radial_cos < 0) — feeding it directly, unmirrored, asks the model
+        # to extrapolate on inputs it never saw and mislabels the output as
+        # e_meas's own share. Mirror the same reorientation predict.py uses.
         u, v, k = map(int, e_meas.split("_"))
         data = G.get_edge_data(u, v, k)
         bearing = edge_bearing_from_graph(G, u, v, k, data)
-        feats = edge_features("goteborg", mid_lat, mid_lon, bearing, data)
+        feats_meas = edge_features("goteborg", mid_lat, mid_lon, bearing, data)
+
+        ou, ov, ok = map(int, e_opp.split("_"))
+        opp_feat = geo_by_id.get(e_opp)
+        if opp_feat is not None:
+            oc = opp_feat["geometry"]["coordinates"]
+            opp_lat, opp_lon = (oc[0][1] + oc[-1][1]) / 2, (oc[0][0] + oc[-1][0]) / 2
+        else:
+            opp_lat, opp_lon = mid_lat, mid_lon
+        opp_data = G.get_edge_data(ou, ov, ok)
+        opp_bearing = edge_bearing_from_graph(G, ou, ov, ok, opp_data)
+        feats_opp = edge_features("goteborg", opp_lat, opp_lon, opp_bearing, opp_data)
+
+        meas_is_toward_centre = feats_meas["radial_cos"] >= feats_opp["radial_cos"]
+        feats = feats_meas if meas_is_toward_centre else feats_opp
         prof = sensor_profile_features(profiles, e_meas)
 
         rows = [[feats[cn] for cn in FEATURE_NAMES]
@@ -109,6 +145,10 @@ def main() -> None:
         shift = q50s - q50
         q10, q50, q90 = (np.clip(a + shift, *CLAMP) for a in (q10, q50, q90))
 
+        # q10/q90/q50 above are the CANONICAL (toward-centre) edge's share —
+        # re-derive e_meas's own share (unchanged, or complemented+swapped).
+        q10, q50, q90 = measured_edge_shares(
+            feats_meas["radial_cos"], feats_opp["radial_cos"], q10, q50, q90)
         s10, s50, s90 = (np.array(hourly_to_slots(a)) for a in (q10, q50, q90))
         meas = np.array([v if v is not None else np.nan
                          for v in flows[e_meas][q0:q0 + 96]], dtype=float)
@@ -128,8 +168,11 @@ def main() -> None:
             "provenance": "level-3 learned prior (dirsplit model, shrinkage "
                           f"λ={lam:.2f}) applied to the measured twin",
         }
+        # s10/s50/s90 are e_meas's own (already-oriented) share at each of the
+        # 96 slots; slot 32 == hour 8 exactly (slots are hourly-interpolated
+        # at hour boundaries), and the opposite edge's share is 1 - e_meas's.
         print(f"{sid:<7} {e_meas} → {e_opp:<24} "
-              f"{1-q50[8]:.2f} ({1-q90[8]:.2f}–{1-q10[8]:.2f})")
+              f"{1-s50[32]:.2f} ({1-s90[32]:.2f}–{1-s10[32]:.2f})")
 
     OUT_PATH.parent.mkdir(exist_ok=True)
     with open(OUT_PATH, "w") as f:

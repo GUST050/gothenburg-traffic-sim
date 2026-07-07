@@ -67,7 +67,11 @@ def profile_features(rows: list[dict]) -> dict[str, float] | None:
         "am_pm_ratio":   round(am_sum / pm_sum, 4) if pm_sum > 0 else 1.0,
         "peak_hour_am":  float(am),
         "peak_hour_pm":  float(pm),
-        "weekend_ratio": round(we_all / wd_all, 4) if wd_all > 0 else 0.0,
+        # 0.3 matches predict.py's sensor_profile_features fallback for the
+        # same degenerate case (weekday data present but sums to zero) —
+        # was 0.0 here, an unexplained inconsistency between the two
+        # otherwise-parallel functions. Found 2026-07-07.
+        "weekend_ratio": round(we_all / wd_all, 4) if wd_all > 0 else 0.3,
     }
 
 

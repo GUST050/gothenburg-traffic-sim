@@ -18,6 +18,7 @@ import argparse
 import csv
 import datetime as dt
 import json
+from zoneinfo import ZoneInfo
 
 from . import api
 from .config import (CITIES, DATA_DIR, PREFERRED_YEARS, SAMPLE_ISO_WEEKS,
@@ -104,10 +105,15 @@ def pick_year(station: dict) -> int | None:
 
 
 def week_bounds(year: int, iso_week: int) -> tuple[str, str]:
+    # Norway observes the same EU DST rule as CET/CEST — a hardcoded +01:00
+    # is wrong for 3 of the 4 SAMPLE_ISO_WEEKS (20 mid-May, 36/37 early Sept
+    # are CEST/+02:00; only 45 early Nov is CET/+01:00), pulling in the wrong
+    # real hour at each sampled week's boundary. Found 2026-07-07.
+    tz = ZoneInfo("Europe/Oslo")
     monday = dt.date.fromisocalendar(year, iso_week, 1)
-    t0 = f"{monday}T00:00:00+01:00"
-    t1 = f"{monday + dt.timedelta(days=7)}T00:00:00+01:00"
-    return t0, t1
+    t0 = dt.datetime(monday.year, monday.month, monday.day, tzinfo=tz)
+    t1 = t0 + dt.timedelta(days=7)
+    return t0.isoformat(), t1.isoformat()
 
 
 def fetch_station_volumes(station: dict, year: int) -> list[dict]:

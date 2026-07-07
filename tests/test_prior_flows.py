@@ -8,10 +8,11 @@ import sys
 from pathlib import Path
 
 import networkx as nx
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from prior_flows import opposite_edge
+from prior_flows import measured_edge_shares, opposite_edge
 
 
 def node(lat, lon):
@@ -72,3 +73,30 @@ class TestOppositeEdgeDividedCarriageway:
         G.add_edge(1, 2, key=0)
         G.add_edge(3, 4, key=0)
         assert opposite_edge(G, "1_2_0", 57.7005, 11.900) is None
+
+
+class TestMeasuredEdgeShares:
+    """The dirsplit model only ever predicts on the toward-centre edge of a
+    pair (train.py trains on radial_cos > 0 rows exclusively) — e_meas's own
+    share must be re-derived by orientation, not assumed to equal the raw
+    model output. Found 2026-07-06: for 4 of 5 single-direction Gothenburg
+    sensors, e_meas itself points AWAY from centre."""
+
+    def test_measured_edge_is_toward_centre_passthrough(self):
+        q10, q50, q90 = np.array([0.4]), np.array([0.5]), np.array([0.6])
+        r10, r50, r90 = measured_edge_shares(0.6, -0.6, q10, q50, q90)
+        assert r10 is q10 and r50 is q50 and r90 is q90
+
+    def test_measured_edge_away_from_centre_complements_and_swaps_band(self):
+        # canonical (toward-centre) edge's predicted share is 0.3-0.4-0.7
+        q10, q50, q90 = np.array([0.3]), np.array([0.4]), np.array([0.7])
+        r10, r50, r90 = measured_edge_shares(-0.6, 0.6, q10, q50, q90)
+        # e_meas's own share is the complement, with q10/q90 swapped
+        assert r10 == pytest.approx(1 - 0.7)
+        assert r50 == pytest.approx(1 - 0.4)
+        assert r90 == pytest.approx(1 - 0.3)
+
+    def test_tie_treated_as_measured_toward_centre(self):
+        q10, q50, q90 = np.array([0.4]), np.array([0.5]), np.array([0.6])
+        r10, r50, r90 = measured_edge_shares(0.0, 0.0, q10, q50, q90)
+        assert r10 is q10 and r50 is q50 and r90 is q90

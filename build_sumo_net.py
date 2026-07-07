@@ -79,7 +79,12 @@ def parse_lanes(data: dict) -> int:
         digits = "".join(ch for ch in str(raw).split(";")[0] if ch.isdigit())
         if digits:
             total  = int(digits)
-            oneway = data.get("oneway") in (True, "True", "true", "yes")
+            # scalar(): osmnx graph simplification can merge several original
+            # OSM ways into one edge, leaving a list-valued tag when they
+            # disagree — maxspeed/highway above already guard against this,
+            # oneway didn't, which would silently halve a real one-way
+            # street's lane count (list != any of the string/bool checks).
+            oneway = scalar(data.get("oneway")) in (True, "True", "true", "yes")
             lanes  = total if oneway else max(1, total // 2)
             return min(lanes, 4)
     return DEFAULT_LANES.get(hw, 1)

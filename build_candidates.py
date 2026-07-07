@@ -114,9 +114,26 @@ POI_TAGS = {
 }
 DISC_M = 150.0   # POI catchment radius per edge
 
+# Gothenburg's latitude — 1° longitude is NOT 1° latitude in km here
+# (cos(57.7°)≈0.535, so 1° lon ≈ 59.5 km vs 1° lat ≈ 110.5 km). Used by both
+# activity_mass()'s metre-scale POI catchment and gravity_distance_km()'s
+# km-scale OD distance; a bare degree-distance (no cos-correction) overstates
+# east-west distance ~1.87x, biasing gravity decay against E-W trips relative
+# to equally-far north-south ones — found 2026-07-06.
+KLAT_M = 110_540.0
+KLON_M = 111_320.0 * math.cos(math.radians(57.7))
+
 
 def scalar(v):
     return v[0] if isinstance(v, list) else v
+
+
+def gravity_distance_km(lats: np.ndarray, lons: np.ndarray,
+                        lat0: float, lon0: float) -> np.ndarray:
+    """Cos-corrected flat-earth distance (km) from (lat0,lon0) to each point
+    — the approximation gravity models use at city scale."""
+    return np.sqrt(((lats - lat0) * KLAT_M / 1000.0) ** 2
+                  + ((lons - lon0) * KLON_M / 1000.0) ** 2)
 
 
 def load_deso_population() -> dict[str, int]:
@@ -231,7 +248,7 @@ def activity_mass(G, edges: list[dict]) -> dict[str, np.ndarray]:
 
     lats = np.array([e["lat"] for e in edges])
     lons = np.array([e["lon"] for e in edges])
-    klat, klon = 110_540.0, 111_320.0 * math.cos(math.radians(57.7))
+    klat, klon = KLAT_M, KLON_M
     xs, ys = lons * klon, lats * klat
 
     poi_xy: dict[str, list] = {c: [] for c in POI_TAGS}
@@ -419,13 +436,14 @@ def main() -> None:
     home_idx = rng.choice(len(edges), size=n_tours, p=pH)
     purposes = rng.choice(list(PURPOSE_SHARES), size=n_tours,
                           p=list(PURPOSE_SHARES.values()))
+    edge_lats = np.array([e["lat"] for e in edges])
+    edge_lons = np.array([e["lon"] for e in edges])
     for h_i, purpose in zip(home_idx, purposes):
         w = amass[purpose].copy()
         if w.sum() == 0:
             continue
-        d_km = np.sqrt((np.array([e["lat"] for e in edges]) - edges[h_i]["lat"]) ** 2
-                      + (np.array([e["lon"] for e in edges]) - edges[h_i]["lon"]) ** 2
-                      ) * 111.0
+        d_km = gravity_distance_km(edge_lats, edge_lons,
+                                   edges[h_i]["lat"], edges[h_i]["lon"])
         w = w * np.exp(-d_km / args.gravity_km)
         w[h_i] = 0
         if w.sum() == 0:

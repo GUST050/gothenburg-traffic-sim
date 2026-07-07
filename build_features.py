@@ -296,14 +296,19 @@ def main() -> None:
     print(f"Wrote {out_meta}")
 
     level_counts = sensor_meta["level"].value_counts()
-    if "S" in level_counts.index and "Total" in level_counts.index:
-        s_sensors = sensor_meta[sensor_meta["level"] == "S"]["sensor_id"].tolist()
-        print(f"\n  WARNING: sensor(s) {s_sensors} measure a single direction (level='S').")
-        print(f"  All other sensors measure bidirectional totals (level='Total').")
+    single_dir = sensor_meta[sensor_meta["level"] != "Total"]
+    # Any level letter (V/S/SO/...) is single-direction — only "Total" is
+    # genuinely two-way. Used to say "S" specifically and imply everything
+    # else was "Total", which stopped being true once the 2026-07-03 data
+    # truth fix added V/SO letters for 4 more single-direction sensors.
+    if not single_dir.empty and "Total" in level_counts.index:
+        s_sensors = single_dir["sensor_id"].tolist()
+        print(f"\n  WARNING: sensor(s) {s_sensors} measure a single direction.")
+        print(f"  Only the remaining sensor(s) measure a genuine bidirectional total (level='Total').")
         print(f"  Z-score normalisation handles the scale difference during training.")
-        print(f"  Adjacency weights between S and Total sensors are distance-based and")
-        print(f"  do not capture the measurement asymmetry — revisit when directional"  )
-        print(f"  data arrives from Felicia.")
+        print(f"  Adjacency weights between single-direction and Total sensors are")
+        print(f"  distance-based and do not capture the measurement asymmetry —")
+        print(f"  revisit when directional data arrives from Felicia.")
 
     # ── Flow matrix ────────────────────────────────────────────────────────────
     print("\nBuilding flow matrix …")
