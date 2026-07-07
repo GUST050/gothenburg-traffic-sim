@@ -406,10 +406,18 @@
 
         const trajCache = {};
 
+        // Guards loadVehiclesFor against a stale fetch resolving after the
+        // user has already switched to a different mode/scenario — without
+        // this, rapid switching (e.g. Simulering A -> Historisk before A's
+        // trajectory fetch resolves) could re-enable the vehicle overlay on
+        // top of Historisk/Prognos, contradicting "vehicles are ALWAYS the
+        // Simulering view". Found in review 2026-07-07.
+        let modeToken = 0;
+
         // Vehicles ARE the simulation now — no separate toggle. Whenever a
         // scenario provider has trajectories, they're loaded and shown
         // automatically; leaving Simulering turns them off automatically.
-        async function loadVehiclesFor(provider) {
+        async function loadVehiclesFor(provider, token) {
           if (!provider.trajectories) {
             Render.setVehicleMode(false);
             return;
@@ -419,6 +427,7 @@
                                     + '?t=' + Date.now());
             trajCache[provider.trajectories] = await res.json();
           }
+          if (token !== modeToken) return;   // a newer mode switch happened meanwhile
           Render.setTrajectories(trajCache[provider.trajectories]);
           Render.setVehicleMode(true);
         }
@@ -426,6 +435,7 @@
         let currentProvider = histProvider;
 
         function setMode(activeBtn, provider) {
+          const token = ++modeToken;
           currentProvider = provider;
           for (const b of [btnHist, btnFore, btnScen]) {
             b.classList.toggle('active', b === activeBtn);
@@ -452,7 +462,7 @@
           Controls.setSpeedMode(isSim);   // real-time seconds vs fast quarter-scrubbing
           Render.setProvider(provider);
           Controls.setProvider(provider);
-          if (isSim) loadVehiclesFor(provider); else Render.setVehicleMode(false);
+          if (isSim) loadVehiclesFor(provider, token); else Render.setVehicleMode(false);
           // Entering a scenario always starts at its own beginning (qi=0
           // in the OLD provider could be past the scenario's own length).
           // Switching between Historisk <-> Prognos keeps the scrubbed
@@ -509,12 +519,20 @@
           }
         }
 
+        // Guards against rapid scenario-dropdown switching: an earlier,
+        // slower fetch resolving after a later one would otherwise silently
+        // revert the map to the previously-selected scenario even though
+        // <select> already shows the new one. Found in review 2026-07-07.
+        let scenarioToken = 0;
+
         async function activateScenario(file, { fresh = false } = {}) {
+          const token = ++scenarioToken;
           if (fresh) delete scenProviders[file];   // file was overwritten on disk
           if (!scenProviders[file]) {
             scenProviders[file] = await new HistoricalProvider()
               .load('data/scenarios/' + file + '?t=' + Date.now());
           }
+          if (token !== scenarioToken) return;   // a newer scenario switch happened meanwhile
           setMode(btnScen, scenProviders[file]);
           // Scenario files start at their own epoch (window start)
           State.setQI(params.get('qi') ? Number(params.get('qi')) : 0);

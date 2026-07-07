@@ -224,6 +224,15 @@ class Handler(SimpleHTTPRequestHandler):
         except subprocess.TimeoutExpired:
             self._set_recal(status="error",
                             error="omkalibreringen tog för lång tid — avbruten")
+        except Exception as e:
+            # Anything unanticipated (a missing file, a permissions error on
+            # the scenario-file cleanup, ...) must still flip the status off
+            # "running" — otherwise the frontend polls forever showing a
+            # fake ever-increasing elapsed time with no way to know the job
+            # actually died. Found in review: only TimeoutExpired was caught.
+            print(f"recalibrate: unexpected {type(e).__name__}: {e}")
+            self._set_recal(status="error",
+                            error=f"oväntat fel — se serverloggen ({type(e).__name__})")
         finally:
             _sim_lock.release()
 

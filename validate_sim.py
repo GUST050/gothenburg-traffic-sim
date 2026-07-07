@@ -65,8 +65,11 @@ def run_meso(route_file: Path, ed_file: Path, duration_s: int) -> None:
            "--begin", "0", "--end", str(duration_s + 3600),
            "--no-step-log", "true", "--no-warnings", "true",
            "--ignore-route-errors", "true", "--seed", "1000"]
+    # LOSO loops one sumo run per station unattended — a hang on one station
+    # must not stall the whole run with no diagnostic. Same reasoning as
+    # run_scenario.py's SUMO_TIMEOUT_S, found in the same review pass.
     subprocess.run(cmd, cwd=str(SUMO_DIR), capture_output=True, text=True,
-                   check=True)
+                   check=True, timeout=300)
 
 
 def simulated_series(ed_file: Path, edge: str, nq: int) -> np.ndarray:

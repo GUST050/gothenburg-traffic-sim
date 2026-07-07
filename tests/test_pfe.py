@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from pfe import Candidate, largest_remainder_round, solve_interval
+from pfe import Candidate, calibrate, largest_remainder_round, solve_interval
 
 
 def cand(*edges):
@@ -56,6 +56,29 @@ class TestSolveInterval:
         cands = [cand("b")]
         x = solve_interval(cands, {}, {"b": (25.0, 500.0)}, {})
         assert served(x, cands, "b") >= 25.0 - 1e-6
+
+
+class TestCalibrateGEH:
+    def test_hour_with_null_first_quarter_still_counted(self, tmp_path):
+        """A measured edge that's missing (null) only in an hour's FIRST
+        quarter, but present in the other three, must still be checked for
+        that hour — found 2026-07-06: the loop used to key off
+        targets_per_q[i] alone and silently skipped the whole hour."""
+        cand_path = tmp_path / "candidates.rou.xml"
+        cand_path.write_text(
+            '<routes><vehicle id="0" depart="0.00">'
+            '<route edges="e"/></vehicle></routes>'
+        )
+        out_path = tmp_path / "calibrated.rou.xml"
+        targets_per_q = [{}, {"e": 10.0}, {"e": 10.0}, {"e": 10.0}]
+        bounds_per_q  = [{}, {}, {}, {}]
+        priors_per_q  = [{}, {}, {}, {}]
+
+        report = calibrate(cand_path, out_path, targets_per_q,
+                           bounds_per_q, priors_per_q)
+
+        assert report["geh_total"] == 1
+        assert report["geh_ok"] == 1
 
 
 class TestRounding:

@@ -249,6 +249,22 @@ class TestRecalibrateAsyncLifecycle:
         assert status == 202
         wait_until(lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] != "running")
 
+    def test_unexpected_exception_reports_error_not_stuck_running(self, base_url, monkeypatch):
+        """Regression: _run_recalibrate used to catch only TimeoutExpired —
+        any other exception (a missing file, a permissions error, ...) left
+        _recal_state stuck at "running" forever, with the frontend polling
+        an ever-increasing fake elapsed time and no way to know the job
+        actually died. Found 2026-07-07 in review."""
+        def fake_run(cmd, **kw):
+            raise FileNotFoundError("build_sumo_demand.py vanished")
+        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "error")
+        # and the lock must be released too, not just the status flipped
+        status, _ = get_json(f"{base_url}/api/recalibrate?date=2025-09-17")
+        assert status == 202
+
     def test_old_scenario_files_are_wiped_on_successful_recalibration(self, base_url, monkeypatch):
         stale = serve.SCEN_DIR / "stale_scenario.json"
         stale.write_text("{}")

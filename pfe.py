@@ -202,10 +202,16 @@ def calibrate(
                 vid += 1
         f.write("</routes>\n")
 
-    # GEH on hourly aggregates at measured edges — the standard fit metric
+    # GEH on hourly aggregates at measured edges — the standard fit metric.
+    # An edge counts for an hour if ANY of its 4 quarters has a measurement —
+    # checking only targets_per_q[i] (the hour's first quarter) would silently
+    # skip the whole hour whenever just that one quarter happens to be null.
     geh_ok = geh_all = 0
     for i in range(0, nq - 3, 4):
-        for e in targets_per_q[i]:
+        edges_in_hour: set[str] = set()
+        for j in range(i, i + 4):
+            edges_in_hour.update(targets_per_q[j])
+        for e in edges_in_hour:
             m = sum(achieved.get(e, [0.0] * nq)[i:i + 4])
             c = sum(targets_per_q[j].get(e, 0.0) for j in range(i, i + 4))
             if m + c > 0:

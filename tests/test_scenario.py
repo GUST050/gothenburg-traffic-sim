@@ -7,9 +7,14 @@ scenarios have been generated yet.
 """
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+import run_scenario
 
 SCEN_DIR   = Path(__file__).parent.parent / "web" / "data" / "scenarios"
 INDEX_PATH = SCEN_DIR / "index.json"
@@ -87,3 +92,28 @@ def test_closed_edges_have_reduced_flow(index):
                 f"{s['name']}: closed edge {ce} still carries {closed_total} "
                 f"(baseline {base_total})"
             )
+
+
+class TestSumoTimeout:
+    """Neither sumo subprocess call had a timeout — a hung sumo process had
+    no bound, and if THIS script's own parent (e.g. serve.py's outer
+    subprocess.run) times out and kills it first, the sumo grandchild is
+    orphaned permanently (a timeout only ever kills its direct child).
+    Found in review 2026-07-07."""
+
+    def test_run_sumo_timeout_exits_cleanly(self, monkeypatch, tmp_path):
+        def fake_run(*a, **kw):
+            raise subprocess.TimeoutExpired(cmd="sumo", timeout=kw.get("timeout"))
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        with pytest.raises(SystemExit):
+            run_scenario.run_sumo(1000, tmp_path / "r.rou.xml", [],
+                                  duration_s=900, home=tmp_path)
+
+    def test_export_trajectories_timeout_returns_none_not_raises(self, monkeypatch, tmp_path):
+        def fake_run(*a, **kw):
+            raise subprocess.TimeoutExpired(cmd="sumo", timeout=kw.get("timeout"))
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        result = run_scenario.export_trajectories(
+            "baseline", tmp_path / "r.rou.xml", [], duration_s=900,
+            home=tmp_path, web_edges=set())
+        assert result is None

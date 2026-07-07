@@ -34,7 +34,7 @@ GRAVITY_KMS       = (1.0, 1.8, 2.6)
 
 
 def run(cmd: list[str]) -> str:
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
     return res.stdout + res.stderr
 
 

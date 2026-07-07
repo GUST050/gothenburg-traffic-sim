@@ -43,6 +43,14 @@ NET_PATH  = SUMO_DIR / "net.net.xml"
 GEO_PATH  = Path("web/data/network.geojson")
 OUT_DIR   = Path("web/data/scenarios")
 
+# A whole-day meso run normally takes ~10-15 s (measured: 3-seed whole-day
+# closure ~35 s total). This is a safety net, not a normal-path limit: without
+# it, a hung sumo process has no bound and — if this script's own PARENT
+# process (e.g. serve.py's outer subprocess.run) times out and kills THIS
+# process first — becomes permanently orphaned, since a timeout can only ever
+# kill its own direct child. Found in review 2026-07-07.
+SUMO_TIMEOUT_S = 300
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
@@ -182,8 +190,12 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         # drop them instead of aborting (standard for closure studies).
         "--ignore-route-errors", "true",
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True,
-                         cwd=str(SUMO_DIR), env={"SUMO_HOME": str(home)})
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True,
+                             cwd=str(SUMO_DIR), env={"SUMO_HOME": str(home)},
+                             timeout=SUMO_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"sumo timed out after {SUMO_TIMEOUT_S}s (seed {seed})")
     if res.returncode != 0:
         print(res.stderr[-2000:])
         sys.exit(f"sumo failed (seed {seed})")
@@ -215,8 +227,13 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
         "--no-step-log", "true", "--no-warnings", "true",
         "--ignore-route-errors", "true", "--seed", "1000",
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True,
-                         cwd=str(SUMO_DIR), env={"SUMO_HOME": str(home)})
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True,
+                             cwd=str(SUMO_DIR), env={"SUMO_HOME": str(home)},
+                             timeout=SUMO_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        print(f"sumo (trajectory export) timed out after {SUMO_TIMEOUT_S}s")
+        return None
     if res.returncode != 0:
         print(res.stderr[-800:])
         return None
