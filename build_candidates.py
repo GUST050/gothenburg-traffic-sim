@@ -558,6 +558,65 @@ def drop_uturn_routes(path: Path) -> None:
           f"twice (a literal U-turn is the special case one step back)")
 
 
+def drop_excessive_detours(path: Path, G, max_stretch: float) -> None:
+    """Drop candidates whose OWN realized path costs more than max_stretch
+    times the TRUE shortest path between their OWN entry and exit nodes —
+    "enforce the actual invariant directly" (this file's own established
+    fix pattern, see drop_uturn_routes above) applied to detours instead of
+    loops, because it is THE SAME root cause: `--weights.random-factor`
+    jitters every edge's cost independently and multiplicatively with no
+    cap on how many edges on one path can get unluckily jittered in the
+    same direction, so a long candidate's cumulative cost inflation is
+    UNBOUNDED in the worst case — drop_uturn_routes already catches the
+    most visible symptom (the jitter finding a pointless loop BACK to a
+    node already visited), but a genuinely circuitous, still-simple path
+    (no repeated node, so that check lets it through) is the exact same
+    mechanism, just without a repeated node to key off. Gustav asked
+    (2026-07-10) whether the candidate pool could contain "helt orimliga
+    rutter" (completely unreasonable routes) — this was the honest answer:
+    yes, nothing verified it, only drop_uturn_routes' narrower invariant
+    did.
+
+    max_stretch is deliberately the SAME --route-diversity value passed to
+    duarouter's --weights.random-factor, not an arbitrary constant: that
+    parameter IS the mechanism being checked, so the tolerance for how far
+    a jittered path may stray from true-shortest should be exactly the
+    tolerance we told duarouter to explore, not a second, disconnected
+    magic number. Endpoints repeat heavily across the pool (e.g. all
+    ~900 via-trips through one sensor share a handful of gate pairs), so
+    true-shortest-path costs are cached per (entry, exit) pair — one
+    Dijkstra call per DISTINCT pair, not per candidate."""
+    import networkx as nx
+    tree = ET.parse(path)
+    root = tree.getroot()
+    true_cost_cache: dict[tuple[int, int], float | None] = {}
+    dropped = 0
+    for veh in list(root):
+        route = veh.find("route")
+        edges = route.get("edges").split()
+        entry = int(edges[0].split("_")[0])
+        exit_ = int(edges[-1].split("_")[1])
+        realized = sum(G[int(u)][int(v)][int(k)]["length"]
+                       for u, v, k in (e.split("_") for e in edges))
+        key = (entry, exit_)
+        if key not in true_cost_cache:
+            try:
+                true_cost_cache[key] = nx.shortest_path_length(
+                    G, entry, exit_, weight="length")
+            except nx.NetworkXNoPath:
+                true_cost_cache[key] = None
+        true_cost = true_cost_cache[key]
+        if true_cost is not None and realized > max_stretch * true_cost:
+            dropped += 1
+            root.remove(veh)
+    if dropped:
+        tree.write(path)
+    print(f"  dropped {dropped} candidates whose own path cost more than "
+          f"{max_stretch}x the true shortest path for their entry/exit "
+          f"(the same random-factor jitter drop_uturn_routes catches when "
+          f"it loops; this is the same mechanism without a repeated node)")
+
+
 def upstream_downstream_gates(
     G, m_edge: str, entries: list[tuple[str, int]], exits: list[tuple[str, int]],
 ) -> tuple[list[str], list[str]]:
@@ -966,6 +1025,7 @@ def main() -> None:
         print(res.stderr[-1500:])
         sys.exit("duarouter failed")
     drop_uturn_routes(out)
+    drop_excessive_detours(out, G, args.route_diversity)
     n = sum(1 for line in open(out) if "<vehicle" in line)
     print(f"Wrote {out}  ({n} routed candidates)")
 

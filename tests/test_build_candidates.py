@@ -86,6 +86,98 @@ class TestDropUturnRoutes:
         assert read_vehicle_ids(path) == ["clean"]
 
 
+class TestDropExcessiveDetours:
+    """Added 2026-07-10 (Gustav asked directly: could the candidate pool
+    contain "helt orimliga rutter", completely unreasonable routes? Honest
+    answer: yes — drop_uturn_routes only catches the symptom where the
+    random-factor jitter loops back to a repeated node; a genuinely
+    circuitous but still-simple (no repeated node) path is the same root
+    cause and was never checked). Mirrors drop_uturn_routes' own test
+    style: small synthetic graphs, real Dijkstra reference costs."""
+
+    def _graph(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=10.0)
+        G.add_edge(2, 3, key=0, length=10.0)      # true shortest 1->3: 20 via 1_2_0 2_3_0
+        G.add_edge(1, 4, key=0, length=10.0)
+        G.add_edge(4, 5, key=0, length=10.0)
+        G.add_edge(5, 3, key=0, length=100.0)     # detour 1->3 via 1_4_0 4_5_0 5_3_0: 120 (6x)
+        return G
+
+    def test_true_shortest_path_is_kept(self, tmp_path):
+        G = self._graph()
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("shortest", ["1_2_0", "2_3_0"])])
+        bc.drop_excessive_detours(path, G, max_stretch=2.0)
+        assert read_vehicle_ids(path) == ["shortest"]
+
+    def test_a_genuine_detour_is_dropped(self, tmp_path):
+        G = self._graph()
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [
+            ("shortest", ["1_2_0", "2_3_0"]),
+            ("detour", ["1_4_0", "4_5_0", "5_3_0"]),   # 120 vs true 20 -> 6x, way over
+        ])
+        bc.drop_excessive_detours(path, G, max_stretch=2.0)
+        assert read_vehicle_ids(path) == ["shortest"]
+
+    def test_within_tolerance_is_kept(self, tmp_path):
+        """A mildly longer alternative (1.5x, e.g. a real different-street
+        option) must survive a max_stretch=2.0 gate -- this isn't meant to
+        force everyone onto THE shortest path, only to catch genuinely
+        unreasonable ones."""
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=10.0)
+        G.add_edge(2, 3, key=0, length=10.0)     # true shortest: 20
+        G.add_edge(1, 6, key=0, length=15.0)
+        G.add_edge(6, 3, key=0, length=15.0)     # alternative: 30 (1.5x) -- reasonable
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("alt", ["1_6_0", "6_3_0"])])
+        bc.drop_excessive_detours(path, G, max_stretch=2.0)
+        assert read_vehicle_ids(path) == ["alt"]
+
+    def test_no_detours_leaves_file_untouched(self, tmp_path):
+        G = self._graph()
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("shortest", ["1_2_0", "2_3_0"])])
+        mtime_before = path.stat().st_mtime_ns
+        bc.drop_excessive_detours(path, G, max_stretch=2.0)
+        assert path.stat().st_mtime_ns == mtime_before   # write() skipped when dropped==0
+
+    def test_stretch_bound_is_tied_to_the_route_diversity_parameter(self, tmp_path):
+        """max_stretch is passed straight through from --route-diversity
+        (the same parameter driving duarouter's --weights.random-factor),
+        not an unrelated constant -- a stricter caller-supplied bound must
+        catch what a looser one lets through."""
+        G = self._graph()
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("detour", ["1_4_0", "4_5_0", "5_3_0"])])   # 6x true shortest
+        bc.drop_excessive_detours(path, G, max_stretch=10.0)   # loose: 6x survives
+        assert read_vehicle_ids(path) == ["detour"]
+
+    def test_shared_entry_exit_endpoints_use_one_cached_shortest_path_call(self, tmp_path, monkeypatch):
+        """Endpoints repeat heavily in the real pool (e.g. ~900 via-trips
+        per sensor sharing a handful of gate pairs) -- the true-shortest-
+        path cost must be computed once per DISTINCT (entry, exit) pair,
+        not once per candidate."""
+        G = self._graph()
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [
+            ("a", ["1_2_0", "2_3_0"]),
+            ("b", ["1_2_0", "2_3_0"]),
+            ("c", ["1_2_0", "2_3_0"]),
+        ])
+        calls = []
+        import networkx as nx_module
+        real_fn = nx_module.shortest_path_length
+        def counting_fn(*args, **kwargs):
+            calls.append(1)
+            return real_fn(*args, **kwargs)
+        monkeypatch.setattr(nx_module, "shortest_path_length", counting_fn)
+        bc.drop_excessive_detours(path, G, max_stretch=2.0)
+        assert len(calls) == 1
+
+
 class TestRouteVisitsANodeTwice:
     def test_straight_route_has_no_repeat(self):
         assert not bc.route_visits_a_node_twice(["1_2_0", "2_3_0", "3_4_0"])
