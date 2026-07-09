@@ -350,8 +350,8 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
 
 def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
                         duration_s: int, home: Path,
-                        web_edges: set[str]) -> str | None:
-    """One extra meso run with vehroute exit-times → a compact per-vehicle
+                        web_edges: set[str], micro: bool = False) -> str | None:
+    """One extra SUMO run with vehroute exit-times → a compact per-vehicle
     edge-timeline the web animates: EVERY DOT IS A REAL SIMULATED VEHICLE
     with its origin, destination, route and congestion-accurate timing.
 
@@ -361,9 +361,9 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
     vr_file = SUMO_DIR / f"vehroutes_{name}.xml"
     cmd = [
         str(home / "bin" / "sumo"),
-        "--mesosim", "true",
-        "--meso-junction-control", "true",
-        "--meso-junction-control.limited", "true",
+        *([] if micro else ["--mesosim", "true",
+                            "--meso-junction-control", "true",
+                            "--meso-junction-control.limited", "true"]),
         "-n", str(NET_PATH.resolve()),
         "-r", str(route_path.resolve()),
         *(("-a", ",".join(str(p.resolve()) for p in closure_add))
@@ -548,7 +548,8 @@ def main() -> None:
     traj_name = None
     if not args.no_trajectories:
         traj_name = export_trajectories(name, variants[0], closure_add,
-                                        duration_s, home, web_edges)
+                                        duration_s, home, web_edges,
+                                        micro=args.micro)
 
     payload = {
         "epoch":            meta["epoch_sim"],

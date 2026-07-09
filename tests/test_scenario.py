@@ -120,6 +120,30 @@ class TestSumoTimeout:
         assert result is None
 
 
+class TestTrajectorySimulationMode:
+    """A micro scenario used micro edge-flow simulation but its vehroute
+    export always forced --mesosim, so the web UI displayed vehicle timings
+    from a different simulation mode. Found in hygiene review 2026-07-10."""
+
+    @pytest.mark.parametrize("micro", [False, True])
+    def test_export_trajectories_matches_requested_simulation_mode(
+            self, monkeypatch, tmp_path, micro):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 1, stderr="expected")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+
+        result = run_scenario.export_trajectories(
+            "mode-test", tmp_path / "r.rou.xml", [], duration_s=900,
+            home=tmp_path, web_edges=set(), micro=micro)
+
+        assert result is None
+        assert ("--mesosim" in commands[0]) is not micro
+
+
 class TestScenarioManifestDemandScope:
     def test_demand_signature_changes_when_window_changes(self):
         meta = {
