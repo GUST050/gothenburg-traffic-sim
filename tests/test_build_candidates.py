@@ -178,6 +178,53 @@ class TestDropExcessiveDetours:
         assert len(calls) == 1
 
 
+class TestReportSensorCrossHits:
+    """Diagnostic-only (2026-07-10): a vehicle whose ACTUAL routed path
+    naturally crosses multiple sensors is extra valuable (cross-sensor
+    reinforcement) -- checked after routing via simple set membership,
+    not during generation, so it reflects what really happened rather
+    than generation-time intent."""
+
+    def test_vehicle_touching_only_its_own_sensor_counts_as_cross_0(self, tmp_path):
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("v0", ["1_2_0", "2_3_0"])])
+        report = bc.report_sensor_cross_hits(path, ["2_3_0"])
+        assert report["2_3_0"]["total"] == 1
+        assert report["2_3_0"]["cross_1"] == 0
+
+    def test_vehicle_touching_two_sensors_counts_for_both(self, tmp_path):
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("v0", ["1_2_0", "2_3_0", "3_4_0"])])
+        report = bc.report_sensor_cross_hits(path, ["1_2_0", "3_4_0"])
+        assert report["1_2_0"]["total"] == 1
+        assert report["1_2_0"]["cross_1"] == 1
+        assert report["3_4_0"]["total"] == 1
+        assert report["3_4_0"]["cross_1"] == 1
+
+    def test_vehicle_touching_four_sensors_counts_as_cross_3plus(self, tmp_path):
+        """cross_N buckets by OTHER sensors touched -- 4 sensors total
+        means 3 others for each, landing in the 3+ bucket."""
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("v0", ["1_2_0", "2_3_0", "3_4_0", "4_5_0"])])
+        sensors = ["1_2_0", "2_3_0", "3_4_0", "4_5_0"]
+        report = bc.report_sensor_cross_hits(path, sensors)
+        for m in sensors:
+            assert report[m]["cross_3plus"] == 1
+
+    def test_vehicle_touching_no_sensor_is_not_counted_anywhere(self, tmp_path):
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("v0", ["9_10_0"])])
+        report = bc.report_sensor_cross_hits(path, ["1_2_0"])
+        assert report["1_2_0"]["total"] == 0
+
+    def test_writes_the_report_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(bc, "SUMO_DIR", tmp_path)
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("v0", ["1_2_0"])])
+        bc.report_sensor_cross_hits(path, ["1_2_0"])
+        assert (tmp_path / "sensor_coverage_report.json").exists()
+
+
 class TestRouteVisitsANodeTwice:
     def test_straight_route_has_no_repeat(self):
         assert not bc.route_visits_a_node_twice(["1_2_0", "2_3_0", "3_4_0"])
@@ -287,6 +334,176 @@ class TestViaNaturallyOnPath:
         G.add_edge(1, 10, key=0, length=10.0)
         G.add_edge(11, 20, key=0, length=10.0)   # disconnected from node 10
         assert not bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+
+class TestBuildShortestDistanceMatrix:
+    def test_direct_edge_distance(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=10.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        assert D[node_idx[1], node_idx[2]] == pytest.approx(10.0)
+
+    def test_multi_hop_distance_sums_edges(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=10.0)
+        G.add_edge(2, 3, key=0, length=5.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        assert D[node_idx[1], node_idx[3]] == pytest.approx(15.0)
+
+    def test_unreachable_pair_is_infinite(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=10.0)
+        G.add_edge(3, 4, key=0, length=10.0)   # disconnected component
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        assert D[node_idx[1], node_idx[3]] == np.inf
+
+    def test_parallel_edges_take_the_minimum_not_the_sum(self):
+        """scipy's sparse constructor sums duplicate (row,col) entries by
+        default -- this would silently corrupt distances (10+2=12 instead
+        of the correct min=2) if not explicitly deduplicated."""
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=10.0)
+        G.add_edge(1, 2, key=1, length=2.0)    # a shorter parallel edge
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        assert D[node_idx[1], node_idx[2]] == pytest.approx(2.0)
+
+    def test_directed_asymmetry_is_preserved(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=10.0)   # only one direction
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        assert D[node_idx[1], node_idx[2]] == pytest.approx(10.0)
+        assert D[node_idx[2], node_idx[1]] == np.inf
+
+
+class TestNaturalFarEndWeights:
+    """Cross-checked against via_naturally_on_path's own reference graphs
+    (TestViaNaturallyOnPath above) -- the vectorized distance-arithmetic
+    check must agree with the scalar path-trace check on every case, since
+    natural_far_end_weights is meant to be an exact generalization, not an
+    approximation."""
+
+    def test_agrees_with_via_naturally_on_path_when_on_direct_chain(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=10.0)
+        G.add_edge(11, 20, key=0, length=10.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=10, m_u=10, m_v=11, m_length=10.0,
+            candidate_u_idx=np.array([node_idx[11]]), base_weights=np.array([3.0]))
+        assert w[0] == pytest.approx(3.0)   # natural -> base weight passes through
+        assert bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+    def test_agrees_with_via_naturally_on_path_when_bypassed(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=1000.0)
+        G.add_edge(11, 20, key=0, length=10.0)
+        G.add_edge(10, 99, key=0, length=1.0)
+        G.add_edge(99, 11, key=0, length=1.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=10, m_u=10, m_v=11, m_length=1000.0,
+            candidate_u_idx=np.array([node_idx[11]]), base_weights=np.array([3.0]))
+        assert w[0] == pytest.approx(0.0)   # not natural -> masked to zero
+        assert not bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+    def test_agrees_with_via_naturally_on_path_when_unreachable(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(11, 20, key=0, length=10.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=10, m_u=10, m_v=11, m_length=10.0,
+            candidate_u_idx=np.array([node_idx[11]]), base_weights=np.array([3.0]))
+        assert w[0] == pytest.approx(0.0)
+        assert not bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+    def test_vectorizes_over_multiple_candidates_independently(self):
+        """One candidate naturally fits, another doesn't -- each must be
+        masked independently, not all-or-nothing."""
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=10.0)   # via edge
+        G.add_edge(11, 20, key=0, length=10.0)   # natural candidate: node 20
+        G.add_edge(1, 30, key=0, length=1.0)     # a much shorter, unrelated path to 30
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        candidate_idx = np.array([node_idx[20], node_idx[30]])
+        w = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=1, m_u=10, m_v=11, m_length=10.0,
+            candidate_u_idx=candidate_idx, base_weights=np.array([5.0, 7.0]))
+        assert w[0] == pytest.approx(5.0)    # node 20: natural via the sensor
+        assert w[1] == pytest.approx(0.0)    # node 30: shorter direct path exists
+
+    def test_zero_base_weight_stays_zero_even_when_natural(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=10.0)
+        G.add_edge(11, 20, key=0, length=10.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=10, m_u=10, m_v=11, m_length=10.0,
+            candidate_u_idx=np.array([node_idx[11]]), base_weights=np.array([0.0]))
+        assert w[0] == pytest.approx(0.0)
+
+
+class TestSampleAnchorAndFarEnd:
+    def test_returns_a_natural_pair_when_one_exists(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=10.0)
+        G.add_edge(11, 20, key=0, length=10.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        rng = np.random.default_rng(0)
+        result = bc.sample_anchor_and_far_end(
+            rng, D, node_idx,
+            anchor_node_ids=np.array([10]), anchor_weights=np.array([1.0]),
+            far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
+            m_u=10, m_v=11, m_length=10.0)
+        assert result == (0, 0)   # anchor index 0 (-> node 10), far index 0 (-> node 11)
+
+    def test_redraws_anchor_when_first_choice_has_no_natural_far_end(self):
+        """Two candidate anchors: one (5) has zero natural far ends, the
+        other (10) has one -- must keep redrawing until it finds 10, not
+        give up on the first bad draw."""
+        G = nx.MultiDiGraph()
+        G.add_edge(5, 99, key=0, length=1.0)     # anchor 5's only path bypasses the sensor
+        G.add_edge(99, 11, key=0, length=1.0)
+        G.add_edge(10, 11, key=0, length=10.0)   # via edge, anchor 10 -> sensor -> 11
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        rng = np.random.default_rng(0)
+        result = bc.sample_anchor_and_far_end(
+            rng, D, node_idx,
+            anchor_node_ids=np.array([5, 10]), anchor_weights=np.array([0.99, 0.01]),
+            far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
+            m_u=10, m_v=11, m_length=10.0, max_anchor_redraws=50)
+        assert result is not None
+        assert result[0] == 1   # index 1 (node 10) is the only anchor that can ever succeed
+
+    def test_returns_none_when_no_anchor_has_a_natural_far_end(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(5, 11, key=0, length=1.0)     # direct, bypasses the sensor entirely
+        G.add_edge(10, 12, key=0, length=10.0)   # unrelated via edge
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        rng = np.random.default_rng(0)
+        result = bc.sample_anchor_and_far_end(
+            rng, D, node_idx,
+            anchor_node_ids=np.array([5]), anchor_weights=np.array([1.0]),
+            far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
+            m_u=10, m_v=12, m_length=10.0, max_anchor_redraws=10)
+        assert result is None
+
+    def test_returns_none_when_anchor_weights_are_all_zero(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(10, 11, key=0, length=10.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        rng = np.random.default_rng(0)
+        result = bc.sample_anchor_and_far_end(
+            rng, D, node_idx,
+            anchor_node_ids=np.array([10]), anchor_weights=np.array([0.0]),
+            far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
+            m_u=10, m_v=11, m_length=10.0)
+        assert result is None
 
 
 class TestVerifiedViaGatePairs:

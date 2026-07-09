@@ -617,6 +617,47 @@ def drop_excessive_detours(path: Path, G, max_stretch: float) -> None:
           f"it loops; this is the same mechanism without a repeated node)")
 
 
+def report_sensor_cross_hits(routed_path: Path, measured: list[str]) -> dict:
+    """Diagnostic only (not wired into PFE weighting this pass) — a
+    vehicle whose route naturally crosses MULTIPLE sensors is extra
+    valuable (cross-sensor reinforcement, Gustav's framing when this
+    generation scheme was designed: as more sensors get added, more such
+    vehicles appear automatically). Checked AFTER routing, not during
+    generation — it reflects the vehicle's ACTUAL simulated route (a
+    simple set-membership scan over its final edge list) rather than
+    generation-time intent, and needs no Dijkstra call since the route is
+    already concrete.
+
+    Writes sumo/sensor_coverage_report.json: for each sensor, how many of
+    its own candidates ALSO touch 1/2/3+ of the other 6 measured edges.
+    Becomes materially more useful once more sensors are added (more
+    overlap to find) — kept cheap and separate from generation now so it
+    doesn't complicate the yield-sensitive sampling logic there."""
+    root = ET.parse(routed_path).getroot()
+    report: dict[str, dict[str, int]] = {
+        m: {"total": 0, "cross_1": 0, "cross_2": 0, "cross_3plus": 0}
+        for m in measured
+    }
+    for veh in root:
+        route = veh.find("route")
+        if route is None:
+            continue
+        edges = set(route.get("edges").split())
+        hits = [m for m in measured if m in edges]
+        for m in hits:
+            other_hits = len(hits) - 1
+            report[m]["total"] += 1
+            if other_hits == 1:
+                report[m]["cross_1"] += 1
+            elif other_hits == 2:
+                report[m]["cross_2"] += 1
+            elif other_hits >= 3:
+                report[m]["cross_3plus"] += 1
+    with open(SUMO_DIR / "sensor_coverage_report.json", "w") as f:
+        json.dump(report, f, indent=1)
+    return report
+
+
 def upstream_downstream_gates(
     G, m_edge: str, entries: list[tuple[str, int]], exits: list[tuple[str, int]],
 ) -> tuple[list[str], list[str]]:
@@ -660,6 +701,133 @@ def via_naturally_on_path(G, entry_v: int, exit_u: int, m_u: int, m_v: int) -> b
     except nx.NetworkXNoPath:
         return False
     return any(path[i] == m_u and path[i + 1] == m_v for i in range(len(path) - 1))
+
+
+def build_shortest_distance_matrix(G) -> tuple[np.ndarray, dict[int, int]]:
+    """All-pairs shortest (by length) distance, computed ONCE per run via
+    scipy.sparse.csgraph.dijkstra (scipy is already a project dependency —
+    pfe.py, observability.py) — measured 1.39s / 92.6MB on the real
+    3402-node production graph. This is what makes
+    natural_far_end_weights() an O(1) array lookup per candidate instead
+    of a real nx.shortest_path call (2.23ms measured) — the difference
+    between bounded retries being free vs. costing real minutes per
+    sensor, which is exactly the kind of cost this session already hit
+    once with the (reverted) duarouter-retry approach to via-trip
+    coverage.
+
+    Parallel edges (MultiDiGraph) are collapsed to their MINIMUM length —
+    for shortest-path purposes only the cheapest of several parallel
+    edges between the same two nodes ever matters; scipy's sparse matrix
+    constructor SUMS duplicate (row, col) entries by default, which would
+    silently corrupt distances if left to it."""
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import dijkstra
+
+    nodes = list(G.nodes())
+    node_idx = {n: i for i, n in enumerate(nodes)}
+    best: dict[tuple[int, int], float] = {}
+    for u, v, d in G.edges(data=True):
+        key = (node_idx[u], node_idx[v])
+        length = d.get("length", 1.0)
+        if key not in best or length < best[key]:
+            best[key] = length
+    rows, cols, weights = zip(*((r, c, w) for (r, c), w in best.items()))
+    adj = csr_matrix((weights, (rows, cols)), shape=(len(nodes), len(nodes)))
+    D = dijkstra(adj, directed=True)
+    return D, node_idx
+
+
+def natural_far_end_weights(
+    D: np.ndarray, node_idx: dict[int, int],
+    anchor_v: int, m_u: int, m_v: int, m_length: float,
+    candidate_u_idx: np.ndarray, base_weights: np.ndarray,
+    tol_abs: float = 0.5, tol_rel: float = 1e-6,
+) -> np.ndarray:
+    """Vectorized generalization of via_naturally_on_path — same
+    semantics (is routing anchor->m_u->m_v->candidate the true shortest
+    anchor->candidate path), checked via distance ARITHMETIC on the
+    precomputed all-pairs matrix instead of tracing one nx.shortest_path
+    per candidate: anchor->candidate is a natural via-fit iff
+    dist(anchor,m_u) + m_length + dist(m_v,candidate) == dist(anchor,candidate)
+    (within tolerance). This masks (never reinterprets) whatever weighting
+    a trip category already computes — base_weights passes through
+    unchanged wherever the candidate is natural, and becomes 0 elsewhere,
+    so gravity_km's existing calibration and meaning are untouched.
+
+    candidate_u_idx must already be MATRIX indices (via node_idx), not
+    raw graph node IDs — precompute this once per candidate pool outside
+    any per-trip sampling loop; base_weights is aligned to it 1:1.
+
+    Unreachable pairs (scipy dijkstra returns inf across disconnected
+    components) are correctly treated as not-natural, never as a match."""
+    a = node_idx[anchor_v]
+    mu = node_idx[m_u]
+    mv = node_idx[m_v]
+    d_a_mu = D[a, mu]
+    d_mv_far = D[mv, candidate_u_idx]
+    d_direct = D[a, candidate_u_idx]
+    via_dist = d_a_mu + m_length + d_mv_far
+    finite = np.isfinite(d_direct) & np.isfinite(via_dist)
+    tol = np.maximum(tol_abs, tol_rel * np.where(finite, d_direct, 0.0))
+    # inf - inf (both anchor and via-route unreachable to a candidate) is a
+    # real, expected case on a graph with disconnected components — numpy
+    # eagerly computes via_dist - d_direct for the WHOLE array even inside
+    # np.where, so it produces a nan there regardless; `finite` already
+    # excludes that element from `natural` correctly, this just silences
+    # the resulting (harmless) RuntimeWarning.
+    with np.errstate(invalid="ignore"):
+        natural = finite & (np.abs(via_dist - d_direct) <= tol)
+    return np.where(natural, base_weights, 0.0)
+
+
+def sample_anchor_and_far_end(
+    rng: np.random.Generator, D: np.ndarray, node_idx: dict[int, int],
+    anchor_node_ids: np.ndarray, anchor_weights: np.ndarray,
+    far_u_idx: np.ndarray, far_base_weights: np.ndarray,
+    m_u: int, m_v: int, m_length: float,
+    max_anchor_redraws: int = 25,
+) -> tuple[int, int] | None:
+    """Draw an anchor from its EXISTING, unbiased weighting (anchor_weights
+    — pH for homes, w_entry/w_exit for gates, unchanged from what each
+    trip category already computes), then mask the far-end pool to the
+    exact naturally-via-m_edge subset and sample the far end from THAT,
+    still weighted by whatever the category already computes
+    (far_base_weights, e.g. activity_mass[purpose]*exp(-d/gravity_km)).
+
+    If a drawn anchor happens to have ZERO natural far ends (measured on
+    the real graph: this varies 1.3%-87% depending on the sensor — some
+    sensors are structurally poor fits for a given trip category), redraw
+    the anchor — cheap, an array op, not a Dijkstra call — up to
+    max_anchor_redraws times. Returns None (never a non-compliant pair)
+    if exhausted; the caller counts/logs this rather than forcing a trip
+    that wouldn't genuinely be anchored to the sensor.
+
+    Returns (anchor_index, far_end_index) — BOTH as positions into
+    anchor_node_ids and far_u_idx/far_base_weights respectively, not
+    resolved node IDs: the caller usually needs the exact source edge
+    (its id string, lat/lon, its OWN "u" node for a return leg, ...), and
+    multiple edges can share the same node, so returning only a bare node
+    value would make it ambiguous which specific edge was actually drawn.
+    The caller looks up whatever metadata it associates with each
+    position — this function works purely in distance/index space and has
+    no knowledge of edge IDs, lat/lon, or purpose categories."""
+    n_anchors = len(anchor_node_ids)
+    total_anchor_w = anchor_weights.sum()
+    if n_anchors == 0 or total_anchor_w <= 0:
+        return None
+    p_anchor = anchor_weights / total_anchor_w
+    for _ in range(max_anchor_redraws):
+        anchor_pos = rng.choice(n_anchors, p=p_anchor)
+        anchor_v = int(anchor_node_ids[anchor_pos])
+        if anchor_v not in node_idx:
+            continue
+        masked = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v,
+                                         m_length, far_u_idx, far_base_weights)
+        total = masked.sum()
+        if total > 0:
+            far_pos = rng.choice(len(far_u_idx), p=masked / total)
+            return int(anchor_pos), int(far_pos)
+    return None
 
 
 def verified_via_gate_pairs(G, m_edge: str, in_ids: list[str], out_ids: list[str]
@@ -744,6 +912,250 @@ def blend_day_shape(real: np.ndarray, fallback: np.ndarray,
     return blended / blended.sum()
 
 
+def _natural_sensor_for_leg(D, node_idx, anchor_v: int, candidate_u: int,
+                            m_info: dict[str, tuple[int, int, float]],
+                            quota: dict[str, int]) -> str | None:
+    """Which measured edge (if any) the anchor->candidate path naturally
+    passes through — checked against ALL sensors (7 cheap O(1) lookups),
+    preferring whichever is furthest behind its own quota if more than one
+    fits. Used for a tour's RETURN leg, whose path is already fixed once
+    the outbound leg's anchor+far-end are drawn — unlike the outbound
+    leg's own draw (which only ever tries ONE sensor's naturalness mask at
+    a time via sample_anchor_and_far_end), the return leg's fixed path
+    might naturally fit a DIFFERENT sensor than the outbound leg did, or
+    none at all (a real, expected case on a directed, asymmetric network
+    — see generate_sensor_anchored_trips' own docstring)."""
+    candidate_idx = np.array([node_idx[candidate_u]])
+    for m_edge in sorted(m_info, key=lambda m: -quota[m]):
+        m_u, m_v, m_length = m_info[m_edge]
+        w = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v, m_length,
+                                    candidate_idx, np.array([1.0]))
+        if w[0] > 0:
+            return m_edge
+    return None
+
+
+def generate_sensor_anchored_trips(
+    rng: np.random.Generator, G, edges: list[dict],
+    hmass: np.ndarray, amass: dict[str, np.ndarray],
+    entries: list[tuple[str, int]], exits: list[tuple[str, int]],
+    entry_ids: list[str], exit_ids: list[str],
+    w_entry: np.ndarray, w_exit: np.ndarray,
+    shape_hourly: np.ndarray, measured: list[str],
+    n_total: int, through_fraction: float, cross_fraction: float,
+    gravity_km: float, is_weekend: bool,
+    min_per_sensor: int = 50, max_anchor_redraws: int = 25,
+) -> tuple[list[tuple], list[float]]:
+    """Replaces the old E-E/I-I/E-I/I-E blocks + separate via-trip
+    coverage block with ONE principle: every generated trip must be
+    traceable to at least one of the measured sensor edges (Gustav,
+    2026-07-10 — every simulated vehicle should be explainable by real
+    sensor data, not invented background demand), while each trip's own
+    start/end are still drawn from the SAME realistic, city-wide
+    population/POI/gravity weighting the old "regular" trips used — not
+    narrowly local to a sensor.
+
+    MECHANISM (validated against the real graph before being wired in —
+    see the standalone diagnostic run this session): draw the anchor
+    (home edge / gate) from its existing, UNCHANGED weighting, then mask
+    the far-end candidate pool to the EXACT subset where routing
+    anchor->sensor->far-end is genuinely the shortest anchor->far-end path
+    (natural_far_end_weights, an exact vectorized generalization of
+    via_naturally_on_path — not an approximation, so nothing generated
+    ever needs to be discarded downstream for being an unnatural detour).
+    A naive "free draw, then force+verify" approach was measured at
+    0.65% yield on the real graph — far too low for practical retries;
+    masking the pool this way instead of rejecting after the fact is what
+    makes bounded retries (max_anchor_redraws) actually cheap (measured
+    98.5-100% cumulative success per sensor at 25 retries, ~0.2-1ms/call).
+
+    PAIRED TOURS keep their existing AM/PM structure (a real, valuable
+    realism property), but do NOT require both legs through the SAME
+    sensor — measured redraw rates vary 1.3%-87% across the real 7
+    sensors (the network is directed and asymmetric), so that would fail
+    constantly on a poor-fit sensor for no good reason. The outbound leg
+    tries sensors in quota order (most-behind first) via
+    sample_anchor_and_far_end; the return leg's path is then already
+    fixed, so it's checked against all 7 sensors (_natural_sensor_for_leg)
+    for whichever one it happens to naturally pass — if none, the whole
+    tour (home+activity pair) is redrawn rather than emitting a
+    non-compliant leg.
+
+    E-E (gate-to-gate through trips) skips the distance matrix entirely —
+    gate pools are tiny (28/24 on the real graph) so the EXISTING,
+    already-validated upstream_downstream_gates + verified_via_gate_pairs
+    mechanism is reused unchanged, just invoked per-sensor here instead of
+    in a separate block.
+
+    BUDGET: one shared n_total, split into an equal starting quota per
+    sensor (a rigid per-sensor count would be wrong given the measured
+    1.3%-87% connectivity spread — a structurally poor-fit sensor
+    correctly ends up under its equal share, a well-connected one absorbs
+    the overflow; forcing equal counts onto a poor fit would just mean
+    reusing near-duplicate routes, exactly what pfe.py's Path-Size
+    weighting already penalises). min_per_sensor is a safety-net floor
+    only, not a target."""
+    D, node_idx = build_shortest_distance_matrix(G)
+
+    edge_ids  = [e["id"] for e in edges]
+    edge_u_nodes = [e["u"] for e in edges]
+    edge_v_nodes = [e["v"] for e in edges]
+    edge_u_idx = np.array([node_idx[u] for u in edge_u_nodes])
+    edge_lats  = np.array([e["lat"] for e in edges])
+    edge_lons  = np.array([e["lon"] for e in edges])
+
+    entry_v_nodes = [int(eid.split("_")[1]) for eid in entry_ids]
+    entry_lats, entry_lons = gate_latlon(G, entries)
+    exit_u_nodes = [int(eid.split("_")[0]) for eid in exit_ids]
+    exit_v_nodes = [int(eid.split("_")[1]) for eid in exit_ids]
+    exit_u_idx = np.array([node_idx[u] for u in exit_u_nodes])
+    exit_lats, exit_lons = gate_latlon(G, exits)
+
+    m_info: dict[str, tuple[int, int, float]] = {}
+    good_pairs_ee: dict[str, list[tuple[str, str]]] = {}
+    for m_edge in measured:
+        u_s, v_s, k_s = m_edge.split("_")
+        m_u, m_v = int(u_s), int(v_s)
+        m_info[m_edge] = (m_u, m_v, G[m_u][m_v][int(k_s)]["length"])
+        in_ids, out_ids = upstream_downstream_gates(G, m_edge, entries, exits)
+        good_pairs_ee[m_edge] = verified_via_gate_pairs(G, m_edge, in_ids, out_ids)
+
+    n_sensors = len(measured)
+    initial_quota = {m: n_total // n_sensors + (1 if i < n_total % n_sensors else 0)
+                     for i, m in enumerate(measured)}
+    quota = dict(initial_quota)
+
+    def by_quota():
+        return sorted(measured, key=lambda m: -quota[m])
+
+    trips: list[tuple] = []
+    tour_lengths_km: list[float] = []
+    n_dropped_no_sensor = 0
+
+    def am_pm_hours():
+        h_out = rng.choice(24, p=shape_hourly)
+        pm_shape = shape_hourly * (np.arange(24) >= 12)
+        pm_shape = pm_shape / pm_shape.sum() if pm_shape.sum() > 0 else shape_hourly
+        h_ret = max(h_out + 1, rng.choice(24, p=pm_shape))
+        return h_out, min(h_ret, 23)
+
+    n_through     = int(n_total * through_fraction)
+    n_tours_total = (n_total - n_through) // 2
+    n_cross    = int(n_tours_total * cross_fraction)
+    n_internal = n_tours_total - n_cross
+    n_ei = n_cross // 2
+    n_ie = n_cross - n_ei
+
+    # ── E-E: through traffic, gate->gate — unchanged mechanism, invoked
+    # per-sensor here instead of in a separate block ────────────────────
+    hours = rng.choice(24, size=n_through, p=shape_hourly)
+    for h in hours:
+        for m_edge in by_quota():
+            pairs = good_pairs_ee[m_edge]
+            if not pairs:
+                continue
+            e_in, e_out = pairs[rng.integers(len(pairs))]
+            trips.append(((h + rng.random()) * 3600, e_in, e_out, m_edge))
+            quota[m_edge] -= 1
+            break
+
+    # ── I-I / E-I / I-E: paired tours, sensor-anchored per leg — the
+    # outbound leg draws (anchor, far-end) fresh per attempt (gravity decay
+    # depends on WHICH anchor gets drawn, so it's recomputed every retry,
+    # not fixed once), trying sensors in quota order; the return leg's
+    # path is then fixed, so it's checked against all 7 sensors for
+    # whichever it naturally fits — possibly a DIFFERENT one, possibly
+    # none (whole tour redrawn if so). ─────────────────────────────────
+    def gravity_anchored_tour(
+        anchor_v_nodes: list[int], anchor_u_nodes: list[int],
+        anchor_weights: np.ndarray, anchor_lats: np.ndarray, anchor_lons: np.ndarray,
+        anchor_ids: list[str],
+        far_u_idx: np.ndarray, far_u_nodes: list[int], far_v_nodes: list[int],
+        far_lats: np.ndarray, far_lons: np.ndarray, far_ids: list[str],
+        far_base_weights: np.ndarray, h_out: int, h_ret: int,
+    ) -> bool:
+        """far_base_weights/h_out/h_ret are resolved ONCE by the caller
+        (purpose is drawn from that SAME h_out, matching the original
+        per-tour — not per-retry — semantics); gravity decay is still
+        recomputed every anchor attempt below, since it genuinely depends
+        on which anchor gets drawn."""
+        nonlocal n_dropped_no_sensor
+        anchor_p = anchor_weights / anchor_weights.sum()
+        for m_edge in by_quota():
+            m_u, m_v, m_length = m_info[m_edge]
+            for _ in range(max_anchor_redraws):
+                a_pos = int(rng.choice(len(anchor_v_nodes), p=anchor_p))
+                anchor_v = anchor_v_nodes[a_pos]
+                if anchor_v not in node_idx:
+                    continue
+                d_km = gravity_distance_km(far_lats, far_lons,
+                                           anchor_lats[a_pos], anchor_lons[a_pos])
+                far_w = far_base_weights * np.exp(-d_km / gravity_km)
+                masked = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v,
+                                                 m_length, far_u_idx, far_w)
+                total = masked.sum()
+                if total <= 0:
+                    continue
+                f_pos = int(rng.choice(len(far_u_idx), p=masked / total))
+                return_sensor = _natural_sensor_for_leg(
+                    D, node_idx, far_v_nodes[f_pos], anchor_u_nodes[a_pos],
+                    m_info, quota)
+                if return_sensor is None:
+                    continue
+                quota[m_edge] -= 1
+                quota[return_sensor] -= 1
+                tour_lengths_km.append(float(d_km[f_pos]))
+                trips.append(((h_out + rng.random()) * 3600,
+                              anchor_ids[a_pos], far_ids[f_pos], m_edge))
+                trips.append(((h_ret + rng.random()) * 3600,
+                              far_ids[f_pos], anchor_ids[a_pos], return_sensor))
+                return True
+        n_dropped_no_sensor += 1
+        return False
+
+    def draw_purpose_weights(h_out: int) -> np.ndarray:
+        purpose_shares = purpose_shares_for_hour(int(h_out), is_weekend)
+        purpose = rng.choice(PURPOSE_CATEGORIES, p=list(purpose_shares.values()))
+        return amass[purpose]
+
+    entry_u_nodes = [int(eid.split("_")[0]) for eid in entry_ids]
+
+    # I-I: home -> activity, both internal
+    for _ in range(n_internal):
+        h_out, h_ret = am_pm_hours()
+        gravity_anchored_tour(
+            edge_v_nodes, edge_u_nodes, hmass, edge_lats, edge_lons, edge_ids,
+            edge_u_idx, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons, edge_ids,
+            draw_purpose_weights(h_out), h_out, h_ret)
+
+    # E-I: entry gate -> activity, exits via an independently-drawn gate
+    for _ in range(n_ei):
+        h_out, h_ret = am_pm_hours()
+        gravity_anchored_tour(
+            entry_v_nodes, entry_u_nodes, w_entry, entry_lats, entry_lons, entry_ids,
+            edge_u_idx, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons, edge_ids,
+            draw_purpose_weights(h_out), h_out, h_ret)
+
+    # I-E: internal home -> exit gate
+    for _ in range(n_ie):
+        h_out, h_ret = am_pm_hours()
+        gravity_anchored_tour(
+            edge_v_nodes, edge_u_nodes, hmass, edge_lats, edge_lons, edge_ids,
+            exit_u_idx, exit_u_nodes, exit_v_nodes, exit_lats, exit_lons, exit_ids,
+            w_exit, h_out, h_ret)
+
+    print(f"sensor-anchored generation: dropped {n_dropped_no_sensor} tour "
+          f"attempts where no sensor naturally fit either leg "
+          f"(of {n_internal + n_ei + n_ie} attempted)")
+    achieved = {m: initial_quota[m] - quota[m] for m in measured}
+    short = {m: n for m, n in achieved.items() if n < min_per_sensor}
+    if short:
+        print(f"  WARNING: below --min-per-sensor ({min_per_sensor}): {short} "
+              f"-- these sensors are structurally poor fits for the current "
+              f"trip mix; consider a higher --n-total or investigate why")
+    return trips, tour_lengths_km
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--through-fraction", type=float, default=0.5,
@@ -791,8 +1203,16 @@ def main() -> None:
                         "assumption about it, with no holiday list to "
                         "maintain. Added 2026-07-09.")
     ap.add_argument("--n-total", type=int, default=12000)
-    ap.add_argument("--n-sensor-via", type=int, default=900,
-                    help="via-trips per measured edge (coverage guarantee)")
+    ap.add_argument("--min-per-sensor", type=int, default=50,
+                    help="safety-net floor, not a target — every trip is "
+                        "now sensor-anchored (generate_sensor_anchored_trips), "
+                        "so n_total is split into an equal starting quota "
+                        "per sensor; structurally poor-fit sensors correctly "
+                        "end up under quota and well-connected ones absorb "
+                        "the overflow (measured redraw-success rate on the "
+                        "real graph varies 1.3%-100% by sensor). This floor "
+                        "only guards against a sensor silently getting zero "
+                        "coverage.")
     ap.add_argument("--route-diversity", type=float, default=2.0,
                     help="duarouter --weights.random-factor: per-trip edge-"
                         "weight jitter drawn from [1, X) so similar OD pairs "
@@ -844,137 +1264,21 @@ def main() -> None:
 
     if hmass.sum() == 0:
         sys.exit("home_mass is all-zero — check data_in/deso/ (run fetch_deso.py)")
-    pH = hmass / hmass.sum()
-
-    n_through     = int(args.n_total * args.through_fraction)
-    n_tours_total = (args.n_total - n_through) // 2   # paired -> half as many tours
-    n_cross    = int(n_tours_total * args.cross_fraction)
-    n_internal = n_tours_total - n_cross
-    n_ei = n_cross // 2          # gate (home-side) -> internal activity
-    n_ie = n_cross - n_ei        # internal home -> gate (activity-side)
-
-    trips: list[tuple[float, str, str]] = []
-
-    # ── E-E: through traffic, gate→gate, our measured departure shape ──────────
-    hours = rng.choice(24, size=n_through, p=shape_hourly)
-    for h in hours:
-        e_in  = entry_ids[rng.choice(len(entry_ids), p=w_entry)]
-        e_out = exit_ids[rng.choice(len(exit_ids), p=w_exit)]
-        trips.append(((h + rng.random()) * 3600, e_in, e_out))
-
-    edge_lats = np.array([e["lat"] for e in edges])
-    edge_lons = np.array([e["lon"] for e in edges])
-    entry_lats, entry_lons = gate_latlon(G, entries)
-    exit_lats,  exit_lons  = gate_latlon(G, exits)
-    tour_lengths_km: list[float] = []
-
-    def am_pm_hours():
-        """Outbound ~ AM-weighted draw from OUR shape; return ~ PM-weighted
-        (shared by all three tour classes: I-I, E-I, I-E)."""
-        h_out = rng.choice(24, p=shape_hourly)
-        pm_shape = shape_hourly * (np.arange(24) >= 12)
-        pm_shape = pm_shape / pm_shape.sum() if pm_shape.sum() > 0 else shape_hourly
-        h_ret = max(h_out + 1, rng.choice(24, p=pm_shape))
-        return h_out, min(h_ret, 23)
-
-    # ── I-I: purpose-sampled (hour-of-day AND day-type aware — the departure
-    # hour is drawn FIRST, then purpose conditional on it via
-    # purpose_shares_for_hour(), since e.g. 08h is ~86% arbete on a weekday
-    # while 20h is ~35% fritid; see PURPOSE_HOURLY_WEEKDAY/WEEKEND above),
-    # gravity-weighted, PAIRED internal tours ──────────────────────────────
-    home_idx = rng.choice(len(edges), size=n_internal, p=pH)
-    for h_i in home_idx:
-        h_out, h_ret = am_pm_hours()
-        purpose_shares = purpose_shares_for_hour(int(h_out), args.is_weekend)
-        purpose = rng.choice(PURPOSE_CATEGORIES, p=list(purpose_shares.values()))
-        w = amass[purpose].copy()
-        if w.sum() == 0:
-            continue
-        d_km = gravity_distance_km(edge_lats, edge_lons,
-                                   edges[h_i]["lat"], edges[h_i]["lon"])
-        w = w * np.exp(-d_km / args.gravity_km)
-        w[h_i] = 0
-        if w.sum() == 0:
-            continue
-        a_i = rng.choice(len(edges), p=w / w.sum())
-        tour_lengths_km.append(float(d_km[a_i]))
-
-        trips.append(((h_out + rng.random()) * 3600,
-                      edges[h_i]["id"], edges[a_i]["id"]))
-        trips.append(((h_ret + rng.random()) * 3600,
-                      edges[a_i]["id"], edges[h_i]["id"]))
-
-    # ── E-I: commuter from OUTSIDE the canvas, entering via a gate to an
-    # internal activity — documented in this file's METHOD section since
-    # 2026-07-05 but never implemented until now (confirmed 2026-07-08: every
-    # "tour" was silently I-I only, both ends drawn from `edges`, which
-    # structurally caps tour length at the small canvas's own diameter and
-    # cannot reach RVU's 5.1-10km trip share no matter how gravity_km is
-    # tuned — a gate-anchored end can plausibly span that far). Paired:
-    # arrive via one gate, leave via an independently-drawn gate (same
-    # independence E-E's through trips already use for entry vs exit).
-    gate_idx_ei = rng.choice(len(entries), size=n_ei, p=w_entry)
-    for gi in gate_idx_ei:
-        h_out, h_ret = am_pm_hours()
-        purpose_shares = purpose_shares_for_hour(int(h_out), args.is_weekend)
-        purpose = rng.choice(PURPOSE_CATEGORIES, p=list(purpose_shares.values()))
-        w = amass[purpose].copy()
-        if w.sum() == 0:
-            continue
-        d_km = gravity_distance_km(edge_lats, edge_lons,
-                                   entry_lats[gi], entry_lons[gi])
-        w = w * np.exp(-d_km / args.gravity_km)
-        if w.sum() == 0:
-            continue
-        a_i = rng.choice(len(edges), p=w / w.sum())
-        tour_lengths_km.append(float(d_km[a_i]))
-
-        g_out = exit_ids[rng.choice(len(exit_ids), p=w_exit)]
-        trips.append(((h_out + rng.random()) * 3600,
-                      entry_ids[gi], edges[a_i]["id"]))
-        trips.append(((h_ret + rng.random()) * 3600,
-                      edges[a_i]["id"], g_out))
-
-    # ── I-E: internal home, commuting OUT to something outside the canvas
-    # via a gate — the mirror image of E-I. Destination gate is weighted by
-    # BOTH road class (w_exit, same prior E-E uses) AND gravity distance
-    # from home (nearer gates preferred, all else equal) — E-E's gate draws
-    # have no "distance from" anchor to weight by, this does.
-    home_idx_ie = rng.choice(len(edges), size=n_ie, p=pH)
-    for h_i in home_idx_ie:
-        d_km = gravity_distance_km(exit_lats, exit_lons,
-                                   edges[h_i]["lat"], edges[h_i]["lon"])
-        w = w_exit * np.exp(-d_km / args.gravity_km)
-        if w.sum() == 0:
-            continue
-        g_i = rng.choice(len(exits), p=w / w.sum())
-        tour_lengths_km.append(float(d_km[g_i]))
-
-        g_in = entry_ids[rng.choice(len(entry_ids), p=w_entry)]
-        h_out, h_ret = am_pm_hours()
-        trips.append(((h_out + rng.random()) * 3600,
-                      edges[h_i]["id"], exit_ids[g_i]))
-        trips.append(((h_ret + rng.random()) * 3600,
-                      g_in, edges[h_i]["id"]))
-
-    # ── Coverage guarantee: via-trips through every measured sensor edge ───────
-    # Gates are restricted to ones upstream/downstream of m_edge's OWN travel
-    # direction (see upstream_downstream_gates), THEN verified against the
-    # real graph (verified_via_gate_pairs) — the bearing filter alone still
-    # let some pairs through that force duarouter's independent entry->via
-    # and via->exit legs to backtrack through each other; verifying m_edge
-    # is genuinely on the entry->exit path stops a bad via-trip from being
-    # generated at all, rather than generating it and relying on
-    # drop_uturn_routes to discard it afterward.
     with open("web/data/flows.json") as f:
         measured = list(json.load(f)["flows"])
-    for m_edge in measured:
-        in_ids, out_ids = upstream_downstream_gates(G, m_edge, entries, exits)
-        good_pairs = verified_via_gate_pairs(G, m_edge, in_ids, out_ids)
-        hrs = rng.choice(24, size=args.n_sensor_via, p=shape_hourly)
-        for h in hrs:
-            e_in, e_out = good_pairs[rng.integers(len(good_pairs))]
-            trips.append(((h + rng.random()) * 3600, e_in, e_out, m_edge))
+
+    trips, tour_lengths_km = generate_sensor_anchored_trips(
+        rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+        w_entry, w_exit, shape_hourly, measured,
+        args.n_total, args.through_fraction, args.cross_fraction,
+        args.gravity_km, args.is_weekend, args.min_per_sensor)
+
+    n_through     = int(args.n_total * args.through_fraction)
+    n_tours_total = (args.n_total - n_through) // 2
+    n_cross    = int(n_tours_total * args.cross_fraction)
+    n_internal = n_tours_total - n_cross
+    n_ei = n_cross // 2
+    n_ie = n_cross - n_ei
 
     trips.sort(key=lambda t: t[0])
     trips_path = SUMO_DIR / f"tours{args.out_suffix}.trips.xml"
@@ -985,10 +1289,10 @@ def main() -> None:
             f.write(f'  <trip id="t{i}" depart="{t[0]:.1f}" '
                     f'from="{t[1]}" to="{t[2]}"{via}/>\n')
         f.write("</routes>\n")
-    print(f"{len(trips)} trips ({n_through} E-E through, "
-          f"{n_internal} I-I + {n_ei} E-I + {n_ie} I-E paired tours "
-          f"= {(n_internal+n_ei+n_ie)*2} legs, "
-          f"{len(measured)*args.n_sensor_via} coverage)")
+    print(f"{len(trips)} trips written, all sensor-anchored — target mix "
+          f"was {n_through} E-E through + {n_internal} I-I / {n_ei} E-I / "
+          f"{n_ie} I-E paired tours (actual counts vary since some tour "
+          f"attempts are dropped when no sensor naturally fits either leg)")
 
     fit = trip_length_fit(tour_lengths_km)
     fit["through_fraction"] = args.through_fraction
@@ -1026,8 +1330,11 @@ def main() -> None:
         sys.exit("duarouter failed")
     drop_uturn_routes(out)
     drop_excessive_detours(out, G, args.route_diversity)
+    cross_report = report_sensor_cross_hits(out, measured)
     n = sum(1 for line in open(out) if "<vehicle" in line)
     print(f"Wrote {out}  ({n} routed candidates)")
+    print(f"  sensor cross-hit diagnostic (sumo/sensor_coverage_report.json): "
+          f"{ {m: r['total'] for m, r in cross_report.items()} }")
 
 
 if __name__ == "__main__":

@@ -57,7 +57,7 @@ def main() -> None:
             print(f"\n=== θ: through_fraction={tf} gravity_km={gk} ===")
             out = run([sys.executable, "build_candidates.py",
                       "--through-fraction", str(tf), "--gravity-km", str(gk),
-                      "--n-total", "6000", "--n-sensor-via", "400",
+                      "--n-total", "6000",
                       "--out-suffix", "_theta"])
             print(out[-800:])
 
