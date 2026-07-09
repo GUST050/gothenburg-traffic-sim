@@ -187,24 +187,59 @@ Goal arc, in order:
      guarantee `run_scenario.py` runs right after, unlike serve.py's recalibration
      path). Verified with Codex (codex:codex-rescue) at each stage — code review
      before push, plan alignment before rebuild, and a numbers sanity-check after.
-   - KNOWN ISSUE, found during that verification (NOT caused by the E-I/I-E fix —
-     the closure/rerouter code in run_scenario.py is untouched; the new OD mix just
-     exposed it where the old one happened not to): 39 of 16467 vehicles (0.24%) in
-     the Skånegatan closure scenario still have a closed edge in their EXPORTED
-     trajectory (`close_..._traj.json`) — confirmed directly by decoding the `e`
-     index sequence against the closed edge IDs, and confirmed absent (0/13216) in
-     the previously-committed closure scenario. Root cause hypothesis: `calibrated
-     .rou.xml`'s explicit routes are computed independent of any later closure;
-     enforcement relies entirely on the `<rerouter>`/`closingReroute` additional
-     file catching every vehicle whose static route needs the closed edge before it
-     gets there — REROUTER_RADIUS_M=400m coverage confirmed present on the
-     upstream edge for these 39 vehicles, yet they weren't redirected, suggesting a
-     `--mesosim` + explicit-route interaction gap in SUMO's rerouter, not a
-     radius/coverage bug. Small (~99.4% of the ~6408 affected routes ARE correctly
-     rerouted or dropped) but real and visible (vehicle dots on a "closed" road) —
-     not investigated further yet; next person to touch run_scenario.py's closure
-     path should start here.
-   REMAINING: leave-one-out validation at the 6 sensors (empirical confidence decay, now the top priority per project-direction discussion 2026-07-09 — LOSO numbers predate this fix and are stale); root-cause the 39-vehicle closure-rerouter leak above; more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
+   - CLOSURE-LEAK FIX (2026-07-09, same day, `truncate_stranded_vehicles` in
+     run_scenario.py): root-caused and fixed the 39-vehicle leak found during the
+     rebuild above (NOT caused by the E-I/I-E fix — the closure/rerouter code was
+     untouched at the time; the new OD mix just exposed a pre-existing gap where
+     the old one happened not to). Root cause, confirmed three independent ways:
+     (1) the live sumo run's own warnings (only visible with `--no-warnings`
+     removed) showed "No route for vehicle found" then "Teleporting vehicle;
+     waited too long" — sumo's stuck-vehicle cleanup was forcibly relocating it
+     PAST the closure at end-of-run, which then reads as if it drove the closed
+     edge; (2) duarouter, given the exact same closure additional file and even
+     replanning the trip from scratch, still routed through the closed edge —
+     `<rerouter>`/`closingReroute` is a RUNTIME sumo concept the offline router
+     doesn't evaluate at all; (3) a plain Dijkstra over net.net.xml's
+     `<connection>` graph with the closed edges removed found no path either.
+     Deeper cause: node 3575001205 (Skånegatan/Engelbrektsgatan) has exactly ONE
+     incoming connection in the whole network — the edge being closed — so
+     whatever's downstream is structurally cut off once it closes; not verified
+     against a real map, could be a genuine one-way street or an OSM-import gap.
+     Scale-checked (Gustav asked directly): only 63 of 7125 edges (0.9%) become
+     unreachable once this specific closure applies — a small contained pocket,
+     not the network being fragile to any random closure.
+     THREE ROUNDS to get the fix right, each from real feedback:
+     (i) first cut just DELETED stranded vehicles — Gustav, correctly: a driver
+     whose literal destination is now unreachable by car still drives most of the
+     trip and parks short of it, walking the rest; deleting the whole vehicle
+     erased its real contribution to every OTHER edge on the route, not just the
+     closed one. Fixed to TRUNCATE the route at the last edge before the closure
+     instead (only actually dropped if the closed edge is the vehicle's very
+     FIRST edge — no partial trip possible at all);
+     (ii) Codex's review then caught that the reachability check used the
+     route's ORIGIN as a proxy for "will the live rerouter save this vehicle" —
+     wrong two ways: two vehicles sharing an origin/destination can be on
+     different candidate routes, one already committed to a dead branch the
+     other avoided; and with multiple `--close` edges, truncating at the FIRST
+     one hit ignores whether a LATER one on the same route is what actually
+     kills the detour. Both fixed the same way: check reachability from the
+     edge immediately BEFORE the first closed edge in THAT vehicle's own route
+     (matching exactly where sumo's live rerouter itself re-plans from), not
+     from a shared origin — `reachable()` already removes every closed edge at
+     once, so this correctly accounts for later closures too, not just the
+     first hit;
+     (iii) non-blocking cleanup: `build_edge_graph` now built ONCE per closure
+     (in main()) and passed in, instead of re-parsing net.net.xml per demand
+     variant file.
+     Verified: 0/16467 leaking vehicles post-fix (was 39/16467), vehicle count
+     unchanged (nothing deleted unnecessarily), reproduced clean on a second,
+     unrelated closure (Läraregatan) tested live via `/api/close`. 11 tests
+     (`TestTruncateStrandedVehicles`), including two regression tests that
+     directly reproduce Codex's two review findings and confirm the fix.
+     Two independent Codex review passes (codex:codex-rescue), both fresh
+     threads: first found the two origin-vs-position bugs above, second
+     confirmed both resolved with no new blocking issues.
+   REMAINING: leave-one-out validation at the 6 sensors (empirical confidence decay, now the top priority per project-direction discussion 2026-07-09 — LOSO numbers predate the E-I/I-E fix and are stale); more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
 5. IN PROGRESS — Trained direction-split model (`dirsplit/` package), replacing the AM/PM-Gaussian guess in estimate_directions.py:
    - Training data: OPEN hourly directional counts from Statens vegvesen's trafikkdata GraphQL API (no key) — 394 stations in Oslo/Bergen/Trondheim/Stavanger bboxes; volumes fetched per station for 4 ISO weeks (36,37,20,45) of its newest available year. UK DfT raw counts identified as secondary source (hourly 07–19 by direction, bulk CSV) — not yet integrated.
    - Heading→bearing: station directions are PLACE NAMES; resolved by geocoding both names (Nominatim, cached, 1 req/s) and matching against the OSM edge's two axis bearings, with a consistency requirement (opposite candidates, ≤75° each) — ambiguous stations are EXCLUDED, all decisions stored for audit in stations_matched.json.

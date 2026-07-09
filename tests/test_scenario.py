@@ -9,6 +9,7 @@ scenarios have been generated yet.
 import json
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -150,3 +151,181 @@ class TestScenarioManifestDemandScope:
 
         assert filtered["demand_signature"] == current
         assert [s["name"] for s in filtered["scenarios"]] == ["baseline"]
+
+
+class TestTruncateStrandedVehicles:
+    """FOUND 2026-07-09: SUMO's runtime rerouter (write_closure_additional)
+    reroutes vehicles around a closure fine WHEN a detour exists, but for an
+    origin/destination pair with NO detour at all it can't find one either —
+    confirmed directly (duarouter given the same closure file still routes
+    through the "closed" edge; a rerouter is a runtime-only concept, not
+    something the offline router evaluates) — and the vehicle just sits
+    stuck until sumo's end-of-run cleanup teleports it past the closure,
+    which then shows up in the exported flows/trajectory as if it had
+    legitimately driven the closed edge.
+
+    truncate_stranded_vehicles is the fix — but SHORTENS the route to end
+    just short of the closure rather than deleting the vehicle outright
+    (Gustav, correctly: deleting it also erases its real traffic
+    contribution on every edge BEFORE the closure, not just the closed one
+    — a driver whose actual destination is now unreachable by car still
+    drives most of the way and parks short of it, walking the rest)."""
+
+    @staticmethod
+    def write_net(path: Path) -> None:
+        # a_b --(closed)--> b_c --> c_d, with a detour a_b->b_e->e_c->c_d;
+        # w_x->x_y--(closed)-->y_z is a dead end with no alternative — a
+        # vehicle heading there can still legitimately drive w_x->x_y.
+        connections = [
+            ("a_b", "b_c"), ("b_c", "c_d"),
+            ("a_b", "b_e"), ("b_e", "e_c"), ("e_c", "c_d"),
+            ("w_x", "x_y"), ("x_y", "y_z"),
+        ]
+        with open(path, "w") as f:
+            f.write("<net>\n")
+            for frm, to in connections:
+                f.write(f'  <connection from="{frm}" to="{to}"/>\n')
+            f.write("</net>\n")
+
+    @staticmethod
+    def write_routes(path: Path) -> None:
+        with open(path, "w") as f:
+            f.write("<routes>\n")
+            f.write('  <vehicle id="detourable" depart="0">\n'
+                    '    <route edges="a_b b_c c_d"/>\n  </vehicle>\n')
+            f.write('  <vehicle id="stranded" depart="0">\n'
+                    '    <route edges="w_x x_y y_z"/>\n  </vehicle>\n')
+            f.write('  <vehicle id="immediately_stranded" depart="0">\n'
+                    '    <route edges="y_z"/>\n  </vehicle>\n')
+            f.write('  <vehicle id="untouched" depart="0">\n'
+                    '    <route edges="a_b b_e e_c c_d"/>\n  </vehicle>\n')
+            f.write("</routes>\n")
+
+    def test_detour_exists_route_is_untouched(self, monkeypatch, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        self.write_net(net_path)
+        monkeypatch.setattr(run_scenario, "NET_PATH", net_path)
+
+        route_path = tmp_path / "in.rou.xml"
+        self.write_routes(route_path)
+        out_path = tmp_path / "out.rou.xml"
+
+        adj = run_scenario.build_edge_graph({"b_c", "y_z"})
+        t, d = run_scenario.truncate_stranded_vehicles(
+            route_path, ["b_c", "y_z"], out_path, adj)
+
+        assert (t, d) == (1, 1)
+        vehicles = {v.get("id"): v.find("route").get("edges")
+                    for v in ET.parse(out_path).getroot().findall("vehicle")}
+        assert vehicles["detourable"] == "a_b b_c c_d"        # rerouter handles it live
+        assert vehicles["untouched"] == "a_b b_e e_c c_d"
+        assert vehicles["stranded"] == "w_x x_y"               # truncated, not deleted
+        assert "immediately_stranded" not in vehicles          # nothing to truncate to
+
+    def test_no_affected_vehicles_still_writes_output(self, monkeypatch, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        self.write_net(net_path)
+        monkeypatch.setattr(run_scenario, "NET_PATH", net_path)
+
+        route_path = tmp_path / "in.rou.xml"
+        self.write_routes(route_path)
+        out_path = tmp_path / "out.rou.xml"
+
+        adj = run_scenario.build_edge_graph({"nonexistent_edge"})
+        t, d = run_scenario.truncate_stranded_vehicles(
+            route_path, ["nonexistent_edge"], out_path, adj)
+
+        assert (t, d) == (0, 0)
+        ids = {v.get("id") for v in ET.parse(out_path).getroot().findall("vehicle")}
+        assert ids == {"detourable", "stranded", "immediately_stranded", "untouched"}
+
+    def test_same_origin_and_destination_but_only_one_branch_is_stranded(
+            self, monkeypatch, tmp_path):
+        """FOUND in Codex review 2026-07-09: the first version of this fix
+        cached on (route[0], route[-1]) — global origin/destination
+        reachability — as a proxy for "will the live rerouter save this
+        vehicle". Wrong: two vehicles can share the same origin AND the
+        same destination while being on different candidate routes, one
+        of which is already committed to a branch with no way out even
+        though the OTHER branch (which this vehicle isn't on) would have
+        worked fine. The origin-level check would have left BOTH routes
+        untouched (since SOME path from origin to destination exists),
+        reproducing the exact teleport-through-a-closed-edge leak for the
+        vehicle on the bad branch. The fix checks reachability from each
+        vehicle's OWN position right before the closure, not from a
+        shared origin."""
+        net_path = tmp_path / "net.net.xml"
+        connections = [
+            ("a_b", "b_g"), ("b_g", "g_z"), ("g_z", "z_d"),        # good branch, avoids closure
+            ("a_b", "b_h"), ("b_h", "h_closed"),                    # bad branch: dead end once closed
+            ("h_closed", "closed_z"), ("closed_z", "z_d"),
+        ]
+        with open(net_path, "w") as f:
+            f.write("<net>\n")
+            for frm, to in connections:
+                f.write(f'  <connection from="{frm}" to="{to}"/>\n')
+            f.write("</net>\n")
+        monkeypatch.setattr(run_scenario, "NET_PATH", net_path)
+
+        route_path = tmp_path / "in.rou.xml"
+        with open(route_path, "w") as f:
+            f.write("<routes>\n")
+            f.write('  <vehicle id="good_branch" depart="0">\n'
+                    '    <route edges="a_b b_g g_z z_d"/>\n  </vehicle>\n')
+            f.write('  <vehicle id="bad_branch" depart="0">\n'
+                    '    <route edges="a_b b_h h_closed closed_z z_d"/>\n  </vehicle>\n')
+            f.write("</routes>\n")
+        out_path = tmp_path / "out.rou.xml"
+
+        adj = run_scenario.build_edge_graph({"h_closed"})
+        t, d = run_scenario.truncate_stranded_vehicles(
+            route_path, ["h_closed"], out_path, adj)
+
+        assert (t, d) == (1, 0)
+        vehicles = {v.get("id"): v.find("route").get("edges")
+                    for v in ET.parse(out_path).getroot().findall("vehicle")}
+        # same origin (a_b) and same destination (z_d) as bad_branch, but
+        # reachable overall — must stay fully untouched
+        assert vehicles["good_branch"] == "a_b b_g g_z z_d"
+        # stuck on its own branch despite origin->destination being
+        # reachable via the OTHER branch — must be truncated, not left as-is
+        assert vehicles["bad_branch"] == "a_b b_h"
+
+    def test_multiple_closures_with_a_bypass_leaves_route_untouched(
+            self, monkeypatch, tmp_path):
+        """A candidate route can pass through TWO closed edges in sequence
+        while a real detour exists that avoids both — truncating at the
+        FIRST closed edge encountered (ignoring whether a later closure on
+        the same route is what actually matters) would wrongly cut off a
+        trip the live rerouter can complete just fine. Since `reachable()`
+        removes every closed edge at once (not just the first), checking
+        from right before the first closure already accounts for the
+        second one too."""
+        net_path = tmp_path / "net.net.xml"
+        connections = [
+            ("p_q", "q_r1"), ("q_r1", "r1_s"), ("r1_s", "s_t2"), ("s_t2", "t2_end"),
+            ("p_q", "q_r2"), ("q_r2", "r2_s"), ("r2_s", "t2_end"),   # bypass around BOTH closures
+        ]
+        with open(net_path, "w") as f:
+            f.write("<net>\n")
+            for frm, to in connections:
+                f.write(f'  <connection from="{frm}" to="{to}"/>\n')
+            f.write("</net>\n")
+        monkeypatch.setattr(run_scenario, "NET_PATH", net_path)
+
+        route_path = tmp_path / "in.rou.xml"
+        with open(route_path, "w") as f:
+            f.write("<routes>\n")
+            f.write('  <vehicle id="double_closure" depart="0">\n'
+                    '    <route edges="p_q q_r1 r1_s s_t2 t2_end"/>\n  </vehicle>\n')
+            f.write("</routes>\n")
+        out_path = tmp_path / "out.rou.xml"
+
+        adj = run_scenario.build_edge_graph({"q_r1", "s_t2"})
+        t, d = run_scenario.truncate_stranded_vehicles(
+            route_path, ["q_r1", "s_t2"], out_path, adj)
+
+        assert (t, d) == (0, 0)
+        vehicles = {v.get("id"): v.find("route").get("edges")
+                    for v in ET.parse(out_path).getroot().findall("vehicle")}
+        assert vehicles["double_closure"] == "p_q q_r1 r1_s s_t2 t2_end"

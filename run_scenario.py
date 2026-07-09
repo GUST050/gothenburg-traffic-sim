@@ -160,6 +160,128 @@ def write_closure_additional(path: Path, close_edges: list[str],
         f.write("</additional>\n")
 
 
+def build_edge_graph(banned: set[str]) -> dict[str, list[str]]:
+    """Directed edge->edge adjacency from net.net.xml's <connection> elements,
+    with `banned` edges (the closure) removed from both ends — the same
+    graph SUMO's own router uses to find a path, minus the closed edges."""
+    adj: dict[str, list[str]] = {}
+    for c in ET.parse(NET_PATH).getroot().findall("connection"):
+        frm, to = c.get("from"), c.get("to")
+        if frm in banned or to in banned:
+            continue
+        adj.setdefault(frm, []).append(to)
+    return adj
+
+
+def reachable(adj: dict[str, list[str]], start: str, goal: str,
+             banned: set[str]) -> bool:
+    # start==goal is only trivially "reachable" if that edge itself isn't
+    # the one being closed — a single-edge trip THROUGH the closed edge
+    # (origin==destination==closed edge) has nowhere to go, not nowhere
+    # to detour.
+    if start in banned or goal in banned:
+        return False
+    if start == goal:
+        return True
+    seen = {start}
+    stack = [start]
+    while stack:
+        for nxt in adj.get(stack.pop(), ()):
+            if nxt == goal:
+                return True
+            if nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+    return False
+
+
+def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
+                               out_path: Path, adj: dict[str, list[str]]) -> tuple[int, int]:
+    """Shorten (don't delete) vehicles whose route has no detour at all.
+
+    FOUND 2026-07-09 (Gustav asked for the closure-leak finding from the
+    demand rebuild's Codex review to actually get fixed): SUMO's runtime
+    <rerouter>/closingReroute (write_closure_additional) reroutes ~99.4% of
+    affected vehicles fine, but for an origin/destination pair with NO
+    detour around the closure at all (confirmed directly: duarouter, even
+    given the same closure additional file and even replanning the trip
+    from scratch, still routes through the "closed" edge — rerouters are a
+    RUNTIME sumo concept, invisible to the offline router — and a plain
+    Dijkstra over net.net.xml's <connection> graph with the closed edges
+    removed returns no path either, independent confirmation), the live
+    rerouter can't find an alternative and the vehicle just sits stuck on
+    the rerouter edge until sumo's end-of-run stuck-vehicle cleanup
+    forcibly TELEPORTS it past the closure — which then shows up in the
+    exported flows/trajectory as if it had legitimately driven the closed
+    edge.
+
+    FIRST FIX (same day) just deleted these vehicles outright — WRONG
+    (Gustav, correctly: people whose actual destination is now unreachable
+    by car still drive most of the way and park short of the closure,
+    walking the rest — dropping the whole vehicle erases its real traffic
+    contribution on every OTHER edge of its route too, not just the
+    closed one, understating flow on the approach streets). Fixed:
+    TRUNCATE the route at the last edge reachable before the closure
+    (i.e. right before the first closed edge encountered) instead of
+    removing the vehicle — it still drives and is counted on everything
+    up to that point, it just "arrives" there instead of continuing.
+    Only actually dropped if the closed edge is the very FIRST edge of
+    the route (nothing to truncate to — no partial trip is possible).
+
+    SECOND FIX (same day, Codex review): the reachability check used to
+    test origin→destination, as a proxy for "will the live rerouter
+    detour this one fine" — WRONG for two reasons Codex caught: (a) two
+    vehicles with the same origin/destination can be on different
+    candidate routes, so one can already be committed to a branch its
+    ORIGIN could have avoided but IT no longer can; (b) with multiple
+    `--close` edges, truncating at the first one encountered ignores
+    whether a LATER closure on the same route is what actually kills the
+    detour. Both are the same underlying bug: origin isn't where the live
+    rerouter re-plans FROM — it re-plans from wherever the vehicle
+    currently is when it hits the closure. Fixed: check reachability from
+    the edge immediately BEFORE the first closed edge in THIS vehicle's
+    own route (not from edges[0]) to the final destination — this is
+    exactly what sumo's rerouter itself computes, and since `reachable()`
+    does a full graph search (not just along the original candidate
+    route) with ALL close_edges removed at once, it already correctly
+    accounts for every other closure on the route too, not just the
+    first.
+
+    `adj` is built ONCE by the caller (build_edge_graph(closed)) and
+    reused across every demand variant file for this closure — it only
+    depends on close_edges, not on which route file is being filtered.
+    """
+    closed = set(close_edges)
+    tree = ET.parse(route_path)
+    root = tree.getroot()
+    affected = [v for v in root.findall("vehicle")
+                if closed & set(v.find("route").get("edges").split())]
+    if not affected:
+        tree.write(out_path, xml_declaration=True, encoding="UTF-8")
+        return 0, 0
+    cache: dict[tuple[str, str], bool] = {}
+    n_truncated = 0
+    n_dropped = 0
+    for v in affected:
+        route_el = v.find("route")
+        edges = route_el.get("edges").split()
+        i = next(idx for idx, e in enumerate(edges) if e in closed)
+        if i == 0:
+            root.remove(v)
+            n_dropped += 1
+            continue
+        key = (edges[i - 1], edges[-1])
+        ok = cache.get(key)
+        if ok is None:
+            ok = cache[key] = reachable(adj, *key, closed)
+        if ok:
+            continue   # the live rerouter will detour this one fine
+        route_el.set("edges", " ".join(edges[:i]))
+        n_truncated += 1
+    tree.write(out_path, xml_declaration=True, encoding="UTF-8")
+    return n_truncated, n_dropped
+
+
 def demand_variants() -> list[Path]:
     """Calibrated route sets — q50 plus (if built) the q10/q90 direction-
     split variants. Monte Carlo seeds are spread over them so the seed
@@ -370,6 +492,30 @@ def main() -> None:
         cpath = SUMO_DIR / f"closure_{name}.add.xml"
         write_closure_additional(cpath, args.close, rerouter_edges, duration_s)
         closure_add = [cpath]
+
+        # Vehicles with no detour around the closure at all can't be fixed
+        # by the runtime rerouter above (see truncate_stranded_vehicles) —
+        # shortened/dropped here so they never get simulated past the
+        # closure, instead of relying on sumo's stuck-vehicle teleport to
+        # hide them after the fact.
+        adj = build_edge_graph(set(args.close))
+        filtered_variants = []
+        n_truncated = n_dropped = 0
+        for vp in variants:
+            fp = SUMO_DIR / f"{vp.stem}_{name}.rou.xml"
+            t, d = truncate_stranded_vehicles(vp, args.close, fp, adj)
+            n_truncated += t
+            n_dropped += d
+            filtered_variants.append(fp)
+        if n_truncated:
+            print(f"  truncated {n_truncated} vehicle(s) with no detour around "
+                  f"the closure to end just short of it (parked there instead "
+                  f"of continuing) rather than sitting stuck and getting "
+                  f"teleported through it at end of run")
+        if n_dropped:
+            print(f"  dropped {n_dropped} vehicle(s) that couldn't even "
+                  f"depart with the closure in place")
+        variants = filtered_variants
 
     per_seed: list[dict[str, np.ndarray]] = []
     for s in range(args.seeds):
