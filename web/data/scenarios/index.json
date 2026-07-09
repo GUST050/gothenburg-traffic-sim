@@ -1,10 +1,12 @@
 {
+  "demand_signature": "b5116ac70049",
   "scenarios": [
     {
       "name": "baseline",
       "label": "Baslinje (ingen avst\u00e4ngning)",
       "file": "baseline.json",
       "closed_edges": [],
+      "demand_signature": "b5116ac70049",
       "window": "2025-09-16 00:00\u201324:00"
     },
     {
@@ -15,6 +17,7 @@
         "60786979_3575001205_0",
         "1455801464_18241874_0"
       ],
+      "demand_signature": "b5116ac70049",
       "window": "2025-09-16 00:00\u201324:00"
     }
   ]

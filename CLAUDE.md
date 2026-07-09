@@ -172,7 +172,39 @@ Goal arc, in order:
    - INTERACTIVE CLOSURES (2026-07-03): `make serve` runs serve.py — static web/ + /api/close?edges=a,b,c which shells out to run_scenario.py (one sim at a time, lock + 409). Whole-day interactive closure ≈ 40 s thanks to meso. Web: 🚧 Stäng väg mode (feature-detected via /api/ping, hidden on static hosting) — click edges to select (red-dashed pending style), Simulera runs the MC and auto-loads the scenario. run_scenario supports MULTIPLE --close edges (scenario JSON: closed_edges list); shared closure rerouter file per scenario. Scenario fetches use cache-busting (re-runs overwrite files in place).
    - DATA INTAKE: data_in/ drop folder (build_data auto-discovers; falls back to the original Downloads delivery). New-sensor workflow in data_in/README.md; `make refresh` re-runs the whole chain raw→scenarios.
    - Simulation uses the FULL graphml graph (~2 250 edges) so rerouting has real alternatives; the web app displays the subset in network.geojson.
-   REMAINING: leave-one-out validation at the 6 sensors (empirical confidence decay); whole-day windows; more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
+   - E-I/I-E FIX + REBUILD (2026-07-09, commit d0820ae): found and fixed the bug
+     described above under "Make every simulated vehicle sensor-anchored" — E-I/I-E
+     tours' return leg was reusing the outbound gate edge, which is structurally
+     unreachable from the other direction, so the whole category silently produced
+     0 trips. Fixed with a fresh, independently-drawn gate per return leg
+     (`natural_origin_weights`, mirroring `natural_far_end_weights` for a fixed
+     destination instead of a fixed origin). Rebuilt demand + scenarios end to end
+     (`make demand && make scenario`, 2025-09-16 whole-day/historical, same window
+     already deployed): dropped tour attempts fell from 1000/1000 (isolated E-I/I-E
+     test, pre-fix) to 1/3000; GEH<5 stayed 100% on all three demand variants;
+     `clear_stale_scenarios()` now leaves a valid empty `index.json` manifest
+     instead of deleting it outright (a CLI-only `make demand` run has no
+     guarantee `run_scenario.py` runs right after, unlike serve.py's recalibration
+     path). Verified with Codex (codex:codex-rescue) at each stage — code review
+     before push, plan alignment before rebuild, and a numbers sanity-check after.
+   - KNOWN ISSUE, found during that verification (NOT caused by the E-I/I-E fix —
+     the closure/rerouter code in run_scenario.py is untouched; the new OD mix just
+     exposed it where the old one happened not to): 39 of 16467 vehicles (0.24%) in
+     the Skånegatan closure scenario still have a closed edge in their EXPORTED
+     trajectory (`close_..._traj.json`) — confirmed directly by decoding the `e`
+     index sequence against the closed edge IDs, and confirmed absent (0/13216) in
+     the previously-committed closure scenario. Root cause hypothesis: `calibrated
+     .rou.xml`'s explicit routes are computed independent of any later closure;
+     enforcement relies entirely on the `<rerouter>`/`closingReroute` additional
+     file catching every vehicle whose static route needs the closed edge before it
+     gets there — REROUTER_RADIUS_M=400m coverage confirmed present on the
+     upstream edge for these 39 vehicles, yet they weren't redirected, suggesting a
+     `--mesosim` + explicit-route interaction gap in SUMO's rerouter, not a
+     radius/coverage bug. Small (~99.4% of the ~6408 affected routes ARE correctly
+     rerouted or dropped) but real and visible (vehicle dots on a "closed" road) —
+     not investigated further yet; next person to touch run_scenario.py's closure
+     path should start here.
+   REMAINING: leave-one-out validation at the 6 sensors (empirical confidence decay, now the top priority per project-direction discussion 2026-07-09 — LOSO numbers predate this fix and are stale); root-cause the 39-vehicle closure-rerouter leak above; more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
 5. IN PROGRESS — Trained direction-split model (`dirsplit/` package), replacing the AM/PM-Gaussian guess in estimate_directions.py:
    - Training data: OPEN hourly directional counts from Statens vegvesen's trafikkdata GraphQL API (no key) — 394 stations in Oslo/Bergen/Trondheim/Stavanger bboxes; volumes fetched per station for 4 ISO weeks (36,37,20,45) of its newest available year. UK DfT raw counts identified as secondary source (hourly 07–19 by direction, bulk CSV) — not yet integrated.
    - Heading→bearing: station directions are PLACE NAMES; resolved by geocoding both names (Nominatim, cached, 1 req/s) and matching against the OSM edge's two axis bearings, with a consistency requirement (opposite candidates, ≤75° each) — ambiguous stations are EXCLUDED, all decisions stored for audit in stations_matched.json.
