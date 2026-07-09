@@ -117,3 +117,36 @@ class TestSumoTimeout:
             "baseline", tmp_path / "r.rou.xml", [], duration_s=900,
             home=tmp_path, web_edges=set())
         assert result is None
+
+
+class TestScenarioManifestDemandScope:
+    def test_demand_signature_changes_when_window_changes(self):
+        meta = {
+            "date": "2025-09-16",
+            "source": "historical",
+            "begin": "00:00",
+            "end": "24:00",
+            "n_intervals": 96,
+            "epoch_sim": "2025-09-16T00:00:00",
+            "n_variants": 3,
+        }
+        changed = dict(meta, begin="07:00", end="09:00", n_intervals=8,
+                       epoch_sim="2025-09-16T07:00:00")
+
+        assert run_scenario.demand_signature(meta) != run_scenario.demand_signature(changed)
+
+    def test_manifest_keeps_only_current_demand_entries(self):
+        current = "abc123"
+        old = "old999"
+        index = {
+            "scenarios": [
+                {"name": "baseline", "demand_signature": current},
+                {"name": "old_closure", "demand_signature": old},
+                {"name": "legacy_without_signature"},
+            ]
+        }
+
+        filtered = run_scenario.index_for_current_demand(index, current)
+
+        assert filtered["demand_signature"] == current
+        assert [s["name"] for s in filtered["scenarios"]] == ["baseline"]

@@ -447,6 +447,69 @@ class TestNaturalFarEndWeights:
         assert w[0] == pytest.approx(0.0)
 
 
+class TestNaturalOriginWeights:
+    """Mirror of natural_far_end_weights -- there the ORIGIN is fixed and
+    DESTINATION candidates are masked; here the DESTINATION is fixed and
+    ORIGIN candidates are masked. Added 2026-07-10 after finding a real
+    bug: I-E's return leg needs to draw a FRESH entry gate as its ORIGIN
+    (reaching the fixed home edge as destination) -- natural_far_end_weights
+    can't express that (it only ever varies the destination side)."""
+
+    def test_agrees_with_natural_far_end_weights_by_symmetry(self):
+        """For a single fixed pair, natural_origin_weights(candidate=X,
+        dest=Y) must agree with natural_far_end_weights(anchor=X,
+        candidate=Y) -- same underlying invariant, just built to vary the
+        opposite side."""
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=10.0)
+        G.add_edge(11, 20, key=0, length=10.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w_far = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=10, m_u=10, m_v=11, m_length=10.0,
+            candidate_u_idx=np.array([node_idx[11]]), base_weights=np.array([5.0]))
+        w_origin = bc.natural_origin_weights(
+            D, node_idx, candidate_v_idx=np.array([node_idx[10]]),
+            m_u=10, m_v=11, m_length=10.0, dest_u=11, base_weights=np.array([5.0]))
+        assert w_far[0] == pytest.approx(w_origin[0])
+
+    def test_bypassed_route_is_masked_to_zero(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=1000.0)
+        G.add_edge(11, 20, key=0, length=10.0)
+        G.add_edge(10, 99, key=0, length=1.0)
+        G.add_edge(99, 11, key=0, length=1.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w = bc.natural_origin_weights(
+            D, node_idx, candidate_v_idx=np.array([node_idx[10]]),
+            m_u=10, m_v=11, m_length=1000.0, dest_u=11, base_weights=np.array([3.0]))
+        assert w[0] == pytest.approx(0.0)
+
+    def test_vectorizes_over_multiple_origin_candidates_independently(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(10, 11, key=0, length=10.0)   # via edge
+        G.add_edge(11, 20, key=0, length=10.0)   # dest
+        G.add_edge(30, 20, key=0, length=1.0)    # a much shorter, unrelated direct path to dest
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        candidate_idx = np.array([node_idx[10], node_idx[30]])
+        w = bc.natural_origin_weights(
+            D, node_idx, candidate_v_idx=candidate_idx,
+            m_u=10, m_v=11, m_length=10.0, dest_u=20, base_weights=np.array([5.0, 7.0]))
+        assert w[0] == pytest.approx(5.0)   # node 10: natural via the sensor
+        assert w[1] == pytest.approx(0.0)   # node 30: shorter direct path exists
+
+    def test_unreachable_pair_is_masked_to_zero(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(10, 11, key=0, length=10.0)
+        G.add_edge(30, 40, key=0, length=10.0)   # disconnected from 10/11
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w = bc.natural_origin_weights(
+            D, node_idx, candidate_v_idx=np.array([node_idx[30]]),
+            m_u=10, m_v=11, m_length=10.0, dest_u=11, base_weights=np.array([3.0]))
+        assert w[0] == pytest.approx(0.0)
+
+
 class TestSampleAnchorAndFarEnd:
     def test_returns_a_natural_pair_when_one_exists(self):
         G = nx.MultiDiGraph()
@@ -504,6 +567,137 @@ class TestSampleAnchorAndFarEnd:
             far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
             m_u=10, m_v=11, m_length=10.0)
         assert result is None
+
+
+class TestGenerateSensorAnchoredTripsEIandIE:
+    """Regression test for a real, confirmed, SHIPPED bug (found 2026-07-10
+    during a full-structure review Gustav asked for, after the previous
+    session's rewrite had already been committed and pushed): E-I and I-E
+    were COMPLETELY non-functional -- isolating their generation on the
+    real graph (cross_fraction=1.0, through_fraction=0.0) produced
+    1000/1000 dropped tour attempts, silently, with no exception and no
+    warning distinguishing it from ordinary sensor-fit variance. Root
+    cause: the return leg reused the OUTBOUND anchor's own gate edge as
+    the return destination/origin for every category, but E-I's anchor is
+    an ENTRY gate (its own start node has in-degree 0 -- nothing inside
+    the graph can ever route back TO it) and I-E's far end is an EXIT
+    gate (its own end node has out-degree 0 -- nothing can ever continue
+    FROM it), so the return-leg naturalness check was asking for
+    something structurally impossible and always returned None.
+
+    This was caught ONLY by manually running ad hoc diagnostic scripts
+    against the real graph -- no permanent test exercised
+    generate_sensor_anchored_trips itself. This test fixture is a small,
+    deterministic "diamond corridor" graph built so this bug (and its
+    fix) has a permanent, fast, no-real-data-needed regression guard:
+
+        1 --entry--> 2 --sensorA--> 3 --home/activity--> 4 --sensorB--> 5 --exit--> 6
+
+    Node 1 has in-degree 0 (the only entry gate); node 6 has out-degree 0
+    (the only exit gate) -- matching find_gates()'s own convention. hmass/
+    amass put ALL weight on the home/activity edge (3_4_0) so the anchor/
+    far-end draw is deterministic, not just probable."""
+
+    def _build_graph(self):
+        G = nx.MultiDiGraph()
+        coords = {1: (0.0, 0.0), 2: (0.0, 0.01), 3: (0.0, 0.02),
+                 4: (0.0, 0.03), 5: (0.0, 0.04), 6: (0.0, 0.05)}
+        for n, (lat, lon) in coords.items():
+            G.add_node(n, y=lat, x=lon)
+        G.add_edge(1, 2, key=0, length=10.0)   # entry gate (1_2_0)
+        G.add_edge(2, 3, key=0, length=10.0)   # sensorA (2_3_0)
+        G.add_edge(3, 4, key=0, length=10.0)   # home/activity (3_4_0)
+        G.add_edge(4, 5, key=0, length=10.0)   # sensorB (4_5_0)
+        G.add_edge(5, 6, key=0, length=10.0)   # exit gate (5_6_0)
+        return G
+
+    def _setup(self):
+        G = self._build_graph()
+        edges = [
+            {"id": "1_2_0", "u": 1, "v": 2, "lat": 0.0, "lon": 0.005, "hw": "", "len": 10.0},
+            {"id": "2_3_0", "u": 2, "v": 3, "lat": 0.0, "lon": 0.015, "hw": "", "len": 10.0},
+            {"id": "3_4_0", "u": 3, "v": 4, "lat": 0.0, "lon": 0.025, "hw": "", "len": 10.0},
+            {"id": "4_5_0", "u": 4, "v": 5, "lat": 0.0, "lon": 0.035, "hw": "", "len": 10.0},
+            {"id": "5_6_0", "u": 5, "v": 6, "lat": 0.0, "lon": 0.045, "hw": "", "len": 10.0},
+        ]
+        # all weight on the home/activity edge (index 2) -- deterministic draw
+        hmass = np.array([0.0, 0.0, 1.0, 0.0, 0.0])
+        amass = {p: np.array([0.0, 0.0, 1.0, 0.0, 0.0]) for p in bc.PURPOSE_CATEGORIES}
+        entries = [("1_2_0", 1)]
+        exits = [("5_6_0", 6)]
+        entry_ids = ["1_2_0"]
+        exit_ids = ["5_6_0"]
+        w_entry = np.array([1.0])
+        w_exit = np.array([1.0])
+        shape_hourly = np.full(24, 1 / 24)
+        measured = ["2_3_0", "4_5_0"]
+        return G, edges, hmass, amass, entries, exits, entry_ids, exit_ids, w_entry, w_exit, shape_hourly, measured
+
+    def test_ei_return_leg_goes_to_the_exit_not_back_to_the_entry(self):
+        (G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+         w_entry, w_exit, shape_hourly, measured) = self._setup()
+        rng = np.random.default_rng(0)
+        # n_total=8, through_fraction=0, cross_fraction=1.0 -> n_ei=2, n_ie=2, n_internal=0
+        trips, lengths, short = bc.generate_sensor_anchored_trips(
+            rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+            w_entry, w_exit, shape_hourly, measured,
+            n_total=8, through_fraction=0.0, cross_fraction=1.0,
+            gravity_km=5.0, is_weekend=False, min_per_sensor=0)
+        assert len(trips) > 0, "E-I/I-E generation must not silently produce zero trips"
+        # every trip must be sensor-anchored (via tag present)
+        assert all(len(t) > 3 for t in trips)
+        # NO trip may end AT the entry gate or start FROM the exit gate --
+        # the exact structural-impossibility bug this test guards against
+        for t in trips:
+            assert t[2] != "1_2_0", "a trip ended at the entry gate -- unreachable from inside the graph"
+            assert t[1] != "5_6_0", "a trip started from the exit gate -- can't continue past it"
+
+    def test_ei_outbound_uses_entry_and_activity_return_uses_exit(self):
+        (G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+         w_entry, w_exit, shape_hourly, measured) = self._setup()
+        rng = np.random.default_rng(1)
+        trips, lengths, short = bc.generate_sensor_anchored_trips(
+            rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+            w_entry, w_exit, shape_hourly, measured,
+            n_total=8, through_fraction=0.0, cross_fraction=1.0,
+            gravity_km=5.0, is_weekend=False, min_per_sensor=0)
+        # find an E-I outbound leg (from=entry) and confirm its paired
+        # return leg (to=activity's far end from THIS trip) lands on the exit
+        outbound = [t for t in trips if t[1] == "1_2_0"]
+        assert len(outbound) > 0, "no E-I outbound leg was generated at all"
+        for t in outbound:
+            assert t[2] == "3_4_0"   # deterministic: only the activity edge has weight
+
+    def test_ie_return_leg_comes_from_the_entry_not_the_exit(self):
+        (G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+         w_entry, w_exit, shape_hourly, measured) = self._setup()
+        rng = np.random.default_rng(2)
+        trips, lengths, short = bc.generate_sensor_anchored_trips(
+            rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+            w_entry, w_exit, shape_hourly, measured,
+            n_total=8, through_fraction=0.0, cross_fraction=1.0,
+            gravity_km=5.0, is_weekend=False, min_per_sensor=0)
+        # find an I-E outbound leg (from=home/activity, to=exit)
+        outbound = [t for t in trips if t[1] == "3_4_0" and t[2] == "5_6_0"]
+        assert len(outbound) > 0, "no I-E outbound leg was generated at all"
+        # its return leg must depart from the ENTRY gate, arriving at home
+        return_legs = [t for t in trips if t[2] == "3_4_0" and t[1] == "1_2_0"]
+        assert len(return_legs) > 0, "I-E return leg never used the entry gate as origin"
+
+    def test_no_tours_are_silently_dropped_on_this_well_connected_graph(self):
+        """On a graph where BOTH sensors are genuinely reachable for both
+        legs, the drop rate must be 0 -- this is what "1000/1000 dropped"
+        looked like before the fix, and 0/N is what it must look like now."""
+        (G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+         w_entry, w_exit, shape_hourly, measured) = self._setup()
+        rng = np.random.default_rng(3)
+        trips, lengths, short = bc.generate_sensor_anchored_trips(
+            rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+            w_entry, w_exit, shape_hourly, measured,
+            n_total=40, through_fraction=0.0, cross_fraction=1.0,
+            gravity_km=5.0, is_weekend=False, min_per_sensor=0)
+        # n_total=40 -> n_tours_total=20, n_cross=20, n_ei=10, n_ie=10 -> 20 legs each way = 40 legs total
+        assert len(trips) == 40
 
 
 class TestVerifiedViaGatePairs:
@@ -603,7 +797,7 @@ class TestGateLatLon:
 
 
 class TestPurposeSharesForDayType:
-    """Found 2026-07-09: PURPOSE_SHARES was a single flat 43/33/24 constant
+    """Found 2026-07-10: PURPOSE_SHARES was a single flat 43/33/24 constant
     (RVU's own WEEKLY average, no day-type qualifier in Fig.11's caption)
     applied on EVERY simulated day regardless of weekday/weekend/holiday —
     silently overstating 'arbete' on real weekends/holidays. Split into
@@ -653,7 +847,7 @@ class TestPurposeHourlyTables:
     weekday) rescaled against our own real measured Gothenburg hourly
     shape; weekend uses a simpler model (only fritid varies by hour, since
     a 3-parameter fit against real weekend rush-hour anchors bought
-    essentially nothing over a 1-parameter one). Added 2026-07-09."""
+    essentially nothing over a 1-parameter one). Added 2026-07-10."""
 
     def test_every_weekday_hour_sums_to_one(self):
         for h, row in enumerate(bc.PURPOSE_HOURLY_WEEKDAY):
@@ -766,7 +960,7 @@ class TestBlendDayShape:
     """--real-day-shape-file's measured/forecast shape, shrunk toward the
     weekday/weekend/holiday fallback rather than fully trusted (hedges
     against one day's sampling noise across just 6-7 sensors). Added
-    2026-07-09."""
+    2026-07-10."""
 
     def test_blend_weights_toward_real_by_default(self):
         real = np.zeros(24); real[10] = 1.0

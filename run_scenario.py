@@ -27,6 +27,7 @@ Writes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -50,6 +51,30 @@ OUT_DIR   = Path("web/data/scenarios")
 # process first — becomes permanently orphaned, since a timeout can only ever
 # kill its own direct child. Found in review 2026-07-07.
 SUMO_TIMEOUT_S = 300
+
+
+def demand_signature(meta: dict) -> str:
+    """Stable fingerprint for the demand that produced a scenario.
+
+    Scenario files are only meaningful for the calibrated demand currently
+    represented by sumo/demand_meta.json. If someone runs build_sumo_demand.py
+    manually, old closure scenarios from the previous date/window otherwise
+    remain in index.json and look selectable even though they were generated
+    from different routes. The signature keeps the manifest scoped to one
+    demand build.
+    """
+    keys = ("date", "source", "begin", "end", "n_intervals", "epoch_sim", "n_variants")
+    payload = {k: meta.get(k) for k in keys}
+    return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
+
+
+def index_for_current_demand(index: dict, signature: str) -> dict:
+    """Drop manifest entries generated from another demand calibration."""
+    scenarios = [
+        s for s in index.get("scenarios", [])
+        if s.get("demand_signature") == signature
+    ]
+    return {"demand_signature": signature, "scenarios": scenarios}
 
 
 def parse_args() -> argparse.Namespace:
@@ -303,6 +328,7 @@ def main() -> None:
         meta = json.load(f)
     n_intervals = meta["n_intervals"]
     duration_s  = n_intervals * 900
+    sig = demand_signature(meta)
 
     prior, names = load_geojson_meta()
     for ce in args.close:
@@ -381,6 +407,7 @@ def main() -> None:
     payload = {
         "epoch":            meta["epoch_sim"],
         "interval_minutes": 15,
+        "n_quarters":       n_intervals,
         "generated_at":     pd.Timestamp.now().isoformat(timespec="seconds"),
         "trajectories":     traj_name,
         "scenario": {
@@ -389,6 +416,7 @@ def main() -> None:
             "date": meta["date"], "source": meta.get("source", "historical"),
             "begin": meta["begin"], "end": meta["end"],
             "seeds": args.seeds,
+            "demand_signature": sig,
         },
         "flows":      flows_out,
         "confidence": conf_out,
@@ -401,11 +429,13 @@ def main() -> None:
     # ── Manifest ───────────────────────────────────────────────────────────────
     index_path = OUT_DIR / "index.json"
     index = json.load(open(index_path)) if index_path.exists() else {"scenarios": []}
+    index = index_for_current_demand(index, sig)
     index["scenarios"] = [s for s in index["scenarios"] if s["name"] != name]
     src_tag = " · Prognos" if meta.get("source") == "forecast" else ""
     index["scenarios"].append({
         "name": name, "label": label, "file": f"{name}.json",
         "closed_edges": args.close,
+        "demand_signature": sig,
         "window": f"{meta['date']} {meta['begin']}–{meta['end']}{src_tag}",
     })
     index["scenarios"].sort(key=lambda s: s["name"])

@@ -124,7 +124,7 @@ GATE_WEIGHT = {          # proxy: approach-road class → relative through-flow
 # RVU Västra Götaland 2022-2023, fig. 11 (p.21), home leg excluded — the
 # WEEKLY AVERAGE (43/33/24), not a weekday-specific figure (Fig.11's own
 # caption has no day-type qualifier, and the underlying diary survey spans
-# all 7 days). Added 2026-07-09: this was used as a FLAT constant regardless
+# all 7 days). Added 2026-07-10: this was used as a FLAT constant regardless
 # of day_kind (weekday/weekend/holiday) — meaning every simulated day, even
 # a Sunday, silently drew purposes from a 7-day BLEND, overstating "arbete"
 # on real weekends/holidays and understating it on real weekdays.
@@ -132,7 +132,7 @@ GATE_WEIGHT = {          # proxy: approach-road class → relative through-flow
 # PURPOSE_SHARES_WEEKDAY/WEEKEND below split this back into day-type-
 # specific shares. RVU has no such split directly, so the SHAPE of the
 # weekday->weekend shift is TRIANGULATED from TWO independent, verified
-# external sources (2026-07-09 — checked against a second source after the
+# external sources (2026-07-10 — checked against a second source after the
 # first cut used NHTS alone):
 #   NHTS 2017 (US, fhwa.dot.gov/policyinformation, "Travel Trips by
 #   Purpose", home-based categories, non-home-based excluded — no analog
@@ -172,7 +172,7 @@ def purpose_shares_for(is_weekend: bool) -> dict[str, float]:
     return PURPOSE_SHARES_WEEKEND if is_weekend else PURPOSE_SHARES_WEEKDAY
 
 
-# PURPOSE_HOURLY_WEEKDAY/WEEKEND (2026-07-09): purpose ALSO varies by hour,
+# PURPOSE_HOURLY_WEEKDAY/WEEKEND (2026-07-10): purpose ALSO varies by hour,
 # not just by day-type — "kl 8 nästan 100% jobb" (the original observation
 # that prompted this whole line of work). Neither RVU nor either day-type
 # source above has a joint purpose×hour table, so this is calibrated from a
@@ -195,7 +195,7 @@ def purpose_shares_for(is_weekend: bool) -> dict[str, float]:
 # ~50-54% mid-morning/midday; fritid peaks ~35-39% in the evening (19-21h).
 # WEEKEND: the UK table is Mon-Fri only — no full weekend/Saturday hourly
 # table was found (checked NHTS, UK NTS ad-hoc series, DE/NO/DK/NL surveys,
-# 2026-07-09). Naively rescaling the WEEKDAY hourly shape for weekends
+# 2026-07-10). Naively rescaling the WEEKDAY hourly shape for weekends
 # overshot badly against real anchors (UK NTS table NTSQ04007's weekend
 # AM/PM-rush purpose mix: 17.9%/51.4%/30.6% arbete/service/fritid AM,
 # 11.6%/44.6%/43.8% PM — a synchronised commute peak just doesn't exist on
@@ -780,6 +780,52 @@ def natural_far_end_weights(
     return np.where(natural, base_weights, 0.0)
 
 
+def natural_origin_weights(
+    D: np.ndarray, node_idx: dict[int, int],
+    candidate_v_idx: np.ndarray, m_u: int, m_v: int, m_length: float,
+    dest_u: int, base_weights: np.ndarray,
+    tol_abs: float = 0.5, tol_rel: float = 1e-6,
+) -> np.ndarray:
+    """Mirror of natural_far_end_weights — there the ORIGIN was fixed and
+    many DESTINATION candidates were masked; here the DESTINATION
+    (dest_u) is fixed and many ORIGIN candidates are masked instead
+    (candidate->m_u->m_v->dest_u must equal the true shortest
+    candidate->dest_u distance).
+
+    FOUND 2026-07-10 (Gustav asked for a thorough review of the new
+    sensor-anchored design; confirmed by isolating E-I/I-E generation on
+    the real graph: cross_fraction=1.0 alone produced 1000/1000 dropped
+    tour attempts — a complete, silent failure, not the "expected
+    network-asymmetry dropout" this was first, wrongly, reported as):
+    an E-I tour's return leg needs to reach an INDEPENDENTLY-drawn exit
+    gate from the (fixed) activity edge — natural_far_end_weights handles
+    that directly, since the fixed point IS the origin there. But an I-E
+    tour's return leg needs to depart from an INDEPENDENTLY-drawn entry
+    gate and reach the (fixed) home edge — the fixed point there is the
+    DESTINATION, and natural_far_end_weights has no way to vary the
+    ORIGIN instead. Needed as its own function (not just swapped
+    arguments) because the distance-matrix indexing direction is
+    different: D[origin, dest], never symmetric on a directed graph.
+
+    candidate_v_idx must be each candidate edge's OWN "v" node (matrix
+    index) — the node reached immediately after traversing that edge,
+    i.e. the natural point to measure ONWARD travel from, mirroring how
+    natural_far_end_weights' candidates are keyed by their "u" node (the
+    point BEFORE entering that edge, natural for measuring travel TO)."""
+    mu = node_idx[m_u]
+    mv = node_idx[m_v]
+    du = node_idx[dest_u]
+    d_candidate_mu = D[candidate_v_idx, mu]
+    d_mv_dest = D[mv, du]
+    d_direct = D[candidate_v_idx, du]
+    via_dist = d_candidate_mu + m_length + d_mv_dest
+    finite = np.isfinite(d_direct) & np.isfinite(via_dist)
+    tol = np.maximum(tol_abs, tol_rel * np.where(finite, d_direct, 0.0))
+    with np.errstate(invalid="ignore"):
+        natural = finite & (np.abs(via_dist - d_direct) <= tol)
+    return np.where(natural, base_weights, 0.0)
+
+
 def sample_anchor_and_far_end(
     rng: np.random.Generator, D: np.ndarray, node_idx: dict[int, int],
     anchor_node_ids: np.ndarray, anchor_weights: np.ndarray,
@@ -877,7 +923,7 @@ def daily_shape(is_weekend: bool = False) -> np.ndarray:
     more local and finer-grained than RVU's regional bins, and consistent
     with them (both show the 7-8h / 16-17h peaks RVU reports on p.11).
 
-    FIXED 2026-07-09: this unconditionally read the 'weekday' profile
+    FIXED 2026-07-10: this unconditionally read the 'weekday' profile
     regardless of which --date was actually being calibrated — normal_
     profile.json has ALWAYS carried a separate, real 'weekend' profile
     (RVU's own Fig.1 confirms weekday and weekend departure-time shapes
@@ -918,13 +964,22 @@ def _natural_sensor_for_leg(D, node_idx, anchor_v: int, candidate_u: int,
     """Which measured edge (if any) the anchor->candidate path naturally
     passes through — checked against ALL sensors (7 cheap O(1) lookups),
     preferring whichever is furthest behind its own quota if more than one
-    fits. Used for a tour's RETURN leg, whose path is already fixed once
-    the outbound leg's anchor+far-end are drawn — unlike the outbound
-    leg's own draw (which only ever tries ONE sensor's naturalness mask at
-    a time via sample_anchor_and_far_end), the return leg's fixed path
-    might naturally fit a DIFFERENT sensor than the outbound leg did, or
-    none at all (a real, expected case on a directed, asymmetric network
-    — see generate_sensor_anchored_trips' own docstring)."""
+    fits. Used ONLY by I-I's return leg (generate_sensor_anchored_trips):
+    both of I-I's endpoints are ordinary internal edges, so the return leg
+    can reuse BOTH fixed edges from the outbound draw as-is — no new gate
+    to sample, just a check of which sensor (if any) naturally connects
+    them, which may be a DIFFERENT sensor than the outbound leg used, or
+    none at all (a real, expected case on a directed, asymmetric network).
+    E-I/I-E's return legs are NOT interchangeable with this: one of their
+    two endpoints is a gate edge that can never legitimately be reused as
+    a return endpoint (an entry gate's own start node has in-degree 0, an
+    exit gate's own end node has out-degree 0), so those legs need a
+    FRESH gate draw instead (natural_far_end_weights / natural_origin_weights
+    directly, inlined in generate_sensor_anchored_trips) — this function
+    would silently return None for them essentially always, which is
+    exactly the bug found and fixed 2026-07-10 (E-I/I-E were completely
+    non-functional before that fix, confirmed via isolated generation:
+    1000/1000 dropped)."""
     candidate_idx = np.array([node_idx[candidate_u]])
     for m_edge in sorted(m_info, key=lambda m: -quota[m]):
         m_u, m_v, m_length = m_info[m_edge]
@@ -945,7 +1000,7 @@ def generate_sensor_anchored_trips(
     n_total: int, through_fraction: float, cross_fraction: float,
     gravity_km: float, is_weekend: bool,
     min_per_sensor: int = 50, max_anchor_redraws: int = 25,
-) -> tuple[list[tuple], list[float]]:
+) -> tuple[list[tuple], list[float], dict[str, int]]:
     """Replaces the old E-E/I-I/E-I/I-E blocks + separate via-trip
     coverage block with ONE principle: every generated trip must be
     traceable to at least one of the measured sensor edges (Gustav,
@@ -974,12 +1029,23 @@ def generate_sensor_anchored_trips(
     sensor — measured redraw rates vary 1.3%-87% across the real 7
     sensors (the network is directed and asymmetric), so that would fail
     constantly on a poor-fit sensor for no good reason. The outbound leg
-    tries sensors in quota order (most-behind first) via
-    sample_anchor_and_far_end; the return leg's path is then already
-    fixed, so it's checked against all 7 sensors (_natural_sensor_for_leg)
-    for whichever one it happens to naturally pass — if none, the whole
-    tour (home+activity pair) is redrawn rather than emitting a
-    non-compliant leg.
+    tries sensors in quota order (most-behind first), drawing a fresh
+    anchor+far-end pair per retry (gravity decay depends on WHICH anchor
+    gets drawn, so it's recomputed every attempt — this is why the loop
+    is inlined per category below rather than calling the simpler
+    sample_anchor_and_far_end, whose far_base_weights is fixed and can't
+    vary per-anchor). What the return leg needs depends on whether its
+    OWN endpoints are ordinary internal edges (reachable/continuable from
+    any direction) or gate edges (structurally one-directional — see the
+    FOUND 2026-07-10 note at the top of the actual I-I/E-I/I-E code below
+    for the real bug this fixed): I-I's return leg reuses BOTH fixed
+    edges, just checking which sensor (if any) naturally connects them
+    (_natural_sensor_for_leg); E-I/I-E's return leg reuses only ONE fixed
+    edge and must draw a FRESH, independent gate for the other end,
+    masked to the natural subset. If no sensor and no valid return-leg
+    draw exists, the whole tour attempt is abandoned (not compensated
+    with an extra attempt elsewhere) rather than emitting a non-compliant
+    leg.
 
     E-E (gate-to-gate through trips) skips the distance matrix entirely —
     gate pools are tiny (28/24 on the real graph) so the EXISTING,
@@ -1005,6 +1071,7 @@ def generate_sensor_anchored_trips(
     edge_lons  = np.array([e["lon"] for e in edges])
 
     entry_v_nodes = [int(eid.split("_")[1]) for eid in entry_ids]
+    entry_v_idx = np.array([node_idx[v] for v in entry_v_nodes])
     entry_lats, entry_lons = gate_latlon(G, entries)
     exit_u_nodes = [int(eid.split("_")[0]) for eid in exit_ids]
     exit_v_nodes = [int(eid.split("_")[1]) for eid in exit_ids]
@@ -1059,46 +1126,73 @@ def generate_sensor_anchored_trips(
             quota[m_edge] -= 1
             break
 
-    # ── I-I / E-I / I-E: paired tours, sensor-anchored per leg — the
-    # outbound leg draws (anchor, far-end) fresh per attempt (gravity decay
-    # depends on WHICH anchor gets drawn, so it's recomputed every retry,
-    # not fixed once), trying sensors in quota order; the return leg's
-    # path is then fixed, so it's checked against all 7 sensors for
-    # whichever it naturally fits — possibly a DIFFERENT one, possibly
-    # none (whole tour redrawn if so). ─────────────────────────────────
-    def gravity_anchored_tour(
-        anchor_v_nodes: list[int], anchor_u_nodes: list[int],
-        anchor_weights: np.ndarray, anchor_lats: np.ndarray, anchor_lons: np.ndarray,
-        anchor_ids: list[str],
-        far_u_idx: np.ndarray, far_u_nodes: list[int], far_v_nodes: list[int],
-        far_lats: np.ndarray, far_lons: np.ndarray, far_ids: list[str],
-        far_base_weights: np.ndarray, h_out: int, h_ret: int,
-    ) -> bool:
-        """far_base_weights/h_out/h_ret are resolved ONCE by the caller
-        (purpose is drawn from that SAME h_out, matching the original
-        per-tour — not per-retry — semantics); gravity decay is still
-        recomputed every anchor attempt below, since it genuinely depends
-        on which anchor gets drawn."""
-        nonlocal n_dropped_no_sensor
-        anchor_p = anchor_weights / anchor_weights.sum()
+    # ── I-I / E-I / I-E: paired tours, sensor-anchored per leg. ─────────
+    #
+    # FOUND 2026-07-10 (Gustav asked for a thorough review of the whole
+    # new design; confirmed by isolating generation on the real graph —
+    # cross_fraction=1.0/through_fraction=0.0 alone produced 1000/1000
+    # dropped tour attempts, a SILENT, COMPLETE FAILURE, not the "expected
+    # network-asymmetry dropout" this was first, wrongly, reported as): an
+    # earlier version of this code reused the OUTBOUND anchor's own edge
+    # id as the return leg's destination/origin for EVERY category,
+    # including E-I and I-E. That's only valid for I-I, where BOTH ends
+    # are ordinary internal edges, freely reachable/continuable from any
+    # direction. E-I's anchor is an ENTRY gate — find_gates() defines
+    # these as edges whose OWN START node has in-degree 0, meaning NOTHING
+    # inside the graph can ever route back TO it; I-E's far end is an
+    # EXIT gate — its OWN END node has out-degree 0, meaning nothing can
+    # ever continue FROM it. Asking _natural_sensor_for_leg to check a
+    # path TO an entry gate or FROM an exit gate is asking for something
+    # structurally impossible, so it silently returned None every time —
+    # E-I/I-E were completely non-functional despite the target quota
+    # printed for them.
+    #
+    # FIX: E-I's return leg keeps the (fixed) activity edge as its origin
+    # but draws a FRESH, independent exit gate as its destination — masked
+    # to the natural subset via natural_far_end_weights (same fixed-origin
+    # shape it was built for). I-E's return leg keeps the (fixed) home
+    # edge as its destination but draws a FRESH, independent entry gate as
+    # its origin — needs natural_origin_weights instead (the mirror image:
+    # fixed DESTINATION, masked ORIGIN pool), since natural_far_end_weights
+    # has no way to vary the origin side. Matches the ORIGINAL (pre-
+    # sensor-anchoring) E-I/I-E code's own return-leg semantics (an
+    # independently-drawn gate, not the same one reused) — this design
+    # only adds the sensor-naturalness mask on top of that existing shape,
+    # it doesn't change which edge plays which role.
+    def draw_purpose_weights(h_out: int) -> np.ndarray:
+        purpose_shares = purpose_shares_for_hour(int(h_out), is_weekend)
+        purpose = rng.choice(PURPOSE_CATEGORIES, p=list(purpose_shares.values()))
+        return amass[purpose]
+
+    home_anchor_p = hmass / hmass.sum()
+    entry_anchor_p = w_entry / w_entry.sum()
+
+    # I-I: home -> activity -> home. Both ends are ordinary internal
+    # edges, so the return leg simply reuses both fixed edges — only
+    # needs to verify SOME sensor naturally connects them (no new draw).
+    for _ in range(n_internal):
+        h_out, h_ret = am_pm_hours()
+        far_base = draw_purpose_weights(h_out)
+        anchor_p = home_anchor_p
+        succeeded = False
         for m_edge in by_quota():
             m_u, m_v, m_length = m_info[m_edge]
             for _ in range(max_anchor_redraws):
-                a_pos = int(rng.choice(len(anchor_v_nodes), p=anchor_p))
-                anchor_v = anchor_v_nodes[a_pos]
+                a_pos = int(rng.choice(len(edge_v_nodes), p=anchor_p))
+                anchor_v = edge_v_nodes[a_pos]
                 if anchor_v not in node_idx:
                     continue
-                d_km = gravity_distance_km(far_lats, far_lons,
-                                           anchor_lats[a_pos], anchor_lons[a_pos])
-                far_w = far_base_weights * np.exp(-d_km / gravity_km)
+                d_km = gravity_distance_km(edge_lats, edge_lons,
+                                           edge_lats[a_pos], edge_lons[a_pos])
+                far_w = far_base * np.exp(-d_km / gravity_km)
                 masked = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v,
-                                                 m_length, far_u_idx, far_w)
+                                                 m_length, edge_u_idx, far_w)
                 total = masked.sum()
                 if total <= 0:
                     continue
-                f_pos = int(rng.choice(len(far_u_idx), p=masked / total))
+                f_pos = int(rng.choice(len(edge_u_idx), p=masked / total))
                 return_sensor = _natural_sensor_for_leg(
-                    D, node_idx, far_v_nodes[f_pos], anchor_u_nodes[a_pos],
+                    D, node_idx, edge_v_nodes[f_pos], edge_u_nodes[a_pos],
                     m_info, quota)
                 if return_sensor is None:
                     continue
@@ -1106,43 +1200,110 @@ def generate_sensor_anchored_trips(
                 quota[return_sensor] -= 1
                 tour_lengths_km.append(float(d_km[f_pos]))
                 trips.append(((h_out + rng.random()) * 3600,
-                              anchor_ids[a_pos], far_ids[f_pos], m_edge))
+                              edge_ids[a_pos], edge_ids[f_pos], m_edge))
                 trips.append(((h_ret + rng.random()) * 3600,
-                              far_ids[f_pos], anchor_ids[a_pos], return_sensor))
-                return True
-        n_dropped_no_sensor += 1
-        return False
+                              edge_ids[f_pos], edge_ids[a_pos], return_sensor))
+                succeeded = True
+                break
+            if succeeded:
+                break
+        if not succeeded:
+            n_dropped_no_sensor += 1
 
-    def draw_purpose_weights(h_out: int) -> np.ndarray:
-        purpose_shares = purpose_shares_for_hour(int(h_out), is_weekend)
-        purpose = rng.choice(PURPOSE_CATEGORIES, p=list(purpose_shares.values()))
-        return amass[purpose]
-
-    entry_u_nodes = [int(eid.split("_")[0]) for eid in entry_ids]
-
-    # I-I: home -> activity, both internal
-    for _ in range(n_internal):
-        h_out, h_ret = am_pm_hours()
-        gravity_anchored_tour(
-            edge_v_nodes, edge_u_nodes, hmass, edge_lats, edge_lons, edge_ids,
-            edge_u_idx, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons, edge_ids,
-            draw_purpose_weights(h_out), h_out, h_ret)
-
-    # E-I: entry gate -> activity, exits via an independently-drawn gate
+    # E-I: entry gate -> activity, return leg to an INDEPENDENTLY-drawn
+    # exit gate (never back through the entry gate — see note above).
     for _ in range(n_ei):
         h_out, h_ret = am_pm_hours()
-        gravity_anchored_tour(
-            entry_v_nodes, entry_u_nodes, w_entry, entry_lats, entry_lons, entry_ids,
-            edge_u_idx, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons, edge_ids,
-            draw_purpose_weights(h_out), h_out, h_ret)
+        far_base = draw_purpose_weights(h_out)
+        anchor_p = entry_anchor_p
+        succeeded = False
+        for m_edge in by_quota():
+            m_u, m_v, m_length = m_info[m_edge]
+            for _ in range(max_anchor_redraws):
+                a_pos = int(rng.choice(len(entry_v_nodes), p=anchor_p))
+                anchor_v = entry_v_nodes[a_pos]
+                if anchor_v not in node_idx:
+                    continue
+                d_km = gravity_distance_km(edge_lats, edge_lons,
+                                           entry_lats[a_pos], entry_lons[a_pos])
+                far_w = far_base * np.exp(-d_km / gravity_km)
+                masked = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v,
+                                                 m_length, edge_u_idx, far_w)
+                total = masked.sum()
+                if total <= 0:
+                    continue
+                f_pos = int(rng.choice(len(edge_u_idx), p=masked / total))
+                for return_m_edge in by_quota():
+                    rm_u, rm_v, rm_length = m_info[return_m_edge]
+                    return_masked = natural_far_end_weights(
+                        D, node_idx, edge_v_nodes[f_pos], rm_u, rm_v, rm_length,
+                        exit_u_idx, w_exit)
+                    return_total = return_masked.sum()
+                    if return_total <= 0:
+                        continue
+                    g_pos = int(rng.choice(len(exit_u_idx), p=return_masked / return_total))
+                    quota[m_edge] -= 1
+                    quota[return_m_edge] -= 1
+                    tour_lengths_km.append(float(d_km[f_pos]))
+                    trips.append(((h_out + rng.random()) * 3600,
+                                  entry_ids[a_pos], edge_ids[f_pos], m_edge))
+                    trips.append(((h_ret + rng.random()) * 3600,
+                                  edge_ids[f_pos], exit_ids[g_pos], return_m_edge))
+                    succeeded = True
+                    break
+                if succeeded:
+                    break
+            if succeeded:
+                break
+        if not succeeded:
+            n_dropped_no_sensor += 1
 
-    # I-E: internal home -> exit gate
+    # I-E: internal home -> exit gate, return leg FROM an INDEPENDENTLY-
+    # drawn entry gate (never from the same exit gate — see note above).
     for _ in range(n_ie):
         h_out, h_ret = am_pm_hours()
-        gravity_anchored_tour(
-            edge_v_nodes, edge_u_nodes, hmass, edge_lats, edge_lons, edge_ids,
-            exit_u_idx, exit_u_nodes, exit_v_nodes, exit_lats, exit_lons, exit_ids,
-            w_exit, h_out, h_ret)
+        anchor_p = home_anchor_p
+        succeeded = False
+        for m_edge in by_quota():
+            m_u, m_v, m_length = m_info[m_edge]
+            for _ in range(max_anchor_redraws):
+                a_pos = int(rng.choice(len(edge_v_nodes), p=anchor_p))
+                anchor_v = edge_v_nodes[a_pos]
+                if anchor_v not in node_idx:
+                    continue
+                d_km = gravity_distance_km(exit_lats, exit_lons,
+                                           edge_lats[a_pos], edge_lons[a_pos])
+                far_w = w_exit * np.exp(-d_km / gravity_km)
+                masked = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v,
+                                                 m_length, exit_u_idx, far_w)
+                total = masked.sum()
+                if total <= 0:
+                    continue
+                f_pos = int(rng.choice(len(exit_u_idx), p=masked / total))
+                for return_m_edge in by_quota():
+                    rm_u, rm_v, rm_length = m_info[return_m_edge]
+                    return_masked = natural_origin_weights(
+                        D, node_idx, entry_v_idx, rm_u, rm_v, rm_length,
+                        edge_u_nodes[a_pos], w_entry)
+                    return_total = return_masked.sum()
+                    if return_total <= 0:
+                        continue
+                    g_pos = int(rng.choice(len(entry_v_idx), p=return_masked / return_total))
+                    quota[m_edge] -= 1
+                    quota[return_m_edge] -= 1
+                    tour_lengths_km.append(float(d_km[f_pos]))
+                    trips.append(((h_out + rng.random()) * 3600,
+                                  edge_ids[a_pos], exit_ids[f_pos], m_edge))
+                    trips.append(((h_ret + rng.random()) * 3600,
+                                  entry_ids[g_pos], edge_ids[a_pos], return_m_edge))
+                    succeeded = True
+                    break
+                if succeeded:
+                    break
+            if succeeded:
+                break
+        if not succeeded:
+            n_dropped_no_sensor += 1
 
     print(f"sensor-anchored generation: dropped {n_dropped_no_sensor} tour "
           f"attempts where no sensor naturally fit either leg "
@@ -1153,7 +1314,7 @@ def generate_sensor_anchored_trips(
         print(f"  WARNING: below --min-per-sensor ({min_per_sensor}): {short} "
               f"-- these sensors are structurally poor fits for the current "
               f"trip mix; consider a higher --n-total or investigate why")
-    return trips, tour_lengths_km
+    return trips, tour_lengths_km, short
 
 
 def main() -> None:
@@ -1201,7 +1362,7 @@ def main() -> None:
                         "happened that specific date (a school-break Friday, "
                         "a snow day, a local event, ...) rather than an "
                         "assumption about it, with no holiday list to "
-                        "maintain. Added 2026-07-09.")
+                        "maintain. Added 2026-07-10.")
     ap.add_argument("--n-total", type=int, default=12000)
     ap.add_argument("--min-per-sensor", type=int, default=50,
                     help="safety-net floor, not a target — every trip is "
@@ -1267,7 +1428,7 @@ def main() -> None:
     with open("web/data/flows.json") as f:
         measured = list(json.load(f)["flows"])
 
-    trips, tour_lengths_km = generate_sensor_anchored_trips(
+    trips, tour_lengths_km, short_quota = generate_sensor_anchored_trips(
         rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
         w_entry, w_exit, shape_hourly, measured,
         args.n_total, args.through_fraction, args.cross_fraction,
@@ -1335,6 +1496,18 @@ def main() -> None:
     print(f"Wrote {out}  ({n} routed candidates)")
     print(f"  sensor cross-hit diagnostic (sumo/sensor_coverage_report.json): "
           f"{ {m: r['total'] for m, r in cross_report.items()} }")
+    if short_quota:
+        # Reprinted here, as the LAST thing main() prints — FOUND
+        # 2026-07-10: build_sumo_demand.py's subprocess caller only shows
+        # res.stdout[-1200:] (a preview, not the full log), and this
+        # warning's first print (inside generate_sensor_anchored_trips,
+        # near the START of this run's output) measured well outside that
+        # window in a real run (1372 chars of further output followed it,
+        # over the 1200-char budget) — a real per-sensor coverage
+        # shortfall would have been silently invisible in the normal
+        # pipeline, never just theoretically possible.
+        print(f"  WARNING: below --min-per-sensor ({args.min_per_sensor}): "
+              f"{short_quota} -- see the full log above for detail")
 
 
 if __name__ == "__main__":

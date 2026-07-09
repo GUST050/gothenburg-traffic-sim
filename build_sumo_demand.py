@@ -46,6 +46,7 @@ FLOWS_FORECAST_PATH = Path("web/data/flows_forecast.json")
 GEO_PATH   = Path("web/data/network.geojson")
 SUMO_DIR   = Path("sumo")
 NET_PATH   = SUMO_DIR / "net.net.xml"
+SCEN_DIR   = Path("web/data/scenarios")
 
 INTERVAL = pd.Timedelta(minutes=15)
 
@@ -319,6 +320,35 @@ def ensure_assignment_priors() -> dict:
             return {"weight": 0.0, "flows": {}}
     with open(path) as f:
         return json.load(f)
+
+
+def clear_stale_scenarios() -> int:
+    """Remove web scenarios generated from an older calibrated demand.
+
+    A demand rebuild changes the route file that every scenario simulates.
+    Leaving old baseline/closure JSON in web/data/scenarios makes the UI
+    list scenarios that look current but were produced from the previous
+    date/window/source. serve.py already did this for web-triggered
+    recalibration; doing it here makes the CLI path equally safe.
+
+    Deletes index.json along with the scenario files (it's as stale as
+    they are), but immediately replaces it with an empty manifest rather
+    than leaving it missing: web/index.html fetches index.json directly,
+    and serve.py's version of this cleanup gets away with a momentary gap
+    only because it always calls run_scenario.py right after — this CLI
+    path has no such guarantee (`make demand` and `make scenario` are
+    separate targets), so a missing manifest could sit there until the
+    next `make scenario` run.
+    """
+    if not SCEN_DIR.exists():
+        return 0
+    n = 0
+    for path in SCEN_DIR.glob("*.json"):
+        path.unlink()
+        n += 1
+    with open(SCEN_DIR / "index.json", "w") as f:
+        json.dump({"scenarios": []}, f, indent=2)
+    return n
 
 
 def ensure_priors(date: str) -> dict:
@@ -927,6 +957,10 @@ def main() -> None:
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")
+
+    n_stale = clear_stale_scenarios()
+    if n_stale:
+        print(f"Removed {n_stale} stale web scenario JSON files — run run_scenario.py to rebuild")
 
     export_od(calib_path, sensor_edges, meta)
 

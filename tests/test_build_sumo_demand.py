@@ -61,6 +61,38 @@ def test_write_counts_splits_two_way_total_by_direction_share(monkeypatch, tmp_p
     assert counts["edgeS"] == 40.0
 
 
+def test_clear_stale_scenarios_removes_only_json(monkeypatch, tmp_path):
+    scen_dir = tmp_path / "scenarios"
+    scen_dir.mkdir()
+    (scen_dir / "baseline.json").write_text("{}")
+    (scen_dir / "close_x.json").write_text("{}")
+    (scen_dir / "README.txt").write_text("keep")
+    monkeypatch.setattr(bsd, "SCEN_DIR", scen_dir)
+
+    assert bsd.clear_stale_scenarios() == 2
+    assert not (scen_dir / "baseline.json").exists()
+    assert not (scen_dir / "close_x.json").exists()
+    assert (scen_dir / "README.txt").exists()
+
+
+def test_clear_stale_scenarios_leaves_a_valid_empty_manifest(monkeypatch, tmp_path):
+    """A CLI-only `python3 build_sumo_demand.py` run (no immediate
+    run_scenario.py after it, unlike serve.py's recalibration path) must
+    not leave web/index.html's `fetch('data/scenarios/index.json')`
+    404ing — that silently breaks the Simulering picker until someone
+    happens to run run_scenario.py next."""
+    scen_dir = tmp_path / "scenarios"
+    scen_dir.mkdir()
+    (scen_dir / "baseline.json").write_text("{}")
+    (scen_dir / "index.json").write_text(json.dumps({"scenarios": [{"name": "old"}]}))
+    monkeypatch.setattr(bsd, "SCEN_DIR", scen_dir)
+
+    assert bsd.clear_stale_scenarios() == 2
+    index_path = scen_dir / "index.json"
+    assert index_path.exists()
+    assert json.loads(index_path.read_text()) == {"scenarios": []}
+
+
 class TestClassifyDay:
     """Found 2026-07-08/09: build_candidates.py's departure-time shape
     (daily_shape()) always read the 'weekday' profile regardless of the

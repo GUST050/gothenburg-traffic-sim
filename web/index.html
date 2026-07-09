@@ -578,10 +578,11 @@
 
         function refreshCloseUI() {
           const showNormal = !closureMode && !dayPickMode;
+          const showApiActions = showNormal && apiAvailable;
           scenSelect.style.display   = showNormal ? '' : 'none';
           simDayHint.style.display   = showNormal ? '' : 'none';
-          btnClose.style.display     = showNormal ? '' : 'none';
-          btnDay.style.display       = showNormal ? '' : 'none';
+          btnClose.style.display     = showApiActions ? '' : 'none';
+          btnDay.style.display       = showApiActions ? '' : 'none';
           pickBanner.classList.toggle('show', closureMode);
           dayBanner.classList.toggle('show', dayPickMode);
           pickCount.textContent = `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
@@ -606,7 +607,10 @@
         fetch('/api/ping').then(r => {
           apiAvailable = r.ok;
           refreshCloseUI();
-        }).catch(() => {});
+        }).catch(() => {
+          apiAvailable = false;
+          refreshCloseUI();
+        });
 
         btnClose.addEventListener('click', enterPicking);
         btnCancel.addEventListener('click', exitPicking);
