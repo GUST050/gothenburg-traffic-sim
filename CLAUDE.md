@@ -79,7 +79,8 @@ Goal arc, in order:
     come from the fixed real reference `STRUCTURAL_REFERENCE_DATE =
     "2025-09-16"` regardless of which date/source is actually being
     simulated. Only the target values switch. Recalibrating (either
-    source) takes ~15-20 min and wipes old scenario files (they'd
+    source) takes ~6 min after the flat quarter-parallel PFE change
+    (2026-07-09) and wipes old scenario files (they'd
     silently reflect the previous date's demand otherwise) — screenshot-
     verified end-to-end for 2027-09-14 forecast (100% GEH<5, vehicles
     moving, correct labels).
@@ -104,6 +105,19 @@ Goal arc, in order:
     (codex:codex-rescue, write mode) at Gustav's request ("lös detta
     problemet ... utan att ta bort prestanda") — verified independently
     by Claude afterward (diff review + own pytest run) before commit.
+  - PFE FLAT QUARTER PARALLELISATION (2026-07-09, after dae472b):
+    verified `solve_interval_entropy`, `solve_interval`, and
+    `calibrate()` have no warm start, RNG, previous-quarter accumulator,
+    shared solver object, or hidden module cache tying quarters together.
+    The final q50/q10/q90 solve now flattens all 3×96 independent
+    (variant, quarter) solves into one `fork` pool over all CPU cores,
+    avoiding the illegal nested-pool trap from daemon variant workers.
+    Route files are still written afterwards in deterministic
+    variant/quarter/depart order, so SUMO's depart sorting and GEH
+    aggregation stay unchanged. Measured full-day 2025-09-16 historical
+    demand build: 336.69 s (5.61 min) end-to-end on this machine, using
+    10 workers, with q50/q10/q90 all 100.0% GEH<5 and 0 infeasible
+    intervals.
   - Real-time playback: speed presets are now MODE-DEPENDENT
     (`Controls.setSpeedMode`) — Historisk/Prognos keep the fast quarter-
     scrubbing presets (1×/4×/24×/96×, quarters/sec, for browsing a year

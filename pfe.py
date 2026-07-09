@@ -522,65 +522,68 @@ def round_preserving_measured(
     return counts
 
 
-def calibrate(
-    candidates_path: Path,
-    out_path: Path,
-    targets_per_q: list[dict[str, float]],          # measured, per quarter
-    bounds_per_q: list[dict[str, tuple[float, float]]],
-    priors_per_q: list[dict[str, tuple[float, float]]],
-) -> dict:
-    """Solve all intervals; write a .rou.xml; return a fit report.
+def solve_interval_with_relaxation(
+    shapes: list[Candidate],
+    targets: dict[str, float],
+    bounds: dict[str, tuple[float, float]],
+    priors: dict[str, tuple[float, float]],
+    route_cost: np.ndarray | None = None,
+) -> np.ndarray | None:
+    """Solve one interval using calibrate()'s exact relaxation ladder."""
+    sol = solve_interval_entropy(shapes, targets, bounds, priors,
+                                 route_cost=route_cost)
+    if sol is None:
+        for tol_mult, use_bounds in ((2.0, True), (4.0, True), (4.0, False)):
+            sol = solve_interval_entropy(
+                shapes, targets, bounds if use_bounds else {}, priors,
+                tol_mult=tol_mult, route_cost=route_cost)
+            if sol is not None:
+                break
+    if sol is None:
+        sol = solve_interval(shapes, targets, bounds, priors,
+                             route_cost=route_cost)
+    return sol
 
-    SHARED SHAPE POOL: a route's geometry is drivable at any hour, so every
-    interval solves over ALL distinct candidate shapes of the day (departure
-    times are assigned when a shape is chosen). Bucketing candidates by
-    their original depart time starved sparse quarters of shape diversity —
-    2–3 overlapping corridor routes per sensor made the LP infeasible.
 
-    Each interval is solved by solve_interval_entropy() (IPF/Bregman
-    balancing — see its own docstring for why this replaced an LP +
-    reweighting apparatus that grew out of chasing the same underlying
-    issue with the wrong tool). solve_interval (the original LP) is kept
-    as the RELAXATION LADDER's final rung — a battle-tested, complete
-    solver as backstop, in the rare case IPF's iteration budget doesn't
-    converge for some edge-case constraint combination."""
+def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndarray]:
+    """Load candidate routes once and build the shared shape pool."""
     cands = load_candidates(candidates_path)
-    nq = len(targets_per_q)
 
-    # Dedupe to distinct shapes — the LP variables
+    # Dedupe to distinct shapes — the LP/IPF variables.
     seen: dict[str, Candidate] = {}
     for cand in cands:
         seen.setdefault(" ".join(cand.edges), cand)
     shapes = list(seen.values())
     print(f"  shape pool: {len(shapes)} distinct routes "
           f"(from {len(cands)} candidates)")
-    route_cost = path_size_weights(shapes)
+    return shapes, path_size_weights(shapes)
 
+
+def solve_calibration_intervals(
+    shapes: list[Candidate],
+    route_cost: np.ndarray,
+    targets_per_q: list[dict[str, float]],
+    bounds_per_q: list[dict[str, tuple[float, float]]],
+    priors_per_q: list[dict[str, tuple[float, float]]],
+) -> list[np.ndarray | None]:
+    """Sequentially solve every interval for one variant."""
     solutions: list[np.ndarray | None] = []
-    infeasible = 0
-    for i in range(nq):
-        # Relaxation ladder: exact → widened tolerances → without the
-        # level-2 bounds → the original LP as a last resort. An interval
-        # must never end up EMPTY just because one constraint combination
-        # is unlucky.
-        sol = solve_interval_entropy(shapes, targets_per_q[i],
-                                    bounds_per_q[i], priors_per_q[i],
-                                    route_cost=route_cost)
-        if sol is None:
-            for tol_mult, use_bounds in ((2.0, True), (4.0, True), (4.0, False)):
-                sol = solve_interval_entropy(
-                    shapes, targets_per_q[i],
-                    bounds_per_q[i] if use_bounds else {},
-                    priors_per_q[i], tol_mult=tol_mult, route_cost=route_cost)
-                if sol is not None:
-                    break
-        if sol is None:
-            sol = solve_interval(shapes, targets_per_q[i], bounds_per_q[i],
-                                 priors_per_q[i], route_cost=route_cost)
-        if sol is None:
-            infeasible += 1
-        solutions.append(sol)
+    for i in range(len(targets_per_q)):
+        solutions.append(solve_interval_with_relaxation(
+            shapes, targets_per_q[i], bounds_per_q[i], priors_per_q[i],
+            route_cost=route_cost))
+    return solutions
 
+
+def write_calibration_report(
+    shapes: list[Candidate],
+    out_path: Path,
+    targets_per_q: list[dict[str, float]],
+    solutions: list[np.ndarray | None],
+) -> dict:
+    """Write .rou.xml and compute the same fit report calibrate() returns."""
+    nq = len(targets_per_q)
+    infeasible = sum(sol is None for sol in solutions)
     achieved: dict[str, list[float]] = {}
     vid = 0
     with open(out_path, "w") as f:
@@ -627,3 +630,31 @@ def calibrate(
             "geh_ok": geh_ok, "geh_total": geh_all,
             "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
             "achieved": achieved}
+
+
+def calibrate(
+    candidates_path: Path,
+    out_path: Path,
+    targets_per_q: list[dict[str, float]],          # measured, per quarter
+    bounds_per_q: list[dict[str, tuple[float, float]]],
+    priors_per_q: list[dict[str, tuple[float, float]]],
+) -> dict:
+    """Solve all intervals; write a .rou.xml; return a fit report.
+
+    SHARED SHAPE POOL: a route's geometry is drivable at any hour, so every
+    interval solves over ALL distinct candidate shapes of the day (departure
+    times are assigned when a shape is chosen). Bucketing candidates by
+    their original depart time starved sparse quarters of shape diversity —
+    2–3 overlapping corridor routes per sensor made the LP infeasible.
+
+    Each interval is solved by solve_interval_entropy() (IPF/Bregman
+    balancing — see its own docstring for why this replaced an LP +
+    reweighting apparatus that grew out of chasing the same underlying
+    issue with the wrong tool). solve_interval (the original LP) is kept
+    as the RELAXATION LADDER's final rung — a battle-tested, complete
+    solver as backstop, in the rare case IPF's iteration budget doesn't
+    converge for some edge-case constraint combination."""
+    shapes, route_cost = prepare_calibration(candidates_path)
+    solutions = solve_calibration_intervals(
+        shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q)
+    return write_calibration_report(shapes, out_path, targets_per_q, solutions)

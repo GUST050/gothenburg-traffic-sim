@@ -14,20 +14,20 @@ Endpoints:
                                 One simulation at a time (409 while busy).
   GET /api/recalibrate?date=YYYY-MM-DD&source=historical|forecast
                               — starts the whole-day PFE demand recalibration
-                                for a NEW date/source (~5–14 min) in a
+                                for a NEW date/source (~6 min) in a
                                 BACKGROUND THREAD and returns immediately
                                 ({"status": "started"}) — see the note below
                                 on why this is async rather than one long
                                 blocking request.
   GET /api/recalibrate/status — {"status": "idle"|"running"|"done"|"error", ...}.
                                 The frontend polls this instead of holding
-                                one request open for the whole 5–14 min, and
+                                one request open for the whole ~6 min, and
                                 a fresh page load checks it once too, so a
                                 job started from one tab/session is visible
                                 from any other and survives a dropped
                                 connection, laptop sleep, or closed tab.
 
-WHY ASYNC (found from a real failure): a 5–14 min job tied to a single
+WHY ASYNC (found from a real failure): a multi-minute job tied to a single
 blocking HTTP GET is fragile — a browser's own request timeout, a closed
 tab, a sleeping laptop, or a dropped wifi connection all abandon the
 CLIENT side while the SERVER keeps computing regardless (subprocess.run

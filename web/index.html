@@ -322,12 +322,12 @@
     <div id="sim-panel">
       <span class="label">Simulering</span>
       <select id="scen-select"></select>
-      <span class="hint" id="sim-day-hint" title="Byt med knappen till höger — kräver ny kalibrering, ~15–20 min"></span>
+      <span class="hint" id="sim-day-hint" title="Byt med knappen till höger — kräver ny kalibrering, ~6 min"></span>
       <div class="v-divider"></div>
       <button id="close-mode-btn" class="action-btn"
               title="Klicka på vägar i kartan för att simulera en avstängning">+ Ny avstängning</button>
       <button id="change-day-btn" class="action-btn"
-              title="Kalibrera om simuleringen mot ett annat datum (tar ~15–20 min)">📅 Byt dag</button>
+              title="Kalibrera om simuleringen mot ett annat datum (tar ~6 min)">📅 Byt dag</button>
 
       <div id="pick-banner">
         <span class="hint">Klicka på vägar i kartan att stänga</span>
@@ -343,7 +343,7 @@
         </div>
         <input type="date" id="new-date-input" value="2025-09-16"
                min="2025-01-01" max="2025-12-31">
-        <button id="day-run-btn" class="action-btn primary">Räkna om (~15–20 min)</button>
+        <button id="day-run-btn" class="action-btn primary">Räkna om (~6 min)</button>
         <button id="day-cancel-btn" class="action-btn">Avbryt</button>
       </div>
     </div>
@@ -564,7 +564,7 @@
         let apiAvailable = false;
 
         // ── Byt simuleringsdag — den andra halvan av "vilka dagar vill jag
-        // simulera": en långsammare, uppenbart annorlunda åtgärd (~15–20 min,
+        // simulera": en långsammare, uppenbart annorlunda åtgärd (~6 min,
         // kalibrerar om HELA dygnets efterfrågan) än att bara stänga en väg.
         const btnDay     = document.getElementById('change-day-btn');
         const dayBanner  = document.getElementById('day-banner');
@@ -674,7 +674,7 @@
           }
         });
 
-        // The recalibration takes ~15-20 min — a single held-open fetch for
+        // The recalibration takes ~6 min — a single held-open fetch for
         // that long is fragile (browser timeout, closed tab, sleeping
         // laptop, dropped wifi all abandon the CLIENT while the SERVER
         // keeps computing regardless). This is what actually happened
@@ -734,7 +734,7 @@
           } finally {
             btnDayRun.disabled = false;
             btnDayCancel.disabled = false;
-            btnDayRun.textContent = 'Räkna om (~15–20 min)';
+            btnDayRun.textContent = 'Räkna om (~6 min)';
           }
         });
 
@@ -756,7 +756,7 @@
               await pollRecalibration();
               btnDayRun.disabled = false;
               btnDayCancel.disabled = false;
-              btnDayRun.textContent = 'Räkna om (~15–20 min)';
+              btnDayRun.textContent = 'Räkna om (~6 min)';
             } else if (status.status === 'done' && status.date !== currentSimDate) {
               await applyFinishedRecalibration(status);
             }

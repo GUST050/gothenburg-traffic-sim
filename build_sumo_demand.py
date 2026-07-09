@@ -684,23 +684,84 @@ def run_tool(script: str, args: list[str], home: Path) -> None:
         sys.exit(f"{script} failed")
 
 
-def _run_pfe_calibration_job(job: dict) -> tuple[str, str, dict]:
-    """ProcessPool worker for one independent direction-split variant.
+_PFE_PAR_SHAPES = None
+_PFE_PAR_ROUTE_COST = None
 
-    Each job reads the shared candidate route file and writes exactly one
-    output route file. No mutable Python state is shared between variants.
+
+def _run_pfe_interval_job(job: dict):
+    """ProcessPool worker for one independent (variant, quarter) PFE solve.
+
+    The shared shape pool and route-cost vector are inherited by fork, so the
+    heavy candidate geometry is not pickled once per quarter.
     """
     import pfe
 
-    report = pfe.calibrate(
-        job["cand_path"], job["out_path"], job["targets"],
-        job["bounds_pq"], job["priors_pq"],
+    if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
+        raise RuntimeError("PFE interval worker was not initialized")
+    sol = pfe.solve_interval_with_relaxation(
+        _PFE_PAR_SHAPES,
+        job["targets"],
+        job["bounds"],
+        job["priors"],
+        route_cost=_PFE_PAR_ROUTE_COST,
     )
-    if not job.get("keep_achieved", False):
-        # The achieved edge×quarter table is only needed by congestion feedback.
-        # Avoid pickling it back from workers on the final demand variants.
-        report = {k: v for k, v in report.items() if k != "achieved"}
-    return job["suffix"], job["key"], report
+    return job["suffix"], job["key"], job["quarter"], sol
+
+
+def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, str]],
+                                  variant_inputs: dict[str, dict],
+                                  max_workers: int | None = None) -> dict[str, dict]:
+    """Solve all final direction variants through one flat worker pool.
+
+    This avoids nesting multiprocessing pools: the unit of parallel work is one
+    15-minute interval, across all variants, and route files are written only
+    after every solution has been collected in deterministic quarter order.
+    """
+    import pfe
+
+    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST
+    shapes, route_cost = pfe.prepare_calibration(cand_path)
+    _PFE_PAR_SHAPES = shapes
+    _PFE_PAR_ROUTE_COST = route_cost
+    try:
+        tasks = []
+        solutions = {}
+        for suffix, key in variants:
+            data = variant_inputs[suffix]
+            nq = len(data["targets"])
+            solutions[suffix] = [None] * nq
+            for i in range(nq):
+                tasks.append({
+                    "suffix": suffix,
+                    "key": key,
+                    "quarter": i,
+                    "targets": data["targets"][i],
+                    "bounds": data["bounds_pq"][i],
+                    "priors": data["priors_pq"][i],
+                })
+
+        n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
+        print(f"  PFE final variants: solving {len(tasks)} independent "
+              f"variant×quarter intervals in one pool ({n_workers} workers)")
+        with mp.get_context("fork").Pool(processes=n_workers) as pool:
+            for suffix, _key, quarter, sol in pool.imap_unordered(
+                _run_pfe_interval_job, tasks
+            ):
+                solutions[suffix][quarter] = sol
+
+        reports = {}
+        for suffix, key in variants:
+            data = variant_inputs[suffix]
+            reports[suffix] = pfe.write_calibration_report(
+                shapes, data["out_path"], data["targets"], solutions[suffix])
+            if not data.get("keep_achieved", False):
+                reports[suffix] = {
+                    k: v for k, v in reports[suffix].items() if k != "achieved"
+                }
+        return reports
+    finally:
+        _PFE_PAR_SHAPES = None
+        _PFE_PAR_ROUTE_COST = None
 
 
 def main() -> None:
@@ -888,31 +949,22 @@ def main() -> None:
             generate_candidates(weight_file)
             if iteration == n_iter - 1:
                 if len(variants) > 1:
-                    jobs = []
+                    variant_inputs = {}
                     for suffix, key in variants:
                         targets = build_targets(flows, sensor_edges, qi_start,
                                                 n_intervals, split_key=key)
                         bounds_pq, priors_pq = build_bounds_priors(suffix)
                         out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
-                        jobs.append({
-                            "suffix": suffix,
-                            "key": key,
-                            "cand_path": cand_path,
+                        variant_inputs[suffix] = {
                             "out_path": out,
                             "targets": targets,
                             "bounds_pq": bounds_pq,
                             "priors_pq": priors_pq,
                             "keep_achieved": False,
-                        })
-                    max_workers = min(len(jobs), os.cpu_count() or 1)
-                    print(f"  PFE final variants: running {len(jobs)} independent "
-                          f"calibrations in parallel ({max_workers} workers)")
-                    reports = {}
-                    with mp.get_context("fork").Pool(processes=max_workers) as pool:
-                        for suffix, key, variant_report in pool.imap_unordered(
-                            _run_pfe_calibration_job, jobs
-                        ):
-                            reports[suffix] = variant_report
+                        }
+                    reports = run_pfe_variants_flat_parallel(
+                        cand_path, variants, variant_inputs,
+                        max_workers=os.cpu_count() or 1)
                     for suffix, key in variants:
                         variant_report = reports[suffix]
                         label = "PFE" if suffix == "" and n_iter == 1 else (
