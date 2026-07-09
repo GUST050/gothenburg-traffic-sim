@@ -37,6 +37,8 @@ from __future__ import annotations
 import argparse
 
 import json
+import multiprocessing as mp
+import os
 import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -44,6 +46,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from assignment_priors import (DEFAULT_N_SAMPLES, calibrate_assignment_priors,
+                               compute_assignment_load)
 import pfe
 from build_sumo_demand import build_targets, ensure_observability, load_sensor_edges
 from build_sumo_net import sumo_home
@@ -59,12 +63,8 @@ def load_inputs():
         meta = json.load(f)
     with open(SUMO_DIR / "prior_flows.json") as f:
         priors = json.load(f)["edges"]
-    assign = {"weight": 0.0, "flows": {}}
-    if Path(SUMO_DIR / "assignment_priors.json").exists():
-        with open(SUMO_DIR / "assignment_priors.json") as f:
-            assign = json.load(f)
     corridor = ensure_observability().get("corridor_priors", {})
-    return flows, meta, priors, assign, corridor
+    return flows, meta, priors, corridor
 
 
 def run_meso(route_file: Path, ed_file: Path, duration_s: int) -> None:
@@ -95,14 +95,75 @@ def corridor_priors_for_fold(corridor: dict, edge_to_sensor: dict[str, str],
     excluded, since it blends in that station's own measurement."""
     out: dict[str, tuple[float, float]] = {}
     for e, d in corridor.items():
-        if (edge_to_sensor.get(d["from_sensor_edge"]) == held or
-                edge_to_sensor.get(d["to_sensor_edge"]) == held):
+        from_sensor = edge_to_sensor.get(d["from_sensor_edge"])
+        to_sensor = edge_to_sensor.get(d["to_sensor_edge"])
+        if from_sensor is None or to_sensor is None:
+            raise ValueError(
+                f"corridor prior {e} references non-sensor anchor(s): "
+                f"{d['from_sensor_edge']}->{from_sensor}, "
+                f"{d['to_sensor_edge']}->{to_sensor}"
+            )
+        if from_sensor == held or to_sensor == held:
             continue
         if qi >= len(d["prior"]) or d["prior"][qi] is None:
             continue
         band = d["band"][qi] or 8.0
         out[e] = (float(d["prior"][qi]), 1.0 / max(1.0, band))
     return out
+
+
+_PFE_PAR_SHAPES = None
+_PFE_PAR_ROUTE_COST = None
+
+
+def _run_pfe_interval_job(job: dict):
+    """ProcessPool worker for one independent quarter PFE solve."""
+    if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
+        raise RuntimeError("PFE interval worker was not initialized")
+    sol = pfe.solve_interval_with_relaxation(
+        _PFE_PAR_SHAPES,
+        job["targets"],
+        job["bounds"],
+        job["priors"],
+        route_cost=_PFE_PAR_ROUTE_COST,
+    )
+    return job["quarter"], sol
+
+
+def calibrate_fold_parallel(
+    cand_path: Path,
+    out_path: Path,
+    targets: list[dict[str, float]],
+    bounds_pq: list[dict[str, tuple[float, float]]],
+    priors_pq: list[dict[str, tuple[float, float]]],
+    max_workers: int | None = None,
+) -> dict:
+    """Solve this LOSO fold through one flat per-quarter worker pool."""
+    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST
+    shapes, route_cost = pfe.prepare_calibration(cand_path)
+    _PFE_PAR_SHAPES = shapes
+    _PFE_PAR_ROUTE_COST = route_cost
+    try:
+        tasks = [
+            {
+                "quarter": i,
+                "targets": targets[i],
+                "bounds": bounds_pq[i],
+                "priors": priors_pq[i],
+            }
+            for i in range(len(targets))
+        ]
+        solutions = [None] * len(targets)
+        n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
+        print(f"  PFE LOSO fold: solving {len(tasks)} independent quarter "
+              f"intervals in one pool ({n_workers} workers)")
+        with mp.get_context("fork").Pool(processes=n_workers) as pool:
+            for quarter, sol in pool.imap_unordered(_run_pfe_interval_job, tasks):
+                solutions[quarter] = sol
+        return pfe.write_calibration_report(shapes, out_path, targets, solutions)
+    finally:
+        _PFE_PAR_SHAPES = None
+        _PFE_PAR_ROUTE_COST = None
 
 
 def simulated_series(ed_file: Path, edge: str, nq: int) -> np.ndarray:
@@ -124,9 +185,11 @@ def main() -> None:
                         "prior to isolate its effect on recovery")
     args = ap.parse_args()
 
-    flows, meta, all_priors, assign, corridor = load_inputs()
-    assign_w     = 0.0 if args.no_assignment_prior else assign.get("weight", 0.0)
-    assign_flows = assign.get("flows", {})
+    flows, meta, all_priors, corridor = load_inputs()
+    assignment_load = None
+    if not args.no_assignment_prior:
+        print("Computing structural assignment load once for LOSO folds …")
+        assignment_load = compute_assignment_load()
     sensor_edges = load_sensor_edges()
     qi_start, nq = meta["qi_start"], meta["n_intervals"]
     duration_s = nq * 900
@@ -143,12 +206,26 @@ def main() -> None:
 
     report = {"window": f"{meta['date']} {meta['begin']}–{meta['end']}",
               "note": "leave-one-station-out — simulated vs measured at the "
-                      "held-out station; level-2 bounds excluded in all folds "
-                      "(they would leak the full measurement set)",
+                      "held-out station; level-2 bounds, priors, corridor "
+                      "priors, and the assignment-prior scale factor are all "
+                      "recomputed per fold with the held-out station's own "
+                      "data excluded (2026-07-09 fix — the assignment-prior "
+                      "scale factor used to leak: it was fit against ALL "
+                      "sensors including the one being held out)",
               "stations": {}}
 
     print(f"LOSO över {len(sensor_edges)} stationer, {nq} kvartar")
     for held, held_edges in sorted(sensor_edges.items()):
+        assign = {"weight": 0.0, "flows": {}}
+        if assignment_load is not None:
+            assign = calibrate_assignment_priors(
+                assignment_load,
+                DEFAULT_N_SAMPLES,
+                exclude_sensor=held,
+                write_path=None,
+            )
+        assign_w     = 0.0 if args.no_assignment_prior else assign.get("weight", 0.0)
+        assign_flows = assign.get("flows", {})
         se = {s: e for s, e in sensor_edges.items() if s != held}
         targets = []
         full = build_targets(flows, sensor_edges, qi_start, nq)
@@ -187,7 +264,7 @@ def main() -> None:
             bounds_pq.append(bq)
 
         rou = SUMO_DIR / f"loso_{held}.rou.xml"
-        rep = pfe.calibrate(cand_path, rou, targets, bounds_pq, priors_pq)
+        rep = calibrate_fold_parallel(cand_path, rou, targets, bounds_pq, priors_pq)
         ed = SUMO_DIR / f"loso_ed_{held}.xml"
         run_meso(rou, SUMO_DIR / f"loso_ed_{held}.xml", duration_s)
 

@@ -118,6 +118,41 @@ Goal arc, in order:
     demand build: 336.69 s (5.61 min) end-to-end on this machine, using
     10 workers, with q50/q10/q90 all 100.0% GEH<5 and 0 infeasible
     intervals.
+  - LOSO VALIDATION RUN (2026-07-09, `validate_sim.py`, fresh numbers
+    superseding every prior LOSO figure in this file — all of them predate
+    the E-I/I-E fix): before running it for real, audited the leakage-
+    prevention methodology end to end (Codex + Claude, two review passes)
+    and found ONE real leak: `assignment_priors.py`'s scale factor was fit
+    against ALL sensors' measured flows, including whichever one a given
+    fold was holding out. Measured how much this mattered by running LOSO
+    three ways: (1) leaking, with assignment-prior: ratios 0.838/0.971/2.581
+    (min/median/max); (2) assignment-prior disabled entirely: 0.308/1.102/
+    4.130 — MUCH worse on 5/6 stations, confirming assignment-prior is
+    doing real work (matches the earlier-documented recovery finding) and
+    that simply disabling it would answer a different, less relevant
+    question than "how does the deployed system generalize"; (3) FIXED —
+    assignment_priors.py refactored so its expensive structural load
+    computation (`compute_assignment_load`, ~40k-sample gravity/stochastic-
+    multipath routing, independent of measured data) runs once, while the
+    cheap scale-factor regression (`calibrate_assignment_priors`) is
+    refit per fold with `exclude_sensor` removing every edge belonging to
+    the held-out station — verified against real data that this filters
+    exactly the right edges (sensor 107: 2 edges, the only two-way sensor;
+    all others: 1 edge each) and that main()'s unexcluded path is byte-
+    identical to the pre-refactor code (same scale, same R², same flow
+    count). Final leak-free result: ratios 0.830/0.896/2.410 — close to
+    the leaking version (confirms the leak was real but not the dominant
+    driver of the earlier numbers), clearly closer to it than to the
+    no-assignment-prior version. Per-station held-out GEH<5: 107 41.7%/
+    29.2% (its two edges), 133 66.7%, 134 79.2%, 1074 75.0%, 1076 33.3%,
+    2276 66.7%. Also reused the flat per-quarter PFE parallelization here
+    (`calibrate_fold_parallel`) — full 6-station run in 895 s (~15 min),
+    down from a projected ~60-75 min sequential. Written to
+    `web/data/loso_report.json`. NOT YET DONE: deriving an actual
+    distance-decay curve from these numbers and wiring it into
+    `network.geojson`'s `confidence` field to replace the CONF_SIGMA_M
+    placeholder — that's the next step, this run only produced the raw
+    validation data it needs to be based on.
   - Real-time playback: speed presets are now MODE-DEPENDENT
     (`Controls.setSpeedMode`) — Historisk/Prognos keep the fast quarter-
     scrubbing presets (1×/4×/24×/96×, quarters/sec, for browsing a year
@@ -274,7 +309,7 @@ Goal arc, in order:
      Two independent Codex review passes (codex:codex-rescue), both fresh
      threads: first found the two origin-vs-position bugs above, second
      confirmed both resolved with no new blocking issues.
-   REMAINING: leave-one-out validation at the 6 sensors (empirical confidence decay, now the top priority per project-direction discussion 2026-07-09 — LOSO numbers predate the E-I/I-E fix and are stale); more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
+   REMAINING: derive an empirical distance-decay confidence curve from the fresh 2026-07-09 LOSO numbers above and wire it into network.geojson's confidence field, replacing the CONF_SIGMA_M placeholder (the LOSO validation itself is DONE — this is the last step that actually consumes it); more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
 5. IN PROGRESS — Trained direction-split model (`dirsplit/` package), replacing the AM/PM-Gaussian guess in estimate_directions.py:
    - Training data: OPEN hourly directional counts from Statens vegvesen's trafikkdata GraphQL API (no key) — 394 stations in Oslo/Bergen/Trondheim/Stavanger bboxes; volumes fetched per station for 4 ISO weeks (36,37,20,45) of its newest available year. UK DfT raw counts identified as secondary source (hourly 07–19 by direction, bulk CSV) — not yet integrated.
    - Heading→bearing: station directions are PLACE NAMES; resolved by geocoding both names (Nominatim, cached, 1 req/s) and matching against the OSM edge's two axis bearings, with a consistency requirement (opposite candidates, ≤75° each) — ambiguous stations are EXCLUDED, all decisions stored for audit in stations_matched.json.

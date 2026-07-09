@@ -80,6 +80,12 @@ from build_sumo_net import parse_speed_ms
 GRAPH_PATH = Path("web/data/graph.graphml")
 OUT_PATH   = Path("sumo/assignment_priors.json")
 WEIGHT     = 0.15   # << direction/corridor priors' typical 1/band weight — stays weak
+DEFAULT_N_SAMPLES = 40000
+DEFAULT_GRAVITY_KM = 2.6
+DEFAULT_THROUGH_FRACTION = 0.5
+DEFAULT_SEED = 42
+DEFAULT_N_VARIANTS = 10
+DEFAULT_PERTURB_SIGMA = 0.35
 
 
 def build_perturbed_variants(
@@ -135,27 +141,21 @@ def daily_shape() -> np.ndarray:
     return acc / acc.sum()
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--n-samples", type=int, default=40000,
-                    help="OD pairs sampled for the stochastic loading")
-    ap.add_argument("--gravity-km", type=float, default=2.6)
-    ap.add_argument("--through-fraction", type=float, default=0.5,
-                    help="same θ as build_candidates.py — E-E through trips "
-                        "are a first-class part of the loaded field, not "
-                        "just an afterthought (this omission was the actual "
-                        "bug behind the first attempt's bad fit: Skånegatan/"
-                        "Valhallagatan are through-corridors to Örgrytevägen/"
-                        "Söderleden, not just home-activity destinations)")
-    ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--n-variants", type=int, default=10,
-                    help="number of randomly-perturbed weight graphs — the "
-                        "lightweight stand-in for Dial's stochastic "
-                        "multipath loading (see module docstring, bug #2)")
-    ap.add_argument("--perturb-sigma", type=float, default=0.35,
-                    help="lognormal sigma for per-edge travel-time jitter")
-    args = ap.parse_args()
-    rng = np.random.default_rng(args.seed)
+def compute_assignment_load(
+    n_samples: int = DEFAULT_N_SAMPLES,
+    gravity_km: float = DEFAULT_GRAVITY_KM,
+    through_fraction: float = DEFAULT_THROUGH_FRACTION,
+    seed: int = DEFAULT_SEED,
+    n_variants: int = DEFAULT_N_VARIANTS,
+    perturb_sigma: float = DEFAULT_PERTURB_SIGMA,
+) -> dict[str, float]:
+    """Compute the structural gravity/stochastic-multipath edge load.
+
+    This intentionally depends only on population/activity/gates/network
+    structure, not measured sensor counts. LOSO can therefore run it once
+    and recalibrate only the measured scale factor per fold.
+    """
+    rng = np.random.default_rng(seed)
 
     G = ox.load_graphml(GRAPH_PATH)
     base_time = {}
@@ -163,10 +163,10 @@ def main() -> None:
         speed = parse_speed_ms(d)
         base_time[(u, v)] = d.get("length", 1.0) / max(speed, 1.0)
 
-    print(f"Building {args.n_variants} randomly-perturbed travel-time graphs "
+    print(f"Building {n_variants} randomly-perturbed travel-time graphs "
           f"(stochastic multipath stand-in) …")
-    variants = build_perturbed_variants(base_time, args.n_variants,
-                                        args.perturb_sigma, rng)
+    variants = build_perturbed_variants(base_time, n_variants,
+                                        perturb_sigma, rng)
 
     edges = load_graph_edges(G)
     edge_ids = [e["id"] for e in edges]
@@ -186,8 +186,8 @@ def main() -> None:
     entry_nodes = [n for _, n in entries]
     exit_nodes  = [n for _, n in exits]
 
-    n_through = int(args.n_samples * args.through_fraction)
-    n_tours   = args.n_samples - n_through
+    n_through = int(n_samples * through_fraction)
+    n_tours   = n_samples - n_through
     print(f"Sampling {n_through} through (E-E) + {n_tours} tour (E-I/I-E/I-I) "
           f"OD pairs and loading shortest paths (this is the assignment step) …")
     load = {eid: 0.0 for eid in edge_ids}
@@ -224,7 +224,7 @@ def main() -> None:
             vi += 1
             continue
         d_km = gravity_distance_km(lats, lons, lats[h_i], lons[h_i])
-        wgt = w * np.exp(-d_km / args.gravity_km)
+        wgt = w * np.exp(-d_km / gravity_km)
         wgt[h_i] = 0
         if wgt.sum() == 0:
             vi += 1
@@ -245,14 +245,44 @@ def main() -> None:
         load[edges[a_i]["id"]] += 1
     print(f"  {n_ok} pairs routed, {n_nopath} had no path (disconnected "
           f"fringe — expected at a clipped bbox)")
+    return load
 
-    # ── Calibrate ONE global scale factor against our own measured edges ──────
-    with open("web/data/flows.json") as f:
-        flows = json.load(f)["flows"]
+
+def sensor_edge_metadata() -> tuple[dict[str, str | None], dict[str, str]]:
+    """Return measured edge metadata keyed by edge id.
+
+    level is needed for Total-sensor direction splitting; edge_to_sensor is
+    needed by LOSO to exclude every edge belonging to the held-out station.
+    """
     with open("web/data/network.geojson") as f:
         geo = json.load(f)
-    level = {f["properties"]["id"]: f["properties"].get("level")
-             for f in geo["features"] if f["properties"].get("sensor_id")}
+    level = {}
+    edge_to_sensor = {}
+    for feat in geo["features"]:
+        props = feat["properties"]
+        sensor_id = props.get("sensor_id")
+        if not sensor_id:
+            continue
+        eid = props["id"]
+        level[eid] = props.get("level")
+        edge_to_sensor[eid] = str(sensor_id)
+    return level, edge_to_sensor
+
+
+def calibrate_assignment_priors(
+    load: dict[str, float],
+    n_samples: int,
+    exclude_sensor: str | None = None,
+    write_path: Path | None = OUT_PATH,
+) -> dict:
+    """Scale structural assignment load to measured flows and format priors.
+
+    exclude_sensor removes all measured edges belonging to that sensor from
+    the scale fit. Passing None preserves the production behavior.
+    """
+    with open("web/data/flows.json") as f:
+        flows = json.load(f)["flows"]
+    level, edge_to_sensor = sensor_edge_metadata()
 
     # Total (two-way) sensors: split the raw count by the ESTIMATED direction
     # share, same as build_sumo_demand.build_targets/write_counts — not a
@@ -261,6 +291,8 @@ def main() -> None:
     est_shares = load_direction_split()
     x_load, y_meas = [], []
     for eid, lv in level.items():
+        if exclude_sensor is not None and edge_to_sensor.get(eid) == str(exclude_sensor):
+            continue
         arr = flows.get(eid)
         if not arr:
             continue
@@ -277,8 +309,9 @@ def main() -> None:
         y_meas.append(daily_mean)
     x_load, y_meas = np.array(x_load), np.array(y_meas)
     scale, fit_r2 = robust_scale(x_load, y_meas)
+    suffix = f" excluding sensor {exclude_sensor}" if exclude_sensor is not None else ""
     print(f"Scale factor (robust median ratio) on {len(x_load)} measured "
-          f"edges: scale={scale:.3f} veh/day per loading-unit, "
+          f"edges{suffix}: scale={scale:.3f} veh/day per loading-unit, "
           f"R²={fit_r2:.2f} (informational only — see docstring)")
 
     shape96 = daily_shape()
@@ -295,13 +328,47 @@ def main() -> None:
         daily = scale * ld
         out[eid] = [round(daily * s, 2) for s in shape96]
 
-    OUT_PATH.parent.mkdir(exist_ok=True)
-    with open(OUT_PATH, "w") as f:
-        json.dump({"weight": WEIGHT, "scale_veh_per_day": scale,
-                   "fit_r2": round(fit_r2, 3), "n_samples": args.n_samples,
-                   "flows": out}, f)
-    print(f"Wrote {OUT_PATH}  ({len(out)} previously-unconstrained edges "
-          f"now carry a weak gravity-assignment prior)")
+    data = {"weight": WEIGHT, "scale_veh_per_day": scale,
+            "fit_r2": round(fit_r2, 3), "n_samples": n_samples,
+            "flows": out}
+    if write_path is not None:
+        write_path.parent.mkdir(exist_ok=True)
+        with open(write_path, "w") as f:
+            json.dump(data, f)
+        print(f"Wrote {write_path}  ({len(out)} previously-unconstrained edges "
+              f"now carry a weak gravity-assignment prior)")
+    return data
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--n-samples", type=int, default=DEFAULT_N_SAMPLES,
+                    help="OD pairs sampled for the stochastic loading")
+    ap.add_argument("--gravity-km", type=float, default=DEFAULT_GRAVITY_KM)
+    ap.add_argument("--through-fraction", type=float, default=DEFAULT_THROUGH_FRACTION,
+                    help="same θ as build_candidates.py — E-E through trips "
+                        "are a first-class part of the loaded field, not "
+                        "just an afterthought (this omission was the actual "
+                        "bug behind the first attempt's bad fit: Skånegatan/"
+                        "Valhallagatan are through-corridors to Örgrytevägen/"
+                        "Söderleden, not just home-activity destinations)")
+    ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    ap.add_argument("--n-variants", type=int, default=DEFAULT_N_VARIANTS,
+                    help="number of randomly-perturbed weight graphs — the "
+                        "lightweight stand-in for Dial's stochastic "
+                        "multipath loading (see module docstring, bug #2)")
+    ap.add_argument("--perturb-sigma", type=float, default=DEFAULT_PERTURB_SIGMA,
+                    help="lognormal sigma for per-edge travel-time jitter")
+    args = ap.parse_args()
+    load = compute_assignment_load(
+        n_samples=args.n_samples,
+        gravity_km=args.gravity_km,
+        through_fraction=args.through_fraction,
+        seed=args.seed,
+        n_variants=args.n_variants,
+        perturb_sigma=args.perturb_sigma,
+    )
+    calibrate_assignment_priors(load, args.n_samples)
 
 
 if __name__ == "__main__":

@@ -1,20 +1,20 @@
 {
  "window": "2025-09-16 00:00\u201324:00",
- "note": "leave-one-station-out \u2014 simulated vs measured at the held-out station; level-2 bounds excluded in all folds (they would leak the full measurement set)",
+ "note": "leave-one-station-out \u2014 simulated vs measured at the held-out station; level-2 bounds, priors, corridor priors, and the assignment-prior scale factor are all recomputed per fold with the held-out station's own data excluded (2026-07-09 fix \u2014 the assignment-prior scale factor used to leak: it was fit against ALL sensors including the one being held out)",
  "stations": {
   "107": {
    "edges": {
     "60786979_3575001205_0": {
-     "measured_total": 3168,
-     "simulated_total": 3021,
-     "ratio": 0.954,
-     "geh_ok_pct": 95.8
+     "measured_total": 3191,
+     "simulated_total": 2858,
+     "ratio": 0.896,
+     "geh_ok_pct": 41.7
     },
     "1455801464_18241874_0": {
-     "measured_total": 3239,
-     "simulated_total": 301,
-     "ratio": 0.093,
-     "geh_ok_pct": 33.3
+     "measured_total": 3216,
+     "simulated_total": 7751,
+     "ratio": 2.41,
+     "geh_ok_pct": 29.2
     }
    },
    "pfe_geh_pct": 100.0
@@ -23,9 +23,9 @@
    "edges": {
     "60790252_60790253_0": {
      "measured_total": 2875,
-     "simulated_total": 75,
-     "ratio": 0.026,
-     "geh_ok_pct": 16.7
+     "simulated_total": 2491,
+     "ratio": 0.866,
+     "geh_ok_pct": 75.0
     }
    },
    "pfe_geh_pct": 100.0
@@ -34,9 +34,9 @@
    "edges": {
     "30420757_30421744_0": {
      "measured_total": 4820,
-     "simulated_total": 131,
-     "ratio": 0.027,
-     "geh_ok_pct": 8.3
+     "simulated_total": 7307,
+     "ratio": 1.516,
+     "geh_ok_pct": 33.3
     }
    },
    "pfe_geh_pct": 100.0
@@ -45,9 +45,9 @@
    "edges": {
     "26842525_26355153_0": {
      "measured_total": 3569,
-     "simulated_total": 2368,
-     "ratio": 0.663,
-     "geh_ok_pct": 41.7
+     "simulated_total": 2961,
+     "ratio": 0.83,
+     "geh_ok_pct": 66.7
     }
    },
    "pfe_geh_pct": 100.0
@@ -56,9 +56,9 @@
    "edges": {
     "26355153_96523321_0": {
      "measured_total": 3141,
-     "simulated_total": 197,
-     "ratio": 0.063,
-     "geh_ok_pct": 25.0
+     "simulated_total": 3367,
+     "ratio": 1.072,
+     "geh_ok_pct": 79.2
     }
    },
    "pfe_geh_pct": 100.0
@@ -67,9 +67,9 @@
    "edges": {
     "26355153_91615277_0": {
      "measured_total": 4473,
-     "simulated_total": 994,
-     "ratio": 0.222,
-     "geh_ok_pct": 29.2
+     "simulated_total": 3717,
+     "ratio": 0.831,
+     "geh_ok_pct": 66.7
     }
    },
    "pfe_geh_pct": 100.0
