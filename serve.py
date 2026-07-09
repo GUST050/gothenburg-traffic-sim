@@ -192,7 +192,7 @@ class Handler(SimpleHTTPRequestHandler):
                 [sys.executable, "build_sumo_demand.py",
                  "--date", date, "--source", source,
                  "--begin", "00:00", "--end", "24:00"],
-                cwd=str(ROOT), capture_output=True, text=True, timeout=1200,
+                cwd=str(ROOT), capture_output=True, text=True, timeout=2400,
             )
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])

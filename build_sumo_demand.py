@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing as mp
+import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -682,6 +684,25 @@ def run_tool(script: str, args: list[str], home: Path) -> None:
         sys.exit(f"{script} failed")
 
 
+def _run_pfe_calibration_job(job: dict) -> tuple[str, str, dict]:
+    """ProcessPool worker for one independent direction-split variant.
+
+    Each job reads the shared candidate route file and writes exactly one
+    output route file. No mutable Python state is shared between variants.
+    """
+    import pfe
+
+    report = pfe.calibrate(
+        job["cand_path"], job["out_path"], job["targets"],
+        job["bounds_pq"], job["priors_pq"],
+    )
+    if not job.get("keep_achieved", False):
+        # The achieved edge×quarter table is only needed by congestion feedback.
+        # Avoid pickling it back from workers on the final demand variants.
+        report = {k: v for k, v in report.items() if k != "achieved"}
+    return job["suffix"], job["key"], report
+
+
 def main() -> None:
     args = parse_args()
     if not NET_PATH.exists():
@@ -865,6 +886,57 @@ def main() -> None:
         report = None
         for iteration in range(n_iter):
             generate_candidates(weight_file)
+            if iteration == n_iter - 1:
+                if len(variants) > 1:
+                    jobs = []
+                    for suffix, key in variants:
+                        targets = build_targets(flows, sensor_edges, qi_start,
+                                                n_intervals, split_key=key)
+                        bounds_pq, priors_pq = build_bounds_priors(suffix)
+                        out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
+                        jobs.append({
+                            "suffix": suffix,
+                            "key": key,
+                            "cand_path": cand_path,
+                            "out_path": out,
+                            "targets": targets,
+                            "bounds_pq": bounds_pq,
+                            "priors_pq": priors_pq,
+                            "keep_achieved": False,
+                        })
+                    max_workers = min(len(jobs), os.cpu_count() or 1)
+                    print(f"  PFE final variants: running {len(jobs)} independent "
+                          f"calibrations in parallel ({max_workers} workers)")
+                    reports = {}
+                    with mp.get_context("fork").Pool(processes=max_workers) as pool:
+                        for suffix, key, variant_report in pool.imap_unordered(
+                            _run_pfe_calibration_job, jobs
+                        ):
+                            reports[suffix] = variant_report
+                    for suffix, key in variants:
+                        variant_report = reports[suffix]
+                        label = "PFE" if suffix == "" and n_iter == 1 else (
+                            f"[congestion-feedback {iteration+1}/{n_iter}]"
+                            if suffix == "" else "PFE"
+                        )
+                        print(f"  {label} {key:<16} {variant_report['vehicles']:>6} veh  "
+                              f"GEH<5: {variant_report['geh_pct']}%  "
+                              f"(infeasible intervals: {variant_report['infeasible_intervals']})")
+                        if variant_report["geh_pct"] < 100:
+                            print("  ⚠ measured-edge fit below gate — inspect before use")
+                    report = reports[""]
+                else:
+                    targets = build_targets(flows, sensor_edges, qi_start,
+                                            n_intervals, split_key="edge_shares")
+                    bounds_pq, priors_pq = build_bounds_priors("")
+                    report = pfe.calibrate(cand_path, calib_path, targets,
+                                           bounds_pq, priors_pq)
+                    tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
+                    print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
+                          f"GEH<5: {report['geh_pct']}%  "
+                          f"(infeasible intervals: {report['infeasible_intervals']})")
+                break
+
             targets = build_targets(flows, sensor_edges, qi_start,
                                     n_intervals, split_key="edge_shares")
             bounds_pq, priors_pq = build_bounds_priors("")
@@ -874,8 +946,6 @@ def main() -> None:
             print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                   f"GEH<5: {report['geh_pct']}%  "
                   f"(infeasible intervals: {report['infeasible_intervals']})")
-            if iteration == n_iter - 1:
-                break
 
             if args.congestion_method == "simulate":
                 # Simple GEH-based early stop — this method is meant for an
@@ -910,23 +980,6 @@ def main() -> None:
                 write_weight_file(damped_tt, weight_file)
         if report["geh_pct"] < 100:
             print("  ⚠ measured-edge fit below gate — inspect before use")
-
-        # ── Direction-split quantile variants: reuse the FINAL converged
-        # candidate pool, single pass each — they exist for Monte Carlo
-        # direction-uncertainty spread, not the count/equilibrium tension
-        # the feedback loop above resolves.
-        for suffix, key in variants[1:]:
-            targets = build_targets(flows, sensor_edges, qi_start,
-                                    n_intervals, split_key=key)
-            bounds_pq, priors_pq = build_bounds_priors(suffix)
-            out = SUMO_DIR / f"calibrated{suffix}.rou.xml"
-            report = pfe.calibrate(cand_path, out, targets,
-                                   bounds_pq, priors_pq)
-            print(f"  PFE {key:<16} {report['vehicles']:>6} veh  "
-                  f"GEH<5: {report['geh_pct']}%  "
-                  f"(infeasible intervals: {report['infeasible_intervals']})")
-            if report["geh_pct"] < 100:
-                print("  ⚠ measured-edge fit below gate — inspect before use")
     else:
         generate_candidates()
         for suffix, key in variants:

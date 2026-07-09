@@ -79,10 +79,31 @@ Goal arc, in order:
     come from the fixed real reference `STRUCTURAL_REFERENCE_DATE =
     "2025-09-16"` regardless of which date/source is actually being
     simulated. Only the target values switch. Recalibrating (either
-    source) takes ~7-14 min and wipes old scenario files (they'd
+    source) takes ~15-20 min and wipes old scenario files (they'd
     silently reflect the previous date's demand otherwise) — screenshot-
     verified end-to-end for 2027-09-14 forecast (100% GEH<5, vehicles
     moving, correct labels).
+  - PFE PARALLELISATION (2026-07-09, same day as the E-I/I-E fix): the
+    E-I/I-E fix's ~7x bigger candidate pool made the whole pipeline slow
+    enough that a real user hit serve.py's recalibration timeout
+    ("omkalibreringen tog för lång tid — avbruten") simulating a 2027
+    forecast day. Root cause (measured): candidate generation itself was
+    only ~81 s; the three direction-split variants (q50/q10/q90) were
+    each an independent ~9 min `pfe.calibrate()` LP solve, run
+    SEQUENTIALLY — ~27+ min just for that stage. Since each variant reads
+    the same candidate pool read-only and writes its own separate output
+    file (verified: no RNG, no shared mutable state in pfe.py), they're
+    safe to parallelise — done via `multiprocessing.get_context("fork")
+    .Pool`, one process per variant. Measured after: 15.6 min end-to-end
+    for a 2025-09-16 historical full-day build (down from a projected
+    ~30+ min sequential), 100% GEH<5 on all three variants, output file
+    sizes identical to a pre-parallelisation sequential run (byte-count
+    match, consistent with parallel execution order not changing the LP
+    solution — same inputs, same problem, just concurrent). serve.py's
+    timeout raised 1200s → 2400s to match. Implemented by Codex
+    (codex:codex-rescue, write mode) at Gustav's request ("lös detta
+    problemet ... utan att ta bort prestanda") — verified independently
+    by Claude afterward (diff review + own pytest run) before commit.
   - Real-time playback: speed presets are now MODE-DEPENDENT
     (`Controls.setSpeedMode`) — Historisk/Prognos keep the fast quarter-
     scrubbing presets (1×/4×/24×/96×, quarters/sec, for browsing a year
