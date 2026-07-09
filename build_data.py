@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import statistics
 import warnings
 from collections import defaultdict
 from pathlib import Path
@@ -47,7 +48,21 @@ INNER_CITY_BBOX = (57.665, 11.920, 57.722, 12.020)
 # the edge midpoint to the NEAREST sensor.  1.0 at a sensor, ~0.6 at σ metres,
 # ~0.1 at 2σ.  Written to network.geojson so the web app and future
 # ScenarioProvider can show how trustworthy a simulated flow is per edge.
-CONF_SIGMA_M   = 250
+#
+# σ is derived from the leakage-free LOSO report when available:
+#   web/data/loso_report.json gives held-out GEH<5 accuracy at the measured
+#   sensor edges, and the previous network.geojson gives the measured-edge
+#   positions used to compute each held-out station's distance to the nearest
+#   remaining station.  Each (distance, accuracy) pair implies one σ via
+#   accuracy = exp(-d² / 2σ²); the deployed σ is the robust median of those
+#   implied values.
+#
+# Honest limitation: all current LOSO pairs are near-field checks inside the
+# two dense sensor clusters (roughly <300 m from the nearest remaining sensor).
+# Edges kilometres away are still extrapolation; they are now anchored in real
+# held-out validation instead of this old guessed fallback.
+CONF_SIGMA_FALLBACK_M = 250.0
+CONF_SIGMA_CLIP       = (0.02, 0.98)
 
 # ALL drivable roads inside the clip radius are kept as background edges —
 # residential, living_street etc. included (network_type="drive" already
@@ -94,6 +109,88 @@ def bearing_rad(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def eid(u: int, v: int, k: int = 0) -> str:
     return f"{u}_{v}_{k}"
+
+
+def geojson_edge_midpoint(feature: dict) -> tuple[float, float]:
+    """Return (lat, lon) midpoint from a network.geojson LineString feature."""
+    coords = feature["geometry"]["coordinates"]
+    if not coords:
+        raise ValueError("LineString has no coordinates")
+    lon1, lat1 = coords[0]
+    lon2, lat2 = coords[-1]
+    return (lat1 + lat2) / 2, (lon1 + lon2) / 2
+
+
+def empirical_conf_sigma_m(out_dir: Path) -> tuple[float, str]:
+    """Fit the confidence distance-decay sigma from LOSO, or return fallback.
+
+    The fit intentionally stays simple and robust for the tiny validation set:
+    every held-out measured edge contributes one implied sigma, and the median
+    is used instead of least squares so one bad fold cannot dominate the map.
+    """
+    loso_path = out_dir / "loso_report.json"
+    network_path = out_dir / "network.geojson"
+    if not loso_path.exists():
+        return CONF_SIGMA_FALLBACK_M, (
+            f"fallback guessed sigma {CONF_SIGMA_FALLBACK_M:.1f} m "
+            f"(missing {loso_path})"
+        )
+    if not network_path.exists():
+        return CONF_SIGMA_FALLBACK_M, (
+            f"fallback guessed sigma {CONF_SIGMA_FALLBACK_M:.1f} m "
+            f"(missing previous {network_path})"
+        )
+
+    try:
+        loso = json.loads(loso_path.read_text())
+        network = json.loads(network_path.read_text())
+        features_by_id = {
+            f["properties"]["id"]: f
+            for f in network.get("features", [])
+            if f.get("geometry", {}).get("type") == "LineString"
+        }
+
+        stations = loso["stations"]
+        station_pos: dict[str, tuple[float, float]] = {}
+        for sid, station in stations.items():
+            pts = []
+            for edge_id in station["edges"]:
+                pts.append(geojson_edge_midpoint(features_by_id[edge_id]))
+            station_pos[sid] = (
+                sum(lat for lat, _ in pts) / len(pts),
+                sum(lon for _, lon in pts) / len(pts),
+            )
+
+        implied_sigmas: list[float] = []
+        for sid, station in stations.items():
+            if len(station_pos) < 2:
+                continue
+            nearest_remaining_m = min(
+                haversine_m(*station_pos[sid], *pos)
+                for other_sid, pos in station_pos.items()
+                if other_sid != sid
+            )
+            for edge in station["edges"].values():
+                accuracy = max(
+                    CONF_SIGMA_CLIP[0],
+                    min(CONF_SIGMA_CLIP[1], edge["geh_ok_pct"] / 100),
+                )
+                implied_sigmas.append(
+                    nearest_remaining_m / math.sqrt(-2 * math.log(accuracy))
+                )
+
+        if not implied_sigmas:
+            raise ValueError("LOSO report did not yield any confidence points")
+        sigma = statistics.median(implied_sigmas)
+        return sigma, (
+            f"empirical LOSO sigma {sigma:.1f} m from {len(implied_sigmas)} "
+            f"near-field held-out edge points ({loso_path})"
+        )
+    except Exception as exc:
+        return CONF_SIGMA_FALLBACK_M, (
+            f"fallback guessed sigma {CONF_SIGMA_FALLBACK_M:.1f} m "
+            f"(could not fit from LOSO: {exc})"
+        )
 
 
 # ── Measured directions — SOURCE OF TRUTH ─────────────────────────────────────
@@ -551,6 +648,8 @@ def main() -> None:
     print(f"Data: {data_dir}\nCoords: {coords_path}")
     out_dir     = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    conf_sigma_m, conf_sigma_source = empirical_conf_sigma_m(out_dir)
+    print(f"Confidence: {conf_sigma_source}")
 
     ox.settings.use_cache    = True
     ox.settings.cache_folder = str(Path("cache"))
@@ -685,7 +784,7 @@ def main() -> None:
                 "length_m":      round(data.get("length", 0), 1),
                 "dist_sensor_m": round(d_sensor, 1),
                 "confidence":    round(
-                    math.exp(-(d_sensor ** 2) / (2 * CONF_SIGMA_M ** 2)), 3
+                    math.exp(-(d_sensor ** 2) / (2 * conf_sigma_m ** 2)), 3
                 ),
             },
         })

@@ -148,11 +148,38 @@ Goal arc, in order:
     2276 66.7%. Also reused the flat per-quarter PFE parallelization here
     (`calibrate_fold_parallel`) — full 6-station run in 895 s (~15 min),
     down from a projected ~60-75 min sequential. Written to
-    `web/data/loso_report.json`. NOT YET DONE: deriving an actual
-    distance-decay curve from these numbers and wiring it into
-    `network.geojson`'s `confidence` field to replace the CONF_SIGMA_M
-    placeholder — that's the next step, this run only produced the raw
-    validation data it needs to be based on.
+    `web/data/loso_report.json`.
+  - EMPIRICAL CONFIDENCE DECAY (2026-07-09, `build_data.py` consuming
+    `web/data/loso_report.json`): the old guessed `CONF_SIGMA_M = 250 m`
+    placeholder has been replaced by a LOSO-derived sigma when the report
+    exists, with a documented fallback to 250 m for fresh installs before
+    validation has been run. Method: for each held-out station, compute the
+    physical midpoint of its measured edge(s) in `network.geojson`, measure
+    distance to the nearest REMAINING station midpoint, then combine that
+    distance with the held-out edge's GEH<5 percentage from LOSO. Each point
+    implies one sigma via `accuracy = exp(-d² / 2σ²)` (accuracy clipped to
+    [0.02, 0.98]); deployed value is the robust median across the 7 measured
+    held-out edges. Current recomputation on the checked-in network gives
+    implied sigmas 170.9, 144.0, 298.0, 165.3, 68.0, 89.6, 106.7 m; median
+    = **144.0 m**. This is tighter/more conservative than the old 250 m
+    guess. HONEST LIMITATION: every LOSO point is near-field inside the two
+    dense sensor clusters (nearest-remaining-sensor distances 61-245 m in
+    the current geometry). Inner-city edges kilometres from a sensor are
+    still extrapolation; they are now anchored in real held-out validation,
+    not magically validated citywide.
+    CAVEAT FOUND DEPLOYING THIS (2026-07-09): `build_data.py`'s `main()`
+    always calls `ox.graph_from_bbox()` fresh (osmnx-cached, not a frozen
+    snapshot) — running it to pick up the new σ therefore also pulls
+    whatever OSM has changed since the committed `network.geojson` (128
+    street-name and 15 `highway`-classification edges drifted in one such
+    run, e.g. real renames/reclassifications, not corruption — edge IDs and
+    geometry were unaffected). That's out of scope for a confidence-only
+    fix, so the deployed σ=144.0 m was applied by recomputing `confidence`
+    directly on the already-committed `network.geojson` (same `dist_sensor_m`
+    values, just the new σ), not by committing a full pipeline rerun. A
+    real OSM refresh is a legitimate thing to want eventually, but should
+    be its own deliberate, reviewed step — not a side effect of a
+    confidence-formula change.
   - Real-time playback: speed presets are now MODE-DEPENDENT
     (`Controls.setSpeedMode`) — Historisk/Prognos keep the fast quarter-
     scrubbing presets (1×/4×/24×/96×, quarters/sec, for browsing a year
@@ -216,7 +243,7 @@ Goal arc, in order:
 - The seam: the renderer only ever calls `flowAt(edgeId, t)`. Today a HistoricalProvider reads flows.json. Later a ModelProvider (forecasts) and a ScenarioProvider (`flowAt(edgeId, t, scenario)` for incidents) plug into the same interface. The map/animation code never changes when the source changes.
 
 ## Contracts — fixed; everything depends on these
-- `network.geojson`: LineString features = edges, Point features = nodes. Stable string IDs. WGS84 coords. Each measured edge carries `sensor_id`. Every edge carries `dist_sensor_m` and `confidence` = exp(-d²/2σ²), σ = `CONF_SIGMA_M` (250 m), d = distance to nearest sensor. NOTE: this static value is a PLACEHOLDER spatial prior (σ is a guess). In Phase 3 the real confidence comes from the simulation itself — (a) leave-one-out calibration error at the 6 sensors gives the empirical distance-decay, (b) spread across Monte Carlo runs gives per-scenario uncertainty — delivered by the ScenarioProvider per edge/scenario, replacing this prior. The renderer just displays whatever number it gets.
+- `network.geojson`: LineString features = edges, Point features = nodes. Stable string IDs. WGS84 coords. Each measured edge carries `sensor_id`. Every edge carries `dist_sensor_m` and `confidence` = exp(-d²/2σ²), d = distance to nearest sensor. σ is now fitted from the leakage-free LOSO report when `web/data/loso_report.json` exists (current value 144.0 m, robust median of 7 held-out measured-edge points); `build_data.py` falls back to the old guessed 250 m only when that validation artifact or the previous network file is missing. NOTE: this static confidence is empirically anchored only in the near field (<~300 m in the current two-cluster sensor layout). Citywide/inner-city distances beyond that remain labelled extrapolation. ScenarioProvider can further reduce confidence per edge/scenario using Monte Carlo spread; the renderer just displays whatever confidence number it gets.
 - `flows.json` / `flows_forecast.json`: `{epoch, interval_minutes, flows}` where `flows[edgeId][quarterIndex] = count`, `null` where missing. Same edge IDs as the GeoJSON. Epoch strings have no timezone suffix — the web app parses them as UTC (provider.js appends 'Z'); keep parse and getUTC* formatting consistent.
 - One ID space across data/model/sim/map. One coordinate system (WGS84). Time = ISO datetime / abstract index — never "row in the 2025 file".
 - `NormalProfile.flowAt/calmAt(edgeId, qi, dayOfWeek)`: dayOfWeek (0=Mon) MUST be derived from the ACTIVE provider's epoch (2025 starts Wednesday, 2027 Friday) — never from qi alone.
@@ -309,7 +336,7 @@ Goal arc, in order:
      Two independent Codex review passes (codex:codex-rescue), both fresh
      threads: first found the two origin-vs-position bugs above, second
      confirmed both resolved with no new blocking issues.
-   REMAINING: derive an empirical distance-decay confidence curve from the fresh 2026-07-09 LOSO numbers above and wire it into network.geojson's confidence field, replacing the CONF_SIGMA_M placeholder (the LOSO validation itself is DONE — this is the last step that actually consumes it); more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate.
+   REMAINING: more scenarios; per-vehicle trajectory playback (FCD → TrajectoryProvider); ML surrogate. The LOSO-derived confidence distance-decay is DONE as of 2026-07-09 (`build_data.py` now consumes `web/data/loso_report.json` and writes the fitted 144.0 m sigma into `network.geojson` confidence values, with the near-field extrapolation caveat documented above).
 5. IN PROGRESS — Trained direction-split model (`dirsplit/` package), replacing the AM/PM-Gaussian guess in estimate_directions.py:
    - Training data: OPEN hourly directional counts from Statens vegvesen's trafikkdata GraphQL API (no key) — 394 stations in Oslo/Bergen/Trondheim/Stavanger bboxes; volumes fetched per station for 4 ISO weeks (36,37,20,45) of its newest available year. UK DfT raw counts identified as secondary source (hourly 07–19 by direction, bulk CSV) — not yet integrated.
    - Heading→bearing: station directions are PLACE NAMES; resolved by geocoding both names (Nominatim, cached, 1 req/s) and matching against the OSM edge's two axis bearings, with a consistency requirement (opposite candidates, ≤75° each) — ambiguous stations are EXCLUDED, all decisions stored for audit in stations_matched.json.
