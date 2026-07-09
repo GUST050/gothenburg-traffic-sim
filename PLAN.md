@@ -76,33 +76,37 @@ real confidence, and "optimized" claims must state their baseline.
 ## Phase A — Hygiene (do first; small; everything later builds on these)
 
 ### A1. Fix the `--micro` / trajectory-export inconsistency  — size S
-`run_scenario.py`: the flow simulation respects `--micro`, but
-`export_trajectories()` (~line 286-300) hardcodes `--mesosim true`. A micro
-scenario therefore gets micro flows but meso vehicle timelines in the UI.
-Fix: pass the `micro` flag through to `export_trajectories` and build its
-command with the same conditional flag block as `run_sumo`. Regression test:
-monkeypatch `subprocess.run`, capture the command for both modes, assert
-`--mesosim` present iff not micro. **This must land before any signal work
-(Phase D), which runs in micro.**
+DONE (2026-07-10, commit 29cee91). `export_trajectories()` now takes
+`micro: bool = False` and uses the same conditional meso-flag block as
+`run_sumo()`; `main()` passes `args.micro` through. Regression test
+`TestTrajectorySimulationMode` (tests/test_scenario.py) parametrized over
+micro True/False, asserts `--mesosim` present iff not micro. Two independent
+Codex passes (implement, then a fresh independent review) + Claude diff
+review + full pytest (419 passed, 20 skipped) before commit. Second review
+confirmed: default is backward-compatible with every existing call site, no
+other trajectory-related code hardcodes meso (web only reads the filename;
+serve.py runs default/non-micro), scenario metadata doesn't record which
+mode was used (noted as non-blocking — no current reader needs it).
 
 ### A2. Remove the double XML parse in `parse_edgedata` — size S
-`run_scenario.py` ~line 427: `ET.parse(path).getroot()` appears twice in
-immediate succession; keep one. Pure waste, no behavior change. Existing
-tests cover the parser's output shape.
+DONE — already fixed in the tree before this pass (only one `ET.parse` call
+found on inspection 2026-07-10); no change needed, verified by both Codex
+and Claude independently.
 
 ### A3. Delete stale `sumo/*tls_verify*` artifacts — size S
+DONE (2026-07-10). Files removed (gitignored dir, no commit needed):
 `sumo/additional_tls_verify_1000.add.xml`, `edgedata_tls_verify_1000.xml`,
-`vehroutes_tls_verify.xml` are leftovers of an undocumented 2026-07-06
-experiment; they cannot reproduce it (no command line recorded) and predate
-the current demand. `sumo/` is gitignored — just delete the files. Phase D
-step D1 creates a PROPER, reproducible replacement.
+`vehroutes_tls_verify.xml`. Confirmed no code references them. Phase D step
+D1 creates a proper, reproducible replacement.
 
 ### A4. Fix stale docs — size S
-CLAUDE.md phase-4 REMAINING still lists "per-vehicle trajectory playback
-(FCD → TrajectoryProvider)" as remaining, but vehroute-based per-vehicle
-trajectories already exist (`export_trajectories`, web plays them). Reword to
-what is actually left (e.g. selective FCD windows for micro/signal scenarios,
-see D-phase). Also point CLAUDE.md's REMAINING at this PLAN.md.
+DONE — already correct before this pass: CLAUDE.md's REMAINING line already
+pointed at this PLAN.md and already noted vehroute-based trajectories exist
+(from the PLAN.md-authoring commit, fbf3e05). No further stale reference
+found in CLAUDE.md/ARCHITECTURE.md on a fresh check 2026-07-10.
+
+**Phase A complete.** Next: B0 and C1 (independent measurement gates) —
+in progress.
 
 ---
 
