@@ -99,6 +99,7 @@ import math
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -1317,6 +1318,60 @@ def generate_sensor_anchored_trips(
     return trips, tour_lengths_km, short
 
 
+@dataclass
+class CandidateStructure:
+    """The expensive, date-invariant inputs shared by day blocks."""
+    G: object
+    edges: list[dict]
+    hmass: np.ndarray
+    amass: dict[str, np.ndarray]
+    entries: list[tuple[str, int]]
+    exits: list[tuple[str, int]]
+    entry_ids: list[str]
+    exit_ids: list[str]
+    w_entry: np.ndarray
+    w_exit: np.ndarray
+    measured: list[str]
+
+
+def generate_day_block(
+    structure: CandidateStructure, profile: np.ndarray, offset_s: float,
+    id_prefix: str, seed: int, day_index: int, n_total: int,
+    through_fraction: float, cross_fraction: float, gravity_km: float,
+    is_weekend: bool, min_per_sensor: int, template_trips: list[tuple] | None = None,
+) -> tuple[list[tuple[str, float, str, str, str]], list[float], dict[str, int], list[tuple]]:
+    """Generate one calendar-day candidate block.
+
+    A first block for a day type creates the route geometry. Later blocks of
+    the same type reuse that geometry but draw fresh departures from their own
+    exact-day profile. This keeps the PFE shape pool bounded while preserving
+    every day's measured/forecast departure-time signal.
+    """
+    rng = np.random.default_rng(seed + day_index)
+    if template_trips is None:
+        raw_trips, lengths, short = generate_sensor_anchored_trips(
+            rng, structure.G, structure.edges, structure.hmass, structure.amass,
+            structure.entries, structure.exits, structure.entry_ids, structure.exit_ids,
+            structure.w_entry, structure.w_exit, profile, structure.measured,
+            n_total, through_fraction, cross_fraction, gravity_km, is_weekend,
+            min_per_sensor)
+        template_trips = [(t[1], t[2], t[3] if len(t) > 3 else "") for t in raw_trips]
+    else:
+        # Reusing geometry is deliberate: diversity, not a linearly growing
+        # number of near-duplicate routes, is what the calibration needs.
+        raw_trips = []
+        lengths = []
+        short = {}
+
+    hours = rng.choice(24, size=len(template_trips), p=profile)
+    block = [
+        (f"{id_prefix}{i}", offset_s + (hour + rng.random()) * 3600,
+         from_edge, to_edge, via)
+        for i, ((from_edge, to_edge, via), hour) in enumerate(zip(template_trips, hours))
+    ]
+    return block, lengths, short, template_trips
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--through-fraction", type=float, default=0.5,
@@ -1363,6 +1418,10 @@ def main() -> None:
                         "a snow day, a local event, ...) rather than an "
                         "assumption about it, with no holiday list to "
                         "maintain. Added 2026-07-10.")
+    ap.add_argument("--day-blocks-file", default=None,
+                    help="JSON multi-day blocks from build_sumo_demand.py; "
+                         "each gives its own profile, offset and ID prefix. "
+                         "Omit it to retain the one-day CLI unchanged.")
     ap.add_argument("--n-total", type=int, default=12000)
     ap.add_argument("--min-per-sensor", type=int, default=50,
                     help="safety-net floor, not a target — every trip is "
@@ -1428,11 +1487,45 @@ def main() -> None:
     with open("web/data/flows.json") as f:
         measured = list(json.load(f)["flows"])
 
-    trips, tour_lengths_km, short_quota = generate_sensor_anchored_trips(
-        rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
-        w_entry, w_exit, shape_hourly, measured,
-        args.n_total, args.through_fraction, args.cross_fraction,
-        args.gravity_km, args.is_weekend, args.min_per_sensor)
+    multi_day_trips = None
+    if args.day_blocks_file:
+        with open(args.day_blocks_file) as f:
+            blocks = json.load(f)
+        if not blocks:
+            sys.exit("--day-blocks-file must contain at least one block")
+        structure = CandidateStructure(
+            G=G, edges=edges, hmass=hmass, amass=amass, entries=entries,
+            exits=exits, entry_ids=entry_ids, exit_ids=exit_ids,
+            w_entry=w_entry, w_exit=w_exit, measured=measured)
+        templates: dict[str, list[tuple]] = {}
+        multi_day_trips, tour_lengths_km, short_quota = [], [], {}
+        for day_index, block_spec in enumerate(blocks):
+            profile = np.asarray(block_spec["profile"], dtype=float)
+            if profile.shape != (24,) or profile.sum() <= 0:
+                sys.exit(f"invalid 24-hour profile in day block {day_index}")
+            profile /= profile.sum()
+            pool_key = str(block_spec.get(
+                "pool_key", "weekend" if block_spec.get("is_weekend") else "weekday"))
+            reused = pool_key in templates
+            block, lengths, short, template = generate_day_block(
+                structure, profile, float(block_spec["offset_s"]),
+                str(block_spec["id_prefix"]), args.seed, day_index, args.n_total,
+                args.through_fraction, args.cross_fraction, args.gravity_km,
+                bool(block_spec.get("is_weekend", False)), args.min_per_sensor,
+                templates.get(pool_key))
+            templates.setdefault(pool_key, template)
+            multi_day_trips.extend(block)
+            tour_lengths_km.extend(lengths)
+            short_quota.update(short)
+            print(f"  day block {day_index}: {len(block)} trips, {pool_key} pool "
+                  f"({'reused geometry' if reused else 'new geometry'})")
+        trips = []
+    else:
+        trips, tour_lengths_km, short_quota = generate_sensor_anchored_trips(
+            rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+            w_entry, w_exit, shape_hourly, measured,
+            args.n_total, args.through_fraction, args.cross_fraction,
+            args.gravity_km, args.is_weekend, args.min_per_sensor)
 
     n_through     = int(args.n_total * args.through_fraction)
     n_tours_total = (args.n_total - n_through) // 2
@@ -1442,15 +1535,24 @@ def main() -> None:
     n_ie = n_cross - n_ei
 
     trips.sort(key=lambda t: t[0])
+    if multi_day_trips is not None:
+        multi_day_trips.sort(key=lambda t: t[1])
     trips_path = SUMO_DIR / f"tours{args.out_suffix}.trips.xml"
     with open(trips_path, "w") as f:
         f.write("<routes>\n")
-        for i, t in enumerate(trips):
-            via = f' via="{t[3]}"' if len(t) > 3 else ""
-            f.write(f'  <trip id="t{i}" depart="{t[0]:.1f}" '
-                    f'from="{t[1]}" to="{t[2]}"{via}/>\n')
+        if multi_day_trips is None:
+            for i, t in enumerate(trips):
+                via = f' via="{t[3]}"' if len(t) > 3 else ""
+                f.write(f'  <trip id="t{i}" depart="{t[0]:.1f}" '
+                        f'from="{t[1]}" to="{t[2]}"{via}/>\n')
+        else:
+            for trip_id, depart, from_edge, to_edge, via_edge in multi_day_trips:
+                via = f' via="{via_edge}"' if via_edge else ""
+                f.write(f'  <trip id="{trip_id}" depart="{depart:.1f}" '
+                        f'from="{from_edge}" to="{to_edge}"{via}/>\n')
         f.write("</routes>\n")
-    print(f"{len(trips)} trips written, all sensor-anchored — target mix "
+    n_written = len(multi_day_trips) if multi_day_trips is not None else len(trips)
+    print(f"{n_written} trips written, all sensor-anchored — target mix "
           f"was {n_through} E-E through + {n_internal} I-I / {n_ei} E-I / "
           f"{n_ie} I-E paired tours (actual counts vary since some tour "
           f"attempts are dropped when no sensor naturally fits either leg)")
@@ -1485,7 +1587,7 @@ def main() -> None:
          "--weights.turnaround-penalty", "300",
          "--seed", str(args.seed),
          "--ignore-errors", "--no-warnings", "--repair", "--remove-loops"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, timeout=300)
     if res.returncode != 0:
         print(res.stderr[-1500:])
         sys.exit("duarouter failed")

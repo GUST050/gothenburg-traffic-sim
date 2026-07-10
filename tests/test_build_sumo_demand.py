@@ -32,16 +32,19 @@ class TestB1DateRangeContract:
         assert start.strftime("%Y-%m-%d") == "2025-12-31"
         assert end.strftime("%Y-%m-%d") == "2026-01-01"
 
-    def test_multi_day_cli_exits_before_single_day_candidate_generation(self, monkeypatch, tmp_path):
-        flows_path = tmp_path / "flows.json"
-        flows_path.write_text(json.dumps({"epoch": "2025-01-01T00:00:00", "flows": {}}))
-        monkeypatch.setattr(bsd, "FLOWS_PATH", flows_path)
-        monkeypatch.setattr(bsd, "parse_args", lambda: type("Args", (), {
-            "source": "historical", "start_date": "2025-09-16", "days": 2,
-        })())
-
-        with pytest.raises(SystemExit, match=r"multi-day build \(B2\) not implemented yet"):
-            bsd.main()
+    def test_multi_day_blocks_keep_each_days_own_real_shape(self, monkeypatch):
+        fallback = np.full(24, 1 / 24)
+        monkeypatch.setattr("build_candidates.daily_shape", lambda weekend: fallback)
+        monkeypatch.setattr("build_candidates.blend_day_shape", lambda real, _: real)
+        day0 = TestRealDayShape()._flat_day(peak_hour=8)
+        day1 = TestRealDayShape()._flat_day(peak_hour=20)
+        blocks = bsd.multi_day_blocks(
+            {"e1": day0 + day1}, {"S1": ["e1"]},
+            pd.Timestamp("2025-09-16"), days=2, qi_start=0)
+        assert np.argmax(blocks[0]["profile"]) == 8
+        assert np.argmax(blocks[1]["profile"]) == 20
+        assert [b["offset_s"] for b in blocks] == [0, 86400]
+        assert [b["id_prefix"] for b in blocks] == ["d0_", "d1_"]
 
     def test_single_day_metadata_keeps_legacy_fields_and_adds_range_contract(self):
         meta = bsd.demand_metadata(
@@ -116,6 +119,20 @@ def test_build_targets_single_direction_sensor_takes_full_count(monkeypatch, tmp
     targets = bsd.build_targets(flows, sensor_edges, qi_start=0, n_intervals=1)
 
     assert targets[0]["edgeS"] == 80.0
+
+
+def test_build_targets_multi_day_range_skips_dst_null_quarters(monkeypatch, tmp_path):
+    """2025-03-30's four absent export quarters stay absent inside a range."""
+    monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
+    march_29_qi = 87 * 96  # Jan+Feb+28 days of March before 29 March
+    arr = [10.0] * (march_29_qi + 192)
+    missing = [march_29_qi + 96 + q for q in range(8, 12)]
+    for qi in missing:
+        arr[qi] = None
+    targets = bsd.build_targets({"edgeS": arr}, {"S": ["edgeS"]},
+                                qi_start=march_29_qi, n_intervals=192)
+    assert all("edgeS" in targets[i] for i in range(192) if i not in range(104, 108))
+    assert [targets[i] for i in range(104, 108)] == [{}, {}, {}, {}]
 
 
 def test_unserviceable_measured_edges_emit_explicit_warning(capsys):

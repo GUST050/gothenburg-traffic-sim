@@ -265,6 +265,35 @@ def real_day_shape(flows: dict[str, list], sensor_edges: dict[str, list[str]],
     return hourly / hourly.sum()
 
 
+def multi_day_blocks(flows: dict[str, list], sensor_edges: dict[str, list[str]],
+                     start: pd.Timestamp, days: int, qi_start: int) -> list[dict]:
+    """Candidate-generator blocks with each calendar day's own profile.
+
+    Geometry is pooled by the generator's actual behavioural day type, while
+    profiles are intentionally not pooled: every block retains its exact-day
+    measured/forecast departure shape.
+    """
+    from build_candidates import blend_day_shape, daily_shape
+
+    blocks = []
+    for day_index in range(days):
+        day = start + pd.Timedelta(days=day_index)
+        weekend, kind = classify_day(day.strftime("%Y-%m-%d"), day.dayofweek)
+        real = real_day_shape(flows, sensor_edges, qi_start + day_index * 96)
+        fallback = daily_shape(weekend)
+        profile = blend_day_shape(real, fallback) if real is not None else fallback
+        blocks.append({
+            "profile": profile.tolist(), "offset_s": day_index * 86400,
+            "id_prefix": f"d{day_index}_", "is_weekend": weekend,
+            # Purpose logic is the same for weekend and holiday blocks, so
+            # that is the safe geometry-reuse boundary.
+            "pool_key": "weekend" if weekend else "weekday",
+        })
+        origin = "real" if real is not None else "fallback"
+        print(f"  day {day.strftime('%Y-%m-%d')} ({kind}): {origin} departure shape")
+    return blocks
+
+
 def load_sensor_edges() -> dict[str, list[str]]:
     """{sensor_id: [edge_id, ...]} from network.geojson (1 or 2 edges)."""
     with open(GEO_PATH) as f:
@@ -359,7 +388,7 @@ def ensure_observability() -> dict:
             return d
     print("Running observability (Agent B) …")
     res = subprocess.run([sys.executable, "observability.py"],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, check=True, timeout=1200)
     if res.returncode != 0:
         print(res.stderr[-800:])
         return {"corridor_priors": {}, "derived_flows": {}}
@@ -377,7 +406,7 @@ def ensure_assignment_priors() -> dict:
     if not path.exists():
         print("Computing assignment priors (assignment_priors.py) …")
         res = subprocess.run([sys.executable, "assignment_priors.py"],
-                             capture_output=True, text=True)
+                             capture_output=True, text=True, check=True, timeout=1200)
         if res.returncode != 0:
             print(res.stderr[-800:])
             return {"weight": 0.0, "flows": {}}
@@ -424,7 +453,7 @@ def ensure_priors(date: str) -> dict:
             return d
     print("Computing level-3 priors (prior_flows) …")
     res = subprocess.run([sys.executable, "prior_flows.py", "--date", date],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, check=True, timeout=1200)
     if res.returncode != 0:
         print(res.stderr[-1000:])
         print("  (no priors available — continuing without level 3)")
@@ -546,10 +575,16 @@ def export_od(calib_path: Path, sensor_edges: dict[str, list[str]], meta: dict) 
     zones = sorted({z for pair in od for z in pair})
     matrix = {o: {d: od.get((o, d), 0) for d in zones} for o in zones}
 
+    if "date" in meta:
+        window = f"{meta['date']} {meta['begin']}–{meta['end']}"
+    else:
+        window = f"{meta['start_date']} → {meta['end_date_exclusive']} " \
+                 f"({meta['days']} days)"
+
     out_json = Path("web/data/od_matrix.json")
     with open(out_json, "w") as f:
         json.dump({
-            "window":  f"{meta['date']} {meta['begin']}–{meta['end']}",
+            "window":  window,
             "n_trips": n_trips,
             "zones":   zones,
             "matrix":  matrix,
@@ -744,11 +779,10 @@ def run_tool(script: str, args: list[str], home: Path) -> None:
         "PATH": f"{home / 'bin'}:/usr/bin:/bin",
         "HOME": str(Path.home()),
     }
-    res = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    res = subprocess.run(cmd, capture_output=True, text=True, env=env,
+                         check=True, timeout=1200)
     tail = (res.stdout + res.stderr)[-2500:]
     print(tail)
-    if res.returncode != 0:
-        sys.exit(f"{script} failed")
 
 
 _PFE_PAR_SHAPES = None
@@ -854,21 +888,22 @@ def main() -> None:
     flows        = flows_payload["flows"]
 
     try:
-        validate_date_range(args.start_date, args.days, source_epoch.year)
+        range_start, range_end = validate_date_range(args.start_date, args.days, source_epoch.year)
     except ValueError as exc:
         sys.exit(str(exc))
-    if args.days > 1:
-        # B1 establishes the range metadata contract only. Generating one
-        # continuous candidate pool with per-day departures is B2 work.
-        sys.exit("multi-day build (B2) not implemented yet")
     if not NET_PATH.exists():
         sys.exit("sumo/net.net.xml missing — run build_sumo_net.py first")
 
-    t0 = pd.Timestamp(f"{args.start_date} {args.begin}")
-    if args.end == "24:00":   # whole day — pandas rejects hour 24
-        t1 = t0.normalize() + pd.Timedelta(days=1)
+    if args.days > 1:
+        # Multi-day demand is a continuous sequence of complete calendar
+        # days. The legacy begin/end window remains exactly as-is for one day.
+        t0, t1 = range_start, range_end
     else:
-        t1 = pd.Timestamp(f"{args.start_date} {args.end}")
+        t0 = pd.Timestamp(f"{args.start_date} {args.begin}")
+        if args.end == "24:00":   # whole day — pandas rejects hour 24
+            t1 = t0.normalize() + pd.Timedelta(days=1)
+        else:
+            t1 = pd.Timestamp(f"{args.start_date} {args.end}")
     qi_start    = int((t0 - source_epoch) / INTERVAL)
     n_intervals = int((t1 - t0) / INTERVAL)
     duration_s  = n_intervals * 900
@@ -894,6 +929,12 @@ def main() -> None:
     else:
         print(f"  real day-shape: too sparse, using {day_kind} fallback only")
 
+    day_blocks_path = None
+    if args.days > 1:
+        day_blocks_path = SUMO_DIR / "candidate_day_blocks.json"
+        day_blocks_path.write_text(json.dumps(
+            multi_day_blocks(flows, sensor_edges, range_start, args.days, qi_start)))
+
     home = sumo_home()
 
     cand_path = SUMO_DIR / "candidates.rou.xml"
@@ -916,7 +957,10 @@ def main() -> None:
             ], home)
         else:
             print("\nGenerating candidate route pool (subarea/DeSO/RVU generator) …")
-            n_total = max(6000, int(12000 * duration_s / 86400))
+            # A multi-day PFE needs additional time coverage, not a fresh
+            # 12k route geometries per day. build_candidates reuses one pool
+            # per behavioural day type and only re-samples day departures.
+            n_total = 12000 if args.days > 1 else max(6000, int(12000 * duration_s / 86400))
             cmd = [sys.executable, "build_candidates.py",
                   "--through-fraction", str(args.through_fraction),
                   "--gravity-km", str(args.gravity_km),
@@ -926,14 +970,13 @@ def main() -> None:
                 cmd += ["--is-weekend"]
             if day_shape_path is not None:
                 cmd += ["--real-day-shape-file", str(day_shape_path)]
+            if day_blocks_path is not None:
+                cmd += ["--day-blocks-file", str(day_blocks_path)]
             if weight_file is not None:
                 cmd += ["--weight-file", str(weight_file),
                        "--weight-period", str(BPR_PERIOD_S)]
-            res = subprocess.run(cmd, capture_output=True, text=True)
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=1200)
             print(res.stdout[-1200:])
-            if res.returncode != 0:
-                print(res.stderr[-1500:])
-                sys.exit("build_candidates.py failed")
 
     # ── Calibrate: one route set per direction-split variant ───────────────────
     # q50 = the default (calibrated.rou.xml). If the split file carries
@@ -970,8 +1013,11 @@ def main() -> None:
             for i in range(n_intervals):
                 bq = {}
                 for e, arr in bounds_data["bounds"].items():
-                    if i < len(arr) and arr[i]:
-                        bq[e] = (arr[i][0], arr[i][1])
+                    # Bounds are structural reference-day relationships;
+                    # repeat their 96 time-of-day slots for each target day.
+                    slot_i = i % 96
+                    if slot_i < len(arr) and arr[slot_i]:
+                        bq[e] = (arr[slot_i][0], arr[slot_i][1])
                 pq = {}
                 slot = (qi_start + i) % 96
                 pkey = prior_variant.get(suffix, "prior")

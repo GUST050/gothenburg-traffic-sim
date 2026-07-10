@@ -35,6 +35,29 @@ def read_vehicle_ids(path):
     return [veh.get("id") for veh in ET.parse(path).getroot().iter("vehicle")]
 
 
+def test_generate_day_block_reuses_geometry_but_resamples_each_days_departures(monkeypatch):
+    calls = []
+
+    def fake_generate(rng, *args, **kwargs):
+        calls.append(1)
+        return [(100.0, "from", "to", "via")], [1.0], {},
+
+    monkeypatch.setattr(bc, "generate_sensor_anchored_trips", fake_generate)
+    structure = bc.CandidateStructure(
+        G=None, edges=[], hmass=np.array([]), amass={}, entries=[], exits=[],
+        entry_ids=[], exit_ids=[], w_entry=np.array([]), w_exit=np.array([]), measured=[])
+    profile = np.zeros(24); profile[3] = 1.0
+    first, _, _, templates = bc.generate_day_block(
+        structure, profile, 0, "d0_", 42, 0, 1, .5, .3, 2.6, False, 1)
+    second, lengths, _, _ = bc.generate_day_block(
+        structure, profile, 86400, "d1_", 42, 1, 1, .5, .3, 2.6, False, 1,
+        template_trips=templates)
+    assert calls == [1]
+    assert first[0][0] == "d0_0" and 10800 <= first[0][1] < 14400
+    assert second[0][0] == "d1_0" and 97200 <= second[0][1] < 100800
+    assert lengths == []
+
+
 class TestReverseEdgeId:
     def test_swaps_endpoints_keeps_key(self):
         assert bc.reverse_edge_id("100_200_0") == "200_100_0"

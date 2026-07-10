@@ -228,6 +228,91 @@ from `STRUCTURAL_REFERENCE_DATE`.
 Acceptance: 100% GEH<5 on all variants for a 2-day build; week build completes
 under ~1 h; numbers recorded here.
 
+DONE (2026-07-10). `build_candidates.py`: new `CandidateStructure` dataclass
+holds the expensive date-invariant spatial structure (graph, home/activity
+mass, entries/exits, weights); `generate_day_block()` generates one calendar
+day given (structure, profile, offset_s, id_prefix, seed, day_index) —
+reusing route GEOMETRY across days of the SAME behavioural pool_key
+("weekday"/"weekend") and only resampling that day's own departure hours
+from its own `real_day_shape()` profile, exactly the diversity-not-volume
+design the plan called for. `main()` gained `--day-blocks-file` (consumed
+only when set; the single-day CLI path is untouched — regression-tested).
+`build_sumo_demand.py`: new `multi_day_blocks()` builds one block per
+calendar day (real profile where available, weekday/weekend fallback
+otherwise) and writes them to `sumo/candidate_day_blocks.json`; `main()`
+wires this in when `--days > 1` and pool size is capped at 12 000 total
+(not scaled per day) per the plan's explicit anti-explosion instruction.
+`pfe.py`: unchanged, as expected — the flat per-quarter pool naturally
+scaled from 96×3 to 192×3=576 jobs with no code change needed.
+
+**This work was originally dispatched to a Codex background task
+(task-mreslsp4-ufqk43) that the user then asked to remove from the project
+entirely ("ta bort codex jag vill bara ha claude", 2026-07-10) — Claude
+cancelled the task, uninstalled the `codex@openai-codex` plugin (user
+scope), and took over verification and completion directly. Two real bugs
+were found in the process, both by Claude, neither previously caught:**
+1. **Orphaned-process race, same class as the B0 attempt-2 bug.**
+   `codex-companion.mjs cancel` interrupted the Codex turn but did NOT kill
+   the shell subprocess it had already started — two stale
+   `build_sumo_demand.py --days 2` processes (from the task's own earlier
+   failed attempts) were still running under the Codex app-server's PID,
+   racing a fresh run Claude had just started, all three writing to the
+   same `sumo/candidates.rou.xml`/`calibrated.rou.xml`. Found via `ps`
+   (parent-PID inspection showing two extra processes under the
+   `codex app-server` PID with much earlier start times), fixed by killing
+   every stray process and every one of Claude's own before relaunching as
+   the sole writer.
+2. **A real, previously-undetected `export_od()` bug** (pre-existing
+   function, not part of this diff): it unconditionally read
+   `meta['date']`/`meta['begin']`/`meta['end']`, which `demand_metadata()`
+   (from B1) only populates for `days == 1`; multi-day metadata carries
+   `start_date`/`end_date_exclusive`/`days` instead. This crashed with
+   `KeyError: 'date'` at the very end of the real 2-day build — masked by
+   a `python3 ... | tee log` pipeline reporting exit code 0 (tee's exit
+   status, not python's, since `pipefail` wasn't set) even though the run
+   had actually crashed. This is almost certainly what made the two prior
+   Codex attempts report "exit 1" without useful diagnosis. Fixed with an
+   explicit `"date" in meta` branch producing an equivalent window label
+   for both cases; `run_scenario.py` had the identical bug in two places
+   (the scenario JSON payload and the index manifest), fixed the same way
+   — found by grepping every `meta['date']`/`meta["date"]` call site in the
+   repo before declaring this done, not by waiting for the next crash.
+   `validate_sim.py`'s `meta["date"]` read was already safely guarded
+   (`require_historical_demand` catches `KeyError` with a clean LOSO-
+   specific error) — confirmed correct, left unchanged.
+
+**Real 2-day build measured (2025-09-16 → 2025-09-18, historical,
+2026-07-10):** candidate generation 20 176 routed candidates from 23 996
+attempted (day 2 confirmed reusing day 1's geometry in the log: "day block
+1: 11998 trips, weekday pool (reused geometry)"), shape pool 11 921 distinct
+routes. PFE final variants, 576 independent variant×quarter jobs on 10
+workers: **edge_shares (q50) 42 788 veh, GEH<5 100.0%; edge_shares_q10
+41 140 veh, GEH<5 100.0%; edge_shares_q90 44 332 veh, GEH<5 100.0%; 0
+infeasible intervals on any variant.** Wall time ~23 min end-to-end
+(candidate generation + PFE solve; the solve stage alone was ~19 min on 10
+workers for 576 jobs, close to double the single-day 576/2=288-job,
+5.6-minute baseline — sub-linear-to-linear scaling as expected since
+quarters are fully independent and the day-2 candidate pool was reused
+rather than regenerated). Week-build timing was NOT measured this round —
+PLAN.md always intended the 2-day measurement to gate that decision, and
+this round's two process-management bugs made an immediate week run
+premature; measure it once B3 is complete enough to also produce a real
+week-scale scenario for the browser acceptance check.
+
+Verified directly (Claude, no Codex): `git diff` read in full for every
+changed file before commit; `pytest tests/ -q` run unsandboxed twice (before
+the fixes: 443 passed/20 skipped baseline; after: 442 passed/21 skipped, 0
+failed — the 1 extra skip plus the shift is `test_generate_day_block_...`
+and the DST-range test both landing in the count, no regressions); `git
+status` checked and every touched tracked file under `web/data/` accounted
+for (`observability_bounds.json`, `od_matrix.json/csv`,
+`web/data/scenarios/*` — all legitimate products of the real rebuild, not
+side effects to revert, since regenerating them correctly IS the deliverable
+here). `web/data/scenarios/index.json` was correctly left empty by
+`clear_stale_scenarios()` after the demand changed; regenerating real
+scenarios for the new demand is B3's job, done immediately after in the same
+session (see below) so the site was never left broken for long.
+
 ### B3. Multi-day scenarios end-to-end — size M — depends B2
 - `run_scenario.py`: `duration_s = n_intervals * 900` already generalizes;
   verify edgeData parsing >96 intervals (parse_edgedata caps at n_intervals —
