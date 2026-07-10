@@ -457,6 +457,111 @@ condition), and flip provenance to `city-configured`.
 
 ---
 
+## Known issues from the 2026-07-10 deep review (deferred, not fixed)
+
+Before continuing to B1/C2, a two-track deep review (Codex + Claude,
+independent verification, plus traffic-modeling research validation) covered
+the whole demand/PFE pipeline and the scenario/serve/web layer. Four
+confirmed critical/high bugs were fixed immediately (commits `90eadca`,
+`f037a7b`: assignment-priors parallel-edge double-counting, LOSO
+forecast-source guard, LOSO/production meso-config mismatch, PFE silently
+dropping unserviceable hard constraints, serve.py's `/api/close` lock
+transaction, serve.py binding to all interfaces). The rest were judged
+real but lower-severity or more invasive, and are recorded here instead of
+fixed under time pressure — whoever picks up B1/C2 should look at these
+first, since several interact with that work directly.
+
+**Pipeline (assignment_priors.py, pfe.py, build_candidates.py,
+build_sumo_demand.py, validate_sim.py):**
+- `ensure_bounds`/`ensure_observability` cache-key on GeoJSON feature COUNT
+  only — a network edit that doesn't change edge count (e.g. a reclassified
+  or re-geometried edge, the exact kind of drift `build_data.py`'s live OSM
+  refetch causes, see the Phase-0 ground rules) can silently serve a stale
+  structural product. `ensure_assignment_priors` accepts any existing file
+  with no provenance check at all. Fix direction: hash edge IDs + geometry +
+  relevant attributes + direction-split version + parameter set, not just a
+  count.
+- LOSO leaks when demand was built with `--congestion-iterations > 1`: the
+  BPR feedback weight file is fit against ALL sensors, including the one a
+  given fold holds out, then reused unchanged across folds (same class of
+  leak as the already-fixed assignment-prior scale factor, commit `be2bb8b`
+  — not yet applied here). Low current impact since the default is 1
+  iteration, but must be fixed before that default ever changes.
+- `round_preserving_measured` (pfe.py) makes up to 4 correction passes over
+  overlapping route sets with no final check that the discrete result is
+  still within each measured band's tolerance after rounding — GEH catches
+  gross failures but only after the route file is already written.
+- CLI args across `build_sumo_demand.py`/`run_scenario.py` aren't validated
+  for sane ranges: `--begin == --end` reaches `Pool(processes=0)`, `--end <
+  --begin` gives negative `n_intervals`, `--seeds 0` silently produces an
+  empty scenario, `--name ../../x` in run_scenario.py is a real (if
+  CLI-only, not web-exposed) path-traversal footgun.
+- `real_day_shape()` sums ALL measured directed edges per quarter, so
+  sensor 107 (the one genuinely two-way station, 2 directed edges) gets
+  double weight in the shared daily departure-shape relative to every
+  single-direction station. Should aggregate per physical station first.
+- Multiple zero-mass/empty-input NaN risks (assignment_priors.py robust
+  scale on an empty/degenerate sample; build_candidates.py gate weights,
+  normal_profile, real-day-shape when normalization sums to zero) — mostly
+  network-expansion/incomplete-intake edge cases, not everyday risks today.
+- Statistical framing: the 3-seed Monte Carlo spread over q10/q50/q90 that
+  drives the UI's per-edge confidence mixes process variation with three
+  correlated, deterministic quantile scenarios (not independent draws from
+  a calibrated posterior), and uses population stddev (ddof=0) at n=3. FHWA
+  guidance suggests more replications for a real confidence interval at
+  this scale. Recommendation from the review: relabel as a "stability
+  indicator" rather than a statistical confidence interval, or move to
+  independent seeds per demand draw plus randomized direction-share draws
+  if a real interval is wanted.
+- Research-grounded naming/framing check: `solve_interval_entropy` is a
+  heuristic IPF-inspired solver, not literally maximum-entropy estimation
+  with the stated soft priors — fine as an engineering choice, but should
+  be described that way. Similarly the gravity+jittered-shortest-path
+  assignment field is Dial-*style*, not Dial's actual efficient-path-set
+  algorithm. Neither needs to change; the docstrings/CLAUDE.md framing
+  should not overclaim. See the review's cited literature (Van Zuylen &
+  Willumsen on entropy OD estimation, Dial 1971, SUMO's own Cadyts/DUA
+  tooling as possible stronger alternatives if this ever becomes a
+  priority) for anyone who wants to push the method itself further.
+
+**Scenario/serve/web layer (run_scenario.py, serve.py, web/*.js):**
+- Outer subprocess timeouts (`serve.py`'s 600s/300s around `run_scenario.py`
+  calls) don't guarantee killing grandchild SUMO processes if a middle
+  process hangs — same class of issue `SUMO_TIMEOUT_S` was added for
+  originally, but the outer layer isn't fully closed. Worth a process-group
+  kill (`os.killpg` / `start_new_session=True` + group signal) instead of a
+  bare `subprocess.run(timeout=...)`.
+- Web client: `scenarioToken` only guards a second Simulering-scenario load
+  racing a first one. Switching to Historisk/Prognos mid-fetch, or a slow
+  trajectory load finishing after the user has already switched away, isn't
+  covered by the same token and can flash stale state. Needs the token (or
+  an equivalent generation counter) checked on every async completion path
+  that touches the map, not just the scenario-vs-scenario one.
+- `run_scenario.py`'s reachability graph (`build_edge_graph`/`reachable`,
+  used by `truncate_stranded_vehicles`) is a plain `<connection>` graph with
+  no vClass/permission/turn-restriction awareness — direct, not yet observed
+  in practice given today's single vClass, but C2's time-windowed closures
+  will exercise this logic much harder and should get a test for a
+  topologically-reachable-but-vClass-forbidden edge.
+- serve.py's `_recal_state["status"]="done"` write and the `finally` lock
+  release are two separate statements — a client could theoretically poll
+  and see `done` in the narrow window before the lock actually frees,
+  observed as a very-unlikely-but-real 409 on an immediate next request.
+  Low priority (self-heals on the next poll) but easy to close with an
+  ordering fix if touching this code anyway.
+- C1's probe (`tools/c1_temporary_closure_probe`) conflated `--device.
+  rerouting.mode 8` with periodic rerouting (`--device.rerouting.probability
+  1 --device.rerouting.period 1`) in the same test run — its finding "mode 8
+  changes route choice to waiting for the short route" is confirmed only for
+  that combination, not mode 8 in isolation. Re-run mode 8 alone before
+  leaning on that specific conclusion in C2's design.
+- B0's numeric conclusion (0.428% lower timeLoss, 2.21s faster for
+  continuous vs chained) is from a single seed/variant (q50, seed 1000), not
+  replicated — solid support for the qualitative claim (continuous preserves
+  midnight-crossing vehicles) but not a rigorously bounded performance
+  number. Treat the percentage as illustrative, not a guarantee, if it ever
+  gets quoted outside this repo.
+
 ## Suggested execution order
 
 A1→A4 (one commit each or one small batch) → B0 ∥ C1 (both small gates,
