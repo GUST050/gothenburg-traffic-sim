@@ -33,6 +33,7 @@ import multiprocessing as mp
 import os
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -438,8 +439,20 @@ def clear_stale_scenarios() -> int:
     for path in SCEN_DIR.glob("*.json"):
         path.unlink()
         n += 1
-    with open(SCEN_DIR / "index.json", "w") as f:
-        json.dump({"scenarios": []}, f, indent=2)
+    # Atomic (write-temp-then-replace) so a live browser polling index.json
+    # mid-cleanup never observes a truncated file — same reasoning as
+    # run_scenario.py's atomic_write_json, duplicated here rather than
+    # imported to keep this CLI-only path independent of run_scenario.py's
+    # module-level state (2026-07-10).
+    index_path = SCEN_DIR / "index.json"
+    fd, tmp_name = tempfile.mkstemp(dir=SCEN_DIR, prefix=".index.json.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump({"scenarios": []}, f, indent=2)
+        os.replace(tmp_name, index_path)
+    except BaseException:
+        os.unlink(tmp_name)
+        raise
     return n
 
 
@@ -801,14 +814,14 @@ def _run_pfe_interval_job(job: dict):
 
     if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
         raise RuntimeError("PFE interval worker was not initialized")
-    sol = pfe.solve_interval_with_relaxation(
+    sol, rung = pfe.solve_interval_with_relaxation(
         _PFE_PAR_SHAPES,
         job["targets"],
         job["bounds"],
         job["priors"],
         route_cost=_PFE_PAR_ROUTE_COST,
     )
-    return job["suffix"], job["key"], job["quarter"], sol
+    return job["suffix"], job["key"], job["quarter"], sol, rung
 
 
 def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, str]],
@@ -829,10 +842,12 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     try:
         tasks = []
         solutions = {}
+        rungs = {}
         for suffix, key in variants:
             data = variant_inputs[suffix]
             nq = len(data["targets"])
             solutions[suffix] = [None] * nq
+            rungs[suffix] = [pfe.RUNG_INFEASIBLE] * nq
             for i in range(nq):
                 tasks.append({
                     "suffix": suffix,
@@ -847,17 +862,18 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         print(f"  PFE final variants: solving {len(tasks)} independent "
               f"variant×quarter intervals in one pool ({n_workers} workers)")
         with mp.get_context("fork").Pool(processes=n_workers) as pool:
-            for suffix, _key, quarter, sol in pool.imap_unordered(
+            for suffix, _key, quarter, sol, rung in pool.imap_unordered(
                 _run_pfe_interval_job, tasks
             ):
                 solutions[suffix][quarter] = sol
+                rungs[suffix][quarter] = rung
 
         reports = {}
         for suffix, key in variants:
             data = variant_inputs[suffix]
             reports[suffix] = pfe.write_calibration_report(
                 shapes, data["out_path"], data["targets"], solutions[suffix],
-                data["bounds_pq"])
+                data["bounds_pq"], rungs[suffix])
             if not data.get("keep_achieved", False):
                 reports[suffix] = {
                     k: v for k, v in reports[suffix].items() if k != "achieved"

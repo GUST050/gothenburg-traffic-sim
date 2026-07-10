@@ -44,6 +44,7 @@ Not a CLI — imported by build_sumo_demand.py (--engine pfe).
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -561,27 +562,47 @@ def round_preserving_measured(
     return counts
 
 
+# solve_interval_with_relaxation's rung markers — which stage of the
+# relaxation ladder actually produced a solution, so calibration reports
+# can show a real convergence diagnostic (2026-07-10, found in a review:
+# the ladder ran silently, with no visibility into how often quarters
+# needed it) instead of only a pass/fail infeasible_intervals count.
+RUNG_CLEAN        = 0   # first solve_interval_entropy call succeeded
+RUNG_RELAX_TOL2X  = 1   # tol_mult=2.0, bounds kept
+RUNG_RELAX_TOL4X  = 2   # tol_mult=4.0, bounds kept
+RUNG_RELAX_NOBND  = 3   # tol_mult=4.0, bounds dropped
+RUNG_LP_FALLBACK  = 4   # solve_interval (LP), the final rung
+RUNG_INFEASIBLE   = -1  # no rung produced a solution
+
+
 def solve_interval_with_relaxation(
     shapes: list[Candidate],
     targets: dict[str, float],
     bounds: dict[str, tuple[float, float]],
     priors: dict[str, tuple[float, float]],
     route_cost: np.ndarray | None = None,
-) -> np.ndarray | None:
-    """Solve one interval using calibrate()'s exact relaxation ladder."""
+) -> tuple[np.ndarray | None, int]:
+    """Solve one interval using calibrate()'s exact relaxation ladder.
+
+    Returns (solution, rung) — rung is one of the RUNG_* constants above,
+    telling the caller WHICH stage actually produced the solution (or
+    RUNG_INFEASIBLE if none did), not just whether one exists."""
     sol = solve_interval_entropy(shapes, targets, bounds, priors,
                                  route_cost=route_cost)
-    if sol is None:
-        for tol_mult, use_bounds in ((2.0, True), (4.0, True), (4.0, False)):
-            sol = solve_interval_entropy(
-                shapes, targets, bounds if use_bounds else {}, priors,
-                tol_mult=tol_mult, route_cost=route_cost)
-            if sol is not None:
-                break
-    if sol is None:
-        sol = solve_interval(shapes, targets, bounds, priors,
-                             route_cost=route_cost)
-    return sol
+    if sol is not None:
+        return sol, RUNG_CLEAN
+    for rung, (tol_mult, use_bounds) in zip(
+        (RUNG_RELAX_TOL2X, RUNG_RELAX_TOL4X, RUNG_RELAX_NOBND),
+        ((2.0, True), (4.0, True), (4.0, False)),
+    ):
+        sol = solve_interval_entropy(
+            shapes, targets, bounds if use_bounds else {}, priors,
+            tol_mult=tol_mult, route_cost=route_cost)
+        if sol is not None:
+            return sol, rung
+    sol = solve_interval(shapes, targets, bounds, priors,
+                         route_cost=route_cost)
+    return sol, (RUNG_LP_FALLBACK if sol is not None else RUNG_INFEASIBLE)
 
 
 def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndarray]:
@@ -604,14 +625,28 @@ def solve_calibration_intervals(
     targets_per_q: list[dict[str, float]],
     bounds_per_q: list[dict[str, tuple[float, float]]],
     priors_per_q: list[dict[str, tuple[float, float]]],
-) -> list[np.ndarray | None]:
-    """Sequentially solve every interval for one variant."""
+) -> tuple[list[np.ndarray | None], list[int]]:
+    """Sequentially solve every interval for one variant.
+
+    Returns (solutions, rungs) — rungs are the RUNG_* constant each
+    interval actually converged at, for write_calibration_report's
+    relaxation_summary diagnostic."""
     solutions: list[np.ndarray | None] = []
+    rungs: list[int] = []
     for i in range(len(targets_per_q)):
-        solutions.append(solve_interval_with_relaxation(
+        sol, rung = solve_interval_with_relaxation(
             shapes, targets_per_q[i], bounds_per_q[i], priors_per_q[i],
-            route_cost=route_cost))
-    return solutions
+            route_cost=route_cost)
+        solutions.append(sol)
+        rungs.append(rung)
+    return solutions, rungs
+
+
+RUNG_NAMES = {
+    RUNG_CLEAN: "clean", RUNG_RELAX_TOL2X: "relax_tol2x",
+    RUNG_RELAX_TOL4X: "relax_tol4x", RUNG_RELAX_NOBND: "relax_no_bounds",
+    RUNG_LP_FALLBACK: "lp_fallback", RUNG_INFEASIBLE: "infeasible",
+}
 
 
 def write_calibration_report(
@@ -620,6 +655,7 @@ def write_calibration_report(
     targets_per_q: list[dict[str, float]],
     solutions: list[np.ndarray | None],
     bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
+    rungs: list[int] | None = None,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
 
@@ -702,12 +738,23 @@ def write_calibration_report(
                 geh = float(np.sqrt(2 * (m - c) ** 2 / (m + c)))
                 geh_all += 1
                 geh_ok += geh < 5
-    return {"vehicles": vid, "infeasible_intervals": infeasible,
-            "geh_ok": geh_ok, "geh_total": geh_all,
-            "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
-            "achieved": achieved,
-            "unserviceable_edges": unserviceable_edges,
-            "bound_violations": bound_violations}
+    report = {"vehicles": vid, "infeasible_intervals": infeasible,
+              "geh_ok": geh_ok, "geh_total": geh_all,
+              "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
+              "achieved": achieved,
+              "unserviceable_edges": unserviceable_edges,
+              "bound_violations": bound_violations}
+    if rungs is not None:
+        # Which relaxation-ladder rung each interval actually converged at —
+        # a solver that's quietly living on RUNG_LP_FALLBACK every interval
+        # is a different health signal than one mostly hitting RUNG_CLEAN,
+        # even when both report 100% GEH<5 (found while auditing the
+        # relaxation ladder, 2026-07-10).
+        counts = Counter(rungs)
+        report["relaxation_summary"] = {
+            RUNG_NAMES[rung]: counts[rung] for rung in RUNG_NAMES if counts[rung]
+        }
+    return report
 
 
 def calibrate(
@@ -733,7 +780,7 @@ def calibrate(
     solver as backstop, in the rare case IPF's iteration budget doesn't
     converge for some edge-case constraint combination."""
     shapes, route_cost = prepare_calibration(candidates_path)
-    solutions = solve_calibration_intervals(
+    solutions, rungs = solve_calibration_intervals(
         shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q)
     return write_calibration_report(shapes, out_path, targets_per_q, solutions,
-                                    bounds_per_q)
+                                    bounds_per_q, rungs)

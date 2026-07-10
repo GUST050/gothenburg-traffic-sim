@@ -121,14 +121,14 @@ def _run_pfe_interval_job(job: dict):
     """ProcessPool worker for one independent quarter PFE solve."""
     if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
         raise RuntimeError("PFE interval worker was not initialized")
-    sol = pfe.solve_interval_with_relaxation(
+    sol, rung = pfe.solve_interval_with_relaxation(
         _PFE_PAR_SHAPES,
         job["targets"],
         job["bounds"],
         job["priors"],
         route_cost=_PFE_PAR_ROUTE_COST,
     )
-    return job["quarter"], sol
+    return job["quarter"], sol, rung
 
 
 def calibrate_fold_parallel(
@@ -155,14 +155,16 @@ def calibrate_fold_parallel(
             for i in range(len(targets))
         ]
         solutions = [None] * len(targets)
+        rungs = [pfe.RUNG_INFEASIBLE] * len(targets)
         n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
         print(f"  PFE LOSO fold: solving {len(tasks)} independent quarter "
               f"intervals in one pool ({n_workers} workers)")
         with mp.get_context("fork").Pool(processes=n_workers) as pool:
-            for quarter, sol in pool.imap_unordered(_run_pfe_interval_job, tasks):
+            for quarter, sol, rung in pool.imap_unordered(_run_pfe_interval_job, tasks):
                 solutions[quarter] = sol
+                rungs[quarter] = rung
         return pfe.write_calibration_report(shapes, out_path, targets, solutions,
-                                            bounds_pq)
+                                            bounds_pq, rungs)
     finally:
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None

@@ -7,9 +7,11 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from pfe import (Candidate, EPS_PARSIMONY, calibrate, largest_remainder_round,
-                 path_size_weights, solve_interval, solve_interval_entropy,
-                 write_calibration_report)
+from pfe import (Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
+                 RUNG_LP_FALLBACK, calibrate, largest_remainder_round,
+                 path_size_weights, solve_calibration_intervals,
+                 solve_interval, solve_interval_entropy,
+                 solve_interval_with_relaxation, write_calibration_report)
 
 
 def cand(*edges):
@@ -320,3 +322,62 @@ class TestBoundViolationsFromRounding:
             shapes, tmp_path / "out.rou.xml", targets_per_q, solutions)
 
         assert report["bound_violations"] == []
+
+
+class TestRelaxationRungTracking:
+    """solve_interval_with_relaxation reports WHICH ladder stage produced a
+    solution, and write_calibration_report rolls that up into a
+    relaxation_summary diagnostic (2026-07-10) — a solver quietly living on
+    the LP fallback every interval is a different health signal than one
+    mostly converging clean, even when both hit 100% GEH."""
+
+    def test_easy_interval_reports_clean_rung(self):
+        shapes = [cand("A")]
+        sol, rung = solve_interval_with_relaxation(
+            shapes, {"A": 10.0}, {}, {})
+        assert sol is not None
+        assert rung == RUNG_CLEAN
+
+    def test_infeasible_interval_reports_infeasible_rung(self):
+        # A single candidate touching BOTH edges has only one degree of
+        # freedom (its own vehicle count), so it cannot simultaneously hit
+        # two different targets on the edges it shares — infeasible at
+        # every rung, including the LP fallback.
+        shapes = [cand("A", "B")]
+        sol, rung = solve_interval_with_relaxation(
+            shapes, {"A": 10.0, "B": 20.0}, {}, {})
+        assert sol is None
+        assert rung == RUNG_INFEASIBLE
+
+    def test_solve_calibration_intervals_returns_rung_per_quarter(self):
+        shapes = [cand("A"), cand("A", "B")]
+        route_cost = path_size_weights(shapes)
+        solutions, rungs = solve_calibration_intervals(
+            shapes, route_cost,
+            [{"A": 10.0}, {"A": 10.0, "B": 20.0}], [{}, {}], [{}, {}])
+        assert len(solutions) == len(rungs) == 2
+        assert rungs[0] == RUNG_CLEAN
+        assert solutions[1] is None
+        assert rungs[1] == RUNG_INFEASIBLE
+
+    def test_write_calibration_report_summarizes_rungs(self, tmp_path):
+        shapes = [cand("A")]
+        solutions = [np.array([10.0]), None]
+        targets_per_q = [{"A": 10.0}, {"B": 10.0}]
+        rungs = [RUNG_CLEAN, RUNG_INFEASIBLE]
+
+        report = write_calibration_report(
+            shapes, tmp_path / "out.rou.xml", targets_per_q, solutions,
+            rungs=rungs)
+
+        assert report["relaxation_summary"] == {"clean": 1, "infeasible": 1}
+
+    def test_relaxation_summary_absent_when_rungs_not_given(self, tmp_path):
+        shapes = [cand("A")]
+        solutions = [np.array([10.0])]
+        targets_per_q = [{"A": 10.0}]
+
+        report = write_calibration_report(
+            shapes, tmp_path / "out.rou.xml", targets_per_q, solutions)
+
+        assert "relaxation_summary" not in report
