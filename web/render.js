@@ -193,7 +193,16 @@ const Render = (() => {
     }
 
     const size = _map.getSize();
-    _vehCanvas.width = size.x; _vehCanvas.height = size.y;
+    // Setting canvas.width/height ALWAYS clears the backing store and
+    // resets context state, even when assigned the same value it already
+    // has — a real per-frame cost (this runs at animation-frame rate
+    // during vehicle playback) for something that only actually needs to
+    // happen on a genuine map resize. clearRect below already erases the
+    // previous frame's dots, so skipping the resize when unchanged loses
+    // nothing. Found in a review 2026-07-10.
+    if (_vehCanvas.width !== size.x || _vehCanvas.height !== size.y) {
+      _vehCanvas.width = size.x; _vehCanvas.height = size.y;
+    }
     const ctx = _vehCtx;
     ctx.clearRect(0, 0, size.x, size.y);
     ctx.fillStyle = '#1d4ed8';
