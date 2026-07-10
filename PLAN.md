@@ -197,6 +197,12 @@ måste då dokumentera att fordon som ännu kör vid dygnsgränsen inte bevaras.
   TARGETS become multi-day. Verify this explicitly in tests.
 Tests: signature stability for single-day; range validation; metadata shape.
 
+DONE (2026-07-10). B1 now provides the CLI/range metadata contract and keeps
+the single-day signature and legacy metadata fields unchanged. `--days > 1`
+validates the range then exits explicitly until B2 implements continuous
+multi-day candidate generation; bounds and priors remain structural inputs
+from `STRUCTURAL_REFERENCE_DATE`.
+
 ### B2. Multi-day demand build — size L — depends B0, B1
 - Candidate pool: build per-day BLOCKS. Reuse the expensive spatial
   structure; per day, use that day's own `real_day_shape()` profile (keep the
@@ -345,6 +351,28 @@ to model a temporary closure unless deliberately modelling their different
   (black-dashed closed styling should only apply during the window when
   scrubbing — render reads provider.closedEdges; make it time-dependent).
 Tests: windowed rerouter XML; time-aware prefilter; full-window regression.
+
+DONE (2026-07-10). New repeatable `--closure '{"edge_id":...,"begin":...,
+"end":...}'` JSON CLI (avoids parallel argument lists per the note above);
+legacy `--close EDGE` still represented internally as one
+`{edge_id, begin_s: 0, end_s: duration_s+3600}` window and routed through
+the byte-for-byte original `truncate_stranded_vehicles` code path
+(`closures=None` sentinel) so the whole-duration behavior and its 4
+existing regression tests in `TestTruncateStrandedVehicles` stay untouched
+and unmodified. New `TestTimeWindowedClosures` covers: one `<interval>`
+per window in the rerouter XML; the time-aware prefilter's 3 outcomes
+(long-wait truncated, short-wait retained per C1's 71s/301s numbers, and a
+vehicle arriving after reopening left alone); and an explicit test
+documenting the known vClass/permission blind spot in `build_edge_graph`/
+`reachable` (deliberately not fixed here, see "Known issues" above) so it's
+visible rather than silent. Web: `provider.js` gained `closures` (per-edge
+time windows, `null` for old scenario files → falls back to whole-scenario
+styling unchanged) and `isEdgeClosed(edgeId, qi)`/`closureWindowText(edgeId)`;
+`render.js` uses `isEdgeClosed` for both the black-dashed styling and the
+tooltip "AVSTÄNGD" label, and shows the window's HH:MM–HH:MM range when one
+exists. All independently re-verified before commit: single-distinct-route
+truncation math checked by hand against the new test's numbers, the
+TestTruncateStrandedVehicles class confirmed byte-unmodified in the diff.
 
 ### C3. Disruption metrics + fair baseline comparison — size M — SHARED with Phase D
 New module (suggest `closure_metrics.py`):
