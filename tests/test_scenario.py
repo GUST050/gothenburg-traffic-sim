@@ -210,6 +210,17 @@ class TestScenarioManifestDemandScope:
 
         assert run_scenario.demand_signature(meta) != run_scenario.demand_signature(changed)
 
+    def test_window_label_single_day(self):
+        meta = {"date": "2025-09-16", "begin": "00:00", "end": "24:00"}
+        assert run_scenario.demand_window_label(meta) == "2025-09-16 00:00–24:00"
+
+    def test_window_label_multi_day_does_not_need_date_key(self):
+        meta = {"start_date": "2025-09-16", "end_date_exclusive": "2025-09-18",
+                "days": 2}
+        assert "date" not in meta  # regression guard for the KeyError this fixes
+        assert run_scenario.demand_window_label(meta) == \
+            "2025-09-16 → 2025-09-18 (2 days)"
+
     def test_manifest_keeps_only_current_demand_entries(self):
         current = "abc123"
         old = "old999"

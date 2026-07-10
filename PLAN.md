@@ -331,6 +331,43 @@ Acceptance: run a full week baseline + one closure scenario; scrub through 7
 days in the browser; CDP-screenshot verification (pattern from 2026-07-09
 browser test: headless Chrome, `--remote-debugging-port`, real clicks).
 
+PARTIAL (2026-07-10, Claude, no Codex). Only the correctness blocker for
+multi-day demand was fixed and verified this round — the rest of B3's
+scope (trajectories opt-in, web day-boundary UI, serve.py `days` param,
+week-scale acceptance run + CDP screenshot) is still open, listed above
+unchanged.
+- Fixed the same `meta['date']` bug B2 found in `export_od()`, here in
+  `run_scenario.py` (scenario JSON payload + index manifest both built the
+  window label the same unsafe way). Extracted a shared
+  `demand_window_label(meta)` function (next to the existing
+  `demand_signature()`, same file, same pattern) instead of leaving the
+  fix duplicated inline — it degrades to `start_date`/`end_date_exclusive`/
+  `days` fields when `date` isn't in `meta`, verified no other code reads
+  the scenario JSON's `date`/`begin`/`end` keys directly (grepped
+  `serve.py`, `web/*.js`, `tests/`) so dropping those keys for multi-day
+  scenarios is safe. Two unit tests added
+  (`test_window_label_single_day`, `test_window_label_multi_day_does_not_
+  need_date_key`) — the multi-day one asserts `"date" not in meta` as an
+  explicit regression guard for the exact crash this fixes.
+- Ran `run_scenario.py` (baseline, 3 seeds, default trajectories still
+  on — the `--trajectories` opt-in flag doesn't exist yet, so this 2-day
+  run produced a 21.1 MB `baseline_traj.json`; acceptable at 2 days, would
+  need the opt-in flag before a week run per the plan's own ~90 MB/week
+  estimate) against the real B2 2-day demand: 22.7 s wall time, 42 788
+  vehicles, 2 800 edges with traffic, `web/data/scenarios/baseline.json` +
+  `index.json` regenerated correctly (`window`: "2025-09-16 → 2025-09-18
+  (2 days)"). This also fixed `test_index_lists_existing_files`, which
+  B2's demand rebuild had left failing (real, expected: `demand_metadata`
+  changing wipes stale scenarios via `clear_stale_scenarios()`, and no
+  code had regenerated them yet at that point in the session).
+- `pytest tests/ -q`: 444 passed, 21 skipped, 0 failed (up from B2's 442
+  passed/21 skipped — the 2 new window-label tests, no regressions).
+  `git status` checked: only `run_scenario.py`, `tests/test_scenario.py`,
+  and the regenerated `web/data/scenarios/*` differ; the old single-day
+  closure scenario files were correctly deleted by `clear_stale_scenarios`
+  in B2 and not resurrected (there is no closure scenario yet for the new
+  2-day demand — generating one is still open work, listed above).
+
 ---
 
 ## Phase C — "Best time to close a road" suggester

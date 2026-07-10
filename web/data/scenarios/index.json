@@ -1,24 +1,14 @@
 {
-  "demand_signature": "b5116ac70049",
+  "demand_signature": "5d7d1f6155a6",
   "scenarios": [
     {
       "name": "baseline",
       "label": "Baslinje (ingen avst\u00e4ngning)",
       "file": "baseline.json",
       "closed_edges": [],
-      "demand_signature": "b5116ac70049",
-      "window": "2025-09-16 00:00\u201324:00"
-    },
-    {
-      "name": "close_60786979_3575001205_0+1455801464_18241874_0",
-      "label": "Avst\u00e4ngning: Sk\u00e5negatan",
-      "file": "close_60786979_3575001205_0+1455801464_18241874_0.json",
-      "closed_edges": [
-        "60786979_3575001205_0",
-        "1455801464_18241874_0"
-      ],
-      "demand_signature": "b5116ac70049",
-      "window": "2025-09-16 00:00\u201324:00"
+      "closures": [],
+      "demand_signature": "5d7d1f6155a6",
+      "window": "2025-09-16 \u2192 2025-09-18 (2 days)"
     }
   ]
 }

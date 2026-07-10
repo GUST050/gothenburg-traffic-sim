@@ -77,6 +77,20 @@ def demand_signature(meta: dict) -> str:
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
 
+def demand_window_label(meta: dict) -> str:
+    """Human-readable date range for scenario/index display.
+
+    demand_metadata() (build_sumo_demand.py) only populates date/begin/end
+    for single-day demand; multi-day demand carries start_date/
+    end_date_exclusive/days instead. Reading meta['date'] unconditionally
+    crashes with KeyError on multi-day demand.
+    """
+    if "date" in meta:
+        return f"{meta['date']} {meta['begin']}–{meta['end']}"
+    return (f"{meta['start_date']} → {meta['end_date_exclusive']} "
+            f"({meta['days']} days)")
+
+
 def index_for_current_demand(index: dict, signature: str) -> dict:
     """Drop manifest entries generated from another demand calibration."""
     scenarios = [
@@ -684,6 +698,8 @@ def main() -> None:
         cv   = float((stack.std(axis=0)[busy] / mean[busy]).mean()) if busy.any() else 0.0
         conf_out[eid] = round(prior[eid] * float(np.exp(-cv)), 3)
 
+    window_label = demand_window_label(meta)
+
     traj_name = None
     if not args.no_trajectories:
         traj_name = export_trajectories(name, variants[0], closure_add,
@@ -700,8 +716,13 @@ def main() -> None:
             "name": name, "label": label,
             "closed_edges": close_edges,
             "closures": closures,
-            "date": meta["date"], "source": meta.get("source", "historical"),
-            "begin": meta["begin"], "end": meta["end"],
+            "window": window_label,
+            "source": meta.get("source", "historical"),
+            **({"date": meta["date"], "begin": meta["begin"], "end": meta["end"]}
+               if "date" in meta else
+               {"start_date": meta["start_date"],
+                "end_date_exclusive": meta["end_date_exclusive"],
+                "days": meta["days"]}),
             "seeds": args.seeds,
             "demand_signature": sig,
         },
@@ -724,7 +745,7 @@ def main() -> None:
         "closed_edges": close_edges,
         "closures": closures,
         "demand_signature": sig,
-        "window": f"{meta['date']} {meta['begin']}–{meta['end']}{src_tag}",
+        "window": f"{window_label}{src_tag}",
     })
     index["scenarios"].sort(key=lambda s: s["name"])
     with open(index_path, "w") as f:
