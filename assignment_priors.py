@@ -157,6 +157,30 @@ def add_path_load(
         load[edge_id] = load.get(edge_id, 0) + 1
 
 
+def fastest_parallel_edge_times(G) -> tuple[dict[tuple, float], dict[tuple, object]]:
+    """Collapse a MultiDiGraph to one travel-time edge per (u, v) node pair.
+
+    A (u, v) pair with parallel edges (52 in this graph, e.g. a short slip
+    lane alongside a through lane) collapses to ONE travel-time edge by
+    design (add_path_load's docstring: the perturbed routing graphs are
+    simple DiGraphs, one edge per pair). Found in a review 2026-07-10:
+    keeping whichever edge the iterator happened to visit LAST silently
+    discarded the faster parallel edge in a real case (0.49s kept-vs-
+    discarded 1.53s, a 3x difference) — a rational driver, and any
+    shortest-path routing, picks the FASTER physical link, not an
+    arbitrary one. Keeps the minimum (fastest) travel time among parallel
+    edges instead."""
+    base_time: dict[tuple, float] = {}
+    base_time_key: dict[tuple, object] = {}
+    for u, v, k, d in G.edges(keys=True, data=True):
+        speed = parse_speed_ms(d)
+        t = d.get("length", 1.0) / max(speed, 1.0)
+        if (u, v) not in base_time or t < base_time[(u, v)]:
+            base_time[(u, v)] = t
+            base_time_key[(u, v)] = k
+    return base_time, base_time_key
+
+
 def compute_assignment_load(
     n_samples: int = DEFAULT_N_SAMPLES,
     gravity_km: float = DEFAULT_GRAVITY_KM,
@@ -174,12 +198,7 @@ def compute_assignment_load(
     rng = np.random.default_rng(seed)
 
     G = ox.load_graphml(GRAPH_PATH)
-    base_time = {}
-    base_time_key = {}
-    for u, v, k, d in G.edges(keys=True, data=True):
-        speed = parse_speed_ms(d)
-        base_time[(u, v)] = d.get("length", 1.0) / max(speed, 1.0)
-        base_time_key[(u, v)] = k
+    base_time, base_time_key = fastest_parallel_edge_times(G)
 
     print(f"Building {n_variants} randomly-perturbed travel-time graphs "
           f"(stochastic multipath stand-in) …")

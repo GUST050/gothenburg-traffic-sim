@@ -16,7 +16,45 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from assignment_priors import (build_perturbed_variants, daily_shape,
-                               robust_scale, add_path_load)
+                               fastest_parallel_edge_times, robust_scale,
+                               add_path_load)
+
+
+class TestFastestParallelEdgeTimes:
+    """Found in a review 2026-07-10: collapsing parallel edges to one
+    travel-time edge per (u, v) pair used to keep whichever edge the
+    MultiDiGraph iterator visited LAST, not the fastest — a real case had
+    a 0.49s edge silently discarded in favor of a 1.53s one purely due to
+    iteration order."""
+
+    def test_keeps_the_faster_of_two_parallel_edges_regardless_of_order(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=100.0, maxspeed="30")   # slow: ~12s
+        G.add_edge(1, 2, key=1, length=100.0, maxspeed="50")   # fast: ~7.2s
+
+        base_time, base_time_key = fastest_parallel_edge_times(G)
+
+        assert base_time_key[(1, 2)] == 1
+        assert base_time[(1, 2)] == pytest.approx(100.0 / (50 / 3.6))
+
+    def test_order_of_edge_insertion_does_not_matter(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=100.0, maxspeed="50")   # fast, inserted FIRST
+        G.add_edge(1, 2, key=1, length=100.0, maxspeed="30")   # slow, inserted SECOND
+
+        base_time, base_time_key = fastest_parallel_edge_times(G)
+
+        assert base_time_key[(1, 2)] == 0
+        assert base_time[(1, 2)] == pytest.approx(100.0 / (50 / 3.6))
+
+    def test_single_edge_pair_unaffected(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=200.0, maxspeed="40")
+
+        base_time, base_time_key = fastest_parallel_edge_times(G)
+
+        assert base_time_key[(1, 2)] == 0
+        assert base_time[(1, 2)] == pytest.approx(200.0 / (40 / 3.6))
 
 
 class TestBuildPerturbedVariants:
