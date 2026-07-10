@@ -75,7 +75,8 @@ def run_meso(route_file: Path, ed_file: Path, duration_s: int) -> None:
                 f'period="900" begin="0" end="{duration_s}" '
                 f'excludeEmpty="true"/></additional>\n')
     cmd = [str(home / "bin" / "sumo"),
-           "--mesosim", "true", "--meso-junction-control", "false",
+           "--mesosim", "true", "--meso-junction-control", "true",
+           "--meso-junction-control.limited", "true",
            "-n", str((SUMO_DIR / "net.net.xml").resolve()),
            "-r", str(route_file.resolve()), "-a", str(add.resolve()),
            "--begin", "0", "--end", str(duration_s + 3600),
@@ -178,6 +179,29 @@ def simulated_series(ed_file: Path, edge: str, nq: int) -> np.ndarray:
     return out
 
 
+def require_historical_demand(meta: dict) -> None:
+    """Reject demand that cannot be compared with the 2025 observations."""
+    source = meta.get("source")
+    if source != "historical":
+        raise SystemExit(
+            "LOSO kräver kalibrerad HISTORISK demand (2025) — nuvarande "
+            f"sumo/demand_meta.json har 'source': {source!r}. Kör om "
+            "build_sumo_demand.py med --source historical först."
+        )
+    try:
+        year = pd.Timestamp(meta["date"]).year
+    except (KeyError, TypeError, ValueError):
+        raise SystemExit(
+            "LOSO kräver ett giltigt datum under 2025 i "
+            "sumo/demand_meta.json."
+        )
+    if year != EPOCH.year:
+        raise SystemExit(
+            "LOSO kräver kalibrerad historisk demand för 2025, samma år som "
+            f"web/data/flows.json — demand_meta.json har datum {meta['date']!r}."
+        )
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-assignment-prior", action="store_true",
@@ -186,6 +210,7 @@ def main() -> None:
     args = ap.parse_args()
 
     flows, meta, all_priors, corridor = load_inputs()
+    require_historical_demand(meta)
     assignment_load = None
     if not args.no_assignment_prior:
         print("Computing structural assignment load once for LOSO folds …")

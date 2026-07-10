@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from assignment_priors import (build_perturbed_variants, daily_shape,
-                               robust_scale)
+                               robust_scale, add_path_load)
 
 
 class TestBuildPerturbedVariants:
@@ -65,6 +65,24 @@ class TestBuildPerturbedVariants:
             path = nx.shortest_path(v, 1, 4, weight="weight")
             winners.add(tuple(path))
         assert len(winners) > 1
+
+
+class TestPathLoading:
+    def test_parallel_edges_load_only_the_key_used_by_routing_graph(self):
+        graph = nx.MultiDiGraph()
+        graph.add_edge("a", "b", key="first")
+        graph.add_edge("a", "b", key="winning")
+        load = {"a_b_first": 0.0, "a_b_winning": 0.0}
+
+        # This mirrors compute_assignment_load: the final MultiDiGraph edge
+        # encountered for (a, b) is the one represented in its DiGraph.
+        base_time_key = {}
+        for u, v, key in graph.edges(keys=True):
+            base_time_key[(u, v)] = key
+        add_path_load(load, ["a", "b"], base_time_key)
+
+        assert load["a_b_winning"] == 1.0
+        assert load["a_b_first"] == 0.0
 
 
 class TestRobustScale:

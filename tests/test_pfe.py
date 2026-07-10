@@ -193,6 +193,17 @@ class TestRouteCostAffectsSolution:
 
 
 class TestCalibrateGEH:
+    def test_reports_measured_edges_without_candidate_coverage(self, tmp_path):
+        cand_path = tmp_path / "candidates.rou.xml"
+        cand_path.write_text(
+            '<routes><vehicle id="0" depart="0.00">'
+            '<route edges="other"/></vehicle></routes>'
+        )
+        report = calibrate(cand_path, tmp_path / "calibrated.rou.xml",
+                           [{"missing": 10.0}], [{}], [{}])
+
+        assert report["unserviceable_edges"] == ["missing"]
+
     def test_hour_with_null_first_quarter_still_counted(self, tmp_path):
         """A measured edge that's missing (null) only in an hour's FIRST
         quarter, but present in the other three, must still be checked for

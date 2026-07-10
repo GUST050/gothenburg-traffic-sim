@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+import validate_sim
 from validate_sim import corridor_priors_for_fold
 
 
@@ -83,3 +84,35 @@ class TestCorridorPriorsForFold:
         out = corridor_priors_for_fold(corridor, edge_to_sensor, held="107", qi=0)
         assert "mid1" not in out   # anchored on held-out 107
         assert out["mid2"] == pytest.approx((20.0, 0.25))
+
+
+class TestHistoricalDemandGuard:
+    def test_forecast_demand_exits_before_assignment_or_sumo(self, monkeypatch):
+        meta = {"source": "forecast", "date": "2027-09-16"}
+        monkeypatch.setattr(validate_sim, "load_inputs",
+                            lambda: ({}, meta, {}, {}))
+        monkeypatch.setattr(
+            validate_sim, "compute_assignment_load",
+            lambda: pytest.fail("LOSO started assignment loading for forecast demand"),
+        )
+        monkeypatch.setattr(sys, "argv", ["validate_sim.py"])
+
+        with pytest.raises(SystemExit, match="HISTORISK demand"):
+            validate_sim.main()
+
+
+class TestRunMeso:
+    def test_uses_production_limited_junction_control(self, tmp_path, monkeypatch):
+        sumo_dir = tmp_path / "sumo"
+        sumo_dir.mkdir()
+        calls = []
+        monkeypatch.setattr(validate_sim, "SUMO_DIR", sumo_dir)
+        monkeypatch.setattr(validate_sim, "sumo_home", lambda: tmp_path / "sumo-home")
+        monkeypatch.setattr(validate_sim.subprocess, "run",
+                            lambda cmd, **kwargs: calls.append(cmd))
+
+        validate_sim.run_meso(sumo_dir / "routes.xml", sumo_dir / "edge.xml", 900)
+
+        cmd = calls[0]
+        assert cmd[cmd.index("--meso-junction-control") + 1] == "true"
+        assert cmd[cmd.index("--meso-junction-control.limited") + 1] == "true"

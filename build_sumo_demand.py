@@ -764,6 +764,20 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         _PFE_PAR_ROUTE_COST = None
 
 
+def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
+    """Make missing candidate coverage visible without blocking a demand run.
+
+    This intentionally follows the existing non-blocking GEH gate: a route
+    pool defect must be unmistakable to the operator, while still preserving
+    the usable output for the remaining measured edges.
+    """
+    edges = report.get("unserviceable_edges", [])
+    if edges:
+        print(f"  ⚠ UNSERVICEABLE MEASURED EDGES ({label}): "
+              f"{', '.join(edges)} — no candidate route can serve these "
+              "hard measurements; regenerate/fix the candidate pool.")
+
+
 def main() -> None:
     args = parse_args()
     if not NET_PATH.exists():
@@ -974,6 +988,7 @@ def main() -> None:
                         print(f"  {label} {key:<16} {variant_report['vehicles']:>6} veh  "
                               f"GEH<5: {variant_report['geh_pct']}%  "
                               f"(infeasible intervals: {variant_report['infeasible_intervals']})")
+                        warn_unserviceable_measured_edges(variant_report, key)
                         if variant_report["geh_pct"] < 100:
                             print("  ⚠ measured-edge fit below gate — inspect before use")
                     report = reports[""]
@@ -987,6 +1002,7 @@ def main() -> None:
                     print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                           f"GEH<5: {report['geh_pct']}%  "
                           f"(infeasible intervals: {report['infeasible_intervals']})")
+                    warn_unserviceable_measured_edges(report, "edge_shares")
                 break
 
             targets = build_targets(flows, sensor_edges, qi_start,
@@ -998,6 +1014,7 @@ def main() -> None:
             print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                   f"GEH<5: {report['geh_pct']}%  "
                   f"(infeasible intervals: {report['infeasible_intervals']})")
+            warn_unserviceable_measured_edges(report, "edge_shares")
 
             if args.congestion_method == "simulate":
                 # Simple GEH-based early stop — this method is meant for an

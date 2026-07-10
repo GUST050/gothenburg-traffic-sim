@@ -610,6 +610,15 @@ def write_calibration_report(
                 vid += 1
         f.write("</routes>\n")
 
+    # A missing candidate is not a valid reason to quietly treat a measured
+    # count as unconstrained. The solvers still omit such an impossible row
+    # so other edges in the interval can be served, but expose it prominently
+    # to the demand pipeline instead of letting GEH alone hide the condition.
+    candidate_edges = {e for cand in shapes for e in cand.edges}
+    unserviceable_edges = sorted({
+        e for targets in targets_per_q for e in targets if e not in candidate_edges
+    })
+
     # GEH on hourly aggregates at measured edges — the standard fit metric.
     # An edge counts for an hour if ANY of its 4 quarters has a measurement —
     # checking only targets_per_q[i] (the hour's first quarter) would silently
@@ -629,7 +638,8 @@ def write_calibration_report(
     return {"vehicles": vid, "infeasible_intervals": infeasible,
             "geh_ok": geh_ok, "geh_total": geh_all,
             "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
-            "achieved": achieved}
+            "achieved": achieved,
+            "unserviceable_edges": unserviceable_edges}
 
 
 def calibrate(

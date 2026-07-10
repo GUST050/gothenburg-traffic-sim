@@ -46,6 +46,15 @@ def test_build_targets_single_direction_sensor_takes_full_count(monkeypatch, tmp
     assert targets[0]["edgeS"] == 80.0
 
 
+def test_unserviceable_measured_edges_emit_explicit_warning(capsys):
+    bsd.warn_unserviceable_measured_edges(
+        {"unserviceable_edges": ["a_b_0", "b_c_1"]}, "edge_shares")
+
+    out = capsys.readouterr().out
+    assert "UNSERVICEABLE MEASURED EDGES" in out
+    assert "a_b_0, b_c_1" in out
+
+
 def test_write_counts_splits_two_way_total_by_direction_share(monkeypatch, tmp_path):
     monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
     write_direction_split(tmp_path, {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96})

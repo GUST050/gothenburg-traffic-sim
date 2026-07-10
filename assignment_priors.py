@@ -141,6 +141,22 @@ def daily_shape() -> np.ndarray:
     return acc / acc.sum()
 
 
+def add_path_load(
+    load: dict[str, float], path: list, base_time_key: dict[tuple, object]
+) -> None:
+    """Add one routed path to the specific parallel edges used for routing.
+
+    ``build_perturbed_variants`` is deliberately a simple DiGraph, so each
+    node pair has exactly one selected travel-time edge.  Preserve that edge
+    key from the original MultiDiGraph rather than loading every parallel
+    edge between the same two nodes.
+    """
+    for u, v in zip(path, path[1:]):
+        key = base_time_key[(u, v)]
+        edge_id = f"{u}_{v}_{key}"
+        load[edge_id] = load.get(edge_id, 0) + 1
+
+
 def compute_assignment_load(
     n_samples: int = DEFAULT_N_SAMPLES,
     gravity_km: float = DEFAULT_GRAVITY_KM,
@@ -159,9 +175,11 @@ def compute_assignment_load(
 
     G = ox.load_graphml(GRAPH_PATH)
     base_time = {}
-    for u, v, d in G.edges(data=True):
+    base_time_key = {}
+    for u, v, k, d in G.edges(keys=True, data=True):
         speed = parse_speed_ms(d)
         base_time[(u, v)] = d.get("length", 1.0) / max(speed, 1.0)
+        base_time_key[(u, v)] = k
 
     print(f"Building {n_variants} randomly-perturbed travel-time graphs "
           f"(stochastic multipath stand-in) …")
@@ -210,9 +228,7 @@ def compute_assignment_load(
             continue
         vi += 1
         n_ok += 1
-        for a, b in zip(path, path[1:]):
-            for k in G[a][b]:
-                load[f"{a}_{b}_{k}"] = load.get(f"{a}_{b}_{k}", 0) + 1
+        add_path_load(load, path, base_time_key)
 
     # E-I / I-E / I-I: home ↔ activity, gravity-weighted
     home_idx = rng.choice(len(edges), size=n_tours, p=pH)
@@ -239,9 +255,7 @@ def compute_assignment_load(
         vi += 1
         n_ok += 1
         load[edges[h_i]["id"]] += 1
-        for a, b in zip(path, path[1:]):
-            for k in G[a][b]:
-                load[f"{a}_{b}_{k}"] = load.get(f"{a}_{b}_{k}", 0) + 1
+        add_path_load(load, path, base_time_key)
         load[edges[a_i]["id"]] += 1
     print(f"  {n_ok} pairs routed, {n_nopath} had no path (disconnected "
           f"fringe — expected at a clipped bbox)")
