@@ -5,13 +5,85 @@ perfectly-calibrated direction look like it only delivers ~50%, an artifact
 found 2026-07-06 while investigating sensor 107 — see CLAUDE.md)."""
 
 import json
+import sys
 import subprocess
 import xml.etree.ElementTree as ET
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import build_sumo_demand as bsd
+
+
+class TestB1DateRangeContract:
+    def test_date_is_a_backward_compatible_single_day_alias(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py", "--date", "2025-09-17"])
+        args = bsd.parse_args()
+        assert args.start_date == "2025-09-17"
+        assert args.days == 1
+
+    def test_validate_range_rejects_year_boundary_crossing(self):
+        with pytest.raises(ValueError, match="crosses"):
+            bsd.validate_date_range("2025-12-31", days=2, source_year=2025)
+
+    def test_validate_range_allows_last_single_day_of_year(self):
+        start, end = bsd.validate_date_range("2025-12-31", days=1, source_year=2025)
+        assert start.strftime("%Y-%m-%d") == "2025-12-31"
+        assert end.strftime("%Y-%m-%d") == "2026-01-01"
+
+    def test_multi_day_cli_exits_before_single_day_candidate_generation(self, monkeypatch, tmp_path):
+        flows_path = tmp_path / "flows.json"
+        flows_path.write_text(json.dumps({"epoch": "2025-01-01T00:00:00", "flows": {}}))
+        monkeypatch.setattr(bsd, "FLOWS_PATH", flows_path)
+        monkeypatch.setattr(bsd, "parse_args", lambda: type("Args", (), {
+            "source": "historical", "start_date": "2025-09-16", "days": 2,
+        })())
+
+        with pytest.raises(SystemExit, match=r"multi-day build \(B2\) not implemented yet"):
+            bsd.main()
+
+    def test_single_day_metadata_keeps_legacy_fields_and_adds_range_contract(self):
+        meta = bsd.demand_metadata(
+            start_date="2025-09-16", days=1, source="historical",
+            begin="06:00", end="10:00", qi_start=2472, n_intervals=16,
+            epoch_sim=pd.Timestamp("2025-09-16 06:00"),
+            direction_split="estimated", n_variants=3,
+        )
+        assert {"start_date", "days", "end_date_exclusive", "day_boundaries_s", "day_kinds"} <= set(meta)
+        assert meta["start_date"] == meta["date"] == "2025-09-16"
+        assert meta["days"] == 1
+        assert meta["end_date_exclusive"] == "2025-09-17"
+        assert meta["day_boundaries_s"] == [0, 86400]
+        assert meta["day_kinds"] == ["weekday"]
+        assert meta["begin"] == "06:00"
+        assert meta["end"] == "10:00"
+
+    def test_multi_day_metadata_uses_range_fields_not_legacy_single_day_fields(self):
+        meta = bsd.demand_metadata(
+            start_date="2025-09-16", days=2, source="historical",
+            begin="00:00", end="24:00", qi_start=0, n_intervals=192,
+            epoch_sim=pd.Timestamp("2025-09-16"),
+            direction_split="estimated", n_variants=3,
+        )
+        assert meta["end_date_exclusive"] == "2025-09-18"
+        assert meta["day_boundaries_s"] == [0, 86400, 172800]
+        assert meta["day_kinds"] == ["weekday", "weekday"]
+        assert not {"date", "begin", "end"} & set(meta)
+
+    def test_bounds_and_priors_remain_tied_to_structural_reference(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(bsd, "ensure_bounds", lambda date, begin, end: calls.append(
+            ("bounds", date, begin, end)) or {"bounds": {}})
+        monkeypatch.setattr(bsd, "ensure_priors", lambda date: calls.append(
+            ("priors", date)) or {"edges": {}})
+
+        bsd.structural_bounds_and_priors("00:00", "24:00")
+
+        assert calls == [
+            ("bounds", bsd.STRUCTURAL_REFERENCE_DATE, "00:00", "24:00"),
+            ("priors", bsd.STRUCTURAL_REFERENCE_DATE),
+        ]
 
 
 def write_direction_split(tmp_path, shares: dict[str, list[float]]) -> None:

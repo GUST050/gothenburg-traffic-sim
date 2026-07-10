@@ -67,8 +67,12 @@ CANDIDATE_PERIOD_S = 2.0
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--date",  default="2025-09-16",
-                   help="Simulation date (default: Tue 2025-09-16 — normal September weekday)")
+    p.add_argument("--date", default=None,
+                   help="Backward-compatible alias for --start-date DATE --days 1")
+    p.add_argument("--start-date", default=None,
+                   help="First simulation date, YYYY-MM-DD (default: Tue 2025-09-16)")
+    p.add_argument("--days", type=int, default=1,
+                   help="Number of consecutive calendar days (default: 1; multi-day build is B2)")
     p.add_argument("--source", choices=["historical", "forecast"], default="historical",
                    help="historical = calibrate against actual 2025 sensor "
                         "counts (--date must be in 2025); forecast = "
@@ -145,7 +149,64 @@ def parse_args() -> argparse.Namespace:
                         "not 1-2) practical. 'simulate': a real meso pass "
                         "per iteration (more accurate per step, far slower — "
                         "use for a final accuracy check, not routine runs).")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.days < 1:
+        p.error("--days must be at least 1")
+    if args.date is not None and args.start_date is not None:
+        p.error("use either --date or --start-date, not both")
+    if args.date is not None and args.days != 1:
+        p.error("--date is an alias for --start-date DATE --days 1")
+    args.start_date = args.start_date or args.date or "2025-09-16"
+    return args
+
+
+def validate_date_range(start_date: str, days: int, source_year: int) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Return [start, end) after requiring the whole calendar range in one year."""
+    if days < 1:
+        raise ValueError("--days must be at least 1")
+    try:
+        start = pd.Timestamp(start_date)
+    except (TypeError, ValueError):
+        raise ValueError(f"--start-date must be YYYY-MM-DD, got {start_date!r}") from None
+    if start.strftime("%Y-%m-%d") != start_date:
+        raise ValueError(f"--start-date must be YYYY-MM-DD, got {start_date!r}")
+    end_exclusive = start + pd.Timedelta(days=days)
+    year_end = pd.Timestamp(year=source_year + 1, month=1, day=1)
+    if start.year != source_year or end_exclusive > year_end:
+        raise ValueError(
+            f"date range {start.date()} through {(end_exclusive - pd.Timedelta(days=1)).date()} "
+            f"crosses or lies outside the {source_year} source year")
+    return start, end_exclusive
+
+
+def demand_metadata(*, start_date: str, days: int, source: str, begin: str,
+                    end: str, qi_start: int, n_intervals: int,
+                    epoch_sim: pd.Timestamp, direction_split: str,
+                    n_variants: int) -> dict:
+    """Demand metadata contract; B2 will make multi-day calibration consume it."""
+    start, end_exclusive = validate_date_range(start_date, days, epoch_sim.year)
+    meta = {
+        "start_date": start.strftime("%Y-%m-%d"),
+        "days": days,
+        "end_date_exclusive": end_exclusive.strftime("%Y-%m-%d"),
+        "day_boundaries_s": [day * 86400 for day in range(days + 1)],
+        "day_kinds": [classify_day(day.strftime("%Y-%m-%d"), day.dayofweek)[1]
+                      for day in pd.date_range(start, periods=days, freq="D")],
+        "source": source,
+        "qi_start": qi_start,
+        "n_intervals": n_intervals,
+        # ISO with 'T' — Safari/Firefox reject "YYYY-MM-DD HH:MM" in new Date()
+        "epoch_sim": epoch_sim.isoformat(),
+        "direction_split": direction_split,
+        "n_variants": n_variants,
+        "note": "Total sensor counts split over the two directed edges using "
+                "the estimated time-of-day split (estimate_directions.py); "
+                "direction is not measured in the delivered data.",
+    }
+    # Legacy consumers deliberately retain their exact single-day fields.
+    if days == 1:
+        meta.update({"date": start_date, "begin": begin, "end": end})
+    return meta
 
 
 def classify_day(date_str: str, dayofweek: int) -> tuple[bool, str]:
@@ -370,6 +431,12 @@ def ensure_priors(date: str) -> dict:
         return {"edges": {}}
     with open(path) as f:
         return json.load(f)
+
+
+def structural_bounds_and_priors(begin: str, end: str) -> tuple[dict, dict]:
+    """Load date-invariant structural inputs, never target-date inputs."""
+    return (ensure_bounds(STRUCTURAL_REFERENCE_DATE, begin, end),
+            ensure_priors(STRUCTURAL_REFERENCE_DATE))
 
 
 def write_counts(
@@ -780,28 +847,32 @@ def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
 
 def main() -> None:
     args = parse_args()
-    if not NET_PATH.exists():
-        sys.exit("sumo/net.net.xml missing — run build_sumo_net.py first")
-
     flows_path = FLOWS_FORECAST_PATH if args.source == "forecast" else FLOWS_PATH
     with open(flows_path) as f:
         flows_payload = json.load(f)
     source_epoch = pd.Timestamp(flows_payload["epoch"])
     flows        = flows_payload["flows"]
 
-    t0 = pd.Timestamp(f"{args.date} {args.begin}")
+    try:
+        validate_date_range(args.start_date, args.days, source_epoch.year)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    if args.days > 1:
+        # B1 establishes the range metadata contract only. Generating one
+        # continuous candidate pool with per-day departures is B2 work.
+        sys.exit("multi-day build (B2) not implemented yet")
+    if not NET_PATH.exists():
+        sys.exit("sumo/net.net.xml missing — run build_sumo_net.py first")
+
+    t0 = pd.Timestamp(f"{args.start_date} {args.begin}")
     if args.end == "24:00":   # whole day — pandas rejects hour 24
         t1 = t0.normalize() + pd.Timedelta(days=1)
     else:
-        t1 = pd.Timestamp(f"{args.date} {args.end}")
-    if not (source_epoch <= t0 < source_epoch + pd.Timedelta(days=365)):
-        sys.exit(f"--date {args.date} is outside the {args.source} data's "
-                 f"year ({source_epoch.year}) — pass a {source_epoch.year} "
-                 f"date, or --source historical for a 2025 date")
+        t1 = pd.Timestamp(f"{args.start_date} {args.end}")
     qi_start    = int((t0 - source_epoch) / INTERVAL)
     n_intervals = int((t1 - t0) / INTERVAL)
     duration_s  = n_intervals * 900
-    use_weekend_shape, day_kind = classify_day(args.date, t0.dayofweek)
+    use_weekend_shape, day_kind = classify_day(args.start_date, t0.dayofweek)
     print(f"Window: {t0} → {t1}  ({n_intervals} × 15 min)  source={args.source}"
           f"  {day_kind}")
 
@@ -880,8 +951,7 @@ def main() -> None:
         import pfe
         # Structural (see STRUCTURAL_REFERENCE_DATE) — always the real 2025
         # reference date, even when simulating a --source forecast date.
-        bounds_data = ensure_bounds(STRUCTURAL_REFERENCE_DATE, args.begin, args.end)
-        priors_data = ensure_priors(STRUCTURAL_REFERENCE_DATE)
+        bounds_data, priors_data = structural_bounds_and_priors(args.begin, args.end)
         obs_data    = ensure_observability()
         corridor    = obs_data.get("corridor_priors", {})
         if corridor:
@@ -1065,17 +1135,13 @@ def main() -> None:
                 "--seed", str(args.seed),
             ], home)
 
-    meta = {
-        "date": args.date, "source": args.source, "begin": args.begin, "end": args.end,
-        "qi_start": qi_start, "n_intervals": n_intervals,
-        # ISO with 'T' — Safari/Firefox reject "YYYY-MM-DD HH:MM" in new Date()
-        "epoch_sim": t0.isoformat(),
-        "direction_split": "estimated" if load_direction_split() else "even",
-        "n_variants": len(variants),
-        "note": "Total sensor counts split over the two directed edges using "
-                "the estimated time-of-day split (estimate_directions.py); "
-                "direction is not measured in the delivered data.",
-    }
+    meta = demand_metadata(
+        start_date=args.start_date, days=args.days, source=args.source,
+        begin=args.begin, end=args.end, qi_start=qi_start,
+        n_intervals=n_intervals, epoch_sim=t0,
+        direction_split="estimated" if load_direction_split() else "even",
+        n_variants=len(variants),
+    )
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")
