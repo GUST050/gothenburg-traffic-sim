@@ -531,9 +531,18 @@
           if (!res.ok) throw new Error(`${res.status}`);
           scenIndex = await res.json();
           const current = scenSelect.value;
-          scenSelect.innerHTML = scenIndex.scenarios.map(s =>
-            `<option value="${s.file}">${s.label} · ${s.window}</option>`
-          ).join('');
+          // Build <option> elements directly instead of innerHTML template
+          // strings — s.label includes OSM street names (run_scenario.py:
+          // "Avstängning: " + street names), which are semi-trusted, user-
+          // editable data, not literal app-authored content. textContent
+          // escapes it automatically; the old template-string interpolation
+          // did not. Found in a review 2026-07-10.
+          scenSelect.replaceChildren(...scenIndex.scenarios.map(s => {
+            const opt = document.createElement('option');
+            opt.value = s.file;
+            opt.textContent = `${s.label} · ${s.window}`;
+            return opt;
+          }));
           if ([...scenSelect.options].some(o => o.value === current)) {
             scenSelect.value = current;
           }
