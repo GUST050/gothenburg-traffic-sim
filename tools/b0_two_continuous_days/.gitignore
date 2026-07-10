@@ -1,0 +1,4 @@
+# Generated SUMO runs (hundreds of MB) — only the scripts are tracked.
+*
+!.gitignore
+!*.py

@@ -132,9 +132,49 @@ No product code. Script (can live in `tools/` or a scratch dir) that:
    - vehicles still `running`/`waiting` at each midnight (summary output);
    - Δ between continuous 48 h and 2×24 h on: per-quarter flows near midnight
      (23:00–01:00), total timeLoss, teleports.
-Acceptance: numbers recorded; decision confirmed or revised. If continuous ≈
-chained AND resources are a problem, chaining becomes a legitimate fallback —
-document whichever wins.
+**Mätning — 2026-07-10 (SUMO 1.27.1, meso, seed 1000).** Reproducerbart
+probe-skript och alla otrackade råresultat ligger i
+`tools/b0_two_continuous_days/`. Varje `build_sumo_demand.py` kördes
+synkront med `subprocess.run(check=True, timeout=1200)`; direkt efter lyckad
+retur lästes `sumo/demand_meta.json` och kontrollerades (`date` exakt
+2025-09-16 respektive 2025-09-17) innan q50/q10/q90-routefilerna kopierades
+till dagsnapshots. Detta undviker uttryckligen attempt-2:s XML-copy-race.
+
+- Demand: dag 1 tog 638.63 s (q50 27,238,128 B; q10 25,199,736 B; q90
+  28,613,619 B) och dag 2 547.89 s (q50 27,522,714 B; q10 25,653,642 B;
+  q90 28,980,548 B). 48h q50 hade 46,112 unika fordon (`d1_`/`d2_`),
+  55,290,900 B. Alla tre SUMO-körningar hade explicit `timeout=300`.
+- Väggtid: kontinuerlig 48h 7.24 s; separata 24h: dag 1 5.06 s, dag 2
+  4.39 s (=9.45 s). Observerad högsta child-RSS över körserien var
+  575,913,984 B (549.2 MiB; `RUSAGE_CHILDREN` ger en säker övre gräns, inte
+  en separat per-SUMO-processprofil).
+- Filer: 48h edgeData (192 × 15 min) 93,901,415 B; dess
+  scenario-output (tripinfo+summary+statistics) 20,876,084 B. De separata
+  edgeData-filerna var 46,378,629 + 47,480,673 = 93,859,302 B och scenario-
+  output 10,184,608 + 10,375,579 = 20,560,187 B. En enkel veckoprojektion
+  (×3.5 från 48h) är 193,518,150 B route, 328,654,953 B edgeData och
+  73,066,294 B scenario-output (≈184.6, 313.4 och 69.7 MiB).
+- Vid midnatt t=86,400 var både kontinuerlig och avslutad dag-1-körning
+  `running=2`, `waiting=0`, `teleports=0`; i den separata kedjan kastas de
+  två kvarvarande fordonen därefter bort före dag 2:s nollställda start.
+  Inga teleporter rapporterades i någon körning.
+- Summerade edge-`entered` per kvart nära midnatt (q92–q100;
+  kontinuerlig / separata / Δ): q92 3106/3106/0, q93 2517/2517/0,
+  q94 1890/1890/0, q95 1157/1157/0, q96 1066/1010/+56,
+  q97 1508/1523/−15, q98 1224/1220/+4, q99 1025/1010/+15,
+  q100 808/807/+1. Skillnaden är alltså begränsad till övergången och
+  högst 56 edge-inträden i en kvart.
+- Total `timeLoss`: kontinuerligt 2,159,737.91 s; separata dagar
+  1,038,426.90 + 1,130,585.70 = 2,169,012.60 s. Kontinuerligt är
+  9,274.69 s (0.428%) lägre.
+
+**Beslut.** Resultatet stödjer en sammanhängande 48h-körning som den mest
+semantiskt korrekta vägen: den behåller de två fordon som passerar midnatt,
+ger den lilla men mätbara förbättringen i `timeLoss`, och är dessutom 2.21 s
+snabbare än två körningar här. Samtidigt är flödesskillnaden efter midnatt
+liten och teleporter saknas, så kedjade separata dygn är en legitim praktisk
+fallback om fler-dagarsresurser eller implementation blir ett problem; den
+måste då dokumentera att fordon som ännu kör vid dygnsgränsen inte bevaras.
 
 ### B1. Date-range contract in demand metadata — size M
 `build_sumo_demand.py`:
