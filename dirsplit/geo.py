@@ -17,6 +17,21 @@ def ang_diff_deg(a: float, b: float) -> float:
     return abs((a - b + 180) % 360 - 180)
 
 
+def circular_mean_deg(a: float, b: float) -> float:
+    """Mean of two bearings, correct across the 0/360 wraparound.
+
+    A naive (a+b)/2 is wrong whenever the two bearings straddle north: for
+    350 and 10 (both close to due north, ang_diff_deg only 20) it gives 180
+    (due SOUTH) instead of ~0/360. Vector-averaging (mean sin, mean cos,
+    atan2 back) handles wraparound correctly; found in a review 2026-07-10
+    while auditing observability.py's corridor-coupling bearing average,
+    which is the caller that needed this."""
+    ra, rb = math.radians(a), math.radians(b)
+    s = (math.sin(ra) + math.sin(rb)) / 2
+    c = (math.cos(ra) + math.cos(rb)) / 2
+    return math.degrees(math.atan2(s, c)) % 360
+
+
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     R = 6_371_000
     p1, p2 = math.radians(lat1), math.radians(lat2)

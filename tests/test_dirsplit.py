@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from dirsplit.geo import (ang_diff_deg, bearing_deg, haversine_m, in_bbox,
-                          is_ahead, point_to_polyline_m, radial_cos)
+from dirsplit.geo import (ang_diff_deg, bearing_deg, circular_mean_deg,
+                          haversine_m, in_bbox, is_ahead, point_to_polyline_m,
+                          radial_cos)
 
 
 class TestBearing:
@@ -40,6 +41,28 @@ class TestAngles:
 
     def test_opposite(self):
         assert ang_diff_deg(0, 180) == pytest.approx(180)
+
+
+class TestCircularMean:
+    """Found in a review 2026-07-10: observability.py's corridor_priors()
+    averaged two sensor bearings with naive (b1+b2)/2, which is wrong
+    whenever they straddle 0/360 — 350 and 10 (both near due north,
+    ang_diff_deg only 20) averaged to 180 (due SOUTH), the exact opposite
+    direction. circular_mean_deg fixes this via vector averaging."""
+
+    def test_matches_naive_average_away_from_wraparound(self):
+        assert circular_mean_deg(80, 100) == pytest.approx(90, abs=0.01)
+
+    def test_correct_across_the_north_wraparound(self):
+        # 0 and 360 are the same bearing — compare via the circular-aware
+        # ang_diff_deg, not a raw pytest.approx(0), which 360.0 would fail.
+        assert ang_diff_deg(circular_mean_deg(350, 10), 0) == pytest.approx(0, abs=0.01)
+        assert ang_diff_deg(circular_mean_deg(10, 350), 0) == pytest.approx(0, abs=0.01)
+
+    def test_naive_average_would_have_been_backwards(self):
+        naive = (350 + 10) / 2
+        assert naive == pytest.approx(180)   # the bug this replaces
+        assert ang_diff_deg(circular_mean_deg(350, 10), naive) == pytest.approx(180)
 
 
 class TestHalfPlane:

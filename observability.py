@@ -172,7 +172,7 @@ def corridor_priors(G, measured: dict[str, np.ndarray]) -> dict[str, dict]:
     import networkx as nx
 
     from build_data import edge_bearing_deg
-    from dirsplit.geo import ang_diff_deg
+    from dirsplit.geo import ang_diff_deg, circular_mean_deg
     out: dict[str, dict] = {}
     ids = sorted(measured)
     for e1 in ids:
@@ -197,7 +197,14 @@ def corridor_priors(G, measured: dict[str, np.ndarray]) -> dict[str, dict]:
             s1, s2 = measured[e1], measured[e2]
             band = np.abs(s1 - s2) + ABS_TOL
             n_seg = max(1, len(path) - 1)
-            b_corr = (b1 + b2) / 2 if ang_diff_deg(b1, b2) < 90 else b1
+            # circular_mean_deg, not naive (b1+b2)/2 — bearings straddling
+            # 0/360 (e.g. 350 and 10, both near due north) would otherwise
+            # average to 180 (due SOUTH), the exact opposite direction.
+            # Found in a review 2026-07-10; not currently triggered by the
+            # 6 deployed sensors (none of their qualifying pairs straddle
+            # the wraparound) but a real, silent latent bug for any future
+            # near-north/south sensor pair.
+            b_corr = circular_mean_deg(b1, b2) if ang_diff_deg(b1, b2) < 90 else b1
             for j, (a, b) in enumerate(zip(path, path[1:])):
                 # the corridor must CONTINUE in the sensors' direction —
                 # a path looping via side streets must not inherit their flow
