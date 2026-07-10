@@ -388,6 +388,35 @@ New module (suggest `closure_metrics.py`):
 - GEH is NOT a disruption metric (sensor throughput is blind to waiting time).
 Tests: metric extraction from fixture tripinfo XML; disqualification rule.
 
+DONE (2026-07-10). New standalone `closure_metrics.py`, shared with future
+Phase D: `read_tripinfo`/`read_statistics` extract total `timeLoss`,
+unfinished trips, waiting unfinished trips, teleports and their SUMO reasons;
+`build_metrics` additionally takes explicit `truncated_unreachable`/
+`dropped_unreachable`, optional closed-edge throughput from edgeData, and max
+`halting` from summary as QUEUE DIAGNOSTICS ONLY. `compare_metrics` computes
+Δ total timeLoss against a baseline with the same demand/seeds/variants;
+`is_disqualified`/`disqualification_reasons` make teleports or dropped
+vehicles a hard disqualification condition — they are never ranked as
+improvements. GEH is explicitly not used. `run_scenario.run_sumo` now has
+an opt-in `metrics=False` flag; only when `True` are `--tripinfo-output`,
+`--tripinfo-output.write-unfinished`, `--statistic-output` and periodic
+`--summary-output` added, with deterministic per-seed filenames. Interactive
+closures still use the default path without these outputs. Tests with small
+synthetic tripinfo/statistics/edgeData/summary fixtures verify extraction
+and that lower timeLoss with a teleport/dropped vehicle is still
+disqualified. Deviation from the plan: no real SUMO overhead was measured
+(deliberately avoided the full Gothenburg pipeline, which B2 was using
+concurrently); opt-in output overhead is assumed small per the plan and
+should be measured empirically the first time C4 runs it at scale.
+Independently re-verified (Claude): `git diff run_scenario.py` reviewed
+(single opt-in `metrics` parameter, default path byte-identical),
+`closure_metrics.py` read in full, disqualification rule cross-checked
+against this section's wording (teleports/dropped only — NOT truncated
+vehicles or plain unfinished-trip counts, matching the plan's "teleporting
+or dropping vehicles" language exactly), full `pytest tests/ -q` run
+unsandboxed: 443 passed, 20 skipped, 0 failed (vs. 438/20 baseline before
+C3; the 5 new passes are C3's own tests — no regressions elsewhere).
+
 ### C4. `suggest_closure_time.py` — size M — depends C2, C3
 Offline/batch two-stage search, standalone script (NOT logic inside serve.py):
 1. **Proxy stage (seconds, no simulation):** for every candidate window

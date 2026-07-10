@@ -395,7 +395,8 @@ def demand_variants() -> list[Path]:
 
 
 def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
-             duration_s: int, home: Path, micro: bool = False) -> None:
+             duration_s: int, home: Path, micro: bool = False,
+             metrics: bool = False) -> dict[str, Path] | None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
     # Mesoscopic by default: our product is 15-min edge flows, which does not
@@ -437,6 +438,26 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         # drop them instead of aborting (standard for closure studies).
         "--ignore-route-errors", "true",
     ]
+    metric_paths = None
+    if metrics:
+        # Deliberately opt-in: interactive closures only need edgeData and
+        # retain their current fast command path. The stem makes per-seed,
+        # per-demand-variant output names deterministic for batch callers.
+        stem = f"metrics_{route_path.stem}_{seed}"
+        metric_paths = {
+            "tripinfo": SUMO_DIR / f"{stem}_tripinfo.xml",
+            "statistics": SUMO_DIR / f"{stem}_statistics.xml",
+            "summary": SUMO_DIR / f"{stem}_summary.xml",
+        }
+        cmd.extend([
+            "--tripinfo-output", str(metric_paths["tripinfo"].resolve()),
+            "--tripinfo-output.write-unfinished", "true",
+            "--statistic-output", str(metric_paths["statistics"].resolve()),
+            # Summary's waiting count is supporting diagnostics, not a queue
+            # metric; SUMO's queue-output remains experimental.
+            "--summary-output", str(metric_paths["summary"].resolve()),
+            "--summary-output.period", "900",
+        ])
     try:
         res = subprocess.run(cmd, capture_output=True, text=True,
                              cwd=str(SUMO_DIR), env={"SUMO_HOME": str(home)},
@@ -446,6 +467,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
     if res.returncode != 0:
         print(res.stderr[-2000:])
         sys.exit(f"sumo failed (seed {seed})")
+    return metric_paths
 
 
 def export_trajectories(name: str, route_path: Path, closure_add: list[Path],

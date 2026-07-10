@@ -119,6 +119,30 @@ class TestSumoTimeout:
             home=tmp_path, web_edges=set())
         assert result is None
 
+    def test_run_sumo_metrics_are_opt_in(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+
+        normal = run_scenario.run_sumo(
+            1000, tmp_path / "demand.rou.xml", [], 900, tmp_path)
+        measured = run_scenario.run_sumo(
+            1001, tmp_path / "demand.rou.xml", [], 900, tmp_path, metrics=True)
+
+        assert normal is None
+        assert "--tripinfo-output" not in commands[0]
+        assert "--statistic-output" not in commands[0]
+        assert "--tripinfo-output" in commands[1]
+        assert "--tripinfo-output.write-unfinished" in commands[1]
+        assert "--statistic-output" in commands[1]
+        assert "--summary-output" in commands[1]
+        assert measured is not None
+
 
 class TestTrajectorySimulationMode:
     """A micro scenario used micro edge-flow simulation but its vehroute
