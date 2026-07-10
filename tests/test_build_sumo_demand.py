@@ -402,3 +402,63 @@ class TestFeedbackSimulationTimeout:
         with pytest.raises(SystemExit):
             bsd.run_feedback_simulation(tmp_path / "calibrated.rou.xml",
                                         duration_s=900, home=tmp_path, iteration=0)
+
+
+class TestGracefulDegradationOnSubprocessFailure:
+    """subprocess.run's check=True raises CalledProcessError BEFORE the
+    following line ever runs — a `check=True` call immediately followed by
+    `if res.returncode != 0: ...` makes that whole branch dead code, silently
+    replacing graceful degradation (or, for run_tool, a clean sys.exit with
+    the tool's own stderr) with an uncaught traceback carrying none of the
+    subprocess's diagnostic output. Found during a self-review 2026-07-10;
+    these four call sites (ensure_observability, ensure_assignment_priors,
+    ensure_priors, and the build_candidates.py invocation in main()) had
+    exactly this bug after B2 added check=True to every subprocess call
+    per the B0-derived 'always use check=True' lesson, without noticing the
+    pre-existing manual check right below became unreachable.
+
+    The fake `run` below deliberately mirrors the REAL subprocess.run's
+    check=True semantics (raise CalledProcessError on a non-zero return)
+    instead of always just returning a CompletedProcess — a fake that
+    ignores the check kwarg can't distinguish the fixed code from the
+    buggy version (confirmed: an earlier draft of these tests passed
+    against both, which is a useless test)."""
+
+    @staticmethod
+    def _fake_run_returncode_1(*args, **kwargs):
+        result = subprocess.CompletedProcess(args, 1, stdout="", stderr="boom")
+        if kwargs.get("check"):
+            raise subprocess.CalledProcessError(1, args, output="", stderr="boom")
+        return result
+
+    def test_ensure_observability_degrades_gracefully_on_failure(self, monkeypatch, tmp_path):
+        geo = tmp_path / "network.geojson"
+        geo.write_text(json.dumps({"features": []}))
+        monkeypatch.setattr(bsd, "GEO_PATH", geo)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(bsd.subprocess, "run", self._fake_run_returncode_1)
+        result = bsd.ensure_observability()
+        assert result == {"corridor_priors": {}, "derived_flows": {}}
+
+    def test_ensure_assignment_priors_degrades_gracefully_on_failure(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(bsd.subprocess, "run", self._fake_run_returncode_1)
+        result = bsd.ensure_assignment_priors()
+        assert result == {"weight": 0.0, "flows": {}}
+
+    def test_ensure_priors_degrades_gracefully_on_failure(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(bsd.subprocess, "run", self._fake_run_returncode_1)
+        result = bsd.ensure_priors("2025-09-16")
+        assert result == {"edges": {}}
+
+    def test_run_tool_prints_stderr_tail_before_exiting(self, monkeypatch, tmp_path, capsys):
+        def fake_run(*args, **kwargs):
+            result = subprocess.CompletedProcess(args, 1, stdout="", stderr="the real error")
+            if kwargs.get("check"):
+                raise subprocess.CalledProcessError(1, args, output="", stderr="the real error")
+            return result
+        monkeypatch.setattr(bsd.subprocess, "run", fake_run)
+        with pytest.raises(SystemExit):
+            bsd.run_tool("randomTrips.py", [], tmp_path)
+        assert "the real error" in capsys.readouterr().out

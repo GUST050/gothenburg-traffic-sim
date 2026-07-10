@@ -388,7 +388,7 @@ def ensure_observability() -> dict:
             return d
     print("Running observability (Agent B) …")
     res = subprocess.run([sys.executable, "observability.py"],
-                         capture_output=True, text=True, check=True, timeout=1200)
+                         capture_output=True, text=True, timeout=1200)
     if res.returncode != 0:
         print(res.stderr[-800:])
         return {"corridor_priors": {}, "derived_flows": {}}
@@ -406,7 +406,7 @@ def ensure_assignment_priors() -> dict:
     if not path.exists():
         print("Computing assignment priors (assignment_priors.py) …")
         res = subprocess.run([sys.executable, "assignment_priors.py"],
-                             capture_output=True, text=True, check=True, timeout=1200)
+                             capture_output=True, text=True, timeout=1200)
         if res.returncode != 0:
             print(res.stderr[-800:])
             return {"weight": 0.0, "flows": {}}
@@ -453,7 +453,7 @@ def ensure_priors(date: str) -> dict:
             return d
     print("Computing level-3 priors (prior_flows) …")
     res = subprocess.run([sys.executable, "prior_flows.py", "--date", date],
-                         capture_output=True, text=True, check=True, timeout=1200)
+                         capture_output=True, text=True, timeout=1200)
     if res.returncode != 0:
         print(res.stderr[-1000:])
         print("  (no priors available — continuing without level 3)")
@@ -780,9 +780,11 @@ def run_tool(script: str, args: list[str], home: Path) -> None:
         "HOME": str(Path.home()),
     }
     res = subprocess.run(cmd, capture_output=True, text=True, env=env,
-                         check=True, timeout=1200)
+                         timeout=1200)
     tail = (res.stdout + res.stderr)[-2500:]
     print(tail)
+    if res.returncode != 0:
+        sys.exit(f"{script} failed")
 
 
 _PFE_PAR_SHAPES = None
@@ -975,8 +977,11 @@ def main() -> None:
             if weight_file is not None:
                 cmd += ["--weight-file", str(weight_file),
                        "--weight-period", str(BPR_PERIOD_S)]
-            res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=1200)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
             print(res.stdout[-1200:])
+            if res.returncode != 0:
+                print(res.stderr[-1500:])
+                sys.exit("build_candidates.py failed")
 
     # ── Calibrate: one route set per direction-split variant ───────────────────
     # q50 = the default (calibrated.rou.xml). If the split file carries

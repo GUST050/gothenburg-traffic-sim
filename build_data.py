@@ -362,10 +362,23 @@ def _bidir_edges(edge_sensor: dict[str, str]) -> set[str]:
 
 # ── Data loading ───────────────────────────────────────────────────────────────
 
-def load_raw(data_dir: Path) -> pd.DataFrame:
-    """Load and normalise all sensor CSV files in data_dir."""
+def load_raw(data_dir: Path, coords_path: Path | None = None) -> pd.DataFrame:
+    """Load and normalise all sensor CSV files in data_dir.
+
+    coords_path is excluded explicitly (by resolved path, not just filename
+    pattern) — data_in/'s drop-folder workflow puts the coordinates CSV in
+    the SAME directory as the sensor CSVs, and this glob would otherwise
+    concatenate it in too. It has no level/datum/tid/count columns, so its
+    rows join in with those fields null; the REQUIRED_COLS check only
+    verifies column presence across the whole concatenated frame, not
+    per-row completeness, so this silently corrupted sensor_level for any
+    sensor not already covered by SENSOR_MEASURED_DIRECTION's hardcoded
+    overrides. Found in a bug review 2026-07-10, independently verified."""
     frames = []
+    coords_resolved = coords_path.expanduser().resolve() if coords_path else None
     for path in sorted(data_dir.glob("*.csv")):
+        if coords_resolved is not None and path.resolve() == coords_resolved:
+            continue
         df = pd.read_csv(path, encoding="utf-8-sig")
         df.columns = df.columns.str.strip()
         frames.append(df)
@@ -657,7 +670,7 @@ def main() -> None:
 
     # ── Load sensor data ───────────────────────────────────────────────────────
     print("Loading CSVs …")
-    raw = load_raw(data_dir)
+    raw = load_raw(data_dir, coords_path)
     print(f"  {len(raw):,} rows  |  sensors: {sorted(raw['matplats'].unique())}")
 
     level_inconsistent = raw.groupby("matplats")["level"].nunique()
