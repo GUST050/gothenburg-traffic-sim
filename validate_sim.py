@@ -161,7 +161,8 @@ def calibrate_fold_parallel(
         with mp.get_context("fork").Pool(processes=n_workers) as pool:
             for quarter, sol in pool.imap_unordered(_run_pfe_interval_job, tasks):
                 solutions[quarter] = sol
-        return pfe.write_calibration_report(shapes, out_path, targets, solutions)
+        return pfe.write_calibration_report(shapes, out_path, targets, solutions,
+                                            bounds_pq)
     finally:
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None

@@ -8,7 +8,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from pfe import (Candidate, EPS_PARSIMONY, calibrate, largest_remainder_round,
-                 path_size_weights, solve_interval, solve_interval_entropy)
+                 path_size_weights, solve_interval, solve_interval_entropy,
+                 write_calibration_report)
 
 
 def cand(*edges):
@@ -265,3 +266,57 @@ class TestRounding:
     def test_integer_input_unchanged(self):
         x = np.array([1.0, 2.0, 0.0])
         assert (largest_remainder_round(x) == [1, 2, 0]).all()
+
+
+class TestBoundViolationsFromRounding:
+    """round_preserving_measured has no visibility into level-2 bounds at
+    all (found in a bug review 2026-07-10, independently verified and
+    empirically reproduced here, not just argued structurally): a route
+    shared between a measured edge and a separately-bounded edge can be
+    nudged to hit the measured edge's exact integer target in a way that
+    pushes the bounded edge's rounded total outside its own bound. This
+    is diagnostic-only — write_calibration_report reports the violation,
+    it does not repair the rounding (that needs its own dedicated pass)."""
+
+    def test_reports_a_real_bound_violation_from_rounding(self, tmp_path):
+        # Route A touches only the measured edge M; route B touches BOTH M
+        # and the separately-bounded (but unmeasured) edge U. M's target
+        # (10) requires more integer vehicles than the continuous solution's
+        # sum (7.4) already provides, forcing round_preserving_measured's
+        # deficit-closing loop to increment B past U's own upper bound (3).
+        shapes = [Candidate(depart=0.0, edges=["M"]),
+                 Candidate(depart=0.0, edges=["M", "U"])]
+        solutions = [np.array([5.1, 2.3])]
+        targets_per_q = [{"M": 10.0}]
+        bounds_per_q = [{"U": (0.0, 3.0)}]
+
+        report = write_calibration_report(
+            shapes, tmp_path / "out.rou.xml", targets_per_q, solutions, bounds_per_q)
+
+        assert report["achieved"]["M"] == [10.0]     # measured target still hit exactly
+        assert report["achieved"]["U"][0] > 3.0       # but U's bound is breached
+        assert report["bound_violations"] == [
+            {"edge": "U", "quarter": 0, "achieved": report["achieved"]["U"][0],
+             "bound_lo": 0.0, "bound_hi": 3.0},
+        ]
+
+    def test_no_violations_when_rounding_stays_within_bounds(self, tmp_path):
+        shapes = [Candidate(depart=0.0, edges=["M"])]
+        solutions = [np.array([10.0])]
+        targets_per_q = [{"M": 10.0}]
+        bounds_per_q = [{"M": (0.0, 20.0)}]
+
+        report = write_calibration_report(
+            shapes, tmp_path / "out.rou.xml", targets_per_q, solutions, bounds_per_q)
+
+        assert report["bound_violations"] == []
+
+    def test_bounds_per_q_is_optional_and_defaults_to_no_check(self, tmp_path):
+        shapes = [Candidate(depart=0.0, edges=["M"])]
+        solutions = [np.array([10.0])]
+        targets_per_q = [{"M": 10.0}]
+
+        report = write_calibration_report(
+            shapes, tmp_path / "out.rou.xml", targets_per_q, solutions)
+
+        assert report["bound_violations"] == []

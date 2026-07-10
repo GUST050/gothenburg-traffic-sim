@@ -856,7 +856,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         for suffix, key in variants:
             data = variant_inputs[suffix]
             reports[suffix] = pfe.write_calibration_report(
-                shapes, data["out_path"], data["targets"], solutions[suffix])
+                shapes, data["out_path"], data["targets"], solutions[suffix],
+                data["bounds_pq"])
             if not data.get("keep_achieved", False):
                 reports[suffix] = {
                     k: v for k, v in reports[suffix].items() if k != "achieved"
@@ -879,6 +880,29 @@ def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
         print(f"  ⚠ UNSERVICEABLE MEASURED EDGES ({label}): "
               f"{', '.join(edges)} — no candidate route can serve these "
               "hard measurements; regenerate/fix the candidate pool.")
+
+
+def warn_bound_violations(report: dict, label: str) -> None:
+    """Surface a structural gap found in a bug review 2026-07-10: the
+    integer-rounding step (round_preserving_measured, pfe.py) has no
+    visibility into level-2 bounds, so a route shared between a measured
+    edge and a separately-bounded edge can be nudged in a way that pushes
+    the bounded edge's rounded total outside its own bound. Diagnostic
+    only — reports the condition without blocking the run or attempting
+    a repair (that needs its own careful pass on a function with a
+    documented history of subtle failed designs)."""
+    violations = report.get("bound_violations", [])
+    if violations:
+        sample = ", ".join(
+            f"{v['edge']}@q{v['quarter']} ({v['achieved']:.0f} vs "
+            f"[{v['bound_lo']:.0f},{v['bound_hi']:.0f}])"
+            for v in violations[:5])
+        more = f" (+{len(violations) - 5} more)" if len(violations) > 5 else ""
+        print(f"  ⚠ BOUND VIOLATIONS FROM INTEGER ROUNDING ({label}): "
+              f"{len(violations)} edge-quarters exceed their level-2 bound "
+              f"after rounding — {sample}{more}. The continuous solution "
+              "respected these bounds; only the final integer rounding "
+              "does not currently check them (known gap, diagnostic only).")
 
 
 def main() -> None:
@@ -1110,6 +1134,7 @@ def main() -> None:
                               f"GEH<5: {variant_report['geh_pct']}%  "
                               f"(infeasible intervals: {variant_report['infeasible_intervals']})")
                         warn_unserviceable_measured_edges(variant_report, key)
+                        warn_bound_violations(variant_report, key)
                         if variant_report["geh_pct"] < 100:
                             print("  ⚠ measured-edge fit below gate — inspect before use")
                     report = reports[""]
@@ -1124,6 +1149,7 @@ def main() -> None:
                           f"GEH<5: {report['geh_pct']}%  "
                           f"(infeasible intervals: {report['infeasible_intervals']})")
                     warn_unserviceable_measured_edges(report, "edge_shares")
+                    warn_bound_violations(report, "edge_shares")
                 break
 
             targets = build_targets(flows, sensor_edges, qi_start,
@@ -1136,6 +1162,7 @@ def main() -> None:
                   f"GEH<5: {report['geh_pct']}%  "
                   f"(infeasible intervals: {report['infeasible_intervals']})")
             warn_unserviceable_measured_edges(report, "edge_shares")
+            warn_bound_violations(report, "edge_shares")
 
             if args.congestion_method == "simulate":
                 # Simple GEH-based early stop — this method is meant for an

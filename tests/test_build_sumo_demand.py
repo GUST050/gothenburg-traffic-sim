@@ -144,6 +144,23 @@ def test_unserviceable_measured_edges_emit_explicit_warning(capsys):
     assert "a_b_0, b_c_1" in out
 
 
+def test_bound_violations_emit_explicit_warning(capsys):
+    bsd.warn_bound_violations(
+        {"bound_violations": [
+            {"edge": "a_b_0", "quarter": 3, "achieved": 12.0,
+             "bound_lo": 0.0, "bound_hi": 5.0},
+        ]}, "edge_shares")
+
+    out = capsys.readouterr().out
+    assert "BOUND VIOLATIONS FROM INTEGER ROUNDING" in out
+    assert "a_b_0@q3" in out
+
+
+def test_no_bound_violations_is_silent(capsys):
+    bsd.warn_bound_violations({"bound_violations": []}, "edge_shares")
+    assert capsys.readouterr().out == ""
+
+
 def test_write_counts_splits_two_way_total_by_direction_share(monkeypatch, tmp_path):
     monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
     write_direction_split(tmp_path, {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96})

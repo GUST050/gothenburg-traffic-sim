@@ -580,8 +580,25 @@ def write_calibration_report(
     out_path: Path,
     targets_per_q: list[dict[str, float]],
     solutions: list[np.ndarray | None],
+    bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
 ) -> dict:
-    """Write .rou.xml and compute the same fit report calibrate() returns."""
+    """Write .rou.xml and compute the same fit report calibrate() returns.
+
+    bounds_per_q is optional and DIAGNOSTIC ONLY (2026-07-10): the continuous
+    LP/entropy solution respects bounds by construction, but
+    round_preserving_measured()'s integer ±1 nudges (needed to hit a
+    measured edge's EXACT target) have no visibility into bounds at all —
+    a route shared between a measured edge and a separately-bounded edge
+    can be nudged in a way that pushes the bounded edge's rounded total
+    outside its own [lower, upper]. This is a structural gap, not
+    (necessarily) an observed failure — round_preserving_measured's own
+    comments document routes with total overlap between measured edges
+    occurring in real runs, so the precondition is real, but fixing the
+    rounding logic itself needs its own careful pass (that function has a
+    documented history of three separate subtle failed designs before
+    landing on its current one). This check only counts and reports
+    violations after the fact — it does not alter which counts get
+    written to the .rou.xml."""
     nq = len(targets_per_q)
     infeasible = sum(sol is None for sol in solutions)
     achieved: dict[str, list[float]] = {}
@@ -619,6 +636,17 @@ def write_calibration_report(
         e for targets in targets_per_q for e in targets if e not in candidate_edges
     })
 
+    bound_violations: list[dict] = []
+    if bounds_per_q is not None:
+        for i in range(nq):
+            for e, (lo, hi) in bounds_per_q[i].items():
+                v = achieved.get(e, [0.0] * nq)[i]
+                if v < lo - 0.5 or v > hi + 0.5:   # tolerate rounding, not real breaches
+                    bound_violations.append({
+                        "edge": e, "quarter": i, "achieved": v,
+                        "bound_lo": lo, "bound_hi": hi,
+                    })
+
     # GEH on hourly aggregates at measured edges — the standard fit metric.
     # An edge counts for an hour if ANY of its 4 quarters has a measurement —
     # checking only targets_per_q[i] (the hour's first quarter) would silently
@@ -639,7 +667,8 @@ def write_calibration_report(
             "geh_ok": geh_ok, "geh_total": geh_all,
             "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
             "achieved": achieved,
-            "unserviceable_edges": unserviceable_edges}
+            "unserviceable_edges": unserviceable_edges,
+            "bound_violations": bound_violations}
 
 
 def calibrate(
@@ -667,4 +696,5 @@ def calibrate(
     shapes, route_cost = prepare_calibration(candidates_path)
     solutions = solve_calibration_intervals(
         shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q)
-    return write_calibration_report(shapes, out_path, targets_per_q, solutions)
+    return write_calibration_report(shapes, out_path, targets_per_q, solutions,
+                                    bounds_per_q)
