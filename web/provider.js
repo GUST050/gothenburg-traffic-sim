@@ -8,8 +8,8 @@ class HistoricalProvider {
     this.intervalMinutes = 15;
   }
 
-  async load(url = 'data/flows.json') {
-    const res = await fetch(url);
+  async load(url = 'data/flows.json', { signal } = {}) {
+    const res = await fetch(url, { signal });
     if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status}`);
     const payload = await res.json();
 

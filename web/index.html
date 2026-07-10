@@ -419,18 +419,37 @@
         // top of Historisk/Prognos, contradicting "vehicles are ALWAYS the
         // Simulering view". Found in review 2026-07-07.
         let modeToken = 0;
+        // Aborts the in-flight trajectory fetch itself on a newer mode
+        // switch, instead of letting it run to completion and only
+        // discarding the result via the modeToken check below — a rapid
+        // switch away no longer wastes the full download (found in review
+        // 2026-07-10).
+        let vehicleAbort = null;
 
         // Vehicles ARE the simulation now — no separate toggle. Whenever a
         // scenario provider has trajectories, they're loaded and shown
         // automatically; leaving Simulering turns them off automatically.
         async function loadVehiclesFor(provider, token) {
+          // Cancel whatever trajectory fetch this call supersedes
+          // UNCONDITIONALLY — including the "this provider has none, or it's
+          // already cached" cases, where a still-running earlier fetch is
+          // now pointless but this function would otherwise never touch it.
+          vehicleAbort?.abort();
+          vehicleAbort = null;
           if (!provider.trajectories) {
             Render.setVehicleMode(false);
             return;
           }
           if (!trajCache[provider.trajectories]) {
-            const res = await fetch('data/scenarios/' + provider.trajectories
-                                    + '?t=' + Date.now());
+            vehicleAbort = new AbortController();
+            let res;
+            try {
+              res = await fetch('data/scenarios/' + provider.trajectories
+                                + '?t=' + Date.now(), { signal: vehicleAbort.signal });
+            } catch (e) {
+              if (e.name === 'AbortError') return;   // superseded — not a real failure
+              throw e;
+            }
             trajCache[provider.trajectories] = await res.json();
           }
           if (token !== modeToken) return;   // a newer mode switch happened meanwhile
@@ -553,13 +572,30 @@
         // revert the map to the previously-selected scenario even though
         // <select> already shows the new one. Found in review 2026-07-07.
         let scenarioToken = 0;
+        // Same real-cancellation upgrade as vehicleAbort above, applied to
+        // the scenario JSON fetch itself.
+        let scenarioAbort = null;
 
         async function activateScenario(file, { fresh = false } = {}) {
           const token = ++scenarioToken;
+          // Cancel whatever scenario fetch this call supersedes UNCONDITIONALLY
+          // — even when this call's own file is already cached and needs no
+          // fetch of its own, a still-running earlier fetch is now pointless
+          // and should stop consuming bandwidth, not just have its result
+          // discarded once it eventually lands.
+          scenarioAbort?.abort();
+          scenarioAbort = null;
           if (fresh) delete scenProviders[file];   // file was overwritten on disk
           if (!scenProviders[file]) {
-            scenProviders[file] = await new HistoricalProvider()
-              .load('data/scenarios/' + file + '?t=' + Date.now());
+            scenarioAbort = new AbortController();
+            try {
+              scenProviders[file] = await new HistoricalProvider()
+                .load('data/scenarios/' + file + '?t=' + Date.now(),
+                      { signal: scenarioAbort.signal });
+            } catch (e) {
+              if (e.name === 'AbortError') return;   // superseded — not a real failure
+              throw e;
+            }
           }
           if (token !== scenarioToken) return;   // a newer scenario switch happened meanwhile
           setMode(btnScen, scenProviders[file]);
