@@ -28,6 +28,9 @@ class HistoricalProvider {
     this.trajectories = payload.trajectories ?? null;   // per-vehicle playback file
     this.closedEdges = payload.scenario?.closed_edges
                        ?? (payload.scenario?.closed_edge ? [payload.scenario.closed_edge] : []);
+    // New scenarios carry per-edge [begin_s, end_s) windows. Existing saved
+    // scenarios have no such field and retain their whole-scenario styling.
+    this.closures    = payload.scenario?.closures ?? null;
     this.label       = payload.scenario?.label ?? null;
     this.source      = payload.scenario?.source ?? 'historical';  // 'forecast' = simulated 2027
     this.confidence  = payload.confidence ?? null;  // per-edge, per-scenario
@@ -63,6 +66,23 @@ class HistoricalProvider {
   // data for most background edges too — the renderer colours those as well.
   hasEdge(edgeId) {
     return Object.prototype.hasOwnProperty.call(this._flows, edgeId);
+  }
+
+  isEdgeClosed(edgeId, qi) {
+    if (!this.closedEdges.includes(edgeId)) return false;
+    if (!this.closures) return true;
+    const t = qi * this.intervalMinutes * 60;
+    return this.closures.some(c => c.edge_id === edgeId
+      && c.begin_s <= t && t < c.end_s);
+  }
+
+  closureWindowText(edgeId) {
+    if (!this.closures) return null;
+    const windows = this.closures.filter(c => c.edge_id === edgeId);
+    if (!windows.length) return null;
+    const time = (seconds) => this.dateFromQI(seconds / (this.intervalMinutes * 60))
+      .toISOString().slice(11, 16);
+    return windows.map(c => `${time(c.begin_s)}–${time(c.end_s)}`).join(', ');
   }
 
   dateFromQI(qi) {

@@ -145,6 +145,32 @@ class TestTrajectorySimulationMode:
 
 
 class TestScenarioManifestDemandScope:
+    def test_single_day_signature_is_identical_to_pre_b1_signature(self):
+        meta = {
+            "date": "2025-09-16", "source": "historical", "begin": "00:00",
+            "end": "24:00", "n_intervals": 96,
+            "epoch_sim": "2025-09-16T00:00:00", "n_variants": 3,
+            "start_date": "2025-09-16", "days": 1,
+            "end_date_exclusive": "2025-09-17",
+            "day_boundaries_s": [0, 86400], "day_kinds": ["weekday"],
+        }
+        # Exact SHA-1/12 value emitted by the pre-B1 implementation.
+        assert run_scenario.demand_signature(meta) == "b5116ac70049"
+
+    def test_multi_day_signature_uses_range_contract(self):
+        meta = {
+            "source": "historical", "n_intervals": 192,
+            "epoch_sim": "2025-09-16T00:00:00", "n_variants": 3,
+            "start_date": "2025-09-16", "days": 2,
+            "end_date_exclusive": "2025-09-18",
+            "day_boundaries_s": [0, 86400, 172800],
+            "day_kinds": ["weekday", "weekday"],
+        }
+        changed = dict(meta, end_date_exclusive="2025-09-19",
+                       day_boundaries_s=[0, 86400, 172800, 259200])
+
+        assert run_scenario.demand_signature(meta) != run_scenario.demand_signature(changed)
+
     def test_demand_signature_changes_when_window_changes(self):
         meta = {
             "date": "2025-09-16",
@@ -353,3 +379,79 @@ class TestTruncateStrandedVehicles:
         vehicles = {v.get("id"): v.find("route").get("edges")
                     for v in ET.parse(out_path).getroot().findall("vehicle")}
         assert vehicles["double_closure"] == "p_q q_r1 r1_s s_t2 t2_end"
+
+
+class TestTimeWindowedClosures:
+    def test_write_closure_additional_emits_one_interval_per_window(self, tmp_path):
+        path = tmp_path / "closure.add.xml"
+        closures = [
+            {"edge_id": "a_b", "begin_s": 600, "end_s": 1200},
+            {"edge_id": "c_d", "begin_s": 1800, "end_s": 2400},
+        ]
+
+        run_scenario.write_closure_additional(path, closures, ["a_b", "c_d"])
+
+        intervals = ET.parse(path).getroot().findall(".//interval")
+        assert [(i.get("begin"), i.get("end"),
+                 i.find("closingReroute").get("id")) for i in intervals] == [
+            ("600", "1200", "a_b"), ("1800", "2400", "c_d")]
+
+    def test_prefilter_only_truncates_windowed_no_detour_when_wait_can_teleport(
+            self, monkeypatch, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <connection from="lead" to="closed"/>
+  <connection from="closed" to="destination"/>
+</net>""")
+        monkeypatch.setattr(run_scenario, "NET_PATH", net_path)
+        route_path = tmp_path / "in.rou.xml"
+        route_path.write_text("""<routes>
+  <vehicle id="long_wait" depart="0"><route edges="lead closed destination"/></vehicle>
+  <vehicle id="short_wait" depart="330"><route edges="lead closed destination"/></vehicle>
+  <vehicle id="after_open" depart="500"><route edges="lead closed destination"/></vehicle>
+</routes>""")
+        out_path = tmp_path / "out.rou.xml"
+        closures = [{"edge_id": "closed", "begin_s": 10, "end_s": 400}]
+        adj = run_scenario.build_edge_graph({"closed"})
+
+        truncated, dropped = run_scenario.truncate_stranded_vehicles(
+            route_path, ["closed"], out_path, adj, closures=closures,
+            edge_travel_s={"lead": 20})
+
+        assert (truncated, dropped) == (1, 0)
+        routes = {v.get("id"): v.find("route").get("edges")
+                  for v in ET.parse(out_path).getroot().findall("vehicle")}
+        assert routes["long_wait"] == "lead"       # 380 s may teleport
+        assert routes["short_wait"] == "lead closed destination"  # 50 s waits safely
+        assert routes["after_open"] == "lead closed destination"
+
+    def test_reachability_ignores_permissions_known_limitation(self, monkeypatch, tmp_path):
+        """Known limitation: build_edge_graph follows every <connection>.
+
+        The bicycle-only detour is topologically reachable, so the current
+        prefilter leaves this passenger route intact even though SUMO would
+        reject the detour. This test makes the documented vClass/permission
+        blind spot explicit; C2 deliberately does not attempt to fix it.
+        """
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <connection from="lead" to="closed"/>
+  <connection from="closed" to="destination"/>
+  <connection from="lead" to="bike_detour" allow="bicycle"/>
+  <connection from="bike_detour" to="destination" allow="bicycle"/>
+</net>""")
+        monkeypatch.setattr(run_scenario, "NET_PATH", net_path)
+        route_path = tmp_path / "in.rou.xml"
+        route_path.write_text("""<routes>
+  <vType id="car" vClass="passenger"/>
+  <vehicle id="passenger" type="car" depart="0"><route edges="lead closed destination"/></vehicle>
+</routes>""")
+        out_path = tmp_path / "out.rou.xml"
+        adj = run_scenario.build_edge_graph({"closed"})
+        closures = [{"edge_id": "closed", "begin_s": 0, "end_s": 1000}]
+
+        assert run_scenario.reachable(adj, "lead", "destination", {"closed"})
+        assert run_scenario.truncate_stranded_vehicles(
+            route_path, ["closed"], out_path, adj, closures=closures) == (0, 0)
+        assert ET.parse(out_path).getroot().find("vehicle/route").get("edges") == \
+               "lead closed destination"

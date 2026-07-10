@@ -79,7 +79,7 @@ const Render = (() => {
     }
 
     // Closed edge in a scenario — draw as blocked, no cars
-    if (_provider.closedEdges && _provider.closedEdges.includes(edgeId)) {
+    if (_provider.isEdgeClosed && _provider.isEdgeClosed(edgeId, qi)) {
       e.line.setStyle({ color: '#0f172a', weight: 5, opacity: 0.85, dashArray: '4 7' });
       e.t = null; e.activeCars = 0;
       return;
@@ -355,11 +355,13 @@ const Render = (() => {
             let html = `<b>${name ?? 'Okänd väg'}</b>`;
             if (_provider.hasEdge(id)) {
               const cnt = _provider.flowAt(id, qi);
-              if (_provider.closedEdges && _provider.closedEdges.includes(id)) {
+              if (_provider.isEdgeClosed && _provider.isEdgeClosed(id, qi)) {
                 html += `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
               } else if (cnt !== null) {
                 html += `<br><b style="font-size:1.15em">${cnt}</b> fordon / 15 min <small>(simulerat)</small>`;
               }
+              const window = _provider.closureWindowText?.(id);
+              if (window) html += `<br><small>Avstängning: ${window}</small>`;
             }
             return html + confHtml(edgeConf());
           }, { sticky: true });
@@ -399,11 +401,13 @@ const Render = (() => {
             }
             if (level === 'Total')  html += '<br><small>Summa båda riktningar</small>';
             else if (level)         html += `<br><small>Enkelriktad mätning (${level})</small>`;
-            if (_provider.closedEdges && _provider.closedEdges.includes(id)) {
+            if (_provider.isEdgeClosed && _provider.isEdgeClosed(id, qi)) {
               html += `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
             } else if (_provider.isScenario) {
               html += '<br><small>Simulerat (SUMO)</small>';
             }
+            const window = _provider.closureWindowText?.(id);
+            if (window) html += `<br><small>Avstängning: ${window}</small>`;
             html += confHtml(edgeConf());
             return html;
           }, { sticky: true });

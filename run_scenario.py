@@ -3,12 +3,14 @@ Run a SUMO scenario (baseline or road closure) and export flows for the web app.
 
 Run after build_sumo_demand.py:
   python3 run_scenario.py                                    # baseline
-  python3 run_scenario.py --close 60786979_3575001205_0      # closure scenario
+  python3 run_scenario.py --close 60786979_3575001205_0      # whole-run closure
+  python3 run_scenario.py --closure '{"edge_id":"60786979_3575001205_0","begin":"2025-09-16T08:00:00","end":"2025-09-16T10:00:00"}'
 
 Method:
   - Simulates the calibrated demand (sumo/calibrated.rou.xml) N times with
     different random seeds (Monte Carlo).
-  - --close <edgeId> adds a rerouter that closes the edge for all traffic;
+  - --close <edgeId> adds a whole-run rerouter closure. --closure JSON adds
+    one time-windowed closure without parallel CLI argument lists;
     SUMO reroutes vehicles around it by construction.
   - 15-min per-edge flows ("entered" vehicle counts) are averaged over seeds
     and written in the flows.json format with the SAME edge IDs as the map.
@@ -65,6 +67,13 @@ def demand_signature(meta: dict) -> str:
     """
     keys = ("date", "source", "begin", "end", "n_intervals", "epoch_sim", "n_variants")
     payload = {k: meta.get(k) for k in keys}
+    # B1 metadata is additive for one-day demand. Preserve that established
+    # signature exactly so current scenarios remain valid; multi-day demand
+    # is distinguishable by its explicit range contract.
+    if meta.get("days", 1) > 1:
+        for key in ("start_date", "days", "end_date_exclusive",
+                    "day_boundaries_s", "day_kinds"):
+            payload[key] = meta.get(key)
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
 
@@ -82,6 +91,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--close", nargs="*", default=[], metavar="EDGE_ID",
                    help="Edge(s) to close (must exist in network.geojson). "
                         "Omit for baseline.")
+    p.add_argument("--closure", action="append", default=[], metavar="JSON",
+                   help='Time-windowed closure, repeatable: '
+                        "'{\"edge_id\":\"EDGE\",\"begin\":\"ISO\",\"end\":\"ISO\"}'. "
+                        "--close remains the backwards-compatible whole-run form.")
     p.add_argument("--name",  default=None,
                    help="Scenario name (default: 'baseline' or 'close_<edge…>')")
     p.add_argument("--seeds", type=int, default=3,
@@ -93,6 +106,54 @@ def parse_args() -> argparse.Namespace:
                    help="Skip the per-vehicle trajectory export (one extra "
                         "seed-1000 run with vehroute exit-times)")
     return p.parse_args()
+
+
+def structured_closures(raw: list[str], whole_edges: list[str], epoch: str,
+                        duration_s: int) -> list[dict]:
+    """Parse CLI closures into the single internal time-window contract.
+
+    The legacy --close form is deliberately represented as the old 0 through
+    duration+flush interval, so all existing whole-day behaviour is retained.
+    """
+    if raw and whole_edges:
+        raise ValueError("use either legacy --close or structured --closure, not both")
+    closures = [
+        {"edge_id": edge, "begin_s": 0, "end_s": duration_s + 3600}
+        for edge in whole_edges
+    ]
+    epoch_ts = pd.Timestamp(epoch)
+    for value in raw:
+        try:
+            item = json.loads(value)
+            edge = item["edge_id"]
+            begin = pd.Timestamp(item["begin"])
+            end = pd.Timestamp(item["end"])
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise ValueError("--closure must be JSON with edge_id, begin and end ISO values") from exc
+        if begin.tzinfo is not None:
+            begin = begin.tz_convert(None)
+        if end.tzinfo is not None:
+            end = end.tz_convert(None)
+        begin_s = (begin - epoch_ts).total_seconds()
+        end_s = (end - epoch_ts).total_seconds()
+        if not (0 <= begin_s < end_s <= duration_s + 3600):
+            raise ValueError("--closure window must be within the simulated run and have begin < end")
+        closures.append({"edge_id": edge, "begin_s": int(begin_s), "end_s": int(end_s)})
+    return closures
+
+
+def edge_freeflow_times() -> dict[str, float]:
+    """Free-flow seconds per net edge for the conservative window prefilter."""
+    times = {}
+    for edge in ET.parse(NET_PATH).getroot().findall("edge"):
+        # SUMO stores these on the first lane in normal net.net.xml files;
+        # accept edge-level attributes too for small synthetic fixtures.
+        lane = edge.find("lane")
+        length = float(edge.get("length") or (lane.get("length") if lane is not None else 0) or 0)
+        speed = float(edge.get("speed") or (lane.get("speed") if lane is not None else 0) or 0)
+        if length > 0 and speed > 0:
+            times[edge.get("id")] = length / speed
+    return times
 
 
 def load_geojson_meta() -> tuple[dict[str, float], dict[str, str]]:
@@ -144,18 +205,18 @@ def edges_near(close_edges: list[str], radius_m: float) -> list[str]:
     return sorted(out)
 
 
-def write_closure_additional(path: Path, close_edges: list[str],
-                             all_edges: list[str], duration_s: int) -> None:
+def write_closure_additional(path: Path, closures: list[dict],
+                             all_edges: list[str]) -> None:
     """One shared closure file per scenario. Vehicles whose remaining route
     uses a closed edge recompute when they enter a rerouter edge (the
     closure's neighbourhood)."""
     with open(path, "w") as f:
         f.write("<additional>\n")
         f.write(f'  <rerouter id="closure" edges="{" ".join(all_edges)}">\n')
-        f.write(f'    <interval begin="0" end="{duration_s + 3600}">\n')
-        for ce in close_edges:
-            f.write(f'      <closingReroute id="{ce}" disallow="all"/>\n')
-        f.write("    </interval>\n")
+        for closure in closures:
+            f.write(f'    <interval begin="{closure["begin_s"]}" end="{closure["end_s"]}">\n')
+            f.write(f'      <closingReroute id="{closure["edge_id"]}" disallow="all"/>\n')
+            f.write("    </interval>\n")
         f.write("  </rerouter>\n")
         f.write("</additional>\n")
 
@@ -196,7 +257,9 @@ def reachable(adj: dict[str, list[str]], start: str, goal: str,
 
 
 def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
-                               out_path: Path, adj: dict[str, list[str]]) -> tuple[int, int]:
+                               out_path: Path, adj: dict[str, list[str]],
+                               closures: list[dict] | None = None,
+                               edge_travel_s: dict[str, float] | None = None) -> tuple[int, int]:
     """Shorten (don't delete) vehicles whose route has no detour at all.
 
     FOUND 2026-07-09 (Gustav asked for the closure-leak finding from the
@@ -247,11 +310,22 @@ def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
     accounts for every other closure on the route too, not just the
     first.
 
+    For a time window, only a vehicle estimated to arrive at its closed edge
+    during that window is considered. Its arrival is depart plus free-flow
+    travel time over the preceding route. A no-detour vehicle is retained if
+    the remaining closure wait is safely below SUMO's 300 s teleport limit;
+    otherwise it is truncated exactly as in the whole-run case.  This does
+    not use periodic mode-8 routing: C1 showed that it changes route choice.
+
     `adj` is built ONCE by the caller (build_edge_graph(closed)) and
     reused across every demand variant file for this closure — it only
     depends on close_edges, not on which route file is being filtered.
     """
     closed = set(close_edges)
+    # None deliberately selects the legacy branch below.  The eleven
+    # whole-duration regression tests exercise that branch unchanged.
+    windowed = closures is not None
+    edge_travel_s = edge_travel_s or {}
     tree = ET.parse(route_path)
     root = tree.getroot()
     affected = [v for v in root.findall("vehicle")
@@ -265,7 +339,33 @@ def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
     for v in affected:
         route_el = v.find("route")
         edges = route_el.get("edges").split()
-        i = next(idx for idx, e in enumerate(edges) if e in closed)
+        candidates = [(idx, closure) for idx, edge in enumerate(edges)
+                      for closure in (closures or []) if edge == closure["edge_id"]]
+        if windowed:
+            depart = float(v.get("depart") or 0)
+            elapsed = 0.0
+            active: list[tuple[int, dict, float]] = []
+            for idx, edge in enumerate(edges):
+                for ci, closure in candidates:
+                    if ci == idx:
+                        arrival = depart + elapsed
+                        # Free-flow is an optimistic arrival estimate.  Only
+                        # classify arrivals inside the stated window; this is
+                        # intentionally conservative about the wait threshold.
+                        if closure["begin_s"] <= arrival < closure["end_s"]:
+                            active.append((idx, closure, arrival))
+                elapsed += edge_travel_s.get(edge, 0.0)
+            if not active:
+                continue
+            i, closure, arrival = min(active, key=lambda x: x[0])
+            # C1 observed the default teleport at 301 s. Keep only waits
+            # strictly below 300 s, leaving one second of headroom.
+            if closure["end_s"] - arrival >= 300:
+                pass
+            else:
+                continue
+        else:
+            i = next(idx for idx, e in enumerate(edges) if e in closed)
         if i == 0:
             root.remove(v)
             n_dropped += 1
@@ -452,24 +552,36 @@ def main() -> None:
     duration_s  = n_intervals * 900
     sig = demand_signature(meta)
 
+    try:
+        closures = structured_closures(args.closure, args.close,
+                                       meta["epoch_sim"], duration_s)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    close_edges = list(dict.fromkeys(c["edge_id"] for c in closures))
+
     prior, names = load_geojson_meta()
-    for ce in args.close:
+    for ce in close_edges:
         if ce not in prior:
-            sys.exit(f"--close {ce}: not an edge in network.geojson")
+            sys.exit(f"closure {ce}: not an edge in network.geojson")
 
     if args.name:
         name = args.name
-    elif args.close:
-        name = "close_" + "+".join(args.close)
+    elif close_edges:
+        name = "close_" + "+".join(close_edges)
+        if args.closure:
+            # Two windows on the same edge are distinct scenarios; unlike the
+            # legacy whole-run name, include their structured identity.
+            window_hash = hashlib.sha1(
+                json.dumps(closures, sort_keys=True).encode()).hexdigest()[:8]
+            name = f"{name}_{window_hash}"
         if len(name) > 80:   # many edges → keep the filename sane
-            import hashlib
-            name = f"close_{len(args.close)}edges_" + \
-                   hashlib.sha1("+".join(args.close).encode()).hexdigest()[:8]
+            name = f"close_{len(close_edges)}edges_" + \
+                   hashlib.sha1("+".join(close_edges).encode()).hexdigest()[:8]
     else:
         name = "baseline"
 
-    if args.close:
-        streets = sorted({names[ce] for ce in args.close})
+    if close_edges:
+        streets = sorted({names[ce] for ce in close_edges})
         label = "Avstängning: " + ", ".join(streets)
     else:
         label = "Baslinje (ingen avstängning)"
@@ -485,12 +597,12 @@ def main() -> None:
         print(f"  {len(variants)} demand variants (q50 + direction-split bounds)")
 
     closure_add: list[Path] = []
-    if args.close:
-        rerouter_edges = edges_near(args.close, REROUTER_RADIUS_M)
+    if close_edges:
+        rerouter_edges = edges_near(close_edges, REROUTER_RADIUS_M)
         print(f"  rerouter on {len(rerouter_edges)} edges within "
               f"{REROUTER_RADIUS_M} m of the closure")
         cpath = SUMO_DIR / f"closure_{name}.add.xml"
-        write_closure_additional(cpath, args.close, rerouter_edges, duration_s)
+        write_closure_additional(cpath, closures, rerouter_edges)
         closure_add = [cpath]
 
         # Vehicles with no detour around the closure at all can't be fixed
@@ -498,12 +610,17 @@ def main() -> None:
         # shortened/dropped here so they never get simulated past the
         # closure, instead of relying on sumo's stuck-vehicle teleport to
         # hide them after the fact.
-        adj = build_edge_graph(set(args.close))
+        adj = build_edge_graph(set(close_edges))
+        freeflow = edge_freeflow_times()
         filtered_variants = []
         n_truncated = n_dropped = 0
         for vp in variants:
             fp = SUMO_DIR / f"{vp.stem}_{name}.rou.xml"
-            t, d = truncate_stranded_vehicles(vp, args.close, fp, adj)
+            t, d = truncate_stranded_vehicles(
+                vp, close_edges, fp, adj,
+                # Preserve the exact tested function path for legacy --close.
+                closures=closures if args.closure else None,
+                edge_travel_s=freeflow)
             n_truncated += t
             n_dropped += d
             filtered_variants.append(fp)
@@ -559,7 +676,8 @@ def main() -> None:
         "trajectories":     traj_name,
         "scenario": {
             "name": name, "label": label,
-            "closed_edges": args.close,
+            "closed_edges": close_edges,
+            "closures": closures,
             "date": meta["date"], "source": meta.get("source", "historical"),
             "begin": meta["begin"], "end": meta["end"],
             "seeds": args.seeds,
@@ -581,7 +699,8 @@ def main() -> None:
     src_tag = " · Prognos" if meta.get("source") == "forecast" else ""
     index["scenarios"].append({
         "name": name, "label": label, "file": f"{name}.json",
-        "closed_edges": args.close,
+        "closed_edges": close_edges,
+        "closures": closures,
         "demand_signature": sig,
         "window": f"{meta['date']} {meta['begin']}–{meta['end']}{src_tag}",
     })
