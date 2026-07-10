@@ -137,19 +137,26 @@ class Handler(SimpleHTTPRequestHandler):
             if res.returncode != 0:
                 print(res.stdout[-1500:], res.stderr[-1500:])
                 return self._json(500, {"error": "simuleringen misslyckades — se serverloggen"})
+
+            # Keep the lock until the manifest has been read and matched.
+            # A recalibration clears scenario JSON files while holding this
+            # same lock, so releasing it before this read would allow it to
+            # remove index.json between a successful simulation and response.
+            try:
+                with open(SCEN_DIR / "index.json") as f:
+                    index = json.load(f)
+            except FileNotFoundError:
+                return self._json(500, {"error": "scenariomanifest saknas — se serverloggen"})
+
+            match = next((s for s in index["scenarios"]
+                          if sorted(s.get("closed_edges") or []) == sorted(edges)), None)
+            if match is None:
+                return self._json(500, {"error": "scenariot skrevs inte — se serverloggen"})
+            return self._json(200, match)
         except subprocess.TimeoutExpired:
             return self._json(500, {"error": "simuleringen tog >10 min — avbruten"})
         finally:
             _sim_lock.release()
-
-        # run_scenario updated index.json — find the scenario it just wrote
-        with open(SCEN_DIR / "index.json") as f:
-            index = json.load(f)
-        match = next((s for s in index["scenarios"]
-                      if sorted(s.get("closed_edges") or []) == sorted(edges)), None)
-        if match is None:
-            return self._json(500, {"error": "scenariot skrevs inte — se serverloggen"})
-        return self._json(200, match)
 
     def _recalibrate(self) -> None:
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -246,7 +253,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main() -> None:
     known_edges()   # fail fast if data is missing
-    server = ThreadingHTTPServer(("", PORT), Handler)
+    # Mutating API endpoints have no authentication, so do not expose them
+    # to the LAN by default. Explicit LAN support, if ever needed, should be
+    # an intentional opt-in rather than the server's implicit bind address.
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"Serving web/ + scenario-API på http://localhost:{PORT}")
     try:
         server.serve_forever()

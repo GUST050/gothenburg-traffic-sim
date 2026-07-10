@@ -97,6 +97,23 @@ class TestPing:
         assert body == {"ok": True}
 
 
+class TestServerStartup:
+    def test_main_binds_to_loopback_by_default(self, monkeypatch):
+        seen = {}
+
+        class FakeServer:
+            def __init__(self, address, handler):
+                seen["address"] = address
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+        monkeypatch.setattr(serve, "known_edges", lambda: frozenset())
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", FakeServer)
+        serve.main()
+        assert seen["address"] == ("127.0.0.1", serve.PORT)
+
+
 class TestClose:
     def test_missing_edges_is_400(self, base_url):
         status, body = get_json_or_error(f"{base_url}/api/close")
@@ -134,6 +151,16 @@ class TestClose:
         status, _ = get_json_or_error(f"{base_url}/api/close?edges=a_b_0")
         assert status == 500
         assert not serve._sim_lock.locked()   # must not leak the lock on failure
+
+    def test_missing_manifest_after_successful_simulation_is_clear_500(self, base_url, monkeypatch):
+        """A concurrent recalibration must not turn this into an unhandled
+        FileNotFoundError if an external process removes the manifest."""
+        monkeypatch.setattr(serve.subprocess, "run",
+                            lambda cmd, **kw: FakeCompletedProcess(returncode=0))
+        status, body = get_json_or_error(f"{base_url}/api/close?edges=a_b_0")
+        assert status == 500
+        assert "scenariomanifest saknas" in body["error"]
+        assert not serve._sim_lock.locked()
 
 
 class TestRecalibrateValidation:
