@@ -13,6 +13,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -243,6 +244,22 @@ class TestScenarioManifestDemandScope:
                             ["run_scenario.py", "--trajectories", "--no-trajectories"])
         with pytest.raises(SystemExit):
             run_scenario.parse_args()
+
+    def test_aggregate_flows_includes_edges_with_zero_traffic_in_every_seed(self):
+        """Finding #1 from a bug review 2026-07-10, independently verified
+        and fixed: excludeEmpty="true" means an edge with genuinely zero
+        traffic in every seed never appears in any per_seed dict at all —
+        it must still get a real (zero) flows_out entry, not be silently
+        dropped and rendered as a missing-data gap."""
+        per_seed = [{"busy_edge": np.array([5.0, 5.0])}, {"busy_edge": np.array([5.0, 5.0])}]
+        web_edges = {"busy_edge", "quiet_edge"}
+        prior = {"busy_edge": 0.9, "quiet_edge": 0.7}
+
+        flows_out, conf_out = run_scenario.aggregate_flows(per_seed, web_edges, prior, 2)
+
+        assert set(flows_out) == web_edges
+        assert flows_out["quiet_edge"] == [0, 0]
+        assert conf_out["quiet_edge"] == 0.7   # pure spatial prior, no CV to penalize it
 
     def test_manifest_keeps_only_current_demand_entries(self):
         current = "abc123"

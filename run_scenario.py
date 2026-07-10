@@ -599,6 +599,36 @@ def parse_edgedata(path: Path, n_intervals: int) -> dict[str, np.ndarray]:
     return flows
 
 
+def aggregate_flows(
+    per_seed: list[dict[str, np.ndarray]], web_edges: set[str],
+    prior: dict[str, float], n_intervals: int,
+) -> tuple[dict[str, list[int]], dict[str, float]]:
+    """Mean flows + Monte Carlo confidence, for EVERY edge the map can draw.
+
+    Iterates web_edges, not just the union of edges some seed's edgeData
+    happened to report traffic on (found in a bug review 2026-07-10,
+    independently verified, previously the whole set here): SUMO uses the
+    same edge IDs as network.geojson for the whole simulated graph, so an
+    edge absent from a seed's edgeData (excludeEmpty="true") genuinely
+    carried zero vehicles that seed, not "wasn't simulated" — the
+    ps.get(eid, np.zeros(...)) fallback below already treats it that way
+    per-seed; restricting the OUTER loop to only observed edges silently
+    turned every genuinely-zero edge into a rendered "no data" gap instead
+    of a real, honest zero — the exact inversion of this project's own
+    null-means-missing/zero-means-measured contract."""
+    flows_out: dict[str, list[int]] = {}
+    conf_out:  dict[str, float] = {}
+    for eid in sorted(web_edges):
+        stack = np.stack([ps.get(eid, np.zeros(n_intervals)) for ps in per_seed])
+        mean  = stack.mean(axis=0)
+        flows_out[eid] = [int(round(v)) for v in mean]
+
+        busy = mean > 2           # CV is meaningless for near-zero flows
+        cv   = float((stack.std(axis=0)[busy] / mean[busy]).mean()) if busy.any() else 0.0
+        conf_out[eid] = round(prior[eid] * float(np.exp(-cv)), 3)
+    return flows_out, conf_out
+
+
 def main() -> None:
     args = parse_args()
     home = sumo_home()
@@ -707,18 +737,7 @@ def main() -> None:
 
     # ── Aggregate: mean flows + Monte Carlo confidence ─────────────────────────
     web_edges = set(prior)   # only edges the map can draw
-    all_ids   = set().union(*per_seed) & web_edges
-
-    flows_out: dict[str, list[int]] = {}
-    conf_out:  dict[str, float] = {}
-    for eid in sorted(all_ids):
-        stack = np.stack([ps.get(eid, np.zeros(n_intervals)) for ps in per_seed])
-        mean  = stack.mean(axis=0)
-        flows_out[eid] = [int(round(v)) for v in mean]
-
-        busy = mean > 2           # CV is meaningless for near-zero flows
-        cv   = float((stack.std(axis=0)[busy] / mean[busy]).mean()) if busy.any() else 0.0
-        conf_out[eid] = round(prior[eid] * float(np.exp(-cv)), 3)
+    flows_out, conf_out = aggregate_flows(per_seed, web_edges, prior, n_intervals)
 
     window_label = demand_window_label(meta)
 
