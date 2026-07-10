@@ -186,6 +186,54 @@ class TestRecalibrateValidation:
         wait_until(lambda: seen.get("source") is not None)
         assert seen["source"] == "historical"
 
+    def test_default_days_is_one(self, base_url, monkeypatch):
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            if "build_sumo_demand.py" in cmd[1]:
+                seen["cmd"] = cmd
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        wait_until(lambda: seen.get("cmd") is not None)
+        # days=1 keeps the original --date/--begin/--end call shape —
+        # no behaviour change for existing single-day callers.
+        assert "--date" in seen["cmd"] and "--start-date" not in seen["cmd"]
+
+    def test_days_zero_is_400(self, base_url):
+        status, _ = get_json_or_error(
+            f"{base_url}/api/recalibrate?date=2025-09-16&days=0")
+        assert status == 400
+
+    def test_days_eight_is_400(self, base_url):
+        status, _ = get_json_or_error(
+            f"{base_url}/api/recalibrate?date=2025-09-16&days=8")
+        assert status == 400
+
+    def test_days_not_an_integer_is_400(self, base_url):
+        status, _ = get_json_or_error(
+            f"{base_url}/api/recalibrate?date=2025-09-16&days=abc")
+        assert status == 400
+
+    def test_multi_day_uses_start_date_and_days_flags(self, base_url, monkeypatch):
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            if "build_sumo_demand.py" in cmd[1]:
+                seen["cmd"] = cmd
+                seen["timeout"] = kw.get("timeout")
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        get_json(f"{base_url}/api/recalibrate?date=2025-09-16&days=3")
+        wait_until(lambda: seen.get("cmd") is not None)
+        cmd = seen["cmd"]
+        assert "--date" not in cmd
+        assert cmd[cmd.index("--start-date") + 1] == "2025-09-16"
+        assert cmd[cmd.index("--days") + 1] == "3"
+        assert seen["timeout"] == 1700 + 700 * 3   # scaled, not the flat 2400 s
+
 
 class TestRecalibrateAsyncLifecycle:
     """The actual production-incident territory: a request must return

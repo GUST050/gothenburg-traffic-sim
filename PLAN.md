@@ -368,6 +368,77 @@ unchanged.
   in B2 and not resurrected (there is no closure scenario yet for the new
   2-day demand — generating one is still open work, listed above).
 
+PARTIAL, round 2 (2026-07-10, Claude, no Codex). Implemented the three
+remaining code items; only the week-scale acceptance run + CDP screenshot
+is still open.
+- `run_scenario.py`: `--trajectories` opt-in flag (mutually exclusive with
+  the existing `--no-trajectories`, `p.error()`s if both given). New
+  `want_trajectories(args, n_intervals)`: `--no-trajectories` always wins
+  (off), `--trajectories` always wins (on), otherwise defaults on for
+  `n_intervals <= 96` (single day, unchanged behaviour) and off above it
+  (matches the plan's ~10 MB/day → ~90 MB/week estimate). 4 unit tests.
+  `parse_edgedata`/the `+3600` flush were checked and need no change — both
+  were already generic in `n_intervals`/`duration_s`, not hardcoded to one
+  day; this was exercised for real by round 1's 192-interval baseline run
+  already succeeding.
+- Web (`index.html`): the day-slider group used to be unconditionally
+  disabled with a fixed "(scenariots datum är fast)" hint for EVERY
+  scenario, because no scenario could ever be more than one day before B2.
+  Now computes `simDays = Math.ceil(provider.numQuarters / 96)` on every
+  mode switch: `simDays <= 1` keeps the old disabled/fixed-date behaviour
+  exactly; `simDays > 1` enables the slider, sets its `max` to `simDays - 1`
+  (previously hardcoded to 364 — the year range — even inside a 2-day
+  scenario, so dragging past day 2 silently did nothing instead of being
+  visibly clamped), and shows the real date range as the hint (e.g.
+  "2025-09-16 → 2025-09-18 (2 dagar)"). The quarter-index clock display
+  needed NO changes — `Controls.onTick` already recomputes the full date
+  (including day-of-week) from `provider.dateFromQI(State.qiFloat)` on
+  every tick, so it was already correctly advancing across midnight; only
+  the day-slider's range/label were stale. Verified with a real headless-
+  Chrome CDP session (this project's established browser-testing pattern)
+  against the actual B2 2-day baseline scenario: `day-slider.max` reads
+  `"1"`, hint reads `"2025-09-16 — 2025-09-17 (2 dagar)"`, `State.MAX_QI`
+  is 191, scrubbing the slider to day 1 moves `State.qi` to 96 and the
+  displayed date to "Ons 17 sep 2025" (Wednesday — correct), setting the
+  slider past its max clamps in-browser rather than silently doing
+  nothing, and switching back to Historisk correctly restores `max=364`
+  and the year-range hint. Screenshots confirm the map and vehicle dots
+  render normally in both states. One pre-existing, unrelated console
+  error was found during this testing (`SyntaxError` from
+  `/api/recalibrate/status` returning an HTML 404 page under plain static
+  hosting) — reproduced identically with the day-slider change stashed
+  out, so confirmed NOT a regression; it's an already-caught,
+  already-commented "serve.py not running (static hosting) — ignore" path,
+  out of scope here.
+- `serve.py`: `/api/recalibrate` accepts `days` (default 1, validated
+  1-7, 400 otherwise). `_run_recalibrate` builds `--start-date DATE --days
+  N` instead of `--date DATE --begin 00:00 --end 24:00` when `days > 1`
+  (days=1 keeps the exact original single-day CLI shape — regression
+  tested). Timeout scaling: `1700 + 700 * days` — chosen so days=1 lands on
+  exactly the original 2400 s (no behaviour change for existing single-day
+  callers) and days=7 gets a 6600 s (110 min) ceiling, a ~2.4x margin over
+  the ~45 min the UI now documents for a full week. `run_scenario.py`'s
+  own timeout scales lightly too (`300 + 60*(days-1)`). 5 new tests
+  (days validation: 0, 8, non-integer all 400; default-days-is-1 keeps the
+  `--date` call shape; explicit multi-day uses `--start-date`/`--days` and
+  the scaled timeout).
+- Web UI: day-banner gained a "dagar" number input (1-7, defaults to 1
+  every time the picker opens) next to the date picker; the "Räkna om"
+  button's cost estimate now scales with it via linear interpolation
+  between the plan's two documented anchor points (1 day ≈ 6 min, 7 days ≈
+  45 min) instead of the old hardcoded "~6 min" text; `days` is included
+  in the `/api/recalibrate` call and echoed back through `/status` so
+  `applyFinishedRecalibration` can show "(N dagar)" in the sim-day hint
+  for a multi-day result.
+- `pytest tests/ -q`: 454 passed, 21 skipped, 0 failed (up from round 1's
+  444/21 — the 4 trajectory-default tests + 1 CLI-mutual-exclusivity test
+  + 5 serve.py days tests, no regressions).
+
+STILL OPEN: the week-scale acceptance run itself (build a real 7-day
+demand + one closure scenario, scrub all 7 days in the browser via CDP,
+record wall time/GEH/file sizes here) — everything above is the code this
+needs, not yet exercised at week scale.
+
 ---
 
 ## Phase C — "Best time to close a road" suggester

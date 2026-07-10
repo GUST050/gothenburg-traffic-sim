@@ -12,13 +12,16 @@ Endpoints:
                                 Carlo, ~30–90 s) and returns
                                 {"file": "<scenario>.json", "label": ...}.
                                 One simulation at a time (409 while busy).
-  GET /api/recalibrate?date=YYYY-MM-DD&source=historical|forecast
+  GET /api/recalibrate?date=YYYY-MM-DD&source=historical|forecast&days=N
                               — starts the whole-day PFE demand recalibration
-                                for a NEW date/source (~6 min) in a
-                                BACKGROUND THREAD and returns immediately
+                                for a NEW date/source (~6 min for one day)
+                                in a BACKGROUND THREAD and returns immediately
                                 ({"status": "started"}) — see the note below
                                 on why this is async rather than one long
-                                blocking request.
+                                blocking request. days (default 1, capped at
+                                7) builds DATE through DATE+days-1 as one
+                                continuous multi-day demand (B3) instead of
+                                a single day; a full week costs ~45 min.
   GET /api/recalibrate/status — {"status": "idle"|"running"|"done"|"error", ...}.
                                 The frontend polls this instead of holding
                                 one request open for the whole ~6 min, and
@@ -162,10 +165,17 @@ class Handler(SimpleHTTPRequestHandler):
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         date   = qs.get("date", [""])[0]
         source = qs.get("source", ["historical"])[0]
+        days_raw = qs.get("days", ["1"])[0]
         if not DATE_RE.match(date):
             return self._json(400, {"error": "datum måste vara YYYY-MM-DD"})
         if source not in ("historical", "forecast"):
             return self._json(400, {"error": "source måste vara historical eller forecast"})
+        try:
+            days = int(days_raw)
+        except ValueError:
+            return self._json(400, {"error": "days måste vara ett heltal"})
+        if not (1 <= days <= 7):
+            return self._json(400, {"error": "days måste vara 1-7 (en vecka i taget)"})
 
         if not _sim_lock.acquire(blocking=False):
             return self._json(409, {"error": "en simulering kör redan — vänta"})
@@ -175,17 +185,18 @@ class Handler(SimpleHTTPRequestHandler):
         with _recal_lock:
             _recal_state.clear()
             _recal_state.update(status="running", date=date, source=source,
-                                started_at=time.time())
-        threading.Thread(target=self._run_recalibrate, args=(date, source),
+                                days=days, started_at=time.time())
+        threading.Thread(target=self._run_recalibrate, args=(date, source, days),
                          daemon=True).start()
-        return self._json(202, {"status": "started", "date": date, "source": source})
+        return self._json(202, {"status": "started", "date": date, "source": source,
+                                "days": days})
 
     @staticmethod
     def _set_recal(**kw) -> None:
         with _recal_lock:
             _recal_state.update(**kw)
 
-    def _run_recalibrate(self, date: str, source: str) -> None:
+    def _run_recalibrate(self, date: str, source: str, days: int = 1) -> None:
         # NOTE: every exit path calls _set_recal BEFORE the finally block
         # releases _sim_lock. Doing it the other way around (release, then
         # update state) leaves a race window where a second recalibration
@@ -194,12 +205,24 @@ class Handler(SimpleHTTPRequestHandler):
         # then stomp the SECOND job's running state with the FIRST job's
         # result. Found in review, not by a failing test — the window is a
         # handful of bytecode instructions wide, easy to miss.
+        #
+        # Timeout scaling (B3, 2026-07-10): 2400 s was calibrated for ONE
+        # day. base=1700/per_day=700 keeps days=1 at exactly the original
+        # 2400 s (no behaviour change for existing single-day callers) and
+        # gives days=7 a 6600 s (110 min) ceiling — a generous ~2.4x margin
+        # over the ~45 min a week is documented to cost in the UI, matching
+        # the safety margin the single-day timeout already had relative to
+        # its own measured ~6-19 min runtime.
+        build_cmd = [sys.executable, "build_sumo_demand.py", "--source", source]
+        if days > 1:
+            build_cmd += ["--start-date", date, "--days", str(days)]
+        else:
+            build_cmd += ["--date", date, "--begin", "00:00", "--end", "24:00"]
+        build_timeout = 1700 + 700 * days
         try:
             res = subprocess.run(
-                [sys.executable, "build_sumo_demand.py",
-                 "--date", date, "--source", source,
-                 "--begin", "00:00", "--end", "24:00"],
-                cwd=str(ROOT), capture_output=True, text=True, timeout=2400,
+                build_cmd,
+                cwd=str(ROOT), capture_output=True, text=True, timeout=build_timeout,
             )
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])
@@ -217,7 +240,8 @@ class Handler(SimpleHTTPRequestHandler):
 
             res2 = subprocess.run(
                 [sys.executable, "run_scenario.py"],
-                cwd=str(ROOT), capture_output=True, text=True, timeout=300,
+                cwd=str(ROOT), capture_output=True, text=True,
+                timeout=300 + 60 * (days - 1),
             )
             if res2.returncode != 0:
                 print(res2.stdout[-2000:], res2.stderr[-2000:])
@@ -227,7 +251,7 @@ class Handler(SimpleHTTPRequestHandler):
 
             known_edges.cache_clear()   # network.geojson is unchanged but be safe
             self._set_recal(status="done", file="baseline.json",
-                            date=date, source=source)
+                            date=date, source=source, days=days)
         except subprocess.TimeoutExpired:
             self._set_recal(status="error",
                             error="omkalibreringen tog för lång tid — avbruten")

@@ -77,6 +77,18 @@ def demand_signature(meta: dict) -> str:
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
 
+def want_trajectories(args: argparse.Namespace, n_intervals: int) -> bool:
+    """Trajectory export defaults on for single-day demand (unchanged,
+    existing behaviour), off above one day (~10 MB/day; a week would be
+    ~90 MB by default otherwise). --trajectories/--no-trajectories always
+    override the default explicitly in either direction."""
+    if args.no_trajectories:
+        return False
+    if args.trajectories:
+        return True
+    return n_intervals <= 96
+
+
 def demand_window_label(meta: dict) -> str:
     """Human-readable date range for scenario/index display.
 
@@ -119,7 +131,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-trajectories", action="store_true",
                    help="Skip the per-vehicle trajectory export (one extra "
                         "seed-1000 run with vehroute exit-times)")
-    return p.parse_args()
+    p.add_argument("--trajectories", action="store_true",
+                   help="Force per-vehicle trajectory export for multi-day "
+                        "demand, where it is off by default (~10 MB/day, "
+                        "so ~90 MB for a week — opt in deliberately). No "
+                        "effect for single-day demand, which already "
+                        "exports by default; use --no-trajectories there "
+                        "to skip it instead.")
+    args = p.parse_args()
+    if args.trajectories and args.no_trajectories:
+        p.error("--trajectories and --no-trajectories are mutually exclusive")
+    return args
 
 
 def structured_closures(raw: list[str], whole_edges: list[str], epoch: str,
@@ -701,7 +723,7 @@ def main() -> None:
     window_label = demand_window_label(meta)
 
     traj_name = None
-    if not args.no_trajectories:
+    if want_trajectories(args, n_intervals):
         traj_name = export_trajectories(name, variants[0], closure_add,
                                         duration_s, home, web_edges,
                                         micro=args.micro)

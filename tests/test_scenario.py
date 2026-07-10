@@ -6,6 +6,7 @@ scenario extensions (metadata + per-edge confidence). Skipped if no
 scenarios have been generated yet.
 """
 
+import argparse
 import json
 import subprocess
 import sys
@@ -220,6 +221,28 @@ class TestScenarioManifestDemandScope:
         assert "date" not in meta  # regression guard for the KeyError this fixes
         assert run_scenario.demand_window_label(meta) == \
             "2025-09-16 → 2025-09-18 (2 days)"
+
+    def test_trajectories_default_on_for_single_day(self):
+        args = argparse.Namespace(no_trajectories=False, trajectories=False)
+        assert run_scenario.want_trajectories(args, n_intervals=96) is True
+
+    def test_trajectories_default_off_above_one_day(self):
+        args = argparse.Namespace(no_trajectories=False, trajectories=False)
+        assert run_scenario.want_trajectories(args, n_intervals=192) is False
+
+    def test_trajectories_flag_forces_on_for_multi_day(self):
+        args = argparse.Namespace(no_trajectories=False, trajectories=True)
+        assert run_scenario.want_trajectories(args, n_intervals=672) is True
+
+    def test_no_trajectories_flag_forces_off_for_single_day(self):
+        args = argparse.Namespace(no_trajectories=True, trajectories=False)
+        assert run_scenario.want_trajectories(args, n_intervals=96) is False
+
+    def test_trajectories_and_no_trajectories_together_is_a_cli_error(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv",
+                            ["run_scenario.py", "--trajectories", "--no-trajectories"])
+        with pytest.raises(SystemExit):
+            run_scenario.parse_args()
 
     def test_manifest_keeps_only_current_demand_entries(self):
         current = "abc123"

@@ -147,12 +147,13 @@
     }
     #day-banner.show { display: flex; }
     #day-banner .hint { font-size: 0.76rem; color: var(--sim-2); font-weight: 600; }
-    #new-date-input {
+    #new-date-input, #new-days-input {
       background: rgba(15, 23, 42, 0.85); color: var(--ink);
       border: 1px solid var(--panel-line); border-radius: 8px;
       padding: 5px 9px; font-size: 0.76rem;
       color-scheme: dark;
     }
+    #new-days-input { width: 3.2em; }
     #sim-day-hint { font-size: 0.72rem; color: var(--ink-3); }
 
     #sliders { display: flex; gap: 28px; }
@@ -343,6 +344,9 @@
         </div>
         <input type="date" id="new-date-input" value="2025-09-16"
                min="2025-01-01" max="2025-12-31">
+        <label class="hint" for="new-days-input">dagar</label>
+        <input type="number" id="new-days-input" value="1" min="1" max="7"
+               title="Antal sammanhängande dagar att simulera, 1-7 (en vecka max — kostnaden växer med antalet dagar)">
         <button id="day-run-btn" class="action-btn primary">Räkna om (~6 min)</button>
         <button id="day-cancel-btn" class="action-btn">Avbryt</button>
       </div>
@@ -403,6 +407,8 @@
         const simPanel   = document.getElementById('sim-panel');
         const dayGroup   = document.getElementById('day-group');
         const dayHint    = document.getElementById('day-hint');
+        const daySlider  = document.getElementById('day-slider');
+        const YEAR_DAY_MAX = 364;   // day-slider's original range, for Historisk/Prognos
 
         const trajCache = {};
 
@@ -443,10 +449,24 @@
           const isSim = activeBtn === btnScen;
           const panelWasShown = simPanel.classList.contains('show');
           simPanel.classList.toggle('show', isSim);
-          // "Dag" only makes sense for the full-year historical/forecast
-          // data — a scenario is always a single fixed date.
-          dayGroup.classList.toggle('disabled', isSim);
-          dayHint.textContent = isSim ? '(scenariots datum är fast)' : '1 jan — 31 dec';
+          // "Dag" only makes sense as a scrubber when there's more than one
+          // day to scrub — a single-day scenario has a fixed date (as
+          // before); a multi-day scenario (B3) gets a real day slider
+          // ranging over ITS OWN days, not the full year.
+          const simDays = isSim ? Math.ceil(provider.numQuarters / 96) : 1;
+          dayGroup.classList.toggle('disabled', isSim && simDays <= 1);
+          if (!isSim) {
+            daySlider.max = YEAR_DAY_MAX;
+            dayHint.textContent = '1 jan — 31 dec';
+          } else if (simDays <= 1) {
+            dayHint.textContent = '(scenariots datum är fast)';
+          } else {
+            daySlider.max = simDays - 1;
+            const first = provider.epoch.toISOString().slice(0, 10);
+            const last  = provider.dateFromQI((simDays - 1) * 96)
+                                  .toISOString().slice(0, 10);
+            dayHint.textContent = `${first} — ${last} (${simDays} dagar)`;
+          }
           if (isSim !== panelWasShown) {
             // panel row appeared/disappeared → map's flex box resized
             requestAnimationFrame(() => Render.invalidateSize());
@@ -569,12 +589,27 @@
         const btnDay     = document.getElementById('change-day-btn');
         const dayBanner  = document.getElementById('day-banner');
         const dateInput  = document.getElementById('new-date-input');
+        const daysInput  = document.getElementById('new-days-input');
         const btnDayRun  = document.getElementById('day-run-btn');
         const btnDayCancel = document.getElementById('day-cancel-btn');
         const simDayHint = document.getElementById('sim-day-hint');
         let dayPickMode = false;
         let currentSimDate = '2025-09-16';
         let currentSimSource = 'historical';
+
+        // Linear interpolation between the two measured/documented anchor
+        // points (B3, PLAN.md): 1 day ~6 min, a full week ~45 min.
+        function estimatedMinutes(days) {
+          return Math.round(6 + (45 - 6) / 6 * (Math.max(1, days) - 1));
+        }
+        function updateDayRunLabel() {
+          btnDayRun.textContent = `Räkna om (~${estimatedMinutes(Number(daysInput.value))} min)`;
+        }
+        daysInput.addEventListener('input', () => {
+          const v = Math.max(1, Math.min(7, Math.round(Number(daysInput.value)) || 1));
+          daysInput.value = v;
+          updateDayRunLabel();
+        });
 
         function refreshCloseUI() {
           const showNormal = !closureMode && !dayPickMode;
@@ -642,6 +677,8 @@
           const r = DATE_RANGES[currentSource];
           dateInput.min = r.min; dateInput.max = r.max;
           dateInput.value = currentSimDate;
+          daysInput.value = 1;
+          updateDayRunLabel();
           refreshCloseUI();
         });
         btnDayCancel.addEventListener('click', () => {
@@ -688,7 +725,10 @@
           currentSimDate = data.date;
           currentSimSource = data.source;
           const srcLabel = data.source === 'forecast' ? 'Prognos' : 'Historik';
-          simDayHint.textContent = `${srcLabel}: ${data.date}`;
+          const days = data.days || 1;
+          simDayHint.textContent = days > 1
+            ? `${srcLabel}: ${data.date} (${days} dagar)`
+            : `${srcLabel}: ${data.date}`;
           await loadScenIndex(true);
           scenSelect.value = data.file;
           await activateScenario(data.file, { fresh: true });
@@ -719,10 +759,12 @@
         btnDayRun.addEventListener('click', async () => {
           btnDayRun.disabled = true;
           btnDayCancel.disabled = true;
+          const days = Number(daysInput.value) || 1;
           btnDayRun.textContent = 'Startar…';
           try {
             const res  = await fetch('/api/recalibrate?date=' + dateInput.value
-                                     + '&source=' + currentSource);
+                                     + '&source=' + currentSource
+                                     + '&days=' + days);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
             dayPickMode = false;
@@ -734,7 +776,7 @@
           } finally {
             btnDayRun.disabled = false;
             btnDayCancel.disabled = false;
-            btnDayRun.textContent = 'Räkna om (~6 min)';
+            updateDayRunLabel();
           }
         });
 
