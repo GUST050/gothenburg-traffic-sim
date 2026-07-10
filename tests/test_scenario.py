@@ -41,6 +41,50 @@ def geo_edge_ids():
     return {feat["properties"]["id"] for feat in geo["features"]}
 
 
+class TestAtomicWriteJson:
+    """atomic_write_json (found in review 2026-07-10): a live browser polling
+    a scenario/index file with cache: 'no-store' must never observe a
+    truncated write while run_scenario.py or serve.py's recalibration
+    thread overwrites it in place."""
+
+    def test_writes_valid_json_readable_after_call(self, tmp_path):
+        path = tmp_path / "out.json"
+        run_scenario.atomic_write_json(path, {"a": 1, "b": [1, 2, 3]})
+        assert json.loads(path.read_text()) == {"a": 1, "b": [1, 2, 3]}
+
+    def test_old_content_survives_until_the_new_write_fully_lands(self, tmp_path):
+        path = tmp_path / "out.json"
+        run_scenario.atomic_write_json(path, {"version": "old"})
+        assert json.loads(path.read_text()) == {"version": "old"}
+        run_scenario.atomic_write_json(path, {"version": "new"})
+        # No intermediate state should ever be observable from outside this
+        # call — the only two valid reads are fully-old or fully-new.
+        assert json.loads(path.read_text()) == {"version": "new"}
+
+    def test_no_leftover_temp_file_after_a_successful_write(self, tmp_path):
+        path = tmp_path / "out.json"
+        run_scenario.atomic_write_json(path, {"a": 1})
+        leftovers = [p for p in tmp_path.iterdir() if p != path]
+        assert leftovers == []
+
+    def test_temp_file_is_cleaned_up_on_a_failed_write(self, tmp_path):
+        path = tmp_path / "out.json"
+
+        class Unserializable:
+            pass
+
+        with pytest.raises(TypeError):
+            run_scenario.atomic_write_json(path, {"a": Unserializable()})
+        assert not path.exists()
+        leftovers = list(tmp_path.iterdir())
+        assert leftovers == []
+
+    def test_accepts_json_dump_kwargs(self, tmp_path):
+        path = tmp_path / "out.json"
+        run_scenario.atomic_write_json(path, {"a": 1}, indent=2)
+        assert "\n" in path.read_text()   # indent=2 forces multi-line output
+
+
 @needs_scenarios
 def test_index_lists_existing_files(index):
     assert index["scenarios"], "index.json has no scenarios"

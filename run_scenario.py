@@ -31,8 +31,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -190,6 +192,27 @@ def edge_freeflow_times() -> dict[str, float]:
         if length > 0 and speed > 0:
             times[edge.get("id")] = length / speed
     return times
+
+
+def atomic_write_json(path: Path, obj, **dump_kwargs) -> None:
+    """Write JSON so a live browser polling this path never observes a
+    partial file. serve.py's re-run/'Byt dag' flow overwrites these files
+    in place while the web app may be mid-fetch (cache-busted, no-store) —
+    a plain open(path, "w") is visible (and truncated) the instant it opens,
+    so a request landing mid-write gets a truncated/invalid JSON parse
+    error instead of either the old or the new scenario (found in review
+    2026-07-10). Write to a same-directory temp file, then os.replace(),
+    which POSIX guarantees is atomic — readers see either the fully old or
+    fully new file, never a partial one."""
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.",
+                                    suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(obj, f, **dump_kwargs)
+        os.replace(tmp_name, path)
+    except BaseException:
+        os.unlink(tmp_name)
+        raise
 
 
 def load_geojson_meta() -> tuple[dict[str, float], dict[str, str]]:
@@ -573,9 +596,8 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
     for e, i in edge_index.items():
         inv[i] = e
     traj_name = f"{name}_traj.json"
-    with open(OUT_DIR / traj_name, "w") as f:
-        json.dump({"edges": inv, "vehicles": vehicles}, f,
-                  separators=(",", ":"))
+    atomic_write_json(OUT_DIR / traj_name, {"edges": inv, "vehicles": vehicles},
+                      separators=(",", ":"))
     size_mb = (OUT_DIR / traj_name).stat().st_size / 1e6
     print(f"  trajectories: {len(vehicles)} vehicles → {traj_name} "
           f"({size_mb:.1f} MB)")
@@ -685,6 +707,7 @@ def main() -> None:
         print(f"  {len(variants)} demand variants (q50 + direction-split bounds)")
 
     closure_add: list[Path] = []
+    n_truncated = n_dropped = 0   # stay 0 for a baseline (no-closure) run
     if close_edges:
         rerouter_edges = edges_near(close_edges, REROUTER_RADIUS_M)
         print(f"  rerouter on {len(rerouter_edges)} edges within "
@@ -701,7 +724,6 @@ def main() -> None:
         adj = build_edge_graph(set(close_edges))
         freeflow = edge_freeflow_times()
         filtered_variants = []
-        n_truncated = n_dropped = 0
         for vp in variants:
             fp = SUMO_DIR / f"{vp.stem}_{name}.rou.xml"
             t, d = truncate_stranded_vehicles(
@@ -759,6 +781,12 @@ def main() -> None:
             "closures": closures,
             "window": window_label,
             "source": meta.get("source", "historical"),
+            # Disruption-quality signal, previously only printed to the
+            # build log and lost — a closure with a high truncated/dropped
+            # count is a lower-confidence scenario and the UI/API consumer
+            # has no other way to see that (found in review 2026-07-10).
+            "truncated_vehicles": n_truncated,
+            "dropped_vehicles":   n_dropped,
             **({"date": meta["date"], "begin": meta["begin"], "end": meta["end"]}
                if "date" in meta else
                {"start_date": meta["start_date"],
@@ -771,8 +799,7 @@ def main() -> None:
         "confidence": conf_out,
     }
     out_path = OUT_DIR / f"{name}.json"
-    with open(out_path, "w") as f:
-        json.dump(payload, f, separators=(",", ":"))
+    atomic_write_json(out_path, payload, separators=(",", ":"))
     print(f"Wrote {out_path}  ({len(flows_out)} edges)")
 
     # ── Manifest ───────────────────────────────────────────────────────────────
@@ -789,8 +816,7 @@ def main() -> None:
         "window": f"{window_label}{src_tag}",
     })
     index["scenarios"].sort(key=lambda s: s["name"])
-    with open(index_path, "w") as f:
-        json.dump(index, f, indent=2)
+    atomic_write_json(index_path, index, indent=2)
     print(f"Updated {index_path}  ({len(index['scenarios'])} scenarios)")
 
 
