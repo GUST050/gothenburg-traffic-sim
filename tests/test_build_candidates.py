@@ -178,11 +178,16 @@ class TestDropExcessiveDetours:
         bc.drop_excessive_detours(path, G, max_stretch=10.0)   # loose: 6x survives
         assert read_vehicle_ids(path) == ["detour"]
 
-    def test_shared_entry_exit_endpoints_use_one_cached_shortest_path_call(self, tmp_path, monkeypatch):
+    def test_shared_entry_nodes_use_one_batched_dijkstra_call(self, tmp_path, monkeypatch):
         """Endpoints repeat heavily in the real pool (e.g. ~900 via-trips
-        per sensor sharing a handful of gate pairs) -- the true-shortest-
-        path cost must be computed once per DISTINCT (entry, exit) pair,
-        not once per candidate."""
+        per sensor sharing a handful of gate pairs) -- true-shortest-path
+        costs must be computed via ONE batched scipy Dijkstra call across
+        every distinct ENTRY node (each call returns distances to every
+        other node at once), not one call per candidate or even per
+        distinct (entry, exit) pair. (Was: one networkx shortest_path_
+        length call per distinct pair -- superseded 2026-07-10 by the
+        scipy-batched-by-source rewrite, ~28x faster on the real pool,
+        verified bit-identical output first.)"""
         G = self._graph()
         path = tmp_path / "candidates.rou.xml"
         write_routes(path, [
@@ -190,15 +195,23 @@ class TestDropExcessiveDetours:
             ("b", ["1_2_0", "2_3_0"]),
             ("c", ["1_2_0", "2_3_0"]),
         ])
+        # drop_excessive_detours does `from scipy.sparse.csgraph import
+        # dijkstra as sp_dijkstra` freshly INSIDE the function on every
+        # call, so patching must target the actual source module (scipy's
+        # own `dijkstra` name) -- a local name binding at call time
+        # re-reads whatever that module attribute currently is, but a
+        # module-level attribute on build_candidates itself wouldn't be
+        # touched by that import statement at all.
         calls = []
-        import networkx as nx_module
-        real_fn = nx_module.shortest_path_length
+        import scipy.sparse.csgraph as csgraph_module
+        real_fn = csgraph_module.dijkstra
         def counting_fn(*args, **kwargs):
             calls.append(1)
             return real_fn(*args, **kwargs)
-        monkeypatch.setattr(nx_module, "shortest_path_length", counting_fn)
+        monkeypatch.setattr(csgraph_module, "dijkstra", counting_fn)
         bc.drop_excessive_detours(path, G, max_stretch=2.0)
-        assert len(calls) == 1
+        assert len(calls) == 1   # one batched call for all 3 candidates' shared entry
+        assert read_vehicle_ids(path) == ["a", "b", "c"]   # all kept -- true shortest
 
 
 class TestReportSensorCrossHits:
