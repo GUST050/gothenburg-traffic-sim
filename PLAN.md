@@ -439,6 +439,72 @@ demand + one closure scenario, scrub all 7 days in the browser via CDP,
 record wall time/GEH/file sizes here) — everything above is the code this
 needs, not yet exercised at week scale.
 
+DONE (2026-07-10, Claude, no Codex). Real 7-day build,
+`--start-date 2025-09-16 --days 7` (Tue–Mon, correctly spanning 5 weekdays
++ Sat/Sun): candidate generation reused geometry across all 5 weekdays and
+both weekend days (2 pool_keys total, 28 579 distinct routes from 70 548
+candidates — confirms B2's per-day-type pooling design holds at week
+scale, not just 2 days), PFE solved 2016 independent variant×quarter
+intervals (672 quarters × 3 variants). **100% GEH<5 on all three
+variants, 0 infeasible intervals** (q50 156 394 veh, q10 150 622 veh, q90
+158 087 veh). `export_od` (B2's fix) and `run_scenario.py`'s window-label
+fix (B3 round 1) both worked correctly end to end this time with no
+crash. Generated a baseline scenario (672×15 min, 3 seeds, trajectories
+correctly OFF by default per the `--trajectories` opt-in flag, `--close`
+scenario "Skånegatan": 54 372 vehicles truncated at the closure with no
+detour, 15 dropped outright, matching the existing truncation design) and
+one closure scenario — both ~11 MB, 7147/7147 edges (Finding #1's fix
+confirmed at week scale: every displayable edge gets a real flows entry,
+none hidden as missing).
+
+Browser-verified via a real headless-Chrome CDP session (single tab, no
+leaks this time): day-slider `max="6"`, hint
+`"2025-09-16 — 2025-09-22 (7 dagar)"`, `State.MAX_QI=671`. Scrubbed to
+day 3 (Fri 19 sep, `qi=288`), day 4 (**Lör 20 sep** — the weekday→weekend
+boundary lands exactly right), day 6 (Mån 22 sep, back to weekday) — all
+dates and weekday/weekend labels correct, clock resets to 00:00:00 at
+each boundary. Switched from baseline to the closure scenario mid-session
+(scenario picker showed both correctly) with zero console errors and zero
+unexpected network failures on either. Screenshots confirm the map and
+confidence-gradient coloring render normally at every checked day.
+
+**Timing, reported honestly:** total wall time from candidate generation
+through the final route-file write was ~7h11m (14:07→21:18) — but this
+figure is NOT a clean measurement of the pipeline's own cost. Two
+unrelated resource-contention episodes distorted it: (1) a leaked
+headless-Chrome instance from CDP testing earlier the same session drove
+system load to 65+ before being found and killed (~30 min affected), and
+(2) a ~3+ hour stretch where the OPERATOR's own separate Chrome browsing
+(confirmed via process inspection — not anything this session started)
+spiked load past 100 and nearly stalled the PFE workers, whose CPU time
+barely grew during that window. With those episodes excluded, the actual
+compute-bound portions measured cleanly: candidate generation ≈4 min
+(matching B2's per-block cost, confirming linear-in-pool-count not
+linear-in-day-count scaling), and the PFE solve+write stages accumulated
+~140 CPU-minutes per worker across 10 workers when genuinely unconstrained
+— roughly 8.4x B2's 2-day figure for 3.5x the quarters, consistent with
+the week's 2.4x-larger shape pool (28 579 vs 11 921 distinct routes, from
+adding a second weekend pool_key) multiplying against the job-count
+increase, not a surprise slowdown. **Practical implication for anyone
+running this again:** budget on the order of 1.5-2 hours of genuinely
+uncontended machine time for a full week build, not the ~45 min the UI's
+linear cost-estimate currently shows (that estimate — `estimatedMinutes()`
+in `web/index.html` — was calibrated on `/api/recalibrate`'s prior,
+untested extrapolation and is now known to undercount; revising it is
+follow-up work, not done here, since the real machine-time cost includes
+this run's contention noise and isn't a clean number to recalibrate a
+UI estimate from).
+
+**B3 is now complete**: multi-day scenarios work end-to-end from a
+`build_sumo_demand.py --days N` build through `run_scenario.py` through
+the web app's day-boundary UI, verified at both 2-day and full week
+scale, both historical demand builds and both a baseline and a closure
+scenario. Remaining honest caveat carried forward: the UI's day-cost
+estimate is optimistic at week scale (see above) — worth fixing before
+exposing 7-day recalibration to a real user through `serve.py`'s
+`/api/recalibrate?days=7`, which is wired up but untested end-to-end
+through the web UI (only the CLI path was exercised here).
+
 ---
 
 ## Phase C — "Best time to close a road" suggester
