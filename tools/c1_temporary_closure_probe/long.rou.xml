@@ -1,0 +1,4 @@
+<routes>
+  <vType id="car" accel="2.6" decel="4.5" length="5" maxSpeed="10"/>
+  <vehicle id="stranded_long" type="car" depart="20"><route edges="no_in no_closed no_out"/></vehicle>
+</routes>

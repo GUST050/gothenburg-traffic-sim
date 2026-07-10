@@ -1,0 +1,9 @@
+<routes>
+  <vType id="car" accel="2.6" decel="4.5" length="5" maxSpeed="10"/>
+  <!-- crosses before closure; enters during closure and is rerouted; enters after reopening -->
+  <vehicle id="direct_pre" type="car" depart="0"><route edges="direct_in closed direct_out"/></vehicle>
+  <vehicle id="rerouted" type="car" depart="20"><route edges="direct_in closed direct_out"/></vehicle>
+  <!-- no_in is the rerouter edge; no alternative exists around no_closed -->
+  <vehicle id="stranded_short" type="car" depart="20"><route edges="no_in no_closed no_out"/></vehicle>
+  <vehicle id="reopened_direct" type="car" depart="110"><route edges="direct_in closed direct_out"/></vehicle>
+</routes>

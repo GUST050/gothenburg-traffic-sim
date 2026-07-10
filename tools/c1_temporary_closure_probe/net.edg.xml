@@ -1,0 +1,10 @@
+<edges>
+  <edge id="direct_in" from="a" to="b" numLanes="1" speed="10"/>
+  <edge id="closed" from="b" to="c" numLanes="1" speed="10"/>
+  <edge id="direct_out" from="c" to="d" numLanes="1" speed="10"/>
+  <edge id="detour_1" from="b" to="e" numLanes="1" speed="10"/>
+  <edge id="detour_2" from="e" to="c" numLanes="1" speed="10"/>
+  <edge id="no_in" from="w" to="x" numLanes="1" speed="10"/>
+  <edge id="no_closed" from="x" to="y" numLanes="1" speed="10"/>
+  <edge id="no_out" from="y" to="z" numLanes="1" speed="10"/>
+</edges>

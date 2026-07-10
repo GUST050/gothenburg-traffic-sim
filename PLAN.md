@@ -214,7 +214,72 @@ Minimal isolated net + demand (fixture-scale, like tests/) proving:
   NOT guaranteed — this is exactly what to verify);
 - compare `--ignore-route-errors` vs routing mode 8 (SUMO docs recommend
   mode 8 for temporary permission changes).
-Record findings HERE. They decide C2's stranded-vehicle policy.
+
+**Empirical findings — 2026-07-10, SUMO 1.27.1.** Ran the isolated,
+micro-simulation fixture in `tools/c1_temporary_closure_probe/` (built with
+`netconvert` from its tiny `net.nod.xml`/`net.edg.xml`; all outputs in its
+ignored `out/` directory). The closure additional is exactly a rerouter over
+`direct_in no_in`, with `<interval begin="10" end="100">` and
+`<closingReroute ... disallow="all"/>`; a parallel `no_in -> no_closed ->
+no_out` branch has no detour. Runs used tripinfo and vehroute exit-times, with
+warnings enabled. The probe is reproducible with
+`zsh tools/c1_temporary_closure_probe/run_probe.sh`.
+
+1. **The permission really is restored at `end`.** `stranded_short` reaches
+   the no-detour closure during the window, receives `Warning: No route for
+   vehicle 'stranded_short' found.`, but is not teleported: its tripinfo says
+   `arrival="112.00" ... waitingTime="71.00"`, and its vehroute says
+   `edges="no_in no_closed no_out" exitTimes="100.00 107.00 112.00"`.
+   It leaves `no_in` exactly at `end=100` and then legitimately traverses
+   `no_closed`. Independently, `reopened_direct`, departing at 110, has
+   `edges="direct_in closed direct_out" exitTimes="115.00 120.00 126.00"`.
+   Thus the edge is usable after, not merely at, the interval end.
+2. **No-detour vehicles wait, but only up to the teleport limit.** The
+   10--100 s case above waited 71 s and completed normally. In an otherwise
+   identical 10--500 s run with SUMO's default (no explicit
+   `--time-to-teleport`), stderr contains `Teleporting vehicle
+   'stranded_long'; waited too long (wrong lane), lane='no_in_0',
+   time=329.00.` followed by `ends teleporting on edge 'no_out', time=336.00.`
+   Tripinfo measures `waitingTime="301.00"` (and `arrival="341.00"`). In
+   this 1 s-step fixture the default 300 s threshold therefore fires at 301 s
+   accumulated waiting / simulation time 329, not immediately. A temporary
+   closure is safe to let SUMO wait through only when the predicted wait has
+   headroom below that threshold; otherwise its post-teleport traversal is
+   not a legitimate closed-road flow.
+3. **A normal closure reroute is sticky; it does not revert at reopening.**
+   With the current-method run (`--ignore-route-errors true`, no periodic
+   rerouting device), `rerouted` was replaced at the closure:
+   `<route replacedOnEdge="direct_in" reason="closure"
+   replacedAtTime="20.00" ... edges="direct_in closed direct_out"/>`, then
+   completed on `<route edges="direct_in detour_1 detour_2 direct_out"
+   exitTimes="25.00 85.00 146.00 153.00"/>`. The road reopened at 100 while
+   it was still on `detour_2` (exit 146), yet its final route contains the
+   detour and no `closed`; tripinfo has `rerouteNo="1"`. So C2 must not
+   assume automatic route reversion for the production rerouter.
+4. **`--ignore-route-errors` and mode 8 are different mechanisms, with
+   materially different behaviour.** `sumo --help` for 1.27.1 says
+   `--ignore-route-errors` only means `Do not check whether routes are
+   connected`; it does not attach a rerouting device. Its run gave the sticky
+   detour in (3). Mode 8 is specifically
+   `--device.rerouting.mode 8` (`8 ignores temporary blockages`), so the
+   comparison run assigned every vehicle a device with
+   `--device.rerouting.probability 1 --device.rerouting.period 1` and omitted
+   `--ignore-route-errors`. For the same `rerouted` vehicle vehroute records
+   the closure reroute at 20, then a second
+   `reason="device.rerouting" replacedAtTime="22.00"` back to the short
+   route; final route is `direct_in closed direct_out` with
+   `exitTimes="100.00 106.00 113.00"`, and tripinfo has
+   `rerouteNo="2" waitingTime="73.00"`. Mode 8 therefore makes the vehicle
+   choose the temporarily blocked short route and wait until reopening,
+   rather than continue on the available detour. It is not a drop-in
+   replacement for the current flag/closure rerouter policy. The no-detour
+   vehicle behaves the same in the short window under both runs
+   (`arrival="112.00"`, `waitingTime="71.00"`).
+
+These findings decide C2's stranded-vehicle policy: never rely on waiting
+past the teleport threshold, and do not enable periodic mode-8 devices merely
+to model a temporary closure unless deliberately modelling their different
+"wait for the short route" route-choice behaviour.
 
 ### C2. Time-windowed closures in the scenario engine — size M — depends C1
 - `run_scenario.py` CLI: closures become structured:
@@ -224,9 +289,16 @@ Record findings HERE. They decide C2's stranded-vehicle policy.
 - `write_closure_additional()` (~line 147): one `<interval>` per window.
 - `truncate_stranded_vehicles()` becomes time-aware and CONSERVATIVE:
   a vehicle is affected only if it would hit the closed edge DURING the
-  window (estimate arrival conservatively from depart + free-flow times, or
-  simpler: only prefilter vehicles whose whole trip lies inside the window;
-  let SUMO's wait-until-reopen handle the rest — C1's findings decide).
+  window. Estimate arrival conservatively from depart + free-flow times and
+  estimate the remaining wait to `close_end`: when an unreachable vehicle can
+  wait with headroom below SUMO's default 300 s teleport threshold, retain it
+  and let SUMO wait and traverse only after reopening (C1 measured 71 s
+  waiting, no teleport). When its predicted wait may reach that threshold,
+  truncate it before the closure exactly as for a full-duration closure:
+  C1 measured teleport at 301 s accumulated waiting, after which SUMO emits a
+  false-looking traversal of the closed edge. Do not turn on periodic routing
+  mode 8 as a shortcut: C1 showed it changes detour choice into waiting for
+  the short route.
   For full-duration closures keep exactly today's verified behavior
   (11 tests in TestTruncateStrandedVehicles must keep passing untouched).
 - Scenario JSON + manifest + web popup: carry and display the window

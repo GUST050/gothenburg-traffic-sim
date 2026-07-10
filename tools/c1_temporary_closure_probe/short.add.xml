@@ -1,0 +1,5 @@
+<additional>
+  <rerouter id="closure" edges="direct_in no_in">
+    <interval begin="10" end="100"><closingReroute id="closed" disallow="all"/><closingReroute id="no_closed" disallow="all"/></interval>
+  </rerouter>
+</additional>
