@@ -8,10 +8,17 @@ Endpoints:
   GET /...                    — static files from web/
   GET /api/ping               — {"ok": true}; the web app uses this to decide
                                 whether to show the "Stäng väg" feature
-  GET /api/close?edges=a,b,c  — runs run_scenario.py --close a b c (Monte
-                                Carlo, ~30–90 s) and returns
-                                {"file": "<scenario>.json", "label": ...}.
+  GET /api/close?edges=a,b,c  — starts run_scenario.py --close a b c (Monte
+                                Carlo, ~30–90 s) in a BACKGROUND THREAD and
+                                returns immediately ({"status": "started"}).
                                 One simulation at a time (409 while busy).
+  GET /api/close/status       — {"status": "idle"|"running"|"done"|"error", ...};
+                                on "done" the scenario manifest fields
+                                (file, label, closed_edges, ...) are included
+                                directly. Same async-plus-poll reasoning as
+                                /api/recalibrate below (2026-07-10 — found in
+                                review, matches an already-fixed real
+                                incident for that other endpoint).
   GET /api/recalibrate?date=YYYY-MM-DD&source=historical|forecast&days=N
                               — starts the whole-day PFE demand recalibration
                                 for a NEW date/source (~6 min for one day)
@@ -71,6 +78,8 @@ PORT     = 8000
 _sim_lock   = threading.Lock()     # one simulation (close OR recalibrate) at a time
 _recal_lock = threading.Lock()     # guards _recal_state below
 _recal_state: dict = {"status": "idle"}
+_close_lock = threading.Lock()     # guards _close_state below
+_close_state: dict = {"status": "idle"}
 
 
 @lru_cache(maxsize=1)
@@ -113,6 +122,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/api/ping"):
             return self._json(200, {"ok": True})
+        if self.path.startswith("/api/close/status"):
+            return self._close_status()
         if self.path.startswith("/api/close"):
             return self._close()
         if self.path.startswith("/api/recalibrate/status"):
@@ -122,6 +133,15 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def _close(self) -> None:
+        # Async (2026-07-10, same reasoning and pattern as /api/recalibrate
+        # below — found in a review of an external improvement document
+        # that correctly flagged this as the same risk class, not yet
+        # applied here): a closure run is shorter (~30-90s typically) than
+        # a recalibration, but the failure mode is identical — a browser
+        # tab, proxy, or dropped connection can abandon a blocking request
+        # well before its up-to-600s timeout, while the server keeps
+        # computing regardless. Polling decouples the job's lifetime from
+        # any one connection's, exactly as already proven for recalibrate.
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
         if not edges:
@@ -132,6 +152,26 @@ class Handler(SimpleHTTPRequestHandler):
 
         if not _sim_lock.acquire(blocking=False):
             return self._json(409, {"error": "en simulering kör redan — vänta"})
+        # Lock stays held for the whole job — released by the background
+        # thread, not here (same reasoning as _recalibrate).
+        with _close_lock:
+            _close_state.clear()
+            _close_state.update(status="running", edges=edges, started_at=time.time())
+        threading.Thread(target=self._run_close, args=(edges,), daemon=True).start()
+        return self._json(202, {"status": "started", "edges": edges})
+
+    @staticmethod
+    def _set_close(**kw) -> None:
+        with _close_lock:
+            _close_state.update(**kw)
+
+    def _run_close(self, edges: list[str]) -> None:
+        # Same lock-then-state-then-release ordering as _run_recalibrate,
+        # for the same reason: writing state AFTER releasing the lock
+        # leaves a race window where a second /api/close can acquire the
+        # freed lock and start before this job's trailing "done"/"error"
+        # write lands, which would stomp the SECOND job's running state
+        # with the FIRST job's result.
         try:
             res = subprocess.run(
                 [sys.executable, "run_scenario.py", "--close", *edges],
@@ -139,27 +179,40 @@ class Handler(SimpleHTTPRequestHandler):
             )
             if res.returncode != 0:
                 print(res.stdout[-1500:], res.stderr[-1500:])
-                return self._json(500, {"error": "simuleringen misslyckades — se serverloggen"})
+                self._set_close(status="error",
+                                error="simuleringen misslyckades — se serverloggen")
+                return
 
-            # Keep the lock until the manifest has been read and matched.
-            # A recalibration clears scenario JSON files while holding this
-            # same lock, so releasing it before this read would allow it to
-            # remove index.json between a successful simulation and response.
             try:
                 with open(SCEN_DIR / "index.json") as f:
                     index = json.load(f)
             except FileNotFoundError:
-                return self._json(500, {"error": "scenariomanifest saknas — se serverloggen"})
+                self._set_close(status="error",
+                                error="scenariomanifest saknas — se serverloggen")
+                return
 
             match = next((s for s in index["scenarios"]
                           if sorted(s.get("closed_edges") or []) == sorted(edges)), None)
             if match is None:
-                return self._json(500, {"error": "scenariot skrevs inte — se serverloggen"})
-            return self._json(200, match)
+                self._set_close(status="error",
+                                error="scenariot skrevs inte — se serverloggen")
+                return
+            self._set_close(status="done", **match)
         except subprocess.TimeoutExpired:
-            return self._json(500, {"error": "simuleringen tog >10 min — avbruten"})
+            self._set_close(status="error", error="simuleringen tog >10 min — avbruten")
+        except Exception as e:
+            print(f"close: unexpected {type(e).__name__}: {e}")
+            self._set_close(status="error",
+                            error=f"oväntat fel — se serverloggen ({type(e).__name__})")
         finally:
             _sim_lock.release()
+
+    def _close_status(self) -> None:
+        with _close_lock:
+            state = dict(_close_state)
+        if state.get("status") == "running":
+            state["elapsed_s"] = round(time.time() - state["started_at"])
+        return self._json(200, state)
 
     def _recalibrate(self) -> None:
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)

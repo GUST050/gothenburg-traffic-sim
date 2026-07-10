@@ -58,6 +58,8 @@ def base_url(tmp_path, monkeypatch):
 
     serve._recal_state.clear()
     serve._recal_state.update(status="idle")
+    serve._close_state.clear()
+    serve._close_state.update(status="idle")
     if serve._sim_lock.locked():
         serve._sim_lock.release()
 
@@ -115,6 +117,15 @@ class TestServerStartup:
 
 
 class TestClose:
+    """Made async 2026-07-10 (same reasoning and pattern as
+    /api/recalibrate — found in review, same risk class: a blocking
+    request up to 600s is fragile against a browser tab/proxy/dropped
+    connection abandoning it well before that, even though a real closure
+    usually finishes in ~30-90s). Validation stays synchronous (400s
+    return immediately, no job started); the actual simulation is now
+    started-then-polled via /api/close/status, mirroring
+    TestRecalibrateAsyncLifecycle exactly."""
+
     def test_missing_edges_is_400(self, base_url):
         status, body = get_json_or_error(f"{base_url}/api/close")
         assert status == 400
@@ -133,33 +144,71 @@ class TestClose:
         finally:
             serve._sim_lock.release()
 
-    def test_successful_close_returns_the_matching_scenario(self, base_url, monkeypatch):
+    def test_returns_202_immediately_not_after_the_job_finishes(self, base_url, monkeypatch):
+        started = threading.Event()
+
         def fake_run(cmd, **kw):
-            assert "run_scenario.py" in cmd[1]
+            started.set()
+            time.sleep(0.3)   # stands in for the real ~30-90s job
             index = {"scenarios": [{"closed_edges": ["a_b_0"], "name": "close_a_b_0"}]}
             (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        t0 = time.time()
         status, body = get_json(f"{base_url}/api/close?edges=a_b_0")
-        assert status == 200
-        assert body["name"] == "close_a_b_0"
+        elapsed = time.time() - t0
+        assert status == 202
+        assert body["status"] == "started"
+        assert elapsed < 0.2   # must not block on the background job
+        assert started.wait(timeout=2)
 
-    def test_failed_simulation_is_500_and_releases_the_lock(self, base_url, monkeypatch):
+    def test_successful_close_reports_the_matching_scenario_via_status(self, base_url, monkeypatch):
+        def fake_run(cmd, **kw):
+            assert "run_scenario.py" in cmd[1]
+            index = {"scenarios": [{"closed_edges": ["a_b_0"], "name": "close_a_b_0",
+                                    "file": "close_a_b_0.json"}]}
+            (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        status, body = get_json(f"{base_url}/api/close?edges=a_b_0")
+        assert status == 202
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "done")
+        _, final = get_json(f"{base_url}/api/close/status")
+        assert final["name"] == "close_a_b_0"
+        assert final["file"] == "close_a_b_0.json"
+
+    def test_failed_simulation_reports_error_status_and_releases_the_lock(self, base_url, monkeypatch):
         monkeypatch.setattr(serve.subprocess, "run",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="boom"))
-        status, _ = get_json_or_error(f"{base_url}/api/close?edges=a_b_0")
-        assert status == 500
+        get_json(f"{base_url}/api/close?edges=a_b_0")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
         assert not serve._sim_lock.locked()   # must not leak the lock on failure
+        status, _ = get_json(f"{base_url}/api/close?edges=a_b_0")
+        assert status == 202   # lock really is free, not just the status flipped
 
-    def test_missing_manifest_after_successful_simulation_is_clear_500(self, base_url, monkeypatch):
+    def test_missing_manifest_after_successful_simulation_is_clear_error(self, base_url, monkeypatch):
         """A concurrent recalibration must not turn this into an unhandled
         FileNotFoundError if an external process removes the manifest."""
         monkeypatch.setattr(serve.subprocess, "run",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=0))
-        status, body = get_json_or_error(f"{base_url}/api/close?edges=a_b_0")
-        assert status == 500
-        assert "scenariomanifest saknas" in body["error"]
+        get_json(f"{base_url}/api/close?edges=a_b_0")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
+        _, final = get_json(f"{base_url}/api/close/status")
+        assert "scenariomanifest saknas" in final["error"]
+        assert not serve._sim_lock.locked()
+
+    def test_unexpected_exception_reports_error_not_stuck_running(self, base_url, monkeypatch):
+        def fake_run(cmd, **kw):
+            raise FileNotFoundError("run_scenario.py vanished")
+        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        get_json(f"{base_url}/api/close?edges=a_b_0")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
         assert not serve._sim_lock.locked()
 
 

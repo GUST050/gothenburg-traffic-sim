@@ -701,17 +701,44 @@
           refreshCloseUI();
         });
 
+        // Async (2026-07-10, same reasoning as the recalibration polling
+        // below, applied here after a review correctly flagged /api/close
+        // as the same risk class — a browser tab, proxy, or dropped
+        // connection can abandon a blocking request well before the
+        // server's own up-to-600s timeout, even though a closure usually
+        // finishes in ~30-90s): start the job, poll for its result instead
+        // of holding one fetch open for the whole run.
+        async function pollClose() {
+          for (;;) {
+            await new Promise(r => setTimeout(r, 2000));
+            let status;
+            try {
+              status = await (await fetch('/api/close/status')).json();
+            } catch (e) {
+              continue;   // transient network hiccup — keep polling
+            }
+            if (status.status === 'running') {
+              btnRun.textContent = `Simulerar… (${status.elapsed_s}s)`;
+              continue;
+            }
+            return status;
+          }
+        }
+
         btnRun.addEventListener('click', async () => {
           btnRun.disabled = true;
-          btnRun.textContent = 'Simulerar… (~1 min)';
+          btnRun.textContent = 'Startar…';
           try {
             const res  = await fetch('/api/close?edges=' + [...selected].join(','));
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            btnRun.textContent = 'Simulerar… (0s)';
+            const status = await pollClose();
+            if (status.status === 'error') throw new Error(status.error);
             exitPicking();
             await loadScenIndex(true);
-            scenSelect.value = data.file;
-            await activateScenario(data.file, { fresh: true });
+            scenSelect.value = status.file;
+            await activateScenario(status.file, { fresh: true });
           } catch (e) {
             alert('Simuleringen misslyckades: ' + e.message);
           } finally {
