@@ -59,7 +59,8 @@ from pathlib import Path
 
 import closure_metrics as cm
 import run_scenario as rs
-from signal_lab import TLS_PROVENANCE, net_fingerprint, sumo_version, window_offsets_s
+from signal_lab import (TLS_PROVENANCE, net_fingerprint, sumo_version,
+                        tls_plan_diff, window_offsets_s)
 from signal_optimize import (CAVEAT, relative_pct, run_condition,
                              run_tls_coordinator, run_tls_cycle_adaptation)
 
@@ -252,6 +253,7 @@ def main() -> None:
 
         comparison = cm.compare_metrics(pass1_metrics, pass2_metrics)
         stability = route_stability(vr1_path, vr2_path)
+        plan_diff = tls_plan_diff(rs.NET_PATH, adapted_path, coordinated_path)
         rel_pct = relative_pct(pass1_metrics.total_time_loss_s, pass2_metrics.total_time_loss_s)
         flag = " DISQUALIFIED" if comparison.candidate_disqualified else ""
         print(f"  Δ timeLoss={comparison.delta_time_loss_s:+.0f}s "
@@ -292,6 +294,7 @@ def main() -> None:
             "comparison": {**dataclasses.asdict(comparison),
                           "relative_time_loss_pct": rel_pct},
             "route_stability": stability,
+            "tls_plan_diff": plan_diff,
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
         out_path = args.out or rs.SUMO_DIR / f"signal_closure_combine_{close_key}.json"

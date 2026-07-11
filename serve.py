@@ -55,6 +55,25 @@ Endpoints:
                                 ...&end=... (the SAME endpoint used for
                                 whole-run closures, extended 2026-07-11 to
                                 accept an optional time window).
+  GET /api/optimize_signals?edges=a,b (edges optional)
+                              — PLAN.md Phase D5: runs signal_optimize.py
+                                (D2, edges omitted/empty — no active
+                                closure) or signal_closure_combine.py (D4,
+                                edges given — adapts signals to the ACTUAL
+                                post-closure routes) against the currently
+                                calibrated demand, fixed 07:00-09:00/3-seed
+                                MICRO window (not exposed in the UI, same
+                                scope-narrowing reasoning as C5's top_k/
+                                extra_bad/seeds). Same async/poll pattern,
+                                shares _sim_lock with the other three.
+  GET /api/optimize_signals/status — {"status": ..., ...}; on "done", a
+                                UNIFORM before/after summary regardless of
+                                which script ran (see
+                                summarize_signal_optimization) — a metric
+                                card, a per-junction cycle/split/offset
+                                plan diff, and the tls_provenance="synthetic"
+                                label/caveat every signal result must carry
+                                until PLAN.md D6 imports real city plans.
 
 WHY ASYNC (found from a real failure): a multi-minute job tied to a single
 blocking HTTP GET is fragile — a browser's own request timeout, a closed
@@ -81,6 +100,7 @@ import math
 import os
 import re
 import signal
+import statistics
 import subprocess
 import sys
 import threading
@@ -98,16 +118,27 @@ WEB_DIR  = ROOT / "web"
 SCEN_DIR = WEB_DIR / "data" / "scenarios"
 SUMO_DIR = ROOT / "sumo"
 SUGGEST_OUT = SUMO_DIR / "suggest_closure_web.json"
+OPTIMIZE_OUT = SUMO_DIR / "signal_optimize_web.json"
+OPTIMIZE_CLOSURE_OUT = SUMO_DIR / "signal_closure_combine_web.json"
+# PLAN.md D5: not exposed in the UI, same scope-narrowing reasoning C5 used
+# for top_k/extra_bad/seeds — sane fixed defaults matching every signal_*.py
+# CLI tool's own default, rather than a cluttered advanced-options form.
+OPTIMIZE_WINDOW_START = "07:00"
+OPTIMIZE_WINDOW_END = "09:00"
+OPTIMIZE_SEEDS = 3
 PORT     = 8000
 
 _sim_lock   = threading.Lock()     # one simulation (close OR recalibrate OR
-                                    # suggest_closure) at a time
+                                    # suggest_closure OR optimize_signals) at
+                                    # a time
 _recal_lock = threading.Lock()     # guards _recal_state below
 _recal_state: dict = {"status": "idle"}
 _close_lock = threading.Lock()     # guards _close_state below
 _close_state: dict = {"status": "idle"}
 _suggest_lock = threading.Lock()   # guards _suggest_state below
 _suggest_state: dict = {"status": "idle"}
+_optimize_lock = threading.Lock()  # guards _optimize_state below
+_optimize_state: dict = {"status": "idle"}
 
 
 def run_in_new_session(cmd: list[str], *, cwd: str,
@@ -193,6 +224,66 @@ def summarize_suggestion(result: dict) -> dict:
     }
 
 
+def summarize_signal_optimization(result: dict, closure: bool) -> dict:
+    """One uniform shape for the UI regardless of which script produced
+    `result` — PLAN.md D5's "Optimera signaler" runs D2's signal_optimize.py
+    (no active closure) or D4's signal_closure_combine.py (active closure),
+    whose result JSONs have genuinely different internal layouts (5 named
+    conditions vs a fixed 2-pass before/after), but the same "before/after
+    metric card + per-junction plan diff + provenance label" the web app
+    needs to render either way. `closure` says which schema `result` is in.
+
+    D2's own schema has no explicit is_disqualified() field for its
+    baseline condition (only comparisons_vs_baseline, computed against the
+    CANDIDATE); the same disqualification rule (closure_metrics.py:
+    teleports or dropped_unreachable vehicles) is applied here directly to
+    `before` so both schemas expose it uniformly — this mirrors
+    disqualification_reasons(), not a new policy."""
+    def is_disqualified(m: dict) -> bool:
+        return bool(m["teleport_total"]) or bool(m.get("dropped_unreachable"))
+
+    if closure:
+        before = result["pass1_baseline_signals"]["metrics"]
+        after = result["pass2_optimized_signals"]["metrics"]
+        comparison = result["comparison"]
+        extra = {
+            "closed_edges": result["closed_edges"], "streets": result["streets"],
+            "truncated_vehicles": result["truncated_vehicles"],
+            "dropped_vehicles": result["dropped_vehicles"],
+            "route_stability": result["route_stability"],
+        }
+    else:
+        before = result["conditions"]["baseline"]["metrics"]
+        after = result["conditions"]["adapted_coordinated"]["metrics"]
+        comparison = result["comparisons_vs_baseline"]["adapted_coordinated"]
+        extra = {"closed_edges": [], "streets": [],
+                 "truncated_vehicles": None, "dropped_vehicles": None,
+                 "route_stability": None}
+
+    plan_diff = result["tls_plan_diff"]
+    cycle_deltas = [d["cycle_delta_pct"] for d in plan_diff if d["cycle_delta_pct"] is not None]
+    median_cycle_delta_pct = statistics.median(cycle_deltas) if cycle_deltas else None
+
+    return {
+        "closure": closure,
+        "window_start": result["window_start"], "window_end": result["window_end"],
+        "seeds": result["seeds"],
+        "tls_provenance": result["tls_provenance"], "caveat": result["caveat"],
+        "recommendation_allowed": result["tls_provenance"] != "synthetic",
+        "before": before, "after": after,
+        "before_disqualified": is_disqualified(before),
+        "after_disqualified": is_disqualified(after),
+        "delta_time_loss_s": comparison["delta_time_loss_s"],
+        "relative_time_loss_pct": comparison["relative_time_loss_pct"],
+        "disqualified": comparison["candidate_disqualified"],
+        "disqualification_reasons": list(comparison["disqualification_reasons"]),
+        "n_junctions": len(plan_diff),
+        "median_cycle_delta_pct": median_cycle_delta_pct,
+        "tls_plan_diff": plan_diff,
+        **extra,
+    }
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_DIR), **kwargs)
@@ -238,6 +329,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._suggest_closure_status()
         if self.path.startswith("/api/suggest_closure"):
             return self._suggest_closure()
+        if self.path.startswith("/api/optimize_signals/status"):
+            return self._optimize_signals_status()
+        if self.path.startswith("/api/optimize_signals"):
+            return self._optimize_signals()
         return super().do_GET()
 
     def _close(self) -> None:
@@ -591,6 +686,97 @@ class Handler(SimpleHTTPRequestHandler):
     def _suggest_closure_status(self) -> None:
         with _suggest_lock:
             state = dict(_suggest_state)
+        if state.get("status") == "running":
+            state["elapsed_s"] = round(time.time() - state["started_at"])
+        return self._json(200, state)
+
+    def _optimize_signals(self) -> None:
+        # PLAN.md Phase D5. "Optimera signaler" runs against the CURRENTLY
+        # loaded scenario's own closed edges — `edges` empty/absent means
+        # the active scenario has no closure, so this dispatches to D2's
+        # plain signal_optimize.py; edges present means an active closure,
+        # so it dispatches to D4's signal_closure_combine.py instead (the
+        # combined closure+signal pipeline that adapts signals to where
+        # traffic ACTUALLY goes once the road is closed). Same async/poll
+        # pattern and same shared _sim_lock as /api/close, /api/recalibrate,
+        # /api/suggest_closure — this is the same batch-of-real-SUMO-runs
+        # resource class as all three.
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
+        unknown = [e for e in edges if e not in known_edges()]
+        if unknown:
+            return self._json(400, {"error": f"okända kanter: {unknown}"})
+
+        if not _sim_lock.acquire(blocking=False):
+            return self._json(409, {"error": "en simulering kör redan — vänta"})
+        with _optimize_lock:
+            _optimize_state.clear()
+            _optimize_state.update(status="running", edges=edges, started_at=time.time())
+        threading.Thread(target=self._run_optimize_signals, args=(edges,),
+                         daemon=True).start()
+        return self._json(202, {"status": "started", "edges": edges})
+
+    @staticmethod
+    def _set_optimize(**kw) -> None:
+        with _optimize_lock:
+            _optimize_state.update(**kw)
+
+    def _run_optimize_signals(self, edges: list[str]) -> None:
+        try:
+            closure = bool(edges)
+            if closure:
+                out_path = OPTIMIZE_CLOSURE_OUT
+                cmd = [sys.executable, "signal_closure_combine.py",
+                      "--close", *edges,
+                      "--window-start", OPTIMIZE_WINDOW_START,
+                      "--window-end", OPTIMIZE_WINDOW_END,
+                      "--seeds", str(OPTIMIZE_SEEDS),
+                      "--out", str(out_path)]
+                n_sumo_runs = 2   # D4: exactly two passes, each OPTIMIZE_SEEDS seeds
+            else:
+                out_path = OPTIMIZE_OUT
+                cmd = [sys.executable, "signal_optimize.py",
+                      "--window-start", OPTIMIZE_WINDOW_START,
+                      "--window-end", OPTIMIZE_WINDOW_END,
+                      "--seeds", str(OPTIMIZE_SEEDS),
+                      "--out", str(out_path)]
+                n_sumo_runs = 5   # D2: five named conditions, each OPTIMIZE_SEEDS seeds
+            # Budget: generous per-seed margin for MICRO (much slower than
+            # meso) plus the tlsCycleAdaptation/tlsCoordinator/netconvert
+            # setup steps, same reasoning as /api/suggest_closure's timeout.
+            timeout = 180 + n_sumo_runs * OPTIMIZE_SEEDS * 90
+            res = run_in_new_session(cmd, cwd=str(ROOT), timeout=timeout)
+            if res.returncode != 0:
+                print(res.stdout[-2000:], res.stderr[-2000:])
+                tail = res.stderr.strip().splitlines()
+                last_line = tail[-1] if tail else ""
+                msg = last_line if last_line and len(last_line) < 200 else \
+                     "signaloptimeringen misslyckades — se serverloggen"
+                self._set_optimize(status="error", error=msg)
+                return
+
+            try:
+                with open(out_path) as f:
+                    result = json.load(f)
+            except FileNotFoundError:
+                self._set_optimize(status="error",
+                                   error="resultatfilen skrevs inte — se serverloggen")
+                return
+            self._set_optimize(status="done",
+                               result=summarize_signal_optimization(result, closure))
+        except subprocess.TimeoutExpired:
+            self._set_optimize(status="error",
+                               error="signaloptimeringen tog för lång tid — avbruten")
+        except Exception as e:
+            print(f"optimize_signals: unexpected {type(e).__name__}: {e}")
+            self._set_optimize(status="error",
+                               error=f"oväntat fel — se serverloggen ({type(e).__name__})")
+        finally:
+            _sim_lock.release()
+
+    def _optimize_signals_status(self) -> None:
+        with _optimize_lock:
+            state = dict(_optimize_state)
         if state.get("status") == "running":
             state["elapsed_s"] = round(time.time() - state["started_at"])
         return self._json(200, state)

@@ -212,6 +212,58 @@
     .sr-tag.rank { background: rgba(124,58,237,0.2); color: var(--sim-2); }
     .sr-tag.disq { background: rgba(220,38,38,0.2); color: #f87171; }
 
+    /* ── Signal-optimization results (PLAN.md D5) — same floating-panel
+         pattern as #suggest-results, own id since the content shape
+         (metric card + plan-diff table, not a ranked-window table) differs. */
+    #optimize-results {
+      display: none;
+      position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
+      z-index: 1000; width: min(760px, 92vw); max-height: 60vh;
+      background: var(--panel); backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-line); border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      flex-direction: column; overflow: hidden;
+    }
+    #optimize-results.show { display: flex; }
+    #optimize-results-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid var(--panel-line);
+    }
+    #optimize-results-title { font-size: 0.82rem; font-weight: 700; color: var(--ink); }
+    /* Provenance/caveat: PLAN.md D5 requires this rendered wherever ANY
+       signal result is shown, not just when something looks wrong — always
+       visible, not styled as an alert. */
+    #optimize-results-provenance {
+      padding: 8px 16px; font-size: 0.68rem; color: #f59e0b;
+      background: rgba(245,158,11,0.08); border-bottom: 1px solid var(--panel-line);
+      line-height: 1.5;
+    }
+    #optimize-results-card {
+      display: flex; align-items: center; gap: 18px;
+      padding: 14px 16px; border-bottom: 1px solid var(--panel-line);
+    }
+    .opt-metric { flex: 1; text-align: center; }
+    .opt-metric-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+    .opt-metric-value { font-size: 1.15rem; font-weight: 700; color: var(--ink); margin-top: 2px; }
+    .opt-metric-sub { font-size: 0.66rem; color: var(--ink-3); margin-top: 2px; }
+    .opt-arrow { font-size: 1.3rem; color: var(--ink-3); }
+    .opt-delta { flex: 1; text-align: center; }
+    .opt-delta-value { font-size: 1.15rem; font-weight: 700; }
+    .opt-delta-value.good { color: #4ade80; }
+    .opt-delta-value.bad { color: #f87171; }
+    #optimize-results-meta {
+      padding: 8px 16px; font-size: 0.7rem; color: var(--ink-3); line-height: 1.6;
+      border-bottom: 1px solid var(--panel-line);
+    }
+    #optimize-results-body-wrap { overflow-y: auto; padding: 0 8px 8px; }
+    #optimize-plan-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+    #optimize-plan-table th {
+      text-align: left; padding: 6px 8px; color: var(--ink-3);
+      font-weight: 600; text-transform: uppercase; font-size: 0.62rem;
+      letter-spacing: 0.04em; position: sticky; top: 0; background: var(--panel);
+    }
+    #optimize-plan-table td { padding: 6px 8px; color: var(--ink-2); border-top: 1px solid var(--panel-line); }
+
     #sliders { display: flex; gap: 28px; }
     .slider-group { flex: 1; transition: opacity 0.15s; }
     .slider-group.disabled { opacity: 0.35; pointer-events: none; }
@@ -387,6 +439,8 @@
               title="Kalibrera om simuleringen mot ett annat datum (tar ~6 min)">📅 Byt dag</button>
       <button id="suggest-mode-btn" class="action-btn"
               title="Klicka på en väg för att hitta den bästa tiden att stänga den">🕐 Föreslå tid</button>
+      <button id="optimize-signals-btn" class="action-btn"
+              title="Optimera trafikljusen för det valda scenariot (~2-5 min, syntetiska ljusprogram)">⚡ Optimera signaler</button>
 
       <div id="pick-banner">
         <span class="hint">Klicka på vägar i kartan att stänga</span>
@@ -434,6 +488,27 @@
             </tr>
           </thead>
           <tbody id="suggest-results-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="optimize-results">
+      <div id="optimize-results-header">
+        <span id="optimize-results-title"></span>
+        <button id="optimize-results-close" class="action-btn">Stäng</button>
+      </div>
+      <div id="optimize-results-provenance"></div>
+      <div id="optimize-results-card"></div>
+      <div id="optimize-results-meta"></div>
+      <div id="optimize-results-body-wrap">
+        <table id="optimize-plan-table">
+          <thead>
+            <tr>
+              <th>Korsning</th><th>Cykeltid före → efter</th><th>Δ cykeltid</th>
+              <th>Fasförskjutning före → efter</th><th>Max Δ grönsplit</th>
+            </tr>
+          </thead>
+          <tbody id="optimize-plan-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -766,6 +841,19 @@
         const btnSuggestResultsClose = document.getElementById('suggest-results-close');
         let suggestMode = false;
 
+        // ── Optimera signaler (PLAN.md Phase D5) — no picking mode: acts on
+        // whichever scenario is CURRENTLY loaded (scen-select), same way
+        // "Byt dag" acts on the currently loaded day rather than needing a
+        // map selection first.
+        const btnOptimize            = document.getElementById('optimize-signals-btn');
+        const optimizeResults        = document.getElementById('optimize-results');
+        const optimizeResultsTitle   = document.getElementById('optimize-results-title');
+        const optimizeResultsProv    = document.getElementById('optimize-results-provenance');
+        const optimizeResultsCard    = document.getElementById('optimize-results-card');
+        const optimizeResultsMeta    = document.getElementById('optimize-results-meta');
+        const optimizeResultsClose   = document.getElementById('optimize-results-close');
+        const optimizePlanBody       = document.getElementById('optimize-plan-tbody');
+
         function refreshCloseUI() {
           const showNormal = !closureMode && !dayPickMode && !suggestMode;
           const showApiActions = showNormal && apiAvailable;
@@ -774,6 +862,7 @@
           btnClose.style.display     = showApiActions ? '' : 'none';
           btnDay.style.display       = showApiActions ? '' : 'none';
           btnSuggest.style.display   = showApiActions ? '' : 'none';
+          btnOptimize.style.display  = showApiActions ? '' : 'none';
           pickBanner.classList.toggle('show', closureMode);
           dayBanner.classList.toggle('show', dayPickMode);
           suggestBanner.classList.toggle('show', suggestMode);
@@ -790,6 +879,7 @@
         function enterPicking() {
           closureMode = true;
           selected.clear();
+          optimizeResults.classList.remove('show');
           refreshCloseUI();
         }
         function exitPicking() {
@@ -801,6 +891,7 @@
           suggestMode = true;
           selected.clear();
           suggestResults.classList.remove('show');
+          optimizeResults.classList.remove('show');
           refreshCloseUI();
         }
         function exitSuggestPicking() {
@@ -826,6 +917,154 @@
         btnSuggestCancel.addEventListener('click', exitSuggestPicking);
         btnSuggestResultsClose.addEventListener('click', () => {
           suggestResults.classList.remove('show');
+        });
+
+        // ── Optimera signaler (PLAN.md Phase D5) — same async start/poll
+        // pattern as pollClose/pollSuggest above. Acts on the CURRENTLY
+        // loaded scenario's own closed_edges (from the scenario manifest,
+        // already fetched by loadScenIndex before sim-panel is ever shown):
+        // empty means the loaded scenario has no closure, so the server
+        // dispatches to D2's plain signal_optimize.py; non-empty means an
+        // active closure, so it dispatches to D4's signal_closure_combine.py
+        // (adapts signals to the ACTUAL post-closure routes) instead — the
+        // web app never needs to know which script ran, only the uniform
+        // summary shape serve.py's summarize_signal_optimization returns.
+        async function pollOptimize(onProgress) {
+          for (;;) {
+            await new Promise(r => setTimeout(r, 2000));
+            let status;
+            try {
+              status = await (await fetch('/api/optimize_signals/status')).json();
+            } catch (e) {
+              continue;
+            }
+            if (status.status === 'running') {
+              onProgress?.(status.elapsed_s);
+              continue;
+            }
+            return status;
+          }
+        }
+
+        function optMetricBox(label, valueHTML, subHTML) {
+          const div = document.createElement('div');
+          div.className = 'opt-metric';
+          div.innerHTML = `<div class="opt-metric-label">${label}</div>` +
+                          `<div class="opt-metric-value">${valueHTML}</div>` +
+                          (subHTML ? `<div class="opt-metric-sub">${subHTML}</div>` : '');
+          return div;
+        }
+
+        function renderOptimizeResults(summary) {
+          const closureLabel = summary.closure
+            ? `avstängning: ${summary.streets.join(', ')}`
+            : 'ingen avstängning aktiv';
+          optimizeResultsTitle.textContent =
+            `Signaloptimering · ${closureLabel} · ${summary.window_start}–` +
+            `${summary.window_end} · ${summary.n_junctions} korsningar`;
+
+          // Rendered ALWAYS, not just on a bad result — PLAN.md D5's own
+          // requirement: a signal-provenance label wherever signal results
+          // are shown, so nobody reads a percentage without the caveat that
+          // produced it.
+          optimizeResultsProv.textContent = summary.tls_provenance === 'synthetic'
+            ? `⚠ SYNTETISKA ljusprogram (gissade 90 s-cykler, inte Göteborgs ` +
+              `verkliga signalplaner) — ${summary.caveat}`
+            : `Proveniens: ${summary.tls_provenance} — ${summary.caveat}`;
+
+          optimizeResultsCard.replaceChildren();
+          optimizeResultsCard.appendChild(optMetricBox('Före',
+            `${Math.round(summary.before.total_time_loss_s / 60)} min`,
+            `${summary.before.trip_count} resor` +
+            (summary.before_disqualified ? ' · <b>diskvalificerad</b>' : '')));
+          const arrow = document.createElement('div');
+          arrow.className = 'opt-arrow';
+          arrow.textContent = '→';
+          optimizeResultsCard.appendChild(arrow);
+          optimizeResultsCard.appendChild(optMetricBox('Efter',
+            `${Math.round(summary.after.total_time_loss_s / 60)} min`,
+            `${summary.after.trip_count} resor` +
+            (summary.after_disqualified ? ' · <b>diskvalificerad</b>' : '')));
+          const pct = summary.relative_time_loss_pct;
+          const deltaGood = pct !== null && pct < 0;
+          const deltaDiv = document.createElement('div');
+          deltaDiv.className = 'opt-delta';
+          deltaDiv.innerHTML = `<div class="opt-metric-label">Förändring</div>` +
+            `<div class="opt-delta-value ${deltaGood ? 'good' : 'bad'}">` +
+            `${pct === null ? '–' : (pct > 0 ? '+' : '') + pct + '%'}</div>` +
+            `<div class="opt-metric-sub">${summary.disqualified
+              ? 'diskvalificerad: ' + summary.disqualification_reasons.join(', ')
+              : 'ej diskvalificerad'}</div>`;
+          optimizeResultsCard.appendChild(deltaDiv);
+
+          const metaLines = [];
+          metaLines.push(`Medianförändring cykeltid: ` +
+            `${summary.median_cycle_delta_pct === null ? '–' : summary.median_cycle_delta_pct.toFixed(1) + '%'} ` +
+            `över ${summary.n_junctions} korsningar (${summary.seeds} seeds).`);
+          if (summary.closure) {
+            metaLines.push(`${summary.truncated_vehicles} förkortade, ` +
+              `${summary.dropped_vehicles} borttagna fordon (ingen omväg runt avstängningen).`);
+            if (summary.route_stability.fraction_identical !== null) {
+              metaLines.push(`Ruttstabilitet: ` +
+                `${(summary.route_stability.fraction_identical * 100).toFixed(1)}% av ` +
+                `${summary.route_stability.n_common_vehicles} jämförbara fordon körde ` +
+                `identisk rutt före/efter signalbytet.`);
+            }
+          }
+          if (!summary.recommendation_allowed) {
+            metaLines.push('<b>Detta är INTE en rekommendation</b> — signalprogrammen ' +
+              'är syntetiska gissningar, inte Göteborgs verkliga ljusplaner.');
+          }
+          optimizeResultsMeta.innerHTML = metaLines.join('<br>');
+
+          const sorted = [...summary.tls_plan_diff].sort((a, b) =>
+            Math.abs(b.cycle_delta_pct ?? 0) - Math.abs(a.cycle_delta_pct ?? 0));
+          optimizePlanBody.replaceChildren(...sorted.map(d => {
+            const tr = document.createElement('tr');
+            const idTd = document.createElement('td');
+            idTd.textContent = d.tls_id;
+            const cycleTd = document.createElement('td');
+            cycleTd.textContent = `${d.cycle_before_s.toFixed(0)}s → ${d.cycle_after_s.toFixed(0)}s`;
+            const deltaTd = document.createElement('td');
+            deltaTd.textContent = d.cycle_delta_pct === null ? '–' :
+              `${d.cycle_delta_pct > 0 ? '+' : ''}${d.cycle_delta_pct.toFixed(1)}%`;
+            const offsetTd = document.createElement('td');
+            offsetTd.textContent = `${d.offset_before_s.toFixed(0)}s → ${d.offset_after_s.toFixed(0)}s`;
+            const splitTd = document.createElement('td');
+            splitTd.textContent = d.max_split_change_pct === null ? '–' :
+              `${d.max_split_change_pct.toFixed(1)} pp`;
+            tr.append(idTd, cycleTd, deltaTd, offsetTd, splitTd);
+            return tr;
+          }));
+
+          suggestResults.classList.remove('show');
+          optimizeResults.classList.add('show');
+        }
+
+        btnOptimize.addEventListener('click', async () => {
+          const active = scenIndex?.scenarios.find(s => s.file === scenSelect.value);
+          const edges = active?.closed_edges ?? [];
+          btnOptimize.disabled = true;
+          btnOptimize.textContent = 'Startar…';
+          try {
+            const res  = await fetch('/api/optimize_signals?edges=' + edges.join(','));
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            btnOptimize.textContent = 'Optimerar… (0s)';
+            const status = await pollOptimize(
+              s => btnOptimize.textContent = `Optimerar… (${s}s)`);
+            if (status.status === 'error') throw new Error(status.error);
+            renderOptimizeResults(status.result);
+          } catch (e) {
+            alert('Signaloptimeringen misslyckades: ' + e.message);
+          } finally {
+            btnOptimize.disabled = false;
+            btnOptimize.textContent = '⚡ Optimera signaler';
+          }
+        });
+
+        optimizeResultsClose.addEventListener('click', () => {
+          optimizeResults.classList.remove('show');
         });
 
         // "Simulate the future": Historik 2025 calibrates against actual

@@ -65,6 +65,150 @@ class TestSumoVersion:
         assert signal_lab.sumo_version(tmp_path) == "unknown"
 
 
+def write_net(path: Path, tl_logics_xml: str) -> None:
+    path.write_text(f"<net>{tl_logics_xml}</net>")
+
+
+class TestTlsPlanDiff:
+    """PLAN.md D5: per-junction cycle/split/offset diff, baseline
+    net.net.xml vs the tlsCycleAdaptation/tlsCoordinator additional
+    files — pure XML parsing/diffing, no SUMO invocation."""
+
+    def test_shorter_optimized_cycle_and_a_real_offset(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        write_net(net, """
+        <tlLogic id="J1" type="static" programID="0" offset="0">
+          <phase duration="42" state="GGrr"/>
+          <phase duration="3" state="yyrr"/>
+          <phase duration="42" state="rrGG"/>
+          <phase duration="3" state="rryy"/>
+        </tlLogic>""")
+        adapted = tmp_path / "adapted.add.xml"
+        write_net(adapted, """
+        <tlLogic id="J1" type="static" programID="a" offset="0">
+          <phase duration="12" state="GGrr"/>
+          <phase duration="4" state="yyrr"/>
+          <phase duration="4" state="rrGG"/>
+          <phase duration="4" state="rryy"/>
+        </tlLogic>""")
+        coordinated = tmp_path / "coordinated.add.xml"
+        write_net(coordinated, """
+        <tlLogic id="J1" programID="a" offset="12.5"/>""")
+
+        diffs = signal_lab.tls_plan_diff(net, adapted, coordinated)
+        assert len(diffs) == 1
+        d = diffs[0]
+        assert d["tls_id"] == "J1"
+        assert d["cycle_before_s"] == 90.0
+        assert d["cycle_after_s"] == 24.0
+        assert d["cycle_delta_pct"] == pytest.approx(-73.3, abs=0.1)
+        assert d["offset_before_s"] == 0.0
+        assert d["offset_after_s"] == 12.5   # coordinated's offset, not adapted's 0
+        assert d["n_phases_before"] == d["n_phases_after"] == 4
+        assert d["max_split_change_pct"] is not None
+
+    def test_no_coordinated_file_keeps_adapted_offset(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        write_net(net, """
+        <tlLogic id="J1" type="static" programID="0" offset="0">
+          <phase duration="45" state="GG"/>
+          <phase duration="45" state="rr"/>
+        </tlLogic>""")
+        adapted = tmp_path / "adapted.add.xml"
+        write_net(adapted, """
+        <tlLogic id="J1" type="static" programID="a" offset="7">
+          <phase duration="20" state="GG"/>
+          <phase duration="20" state="rr"/>
+        </tlLogic>""")
+
+        diffs = signal_lab.tls_plan_diff(net, adapted, coordinated_path=None)
+        assert diffs[0]["offset_after_s"] == 7.0
+
+    def test_mismatched_phase_count_reports_no_split_comparison(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        write_net(net, """
+        <tlLogic id="J1" type="static" programID="0" offset="0">
+          <phase duration="42" state="GGrr"/>
+          <phase duration="3" state="yyrr"/>
+          <phase duration="42" state="rrGG"/>
+          <phase duration="3" state="rryy"/>
+        </tlLogic>""")
+        adapted = tmp_path / "adapted.add.xml"
+        write_net(adapted, """
+        <tlLogic id="J1" type="static" programID="a" offset="0">
+          <phase duration="30" state="GGrr"/>
+          <phase duration="30" state="rrGG"/>
+        </tlLogic>""")
+
+        diffs = signal_lab.tls_plan_diff(net, adapted)
+        assert diffs[0]["n_phases_before"] == 4
+        assert diffs[0]["n_phases_after"] == 2
+        assert diffs[0]["max_split_change_pct"] is None
+
+    def test_junction_only_in_baseline_is_skipped_not_crashed(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        write_net(net, """
+        <tlLogic id="J1" type="static" programID="0" offset="0">
+          <phase duration="45" state="GG"/>
+          <phase duration="45" state="rr"/>
+        </tlLogic>
+        <tlLogic id="J2" type="static" programID="0" offset="0">
+          <phase duration="45" state="GG"/>
+          <phase duration="45" state="rr"/>
+        </tlLogic>""")
+        adapted = tmp_path / "adapted.add.xml"
+        write_net(adapted, """
+        <tlLogic id="J1" type="static" programID="a" offset="0">
+          <phase duration="20" state="GG"/>
+          <phase duration="20" state="rr"/>
+        </tlLogic>""")
+
+        diffs = signal_lab.tls_plan_diff(net, adapted)
+        assert len(diffs) == 1
+        assert diffs[0]["tls_id"] == "J1"
+
+    def test_coordinated_offset_for_an_unmatched_junction_is_ignored(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        write_net(net, """
+        <tlLogic id="J1" type="static" programID="0" offset="0">
+          <phase duration="45" state="GG"/>
+          <phase duration="45" state="rr"/>
+        </tlLogic>""")
+        adapted = tmp_path / "adapted.add.xml"
+        write_net(adapted, """
+        <tlLogic id="J1" type="static" programID="a" offset="0">
+          <phase duration="20" state="GG"/>
+          <phase duration="20" state="rr"/>
+        </tlLogic>""")
+        coordinated = tmp_path / "coordinated.add.xml"
+        write_net(coordinated, """
+        <tlLogic id="J99" programID="a" offset="99"/>""")
+
+        diffs = signal_lab.tls_plan_diff(net, adapted, coordinated)
+        assert diffs[0]["offset_after_s"] == 0.0
+
+    def test_results_are_sorted_by_tls_id(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        write_net(net, """
+        <tlLogic id="Z9" type="static" programID="0" offset="0">
+          <phase duration="45" state="GG"/><phase duration="45" state="rr"/>
+        </tlLogic>
+        <tlLogic id="A1" type="static" programID="0" offset="0">
+          <phase duration="45" state="GG"/><phase duration="45" state="rr"/>
+        </tlLogic>""")
+        adapted = tmp_path / "adapted.add.xml"
+        write_net(adapted, """
+        <tlLogic id="Z9" type="static" programID="a" offset="0">
+          <phase duration="20" state="GG"/><phase duration="20" state="rr"/>
+        </tlLogic>
+        <tlLogic id="A1" type="static" programID="a" offset="0">
+          <phase duration="20" state="GG"/><phase duration="20" state="rr"/>
+        </tlLogic>""")
+
+        diffs = signal_lab.tls_plan_diff(net, adapted)
+        assert [d["tls_id"] for d in diffs] == ["A1", "Z9"]
+
+
 class TestMainWindowValidation:
     """main()'s guard against a window outside the calibrated demand
     period — exercised through window_offsets_s + the same bound check

@@ -40,6 +40,7 @@ import json
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pandas as pd
@@ -86,6 +87,79 @@ def sumo_version(home: Path) -> str:
         return first_line or "unknown"
     except (subprocess.SubprocessError, OSError, IndexError):
         return "unknown"
+
+
+def _parse_tl_logics(path: Path) -> dict[str, dict]:
+    """id -> {offset_s, [phase_durations_s, cycle_s]} from a net.net.xml or
+    additional-file <tlLogic>. tlsCoordinator.py's own output ONLY ever
+    writes offset (no <phase> children) — those entries carry offset_s
+    alone, so callers merge them onto a cycle-bearing entry rather than
+    treating them as a second, competing cycle source."""
+    out: dict[str, dict] = {}
+    for tl in ET.parse(path).getroot().iter("tlLogic"):
+        phases = tl.findall("phase")
+        entry: dict = {"offset_s": float(tl.get("offset", 0))}
+        if phases:
+            durations = [float(p.get("duration")) for p in phases]
+            entry["phase_durations_s"] = durations
+            entry["cycle_s"] = sum(durations)
+        out[tl.get("id")] = entry
+    return out
+
+
+def tls_plan_diff(baseline_net_path: Path, adapted_path: Path,
+                  coordinated_path: Path | None = None) -> list[dict]:
+    """Per-junction signal-plan diff: baseline (the deployed net.net.xml's
+    netconvert --tls.guess synthetic 90 s uniform cycle) vs the optimized
+    program (tlsCycleAdaptation.py's per-junction cycle/green-split
+    recalculation, with tlsCoordinator.py's offset applied on top when
+    given — coordinator only ever writes offset, so its file is merged
+    onto the matching adapted entry rather than parsed as a second,
+    independent program).
+
+    Pure XML parsing/diffing, no SUMO invocation — shared by D2's
+    signal_optimize.py and D4's signal_closure_combine.py so a UI showing
+    "how did the lights change" never has two independently-derived
+    answers. Sorted by tls_id for a stable, diffable/testable order.
+
+    max_split_change_pct is only computed when both programs have the SAME
+    number of phases (the ordinary case — tlsCycleAdaptation.py rescales
+    durations, it does not add or remove phases) and neither cycle is
+    zero; otherwise it is reported as None rather than compared against a
+    phase list of different meaning at the same index."""
+    baseline = _parse_tl_logics(baseline_net_path)
+    adapted = _parse_tl_logics(adapted_path)
+    if coordinated_path is not None:
+        coordinated = _parse_tl_logics(coordinated_path)
+        for tls_id, c in coordinated.items():
+            if tls_id in adapted:
+                adapted[tls_id]["offset_s"] = c["offset_s"]
+
+    diffs = []
+    for tls_id, base in baseline.items():
+        opt = adapted.get(tls_id)
+        if opt is None or "cycle_s" not in base or "cycle_s" not in opt:
+            continue
+        base_cycle, opt_cycle = base["cycle_s"], opt["cycle_s"]
+        cycle_delta_pct = (round(100 * (opt_cycle - base_cycle) / base_cycle, 1)
+                           if base_cycle else None)
+        max_split_change_pct = None
+        base_phases, opt_phases = base["phase_durations_s"], opt["phase_durations_s"]
+        if len(base_phases) == len(opt_phases) and base_cycle and opt_cycle:
+            base_splits = [d / base_cycle for d in base_phases]
+            opt_splits = [d / opt_cycle for d in opt_phases]
+            max_split_change_pct = round(
+                100 * max(abs(o - b) for o, b in zip(opt_splits, base_splits)), 1)
+        diffs.append({
+            "tls_id": tls_id,
+            "cycle_before_s": base_cycle, "cycle_after_s": opt_cycle,
+            "cycle_delta_pct": cycle_delta_pct,
+            "offset_before_s": base["offset_s"], "offset_after_s": opt["offset_s"],
+            "n_phases_before": len(base_phases), "n_phases_after": len(opt_phases),
+            "max_split_change_pct": max_split_change_pct,
+        })
+    diffs.sort(key=lambda d: d["tls_id"])
+    return diffs
 
 
 def parse_args() -> argparse.Namespace:

@@ -1567,6 +1567,108 @@ each run).
 before/after metric card + per-junction plan diff (cycle/splits/offsets),
 signal-provenance label rendered wherever signal results are shown.
 
+DONE (2026-07-11). Every bullet implemented, verified against a REAL live
+serve.py through a real headless-Chrome CDP session (zero console
+errors/exceptions on either path) — not just unit-mocked.
+
+- **New shared `signal_lab.tls_plan_diff()`** (D1's module, imported by both
+  D2 and D4): pure XML parsing/diffing, no SUMO invocation — baseline
+  (deployed net.net.xml's netconvert --tls.guess synthetic 90 s cycle) vs
+  the optimized program (tlsCycleAdaptation.py's cycle/phase-duration
+  recalculation, tlsCoordinator.py's offset merged on top — coordinator
+  only ever writes offset, never phases, so its file is merged onto the
+  matching adapted entry rather than parsed as a second cycle source).
+  Per junction: cycle before/after + Δ%, offset before/after,
+  `max_split_change_pct` (only computed when both programs have the SAME
+  phase count — tlsCycleAdaptation.py rescales durations, it does not
+  add/remove phases — else reported `null` rather than compared against a
+  phase list of different meaning at the same index). 6 new unit tests.
+  Wired into both `signal_optimize.py`'s (D2) and
+  `signal_closure_combine.py`'s (D4) own result JSON as `tls_plan_diff`,
+  reusing each script's ALREADY-BUILT `adapted_path`/`coordinated_path`
+  (no second tlsCycleAdaptation/tlsCoordinator run). Verified against real
+  leftover D2/D3 artifacts before wiring it in: 57 real junctions, e.g. a
+  90 s guessed cycle collapsing to a 24 s Webster-computed one at a
+  low-volume junction (-73.3%), a real 366.78 s coordination offset — sane,
+  legible numbers.
+- **`serve.py`**: `/api/optimize_signals?edges=` (start, edges optional) +
+  `/api/optimize_signals/status` (poll), sharing `_sim_lock` with
+  `/api/close`/`/api/recalibrate`/`/api/suggest_closure` (same batch-of-
+  real-SUMO-runs resource class), own `_optimize_lock`/`_optimize_state`.
+  `edges` empty/absent (the currently loaded scenario has no closure)
+  dispatches to D2's plain `signal_optimize.py`; edges present (an active
+  closure) dispatches to D4's `signal_closure_combine.py` instead — same
+  fixed 07:00-09:00/3-seed MICRO window server-side for both, NOT exposed
+  in the UI (deliberate scope narrowing, same reasoning C5 already used
+  for top_k/extra_bad/seeds: sane defaults beat a cluttered advanced-
+  options form for a solo research tool). New
+  `summarize_signal_optimization(result, closure)` gives the frontend ONE
+  uniform shape regardless of which script actually ran — D2's and D4's
+  result JSONs have genuinely different internal layouts (5 named
+  conditions vs a fixed 2-pass before/after) but the UI needs the same
+  "before/after card + plan diff + provenance" either way. Found while
+  writing it: D2's own schema has no explicit `is_disqualified()` field on
+  its baseline condition (only `comparisons_vs_baseline`, computed against
+  the CANDIDATE) — the summary function derives it directly from
+  `before`'s own metrics (teleports/dropped_unreachable), matching
+  `closure_metrics.disqualification_reasons()`'s rule, so both schemas
+  expose `before_disqualified`/`after_disqualified` uniformly rather than
+  D2's side silently defaulting to `false`. 18 new serve.py tests (6 pure-
+  function tests for `summarize_signal_optimization`, 12 for the async
+  start/poll/lock-sharing/error-path lifecycle, mirroring the existing
+  `TestSuggestClosure` pattern).
+- **Web UI**: new "⚡ Optimera signaler" button in the Simulering panel —
+  no picking mode, unlike "+ Ny avstängning"/"🕐 Föreslå tid": it acts on
+  WHICHEVER scenario is currently loaded (`scen-select`'s own
+  `closed_edges`, already available from the scenario manifest fetched
+  before the panel is ever shown), the same way "Byt dag" acts on the
+  currently loaded day without needing a map selection first. Results
+  render in a new floating panel (`#optimize-results`, own id — the
+  content shape, a metric card plus a per-junction table, differs from
+  `#suggest-results`' ranked-window table): a before/after card (time-loss
+  minutes, trip counts, disqualification flags, Δ%), a provenance/caveat
+  banner rendered UNCONDITIONALLY (not just on a bad result — PLAN.md's
+  own requirement that a signal-provenance label appear wherever signal
+  results are shown), route-stability and truncated/dropped-vehicle lines
+  when a closure is active, and the full per-junction plan-diff table
+  sorted client-side by `|cycle_delta_pct|` descending (biggest changes
+  first — the far more useful reading order than the backend's
+  tls_id-sorted list).
+- **Real end-to-end verification** (headless Chrome + CDP, matching the
+  project's established browser-testing discipline — pytest doesn't cover
+  frontend JS): two real runs against a live, unmocked `serve.py`, each
+  polled to completion and screenshotted via `innerText` extraction, zero
+  console errors/exceptions on both.
+  - No-closure path (baseline scenario active): dispatched to
+    `signal_optimize.py`, 175 s wall time, rendered "FÖRE 15643 min ·
+    3394 resor · diskvalificerad → EFTER 44168 min · 3308 resor ·
+    diskvalificerad", "FÖRÄNDRING +182.4%", "diskvalificerad: teleports",
+    "Medianförändring cykeltid: -73.3% över 57 korsningar", 57 plan-diff
+    rows, the "INTE en rekommendation" caveat — every number matches the
+    underlying JSON exactly (`total_time_loss_s`/60, `relative_time_loss_pct`).
+  - Closure path (`close_60786979_3575001205_0.json` scenario selected via
+    the real dropdown): dispatched to `signal_closure_combine.py`, 70 s
+    wall time, rendered "avstängning: Skånegatan" in the title, "FÖRE
+    14487 min → EFTER 16638 min", "+14.8%", "19 förkortade, 0 borttagna
+    fordon", "Ruttstabilitet: 99.9% av 2999 jämförbara fordon" — matching
+    D4's own already-documented mixed real finding (this exact closure/
+    window/seed combination measurably WORSENS congestion, not a
+    regression introduced by D5's wiring).
+  - No tracked files touched by either run (`sumo/` is gitignored; the
+    server writes to `sumo/signal_optimize_web.json` /
+    `sumo/signal_closure_combine_web.json`, never into
+    `web/data/scenarios/`) — confirmed via `git status` after both runs.
+    Chrome and serve.py processes torn down afterward.
+
+Full suite: 639 passed, 20 skipped, 0 failed (up from 615 before this step
+— 24 new: 6 for `tls_plan_diff`, 18 for `serve.py`'s new endpoint/summary
+function).
+
+**PLAN.md's Phase D (traffic-signal optimization) is now fully complete —
+D1 through D5 all done.** Only D6 remains, and it is external (blocked on
+the city delivering real signal plans via Miroslaw) — nothing left to
+execute autonomously in this arc.
+
 ### D6 (external, unblocks honesty upgrade). Real signal plans from the city
 Ask via Miroslaw/city contacts for: signal-object ↔ intersection ↔ SUMO TLS-ID
 mapping, phase diagrams, cycle/green/offset per time-of-day plan, detector

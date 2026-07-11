@@ -52,7 +52,8 @@ from pathlib import Path
 
 import closure_metrics as cm
 import run_scenario as rs
-from signal_lab import TLS_PROVENANCE, net_fingerprint, sumo_version, window_offsets_s
+from signal_lab import (TLS_PROVENANCE, net_fingerprint, sumo_version,
+                        tls_plan_diff, window_offsets_s)
 from suggest_closure_time import aggregate_seed_metrics
 
 CAVEAT = ("Measured against a SYNTHETIC netconvert --tls.guess baseline "
@@ -298,6 +299,14 @@ def main() -> None:
         print(f"  {name}: Δ={comparison.delta_time_loss_s:+.0f}s "
              f"({comparisons[name]['relative_time_loss_pct']}%){flag}")
 
+    # PLAN.md D5: per-junction cycle/split/offset diff, adapted_coordinated
+    # (the full pipeline: cycle adaptation + green-wave offsets) against the
+    # deployed baseline net — reuses the exact add_paths build_signal_
+    # conditions() already produced for that condition rather than
+    # re-deriving the adapted/coordinated paths a second time.
+    adapted_path, coordinated_path = conditions["adapted_coordinated"]["add_paths"]
+    plan_diff = tls_plan_diff(rs.NET_PATH, adapted_path, coordinated_path)
+
     result = {
         "method": "PLAN.md Phase D2: off-the-shelf signal-timing optimizers vs D1 baseline",
         "window_start": args.window_start, "window_end": args.window_end,
@@ -316,6 +325,7 @@ def main() -> None:
         "command": sys.argv,
         "conditions": results,
         "comparisons_vs_baseline": comparisons,
+        "tls_plan_diff": plan_diff,
         "elapsed_s": round(total_elapsed, 1),
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }

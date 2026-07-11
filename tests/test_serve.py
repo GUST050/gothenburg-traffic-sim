@@ -52,6 +52,9 @@ def base_url(tmp_path, monkeypatch):
     scen_dir.mkdir()
     monkeypatch.setattr(serve, "SCEN_DIR", scen_dir)
     monkeypatch.setattr(serve, "SUGGEST_OUT", tmp_path / "suggest_closure_web.json")
+    monkeypatch.setattr(serve, "OPTIMIZE_OUT", tmp_path / "signal_optimize_web.json")
+    monkeypatch.setattr(serve, "OPTIMIZE_CLOSURE_OUT",
+                        tmp_path / "signal_closure_combine_web.json")
 
     def fake_known_edges():
         return frozenset({"a_b_0", "b_a_0"})
@@ -64,6 +67,8 @@ def base_url(tmp_path, monkeypatch):
     serve._close_state.update(status="idle")
     serve._suggest_state.clear()
     serve._suggest_state.update(status="idle")
+    serve._optimize_state.clear()
+    serve._optimize_state.update(status="idle")
     if serve._sim_lock.locked():
         serve._sim_lock.release()
 
@@ -772,6 +777,291 @@ class TestSuggestClosure:
 
     def test_shares_the_sim_lock_with_close(self, base_url):
         """A suggest_closure search and a /api/close run are the same
+        resource class (both real SUMO batches) — must not run concurrently."""
+        serve._sim_lock.acquire()
+        try:
+            status, _ = get_json_or_error(f"{base_url}/api/close?edges=a_b_0")
+            assert status == 409
+        finally:
+            serve._sim_lock.release()
+
+
+def _fake_metrics(**overrides) -> dict:
+    base = {
+        "total_time_loss_s": 10000.0, "trip_count": 500, "unfinished_trips": 0,
+        "unfinished_waiting_trips": 0, "teleport_total": 0, "teleport_reasons": {},
+        "loaded": 500, "inserted": 500, "running_at_end": 0, "waiting_at_end": 0,
+        "truncated_unreachable": 0, "dropped_unreachable": 0,
+        "max_queue_vehicles": 3, "closed_edge_throughput": None,
+    }
+    base.update(overrides)
+    return base
+
+
+_FAKE_PLAN_DIFF = [
+    {"tls_id": "J1", "cycle_before_s": 90.0, "cycle_after_s": 24.0,
+     "cycle_delta_pct": -73.3, "offset_before_s": 0.0, "offset_after_s": 12.5,
+     "n_phases_before": 4, "n_phases_after": 4, "max_split_change_pct": 30.0},
+    {"tls_id": "J2", "cycle_before_s": 90.0, "cycle_after_s": 31.0,
+     "cycle_delta_pct": -65.6, "offset_before_s": 0.0, "offset_after_s": 74.7,
+     "n_phases_before": 6, "n_phases_after": 6, "max_split_change_pct": 17.1},
+]
+
+
+def _fake_signal_optimize_result(**overrides) -> dict:
+    """A structurally accurate (if minimal) signal_optimize.py result file,
+    matching its real schema (see signal_optimize.py's own `result = {...}`
+    in main(), extended for PLAN.md D5's tls_plan_diff field)."""
+    adapted_coord_metrics = _fake_metrics(total_time_loss_s=8000.0, teleport_total=1)
+    base = {
+        "method": "PLAN.md Phase D2", "window_start": "07:00", "window_end": "09:00",
+        "begin_s": 25200, "end_s": 32400, "seeds": 3,
+        "tls_provenance": "synthetic", "caveat": "synthetic baseline caveat",
+        "recommendation_allowed": False,
+        "net_fingerprint": "abc123", "net_fingerprints_by_condition": {},
+        "demand_signature": "xyz789", "sumo_version": "SUMO 1.27.1", "command": [],
+        "conditions": {
+            "baseline": {"metrics": _fake_metrics(), "per_seed_time_loss_s": [10000.0],
+                        "elapsed_s": 3.0},
+            "adapted_coordinated": {"metrics": adapted_coord_metrics,
+                                    "per_seed_time_loss_s": [8000.0], "elapsed_s": 3.0},
+        },
+        "comparisons_vs_baseline": {
+            "adapted_coordinated": {
+                "baseline": _fake_metrics(), "candidate": adapted_coord_metrics,
+                "delta_time_loss_s": -2000.0, "delta_unfinished_trips": 0,
+                "delta_teleports": 1, "delta_dropped_unreachable": 0,
+                "candidate_disqualified": True, "disqualification_reasons": ["teleports"],
+                "relative_time_loss_pct": -20.0,
+            },
+        },
+        "tls_plan_diff": _FAKE_PLAN_DIFF,
+        "elapsed_s": 15.0, "generated_at": "2026-07-11T12:00:00",
+    }
+    base.update(overrides)
+    return base
+
+
+def _fake_signal_closure_combine_result(**overrides) -> dict:
+    """Matches signal_closure_combine.py's real `result = {...}` schema (D4)."""
+    pass1_metrics = _fake_metrics(total_time_loss_s=300000.0, teleport_total=5)
+    pass2_metrics = _fake_metrics(total_time_loss_s=260000.0, teleport_total=5)
+    base = {
+        "method": "PLAN.md Phase D4",
+        "closed_edges": ["a_b_0"], "streets": ["Testgatan"],
+        "window_start": "07:00", "window_end": "08:00",
+        "begin_s": 25200, "end_s": 28800, "seeds": 1,
+        "demand_signature": "xyz789", "net_fingerprint": "abc123",
+        "sumo_version": "SUMO 1.27.1", "tls_provenance": "synthetic",
+        "caveat": "synthetic baseline caveat",
+        "truncated_vehicles": 9, "dropped_vehicles": 0, "n_extracted_routes": 1234,
+        "pass1_baseline_signals": {"metrics": pass1_metrics,
+                                   "per_seed_time_loss_s": [300000.0], "disqualified": True},
+        "pass2_optimized_signals": {"metrics": pass2_metrics,
+                                    "per_seed_time_loss_s": [260000.0], "disqualified": True},
+        "comparison": {
+            "baseline": pass1_metrics, "candidate": pass2_metrics,
+            "delta_time_loss_s": -40000.0, "delta_unfinished_trips": -22,
+            "delta_teleports": 0, "delta_dropped_unreachable": 0,
+            "candidate_disqualified": True, "disqualification_reasons": ["teleports"],
+            "relative_time_loss_pct": -13.3,
+        },
+        "route_stability": {"n_common_vehicles": 1227, "n_identical_routes": 1226,
+                            "fraction_identical": 0.999},
+        "tls_plan_diff": _FAKE_PLAN_DIFF,
+        "generated_at": "2026-07-11T12:00:00",
+    }
+    base.update(overrides)
+    return base
+
+
+class TestSummarizeSignalOptimization:
+    """Pure function — no server needed. Verifies the uniform-shape and
+    honest-provenance rules PLAN.md's D5 spec asks for: one shape for the
+    UI regardless of which script (D2 or D4) actually ran."""
+
+    def test_no_closure_uses_baseline_vs_adapted_coordinated(self):
+        summary = serve.summarize_signal_optimization(
+            _fake_signal_optimize_result(), closure=False)
+        assert summary["closure"] is False
+        assert summary["before"]["total_time_loss_s"] == 10000.0
+        assert summary["after"]["total_time_loss_s"] == 8000.0
+        assert summary["delta_time_loss_s"] == -2000.0
+        assert summary["closed_edges"] == []
+        assert summary["route_stability"] is None
+
+    def test_closure_uses_pass1_vs_pass2(self):
+        summary = serve.summarize_signal_optimization(
+            _fake_signal_closure_combine_result(), closure=True)
+        assert summary["closure"] is True
+        assert summary["before"]["total_time_loss_s"] == 300000.0
+        assert summary["after"]["total_time_loss_s"] == 260000.0
+        assert summary["closed_edges"] == ["a_b_0"]
+        assert summary["route_stability"]["fraction_identical"] == 0.999
+
+    def test_synthetic_provenance_disallows_recommendation(self):
+        summary = serve.summarize_signal_optimization(
+            _fake_signal_optimize_result(), closure=False)
+        assert summary["tls_provenance"] == "synthetic"
+        assert summary["recommendation_allowed"] is False
+
+    def test_non_synthetic_provenance_allows_recommendation(self):
+        summary = serve.summarize_signal_optimization(
+            _fake_signal_optimize_result(tls_provenance="city-configured"), closure=False)
+        assert summary["tls_provenance"] == "city-configured"
+        assert summary["recommendation_allowed"] is True
+
+    def test_before_disqualification_is_derived_from_its_own_metrics(self):
+        # D2's own schema has no explicit is_disqualified() on the baseline
+        # condition (only comparisons_vs_baseline, computed against the
+        # CANDIDATE) -- summarize_signal_optimization must derive it from
+        # `before`'s own metrics, not silently report False regardless of
+        # real teleports/drops in the baseline run itself.
+        result = _fake_signal_optimize_result()
+        result["conditions"]["baseline"]["metrics"] = _fake_metrics(teleport_total=2)
+        summary = serve.summarize_signal_optimization(result, closure=False)
+        assert summary["before_disqualified"] is True
+
+    def test_median_cycle_delta_pct_summarizes_the_full_plan_diff(self):
+        summary = serve.summarize_signal_optimization(
+            _fake_signal_optimize_result(), closure=False)
+        assert summary["n_junctions"] == 2
+        assert summary["median_cycle_delta_pct"] == pytest.approx(-69.45, abs=0.1)
+        assert len(summary["tls_plan_diff"]) == 2
+
+    def test_median_cycle_delta_pct_ignores_none_entries(self):
+        result = _fake_signal_optimize_result()
+        result["tls_plan_diff"] = _FAKE_PLAN_DIFF + [
+            {"tls_id": "J3", "cycle_before_s": 0.0, "cycle_after_s": 0.0,
+             "cycle_delta_pct": None, "offset_before_s": 0.0, "offset_after_s": 0.0,
+             "n_phases_before": 2, "n_phases_after": 2, "max_split_change_pct": None}]
+        summary = serve.summarize_signal_optimization(result, closure=False)
+        assert summary["n_junctions"] == 3   # every junction still counted...
+        # ...but the median itself only ever averages real (non-None) deltas
+        assert summary["median_cycle_delta_pct"] == pytest.approx(-69.45, abs=0.1)
+
+
+class TestOptimizeSignals:
+    def test_unknown_edge_is_400(self, base_url):
+        status, body = get_json_or_error(f"{base_url}/api/optimize_signals?edges=nope_0")
+        assert status == 400
+        assert "nope_0" in body["error"]
+
+    def test_no_edges_dispatches_to_signal_optimize(self, base_url, monkeypatch):
+        # edges omitted entirely means "optimize against the currently
+        # loaded scenario's own closed edges", which is empty for a plain
+        # baseline scenario -- must NOT be rejected as a missing parameter.
+        started = threading.Event()
+
+        def fake_run(cmd, **kw):
+            started.set()
+            assert "signal_optimize.py" in cmd[1]
+            serve.OPTIMIZE_OUT.write_text(json.dumps(_fake_signal_optimize_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        status, body = get_json(f"{base_url}/api/optimize_signals")
+        assert status == 202
+        assert started.wait(timeout=2)
+
+    def test_edges_present_dispatches_to_signal_closure_combine(self, base_url, monkeypatch):
+        def fake_run(cmd, **kw):
+            assert "signal_closure_combine.py" in cmd[1]
+            assert "--close" in cmd and "a_b_0" in cmd
+            serve.OPTIMIZE_CLOSURE_OUT.write_text(
+                json.dumps(_fake_signal_closure_combine_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        status, body = get_json(f"{base_url}/api/optimize_signals?edges=a_b_0")
+        assert status == 202
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
+
+    def test_busy_lock_returns_409(self, base_url):
+        serve._sim_lock.acquire()
+        try:
+            status, _ = get_json_or_error(f"{base_url}/api/optimize_signals")
+            assert status == 409
+        finally:
+            serve._sim_lock.release()
+
+    def test_returns_202_immediately(self, base_url, monkeypatch):
+        started = threading.Event()
+
+        def fake_run(cmd, **kw):
+            started.set()
+            time.sleep(0.3)
+            serve.OPTIMIZE_OUT.write_text(json.dumps(_fake_signal_optimize_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        t0 = time.time()
+        status, body = get_json(f"{base_url}/api/optimize_signals")
+        elapsed = time.time() - t0
+        assert status == 202
+        assert body["status"] == "started"
+        assert elapsed < 0.2
+        assert started.wait(timeout=2)
+
+    def test_successful_no_closure_run_reports_a_summary_via_status(self, base_url, monkeypatch):
+        def fake_run(cmd, **kw):
+            serve.OPTIMIZE_OUT.write_text(json.dumps(_fake_signal_optimize_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        get_json(f"{base_url}/api/optimize_signals")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
+        _, final = get_json(f"{base_url}/api/optimize_signals/status")
+        assert final["result"]["closure"] is False
+        assert final["result"]["delta_time_loss_s"] == -2000.0
+
+    def test_successful_closure_run_reports_a_summary_via_status(self, base_url, monkeypatch):
+        def fake_run(cmd, **kw):
+            serve.OPTIMIZE_CLOSURE_OUT.write_text(
+                json.dumps(_fake_signal_closure_combine_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        get_json(f"{base_url}/api/optimize_signals?edges=a_b_0")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
+        _, final = get_json(f"{base_url}/api/optimize_signals/status")
+        assert final["result"]["closure"] is True
+        assert final["result"]["closed_edges"] == ["a_b_0"]
+
+    def test_failed_run_surfaces_the_tool_own_error_message(self, base_url, monkeypatch):
+        monkeypatch.setattr(serve, "run_in_new_session",
+                            lambda cmd, **kw: FakeCompletedProcess(
+                                returncode=1, stderr="demand_meta.json not found"))
+        get_json(f"{base_url}/api/optimize_signals")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "error")
+        _, final = get_json(f"{base_url}/api/optimize_signals/status")
+        assert "demand_meta.json not found" in final["error"]
+
+    def test_missing_output_file_after_success_is_a_clear_error(self, base_url, monkeypatch):
+        monkeypatch.setattr(serve, "run_in_new_session",
+                            lambda cmd, **kw: FakeCompletedProcess(returncode=0))
+        get_json(f"{base_url}/api/optimize_signals")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "error")
+        _, final = get_json(f"{base_url}/api/optimize_signals/status")
+        assert "resultatfilen" in final["error"]
+
+    def test_failure_releases_the_lock(self, base_url, monkeypatch):
+        monkeypatch.setattr(serve, "run_in_new_session",
+                            lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="boom"))
+        get_json(f"{base_url}/api/optimize_signals")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "error")
+        assert not serve._sim_lock.locked()
+        status, _ = get_json(f"{base_url}/api/optimize_signals")
+        assert status == 202
+
+    def test_shares_the_sim_lock_with_close(self, base_url):
+        """An optimize_signals run and a /api/close run are the same
         resource class (both real SUMO batches) — must not run concurrently."""
         serve._sim_lock.acquire()
         try:
