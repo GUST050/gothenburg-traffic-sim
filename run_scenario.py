@@ -32,6 +32,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -194,6 +195,17 @@ def edge_freeflow_times() -> dict[str, float]:
     return times
 
 
+def valid_scenario_name(name: str) -> bool:
+    """The scenario name is interpolated into route/additional/JSON/
+    trajectory filenames under sumo/ and web/data/scenarios/. A strict slug
+    keeps every generated path inside those directories (no separators, no
+    "..") and SUMO-referenceable (no spaces). Auto-generated names already
+    satisfy this by construction — they're built from validated edge IDs —
+    so this only ever gates a hand-typed --name (IMPROVEMENT_REVIEW 13.7,
+    narrow scope)."""
+    return re.fullmatch(r"[A-Za-z0-9_+-]{1,80}", name) is not None
+
+
 def atomic_write_json(path: Path, obj, **dump_kwargs) -> None:
     """Write JSON so a live browser polling this path never observes a
     partial file. serve.py's re-run/'Byt dag' flow overwrites these files
@@ -223,7 +235,16 @@ def load_geojson_meta() -> tuple[dict[str, float], dict[str, str]]:
     names: dict[str, str] = {}
     for feat in geo["features"]:
         p = feat["properties"]
-        prior[p["id"]] = p.get("confidence") or 0.5
+        # `or 0.5` was WRONG here: 0 is a valid — and on the inner-city
+        # network the most common (6 569/7 147 edges) — confidence value,
+        # meaning "far from every sensor, extrapolation only". Truthiness
+        # coerced all of them to 0.5, so scenario exports displayed a flat
+        # 50% confidence on exactly the edges the spatial prior most
+        # deliberately marks unvalidated (IMPROVEMENT_REVIEW 13.1,
+        # verified against the real network file 2026-07-10). The 0.5
+        # fallback remains only for a genuinely absent property.
+        conf = p.get("confidence")
+        prior[p["id"]] = 0.5 if conf is None else float(conf)
         names[p["id"]] = p.get("name") or p["id"]
     return prior, names
 
@@ -675,6 +696,9 @@ def main() -> None:
             sys.exit(f"closure {ce}: not an edge in network.geojson")
 
     if args.name:
+        if not valid_scenario_name(args.name):
+            sys.exit(f"--name {args.name!r}: use only letters, digits, "
+                     "_ + - (max 80 chars)")
         name = args.name
     elif close_edges:
         name = "close_" + "+".join(close_edges)

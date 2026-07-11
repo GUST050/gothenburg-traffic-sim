@@ -41,6 +41,66 @@ def geo_edge_ids():
     return {feat["properties"]["id"] for feat in geo["features"]}
 
 
+class TestLoadGeojsonMetaConfidence:
+    """confidence=0 is a real value (far-from-sensor extrapolation), not a
+    missing one — on the current network it is the MOST COMMON value
+    (6 569/7 147 edges). The old `p.get("confidence") or 0.5` coerced every
+    such edge to 0.5, displaying 50% confidence exactly where the spatial
+    prior deliberately says 0% (IMPROVEMENT_REVIEW_2026-07-10 item 13.1)."""
+
+    @staticmethod
+    def _geo(tmp_path, props_list):
+        geo = {"type": "FeatureCollection", "features": [
+            {"type": "Feature",
+             "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]},
+             "properties": props}
+            for props in props_list
+        ]}
+        path = tmp_path / "network.geojson"
+        path.write_text(json.dumps(geo))
+        return path
+
+    def test_zero_confidence_is_preserved_not_coerced_to_half(
+            self, tmp_path, monkeypatch):
+        path = self._geo(tmp_path, [
+            {"id": "far_edge", "confidence": 0},
+            {"id": "near_edge", "confidence": 0.93},
+            {"id": "legacy_edge"},   # property absent entirely
+        ])
+        monkeypatch.setattr(run_scenario, "GEO_PATH", path)
+        prior, _names = run_scenario.load_geojson_meta()
+        assert prior["far_edge"] == 0.0        # the bug coerced this to 0.5
+        assert prior["near_edge"] == 0.93
+        assert prior["legacy_edge"] == 0.5     # only true absence falls back
+
+
+class TestValidScenarioName:
+    """--name flows into filesystem paths under sumo/ and web/data/scenarios/
+    — a strict slug keeps generated paths inside those directories
+    (IMPROVEMENT_REVIEW_2026-07-10 item 13.7, narrow scope; the API path was
+    already safe since serve.py rejects unknown edge IDs before they can
+    reach a filename)."""
+
+    def test_accepts_the_auto_generated_name_shapes(self):
+        assert run_scenario.valid_scenario_name("baseline")
+        assert run_scenario.valid_scenario_name("close_60786979_3575001205_0")
+        assert run_scenario.valid_scenario_name(
+            "close_60786979_3575001205_0+1455801464_18241874_0")
+        assert run_scenario.valid_scenario_name("close_2edges_a1b2c3d4")
+
+    def test_rejects_path_separators_and_traversal(self):
+        assert not run_scenario.valid_scenario_name("../escape")
+        assert not run_scenario.valid_scenario_name("sub/dir")
+        assert not run_scenario.valid_scenario_name("back\\slash")
+        assert not run_scenario.valid_scenario_name("..")
+
+    def test_rejects_spaces_empty_and_overlong(self):
+        assert not run_scenario.valid_scenario_name("has space")
+        assert not run_scenario.valid_scenario_name("")
+        assert not run_scenario.valid_scenario_name("x" * 81)
+        assert run_scenario.valid_scenario_name("x" * 80)
+
+
 class TestAtomicWriteJson:
     """atomic_write_json (found in review 2026-07-10): a live browser polling
     a scenario/index file with cache: 'no-store' must never observe a
