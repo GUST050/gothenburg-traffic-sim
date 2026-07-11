@@ -58,7 +58,9 @@ drift apart.
 from __future__ import annotations
 
 import json
+import os
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -80,6 +82,35 @@ _recal_lock = threading.Lock()     # guards _recal_state below
 _recal_state: dict = {"status": "idle"}
 _close_lock = threading.Lock()     # guards _close_state below
 _close_state: dict = {"status": "idle"}
+
+
+def run_in_new_session(cmd: list[str], *, cwd: str,
+                       timeout: float) -> subprocess.CompletedProcess:
+    """subprocess.run(), but a timeout kills the whole process GROUP.
+
+    Every job here spawns grandchildren — run_scenario.py launches SUMO
+    seeds, build_sumo_demand.py launches netconvert/duarouter and fork-pool
+    workers. subprocess.run()'s own timeout kills only the DIRECT child;
+    the grandchildren get reparented and keep running, still writing into
+    the shared sumo/ directory — while the finally-block releases
+    _sim_lock, so the NEXT job can start and race the orphan's output
+    files (IMPROVEMENT_REVIEW 13.8, verified with a real child-spawns-
+    grandchild test). start_new_session makes the child a process-group
+    leader (pgid == its pid), so one killpg reaps the entire tree.
+    """
+    proc = subprocess.Popen(cmd, cwd=cwd, start_new_session=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True)
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass   # group already gone — the child died just as we timed out
+        proc.wait()
+        raise
+    return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 
 
 @lru_cache(maxsize=1)
@@ -173,9 +204,9 @@ class Handler(SimpleHTTPRequestHandler):
         # write lands, which would stomp the SECOND job's running state
         # with the FIRST job's result.
         try:
-            res = subprocess.run(
+            res = run_in_new_session(
                 [sys.executable, "run_scenario.py", "--close", *edges],
-                cwd=str(ROOT), capture_output=True, text=True, timeout=600,
+                cwd=str(ROOT), timeout=600,
             )
             if res.returncode != 0:
                 print(res.stdout[-1500:], res.stderr[-1500:])
@@ -273,10 +304,8 @@ class Handler(SimpleHTTPRequestHandler):
             build_cmd += ["--date", date, "--begin", "00:00", "--end", "24:00"]
         build_timeout = 1700 + 700 * days
         try:
-            res = subprocess.run(
-                build_cmd,
-                cwd=str(ROOT), capture_output=True, text=True, timeout=build_timeout,
-            )
+            res = run_in_new_session(build_cmd, cwd=str(ROOT),
+                                     timeout=build_timeout)
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])
                 last_line = res.stderr.strip().splitlines()[-1] if res.stderr.strip() else ""
@@ -291,10 +320,9 @@ class Handler(SimpleHTTPRequestHandler):
             for f in SCEN_DIR.glob("*.json"):
                 f.unlink()
 
-            res2 = subprocess.run(
+            res2 = run_in_new_session(
                 [sys.executable, "run_scenario.py"],
-                cwd=str(ROOT), capture_output=True, text=True,
-                timeout=300 + 60 * (days - 1),
+                cwd=str(ROOT), timeout=300 + 60 * (days - 1),
             )
             if res2.returncode != 0:
                 print(res2.stdout[-2000:], res2.stderr[-2000:])

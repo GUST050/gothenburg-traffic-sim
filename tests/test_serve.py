@@ -5,7 +5,8 @@ recalibration silently finishing without them) and, until this test file,
 zero automated coverage.
 
 Runs a real ThreadingHTTPServer on an ephemeral port and drives it with
-real HTTP requests — subprocess.run is monkeypatched so run_scenario.py/
+real HTTP requests — run_in_new_session (serve.py's process-group-aware
+subprocess.run wrapper) is monkeypatched so run_scenario.py/
 build_sumo_demand.py are never actually invoked (they take minutes), which
 lets these tests exercise the actual locking/threading/state-machine logic
 in seconds."""
@@ -154,7 +155,7 @@ class TestClose:
             (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
             return FakeCompletedProcess(returncode=0)
 
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         t0 = time.time()
         status, body = get_json(f"{base_url}/api/close?edges=a_b_0")
         elapsed = time.time() - t0
@@ -171,7 +172,7 @@ class TestClose:
             (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
             return FakeCompletedProcess(returncode=0)
 
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         status, body = get_json(f"{base_url}/api/close?edges=a_b_0")
         assert status == 202
         assert wait_until(
@@ -181,7 +182,7 @@ class TestClose:
         assert final["file"] == "close_a_b_0.json"
 
     def test_failed_simulation_reports_error_status_and_releases_the_lock(self, base_url, monkeypatch):
-        monkeypatch.setattr(serve.subprocess, "run",
+        monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="boom"))
         get_json(f"{base_url}/api/close?edges=a_b_0")
         assert wait_until(
@@ -193,7 +194,7 @@ class TestClose:
     def test_missing_manifest_after_successful_simulation_is_clear_error(self, base_url, monkeypatch):
         """A concurrent recalibration must not turn this into an unhandled
         FileNotFoundError if an external process removes the manifest."""
-        monkeypatch.setattr(serve.subprocess, "run",
+        monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=0))
         get_json(f"{base_url}/api/close?edges=a_b_0")
         assert wait_until(
@@ -205,11 +206,65 @@ class TestClose:
     def test_unexpected_exception_reports_error_not_stuck_running(self, base_url, monkeypatch):
         def fake_run(cmd, **kw):
             raise FileNotFoundError("run_scenario.py vanished")
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/close?edges=a_b_0")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
         assert not serve._sim_lock.locked()
+
+
+class TestRunInNewSession:
+    """run_in_new_session (IMPROVEMENT_REVIEW 13.8): a timeout must kill the
+    whole process GROUP, not only the direct child — run_scenario.py and
+    build_sumo_demand.py both spawn grandchildren (SUMO seeds, fork-pool
+    workers) that subprocess.run()'s own timeout kill leaves orphaned and
+    still writing into the shared sumo/ directory while _sim_lock is
+    already released for the next job."""
+
+    def test_normal_completion_returns_completed_process(self):
+        res = serve.run_in_new_session(
+            [sys.executable, "-c", "print('hello')"], cwd=".", timeout=30)
+        assert res.returncode == 0
+        assert res.stdout.strip() == "hello"
+
+    def test_nonzero_exit_is_reported_not_raised(self):
+        res = serve.run_in_new_session(
+            [sys.executable, "-c", "import sys; sys.exit(3)"],
+            cwd=".", timeout=30)
+        assert res.returncode == 3
+
+    def test_timeout_kills_the_grandchild_too(self, tmp_path):
+        import os
+        import subprocess
+        # The child spawns a grandchild that sleeps forever, records its
+        # PID, then sleeps forever itself. After the timeout BOTH must be
+        # gone — with plain subprocess.run the grandchild would survive,
+        # reparented to init/launchd (the exact orphan-SUMO failure mode).
+        pid_file = tmp_path / "grandchild.pid"
+        child_code = (
+            "import subprocess, sys, time\n"
+            "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+            f"open({str(pid_file)!r}, 'w').write(str(p.pid))\n"
+            "time.sleep(600)\n"
+        )
+        with pytest.raises(subprocess.TimeoutExpired):
+            serve.run_in_new_session(
+                [sys.executable, "-c", child_code], cwd=".", timeout=3)
+        assert pid_file.exists(), "child never got far enough to spawn"
+        gpid = int(pid_file.read_text())
+        # Give the SIGKILL a moment to be delivered, then probe existence
+        # (signal 0). NOTE: PID-reuse could theoretically make this probe
+        # hit an unrelated process, but within 2s of the kill that is
+        # vanishingly unlikely.
+        for _ in range(20):
+            try:
+                os.kill(gpid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.1)
+        else:
+            os.kill(gpid, 9)   # clean up the leak before failing the test
+            pytest.fail(f"grandchild {gpid} survived the group kill")
 
 
 class TestRecalibrateValidation:
@@ -230,7 +285,7 @@ class TestRecalibrateValidation:
                 seen["source"] = cmd[cmd.index("--source") + 1]
             return FakeCompletedProcess(returncode=0)
 
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         wait_until(lambda: seen.get("source") is not None)
         assert seen["source"] == "historical"
@@ -243,7 +298,7 @@ class TestRecalibrateValidation:
                 seen["cmd"] = cmd
             return FakeCompletedProcess(returncode=0)
 
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         wait_until(lambda: seen.get("cmd") is not None)
         # days=1 keeps the original --date/--begin/--end call shape —
@@ -274,7 +329,7 @@ class TestRecalibrateValidation:
                 seen["timeout"] = kw.get("timeout")
             return FakeCompletedProcess(returncode=0)
 
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16&days=3")
         wait_until(lambda: seen.get("cmd") is not None)
         cmd = seen["cmd"]
@@ -297,7 +352,7 @@ class TestRecalibrateAsyncLifecycle:
             time.sleep(0.3)   # stands in for the real 5-14 min job
             return FakeCompletedProcess(returncode=0)
 
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         t0 = time.time()
         status, body = get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         elapsed = time.time() - t0
@@ -313,7 +368,7 @@ class TestRecalibrateAsyncLifecycle:
             release.wait(timeout=2)
             return FakeCompletedProcess(returncode=0)
 
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
 
         _, status_body = get_json(f"{base_url}/api/recalibrate/status")
@@ -328,7 +383,7 @@ class TestRecalibrateAsyncLifecycle:
 
     def test_build_failure_reports_error_status(self, base_url, monkeypatch):
         monkeypatch.setattr(
-            serve.subprocess, "run",
+            serve, "run_in_new_session",
             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="line1\nfatal: boom"))
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
@@ -342,14 +397,14 @@ class TestRecalibrateAsyncLifecycle:
                 return FakeCompletedProcess(returncode=0)
             return FakeCompletedProcess(returncode=1, stderr="scenario boom")
 
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "error")
 
     def test_busy_recalibrate_returns_409(self, base_url, monkeypatch):
         release = threading.Event()
-        monkeypatch.setattr(serve.subprocess, "run",
+        monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: (release.wait(timeout=2), FakeCompletedProcess())[1])
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         status, _ = get_json_or_error(f"{base_url}/api/recalibrate?date=2025-09-17")
@@ -363,7 +418,7 @@ class TestRecalibrateAsyncLifecycle:
         the other way around), so a client polling status until it sees a
         terminal state must never observe the lock as still held — and a
         fresh recalibrate request right after must be accepted, not 409."""
-        monkeypatch.setattr(serve.subprocess, "run",
+        monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=0))
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
@@ -381,7 +436,7 @@ class TestRecalibrateAsyncLifecycle:
         actually died. Found 2026-07-07 in review."""
         def fake_run(cmd, **kw):
             raise FileNotFoundError("build_sumo_demand.py vanished")
-        monkeypatch.setattr(serve.subprocess, "run", fake_run)
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "error")
@@ -392,7 +447,7 @@ class TestRecalibrateAsyncLifecycle:
     def test_old_scenario_files_are_wiped_on_successful_recalibration(self, base_url, monkeypatch):
         stale = serve.SCEN_DIR / "stale_scenario.json"
         stale.write_text("{}")
-        monkeypatch.setattr(serve.subprocess, "run",
+        monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=0))
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
