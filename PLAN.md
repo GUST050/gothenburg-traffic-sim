@@ -1091,6 +1091,78 @@ SUMO warns about short (<15 m) approach edges in meso TLS — check ours.
 Outcome: either "meso screening correlates, use it for candidate filtering"
 or "micro-only, windows stay short". Record either way.
 
+DONE (2026-07-11). Answer: **micro-only — meso screening is NOT feasible**,
+measured cleanly and unambiguously. New standalone `signal_meso_screen.py`,
+reusing D2's exact 5-condition setup (`signal_optimize.py`'s
+`run_tls_cycle_adaptation`/`run_tls_coordinator`/`build_alt_type_net`,
+imported directly rather than re-derived) so the micro side of the
+comparison is the SAME ground truth D2 already measured, not a fresh
+re-derivation that could drift.
+
+**`meso.tls.control` investigated first, before building anything around
+it**: this project's own local SUMO 1.27.1 installation has no bundled
+C++ source or documentation referencing this key anywhere (checked every
+`.xsd`, every `tools/` script, every README — none mention it); the XSD
+schema does confirm `<tlLogic>` structurally accepts arbitrary
+`<param key=... value=.../>` children, and SUMO silently ACCEPTS the
+param with no warning either way when added to a real project TLS and
+run — but silence proves nothing (SUMO doesn't warn on unrecognized
+`<param>` keys by design, they're a generic extensibility mechanism used
+by many unrelated subsystems). Since no independent confirmation of its
+real effect could be established, it was NOT relied upon. Used the
+network-wide `--meso-junction-control`/`.limited` mechanism instead — this
+project's OWN already-deployed, independently-verified configuration
+(CLAUDE.md, measured 2026-07-06) — which sidesteps the question entirely
+by testing the actual deployed screening capability, not a hypothetical
+better one.
+
+**Short-approach-edge check** (PLAN.md's own explicit ask): SUMO did not
+print its documented short-edge warning text under this project's real
+invocation (checked directly, `--no-warnings` removed) — but the
+underlying geometric condition IS real and substantial: **55 of 148
+(37.2%) TLS-approach edges are under 15 m**, most near-zero-length (0.2 m)
+connector segments from the inner-city node-splitting. Reported as a plain
+measurement rather than relying on SUMO's own (silent, in this version) warning.
+
+**The core result**: ran all 5 conditions (baseline/adapted/
+adapted_coordinated/actuated/delay_based) in BOTH micro and meso, same
+window (07:00-09:00), same 3 seeds, same real whole-day demand D1/D2 used.
+Micro reproduced D2's real, large differentiation (389-3 276 teleports,
+1.98M-6.82M s total time loss, wildly different across conditions — the
+genuine, chaotic near-saturation signal D2 already found). Meso's total
+time loss was **essentially IDENTICAL across all five conditions**
+(246 395-247 419 s — under 0.5% spread) with **zero teleports in every
+single condition**, meaning meso is not merely weakly sensitive to which
+TLS program/type is active, it is effectively NON-RESPONSIVE to it
+entirely at this demand/window. Spearman correlation between the two
+condition rankings: ρ=-0.80 (n=4, p=0.200 — not statistically
+significant on its own with so few points, but the raw numbers already
+settle the question without needing the correlation coefficient to be
+significant: meso simply isn't moving).
+
+**Plausible (not proven) explanation, consistent with the 37.2%
+short-edge finding**: `--meso-junction-control.limited` only engages
+full-detail control at junctions the model judges close to saturation,
+and meso's coarse queue model has very little geometric "room" to
+represent real queueing at near-zero-length approach edges — this may be
+why so few (functionally zero, at this window) junctions ever cross that
+threshold regardless of which TLS program is loaded. Confirming this
+properly (e.g. testing full non-limited `--meso-junction-control`
+everywhere, or specifically on a handful of long-approach junctions) is
+follow-up work, not required here — the practical D3 answer already stands
+on its own: don't build a meso-based candidate-filtering step for signal
+optimization on this network. Whoever picks up D4 should budget for micro
+time on every real candidate, not a meso pre-filter.
+
+10 new tests (`short_tls_approaches`'s edge counting, internal-edge and
+non-TLS-junction exclusion, zero-approach-edge degenerate case). Full
+suite: 574 passed, 20 skipped, 0 failed (up from 569). One small additive
+change to `signal_optimize.run_condition()` first (`micro: bool = True`,
+default preserves D2's exact existing behaviour) so this script could
+reuse it for both the micro and meso runs instead of a third
+reimplementation of the same seed loop. No tracked files changed by the
+real run.
+
 ### D4. Closure + signals combined — size L — depends C2, D2
 Two-pass loop: run closure (meso) → extract ACTUALLY rerouted routes
 (vehroute output) → optimize signals against those (D2 tools) → evaluate in

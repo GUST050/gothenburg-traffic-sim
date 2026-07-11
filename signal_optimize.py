@@ -112,15 +112,18 @@ def build_alt_type_net(home: Path, tls_type: str, out_path: Path) -> None:
 
 
 def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path],
-                  seeds: int, begin_s: int, end_s: int, home: Path
-                  ) -> tuple[cm.DisruptionMetrics, list[float]]:
+                  seeds: int, begin_s: int, end_s: int, home: Path,
+                  micro: bool = True) -> tuple[cm.DisruptionMetrics, list[float]]:
+    """micro=True (default, every existing caller's behaviour unchanged) for
+    D2's own ground-truth comparisons; micro=False reruns the SAME five
+    conditions in meso for D3's screening-feasibility question (PLAN.md)."""
     per_seed_metrics = []
     per_seed_time_loss = []
     for s in range(seeds):
         seed = 1000 + s
         route_path = variants[s % len(variants)]
         metric_paths = rs.run_sumo(seed, route_path, add_paths, end_s, home,
-                                   micro=True, metrics=True, begin_s=begin_s,
+                                   micro=micro, metrics=True, begin_s=begin_s,
                                    net_path=net_path)
         metrics = cm.build_metrics(metric_paths["tripinfo"], metric_paths["statistics"],
                                    summary_path=metric_paths["summary"])
