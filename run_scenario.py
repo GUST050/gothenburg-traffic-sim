@@ -476,7 +476,8 @@ def demand_variants() -> list[Path]:
 
 def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              duration_s: int, home: Path, micro: bool = False,
-             metrics: bool = False, begin_s: int = 0) -> dict[str, Path] | None:
+             metrics: bool = False, begin_s: int = 0,
+             net_path: Path | None = None) -> dict[str, Path] | None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
     # Mesoscopic by default: our product is 15-min edge flows, which does not
@@ -504,7 +505,13 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         *([] if micro else ["--mesosim", "true",
                             "--meso-junction-control", "true",
                             "--meso-junction-control.limited", "true"]),
-        "-n", str(NET_PATH.resolve()),
+        # net_path (default None -> the deployed NET_PATH, every existing
+        # caller's behaviour is unchanged): signal_optimize.py (PLAN.md D2)
+        # needs to compare against ALTERNATE networks whose ONLY difference
+        # is TLS type ("actuated"/"delay_based" are baked in at netconvert
+        # time, not a sumo runtime flag — verified: `sumo --tls.default-
+        # type` does not exist, only `netconvert --tls.default-type` does).
+        "-n", str((net_path or NET_PATH).resolve()),
         "-r", str(route_path.resolve()),
         # Every existing caller always has at least an edgeData additional,
         # but signal_lab.py (PLAN.md D1) genuinely has none — metrics=True

@@ -285,6 +285,40 @@ class TestRunSumoBeginOffset:
         assert cmd[cmd.index("--end") + 1] == str(7200 + 3600)
 
 
+class TestRunSumoNetPath:
+    """net_path (added for signal_optimize.py, PLAN.md D2): comparing TLS
+    types (actuated/delay_based) needs an ALTERNATE net.net.xml, since
+    those types are baked in at netconvert time, not a sumo runtime flag."""
+
+    def test_default_net_path_is_the_module_constant(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 900, tmp_path)
+        cmd = commands[0]
+        assert cmd[cmd.index("-n") + 1] == str(run_scenario.NET_PATH.resolve())
+
+    def test_explicit_net_path_overrides_the_default(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        alt_net = tmp_path / "net_actuated.net.xml"
+        run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 900, tmp_path,
+                              net_path=alt_net)
+        cmd = commands[0]
+        assert cmd[cmd.index("-n") + 1] == str(alt_net.resolve())
+
+
 class TestTrajectorySimulationMode:
     """A micro scenario used micro edge-flow simulation but its vehroute
     export always forced --mesosim, so the web UI displayed vehicle timings

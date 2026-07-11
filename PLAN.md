@@ -998,6 +998,90 @@ Run SUMO tools on our calibrated routes:
 - Also test SUMO built-in `actuated` and `delay_based` TLS types in micro
   as a no-optimization reference point.
 
+DONE (2026-07-11). New standalone `signal_optimize.py`. Two small,
+additive changes to `run_scenario.run_sumo()` first (same low-risk pattern
+as D1's `begin_s`): a `net_path: Path | None = None` parameter, because
+`actuated`/`delay_based` turned out to be NETWORK-BUILD-time choices, not
+runtime flags — verified directly (`sumo --tls.default-type` does not
+exist; only `netconvert --tls.default-type` does), so each type needs its
+own network file built from the SAME plain nod/edg XML
+`build_sumo_net.py` uses (verified: 27 614/27 614 edge IDs identical
+between the deployed network and a freshly rebuilt `--tls.default-type
+actuated` variant — the contract holds).
+
+**Mechanism verified empirically before relying on it** (this project's
+established discipline, same as the C1 closure probe): it was NOT obvious
+from documentation alone whether loading a second `<tlLogic>` program via
+`-a` for an id SUMO already knows (from the net file) actually becomes the
+ACTIVE program, or merely an inert alternate one requiring a runtime
+switch. Used TraCI directly (`traci.trafficlight.getProgram(id)`
+immediately after `traci.start(...)`) against the real project network:
+confirmed the answer is "yes, the LAST-LOADED program is active by
+default" — loading only `net.net.xml` gives active program `"0"`; adding
+`-a adapted.add.xml` (tlsCycleAdaptation's own default programID `"a"`)
+switches the active program to `"a"`; adding
+`-a adapted.add.xml,coordinated.add.xml` together still resolves to `"a"`
+with tlsCoordinator's offset override applied on top (its output is a
+sparse `<tlLogic id=... programID="a" offset="..."/>` with no `<phase>`
+children — an offset-only override of an EXISTING program, not a new one,
+confirmed by inspecting its real output against our network: 481
+coordinated TLS pairs, offsets from -280 to +366 s).
+
+Five conditions run per window: `baseline` (deployed net, programID `"0"`,
+untouched synthetic 90 s cycle), `adapted` (`-a` the Webster output),
+`adapted_coordinated` (`-a` both Webster + coordinator outputs),
+`actuated`, `delay_based` (each its own rebuilt network). `relative_pct()`
+guards the zero-baseline division case explicitly (returns `None`, never
+raises or emits inf/nan) — a real edge case for a genuinely empty window.
+
+**Real result, run against the same real whole-day demand D1 measured
+(96 quarters, 22 841 trips), window 07:00-09:00, 3 seeds, ~252 s total
+runtime** — reported exactly as measured, not adjusted to match the
+plan's own expectation of "possibly large wins":
+
+| Condition | Δ time loss (abs) | Δ time loss (%) | Teleports | Disqualified |
+|---|---|---|---|---|
+| baseline | — | — | 389 | — |
+| adapted | +3 871 943 s | +195.7% | 2 672 | yes |
+| adapted_coordinated | +4 845 085 s | +244.9% | 3 276 | yes |
+| actuated | +4 566 729 s | +230.9% | 3 228 | yes |
+| delay_based | +2 868 791 s | +145.0% | 1 936 | yes |
+
+**All four alternatives were WORSE than the naive synthetic baseline, by
+a lot, and all four were disqualified for teleports** — the opposite of
+what the plan anticipated ("expect possibly LARGE relative wins"). This
+was investigated, not just reported blind: (1) confirmed it isn't a
+config bug — a clean, warning-free run against the `actuated` network
+with `--no-warnings` REMOVED produced zero stderr output, so there's no
+suppressed "missing detector" or fallback warning explaining it away; (2)
+per-seed time-loss values are wildly inconsistent ACROSS conditions
+(e.g. seed index 1 is the BEST performer for `baseline`/`adapted`/
+`adapted_coordinated`/`actuated` but the WORST for `delay_based`,
+10 020 592 s vs 699 694-2 467 263 s for the same seed under other
+conditions) — this chaotic, non-monotonic pattern, plus baseline ALREADY
+showing 389 teleports before any optimization is even applied, is
+consistent with this specific network+demand combination sitting close to
+a genuine micro-simulation congestion-collapse threshold at this time
+window, where small signal-timing differences tip individual seeds into
+gridlock unpredictably, rather than any one condition being cleanly
+"better" or "worse" in a stable sense. This is a PLAUSIBLE explanation,
+stated as a hypothesis, not a proven root cause — confirming it properly
+(e.g. testing an off-peak window to see if the pattern reverses, checking
+whether Webster's isolated-intersection assumption breaks down under
+network-wide spillback in this dense a grid) is real follow-up work, not
+done here since D2's own scope is the harness + honest measurement, not
+diagnosing PFE/demand/network capacity interactions. Flagged explicitly
+for whoever picks up D3/D4: do not assume any of these four alternatives
+is a safe default without investigating this further first — the
+measured baseline currently outperforms all of them at this window.
+
+15 new tests (subprocess command construction and error handling for all
+three tool wrappers, `relative_pct`'s zero-baseline guard) plus 2 for
+`run_sumo`'s new `net_path` parameter. Full suite: 569 passed, 20 skipped,
+0 failed (up from 556). No tracked files changed by the real run (net/tls
+outputs, netconvert rebuilds, and the result JSON all live in gitignored
+`sumo/`).
+
 ### D3. Meso screening feasibility — size M — depends D1
 Test whether cheap screening is possible: per-TLS
 `<param key="meso.tls.control" value="true"/>` (full-detail static TLS at
