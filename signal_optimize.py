@@ -52,7 +52,7 @@ from pathlib import Path
 
 import closure_metrics as cm
 import run_scenario as rs
-from signal_lab import net_fingerprint, sumo_version, window_offsets_s
+from signal_lab import TLS_PROVENANCE, net_fingerprint, sumo_version, window_offsets_s
 from suggest_closure_time import aggregate_seed_metrics
 
 CAVEAT = ("Measured against a SYNTHETIC netconvert --tls.guess baseline "
@@ -111,6 +111,77 @@ def build_alt_type_net(home: Path, tls_type: str, out_path: Path) -> None:
         sys.exit(f"netconvert failed for --tls.default-type {tls_type}")
 
 
+def signal_artifact_label(window_start: str, window_end: str, demand_sig: str,
+                          net_fp: str) -> str:
+    """Content-addressed label for cached signal-timing artifacts
+    (tls_adapted, tls_coordinated, alternate-type networks) — folds in
+    demand_signature and net_fingerprint so a stale artifact built from a
+    DIFFERENT demand or network can never be silently reused just because
+    the window happens to match. Found in external review 2026-07-11
+    (NEW_CHANGES_REVIEW_2026-07-11.md section 6.1): the label used to be
+    the window alone, so recalibrating demand or rebuilding the network
+    without changing --window-start/--window-end left a stale
+    tls_adapted_<label>.add.xml on disk that a later run would silently
+    reuse, evaluated against demand/geometry it was never actually built
+    from."""
+    window = f"{window_start.replace(':', '')}_{window_end.replace(':', '')}"
+    return f"{window}_{demand_sig}_{net_fp}"
+
+
+def build_signal_conditions(home: Path, variants: list[Path], begin_s: int,
+                            label: str) -> dict[str, dict]:
+    """Build (or reuse, under the fingerprinted `label`) the
+    tlsCycleAdaptation/tlsCoordinator outputs and the actuated/delay_based
+    alternate networks, then return the 5-condition dict D2 and D3 both
+    evaluate. Shared by signal_optimize.py and signal_meso_screen.py so
+    they can never silently diverge on which conditions exist or how
+    artifacts get cached — found in external review 2026-07-11 as
+    duplicated, behaviorally-INCONSISTENT code: signal_optimize.py always
+    rebuilt every artifact unconditionally while signal_meso_screen.py
+    cached by bare filename existence with no freshness check at all (the
+    actual bug fixed here). A single shared, correctly-fingerprinted
+    implementation fixes both problems at once."""
+    adapted_path = rs.SUMO_DIR / f"tls_adapted_{label}.add.xml"
+    if not adapted_path.exists():
+        print("  running tlsCycleAdaptation.py …")
+        run_tls_cycle_adaptation(home, variants[0], begin_s, adapted_path)
+    coordinated_path = rs.SUMO_DIR / f"tls_coordinated_{label}.add.xml"
+    if not coordinated_path.exists():
+        print("  running tlsCoordinator.py …")
+        run_tls_coordinator(home, variants[0], adapted_path, coordinated_path)
+    alt_nets: dict[str, Path] = {}
+    for tls_type in BUILTIN_TLS_TYPES:
+        net_path = rs.SUMO_DIR / f"net_{tls_type}_{label}.net.xml"
+        if not net_path.exists():
+            print(f"  building alternate network (--tls.default-type {tls_type}) …")
+            build_alt_type_net(home, tls_type, net_path)
+        alt_nets[tls_type] = net_path
+    return {
+        "baseline": {"net_path": rs.NET_PATH, "add_paths": []},
+        "adapted": {"net_path": rs.NET_PATH, "add_paths": [adapted_path]},
+        "adapted_coordinated": {"net_path": rs.NET_PATH,
+                                "add_paths": [adapted_path, coordinated_path]},
+        "actuated": {"net_path": alt_nets["actuated"], "add_paths": []},
+        "delay_based": {"net_path": alt_nets["delay_based"], "add_paths": []},
+    }
+
+
+def condition_net_fingerprints(conditions: dict[str, dict]) -> dict[str, str]:
+    """net_fingerprint PER CONDITION, not just the baseline network — found
+    in review 2026-07-11: actuated/delay_based run against their OWN
+    rebuilt network files, so a single top-level net_fingerprint field
+    (hashing only rs.NET_PATH) couldn't detect if one of those alternate
+    networks changed between two runs while the baseline stayed the same."""
+    seen: dict[Path, str] = {}
+    out = {}
+    for name, cfg in conditions.items():
+        p = cfg["net_path"]
+        if p not in seen:
+            seen[p] = net_fingerprint(p)
+        out[name] = seen[p]
+    return out
+
+
 def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path],
                   seeds: int, begin_s: int, end_s: int, home: Path,
                   micro: bool = True) -> tuple[cm.DisruptionMetrics, list[float]]:
@@ -122,9 +193,16 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
     for s in range(seeds):
         seed = 1000 + s
         route_path = variants[s % len(variants)]
+        # flush_s=0: this is always a bounded time-of-day window experiment
+        # (D2 micro, D3 meso) — the default 3600s meso flush would admit
+        # departures up to an hour past the requested window into the
+        # "window" total (verified empirically 2026-07-11: 55%
+        # contamination at the default window with the old default). A
+        # vehicle that departed in-window but hasn't finished by end_s is
+        # honestly tracked via unfinished_trips, not silently padded in.
         metric_paths = rs.run_sumo(seed, route_path, add_paths, end_s, home,
                                    micro=micro, metrics=True, begin_s=begin_s,
-                                   net_path=net_path)
+                                   net_path=net_path, flush_s=0)
         metrics = cm.build_metrics(metric_paths["tripinfo"], metric_paths["statistics"],
                                    summary_path=metric_paths["summary"])
         per_seed_metrics.append(metrics)
@@ -169,34 +247,15 @@ def main() -> None:
                  f"the calibrated demand period (0-{total_duration_s / 3600:.1f}h)")
 
     variants = rs.demand_variants()
-    label = f"{args.window_start.replace(':', '')}_{args.window_end.replace(':', '')}"
+    demand_sig = rs.demand_signature(meta)
+    baseline_net_fp = net_fingerprint(rs.NET_PATH)
+    label = signal_artifact_label(args.window_start, args.window_end,
+                                  demand_sig, baseline_net_fp)
     print(f"Signal optimize: {args.window_start}-{args.window_end} window, "
          f"{args.seeds} seed(s), MICRO — 5 conditions vs synthetic baseline")
 
-    # ── Build the optimizer outputs and alt-type networks once. ──────────
-    print("  running tlsCycleAdaptation.py …")
-    adapted_path = rs.SUMO_DIR / f"tls_adapted_{label}.add.xml"
-    run_tls_cycle_adaptation(home, variants[0], begin_s, adapted_path)
-
-    print("  running tlsCoordinator.py …")
-    coordinated_path = rs.SUMO_DIR / f"tls_coordinated_{label}.add.xml"
-    run_tls_coordinator(home, variants[0], adapted_path, coordinated_path)
-
-    alt_nets: dict[str, Path] = {}
-    for tls_type in BUILTIN_TLS_TYPES:
-        print(f"  building alternate network (--tls.default-type {tls_type}) …")
-        net_path = rs.SUMO_DIR / f"net_{tls_type}.net.xml"
-        build_alt_type_net(home, tls_type, net_path)
-        alt_nets[tls_type] = net_path
-
-    conditions = {
-        "baseline": {"net_path": rs.NET_PATH, "add_paths": []},
-        "adapted": {"net_path": rs.NET_PATH, "add_paths": [adapted_path]},
-        "adapted_coordinated": {"net_path": rs.NET_PATH,
-                                "add_paths": [adapted_path, coordinated_path]},
-        "actuated": {"net_path": alt_nets["actuated"], "add_paths": []},
-        "delay_based": {"net_path": alt_nets["delay_based"], "add_paths": []},
-    }
+    conditions = build_signal_conditions(home, variants, begin_s, label)
+    net_fps = condition_net_fingerprints(conditions)
 
     results = {}
     t_total = time.time()
@@ -234,9 +293,16 @@ def main() -> None:
         "method": "PLAN.md Phase D2: off-the-shelf signal-timing optimizers vs D1 baseline",
         "window_start": args.window_start, "window_end": args.window_end,
         "begin_s": begin_s, "end_s": end_s, "seeds": args.seeds,
-        "tls_provenance": "synthetic", "caveat": CAVEAT,
-        "net_fingerprint": net_fingerprint(rs.NET_PATH),
-        "demand_signature": rs.demand_signature(meta),
+        # Imported from signal_lab.py (D1) rather than a second hardcoded
+        # "synthetic" literal — found in self-review 2026-07-11: the two
+        # copies would silently stop matching the moment PLAN.md D6 flips
+        # D1's TLS_PROVENANCE to "city-configured" but this file's literal
+        # string was never updated alongside it.
+        "tls_provenance": TLS_PROVENANCE, "caveat": CAVEAT,
+        "recommendation_allowed": TLS_PROVENANCE != "synthetic",
+        "net_fingerprint": baseline_net_fp,
+        "net_fingerprints_by_condition": net_fps,
+        "demand_signature": demand_sig,
         "sumo_version": sumo_version(home),
         "command": sys.argv,
         "conditions": results,

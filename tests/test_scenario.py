@@ -250,6 +250,46 @@ class TestSumoTimeout:
         assert measured is not None
 
 
+class TestRunSumoFlushOffset:
+    """flush_s (fixed 2026-07-11, external review NEW_CHANGES_REVIEW section
+    1): a bounded time-of-day window experiment must not admit departures
+    past the requested window end. The default 3600s meso flush, reused
+    unchanged for D1/D2/D3's windowed calls, let vehicles scheduled up to an
+    hour AFTER the window still depart and count toward it — verified
+    empirically against real demand (55% of a nominal 07:00-09:00 run's
+    tripinfo entries had depart >= 09:00)."""
+
+    def test_default_flush_is_3600_unchanged(self, monkeypatch, tmp_path):
+        # Every whole-period caller (run_scenario.py main(), suggest_
+        # closure_time.py) relies on this default for meso's insertion
+        # backlog -- must be byte-identical to before flush_s existed.
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 7200, tmp_path)
+        cmd = commands[0]
+        assert cmd[cmd.index("--end") + 1] == str(7200 + 3600)
+
+    def test_explicit_flush_s_zero_caps_end_exactly_at_the_window(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 28800,
+                              tmp_path, flush_s=0)
+        cmd = commands[0]
+        assert cmd[cmd.index("--end") + 1] == "28800"
+
+
 class TestRunSumoBeginOffset:
     """begin_s (added for signal_lab.py, PLAN.md D1): a bounded time-of-day
     window must shift SUMO's own --begin, not just filter results after the

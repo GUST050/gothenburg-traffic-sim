@@ -56,10 +56,9 @@ from scipy import stats as scipy_stats
 
 import closure_metrics as cm
 import run_scenario as rs
-from signal_lab import net_fingerprint, sumo_version, window_offsets_s
-from signal_optimize import (build_alt_type_net, relative_pct,
-                             run_condition, run_tls_coordinator,
-                             run_tls_cycle_adaptation)
+from signal_lab import TLS_PROVENANCE, net_fingerprint, sumo_version, window_offsets_s
+from signal_optimize import (build_signal_conditions, condition_net_fingerprints,
+                             relative_pct, run_condition, signal_artifact_label)
 
 SHORT_APPROACH_THRESHOLD_M = 15.0
 
@@ -88,6 +87,37 @@ def short_tls_approaches(net_path: Path) -> dict:
            "short_count": len(short),
            "short_pct": round(100 * len(short) / total_approaches, 1) if total_approaches else None,
            "examples": short[:10]}
+
+
+def condition_correlation(names: list[str], deltas: dict
+                          ) -> tuple[list[str], list[str], float | None, float | None]:
+    """Spearman correlation between micro's and meso's condition rankings.
+
+    Correlates on the RAW delta_time_loss_s values, NOT on order.index()-
+    derived positions (fixed in review 2026-07-11, self-review): scipy's
+    spearmanr already rank-transforms its input with correct tie handling,
+    so feeding it .index() results double-ranks and silently discards any
+    real tie between two conditions' actual time-loss values — every
+    .index()-based "rank" list is a clean 0..N-1 permutation by
+    construction, whether or not the underlying values actually differ.
+    That construction also broke the degenerate-input guard: checking
+    len(set(index-derived ranks)) is always == len(names) for any list
+    with more than one entry, so the "cannot compute correlation" branch
+    could never fire even when the underlying delta_time_loss_s values
+    were genuinely all identical (e.g. an upstream metrics failure
+    returning the same number for every condition). Checking the RAW
+    values' distinctness instead makes the guard actually guard something.
+
+    Returns (micro_order, meso_order, spearman_rho, p_value); rho/p_value
+    are None when either side's values are degenerate (all equal)."""
+    micro_vals = [deltas["micro"][n]["delta_time_loss_s"] for n in names]
+    meso_vals = [deltas["meso"][n]["delta_time_loss_s"] for n in names]
+    micro_order = sorted(names, key=lambda n: deltas["micro"][n]["delta_time_loss_s"])
+    meso_order = sorted(names, key=lambda n: deltas["meso"][n]["delta_time_loss_s"])
+    if len(set(micro_vals)) > 1 and len(set(meso_vals)) > 1:
+        rho, pval = scipy_stats.spearmanr(micro_vals, meso_vals)
+        return micro_order, meso_order, float(rho), float(pval)
+    return micro_order, meso_order, None, None
 
 
 def parse_args() -> argparse.Namespace:
@@ -121,7 +151,10 @@ def main() -> None:
                  f"the calibrated demand period (0-{total_duration_s / 3600:.1f}h)")
 
     variants = rs.demand_variants()
-    label = f"{args.window_start.replace(':', '')}_{args.window_end.replace(':', '')}"
+    demand_sig = rs.demand_signature(meta)
+    baseline_net_fp = net_fingerprint(rs.NET_PATH)
+    label = signal_artifact_label(args.window_start, args.window_end,
+                                  demand_sig, baseline_net_fp)
     print(f"Signal meso screen: {args.window_start}-{args.window_end} window, "
          f"{args.seeds} seed(s) — micro ground truth vs meso screen, 5 conditions")
 
@@ -131,28 +164,8 @@ def main() -> None:
          f"{SHORT_APPROACH_THRESHOLD_M} m")
 
     print("  building/reusing tlsCycleAdaptation + tlsCoordinator outputs …")
-    adapted_path = rs.SUMO_DIR / f"tls_adapted_{label}.add.xml"
-    if not adapted_path.exists():
-        run_tls_cycle_adaptation(home, variants[0], begin_s, adapted_path)
-    coordinated_path = rs.SUMO_DIR / f"tls_coordinated_{label}.add.xml"
-    if not coordinated_path.exists():
-        run_tls_coordinator(home, variants[0], adapted_path, coordinated_path)
-    alt_nets = {}
-    for tls_type in ("actuated", "delay_based"):
-        net_path = rs.SUMO_DIR / f"net_{tls_type}.net.xml"
-        if not net_path.exists():
-            print(f"  building alternate network (--tls.default-type {tls_type}) …")
-            build_alt_type_net(home, tls_type, net_path)
-        alt_nets[tls_type] = net_path
-
-    conditions = {
-        "baseline": {"net_path": rs.NET_PATH, "add_paths": []},
-        "adapted": {"net_path": rs.NET_PATH, "add_paths": [adapted_path]},
-        "adapted_coordinated": {"net_path": rs.NET_PATH,
-                                "add_paths": [adapted_path, coordinated_path]},
-        "actuated": {"net_path": alt_nets["actuated"], "add_paths": []},
-        "delay_based": {"net_path": alt_nets["delay_based"], "add_paths": []},
-    }
+    conditions = build_signal_conditions(home, variants, begin_s, label)
+    net_fps = condition_net_fingerprints(conditions)
 
     per_condition = {}
     t_total = time.time()
@@ -190,15 +203,7 @@ def main() -> None:
 
     # ── Does meso's ranking correlate with micro's ground truth? ────────
     names = [n for n in conditions if n != "baseline"]
-    micro_order = sorted(names, key=lambda n: deltas["micro"][n]["delta_time_loss_s"])
-    meso_order = sorted(names, key=lambda n: deltas["meso"][n]["delta_time_loss_s"])
-    micro_ranks = [micro_order.index(n) for n in names]
-    meso_ranks = [meso_order.index(n) for n in names]
-    if len(set(micro_ranks)) > 1 and len(set(meso_ranks)) > 1:
-        rho, pval = scipy_stats.spearmanr(micro_ranks, meso_ranks)
-        rho, pval = float(rho), float(pval)
-    else:
-        rho, pval = None, None
+    micro_order, meso_order, rho, pval = condition_correlation(names, deltas)
     correlates = rho is not None and rho > 0.5
     print(f"  micro ranking (best->worst): {micro_order}")
     print(f"  meso  ranking (best->worst): {meso_order}")
@@ -224,8 +229,11 @@ def main() -> None:
                        "mechanism this project already deploys and has independently "
                        "verified instead."),
         },
-        "net_fingerprint": net_fingerprint(rs.NET_PATH),
-        "demand_signature": rs.demand_signature(meta),
+        "tls_provenance": TLS_PROVENANCE,
+        "recommendation_allowed": TLS_PROVENANCE != "synthetic",
+        "net_fingerprint": baseline_net_fp,
+        "net_fingerprints_by_condition": net_fps,
+        "demand_signature": demand_sig,
         "sumo_version": sumo_version(home),
         "command": sys.argv,
         "conditions": per_condition,

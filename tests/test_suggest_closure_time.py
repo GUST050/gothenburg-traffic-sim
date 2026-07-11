@@ -122,7 +122,8 @@ class TestProxyScoresAndRanking:
     def test_lower_flow_window_scores_better(self):
         windows = [(0, 1800), (1800, 3600)]   # quarters {0,1} vs {2,3}
         flows = self._flows()
-        scored = sct.proxy_scores(windows, ["closed"], ["corridor_hi"], flows, 4)
+        scored, excluded = sct.proxy_scores(windows, ["closed"], ["corridor_hi"], flows, 4)
+        assert excluded == 0
         ranked = sct.rank_candidates(scored)
         # Window 2 (quarters 2,3) has closed-edge flow 0 vs window 1's 10 —
         # it must rank strictly better (lower proxy_rank = better).
@@ -133,7 +134,7 @@ class TestProxyScoresAndRanking:
         # The whole point of Borda ranking here is that no field looks like
         # a fabricated "predicted delay" quantity with real-world units.
         windows = [(0, 1800), (1800, 3600)]
-        scored = sct.proxy_scores(windows, ["closed"], ["corridor_hi"], self._flows(), 4)
+        scored, _ = sct.proxy_scores(windows, ["closed"], ["corridor_hi"], self._flows(), 4)
         ranked = sct.rank_candidates(scored)
         for w in ranked:
             assert set(w) >= {"closed_edge_flow", "corridor_flow", "rank_closed_edge",
@@ -143,11 +144,58 @@ class TestProxyScoresAndRanking:
     def test_missing_corridor_edges_degrades_to_closed_edge_only_ranking(self):
         windows = [(0, 1800), (1800, 3600)]
         flows = self._flows()
-        scored = sct.proxy_scores(windows, ["closed"], [], flows, 4)
+        scored, _ = sct.proxy_scores(windows, ["closed"], [], flows, 4)
         assert all(w["corridor_flow"] is None for w in scored)
         ranked = sct.rank_candidates(scored)
         by_begin = {w["begin_s"]: w for w in ranked}
         assert by_begin[1800]["proxy_rank"] < by_begin[0]["proxy_rank"]
+
+    def test_window_with_no_real_closed_edge_data_is_excluded_not_ranked_as_best(self):
+        # A null-filled closed edge used to be coerced to 0.0 flow, i.e. the
+        # ideal candidate — exactly backwards. It must now be dropped from
+        # the candidate list entirely, not appear as the top-ranked window.
+        windows = [(0, 1800), (1800, 3600)]
+        flows = {
+            "closed": np.array([10.0, 10.0, np.nan, np.nan]),   # missing in window 2
+            "corridor_hi": np.array([20.0, 20.0, 20.0, 20.0]),
+        }
+        scored, excluded = sct.proxy_scores(windows, ["closed"], ["corridor_hi"], flows, 4)
+        assert excluded == 1
+        assert [w["begin_s"] for w in scored] == [0]
+
+    def test_all_windows_excluded_when_closed_edge_entirely_missing(self):
+        windows = [(0, 1800), (1800, 3600)]
+        flows = {"closed": np.array([np.nan, np.nan, np.nan, np.nan]),
+                "corridor_hi": np.array([20.0, 20.0, 20.0, 20.0])}
+        scored, excluded = sct.proxy_scores(windows, ["closed"], ["corridor_hi"], flows, 4)
+        assert excluded == 2
+        assert scored == []
+
+    def test_partial_corridor_missingness_still_scores_from_available_data(self):
+        windows = [(0, 1800), (1800, 3600)]
+        flows = {
+            "closed": np.array([10.0, 10.0, 0.0, 0.0]),
+            "corridor_hi": np.array([20.0, 20.0, np.nan, np.nan]),   # missing in window 2
+        }
+        scored, excluded = sct.proxy_scores(windows, ["closed"], ["corridor_hi"], flows, 4)
+        assert excluded == 0
+        by_begin = {w["begin_s"]: w for w in scored}
+        assert by_begin[0]["corridor_flow"] == 20.0
+        assert by_begin[1800]["corridor_flow"] is None   # no real corridor data this window
+
+    def test_rank_candidates_handles_mixed_corridor_availability(self):
+        # One window has corridor data, one doesn't -- must not crash, and
+        # must still rank both windows using whatever signal is available.
+        scored = [
+            {"begin_s": 0, "end_s": 1800, "closed_edge_flow": 10.0, "corridor_flow": 20.0},
+            {"begin_s": 1800, "end_s": 3600, "closed_edge_flow": 5.0, "corridor_flow": None},
+        ]
+        ranked = sct.rank_candidates(scored)
+        by_begin = {w["begin_s"]: w for w in ranked}
+        assert by_begin[1800]["rank_corridor"] is None
+        # Lower closed-edge flow (5 < 10) with no corridor penalty/bonus
+        # applied -> window 2 should still rank at least as well.
+        assert by_begin[1800]["proxy_rank"] <= by_begin[0]["proxy_rank"]
 
 
 class TestSelectCandidates:
@@ -198,9 +246,20 @@ class TestAggregateSeedMetrics:
             [self._metrics(100.0, teleports=1), self._metrics(100.0, teleports=0)])
         assert agg.teleport_total == 1
 
-    def test_truncated_dropped_taken_from_first_seed_not_summed(self):
-        # These are computed once per variant (shared across seeds that draw
-        # it), not independently per seed -- summing would double-count.
+    def test_truncated_dropped_use_max_not_mean_or_first_seed(self):
+        # A seed with 0 dropped averaged against a seed with 1 dropped must
+        # not round down to 0 and hide a real dropped vehicle from
+        # is_disqualified() -- same reasoning as teleports using SUM, but
+        # MAX here since a variant sampled by multiple seeds shouldn't have
+        # its fixed count added again for every repeat.
+        agg = sct.aggregate_seed_metrics(
+            [self._metrics(100.0, trunc=5, drop=2), self._metrics(100.0, trunc=0, drop=0)])
+        assert (agg.truncated_unreachable, agg.dropped_unreachable) == (5, 2)
+
+    def test_identical_repeated_variant_is_not_double_counted(self):
+        # Two seeds drawing the SAME variant (seeds > len(variants)) report
+        # the same fixed truncation count -- MAX (not SUM) avoids counting
+        # that variant's truncation twice just because it was sampled twice.
         agg = sct.aggregate_seed_metrics(
             [self._metrics(100.0, trunc=5, drop=2), self._metrics(100.0, trunc=5, drop=2)])
         assert (agg.truncated_unreachable, agg.dropped_unreachable) == (5, 2)
@@ -209,6 +268,30 @@ class TestAggregateSeedMetrics:
         agg = sct.aggregate_seed_metrics(
             [self._metrics(100.0, queue=10), self._metrics(100.0, queue=30)])
         assert agg.max_queue_vehicles == 30
+
+
+class TestRecommendationStatus:
+    """Structural (not just prose) enforcement of 'never claim more than
+    measured' (external review section 4): never returns "validated", even
+    for a strong correlation, since the sample is always small and
+    selection-biased by design (proxy top-k + controls, not stratified/
+    held-out)."""
+
+    def test_no_correlation_data_is_insufficient_evidence(self):
+        assert sct.recommendation_status(None) == "insufficient_evidence"
+
+    def test_strong_correlation_is_still_only_screening(self):
+        status = sct.recommendation_status({"spearman_rho": 0.9, "p_value": 0.01, "n": 10})
+        assert status == "screening_only_correlated"
+        assert "validated" not in status
+
+    def test_weak_correlation_is_flagged_distinctly(self):
+        status = sct.recommendation_status({"spearman_rho": 0.1, "p_value": 0.8, "n": 5})
+        assert status == "screening_only_weak_correlation"
+
+    def test_boundary_rho_exactly_0_3_is_weak(self):
+        status = sct.recommendation_status({"spearman_rho": 0.3, "p_value": 0.5, "n": 5})
+        assert status == "screening_only_weak_correlation"
 
 
 class TestDeltaTimeLossInterval:
@@ -236,6 +319,136 @@ class TestDeltaTimeLossInterval:
         assert result["median_s"] == 10.0
 
 
+def _write_tiny_metrics_fixtures(sumo_dir, stem):
+    """Minimal-but-valid tripinfo/statistics/summary XML — empty is fine,
+    closure_metrics.py's readers tolerate absent children (_number/_integer
+    default gracefully when an element is None)."""
+    tripinfo = sumo_dir / f"{stem}_tripinfo.xml"
+    statistics = sumo_dir / f"{stem}_statistics.xml"
+    summary = sumo_dir / f"{stem}_summary.xml"
+    tripinfo.write_text("<tripinfos></tripinfos>")
+    statistics.write_text("<statistics></statistics>")
+    summary.write_text("<summary></summary>")
+    return {"tripinfo": tripinfo, "statistics": statistics, "summary": summary}
+
+
+class TestSimulateClosureVariantAttribution:
+    """simulate_closure's per-seed truncated/dropped attribution (fixed in
+    review 2026-07-11): each seed must carry only the truncation count of
+    the SPECIFIC variant it actually ran, not a sum across every variant."""
+
+    def _setup_variants(self, tmp_path, monkeypatch, n_vehicles):
+        # A tiny net where "closed" has no detour at all (lead->closed->
+        # destination is the only path) -- mirrors
+        # TestTimeWindowedClosures' established fixture pattern in
+        # test_scenario.py exactly.
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <connection from="lead" to="closed"/>
+  <connection from="closed" to="destination"/>
+</net>""")
+        monkeypatch.setattr(run_scenario, "NET_PATH", net_path)
+        monkeypatch.setattr(sct.rs, "SUMO_DIR", tmp_path)
+        # edges_near() (called inside simulate_closure to size the rerouter)
+        # reads plain.edg.xml directly -- a minimal shape-only file with no
+        # edges near the closure is fine for this test's purposes.
+        (tmp_path / "plain.edg.xml").write_text('<edges>\n'
+            '  <edge id="lead" from="lead_n" to="closed_n" shape="0,0 1,1"/>\n'
+            '  <edge id="closed" from="closed_n" to="dest_n" shape="1,1 2,2"/>\n'
+            '</edges>')
+
+        # variant i gets n_vehicles[i] vehicles routed straight through the
+        # closed edge with no detour -> truncate_stranded_vehicles finds
+        # exactly n_vehicles[i] truncated for that variant. Distinct counts
+        # per variant are the point: it's how the tests below can tell
+        # "this seed's own variant's count" apart from "the sum across
+        # every variant" (the old bug).
+        paths = []
+        names = ["calibrated.rou.xml", "calibrated_v1.rou.xml", "calibrated_v2.rou.xml"]
+        for i, n in enumerate(n_vehicles):
+            vp = tmp_path / names[i]
+            vehicles = "\n".join(
+                f'  <vehicle id="v{i}_{j}" depart="0">'
+                f'<route edges="lead closed destination"/></vehicle>'
+                for j in range(n))
+            vp.write_text(f"<routes>\n{vehicles}\n</routes>")
+            paths.append(vp)
+        return paths
+
+    def test_each_seed_carries_only_its_own_variant_truncation(self, tmp_path, monkeypatch):
+        # variant 0 -> 2 truncated, variant 1 -> 1 truncated. The old bug
+        # summed these (3) and reported that combined total for EVERY seed;
+        # each seed must now see only its own variant's count.
+        vp0, vp1 = self._setup_variants(tmp_path, monkeypatch, [2, 1])
+        adj = run_scenario.build_edge_graph({"closed"})
+
+        seen_seeds = []
+
+        def fake_run_sumo(seed, route_path, add_paths, duration_s, home, **kw):
+            seen_seeds.append(seed)
+            return _write_tiny_metrics_fixtures(tmp_path, f"seed{seed}")
+
+        monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
+
+        scratch = []
+        metrics, n_trunc, n_drop, _ = sct.simulate_closure(
+            name="w0", closures=[{"edge_id": "closed", "begin_s": 0, "end_s": 400}],
+            close_edges=["closed"], variants=[vp0, vp1], seeds=2, n_intervals=4,
+            duration_s=900, home=tmp_path, micro=True, adj=adj,
+            freeflow={"lead": 10.0}, scratch=scratch)
+
+        # max(2, 1) = 2, NOT 3 (the old sum-across-all-variants bug would
+        # have broadcast 3 to every seed's aggregate).
+        assert metrics.truncated_unreachable == 2
+        assert n_trunc == 3   # candidate-level total: both variants WERE used
+        assert n_drop == 0
+        assert seen_seeds == [1000, 1001]
+
+    def test_candidate_level_total_excludes_unused_variants(self, tmp_path, monkeypatch):
+        # 3 variants (2, 1, 5 truncated respectively) but only 2 seeds, so
+        # variant 2 (5 truncated) is NEVER actually simulated. The old bug
+        # summed truncation across ALL variants regardless of whether they
+        # were used; the candidate-level total must reflect only the
+        # variants THIS run actually drew.
+        vp0, vp1, vp2 = self._setup_variants(tmp_path, monkeypatch, [2, 1, 5])
+        adj = run_scenario.build_edge_graph({"closed"})
+
+        def fake_run_sumo(seed, route_path, add_paths, duration_s, home, **kw):
+            return _write_tiny_metrics_fixtures(tmp_path, f"seed{seed}")
+
+        monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
+
+        scratch = []
+        _, n_trunc, n_drop, _ = sct.simulate_closure(
+            name="w0", closures=[{"edge_id": "closed", "begin_s": 0, "end_s": 400}],
+            close_edges=["closed"], variants=[vp0, vp1, vp2], seeds=2, n_intervals=4,
+            duration_s=900, home=tmp_path, micro=True, adj=adj,
+            freeflow={"lead": 10.0}, scratch=scratch)
+
+        assert n_trunc == 3   # 2 + 1 (variant 2's 5 excluded -- never sampled)
+
+    def test_repeated_variant_is_not_double_counted_at_candidate_level(self, tmp_path, monkeypatch):
+        # 3 seeds cycling over 2 variants (seed 2 repeats variant 0) must
+        # not double-count variant 0's fixed truncation just because a
+        # third seed happened to draw it again.
+        vp0, vp1 = self._setup_variants(tmp_path, monkeypatch, [2, 1])
+        adj = run_scenario.build_edge_graph({"closed"})
+
+        def fake_run_sumo(seed, route_path, add_paths, duration_s, home, **kw):
+            return _write_tiny_metrics_fixtures(tmp_path, f"seed{seed}")
+
+        monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
+
+        scratch = []
+        _, n_trunc, n_drop, _ = sct.simulate_closure(
+            name="w0", closures=[{"edge_id": "closed", "begin_s": 0, "end_s": 400}],
+            close_edges=["closed"], variants=[vp0, vp1], seeds=3, n_intervals=4,
+            duration_s=900, home=tmp_path, micro=True, adj=adj,
+            freeflow={"lead": 10.0}, scratch=scratch)
+
+        assert n_trunc == 3   # 2 + 1, NOT 2 + 2 + 1 (variant 0 sampled twice)
+
+
 class TestLoadBaselineFlows:
     def test_signature_mismatch_exits(self, tmp_path, monkeypatch):
         baseline = tmp_path / "baseline.json"
@@ -253,7 +466,11 @@ class TestLoadBaselineFlows:
         with pytest.raises(SystemExit):
             sct.load_baseline_flows("sig", 96)
 
-    def test_null_flow_entries_become_zero(self, tmp_path, monkeypatch):
+    def test_null_flow_entries_are_preserved_as_missing_not_zero(self, tmp_path, monkeypatch):
+        # CLAUDE.md's contract: null means missing, never a known zero. An
+        # earlier version of this function coerced null to 0.0, which would
+        # score an edge nobody has real data for as the ideal (lowest-
+        # traffic) window to close it — found in review 2026-07-11.
         baseline = tmp_path / "baseline.json"
         baseline.write_text(json.dumps({
             "n_quarters": 2,
@@ -262,7 +479,8 @@ class TestLoadBaselineFlows:
         }))
         monkeypatch.setattr(sct, "BASELINE_SCENARIO", baseline)
         flows = sct.load_baseline_flows("sig", 2)
-        assert list(flows["e1"]) == [1.0, 0.0]
+        assert flows["e1"][0] == 1.0
+        assert np.isnan(flows["e1"][1])
 
     def test_quarter_count_mismatch_exits(self, tmp_path, monkeypatch):
         baseline = tmp_path / "baseline.json"

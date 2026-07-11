@@ -477,7 +477,8 @@ def demand_variants() -> list[Path]:
 def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              duration_s: int, home: Path, micro: bool = False,
              metrics: bool = False, begin_s: int = 0,
-             net_path: Path | None = None) -> dict[str, Path] | None:
+             net_path: Path | None = None,
+             flush_s: int = 3600) -> dict[str, Path] | None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
     # Mesoscopic by default: our product is 15-min edge flows, which does not
@@ -528,9 +529,27 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         # the fact. duration_s stays the far-end offset from t=0 regardless
         # of begin_s, matching every existing caller's mental model.
         "--begin", str(begin_s),
-        # generous flush: meso insertion queues delay departures (measured
-        # ~170 s avg backlog); a short flush silently drops the tail
-        "--end", str(duration_s + 3600),
+        # flush_s default 3600 (every existing whole-period caller's
+        # behaviour is unchanged): generous flush for MESO's insertion-
+        # queue delay (measured ~170 s avg backlog); a short flush silently
+        # drops the tail. CRITICAL for a BOUNDED time-of-day window
+        # (signal_lab.py/signal_optimize.py/signal_meso_screen.py, PLAN.md
+        # D1-D3): --end does not just cap the simulation clock, it also
+        # caps INSERTION — reusing the meso flush margin here let vehicles
+        # scheduled to depart up to an hour AFTER the requested window
+        # still be inserted and counted in the "window" total. Verified
+        # empirically 2026-07-11 against real demand: a nominal 07:00-09:00
+        # experiment with the meso flush actually simulated 07:00-10:00,
+        # and 1 886 of 3 419 tripinfo entries (55%) had depart >= 09:00 —
+        # more than half the "window" was contamination. These callers now
+        # pass flush_s=0 (--end lands exactly on the window boundary); a
+        # vehicle that departed in-window but hasn't finished by then is
+        # honestly counted via the EXISTING unfinished_trips/
+        # unfinished_waiting_trips guard metrics, not silently included as
+        # if it had completed, and not padded with departures that were
+        # never part of the requested window at all. Found in an external
+        # review (NEW_CHANGES_REVIEW_2026-07-11.md section 1).
+        "--end", str(duration_s + flush_s),
         "--no-step-log", "true",
         "--no-warnings", "true",
         # Vehicles whose destination IS the closed edge have no valid route —

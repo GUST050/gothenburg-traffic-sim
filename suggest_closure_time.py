@@ -80,7 +80,13 @@ def load_baseline_flows(demand_sig: str, n_intervals: int) -> dict[str, np.ndarr
         sys.exit(f"{BASELINE_SCENARIO} covers {baseline['n_quarters']} quarters, "
                  f"current demand covers {n_intervals} — inconsistent state, "
                  "rebuild the baseline")
-    return {e: np.array([0.0 if v is None else float(v) for v in arr])
+    # `null` means MISSING, never a known zero (CLAUDE.md's contract, applies
+    # everywhere flows are read — a real bug review 2026-07-11 caught this
+    # function silently coercing null to 0.0, which would score an unknown
+    # edge as ideally low-traffic and could select it into the proxy top-k).
+    # Coerced to NaN instead; proxy_scores() below excludes windows whose
+    # closed edge has no real data rather than ranking them as "best".
+    return {e: np.array([np.nan if v is None else float(v) for v in arr])
             for e, arr in baseline["flows"].items()}
 
 
@@ -164,25 +170,52 @@ def detour_availability(close_edges: list[str], net_path: Path) -> dict:
 
 def proxy_scores(windows: list[tuple[int, int]], close_edges: list[str],
                  corridor_edges: list[str], baseline_flows: dict[str, np.ndarray],
-                 n_intervals: int) -> list[dict]:
+                 n_intervals: int) -> tuple[list[dict], int]:
     """Per window: mean flow on the closed edge(s) and mean flow on the
     nearby (non-closed) corridor, both from the baseline SUMO run's edgeData.
     LOWER is better for both — no combined number with invented units is
-    produced here; ranking happens in rank_candidates()."""
+    produced here; ranking happens in rank_candidates().
+
+    A window whose closed edge(s) have NO real (non-null) data anywhere in
+    the window is EXCLUDED from the candidate list entirely, not scored as
+    "0 flow = best" — found in review 2026-07-11: an earlier version
+    coerced missing flow to 0.0, which would rank an edge nobody has real
+    data for as the ideal time to close it, exactly backwards from what
+    missing data should mean. Corridor coverage is a weaker, supporting
+    signal — a window with some missing corridor edges still gets scored
+    from whichever corridor edges DO have data (nanmean), and only drops
+    the corridor signal entirely (falls back to closed-edge-only ranking
+    for that one window) if literally none of the corridor edges have any
+    data in the window.
+
+    Returns (scored_windows, n_excluded_for_missing_data)."""
     corridor = [e for e in corridor_edges if e not in close_edges]
+    missing_default = np.full(n_intervals, np.nan)
     out = []
+    excluded = 0
     for begin_s, end_s in windows:
         qs = list(window_quarters(begin_s, end_s, n_intervals))
-        closed_vals = [baseline_flows.get(e, np.zeros(n_intervals))[qs].mean()
-                       for e in close_edges] if qs else [0.0]
-        corridor_vals = [baseline_flows.get(e, np.zeros(n_intervals))[qs].mean()
-                         for e in corridor] if qs and corridor else [0.0]
+        if not qs:
+            excluded += 1
+            continue
+        closed_vals = [baseline_flows.get(e, missing_default)[qs] for e in close_edges]
+        closed_concat = np.concatenate(closed_vals) if closed_vals else np.array([])
+        if closed_concat.size == 0 or np.all(np.isnan(closed_concat)):
+            excluded += 1   # no real data for the edge(s) being closed — not scoreable
+            continue
+        closed_flow = float(np.nanmean(closed_concat))
+        corridor_flow = None
+        if corridor:
+            corridor_vals = [baseline_flows.get(e, missing_default)[qs] for e in corridor]
+            corridor_concat = np.concatenate(corridor_vals)
+            if not np.all(np.isnan(corridor_concat)):
+                corridor_flow = float(np.nanmean(corridor_concat))
         out.append({
             "begin_s": begin_s, "end_s": end_s,
-            "closed_edge_flow": float(np.mean(closed_vals)),
-            "corridor_flow": float(np.mean(corridor_vals)) if corridor else None,
+            "closed_edge_flow": closed_flow,
+            "corridor_flow": corridor_flow,
         })
-    return out
+    return out, excluded
 
 
 def rank_candidates(scored: list[dict]) -> list[dict]:
@@ -200,22 +233,40 @@ def rank_candidates(scored: list[dict]) -> list[dict]:
     UNINFORMATIVE for the comparison. Caught by
     TestProxyScoresAndRanking.test_lower_flow_window_scores_better, which
     used a corridor flow constant across windows specifically to isolate
-    this."""
+    this.
+
+    corridor_flow can now be missing on a PER-WINDOW basis (found in review
+    2026-07-11: some corridor edges near the closure can have real null
+    coverage in some windows even when others don't) — a window without any
+    corridor signal falls back to closed-edge-only ranking for itself
+    specifically, rather than assuming corridor availability is an
+    all-or-nothing property of the whole run."""
     n = len(scored)
     if n == 0:
         return []
     closed_vals = np.array([s["closed_edge_flow"] for s in scored])
     rank_closed = scipy_stats.rankdata(closed_vals, method="average") - 1
-    has_corridor = scored[0]["corridor_flow"] is not None
-    if has_corridor:
-        corridor_vals = np.array([s["corridor_flow"] for s in scored])
-        rank_corridor = scipy_stats.rankdata(corridor_vals, method="average") - 1
-    else:
-        rank_corridor = np.zeros(n)
-    combined = (rank_closed + rank_corridor) / (2 if has_corridor else 1)
+
+    has_corridor_idx = [i for i, s in enumerate(scored) if s["corridor_flow"] is not None]
+    rank_corridor = np.full(n, np.nan)
+    if has_corridor_idx:
+        corridor_vals = np.array([scored[i]["corridor_flow"] for i in has_corridor_idx])
+        sub_ranks = scipy_stats.rankdata(corridor_vals, method="average") - 1
+        # Rescale the subset's ranks onto the SAME [0, n-1] range rank_closed
+        # uses, so a window missing corridor data doesn't skew the mixed
+        # average just because fewer windows were available to rank against.
+        if len(has_corridor_idx) > 1:
+            sub_ranks = sub_ranks / (len(has_corridor_idx) - 1) * (n - 1)
+        else:
+            sub_ranks = np.array([(n - 1) / 2])   # one point -> neutral middle
+        for pos, i in enumerate(has_corridor_idx):
+            rank_corridor[i] = sub_ranks[pos]
+
+    combined = np.where(np.isnan(rank_corridor), rank_closed,
+                        (rank_closed + rank_corridor) / 2)
     out = [
         {**s, "rank_closed_edge": float(rank_closed[i]),
-         "rank_corridor": float(rank_corridor[i]) if has_corridor else None,
+         "rank_corridor": None if np.isnan(rank_corridor[i]) else float(rank_corridor[i]),
          "combined_rank": float(combined[i])}
         for i, s in enumerate(scored)
     ]
@@ -253,7 +304,20 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     aggregated metrics — C5's UI wants to show a median + seed interval
     (PLAN.md's own words), which the mean alone throws away."""
     run_variants = variants
-    n_truncated = n_dropped = 0
+    # Per-VARIANT truncated/dropped counts — truncation is deterministic
+    # given (variant, closure), independent of a seed's random number, so
+    # it only needs computing once per variant. Keyed by run_variants'
+    # index so each seed (which picks run_variants[s % len(run_variants)])
+    # can look up the count for the SPECIFIC variant it actually ran,
+    # instead of a global sum across every variant. Found in review
+    # 2026-07-11: the earlier version summed truncated/dropped across ALL
+    # variants and reported that combined total identically for every
+    # seed, even though each seed only ever ran ONE of them — a seed
+    # running the untruncated-by-much q50 variant was reported as if it
+    # also carried q10/q90's truncation, overstating affected vehicles by
+    # roughly the variant count and making it impossible to tell whether
+    # the demand realization a seed actually used was itself truncated.
+    per_variant_trunc: list[tuple[int, int]] = [(0, 0)] * len(variants)
     closure_add: list[Path] = []
     if close_edges:
         assert closures is not None and adj is not None and freeflow is not None
@@ -263,13 +327,12 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         closure_add = [cpath]
         scratch.append(cpath)
         filtered = []
-        for vp in variants:
+        for i, vp in enumerate(variants):
             fp = rs.SUMO_DIR / f"{vp.stem}_{SCT_PREFIX}{name}.rou.xml"
             t, d = rs.truncate_stranded_vehicles(
                 vp, close_edges, fp, adj, closures=closures,
                 edge_travel_s=freeflow)
-            n_truncated += t
-            n_dropped += d
+            per_variant_trunc[i] = (t, d)
             filtered.append(fp)
             scratch.append(fp)
         run_variants = filtered
@@ -277,7 +340,9 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     per_seed_metrics: list[cm.DisruptionMetrics] = []
     for s in range(seeds):
         seed = 1000 + s
-        route_path = run_variants[s % len(run_variants)]
+        variant_idx = s % len(run_variants)
+        route_path = run_variants[variant_idx]
+        seed_truncated, seed_dropped = per_variant_trunc[variant_idx]
         ed_file = rs.SUMO_DIR / f"{SCT_PREFIX}ed_{name}_{seed}.xml"
         add_path = rs.SUMO_DIR / f"{SCT_PREFIX}add_{name}_{seed}.add.xml"
         rs.write_edgedata_additional(add_path, ed_file, duration_s)
@@ -287,11 +352,38 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         scratch.extend(metric_paths.values())
         per_seed_metrics.append(cm.build_metrics(
             metric_paths["tripinfo"], metric_paths["statistics"],
-            truncated_unreachable=n_truncated, dropped_unreachable=n_dropped,
+            truncated_unreachable=seed_truncated, dropped_unreachable=seed_dropped,
             summary_path=metric_paths["summary"]))
     per_seed_time_loss = [m.total_time_loss_s for m in per_seed_metrics]
+    # Candidate-level totals: sum over the DISTINCT variants actually used
+    # (not over seeds — repeat seeds on the same variant don't add new
+    # truncation, since it's deterministic per variant) so a caller asking
+    # "how many vehicles were affected simulating this candidate" gets the
+    # real total across the demand realizations that were actually run,
+    # not an undercount (old first-seed-only) or overcount (old global sum
+    # applied per seed).
+    used_variant_idxs = {s % len(run_variants) for s in range(seeds)}
+    n_truncated = sum(per_variant_trunc[i][0] for i in used_variant_idxs)
+    n_dropped = sum(per_variant_trunc[i][1] for i in used_variant_idxs)
     return (aggregate_seed_metrics(per_seed_metrics), n_truncated, n_dropped,
            per_seed_time_loss)
+
+
+def recommendation_status(correlation: dict | None) -> str:
+    """A structural (not just prose) status field so a caller can gate on
+    it directly instead of parsing correlation['interpretation'] text.
+    NEVER returns "validated" — even a strong correlation here is from a
+    small, non-random, selection-biased sample (proxy top-k + one low-
+    traffic control + worst-case controls, not a stratified/held-out
+    design), which is real screening evidence, not a statistical
+    validation. Added 2026-07-11 per external review section 4's critique
+    that this project's own honesty rule ("never claim more than
+    measured") wasn't yet enforced as a checkable field here the way
+    tls_provenance/recommendation_allowed are for D1-D3."""
+    if correlation is None:
+        return "insufficient_evidence"
+    return ("screening_only_correlated" if correlation["spearman_rho"] > 0.3
+           else "screening_only_weak_correlation")
 
 
 def delta_time_loss_interval(candidate_per_seed: list[float],
@@ -316,10 +408,17 @@ def aggregate_seed_metrics(per_seed: list[cm.DisruptionMetrics]) -> cm.Disruptio
     """Mean across seeds for volume-like fields (each seed is a full,
     independent replication of the same demand — summing would just count
     the same vehicles `seeds` times); SUM for teleports (a teleport in ANY
-    seed is a real integrity problem, not something to average away); MAX
-    for the diagnostic queue proxy. truncated/dropped are identical across
-    seeds by construction (computed once per variant, not per seed) so the
-    first value is authoritative."""
+    seed is a real integrity problem, not something to average away).
+
+    truncated_unreachable/dropped_unreachable now vary per seed (fixed in
+    review 2026-07-11 — each seed correctly carries only ITS OWN variant's
+    count, see simulate_closure). Uses MAX, not mean, for the same reason
+    teleports use SUM: a seed with dropped_unreachable=0 averaging against
+    a seed with dropped_unreachable=1 must not round down to 0 and hide a
+    real dropped vehicle from is_disqualified()'s check. MAX (not SUM)
+    because a variant sampled by more than one seed (seeds > len(variants))
+    would otherwise have its fixed, deterministic count added again for
+    every repeat — not a real second occurrence."""
     n = len(per_seed)
     mean = lambda f: sum(getattr(m, f) for m in per_seed) / n
     teleport_reasons: dict[str, int] = {}
@@ -338,8 +437,8 @@ def aggregate_seed_metrics(per_seed: list[cm.DisruptionMetrics]) -> cm.Disruptio
         inserted=round(mean("inserted")),
         running_at_end=round(mean("running_at_end")),
         waiting_at_end=round(mean("waiting_at_end")),
-        truncated_unreachable=per_seed[0].truncated_unreachable,
-        dropped_unreachable=per_seed[0].dropped_unreachable,
+        truncated_unreachable=max(m.truncated_unreachable for m in per_seed),
+        dropped_unreachable=max(m.dropped_unreachable for m in per_seed),
         max_queue_vehicles=max(queues) if queues else None,
         closed_edge_throughput=None,
     )
@@ -443,121 +542,136 @@ def main() -> None:
     # already-built baseline scenario's flows. ──────────────────────────
     demand_sig = rs.demand_signature(meta)
     baseline_flows = load_baseline_flows(demand_sig, n_intervals)
-    scored = proxy_scores(windows, args.edge, rerouter_edges, baseline_flows,
-                          n_intervals)
+    scored, n_excluded = proxy_scores(windows, args.edge, rerouter_edges,
+                                      baseline_flows, n_intervals)
+    if n_excluded:
+        print(f"  {n_excluded}/{len(windows)} candidate windows excluded — "
+             "no real (non-null) flow data for the closed edge(s) in that window")
+    if not scored:
+        sys.exit("every candidate window was excluded for missing data — "
+                 "cannot suggest a closure time")
     ranked = rank_candidates(scored)
 
     # ── ONE real baseline metrics run, shared by every simulated
     # candidate's Δ comparison (unavoidable — Δ timeLoss needs a real
     # simulated baseline; the scenario JSON only has flows, not timeLoss). ─
     scratch: list[Path] = []
-    print("  running baseline (metrics) …")
-    t0 = time.time()
-    baseline_metrics, _, _, baseline_per_seed = simulate_closure(
-        name="baseline", closures=None, close_edges=[], variants=variants,
-        seeds=args.seeds, n_intervals=n_intervals, duration_s=total_duration_s,
-        home=home, micro=args.micro, adj=None, freeflow=None, scratch=scratch)
-    print(f"  baseline done ({time.time() - t0:.0f}s): "
-         f"timeLoss={baseline_metrics.total_time_loss_s:.0f}s, "
-         f"{baseline_metrics.trip_count} trips")
-
-    # ── Simulate stage ───────────────────────────────────────────────────
-    to_simulate = select_candidates(ranked, args.top_k, args.extra_bad)
-    print(f"  simulating {len(to_simulate)} of {len(windows)} candidates …")
-    simulated = []
-    for i, w in enumerate(to_simulate):
-        name = f"w{w['begin_s']}"
-        closures = [{"edge_id": e, "begin_s": w["begin_s"], "end_s": w["end_s"]}
-                   for e in args.edge]
+    try:
+        print("  running baseline (metrics) …")
         t0 = time.time()
-        metrics, n_trunc, n_drop, candidate_per_seed = simulate_closure(
-            name=name, closures=closures, close_edges=args.edge,
-            variants=variants, seeds=args.seeds, n_intervals=n_intervals,
-            duration_s=total_duration_s, home=home, micro=args.micro,
-            adj=adj, freeflow=freeflow, scratch=scratch)
-        comparison = cm.compare_metrics(baseline_metrics, metrics)
-        interval = delta_time_loss_interval(candidate_per_seed, baseline_per_seed)
-        elapsed = time.time() - t0
-        print(f"    [{i+1}/{len(to_simulate)}] proxy_rank={w['proxy_rank']} "
-             f"begin={w['begin_s']}s  ΔtimeLoss median={interval['median_s']:+.0f}s "
-             f"[{interval['min_s']:+.0f}, {interval['max_s']:+.0f}]"
-             f"{'  DISQUALIFIED: ' + ','.join(comparison.disqualification_reasons) if comparison.candidate_disqualified else ''}"
-             f"  ({elapsed:.0f}s)")
-        simulated.append({
-            "window": w, "metrics": dataclasses.asdict(metrics),
-            "comparison": dataclasses.asdict(comparison),
-            "delta_time_loss_interval": interval,
-            "truncated_vehicles": n_trunc, "dropped_vehicles": n_drop,
-        })
+        baseline_metrics, _, _, baseline_per_seed = simulate_closure(
+            name="baseline", closures=None, close_edges=[], variants=variants,
+            seeds=args.seeds, n_intervals=n_intervals, duration_s=total_duration_s,
+            home=home, micro=args.micro, adj=None, freeflow=None, scratch=scratch)
+        print(f"  baseline done ({time.time() - t0:.0f}s): "
+             f"timeLoss={baseline_metrics.total_time_loss_s:.0f}s, "
+             f"{baseline_metrics.trip_count} trips")
 
-    # ── Validate the proxy ───────────────────────────────────────────────
-    eligible = [s for s in simulated if not s["comparison"]["candidate_disqualified"]]
-    correlation = None
-    if len(eligible) >= 3:
-        proxy_ranks = [s["window"]["proxy_rank"] for s in eligible]
-        deltas = [s["comparison"]["delta_time_loss_s"] for s in eligible]
-        rho, pval = scipy_stats.spearmanr(proxy_ranks, deltas)
-        correlation = {"spearman_rho": float(rho), "p_value": float(pval),
-                       "n": len(eligible),
-                       "interpretation": (
-                           "proxy rank and simulated delay both increase together "
-                           "(as expected) — trust the ranking"
-                           if rho > 0.3 else
-                           "WEAK OR NO correlation between the proxy ranking and "
-                           "simulated delay — do not trust the proxy ranking for "
-                           "this edge/duration; widen --top-k instead")}
-        print(f"  Spearman rho={rho:.2f} (p={pval:.3f}, n={len(eligible)}): "
-             f"{correlation['interpretation']}")
-    else:
-        print("  fewer than 3 non-disqualified simulated candidates — "
-             "skipping correlation check")
+        # ── Simulate stage ───────────────────────────────────────────────
+        to_simulate = select_candidates(ranked, args.top_k, args.extra_bad)
+        print(f"  simulating {len(to_simulate)} of {len(windows)} candidates …")
+        simulated = []
+        for i, w in enumerate(to_simulate):
+            name = f"w{w['begin_s']}"
+            closures = [{"edge_id": e, "begin_s": w["begin_s"], "end_s": w["end_s"]}
+                       for e in args.edge]
+            t0 = time.time()
+            metrics, n_trunc, n_drop, candidate_per_seed = simulate_closure(
+                name=name, closures=closures, close_edges=args.edge,
+                variants=variants, seeds=args.seeds, n_intervals=n_intervals,
+                duration_s=total_duration_s, home=home, micro=args.micro,
+                adj=adj, freeflow=freeflow, scratch=scratch)
+            comparison = cm.compare_metrics(baseline_metrics, metrics)
+            interval = delta_time_loss_interval(candidate_per_seed, baseline_per_seed)
+            elapsed = time.time() - t0
+            print(f"    [{i+1}/{len(to_simulate)}] proxy_rank={w['proxy_rank']} "
+                 f"begin={w['begin_s']}s  ΔtimeLoss median={interval['median_s']:+.0f}s "
+                 f"[{interval['min_s']:+.0f}, {interval['max_s']:+.0f}]"
+                 f"{'  DISQUALIFIED: ' + ','.join(comparison.disqualification_reasons) if comparison.candidate_disqualified else ''}"
+                 f"  ({elapsed:.0f}s)")
+            simulated.append({
+                "window": w, "metrics": dataclasses.asdict(metrics),
+                "comparison": dataclasses.asdict(comparison),
+                "delta_time_loss_interval": interval,
+                "truncated_vehicles": n_trunc, "dropped_vehicles": n_drop,
+            })
 
-    best = min(eligible, key=lambda s: s["comparison"]["delta_time_loss_s"],
-              default=None)
-    best_in_topk = (best is not None and
-                    best["window"]["proxy_rank"] < args.top_k)
-    if best is not None:
-        flag = "" if best_in_topk else "  (OUTSIDE proxy top-k — widen --top-k)"
-        print(f"  simulated best: begin={best['window']['begin_s']}s "
-             f"ΔtimeLoss={best['comparison']['delta_time_loss_s']:+.0f}s{flag}")
+        # ── Validate the proxy ───────────────────────────────────────────
+        eligible = [s for s in simulated if not s["comparison"]["candidate_disqualified"]]
+        correlation = None
+        if len(eligible) >= 3:
+            proxy_ranks = [s["window"]["proxy_rank"] for s in eligible]
+            deltas = [s["comparison"]["delta_time_loss_s"] for s in eligible]
+            rho, pval = scipy_stats.spearmanr(proxy_ranks, deltas)
+            correlation = {"spearman_rho": float(rho), "p_value": float(pval),
+                           "n": len(eligible),
+                           "interpretation": (
+                               "proxy rank and simulated delay both increase together "
+                               "(as expected) — trust the ranking"
+                               if rho > 0.3 else
+                               "WEAK OR NO correlation between the proxy ranking and "
+                               "simulated delay — do not trust the proxy ranking for "
+                               "this edge/duration; widen --top-k instead")}
+            print(f"  Spearman rho={rho:.2f} (p={pval:.3f}, n={len(eligible)}): "
+                 f"{correlation['interpretation']}")
+        else:
+            print("  fewer than 3 non-disqualified simulated candidates — "
+                 "skipping correlation check")
 
-    result = {
-        "method": "PLAN.md Phase C4: proxy-ranked hourly windows, "
-                 "top-k + controls simulated, Spearman-validated",
-        "edges": args.edge, "streets": streets,
-        "duration_hours": args.duration_hours, "slide_hours": args.slide_hours,
-        "total_duration_s": total_duration_s, "n_candidate_windows": len(windows),
-        "top_k": args.top_k, "extra_bad": args.extra_bad, "seeds": args.seeds,
-        "micro": args.micro,
-        "demand_signature": rs.demand_signature(meta),
-        "epoch_sim": meta["epoch_sim"],
-        "detour_availability": diagnostic,
-        "baseline_metrics": dataclasses.asdict(baseline_metrics),
-        "baseline_per_seed_time_loss_s": baseline_per_seed,
-        "proxy_candidates": ranked,
-        "simulated": simulated,
-        "validation": {
-            "correlation": correlation,
-            "simulated_best_in_proxy_top_k": best_in_topk if best else None,
-            "simulated_best_begin_s": best["window"]["begin_s"] if best else None,
-        },
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
-    out_path = args.out or rs.SUMO_DIR / f"suggest_closure_{'+'.join(args.edge)[:60]}.json"
-    rs.atomic_write_json(out_path, result, indent=2)
-    print(f"Wrote {out_path}")
+        best = min(eligible, key=lambda s: s["comparison"]["delta_time_loss_s"],
+                  default=None)
+        best_in_topk = (best is not None and
+                        best["window"]["proxy_rank"] < args.top_k)
+        if best is not None:
+            flag = "" if best_in_topk else "  (OUTSIDE proxy top-k — widen --top-k)"
+            print(f"  simulated best: begin={best['window']['begin_s']}s "
+                 f"ΔtimeLoss={best['comparison']['delta_time_loss_s']:+.0f}s{flag}")
 
-    if args.keep_scratch:
-        print(f"  kept {len(scratch)} intermediate file(s) in {rs.SUMO_DIR} (--keep-scratch)")
-    else:
-        removed = 0
-        for p in scratch:
-            try:
-                p.unlink()
-                removed += 1
-            except FileNotFoundError:
-                pass
-        print(f"  cleaned up {removed} intermediate file(s)")
+        result = {
+            "method": "PLAN.md Phase C4: proxy-ranked hourly windows, "
+                     "top-k + controls simulated, Spearman-validated",
+            "edges": args.edge, "streets": streets,
+            "duration_hours": args.duration_hours, "slide_hours": args.slide_hours,
+            "total_duration_s": total_duration_s, "n_candidate_windows": len(windows),
+            "n_windows_excluded_missing_data": n_excluded,
+            "top_k": args.top_k, "extra_bad": args.extra_bad, "seeds": args.seeds,
+            "micro": args.micro,
+            "demand_signature": rs.demand_signature(meta),
+            "epoch_sim": meta["epoch_sim"],
+            "detour_availability": diagnostic,
+            "baseline_metrics": dataclasses.asdict(baseline_metrics),
+            "baseline_per_seed_time_loss_s": baseline_per_seed,
+            "proxy_candidates": ranked,
+            "simulated": simulated,
+            "validation": {
+                "correlation": correlation,
+                "simulated_best_in_proxy_top_k": best_in_topk if best else None,
+                "simulated_best_begin_s": best["window"]["begin_s"] if best else None,
+                "recommendation_status": recommendation_status(correlation),
+            },
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        out_path = args.out or rs.SUMO_DIR / f"suggest_closure_{'+'.join(args.edge)[:60]}.json"
+        rs.atomic_write_json(out_path, result, indent=2)
+        print(f"Wrote {out_path}")
+    finally:
+        # ALWAYS runs, even on a SUMO timeout (sys.exit inside run_sumo) or
+        # any other exception mid-search — a search that dies partway
+        # through used to leave every route/edgeData/tripinfo file written
+        # so far behind with no cleanup at all, since the old cleanup block
+        # only ran after a full successful result write. Found in external
+        # review 2026-07-11 (NEW_CHANGES_REVIEW section 6.3).
+        if args.keep_scratch:
+            print(f"  kept {len(scratch)} intermediate file(s) in {rs.SUMO_DIR} (--keep-scratch)")
+        else:
+            removed = 0
+            for p in scratch:
+                try:
+                    p.unlink()
+                    removed += 1
+                except FileNotFoundError:
+                    pass
+            print(f"  cleaned up {removed} intermediate file(s)")
 
 
 if __name__ == "__main__":

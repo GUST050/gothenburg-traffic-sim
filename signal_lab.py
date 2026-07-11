@@ -132,8 +132,16 @@ def main() -> None:
         seed = 1000 + s
         route_path = variants[s % len(variants)]
         t0 = time.time()
+        # flush_s=0: this IS a bounded time-of-day window experiment — the
+        # default 3600s meso flush would let vehicles depart up to an hour
+        # PAST the requested window and still count toward it (verified
+        # empirically 2026-07-11: 55% contamination at the default window).
+        # A vehicle that departed in-window but hasn't finished by end_s is
+        # honestly tracked via unfinished_trips, not silently padded in or
+        # dropped.
         metric_paths = rs.run_sumo(seed, route_path, [], end_s, home,
-                                   micro=True, metrics=True, begin_s=begin_s)
+                                   micro=True, metrics=True, begin_s=begin_s,
+                                   flush_s=0)
         elapsed = time.time() - t0
         metrics = cm.build_metrics(metric_paths["tripinfo"], metric_paths["statistics"],
                                    summary_path=metric_paths["summary"])
@@ -154,6 +162,14 @@ def main() -> None:
         "begin_s": begin_s, "end_s": end_s,
         "seeds": [p["seed"] for p in per_seed],
         "tls_provenance": TLS_PROVENANCE,
+        # Structural (not just prose) enforcement of the module docstring's
+        # own honesty rule: as long as TLS_PROVENANCE is "synthetic" (the
+        # only value that exists until PLAN.md D6 imports real plans), no
+        # caller may present this as an operational recommendation. Added
+        # 2026-07-11 per external review section 5.1's suggestion to make
+        # this a checkable field, not just a caveat string a UI could
+        # forget to read.
+        "recommendation_allowed": TLS_PROVENANCE != "synthetic",
         "net_fingerprint": net_fingerprint(rs.NET_PATH),
         "demand_signature": rs.demand_signature(meta),
         "sumo_version": sumo_version(home),

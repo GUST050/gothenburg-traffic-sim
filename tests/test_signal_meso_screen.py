@@ -83,3 +83,51 @@ class TestShortTlsApproaches:
         net = _write_net(tmp_path, [("a", "j", 10.0), ("b", "j", 2.0), ("c", "j", 7.0)])
         report = sms.short_tls_approaches(net)
         assert [e["edge"] for e in report["examples"]] == ["b", "c", "a"]
+
+
+def _deltas(micro_vals: dict, meso_vals: dict) -> dict:
+    return {
+        "micro": {n: {"delta_time_loss_s": v} for n, v in micro_vals.items()},
+        "meso": {n: {"delta_time_loss_s": v} for n, v in meso_vals.items()},
+    }
+
+
+class TestConditionCorrelation:
+    """condition_correlation (fixed 2026-07-11, self-review): the degenerate-
+    input guard must inspect the RAW delta_time_loss_s values, not
+    order.index()-derived positions that are always a clean 0..N-1
+    permutation regardless of whether the underlying values differ at all."""
+
+    def test_real_correlation_is_computed_for_distinct_values(self):
+        names = ["a", "b", "c"]
+        deltas = _deltas({"a": 100.0, "b": 200.0, "c": 300.0},
+                         {"a": 150.0, "b": 250.0, "c": 350.0})
+        micro_order, meso_order, rho, pval = sms.condition_correlation(names, deltas)
+        assert rho == 1.0   # identical ordering on both sides
+        assert micro_order == meso_order == ["a", "b", "c"]
+
+    def test_degenerate_micro_values_are_detected_not_silently_ranked(self):
+        # This is the exact bug: with the old order.index()-based ranks,
+        # this identical-everywhere micro side would still produce a
+        # confident-looking rho instead of being caught as degenerate.
+        names = ["a", "b", "c"]
+        deltas = _deltas({"a": 100.0, "b": 100.0, "c": 100.0},
+                         {"a": 150.0, "b": 250.0, "c": 350.0})
+        _, _, rho, pval = sms.condition_correlation(names, deltas)
+        assert rho is None
+        assert pval is None
+
+    def test_degenerate_meso_values_are_detected(self):
+        names = ["a", "b", "c"]
+        deltas = _deltas({"a": 100.0, "b": 200.0, "c": 300.0},
+                         {"a": 50.0, "b": 50.0, "c": 50.0})
+        _, _, rho, pval = sms.condition_correlation(names, deltas)
+        assert rho is None
+        assert pval is None
+
+    def test_negative_correlation_is_a_real_negative_rho_not_masked(self):
+        names = ["a", "b", "c"]
+        deltas = _deltas({"a": 100.0, "b": 200.0, "c": 300.0},
+                         {"a": 300.0, "b": 200.0, "c": 100.0})
+        _, _, rho, _ = sms.condition_correlation(names, deltas)
+        assert rho == -1.0

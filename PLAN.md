@@ -985,6 +985,17 @@ against real demand instead, matching this project's established pattern
 for every other SUMO-invoking script. Full suite: 556 passed, 20 skipped,
 0 failed (up from 544 before this step).
 
+**CORRECTED 2026-07-11.** The paragraph above about the `+3600 s` flush
+margin was WRONG about what it actually does: it does not just "let near-
+boundary vehicles finish" — it lets ENTIRELY NEW vehicles DEPART up to an
+hour past the requested window and counts them in the "window" total.
+Verified directly against real demand: a nominal 07:00-09:00 experiment
+was actually simulating 07:00-10:00, and 1 886 of 3 419 tripinfo entries
+(55%) had depart >= 09:00 — the reported numbers in the table above are
+contaminated and superseded. See the consolidated correction section
+after D3 below for the fix, the corrected table, and why this was found
+by an external review, not caught here originally.
+
 ### D2. Off-the-shelf optimizers — size M — depends D1
 Run SUMO tools on our calibrated routes:
 - `tlsCycleAdaptation.py` (Webster cycle/green splits, per intersection,
@@ -1082,6 +1093,14 @@ three tool wrappers, `relative_pct`'s zero-baseline guard) plus 2 for
 outputs, netconvert rebuilds, and the result JSON all live in gitignored
 `sumo/`).
 
+**CORRECTED 2026-07-11 — see the consolidated correction section after D3
+below.** A measurement-window bug found by external review invalidated
+this section's original numbers (contaminated by up to ~55% extra,
+out-of-window demand). The fix is applied, the finding was RE-MEASURED
+and RE-CONFIRMED (same qualitative result, corrected magnitudes: all four
+alternatives disqualified, +101% to +182% vs baseline instead of the
+original +145% to +245%) — do not use the numbers in the table above.
+
 ### D3. Meso screening feasibility — size M — depends D1
 Test whether cheap screening is possible: per-TLS
 `<param key="meso.tls.control" value="true"/>` (full-detail static TLS at
@@ -1162,6 +1181,296 @@ default preserves D2's exact existing behaviour) so this script could
 reuse it for both the micro and meso runs instead of a third
 reimplementation of the same seed loop. No tracked files changed by the
 real run.
+
+**CORRECTED 2026-07-11** — same window-flush contamination as D1/D2. The
+qualitative answer ("micro-only, meso does not correlate") is UNCHANGED
+and RE-CONFIRMED under the fix; see below for the corrected numbers.
+
+---
+
+## Correction pass on C4/D1-D3 — 2026-07-11
+
+A file named `NEW_CHANGES_REVIEW_2026-07-11.md` appeared in the repo root
+mid-session — an independent review from a parallel session on the same
+machine (same pattern as `BUG_REVIEW_2026-07-10.md`/
+`IMPROVEMENT_REVIEW_2026-07-10.md` earlier). It raised real, specific,
+line-numbered findings against the C4/C5/D1/D2/D3 work above. Every claim
+was independently verified against the actual code/real data before
+fixing anything (this project's established discipline) — some findings
+were confirmed and fixed, one was a real methodological point already
+covered by pre-existing PLAN.md notes (deferred, not re-litigated), and
+several suggested a much larger redesign than the finding itself
+justified (deferred with reasoning, matching the same proportionality
+judgment already applied earlier in this project to a prior improvement
+review).
+
+### Fixed
+
+1. **Window flush contaminated every D1/D2/D3 measurement (the review's
+   own top "Act First" item, confirmed exactly).** `run_sumo()`'s
+   `--end = duration_s + 3600` flush margin exists for MESO's insertion-
+   queue backlog (documented, real, unrelated to this bug) — but
+   `signal_lab.py`/`signal_optimize.py` reused the SAME margin for
+   BOUNDED time-of-day window experiments, where it does something totally
+   different: `--end` doesn't just cap the simulation clock, it also caps
+   which vehicles get INSERTED at all, so the flush let vehicles scheduled
+   to depart up to an HOUR PAST the requested window still count toward
+   it. Verified directly: a nominal 07:00-09:00 experiment was actually
+   simulating 07:00-10:00, and 1 886 of 3 419 tripinfo entries (55%) had
+   depart >= 09:00. Fixed with a new `flush_s: int = 3600` parameter on
+   `run_sumo()` (default preserves every whole-period caller's behaviour
+   exactly — `run_scenario.py` main(), `suggest_closure_time.py`); D1/D2/D3
+   now pass `flush_s=0`, so `--end` lands exactly on the window boundary.
+   A vehicle that departed in-window but hasn't finished by then is
+   honestly counted via the EXISTING `unfinished_trips`/
+   `unfinished_waiting_trips` guard metrics, not silently padded in or
+   dropped. 2 new tests, verified against real demand (`--window-start
+   07:00 --window-end 08:00`: 3 419 trips before the fix, 1 533 after,
+   exactly matching an independent manual `sumo --end 28800` control run).
+
+2. **`suggest_closure_time.py` coerced missing (`null`) flow data to
+   `0.0`, violating CLAUDE.md's own `null != 0` contract, in a place where
+   the consequence is exactly backwards** — an edge with NO real data
+   would score as the IDEAL (lowest-traffic) window to close it.
+   `load_baseline_flows()` now returns `np.nan` for `null`; `proxy_scores()`
+   EXCLUDES a candidate window entirely when its closed edge(s) have no
+   real data anywhere in the window (reports the excluded count, both to
+   stdout and a new `n_windows_excluded_missing_data` result field),
+   rather than ranking it as ideal. Corridor coverage is weaker/supporting
+   and now handled per-window with `nanmean` (a window missing SOME
+   corridor edges still scores from whichever ones have data; only drops
+   to closed-edge-only ranking if literally none of the corridor edges
+   have data in that specific window) — `rank_candidates()` was rewritten
+   to handle per-window (not just per-run) corridor availability, using
+   scipy's average-tie rank-rescaling so a window without corridor data
+   doesn't get a spurious index-order bias. 7 new tests.
+
+3. **Truncated/dropped vehicle counts were summed across ALL demand
+   variants (q50+q10+q90) and reported identically for EVERY seed, even
+   though each seed only ever simulates ONE variant.** A seed drawing the
+   untruncated-by-much q50 variant was reported as if it also carried
+   q10/q90's truncation — overstating affected vehicles roughly by the
+   variant count, and making it impossible to tell whether the demand
+   realization a seed actually used was itself truncated.
+   `simulate_closure()` now tracks truncation PER VARIANT and attributes
+   each seed to its own variant's count; `aggregate_seed_metrics()` uses
+   MAX across seeds (not mean, not "first seed") for the same reason
+   teleports already use SUM — averaging or taking an arbitrary seed can
+   hide a real dropped vehicle. The candidate-level total
+   (`truncated_vehicles`/`dropped_vehicles` in the UI) sums over the
+   DISTINCT variants actually drawn by the run's seeds, not over every
+   variant that exists (so an unsampled variant's truncation is correctly
+   excluded, and a repeated variant isn't double-counted). 5 new tests
+   using a synthetic 3-variant fixture, verified to genuinely discriminate
+   against the pre-fix code (re-ran against `git stash`'d old code: tests
+   failed with `3 == 2` and `8 == 3`, confirming they catch the real bug,
+   not just describing intended behaviour).
+
+4. **`signal_meso_screen.py` reused cached `tls_adapted_*`/
+   `tls_coordinated_*`/`net_actuated`/`net_delay_based` artifacts by bare
+   filename existence, with no check that the current demand or network
+   still matched what they were built from** — independently confirmed
+   by 3 of my own 8 parallel self-review agents (see below) as well as
+   the external review. A demand recalibration or network rebuild without
+   changing `--window-start`/`--window-end` would silently reuse a stale
+   artifact. Fixed by factoring the artifact-building logic (previously
+   duplicated, and INCONSISTENTLY: `signal_optimize.py` always rebuilt
+   unconditionally, `signal_meso_screen.py` cached without any freshness
+   check at all) into one shared `build_signal_conditions()` in
+   `signal_optimize.py`, keyed by a new content-addressed
+   `signal_artifact_label()` that folds in `demand_signature` AND
+   `net_fingerprint` — a stale artifact from different inputs now simply
+   has a DIFFERENT filename, so it structurally cannot be mistaken for a
+   fresh one. Both D2 and D3 now call the identical shared function, which
+   also resolves the duplication/inconsistency findings from multiple
+   review angles at once. Also added `net_fingerprints_by_condition` (a
+   per-condition fingerprint, not just one global one hashing only the
+   baseline network) since `actuated`/`delay_based` run against their OWN
+   rebuilt network files — a change to just one of those could previously
+   go undetected by the single top-level `net_fingerprint` field. 8 new
+   tests (label collision/distinctness, cache-hit/cache-miss/rebuild-on-
+   label-change, per-condition fingerprint sharing/counting).
+
+5. **Self-review finding (not in the external doc): the D3 degenerate-
+   ranking guard was dead code.** `micro_ranks`/`meso_ranks` were computed
+   via `order.index(name)`, which is ALWAYS a clean 0..N-1 permutation for
+   any list of unique names — so `len(set(ranks)) > 1` was always true
+   regardless of whether the underlying `delta_time_loss_s` values were
+   actually distinct, meaning the "cannot compute correlation" branch
+   could never fire even for genuinely degenerate input (e.g. an upstream
+   metrics failure returning the same number for every condition). Also,
+   feeding `spearmanr` pre-computed index-ranks instead of raw values
+   silently discarded any real TIE between conditions' actual time-loss
+   numbers. Extracted into a new pure `condition_correlation()` function
+   that correlates on the raw `delta_time_loss_s` values directly (scipy's
+   `spearmanr` already rank-transforms with correct tie handling) and
+   checks THEIR distinctness for the degenerate guard. 4 new tests,
+   including one reproducing the exact bug (identical micro values across
+   all conditions used to silently produce a confident-looking rho; now
+   correctly returns `None`).
+
+6. **`/api/suggest_closure`'s `duration_hours`/`slide_hours` validation
+   let `NaN`/`inf` through.** `float("nan")` and `float("inf")` both parse
+   successfully, but neither satisfies `<= 0` (every NaN comparison is
+   `False`) nor is obviously invalid at a glance — the existing bound
+   check silently passed NaN into the background job, where
+   `round(nan * 3600)` raises an unhandled `ValueError` instead of a clean
+   400 at the API boundary. Fixed with `math.isfinite()`. 3 new tests.
+
+7. **`suggest_closure_time.py`'s scratch-file cleanup only ran after a
+   FULLY successful search.** A SUMO timeout or any exception mid-search
+   (baseline run or any candidate) skipped the cleanup block entirely,
+   leaving that run's route/edgeData/tripinfo files behind with no
+   retention policy. Wrapped the whole baseline-and-candidate procedure in
+   `try/finally` so cleanup (or `--keep-scratch` preservation) always
+   runs, matching the CLI flag's own stated purpose.
+
+8. **Honesty/provenance labelling made structural, not just prose**
+   (the external review's sections 4/5.1/7.4): D1/D2/D3 already had a
+   `tls_provenance` field but no machine-checkable field actually
+   ENFORCING the "never present a synthetic-TLS result as a
+   recommendation" rule — a caller had to parse a caveat string. Added
+   `recommendation_allowed: bool` (`False` whenever `tls_provenance !=
+   "synthetic"`'s inverse — currently always `False`, since no other
+   value exists until D6) to all three. Also de-duplicated a second
+   hardcoded `"synthetic"` string literal in `signal_optimize.py` into an
+   import of D1's own `TLS_PROVENANCE` constant, so the two can no longer
+   silently drift apart when D6 eventually changes it. `suggest_closure_
+   time.py` gets an analogous `recommendation_status` field
+   (`"insufficient_evidence"` / `"screening_only_weak_correlation"` /
+   `"screening_only_correlated"` — DELIBERATELY never `"validated"`, since
+   even a strong correlation here comes from a small, non-random,
+   selection-biased sample, not a stratified/held-out design) — the web
+   UI already communicated this substance correctly via its own Swedish
+   message text (verified by reading the actual JS), so no UI change was
+   needed, only a structured field for any future programmatic consumer.
+   4 new tests.
+
+### Corrected measurements (supersede the numbers in the D1/D2/D3 sections above)
+
+All re-measured against the identical real whole-day demand (96 quarters,
+22 841 trips) and identical window/seeds as the original runs, with the
+`flush_s=0` fix applied:
+
+**D1** (`--seeds 1` per window):
+
+| Window | Trips | Teleports | Wall time |
+|---|---|---|---|
+| 07:00–08:00 (60 min) | 1 533 | 6 | 2 s |
+| 07:00–08:30 (90 min) | 2 531 | 9 | 4 s |
+| 07:00–09:00 (120 min) | 3 419 | 14 | 5 s |
+
+(Sanity-confirmed: the OLD "60 min" run's contaminated real span was
+exactly 07:00→09:00 — its old numbers, 3 419 trips/14 teleports, are
+IDENTICAL to the NEW correctly-scoped 120-min run above, which is exactly
+what the bug predicts.)
+
+**D2** (5 conditions, `--seeds 3`, window 07:00–09:00): the QUALITATIVE
+finding is UNCHANGED — all four alternatives still disqualified for
+teleports, still worse than the naive synthetic baseline — only the
+magnitudes shrank (less contamination volume to begin with):
+
+| Condition | Δ time loss (was) | Δ time loss (corrected) | Teleports (corrected) |
+|---|---|---|---|
+| adapted | +195.7% | **+110.8%** | 596 |
+| adapted_coordinated | +244.9% | **+182.4%** | 967 |
+| actuated | +230.9% | **+163.8%** | 1 038 |
+| delay_based | +145.0% | **+101.0%** | 631 |
+
+The chaotic per-seed pattern also persists under the fix (seed index 1 is
+the best performer for baseline/adapted/adapted_coordinated/actuated but
+the worst for delay_based) — consistent with, not an artifact of, the
+near-saturation hypothesis already documented in D2's own section above.
+
+**D3** (5 conditions x 2 modes, `--seeds 3`, window 07:00–09:00): the
+QUALITATIVE finding is also UNCHANGED — meso's total time loss is still
+essentially flat across all five conditions under the fix (180 323-
+181 649 s, under 0.7% spread, ZERO teleports in every condition), while
+micro shows the same large real differentiation as D2's corrected numbers.
+Spearman ρ=-0.63 (was -0.80; still not statistically significant with
+n=4, still a non-positive correlation either way) →
+**micro-only, meso screening still not feasible.**
+
+### Deferred (real points, disproportionate to fix reactively here)
+
+- **Closure-truncation cohort consistency** (external review section
+  3.2): comparing a truncated closure route's shorter timeLoss against a
+  baseline where the same trip continues to its original destination is a
+  real, already-documented limitation — see PLAN.md's own C3 section
+  ("Treat closure comparison as an accessibility-and-delay problem") and
+  the equivalent finding already recorded from the OLDER
+  `IMPROVEMENT_REVIEW_2026-07-10.md` (its 13.9/13.10). Not new, not
+  re-litigated here; a matched-cohort baseline redesign is real future
+  work, not a bug fix.
+- **Closed-edge integrity metric scoped to the active closure window**
+  (section 3.3): a genuinely new capability (per-window throughput
+  checking), not a fix to existing code — same disposition as the
+  equivalent item already in the older review (its 13.10).
+- **Full statistical redesign of C4's proxy validation and D3's
+  correlation study** (sections 4, 5.3): stratified/held-out sampling,
+  minimum sample sizes, confidence intervals, a multi-day/multi-window
+  repeated study for D3. These are legitimate research-rigor asks, but a
+  full redesign is disproportionate for a solo summer project's
+  exploratory feasibility work — matches the same proportionality
+  judgment already applied earlier in this project to a prior improvement
+  review's structural suggestions. The honest-labelling fixes above
+  (`recommendation_status`, `recommendation_allowed`) already prevent the
+  concrete failure mode (a screening result being mistaken for a
+  validated one) without the larger redesign.
+- **Per-demand-variant signal-plan optimization/cross-evaluation**
+  (section 5.2): `tlsCycleAdaptation`/`tlsCoordinator` are built from
+  `variants[0]` (q50) only. Real substantial new work, not a fix; flagged
+  for whoever picks up D4+.
+- **Full topology equivalence gates for alternate networks beyond edge-ID
+  equality** (section 5.5): edge-ID equality (27 614/27 614) was already
+  verified real for the actuated/delay_based rebuild; a full
+  lane/connection/restriction diff tool is new work, not a fix.
+- **Job-ID system replacing serve.py's single global status object per
+  operation type** (section 7.1): real for a true multi-tab race, but low
+  practical risk for a single-operator local tool — same disposition as
+  this exact class of suggestion earlier in this project's review
+  history.
+- **`serve.py` parsing `run_scenario.py`'s stdout to learn the generated
+  scenario name** (section 7.3): brittle in principle, but this exact
+  mechanism was ALREADY a deliberate, tested fix (2026-07-11, earlier
+  today) for a WORSE prior bug (ambiguous manifest matching by
+  `closed_edges` alone) — rearchitecting `run_scenario.py`'s output
+  contract to a machine-readable result file is reasonable future work,
+  not a reactive fix here.
+- **Metrics-output filename collisions if these scripts are ever
+  parallelized** (section 6.2): real but currently DORMANT — today's
+  strictly sequential execution reads each metrics file immediately after
+  writing it, before the next condition/seed can overwrite it. Only
+  matters if/when someone parallelizes the 5-condition loop (itself
+  deferred, see the efficiency findings below); noted here as a
+  constraint to address AT that time, not preemptively engineered for now.
+
+### Self-review cross-check
+
+In parallel with reading the external document, 8 background finder
+agents (the project's own `code-review` skill, high effort: line-by-line
+scan, removed-behaviour audit, cross-file tracer, reuse/simplification/
+efficiency/altitude/conventions angles) were run independently against
+the same D1-D3 diff. Their findings substantially OVERLAPPED with the
+external review (the stale-artifact-caching bug was independently found
+by 3 of the 8 angles, plus the external doc — four independent
+confirmations of the same real bug) and added: the dead degenerate-
+ranking-guard bug (fixed above, not in the external doc), several more
+instances of the same duplication-across-three-scripts pattern (window-
+loading/validation boilerplate, the 5-condition dict literal, the window-
+label expression) not yet consolidated — real cleanup opportunity, left
+for a future pass since the HIGHEST-value instance of this duplication
+(the artifact-caching logic, where duplication had already caused a
+correctness bug) is now fixed — and an efficiency finding (the 5
+conditions × N seeds loops in `signal_optimize.py`/`signal_meso_screen.py`
+run strictly sequentially; this project has an established flat-pool
+multiprocessing pattern for exactly this shape of independent-SUMO-run
+workload, unused here) noted as real but not applied, since the current
+~2-4 minute wall times are already comfortable for this project's
+exploratory, interactive usage pattern.
+
+Full suite after all fixes: 604 passed, 20 skipped, 0 failed (up from
+574). No tracked files changed by any of the real re-verification runs.
 
 ### D4. Closure + signals combined — size L — depends C2, D2
 Two-pass loop: run closure (meso) → extract ACTUALLY rerouted routes

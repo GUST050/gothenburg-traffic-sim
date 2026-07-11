@@ -668,6 +668,27 @@ class TestSuggestClosure:
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=0")
         assert status == 400
 
+    def test_nan_duration_hours_is_400_not_a_silent_pass_through(self, base_url):
+        # float("nan") parses successfully but satisfies neither "> 0" nor
+        # "<= 0" (every NaN comparison is False) -- a bare `<= 0` check
+        # would let it through to the background job, where
+        # round(nan * 3600) raises an unhandled ValueError instead of a
+        # clean 400 here. Found in external review 2026-07-11.
+        status, body = get_json_or_error(
+            f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=nan")
+        assert status == 400
+        assert "error" in body
+
+    def test_infinite_duration_hours_is_400(self, base_url):
+        status, _ = get_json_or_error(
+            f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=inf")
+        assert status == 400
+
+    def test_nan_slide_hours_is_400(self, base_url):
+        status, _ = get_json_or_error(
+            f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6&slide_hours=nan")
+        assert status == 400
+
     def test_top_k_out_of_range_is_400(self, base_url):
         status, _ = get_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6&top_k=999")

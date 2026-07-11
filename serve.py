@@ -77,6 +77,7 @@ drift apart.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import signal
@@ -488,13 +489,20 @@ class Handler(SimpleHTTPRequestHandler):
             duration_hours = float(qs.get("duration_hours", [""])[0])
         except ValueError:
             return self._json(400, {"error": "duration_hours krävs och måste vara ett tal"})
-        if duration_hours <= 0:
+        # float("nan")/float("inf") parse successfully but satisfy neither
+        # "> 0" nor "<= 0" (every NaN comparison is False) — the bare
+        # duration_hours <= 0 check below silently let NaN/inf through to
+        # the background job, where suggest_closure_time.py's
+        # round(args.duration_hours * 3600) then raises an unhandled
+        # ValueError instead of a clean 400 at the API boundary. Found in
+        # external review 2026-07-11 (NEW_CHANGES_REVIEW section 7.2).
+        if not math.isfinite(duration_hours) or duration_hours <= 0:
             return self._json(400, {"error": "duration_hours måste vara > 0"})
         try:
             slide_hours = float(qs.get("slide_hours", ["1"])[0])
         except ValueError:
             return self._json(400, {"error": "slide_hours måste vara ett tal"})
-        if slide_hours <= 0:
+        if not math.isfinite(slide_hours) or slide_hours <= 0:
             return self._json(400, {"error": "slide_hours måste vara > 0"})
 
         def int_param(name: str, default: int, lo: int, hi: int) -> int | None:
