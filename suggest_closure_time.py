@@ -233,7 +233,8 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      home: Path, micro: bool,
                      adj: dict[str, list[str]] | None,
                      freeflow: dict[str, float] | None,
-                     scratch: list[Path]) -> tuple[cm.DisruptionMetrics, int, int]:
+                     scratch: list[Path]
+                     ) -> tuple[cm.DisruptionMetrics, int, int, list[float]]:
     """Run `seeds` Monte Carlo replications of one candidate (or the
     baseline, when close_edges is empty) and aggregate their disruption
     metrics. Mirrors run_scenario.main()'s truncate-once-per-variant,
@@ -246,7 +247,11 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     `scratch` so the caller can delete them all at the end — searching a
     handful of windows otherwise leaves dozens of route/edgeData/tripinfo
     files behind per run with no natural expiry (sumo/ is gitignored, but
-    unbounded either way)."""
+    unbounded either way).
+
+    Returns the RAW per-seed total_time_loss_s values alongside the
+    aggregated metrics — C5's UI wants to show a median + seed interval
+    (PLAN.md's own words), which the mean alone throws away."""
     run_variants = variants
     n_truncated = n_dropped = 0
     closure_add: list[Path] = []
@@ -284,7 +289,27 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             metric_paths["tripinfo"], metric_paths["statistics"],
             truncated_unreachable=n_truncated, dropped_unreachable=n_dropped,
             summary_path=metric_paths["summary"]))
-    return aggregate_seed_metrics(per_seed_metrics), n_truncated, n_dropped
+    per_seed_time_loss = [m.total_time_loss_s for m in per_seed_metrics]
+    return (aggregate_seed_metrics(per_seed_metrics), n_truncated, n_dropped,
+           per_seed_time_loss)
+
+
+def delta_time_loss_interval(candidate_per_seed: list[float],
+                             baseline_per_seed: list[float]) -> dict:
+    """Median + [min, max] of Δ time loss across seeds, for the UI's
+    'median ΔtimeLoss + seed interval' requirement (PLAN.md C5) — the mean-
+    only comparison in closure_metrics.MetricComparison collapses exactly
+    the spread-over-seeds information the product's honesty promise wants
+    shown. Each candidate seed is compared against the SAME baseline mean
+    (not seed-paired — variants cycle across seeds independently on each
+    side, so there is no natural 1:1 pairing to begin with; treating both
+    sides as independent-seed ensembles matches how q10/q50/q90 spread is
+    already treated everywhere else in this project)."""
+    baseline_mean = sum(baseline_per_seed) / len(baseline_per_seed)
+    deltas = sorted(c - baseline_mean for c in candidate_per_seed)
+    n = len(deltas)
+    median = deltas[n // 2] if n % 2 else (deltas[n // 2 - 1] + deltas[n // 2]) / 2
+    return {"median_s": median, "min_s": deltas[0], "max_s": deltas[-1], "n_seeds": n}
 
 
 def aggregate_seed_metrics(per_seed: list[cm.DisruptionMetrics]) -> cm.DisruptionMetrics:
@@ -428,7 +453,7 @@ def main() -> None:
     scratch: list[Path] = []
     print("  running baseline (metrics) …")
     t0 = time.time()
-    baseline_metrics, _, _ = simulate_closure(
+    baseline_metrics, _, _, baseline_per_seed = simulate_closure(
         name="baseline", closures=None, close_edges=[], variants=variants,
         seeds=args.seeds, n_intervals=n_intervals, duration_s=total_duration_s,
         home=home, micro=args.micro, adj=None, freeflow=None, scratch=scratch)
@@ -445,20 +470,23 @@ def main() -> None:
         closures = [{"edge_id": e, "begin_s": w["begin_s"], "end_s": w["end_s"]}
                    for e in args.edge]
         t0 = time.time()
-        metrics, n_trunc, n_drop = simulate_closure(
+        metrics, n_trunc, n_drop, candidate_per_seed = simulate_closure(
             name=name, closures=closures, close_edges=args.edge,
             variants=variants, seeds=args.seeds, n_intervals=n_intervals,
             duration_s=total_duration_s, home=home, micro=args.micro,
             adj=adj, freeflow=freeflow, scratch=scratch)
         comparison = cm.compare_metrics(baseline_metrics, metrics)
+        interval = delta_time_loss_interval(candidate_per_seed, baseline_per_seed)
         elapsed = time.time() - t0
         print(f"    [{i+1}/{len(to_simulate)}] proxy_rank={w['proxy_rank']} "
-             f"begin={w['begin_s']}s  ΔtimeLoss={comparison.delta_time_loss_s:+.0f}s"
+             f"begin={w['begin_s']}s  ΔtimeLoss median={interval['median_s']:+.0f}s "
+             f"[{interval['min_s']:+.0f}, {interval['max_s']:+.0f}]"
              f"{'  DISQUALIFIED: ' + ','.join(comparison.disqualification_reasons) if comparison.candidate_disqualified else ''}"
              f"  ({elapsed:.0f}s)")
         simulated.append({
             "window": w, "metrics": dataclasses.asdict(metrics),
             "comparison": dataclasses.asdict(comparison),
+            "delta_time_loss_interval": interval,
             "truncated_vehicles": n_trunc, "dropped_vehicles": n_drop,
         })
 
@@ -505,6 +533,7 @@ def main() -> None:
         "epoch_sim": meta["epoch_sim"],
         "detour_availability": diagnostic,
         "baseline_metrics": dataclasses.asdict(baseline_metrics),
+        "baseline_per_seed_time_loss_s": baseline_per_seed,
         "proxy_candidates": ranked,
         "simulated": simulated,
         "validation": {

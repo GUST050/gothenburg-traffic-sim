@@ -156,6 +156,62 @@
     #new-days-input { width: 3.2em; }
     #sim-day-hint { font-size: 0.72rem; color: var(--ink-3); }
 
+    #suggest-banner {
+      display: none; align-items: center; gap: 12px; flex: 1;
+    }
+    #suggest-banner.show { display: flex; }
+    #suggest-banner .hint { font-size: 0.76rem; color: var(--sim-2); font-weight: 600; }
+    #suggest-duration-input {
+      background: rgba(15, 23, 42, 0.85); color: var(--ink);
+      border: 1px solid var(--panel-line); border-radius: 8px;
+      padding: 5px 9px; font-size: 0.76rem; width: 3.6em;
+      color-scheme: dark;
+    }
+
+    /* ── Suggest-closure-time results — a floating panel, distinct from
+         the horizontal sim-panel because it needs real table space. ──── */
+    #suggest-results {
+      display: none;
+      position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
+      z-index: 1000; width: min(720px, 92vw); max-height: 55vh;
+      background: var(--panel); backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-line); border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      flex-direction: column; overflow: hidden;
+    }
+    #suggest-results.show { display: flex; }
+    #suggest-results-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid var(--panel-line);
+    }
+    #suggest-results-title { font-size: 0.82rem; font-weight: 700; color: var(--ink); }
+    #suggest-results-meta {
+      padding: 8px 16px; font-size: 0.7rem; color: var(--ink-3); line-height: 1.6;
+    }
+    #suggest-results-meta b { color: var(--ink-2); }
+    #suggest-results-warn { color: #f59e0b; }
+    #suggest-results-body-wrap { overflow-y: auto; padding: 0 8px 8px; }
+    #suggest-results-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+    #suggest-results-table th {
+      text-align: left; padding: 6px 8px; color: var(--ink-3);
+      font-weight: 600; text-transform: uppercase; font-size: 0.62rem;
+      letter-spacing: 0.04em; position: sticky; top: 0; background: var(--panel);
+    }
+    #suggest-results-table td { padding: 6px 8px; color: var(--ink-2); border-top: 1px solid var(--panel-line); }
+    #suggest-results-table tr.disqualified td { opacity: 0.5; }
+    #suggest-results-table tr.outside-topk td:first-child { color: var(--ink-3); }
+    .sr-load-btn {
+      background: var(--sim); color: #fff; border: none; border-radius: 6px;
+      padding: 3px 9px; font-size: 0.68rem; font-weight: 600; cursor: pointer;
+    }
+    .sr-load-btn:disabled { opacity: 0.5; cursor: wait; }
+    .sr-tag {
+      display: inline-block; font-size: 0.62rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 999px; margin-left: 4px;
+    }
+    .sr-tag.rank { background: rgba(124,58,237,0.2); color: var(--sim-2); }
+    .sr-tag.disq { background: rgba(220,38,38,0.2); color: #f87171; }
+
     #sliders { display: flex; gap: 28px; }
     .slider-group { flex: 1; transition: opacity 0.15s; }
     .slider-group.disabled { opacity: 0.35; pointer-events: none; }
@@ -329,6 +385,8 @@
               title="Klicka på vägar i kartan för att simulera en avstängning">+ Ny avstängning</button>
       <button id="change-day-btn" class="action-btn"
               title="Kalibrera om simuleringen mot ett annat datum (tar ~6 min)">📅 Byt dag</button>
+      <button id="suggest-mode-btn" class="action-btn"
+              title="Klicka på en väg för att hitta den bästa tiden att stänga den">🕐 Föreslå tid</button>
 
       <div id="pick-banner">
         <span class="hint">Klicka på vägar i kartan att stänga</span>
@@ -349,6 +407,34 @@
                title="Antal sammanhängande dagar att simulera, 1-7 (en vecka max — kostnaden växer med antalet dagar)">
         <button id="day-run-btn" class="action-btn primary">Räkna om (~6 min)</button>
         <button id="day-cancel-btn" class="action-btn">Avbryt</button>
+      </div>
+
+      <div id="suggest-banner">
+        <span class="hint">Klicka på väg(ar) att analysera</span>
+        <span id="suggest-pick-count">0 valda</span>
+        <label class="hint" for="suggest-duration-input">timmar avstängd</label>
+        <input type="number" id="suggest-duration-input" value="6" min="0.25" max="24" step="0.25">
+        <button id="suggest-run-btn" class="action-btn primary" disabled>Sök bästa tid</button>
+        <button id="suggest-cancel-btn" class="action-btn">Avbryt</button>
+      </div>
+    </div>
+
+    <div id="suggest-results">
+      <div id="suggest-results-header">
+        <span id="suggest-results-title"></span>
+        <button id="suggest-results-close" class="action-btn">Stäng</button>
+      </div>
+      <div id="suggest-results-meta"></div>
+      <div id="suggest-results-body-wrap">
+        <table id="suggest-results-table">
+          <thead>
+            <tr>
+              <th>Rang</th><th>Tid</th><th>ΔTid (median)</th><th>Spann (min–max)</th>
+              <th>Kvarlämnade</th><th>Max kö</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="suggest-results-tbody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -663,17 +749,41 @@
           updateDayRunLabel();
         });
 
+        // ── Föreslå stängningstid (PLAN.md Phase C5) — reuses the SAME
+        // edge click-picking as the plain closure flow above (`selected`),
+        // just with a different meaning: which road(s) to search AROUND,
+        // not close outright.
+        const btnSuggest       = document.getElementById('suggest-mode-btn');
+        const suggestBanner    = document.getElementById('suggest-banner');
+        const suggestPickCount = document.getElementById('suggest-pick-count');
+        const durationInput    = document.getElementById('suggest-duration-input');
+        const btnSuggestRun    = document.getElementById('suggest-run-btn');
+        const btnSuggestCancel = document.getElementById('suggest-cancel-btn');
+        const suggestResults      = document.getElementById('suggest-results');
+        const suggestResultsTitle = document.getElementById('suggest-results-title');
+        const suggestResultsMeta  = document.getElementById('suggest-results-meta');
+        const suggestResultsBody  = document.getElementById('suggest-results-tbody');
+        const btnSuggestResultsClose = document.getElementById('suggest-results-close');
+        let suggestMode = false;
+
         function refreshCloseUI() {
-          const showNormal = !closureMode && !dayPickMode;
+          const showNormal = !closureMode && !dayPickMode && !suggestMode;
           const showApiActions = showNormal && apiAvailable;
           scenSelect.style.display   = showNormal ? '' : 'none';
           simDayHint.style.display   = showNormal ? '' : 'none';
           btnClose.style.display     = showApiActions ? '' : 'none';
           btnDay.style.display       = showApiActions ? '' : 'none';
+          btnSuggest.style.display   = showApiActions ? '' : 'none';
           pickBanner.classList.toggle('show', closureMode);
           dayBanner.classList.toggle('show', dayPickMode);
+          suggestBanner.classList.toggle('show', suggestMode);
           pickCount.textContent = `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
           btnRun.disabled = selected.size === 0;
+          if (suggestMode) {
+            suggestPickCount.textContent =
+              `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
+            btnSuggestRun.disabled = selected.size === 0;
+          }
           Render.setPending([...selected]);
         }
 
@@ -687,10 +797,21 @@
           selected.clear();
           refreshCloseUI();
         }
+        function enterSuggestPicking() {
+          suggestMode = true;
+          selected.clear();
+          suggestResults.classList.remove('show');
+          refreshCloseUI();
+        }
+        function exitSuggestPicking() {
+          suggestMode = false;
+          selected.clear();
+          refreshCloseUI();
+        }
 
-        // Feature-detect the API — the "+ Ny avstängning" / "Byt dag" entry
-        // points are hidden entirely when served statically (no server to
-        // simulate with)
+        // Feature-detect the API — the "+ Ny avstängning" / "Byt dag" /
+        // "Föreslå tid" entry points are hidden entirely when served
+        // statically (no server to simulate with)
         fetch('/api/ping').then(r => {
           apiAvailable = r.ok;
           refreshCloseUI();
@@ -701,6 +822,11 @@
 
         btnClose.addEventListener('click', enterPicking);
         btnCancel.addEventListener('click', exitPicking);
+        btnSuggest.addEventListener('click', enterSuggestPicking);
+        btnSuggestCancel.addEventListener('click', exitSuggestPicking);
+        btnSuggestResultsClose.addEventListener('click', () => {
+          suggestResults.classList.remove('show');
+        });
 
         // "Simulate the future": Historik 2025 calibrates against actual
         // sensor counts; Prognos 2027 calibrates against Agent 1's
@@ -739,7 +865,7 @@
         });
 
         Render.onEdgeClick(id => {
-          if (!closureMode) return;
+          if (!closureMode && !suggestMode) return;
           selected.has(id) ? selected.delete(id) : selected.add(id);
           refreshCloseUI();
         });
@@ -751,7 +877,7 @@
         // server's own up-to-600s timeout, even though a closure usually
         // finishes in ~30-90s): start the job, poll for its result instead
         // of holding one fetch open for the whole run.
-        async function pollClose() {
+        async function pollClose(onProgress) {
           for (;;) {
             await new Promise(r => setTimeout(r, 2000));
             let status;
@@ -761,11 +887,20 @@
               continue;   // transient network hiccup — keep polling
             }
             if (status.status === 'running') {
-              btnRun.textContent = `Simulerar… (${status.elapsed_s}s)`;
+              onProgress?.(status.elapsed_s);
               continue;
             }
             return status;
           }
+        }
+
+        // Shared by both the plain closure-picking flow (btnRun below) and
+        // "load this suggested window" (suggest-closure results table) —
+        // both end at the same place: a freshly built scenario, activated.
+        async function activateClosedScenario(status) {
+          await loadScenIndex(true);
+          scenSelect.value = status.file;
+          await activateScenario(status.file, { fresh: true });
         }
 
         btnRun.addEventListener('click', async () => {
@@ -776,17 +911,201 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
             btnRun.textContent = 'Simulerar… (0s)';
-            const status = await pollClose();
+            const status = await pollClose(s => btnRun.textContent = `Simulerar… (${s}s)`);
             if (status.status === 'error') throw new Error(status.error);
             exitPicking();
-            await loadScenIndex(true);
-            scenSelect.value = status.file;
-            await activateScenario(status.file, { fresh: true });
+            await activateClosedScenario(status);
           } catch (e) {
             alert('Simuleringen misslyckades: ' + e.message);
           } finally {
             btnRun.disabled = false;
             btnRun.textContent = 'Simulera avstängning';
+          }
+        });
+
+        // ── Föreslå stängningstid: start + poll, same async pattern as
+        // every other job here. ────────────────────────────────────────
+        async function pollSuggest(onProgress) {
+          for (;;) {
+            await new Promise(r => setTimeout(r, 3000));
+            let status;
+            try {
+              status = await (await fetch('/api/suggest_closure/status')).json();
+            } catch (e) {
+              continue;
+            }
+            if (status.status === 'running') {
+              onProgress?.(status.elapsed_s);
+              continue;
+            }
+            return status;
+          }
+        }
+
+        // begin_s/end_s are seconds from the search's own epoch_sim — the
+        // SAME naive-local-wall-time convention the rest of the app uses
+        // for the epoch string (provider.js appends 'Z' to parse it as
+        // UTC; formatting back strips it the same way, so the ISO string
+        // sent to /api/close means the same wall-clock instant SUMO
+        // simulated against).
+        function isoFromOffset(epochSim, offsetS) {
+          const t = new Date(epochSim.endsWith('Z') ? epochSim : epochSim + 'Z');
+          t.setUTCSeconds(t.getUTCSeconds() + offsetS);
+          return t.toISOString().slice(0, 19);   // strip the trailing 'Z'
+        }
+
+        function fmtHHMM(epochSim, offsetS) {
+          const t = new Date(epochSim.endsWith('Z') ? epochSim : epochSim + 'Z');
+          t.setUTCSeconds(t.getUTCSeconds() + offsetS);
+          return t.toISOString().slice(11, 16);
+        }
+
+        function fmtDelta(seconds) {
+          const sign = seconds >= 0 ? '+' : '−';
+          return `${sign}${Math.round(Math.abs(seconds) / 60)} min`;
+        }
+
+        let lastSuggestResult = null;   // holds epoch_sim + edges for the load-row action
+
+        function renderSuggestResults(summary) {
+          lastSuggestResult = summary;
+          const streets = summary.streets.join(', ');
+          suggestResultsTitle.textContent =
+            `${streets} · ${summary.duration_hours}h avstängning · ` +
+            `${summary.n_simulated} av ${summary.n_candidate_windows} fönster simulerade`;
+
+          const metaLines = [];
+          metaLines.push(`Baslinje: <b>${Math.round(summary.baseline_total_time_loss_s / 60)} ` +
+                         `min total väntetid</b> över ${summary.baseline_trip_count} resor ` +
+                         `(${summary.seeds} seeds).`);
+          const det = summary.detour_availability;
+          if (det.score === null) {
+            metaLines.push(`<span id="suggest-results-warn">⚠ Vägen har ingen anslutning ` +
+                           `alls in/ut från denna riktning — ingen omväg är möjlig.</span>`);
+          } else if (det.score < 1) {
+            metaLines.push(`<span id="suggest-results-warn">⚠ Endast ${det.reachable_pairs}/` +
+                           `${det.total_pairs} möjliga omvägar finns runt denna avstängning — ` +
+                           `räkna med kvarlämnade fordon oavsett vald tid.</span>`);
+          }
+          const corr = summary.validation.correlation;
+          if (corr) {
+            metaLines.push(corr.spearman_rho > 0.3
+              ? `Rangordningen stämmer väl överens med simuleringen ` +
+                `(Spearman ρ=${corr.spearman_rho.toFixed(2)}).`
+              : `<span id="suggest-results-warn">⚠ Svagt samband mellan rangordning och ` +
+                `simulerat resultat (Spearman ρ=${corr.spearman_rho.toFixed(2)}) — ` +
+                `lita inte blint på rangordningen här.</span>`);
+          } else {
+            metaLines.push('För få icke-diskvalificerade fönster för att bedöma rangordningens tillförlitlighet.');
+          }
+          metaLines.push('Rang = förslagets ranking (INTE en tidsuppskattning); ΔTid är simulerad väntetid jämfört med baslinjen.');
+          suggestResultsMeta.innerHTML = metaLines.join('<br>');
+
+          suggestResultsBody.replaceChildren(...summary.candidates.map(c => {
+            const tr = document.createElement('tr');
+            if (c.disqualified) tr.classList.add('disqualified');
+            if (!c.in_proxy_top_k) tr.classList.add('outside-topk');
+
+            const rankTd = document.createElement('td');
+            rankTd.textContent = `#${c.proxy_rank + 1}`;
+            if (!c.in_proxy_top_k) {
+              const tag = document.createElement('span');
+              tag.className = 'sr-tag rank';
+              tag.textContent = 'kontroll';
+              rankTd.appendChild(tag);
+            }
+
+            const timeTd = document.createElement('td');
+            timeTd.textContent = `${fmtHHMM(summary.epoch_sim, c.begin_s)}–` +
+                                 `${fmtHHMM(summary.epoch_sim, c.end_s)}`;
+
+            const deltaTd = document.createElement('td');
+            deltaTd.textContent = fmtDelta(c.delta_time_loss_median_s);
+
+            const spanTd = document.createElement('td');
+            spanTd.textContent = `${fmtDelta(c.delta_time_loss_min_s)} … ${fmtDelta(c.delta_time_loss_max_s)}`;
+
+            const strandedTd = document.createElement('td');
+            strandedTd.textContent = (c.truncated_vehicles + c.dropped_vehicles) > 0
+              ? `${c.truncated_vehicles + c.dropped_vehicles}` : '0';
+
+            const queueTd = document.createElement('td');
+            queueTd.textContent = c.max_queue_vehicles ?? '–';
+
+            const statusTd = document.createElement('td');
+            if (c.disqualified) {
+              const tag = document.createElement('span');
+              tag.className = 'sr-tag disq';
+              tag.textContent = c.disqualification_reasons.join(', ');
+              statusTd.appendChild(tag);
+            } else {
+              statusTd.textContent = 'OK';
+            }
+
+            const loadTd = document.createElement('td');
+            const loadBtn = document.createElement('button');
+            loadBtn.className = 'sr-load-btn';
+            loadBtn.textContent = 'Ladda';
+            loadBtn.disabled = c.disqualified;
+            loadBtn.title = c.disqualified
+              ? 'Diskvalificerad (fordon strandade/teleporterade) — ej rekommenderad att ladda'
+              : 'Bygg detta som ett riktigt scenario på kartan';
+            loadBtn.addEventListener('click', () => loadSuggestedWindow(c, loadBtn));
+            loadTd.appendChild(loadBtn);
+
+            tr.append(rankTd, timeTd, deltaTd, spanTd, strandedTd, queueTd, statusTd, loadTd);
+            return tr;
+          }));
+
+          suggestResults.classList.add('show');
+        }
+
+        async function loadSuggestedWindow(candidate, btn) {
+          const others = suggestResultsBody.querySelectorAll('.sr-load-btn');
+          others.forEach(b => b.disabled = true);
+          btn.textContent = 'Startar…';
+          try {
+            const begin = isoFromOffset(lastSuggestResult.epoch_sim, candidate.begin_s);
+            const end   = isoFromOffset(lastSuggestResult.epoch_sim, candidate.end_s);
+            const edges = lastSuggestResult.edges.join(',');
+            const res  = await fetch(`/api/close?edges=${edges}&begin=${begin}&end=${end}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            btn.textContent = 'Simulerar… (0s)';
+            const status = await pollClose(s => btn.textContent = `Simulerar… (${s}s)`);
+            if (status.status === 'error') throw new Error(status.error);
+            suggestResults.classList.remove('show');
+            exitSuggestPicking();
+            await activateClosedScenario(status);
+          } catch (e) {
+            alert('Kunde inte ladda scenariot: ' + e.message);
+          } finally {
+            others.forEach(b => b.disabled = false);
+            btn.textContent = 'Ladda';
+          }
+        }
+
+        btnSuggestRun.addEventListener('click', async () => {
+          btnSuggestRun.disabled = true;
+          btnSuggestCancel.disabled = true;
+          const durationHours = Number(durationInput.value) || 6;
+          btnSuggestRun.textContent = 'Startar…';
+          try {
+            const res  = await fetch('/api/suggest_closure?edges=' + [...selected].join(',') +
+                                     '&duration_hours=' + durationHours);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            btnSuggestRun.textContent = 'Söker… (0s)';
+            const status = await pollSuggest(
+              s => btnSuggestRun.textContent = `Söker… (${s}s)`);
+            if (status.status === 'error') throw new Error(status.error);
+            renderSuggestResults(status.result);
+          } catch (e) {
+            alert('Sökningen misslyckades: ' + e.message);
+          } finally {
+            btnSuggestRun.disabled = selected.size === 0;
+            btnSuggestCancel.disabled = false;
+            btnSuggestRun.textContent = 'Sök bästa tid';
           }
         });
 

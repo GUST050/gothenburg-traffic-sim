@@ -36,6 +36,25 @@ Endpoints:
                                 job started from one tab/session is visible
                                 from any other and survives a dropped
                                 connection, laptop sleep, or closed tab.
+  GET /api/suggest_closure?edges=a,b&duration_hours=6&slide_hours=1
+                            &top_k=15&extra_bad=2&seeds=3
+                              — PLAN.md Phase C5: runs suggest_closure_time.py
+                                (Phase C4) against the CURRENTLY calibrated
+                                demand and the matching baseline scenario
+                                already in web/data/scenarios/baseline.json.
+                                Same async/poll pattern as /api/close and
+                                /api/recalibrate; one simulation job of any
+                                kind at a time (409 while busy).
+  GET /api/suggest_closure/status — {"status": ..., ...}; on "done", a
+                                SUMMARY of the result (ranked simulated
+                                candidates + the proxy-validation numbers),
+                                not the full result file (which can hold
+                                every candidate window's raw metrics). Load
+                                a specific row into a real, viewable
+                                scenario via /api/close?edges=...&begin=
+                                ...&end=... (the SAME endpoint used for
+                                whole-run closures, extended 2026-07-11 to
+                                accept an optional time window).
 
 WHY ASYNC (found from a real failure): a multi-minute job tied to a single
 blocking HTTP GET is fragile — a browser's own request timeout, a closed
@@ -71,17 +90,23 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
 
 ROOT     = Path(__file__).parent
 WEB_DIR  = ROOT / "web"
 SCEN_DIR = WEB_DIR / "data" / "scenarios"
+SUMO_DIR = ROOT / "sumo"
+SUGGEST_OUT = SUMO_DIR / "suggest_closure_web.json"
 PORT     = 8000
 
-_sim_lock   = threading.Lock()     # one simulation (close OR recalibrate) at a time
+_sim_lock   = threading.Lock()     # one simulation (close OR recalibrate OR
+                                    # suggest_closure) at a time
 _recal_lock = threading.Lock()     # guards _recal_state below
 _recal_state: dict = {"status": "idle"}
 _close_lock = threading.Lock()     # guards _close_state below
 _close_state: dict = {"status": "idle"}
+_suggest_lock = threading.Lock()   # guards _suggest_state below
+_suggest_state: dict = {"status": "idle"}
 
 
 def run_in_new_session(cmd: list[str], *, cwd: str,
@@ -118,6 +143,53 @@ def known_edges() -> frozenset[str]:
     with open(WEB_DIR / "data" / "network.geojson") as f:
         geo = json.load(f)
     return frozenset(feat["properties"]["id"] for feat in geo["features"])
+
+
+def summarize_suggestion(result: dict) -> dict:
+    """Curated table for the UI from suggest_closure_time.py's full result
+    file — NOT the raw file itself, which carries every candidate window's
+    full per-seed metrics (large for a week-scale search). Honest
+    presentation rules (PLAN.md C5): a median + [min, max] interval over
+    seeds, never a single fabricated number; the baseline totals included
+    explicitly so 'better than what?' always has an answer on screen;
+    proxy-only fields keep the word 'rank', never 'minutes'; and N
+    simulated vs N candidate windows total is always shown, so a small
+    top-k is visibly a small top-k, not silently presented as exhaustive."""
+    top_k = result["top_k"]
+    candidates = []
+    for s in result["simulated"]:
+        w = s["window"]
+        interval = s["delta_time_loss_interval"]
+        candidates.append({
+            "begin_s": w["begin_s"], "end_s": w["end_s"],
+            "proxy_rank": w["proxy_rank"],
+            "in_proxy_top_k": w["proxy_rank"] < top_k,
+            "delta_time_loss_median_s": interval["median_s"],
+            "delta_time_loss_min_s": interval["min_s"],
+            "delta_time_loss_max_s": interval["max_s"],
+            "n_seeds": interval["n_seeds"],
+            "disqualified": s["comparison"]["candidate_disqualified"],
+            "disqualification_reasons": s["comparison"]["disqualification_reasons"],
+            "truncated_vehicles": s["truncated_vehicles"],
+            "dropped_vehicles": s["dropped_vehicles"],
+            "max_queue_vehicles": s["metrics"]["max_queue_vehicles"],
+        })
+    candidates.sort(key=lambda c: c["proxy_rank"])
+    return {
+        "edges": result["edges"], "streets": result["streets"],
+        "duration_hours": result["duration_hours"],
+        "slide_hours": result["slide_hours"],
+        "n_candidate_windows": result["n_candidate_windows"],
+        "top_k": top_k, "extra_bad": result["extra_bad"],
+        "seeds": result["seeds"], "n_simulated": len(result["simulated"]),
+        "baseline_total_time_loss_s": result["baseline_metrics"]["total_time_loss_s"],
+        "baseline_trip_count": result["baseline_metrics"]["trip_count"],
+        "detour_availability": result["detour_availability"],
+        "validation": result["validation"],
+        "epoch_sim": result["epoch_sim"],
+        "demand_signature": result["demand_signature"],
+        "candidates": candidates,
+    }
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -161,6 +233,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._recalibrate_status()
         if self.path.startswith("/api/recalibrate"):
             return self._recalibrate()
+        if self.path.startswith("/api/suggest_closure/status"):
+            return self._suggest_closure_status()
+        if self.path.startswith("/api/suggest_closure"):
+            return self._suggest_closure()
         return super().do_GET()
 
     def _close(self) -> None:
@@ -181,14 +257,30 @@ class Handler(SimpleHTTPRequestHandler):
         if unknown:
             return self._json(400, {"error": f"okända kanter: {unknown}"})
 
+        # Optional time window (2026-07-11, for C5's "load this suggested
+        # window as a real scenario" action): when given, runs a
+        # run_scenario.py --closure (time-windowed) instead of --close
+        # (whole-run). Both share the same async/poll machinery below —
+        # the ONLY difference is which CLI form _run_close shells out to.
+        begin = qs.get("begin", [""])[0]
+        end   = qs.get("end", [""])[0]
+        if bool(begin) != bool(end):
+            return self._json(400, {"error": "begin och end måste anges tillsammans"})
+        if begin and not (DATETIME_RE.match(begin) and DATETIME_RE.match(end)):
+            return self._json(400, {"error": "begin/end måste vara ISO-datetime "
+                                    "(YYYY-MM-DDTHH:MM[:SS])"})
+
         if not _sim_lock.acquire(blocking=False):
             return self._json(409, {"error": "en simulering kör redan — vänta"})
         # Lock stays held for the whole job — released by the background
         # thread, not here (same reasoning as _recalibrate).
         with _close_lock:
             _close_state.clear()
-            _close_state.update(status="running", edges=edges, started_at=time.time())
-        threading.Thread(target=self._run_close, args=(edges,), daemon=True).start()
+            _close_state.update(status="running", edges=edges,
+                                begin=begin or None, end=end or None,
+                                started_at=time.time())
+        threading.Thread(target=self._run_close, args=(edges, begin or None, end or None),
+                         daemon=True).start()
         return self._json(202, {"status": "started", "edges": edges})
 
     @staticmethod
@@ -196,7 +288,8 @@ class Handler(SimpleHTTPRequestHandler):
         with _close_lock:
             _close_state.update(**kw)
 
-    def _run_close(self, edges: list[str]) -> None:
+    def _run_close(self, edges: list[str], begin: str | None = None,
+                   end: str | None = None) -> None:
         # Same lock-then-state-then-release ordering as _run_recalibrate,
         # for the same reason: writing state AFTER releasing the lock
         # leaves a race window where a second /api/close can acquire the
@@ -204,15 +297,36 @@ class Handler(SimpleHTTPRequestHandler):
         # write lands, which would stomp the SECOND job's running state
         # with the FIRST job's result.
         try:
-            res = run_in_new_session(
-                [sys.executable, "run_scenario.py", "--close", *edges],
-                cwd=str(ROOT), timeout=600,
-            )
+            if begin and end:
+                cmd = [sys.executable, "run_scenario.py"]
+                for e in edges:
+                    cmd += ["--closure",
+                           json.dumps({"edge_id": e, "begin": begin, "end": end})]
+            else:
+                cmd = [sys.executable, "run_scenario.py", "--close", *edges]
+            res = run_in_new_session(cmd, cwd=str(ROOT), timeout=600)
             if res.returncode != 0:
                 print(res.stdout[-1500:], res.stderr[-1500:])
                 self._set_close(status="error",
                                 error="simuleringen misslyckades — se serverloggen")
                 return
+
+            # Matching by closed_edges alone (the old approach) breaks once
+            # windowed closures exist: run_scenario.py gives a DISTINCT name
+            # (edge set + a hash of the window) to each window on the same
+            # edges, so several manifest entries can share the same
+            # closed_edges and the old lookup could silently pick the WRONG
+            # one. Instead of re-deriving run_scenario.py's own naming logic
+            # here (a second implementation that could drift out of sync),
+            # parse the exact name it used from its own first stdout line —
+            # `print(f"Scenario '{name}' ...")` in main() — and match on
+            # that. Found while adding the windowed-closure path (2026-07-11).
+            name_match = re.search(r"^Scenario '([^']+)'", res.stdout, re.M)
+            if name_match is None:
+                self._set_close(status="error",
+                                error="kunde inte läsa scenarionamnet — se serverloggen")
+                return
+            name = name_match.group(1)
 
             try:
                 with open(SCEN_DIR / "index.json") as f:
@@ -222,8 +336,7 @@ class Handler(SimpleHTTPRequestHandler):
                                 error="scenariomanifest saknas — se serverloggen")
                 return
 
-            match = next((s for s in index["scenarios"]
-                          if sorted(s.get("closed_edges") or []) == sorted(edges)), None)
+            match = next((s for s in index["scenarios"] if s["name"] == name), None)
             if match is None:
                 self._set_close(status="error",
                                 error="scenariot skrevs inte — se serverloggen")
@@ -351,6 +464,125 @@ class Handler(SimpleHTTPRequestHandler):
     def _recalibrate_status(self) -> None:
         with _recal_lock:
             state = dict(_recal_state)
+        if state.get("status") == "running":
+            state["elapsed_s"] = round(time.time() - state["started_at"])
+        return self._json(200, state)
+
+    def _suggest_closure(self) -> None:
+        # PLAN.md Phase C5. Same async/poll pattern as _close/_recalibrate;
+        # shares _sim_lock with them (this is genuinely a batch of SUMO
+        # simulations, same resource class as a closure or recalibration —
+        # running it concurrently with either would just starve both), but
+        # keeps its OWN _suggest_lock/_suggest_state so its status polling
+        # can never be confused with a recalibration's (PLAN.md: "separate
+        # lock from demand-rebuild lock, understandable status").
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
+        if not edges:
+            return self._json(400, {"error": "inga kanter angivna"})
+        unknown = [e for e in edges if e not in known_edges()]
+        if unknown:
+            return self._json(400, {"error": f"okända kanter: {unknown}"})
+
+        try:
+            duration_hours = float(qs.get("duration_hours", [""])[0])
+        except ValueError:
+            return self._json(400, {"error": "duration_hours krävs och måste vara ett tal"})
+        if duration_hours <= 0:
+            return self._json(400, {"error": "duration_hours måste vara > 0"})
+        try:
+            slide_hours = float(qs.get("slide_hours", ["1"])[0])
+        except ValueError:
+            return self._json(400, {"error": "slide_hours måste vara ett tal"})
+        if slide_hours <= 0:
+            return self._json(400, {"error": "slide_hours måste vara > 0"})
+
+        def int_param(name: str, default: int, lo: int, hi: int) -> int | None:
+            try:
+                v = int(qs.get(name, [str(default)])[0])
+            except ValueError:
+                return None
+            return v if lo <= v <= hi else None
+
+        top_k = int_param("top_k", 15, 1, 30)
+        if top_k is None:
+            return self._json(400, {"error": "top_k måste vara ett heltal 1-30"})
+        extra_bad = int_param("extra_bad", 2, 0, 5)
+        if extra_bad is None:
+            return self._json(400, {"error": "extra_bad måste vara ett heltal 0-5"})
+        seeds = int_param("seeds", 3, 1, 5)
+        if seeds is None:
+            return self._json(400, {"error": "seeds måste vara ett heltal 1-5"})
+
+        if not _sim_lock.acquire(blocking=False):
+            return self._json(409, {"error": "en simulering kör redan — vänta"})
+        with _suggest_lock:
+            _suggest_state.clear()
+            _suggest_state.update(status="running", edges=edges,
+                                  duration_hours=duration_hours, started_at=time.time())
+        threading.Thread(
+            target=self._run_suggest_closure,
+            args=(edges, duration_hours, slide_hours, top_k, extra_bad, seeds),
+            daemon=True).start()
+        return self._json(202, {"status": "started", "edges": edges})
+
+    @staticmethod
+    def _set_suggest(**kw) -> None:
+        with _suggest_lock:
+            _suggest_state.update(**kw)
+
+    def _run_suggest_closure(self, edges: list[str], duration_hours: float,
+                             slide_hours: float, top_k: int, extra_bad: int,
+                             seeds: int) -> None:
+        try:
+            # Budget: one baseline run plus (top_k + extra_bad + 1 low-
+            # traffic control) candidate simulations, each up to `seeds`
+            # SUMO runs — generous per-candidate margin (suggest_closure_
+            # time.py defaults to meso), capped so a large top_k×seeds
+            # combination can't tie up the server indefinitely.
+            n_candidates = top_k + extra_bad + 1
+            timeout = min(3600, 180 + n_candidates * seeds * 60)
+            cmd = [sys.executable, "suggest_closure_time.py",
+                  "--edge", *edges,
+                  "--duration-hours", str(duration_hours),
+                  "--slide-hours", str(slide_hours),
+                  "--top-k", str(top_k), "--extra-bad", str(extra_bad),
+                  "--seeds", str(seeds), "--out", str(SUGGEST_OUT)]
+            res = run_in_new_session(cmd, cwd=str(ROOT), timeout=timeout)
+            if res.returncode != 0:
+                print(res.stdout[-2000:], res.stderr[-2000:])
+                # suggest_closure_time.py's own user-facing errors (stale
+                # baseline, unknown edge, duration doesn't fit the demand
+                # period) are sys.exit(msg) — surfaced verbatim to the UI
+                # instead of a generic message, same as /api/recalibrate.
+                tail = res.stderr.strip().splitlines()
+                last_line = tail[-1] if tail else ""
+                msg = last_line if last_line and len(last_line) < 200 else \
+                     "förslaget kunde inte beräknas — se serverloggen"
+                self._set_suggest(status="error", error=msg)
+                return
+
+            try:
+                with open(SUGGEST_OUT) as f:
+                    result = json.load(f)
+            except FileNotFoundError:
+                self._set_suggest(status="error",
+                                  error="resultatfilen skrevs inte — se serverloggen")
+                return
+            self._set_suggest(status="done", result=summarize_suggestion(result))
+        except subprocess.TimeoutExpired:
+            self._set_suggest(status="error",
+                              error="förslaget tog för lång tid — avbruten")
+        except Exception as e:
+            print(f"suggest_closure: unexpected {type(e).__name__}: {e}")
+            self._set_suggest(status="error",
+                              error=f"oväntat fel — se serverloggen ({type(e).__name__})")
+        finally:
+            _sim_lock.release()
+
+    def _suggest_closure_status(self) -> None:
+        with _suggest_lock:
+            state = dict(_suggest_state)
         if state.get("status") == "running":
             state["elapsed_s"] = round(time.time() - state["started_at"])
         return self._json(200, state)

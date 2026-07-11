@@ -782,6 +782,111 @@ baseline they produced was a throwaway 4-hour window, not the deployed
 - Honest presentation rules (product promise): show interval over seeds, name
   the baseline, label proxy-only numbers as ranking, forecast source labelled.
 
+DONE (2026-07-11). Every bullet implemented; one deliberate scope narrowing
+(no date-range picker — explained below) and one real upstream gap in C4
+closed along the way (per-seed spread wasn't being tracked at all).
+
+- **C4 gap closed first**: `suggest_closure_time.py`'s `simulate_closure`
+  only ever returned the MEAN across seeds — there was no way to show "median
+  ΔtimeLoss + seed interval" because the per-seed values were discarded
+  before this step existed. Added `delta_time_loss_interval()` (median +
+  [min, max] of each candidate's per-seed total_time_loss_s against the
+  baseline's per-seed MEAN — not seed-paired, since variants cycle
+  independently on each side, so there's no natural 1:1 pairing; same
+  independent-ensemble framing already used for q10/q50/q90). 3 new unit
+  tests (including the even-seed-count median case).
+- **serve.py**: `/api/suggest_closure` (start) + `/api/suggest_closure/status`
+  (poll), sharing `_sim_lock` with `/api/close`/`/api/recalibrate` (a
+  suggest-closure search is genuinely the same resource class — a batch of
+  real SUMO simulations — running it concurrently with either would starve
+  both) but with its OWN `_suggest_lock`/`_suggest_state`, matching the
+  plan's "separate lock from demand-rebuild lock, understandable status" —
+  read as "don't conflate STATUS tracking across job types", not "skip
+  resource exclusivity", since the latter would defeat the whole point of
+  `_sim_lock`. On "done", the status response holds a CURATED SUMMARY
+  (`summarize_suggestion()`), not the raw result file — the full file
+  carries every candidate window's complete per-seed metrics, unbounded for
+  a week-scale search.
+  **`/api/close` was also extended** (`&begin=ISO&end=ISO`, optional) to run
+  a time-windowed `--closure` instead of whole-run `--close` — this is how
+  "loading a result row" turns a suggestion into a real, viewable scenario,
+  reusing 100% of the existing async/poll/activate machinery rather than
+  building a parallel path.
+  **Real bug found and fixed while wiring this up** (not by a test —
+  reasoning through the new code before writing it): the old
+  `/api/close`→scenario-manifest matching looked up the just-created
+  scenario by `closed_edges` alone. That was safe when only whole-run
+  closures existed (one name per edge set, always overwritten). Once
+  windowed closures can coexist with a whole-run closure on the SAME edges
+  under DIFFERENT manifest names, matching by edge set alone is ambiguous —
+  it could silently report the wrong scenario. Fixed by parsing the exact
+  name `run_scenario.py` used from its own first stdout line
+  (`Scenario '<name>' ...`) instead of re-deriving the naming logic a
+  second time (which could drift out of sync with main()'s real logic).
+  Two dedicated regression tests: one constructs the exact ambiguous-
+  manifest scenario and asserts the right one is picked, one asserts an
+  unparseable stdout is a clear error rather than a silent wrong match.
+  18 new serve.py tests total (10 for `/api/suggest_closure`, 4 for the
+  windowed `/api/close` extension including the ambiguity fix, 6 for
+  `summarize_suggestion`'s honest-presentation rules directly).
+- **Web UI**: new "🕐 Föreslå tid" entry point in the Simulering panel,
+  reusing the EXACT SAME edge click-picking mechanism as "+ Ny avstängning"
+  (`selected` Set, `Render.onEdgeClick`) with a third picking mode
+  (`suggestMode`) — picking here means "search around this road", not
+  "close it". Results render in a new floating panel (`#suggest-results`,
+  distinct from the horizontal sim-panel — a ranked table needs real
+  vertical space) showing: the baseline's own total time loss and trip
+  count named explicitly ("Baslinje: X min över Y resor"); a detour-
+  availability warning when the closed edge has a partial or zero-score
+  topology; the Spearman correlation with an explicit "don't trust this
+  ranking" warning when weak; every row's ΔTid as a MEDIAN with a
+  separate min…max spread column (never a single collapsed number);
+  disqualified rows visibly greyed with their reasons and an disabled,
+  explained "Ladda" button; rows outside the proxy top-k (the low-traffic
+  sanity control, the worst-window negative controls) tagged "kontroll" so
+  they read as comparison points, not part of the ranked recommendation.
+  `pollClose()` was refactored to take an `onProgress` callback (was
+  hardcoded to update one specific button) so the SAME polling loop drives
+  both the plain closure button and the "Ladda" button's progress text.
+- **Scope narrowing, deliberate**: no date-range picker in the UI. C4's
+  design (see its own DONE note) deliberately searches over WHATEVER demand
+  period is currently calibrated, not an arbitrary caller-chosen range —
+  building a new date range means recalibrating demand first (a separate,
+  already-async "📅 Byt dag" action, ~6-45 min), which is out of scope for
+  a search tool whose own point is being fast. The UI only exposes closure
+  DURATION (hours); the search window is implicitly "however much demand is
+  currently loaded", exactly matching what the CLI tool itself supports.
+  `top_k`/`extra_bad`/`seeds` are also not exposed in the UI — sane
+  server-side defaults (15/2/3) rather than a cluttered advanced-options
+  form; they remain available via the CLI/API directly for anyone who wants
+  to tune them.
+
+Verified end-to-end with a real headless-Chrome CDP session against the
+REAL serve.py (not mocked) and a real, matching baseline scenario: entered
+Simulering, entered suggest-picking mode, clicked a real edge, ran a real
+1-hour-duration search (4 candidate windows against the small locally
+calibrated demand window, ~87 s wall time for baseline + 4×3-seed
+candidates, all real meso SUMO runs), got a correctly rendered results
+table (title, baseline reference, a real detour-availability warning for
+this edge — 9/21 possible detours — a real Spearman ρ=0.74 "trust the
+ranking" message, 4 rows with median+spread+status), clicked "Ladda" on
+the top row, watched it start a REAL windowed closure via the extended
+`/api/close`, poll to completion, and correctly activate a brand-new
+scenario (`close_..._99fc2f6f.json`) on the map — zero console errors
+throughout. Browser-test-produced scenario files and all `sumo/` scratch
+were removed afterward; the tracked `baseline.json`/`index.json` restored
+via `git checkout --` (the test baseline was a throwaway small-window
+build, not the deployed one).
+
+544 tests passed, 20 skipped, 0 failed (up from 518 before this step — 26
+new: 3 for the per-seed interval helper, 23 across serve.py's new/changed
+endpoints and `summarize_suggestion`).
+
+**PLAN.md's Phase C ("best time to close a road") is now fully complete —
+C1 through C5 all done.** Remaining work is entirely Phase D (traffic-
+signal optimization), which was already the next item in the suggested
+execution order.
+
 ---
 
 ## Phase D — Traffic-signal optimization

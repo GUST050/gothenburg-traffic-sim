@@ -211,6 +211,31 @@ class TestAggregateSeedMetrics:
         assert agg.max_queue_vehicles == 30
 
 
+class TestDeltaTimeLossInterval:
+    """PLAN.md C5 explicitly wants 'median ΔtimeLoss + seed interval' in the
+    UI, which the mean-only closure_metrics.MetricComparison throws away —
+    this fills that gap without changing the frozen DisruptionMetrics shape."""
+
+    def test_median_and_interval_relative_to_baseline_mean(self):
+        # baseline mean = 100; candidate seeds 90, 110, 130 -> deltas -10,10,30
+        result = sct.delta_time_loss_interval([90.0, 110.0, 130.0],
+                                              [90.0, 100.0, 110.0])
+        assert result["median_s"] == 10.0
+        assert result["min_s"] == -10.0
+        assert result["max_s"] == 30.0
+        assert result["n_seeds"] == 3
+
+    def test_single_seed_all_three_equal(self):
+        result = sct.delta_time_loss_interval([150.0], [100.0])
+        assert result == {"median_s": 50.0, "min_s": 50.0, "max_s": 50.0, "n_seeds": 1}
+
+    def test_even_seed_count_averages_the_two_middle_values(self):
+        result = sct.delta_time_loss_interval([80.0, 100.0, 120.0, 140.0],
+                                               [100.0, 100.0])
+        # deltas: -20, 0, 20, 40 -> median of the two middle (0, 20) = 10
+        assert result["median_s"] == 10.0
+
+
 class TestLoadBaselineFlows:
     def test_signature_mismatch_exits(self, tmp_path, monkeypatch):
         baseline = tmp_path / "baseline.json"
