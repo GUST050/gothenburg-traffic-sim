@@ -476,7 +476,7 @@ def demand_variants() -> list[Path]:
 
 def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              duration_s: int, home: Path, micro: bool = False,
-             metrics: bool = False) -> dict[str, Path] | None:
+             metrics: bool = False, begin_s: int = 0) -> dict[str, Path] | None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
     # Mesoscopic by default: our product is 15-min edge flows, which does not
@@ -506,9 +506,21 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
                             "--meso-junction-control.limited", "true"]),
         "-n", str(NET_PATH.resolve()),
         "-r", str(route_path.resolve()),
-        "-a", ",".join(str(p.resolve()) for p in add_paths),
+        # Every existing caller always has at least an edgeData additional,
+        # but signal_lab.py (PLAN.md D1) genuinely has none — metrics=True
+        # adds tripinfo/statistics/summary flags directly, independent of
+        # -a. An empty "-a ''" is untested SUMO territory; omit the flag
+        # entirely instead of risking it.
+        *(["-a", ",".join(str(p.resolve()) for p in add_paths)] if add_paths else []),
         "--seed", str(seed),
-        "--begin", "0",
+        # begin_s shifts the simulation START (default 0, every existing
+        # caller's behaviour is unchanged) — a vehicle with depart < begin_s
+        # simply never departs, which is exactly what a BOUNDED time-of-day
+        # window (signal_lab.py, PLAN.md D1) wants: only vehicles active in
+        # the window are simulated at all, not the whole day filtered after
+        # the fact. duration_s stays the far-end offset from t=0 regardless
+        # of begin_s, matching every existing caller's mental model.
+        "--begin", str(begin_s),
         # generous flush: meso insertion queues delay departures (measured
         # ~170 s avg backlog); a short flush silently drops the tail
         "--end", str(duration_s + 3600),

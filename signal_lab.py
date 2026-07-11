@@ -1,0 +1,175 @@
+"""
+signal_lab.py — PLAN.md Phase D1: reproducible signal-timing experiment
+harness + baseline.
+
+Runs the CURRENTLY calibrated demand through MICROSCOPIC simulation over a
+bounded time-of-day window, with a fixed set of seeds, and records
+closure_metrics.py's disruption scorecard per run into a results JSON with
+enough provenance (CLI args, network fingerprint, demand signature, SUMO
+version) to reproduce or compare runs later — this is exactly what the
+deleted ad hoc sumo/*tls_verify* artifacts (PLAN.md Phase A3) lacked.
+
+MICRO, not meso: mesoscopic simulation does not execute signal programs at
+all (CLAUDE.md, measured 2026-07-06 — meso delivery is identical whether
+junction control is on or off). Signal-timing experiments are therefore a
+separate, bounded-window, async analysis; meso stays the engine for
+interactive closures and demand recalibration.
+
+PROVENANCE: every net.net.xml traffic light is a netconvert --tls.guess
+synthetic 90 s-cycle default (CLAUDE.md, measured 2026-07-09), not a real
+Gothenburg signal plan. Every result this script writes carries
+tls_provenance="synthetic" explicitly, so nothing downstream can misread
+"optimized against the model's default" as "better than Gothenburg's real
+signals today" (PLAN.md Phase D's own stated honesty requirement). This
+becomes "city-configured" only once PLAN.md D6 imports real plans.
+
+Usage:
+  python3 signal_lab.py [--window-start 07:00] [--window-end 09:00]
+      [--seeds 3] [--out PATH]
+
+Requires sumo/demand_meta.json + sumo/calibrated*.rou.xml (run
+build_sumo_demand.py first) and sumo/net.net.xml (build_sumo_net.py).
+"""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import hashlib
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pandas as pd
+
+import closure_metrics as cm
+import run_scenario as rs
+from suggest_closure_time import aggregate_seed_metrics
+
+TLS_PROVENANCE = "synthetic"   # see module docstring; flips to
+                               # "city-configured" only when D6 lands.
+
+
+def window_offsets_s(epoch_sim: str, window_start: str, window_end: str) -> tuple[int, int]:
+    """HH:MM wall-clock times on the SAME calendar date as epoch_sim, as
+    offsets in seconds from epoch_sim — the same convention
+    structured_closures() uses for --closure begin/end, so a window means
+    the same thing here as everywhere else in this project. epoch_sim is
+    assumed tz-naive local wall time (demand_meta.json's actual contract,
+    verified against real output — no producer ever appends 'Z'); like
+    structured_closures(), this does not special-case a tz-aware epoch."""
+    epoch_ts = pd.Timestamp(epoch_sim)
+    date_str = epoch_ts.strftime("%Y-%m-%d")
+    start_ts = pd.Timestamp(f"{date_str}T{window_start}")
+    end_ts = pd.Timestamp(f"{date_str}T{window_end}")
+    if end_ts <= start_ts:
+        raise ValueError(f"--window-end {window_end} must be after "
+                         f"--window-start {window_start}")
+    begin_s = int((start_ts - epoch_ts).total_seconds())
+    end_s = int((end_ts - epoch_ts).total_seconds())
+    return begin_s, end_s
+
+
+def net_fingerprint(net_path: Path) -> str:
+    """sha1 of the network file's bytes — changes whenever TLS programs,
+    connections, or geometry change, independent of demand."""
+    return hashlib.sha1(net_path.read_bytes()).hexdigest()[:12]
+
+
+def sumo_version(home: Path) -> str:
+    try:
+        res = subprocess.run([str(home / "bin" / "sumo"), "--version"],
+                             capture_output=True, text=True, timeout=30)
+        first_line = res.stdout.strip().splitlines()[0] if res.stdout.strip() else ""
+        return first_line or "unknown"
+    except (subprocess.SubprocessError, OSError, IndexError):
+        return "unknown"
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--window-start", default="07:00", metavar="HH:MM",
+                   help="Window start, wall-clock on the calibrated day (default 07:00).")
+    p.add_argument("--window-end", default="09:00", metavar="HH:MM",
+                   help="Window end, wall-clock on the calibrated day (default 09:00).")
+    p.add_argument("--seeds", type=int, default=3,
+                   help="Fixed Monte Carlo seeds, 1000..1000+seeds-1 (default 3).")
+    p.add_argument("--out", type=Path, default=None,
+                   help="Result JSON path (default: sumo/signal_lab_<window>.json).")
+    return p.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    if args.seeds < 1:
+        sys.exit("--seeds must be >= 1")
+    home = rs.sumo_home()
+    rs.SUMO_DIR.mkdir(parents=True, exist_ok=True)
+
+    with open(rs.SUMO_DIR / "demand_meta.json") as f:
+        meta = json.load(f)
+    total_duration_s = meta["n_intervals"] * 900
+
+    try:
+        begin_s, end_s = window_offsets_s(meta["epoch_sim"], args.window_start,
+                                          args.window_end)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    if not (0 <= begin_s < end_s <= total_duration_s):
+        sys.exit(f"window {args.window_start}-{args.window_end} falls outside "
+                 f"the calibrated demand period (0-{total_duration_s / 3600:.1f}h)")
+
+    variants = rs.demand_variants()
+    print(f"Signal lab: {args.window_start}-{args.window_end} window "
+         f"({(end_s - begin_s) / 60:.0f} min), {args.seeds} seed(s), MICRO, "
+         f"tls_provenance={TLS_PROVENANCE}")
+
+    per_seed = []
+    t_total = time.time()
+    for s in range(args.seeds):
+        seed = 1000 + s
+        route_path = variants[s % len(variants)]
+        t0 = time.time()
+        metric_paths = rs.run_sumo(seed, route_path, [], end_s, home,
+                                   micro=True, metrics=True, begin_s=begin_s)
+        elapsed = time.time() - t0
+        metrics = cm.build_metrics(metric_paths["tripinfo"], metric_paths["statistics"],
+                                   summary_path=metric_paths["summary"])
+        print(f"  seed {seed} ({route_path.name}): {elapsed:.0f}s, "
+             f"timeLoss={metrics.total_time_loss_s:.0f}s, "
+             f"{metrics.trip_count} trips, {metrics.teleport_total} teleports")
+        per_seed.append({"seed": seed, "route_file": route_path.name,
+                         "elapsed_s": round(elapsed, 1),
+                         "metrics": dataclasses.asdict(metrics)})
+    total_elapsed = time.time() - t_total
+
+    aggregate = aggregate_seed_metrics(
+        [cm.DisruptionMetrics(**p["metrics"]) for p in per_seed])
+
+    result = {
+        "method": "PLAN.md Phase D1: micro signal-timing experiment harness",
+        "window_start": args.window_start, "window_end": args.window_end,
+        "begin_s": begin_s, "end_s": end_s,
+        "seeds": [p["seed"] for p in per_seed],
+        "tls_provenance": TLS_PROVENANCE,
+        "net_fingerprint": net_fingerprint(rs.NET_PATH),
+        "demand_signature": rs.demand_signature(meta),
+        "sumo_version": sumo_version(home),
+        "command": sys.argv,
+        "per_seed": per_seed,
+        "aggregate": dataclasses.asdict(aggregate),
+        "elapsed_s": round(total_elapsed, 1),
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    out_path = args.out or (
+        rs.SUMO_DIR /
+        f"signal_lab_{args.window_start.replace(':', '')}"
+        f"_{args.window_end.replace(':', '')}.json")
+    rs.atomic_write_json(out_path, result, indent=2)
+    print(f"Wrote {out_path}  ({total_elapsed:.0f}s total)")
+
+
+if __name__ == "__main__":
+    main()

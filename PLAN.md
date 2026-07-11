@@ -907,6 +907,84 @@ reproducibility — the thing the old tls_verify files lacked). Measure micro
 runtime for 60/90/120-min windows (whole-day micro ≈ 25 min; a 2 h window
 should be minutes — verify) and record here.
 
+DONE (2026-07-11). New standalone `signal_lab.py`. One small, low-risk
+change to `run_scenario.run_sumo()` first: added an optional `begin_s: int
+= 0` parameter (every existing caller's behaviour is byte-identical —
+`--begin` was hardcoded to `"0"` before) so a BOUNDED time-of-day window
+actually shifts SUMO's own simulation start instead of running the whole
+day and filtering after the fact — a vehicle with `depart < begin_s`
+simply never departs. Also found and fixed, while writing `signal_lab.py`
+itself (before ever running it against SUMO): `run_sumo()` unconditionally
+passed `-a ""` when `add_paths` was empty, which no EXISTING caller ever
+does (every one always has at least an edgeData additional) — genuinely
+untested SUMO territory. `signal_lab.py` is the first caller with no
+additional file at all (`metrics=True` alone is sufficient — tripinfo/
+statistics/summary are separate flags, independent of `-a`), so the `-a`
+flag is now omitted entirely when `add_paths` is empty rather than risking
+an empty-string argument. 2 new tests for `begin_s`, regression tests for
+the existing metrics-opt-in behaviour re-run clean.
+
+`window_offsets_s()` converts `HH:MM` wall-clock times to offsets from
+`epoch_sim` using the exact same convention `structured_closures()` already
+established for `--closure` begin/end (verified against the real
+`demand_meta.json`: `epoch_sim` is always tz-naive local wall time, matching
+`structured_closures()`'s own assumption — an initial test asserting a
+trailing-`Z` epoch should work was itself wrong, since no producer in this
+codebase ever writes one; fixed the test, not the code, once traced back to
+the real contract). Provenance: `net_fingerprint()` (sha1 of `net.net.xml`'s
+bytes — changes whenever TLS programs/connections/geometry change),
+`demand_signature()` (reused from `run_scenario.py`), the raw CLI
+`sys.argv`, and a parsed `sumo --version` string are all written into every
+result JSON, plus an explicit `tls_provenance: "synthetic"` field
+(hardcoded — every one of net.net.xml's 65 TLS programs is still a
+netconvert `--tls.guess` default; this flips to `"city-configured"` only
+when D6 imports real plans). `aggregate_seed_metrics()` is imported directly
+from `suggest_closure_time.py` rather than re-derived a third time (same
+mean/sum/max-per-field rules as C4/C5, already tested there).
+
+**Runtime measurement, real data** (built a genuine fresh whole-day demand,
+`build_sumo_demand.py --begin 00:00 --end 24:00`, 96 quarters/22 841
+calibrated trips, restored the pre-existing tracked scenario/od-matrix
+files afterward via `git checkout --` since this was a measurement run, not
+an intentional redeploy):
+
+| Window | Trips inserted | Wall time (1 seed) | Wall time (3 seeds, default) |
+|---|---|---|---|
+| 07:00–08:00 (60 min) | 3 419 | 5.3 s | — |
+| 07:00–08:30 (90 min) | 4 139 | 6.3 s | — |
+| 07:00–09:00 (120 min) | 4 829 | 8.3 s | 27.3 s (8.0+7.1+12.2) |
+
+The plan's own expectation — "whole-day micro ≈ 25 min; a 2 h window should
+be minutes" — is not just met but beaten: a 2-hour window is under 10
+seconds per seed, under 30 seconds for the harness's default 3-seed run.
+(`--end` still adds the same +3600 s flush margin every other `run_sumo()`
+caller gets — meaning the ACTUAL simulated span for a "120-min" window is
+07:00→09:00 clock time as requested, SUMO's own `--end` argument sits an
+hour further out than that to let near-boundary vehicles finish rather than
+being force-counted "unfinished" — this is why even the 60-min case's real
+simulated span is closer to 2 hours of SUMO time, and the runtimes above
+should be read as "safe to run interactively", not literally
+proportional to window length.)
+
+**Real finding, not a signal_lab.py bug**: the 3-seed 120-min run's per-seed
+teleport counts were wildly uneven — 21, 8, then 360 for
+`calibrated_v2.rou.xml` (the q90 direction-split demand variant) — versus
+8-21 for the other two. `aggregate_seed_metrics`'s SUM-not-mean choice for
+teleports is exactly what surfaced this rather than hiding it in an
+averaged 129.7. This is a real signal about that specific demand variant's
+micro-simulation behaviour (out of D1's own scope — this script's job is
+the harness, not diagnosing PFE variant quality) worth flagging for whoever
+picks up D2+: don't assume all three demand variants behave equivalently in
+micro just because they're all 100% GEH<5 in meso/PFE terms.
+
+10 new unit tests (`window_offsets_s` including the epoch-convention case
+above, `net_fingerprint`, `sumo_version`'s graceful-degradation path, the
+window-fits-inside-demand-period bound check) — the heavy end (an actual
+micro SUMO run) is intentionally not unit-tested, exercised manually
+against real demand instead, matching this project's established pattern
+for every other SUMO-invoking script. Full suite: 556 passed, 20 skipped,
+0 failed (up from 544 before this step).
+
 ### D2. Off-the-shelf optimizers — size M — depends D1
 Run SUMO tools on our calibrated routes:
 - `tlsCycleAdaptation.py` (Webster cycle/green splits, per intersection,

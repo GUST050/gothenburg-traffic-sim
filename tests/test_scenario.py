@@ -250,6 +250,41 @@ class TestSumoTimeout:
         assert measured is not None
 
 
+class TestRunSumoBeginOffset:
+    """begin_s (added for signal_lab.py, PLAN.md D1): a bounded time-of-day
+    window must shift SUMO's own --begin, not just filter results after the
+    fact, so vehicles outside the window are never even inserted."""
+
+    def test_default_begin_is_zero_unchanged(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 900, tmp_path)
+        cmd = commands[0]
+        assert cmd[cmd.index("--begin") + 1] == "0"
+
+    def test_explicit_begin_s_is_passed_through(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 7200,
+                              tmp_path, begin_s=3600)
+        cmd = commands[0]
+        assert cmd[cmd.index("--begin") + 1] == "3600"
+        # duration_s stays the far-end offset from t=0, unaffected by begin_s.
+        assert cmd[cmd.index("--end") + 1] == str(7200 + 3600)
+
+
 class TestTrajectorySimulationMode:
     """A micro scenario used micro edge-flow simulation but its vehroute
     export always forced --mesosim, so the web UI displayed vehicle timings
