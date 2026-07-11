@@ -696,6 +696,79 @@ Output: result JSON with method, candidate set, proxy scores, simulated
 metrics, demand_signature, seeds — reproducible without the web.
 Compute: top-15 × ~40 s meso ≈ 10-15 min batch for a week — acceptable.
 
+DONE (2026-07-11). New standalone `suggest_closure_time.py`, not touching
+serve.py/web/data/scenarios per the plan. Deviations from the spec, each
+made deliberately and reasoned through before implementing:
+- **Proxy stage uses the already-built baseline SCENARIO's flows**
+  (`web/data/scenarios/baseline.json`, matched against the current
+  `demand_signature` — hard error if stale/missing), not a fresh SUMO run
+  or raw PFE `achieved` values (the latter is usually stripped from disk
+  by `build_sumo_demand.py` unless `keep_achieved` is requested). This is
+  what makes the proxy stage GENUINELY "seconds, no simulation" as
+  specified — an earlier draft of this file ran an extra throwaway
+  baseline simulation just for the proxy's edgeData, defeating that
+  requirement; caught in review before committing, not after.
+- **Detour availability is a topology-only, per-EDGE diagnostic**, computed
+  ONCE (not per candidate window) and reported alongside the ranking, not
+  folded into it — realized during design that a road's detour topology
+  cannot change hour-to-hour for a fixed edge, so it has zero discriminating
+  power between windows and would only ever act as either a no-op or a
+  misleading tie-breaker if included in the per-window score.
+- **Proxy score is a Borda-style average of two rank positions** (closed-
+  edge flow, nearby-corridor flow) using `scipy.stats.rankdata(...,
+  method="average")`, not a weighted sum of flow numbers — enforces the
+  plan's own "never show it as predicted delay minutes" rule structurally
+  (a rank position cannot be misread as a physical quantity) rather than
+  by convention. An initial stable-sort-based rank implementation was
+  proven wrong by `TestProxyScoresAndRanking.
+  test_lower_flow_window_scores_better` (a tied-corridor-flow fixture) —
+  ties leaked the fixture's original index order into the combined score
+  as a spurious bias; fixed by switching to fractional/average-tie ranking.
+- **`aggregate_seed_metrics`**: mean across seeds for volume-like fields
+  (each seed is a full independent demand replication, not a partition —
+  summing would count every vehicle `seeds` times), SUM for teleports (any
+  seed teleporting is a real integrity signal, not something to dilute by
+  averaging), truncated/dropped taken from the first seed (computed once
+  per demand variant, shared across the seeds that draw it, not
+  independently per seed).
+Also found and fixed a real bug via the test suite before it ever ran
+against SUMO: `detour_availability`'s adjacency graph was built by calling
+`run_scenario.build_edge_graph()`, which hardcodes the module-level
+`run_scenario.NET_PATH` instead of accepting a path argument — silently
+ignoring the `net_path` this function was actually given. No production
+impact (production always passes `rs.NET_PATH` for both), but genuinely
+untestable and a real API footgun; fixed by building the banned-edge
+adjacency directly from `edge_neighbors()`'s already-parsed successor map
+instead of a second, path-inconsistent parse.
+
+Verified against real SUMO and real (if small — the 4-hour morning-window
+demand happened to be what was locally calibrated at the time) demand:
+built a matching baseline scenario, ran `--edge 60786979_3575001205_0
+--duration-hours 1 --slide-hours 0.5 --top-k 3 --extra-bad 1 --seeds 1`
+end to end. Correctly found and reported this edge's known zero-detour
+topology (0/8 predecessor→successor pairs reachable — matches the
+`truncate_stranded_vehicles` closure-leak finding for this exact edge
+documented above under "CLOSURE-LEAK FIX"), correctly disqualified two
+candidate windows for `dropped_unreachable_vehicles`/`teleports`, correctly
+skipped the Spearman check when fewer than 3 non-disqualified candidates
+remained, wrote a valid result JSON. Added scratch-file tracking
+(`--keep-scratch` to opt out) after noticing a search leaves dozens of
+route/edgeData/tripinfo files in `sumo/` per run with no natural expiry;
+verified twice — once confirming cleanup actually removes every tracked
+file, once with `--keep-scratch` confirming it preserves them (including
+the baseline's own metrics files, whose name doesn't contain the tool's
+`sct_` scratch prefix at all since they're keyed off the unmodified
+`calibrated.rou.xml` stem — worth knowing if extending the cleanup list
+later). 26 new unit tests (window generation reproduces the plan's own
+163-window and 19-window worked examples exactly; detour topology on tiny
+synthetic nets; proxy ranking; candidate selection/dedup; seed
+aggregation; baseline-loading error paths) — two of the three ranking
+tests failed against the pre-fix code, confirming they catch the bugs
+above, not just describing intended behavior. Tracked scenario files were
+restored via `git checkout --` after the real verification run (the
+baseline they produced was a throwaway 4-hour window, not the deployed
+7-day one).
+
 ### C5. API + UI — size L — depends C4
 - serve.py: start/status/result endpoints following the PROVEN async
   recalibrate pattern (background thread, 202 immediately, poll; page-load
@@ -841,12 +914,15 @@ build_sumo_demand.py, validate_sim.py):**
   priority) for anyone who wants to push the method itself further.
 
 **Scenario/serve/web layer (run_scenario.py, serve.py, web/*.js):**
-- Outer subprocess timeouts (`serve.py`'s 600s/300s around `run_scenario.py`
-  calls) don't guarantee killing grandchild SUMO processes if a middle
-  process hangs — same class of issue `SUMO_TIMEOUT_S` was added for
-  originally, but the outer layer isn't fully closed. Worth a process-group
-  kill (`os.killpg` / `start_new_session=True` + group signal) instead of a
-  bare `subprocess.run(timeout=...)`.
+- ~~Outer subprocess timeouts...~~ FIXED (2026-07-11, commit `c48732a`,
+  found independently via an external improvement-review pass and verified
+  real with a live child-spawns-grandchild reproduction before fixing):
+  `serve.run_in_new_session()` — `Popen(start_new_session=True)` +
+  `os.killpg(SIGKILL)` on timeout — now wraps all three job subprocess
+  sites (`/api/close`, recalibration's `build_sumo_demand`, and its
+  baseline `run_scenario` call). `TestRunInNewSession.
+  test_timeout_kills_the_grandchild_too` proves the fix (and that plain
+  `subprocess.run(timeout=)` demonstrably does not).
 - Web client: `scenarioToken` only guards a second Simulering-scenario load
   racing a first one. Switching to Historisk/Prognos mid-fetch, or a slow
   trajectory load finishing after the user has already switched away, isn't
