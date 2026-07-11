@@ -359,6 +359,59 @@ class TestRunSumoNetPath:
         assert cmd[cmd.index("-n") + 1] == str(alt_net.resolve())
 
 
+class TestRunSumoVehrouteOutput:
+    """vehroute_output (added for signal_closure_combine.py, PLAN.md D4):
+    extracting the ACTUALLY-driven post-closure routes needs the runtime
+    rerouter's real decisions, only available from --vehroute-output,
+    requested from the SAME run as the disruption metrics."""
+
+    def test_default_omits_vehroute_flags(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        result = run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 900, tmp_path)
+        assert "--vehroute-output" not in commands[0]
+        assert result is None   # every existing caller's behaviour unchanged
+
+    def test_vehroute_output_adds_the_flag_and_returns_its_path(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        vr_path = tmp_path / "vehroutes.xml"
+        result = run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 900, tmp_path,
+                                       vehroute_output=vr_path)
+        cmd = commands[0]
+        assert cmd[cmd.index("--vehroute-output") + 1] == str(vr_path.resolve())
+        assert "--vehroute-output.exit-times" in cmd
+        assert result == {"vehroute": vr_path}
+
+    def test_metrics_and_vehroute_output_combine_in_one_run(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        vr_path = tmp_path / "vehroutes.xml"
+        result = run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 900, tmp_path,
+                                       metrics=True, vehroute_output=vr_path)
+        assert set(result) == {"tripinfo", "statistics", "summary", "vehroute"}
+        assert "--tripinfo-output" in commands[0]
+        assert "--vehroute-output" in commands[0]
+
+
 class TestTrajectorySimulationMode:
     """A micro scenario used micro edge-flow simulation but its vehroute
     export always forced --mesosim, so the web UI displayed vehicle timings

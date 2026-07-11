@@ -1480,6 +1480,88 @@ signal changes shift routing enough to need a second pass (measure, decide).
 This is the deliverable Gustav described: "when a road closes, how should the
 lights adapt".
 
+DONE (2026-07-11). New `signal_closure_combine.py`. **MICRO throughout, not
+meso**, despite this section's own literal wording above — deliberate
+deviation, not an oversight: D3 (just above) measured that meso does not
+execute signal programs meaningfully at all (near-zero time-loss spread
+across 5 wildly different TLS conditions), and D4's entire point is signal-
+timing quality, so extracting routes from a run whose signals don't matter
+and then judging signal quality on them would mix two regimes D3 already
+showed disagree.
+
+**Mechanism, empirically grounded before building on it**: probed a real
+closure (Skånegatan, edge `60786979_3575001205_0`) with
+`--vehroute-output --vehroute-output.exit-times` over real whole-day demand
+— confirmed against 139 real rerouted vehicles, zero exceptions, that a
+rerouted vehicle's actually-driven route is reliably the LAST `<route>`
+child of its `<routeDistribution>` (real `exitTimes`, no
+`replacedOnEdge`/`reason` markers; earlier entries are superseded plans kept
+for audit only, `probability="0"`). Built `extract_final_routes()` on this
+rule. Two additive parameter changes made this possible without duplicating
+any existing machinery: `run_scenario.run_sumo()` gained
+`vehroute_output: Path | None = None` (adds `--vehroute-output`/
+`.exit-times`, returns a `"vehroute"` key alongside the existing tripinfo/
+statistics/summary trio — every existing caller's return value is exactly
+unchanged, verified via `metric_paths or None` and the full test suite);
+`signal_optimize.run_condition()` gained the same parameter, applied only to
+the run's first seed (one representative seed/variant, matching how D2's own
+`tlsCycleAdaptation`/`tlsCoordinator` calls already only use `variants[0]`)
+— return shape unchanged, so D2/D3's existing calls are untouched.
+
+**Pipeline**: build the closure additional file + truncate stranded-vehicle
+demand variants (same `run_scenario.write_closure_additional`/
+`truncate_stranded_vehicles` C2/C4 already use — no third reimplementation)
+→ Pass 1 = closure + the deployed BASELINE synthetic signals, window-bounded
+micro (`run_condition`, `flush_s=0`, same D1-D3 discipline), captures metrics
++ one seed's vehroute → `extract_final_routes()` → D2's
+`run_tls_cycle_adaptation`/`run_tls_coordinator` run against the EXTRACTED
+post-closure routes (not the original pre-closure demand — the whole point)
+→ Pass 2 = same closure/window/seeds with the newly-optimized signals →
+`closure_metrics.compare_metrics()` for before/after, plus a new
+`route_stability()` comparing Pass 1 vs Pass 2's captured routes (PLAN.md's
+own "measure, decide" instruction — reported, not looped into an open-ended
+convergence search; the script always runs exactly two passes).
+
+**Real measured result — HONEST, not cherry-picked, and mixed**: same
+closure, two window/seed sizes.
+- 07:00-08:00, 1 seed: Pass 1 timeLoss=303 434 s (1 533 trips, 5 teleports) →
+  Pass 2 timeLoss=259 473 s (5 teleports) — **-14.5%**, but still
+  DISQUALIFIED (teleports present in both passes, so `compare_metrics` never
+  reports this as a clean win regardless of the timeLoss direction — the
+  disqualification-aware scorecard doing exactly its job). Route stability
+  99.9% of 1 227 common vehicles identical between passes.
+- 07:00-09:00, 3 seeds (the project's own default window): Pass 1
+  timeLoss=869 205 s (37 teleports: 1 jam/4 yield, max_queue=144) → Pass 2
+  timeLoss=998 265 s (108 teleports: 43 jam/22 yield/12 wrongLane,
+  max_queue=357) — **+14.8% WORSE**, also DISQUALIFIED, and visibly more
+  congested by every guard metric (more unfinished trips, 2.5× the queue
+  peak). Route stability still 99.9% (2 996/2 999 common vehicles
+  identical) — the routes barely moved, so the regression is a genuine
+  signal-timing effect, not a routing artifact.
+
+**Reading this honestly**: tlsCycleAdaptation.py's Webster-style cycle/
+green-split recalculation, tuned against ONE representative seed's extracted
+post-closure flow, does not reliably generalize to the full seed/direction-
+variant mix it then gets evaluated against — sometimes it helps, sometimes
+it measurably worsens congestion (more jams, much deeper queues), and which
+one happens is not obvious in advance from the smaller/cheaper test alone.
+This is a genuine capability limit of the off-the-shelf optimizer under
+closure-induced demand redistribution, not a bug in this script (verified:
+same truncated demand variants and closure file feed both passes; only the
+signal additional files differ between them). Anyone using this for a real
+recommendation should run it at the actual seed count they intend to trust
+and read `route_stability`/teleport counts, not just the headline Δ.
+
+8 new unit tests (`extract_final_routes`'s routeDistribution/plain-route/
+mixed/no-route cases, `route_stability`'s identical/changed/
+routeDistribution-on-both-sides/no-common-vehicle cases) — matching D1-D3's
+established style of unit-testing only the pure-logic pieces and verifying
+the SUMO-invoking parts by running them for real. Full suite: 615 passed, 20
+skipped, 0 failed (up from 607). No tracked files changed by the real runs
+(`--out` pointed at a scratch path for both verification runs; intermediate
+`d4_*` files are cleaned up by the script itself, confirmed empty after
+each run).
+
 ### D5. UI + provenance — size L — depends D2 (+D4 for combined)
 "Optimera signaler" action per scenario (async start/poll like C5), result =
 before/after metric card + per-junction plan diff (cycle/splits/offsets),

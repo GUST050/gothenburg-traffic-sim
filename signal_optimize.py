@@ -184,10 +184,18 @@ def condition_net_fingerprints(conditions: dict[str, dict]) -> dict[str, str]:
 
 def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path],
                   seeds: int, begin_s: int, end_s: int, home: Path,
-                  micro: bool = True) -> tuple[cm.DisruptionMetrics, list[float]]:
+                  micro: bool = True,
+                  vehroute_output: Path | None = None
+                  ) -> tuple[cm.DisruptionMetrics, list[float]]:
     """micro=True (default, every existing caller's behaviour unchanged) for
     D2's own ground-truth comparisons; micro=False reruns the SAME five
-    conditions in meso for D3's screening-feasibility question (PLAN.md)."""
+    conditions in meso for D3's screening-feasibility question (PLAN.md).
+
+    vehroute_output (PLAN.md D4): when given, the FIRST seed's run also
+    requests --vehroute-output to that path — one representative seed's
+    actually-driven routes, from the SAME run as its metrics. Return shape
+    is unchanged (the caller already holds the path); every existing
+    caller passes nothing here and sees identical behaviour."""
     per_seed_metrics = []
     per_seed_time_loss = []
     for s in range(seeds):
@@ -202,7 +210,8 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
         # honestly tracked via unfinished_trips, not silently padded in.
         metric_paths = rs.run_sumo(seed, route_path, add_paths, end_s, home,
                                    micro=micro, metrics=True, begin_s=begin_s,
-                                   net_path=net_path, flush_s=0)
+                                   net_path=net_path, flush_s=0,
+                                   vehroute_output=vehroute_output if s == 0 else None)
         metrics = cm.build_metrics(metric_paths["tripinfo"], metric_paths["statistics"],
                                    summary_path=metric_paths["summary"])
         per_seed_metrics.append(metrics)
