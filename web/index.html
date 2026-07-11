@@ -450,6 +450,13 @@
               if (e.name === 'AbortError') return;   // superseded — not a real failure
               throw e;
             }
+            // Recalibration deletes scenario/trajectory files before
+            // rebuilding them — a 404 here is a real, reachable state, and
+            // parsing the server's HTML error page as JSON would surface
+            // as a cryptic SyntaxError with no filename.
+            if (!res.ok) {
+              throw new Error(`trajectories ${provider.trajectories}: HTTP ${res.status}`);
+            }
             trajCache[provider.trajectories] = await res.json();
           }
           if (token !== modeToken) return;   // a newer mode switch happened meanwhile
