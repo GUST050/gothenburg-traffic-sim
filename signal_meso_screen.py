@@ -156,7 +156,7 @@ def main() -> None:
     label = signal_artifact_label(args.window_start, args.window_end,
                                   demand_sig, baseline_net_fp)
     print(f"Signal meso screen: {args.window_start}-{args.window_end} window, "
-         f"{args.seeds} seed(s) — micro ground truth vs meso screen, 5 conditions")
+         f"{args.seeds} seed(s) — micro ground truth vs meso screen, 6 conditions")
 
     approach_report = short_tls_approaches(rs.NET_PATH)
     print(f"  {approach_report['short_count']}/{approach_report['total_tls_approach_edges']} "

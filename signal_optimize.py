@@ -3,7 +3,7 @@ signal_optimize.py — PLAN.md Phase D2: off-the-shelf signal-timing
 optimizers, evaluated via the D1 harness (signal_lab.py's machinery).
 
 Runs SUMO's own tools against the currently calibrated demand for one time
-window, then evaluates FIVE conditions with the SAME MICRO metric machinery
+window, then evaluates SIX conditions with the SAME MICRO metric machinery
 against the SAME baseline:
 
   baseline              — the deployed net.net.xml's untouched synthetic
@@ -14,8 +14,15 @@ against the SAME baseline:
                           offset coordination on top.
   actuated              — SUMO's built-in gap-based actuated TLS type, as
                           a no-optimization-tool reference point.
-  delay_based           — SUMO's built-in delay-based actuated TLS type,
+  delay_based            — SUMO's built-in delay-based actuated TLS type,
                           same reference-point role.
+  regulation_compliant  — signal_regulation.py's TSFS 2014:30-compliant
+                          rebuild of the baseline's own phase structure
+                          (PLAN.md D6, partial — still not Gothenburg's
+                          real signal plans, but grounded in Sweden's
+                          binding regulation instead of an arbitrary guess;
+                          see signal_regulation.py's own docstring for the
+                          full citation list).
 
 actuated/delay_based are network-BUILD-time choices (verified: `sumo
 --tls.default-type` does not exist, only `netconvert --tls.default-type`
@@ -54,6 +61,7 @@ import closure_metrics as cm
 import run_scenario as rs
 from signal_lab import (TLS_PROVENANCE, net_fingerprint, sumo_version,
                         tls_plan_diff, window_offsets_s)
+from signal_regulation import build_regulation_compliant_tls
 from suggest_closure_time import aggregate_seed_metrics
 
 CAVEAT = ("Measured against a SYNTHETIC netconvert --tls.guess baseline "
@@ -63,6 +71,15 @@ CAVEAT = ("Measured against a SYNTHETIC netconvert --tls.guess baseline "
          "read the absolute numbers, not just the percentages.")
 
 BUILTIN_TLS_TYPES = ["actuated", "delay_based"]
+
+# PLAN.md D6 (partial): "regulation_compliant" is a DIFFERENT kind of
+# synthetic than the other 5 conditions -- it's still not Gothenburg's real
+# signal plans (that needs the city), but it's grounded in Sweden's own
+# binding regulation (TSFS 2014:30) rather than an arbitrary uniform-cycle
+# guess, and must not be silently reported under the same "synthetic" label
+# as netconvert's raw guess. Every other condition keeps TLS_PROVENANCE
+# unchanged.
+REGULATION_PROVENANCE = "synthetic_regulation_compliant"
 
 
 def run_tls_cycle_adaptation(home: Path, route_path: Path, begin_s: int,
@@ -133,7 +150,7 @@ def build_signal_conditions(home: Path, variants: list[Path], begin_s: int,
                             label: str) -> dict[str, dict]:
     """Build (or reuse, under the fingerprinted `label`) the
     tlsCycleAdaptation/tlsCoordinator outputs and the actuated/delay_based
-    alternate networks, then return the 5-condition dict D2 and D3 both
+    alternate networks, then return the 6-condition dict D2 and D3 both
     evaluate. Shared by signal_optimize.py and signal_meso_screen.py so
     they can never silently diverge on which conditions exist or how
     artifacts get cached — found in external review 2026-07-11 as
@@ -141,7 +158,14 @@ def build_signal_conditions(home: Path, variants: list[Path], begin_s: int,
     rebuilt every artifact unconditionally while signal_meso_screen.py
     cached by bare filename existence with no freshness check at all (the
     actual bug fixed here). A single shared, correctly-fingerprinted
-    implementation fixes both problems at once."""
+    implementation fixes both problems at once.
+
+    regulation_compliant (PLAN.md D6, partial) is cached under
+    net_fingerprint ALONE, not `label` — unlike adapted/coordinated/alt-
+    nets, it depends only on network geometry (TSFS 2014:30's minimums and
+    the separering-i-tid clearance formula, never on demand or window), so
+    it is correctly reused across every window/demand combination sharing
+    the same network rather than rebuilt per-label for no reason."""
     adapted_path = rs.SUMO_DIR / f"tls_adapted_{label}.add.xml"
     if not adapted_path.exists():
         print("  running tlsCycleAdaptation.py …")
@@ -157,6 +181,10 @@ def build_signal_conditions(home: Path, variants: list[Path], begin_s: int,
             print(f"  building alternate network (--tls.default-type {tls_type}) …")
             build_alt_type_net(home, tls_type, net_path)
         alt_nets[tls_type] = net_path
+    regulation_path = rs.SUMO_DIR / f"tls_regulation_{net_fingerprint(rs.NET_PATH)}.add.xml"
+    if not regulation_path.exists():
+        print("  building regulation-compliant TLS program (TSFS 2014:30) …")
+        build_regulation_compliant_tls(rs.NET_PATH, regulation_path)
     return {
         "baseline": {"net_path": rs.NET_PATH, "add_paths": []},
         "adapted": {"net_path": rs.NET_PATH, "add_paths": [adapted_path]},
@@ -164,6 +192,7 @@ def build_signal_conditions(home: Path, variants: list[Path], begin_s: int,
                                 "add_paths": [adapted_path, coordinated_path]},
         "actuated": {"net_path": alt_nets["actuated"], "add_paths": []},
         "delay_based": {"net_path": alt_nets["delay_based"], "add_paths": []},
+        "regulation_compliant": {"net_path": rs.NET_PATH, "add_paths": [regulation_path]},
     }
 
 
@@ -262,7 +291,7 @@ def main() -> None:
     label = signal_artifact_label(args.window_start, args.window_end,
                                   demand_sig, baseline_net_fp)
     print(f"Signal optimize: {args.window_start}-{args.window_end} window, "
-         f"{args.seeds} seed(s), MICRO — 5 conditions vs synthetic baseline")
+         f"{args.seeds} seed(s), MICRO — 6 conditions vs synthetic baseline")
 
     conditions = build_signal_conditions(home, variants, begin_s, label)
     net_fps = condition_net_fingerprints(conditions)
@@ -318,6 +347,15 @@ def main() -> None:
         # string was never updated alongside it.
         "tls_provenance": TLS_PROVENANCE, "caveat": CAVEAT,
         "recommendation_allowed": TLS_PROVENANCE != "synthetic",
+        # Per-condition override: every condition except regulation_compliant
+        # shares the top-level TLS_PROVENANCE; that one is grounded in TSFS
+        # 2014:30 rather than an arbitrary guess and must say so explicitly
+        # (see REGULATION_PROVENANCE above) rather than inheriting the
+        # generic "synthetic" label silently.
+        "tls_provenance_by_condition": {
+            name: (REGULATION_PROVENANCE if name == "regulation_compliant" else TLS_PROVENANCE)
+            for name in conditions
+        },
         "net_fingerprint": baseline_net_fp,
         "net_fingerprints_by_condition": net_fps,
         "demand_signature": demand_sig,

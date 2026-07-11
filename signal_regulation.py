@@ -1,0 +1,270 @@
+"""
+signal_regulation.py — PLAN.md Phase D6 (partial): a synthetic
+signal-timing baseline that complies with Sweden's binding national
+regulation for traffic signals — Transportstyrelsens föreskrifter TSFS
+2014:30, "Transportstyrelsens föreskrifter och allmänna råd om
+trafiksignaler" — instead of netconvert --tls.guess's arbitrary uniform
+90 s-cycle guess.
+
+NOT Gothenburg's real signal plans. D6's original ask (signal-object <->
+intersection <-> SUMO TLS-ID mapping, phase diagrams, cycle/green/offset
+per time-of-day plan, detector logic, bus priority) genuinely requires the
+city (researched 2026-07-11: checked data.goteborg.se, goteborg.se/psidata,
+and the Teknisk Handbok — no public dataset of operational signal PROGRAMS
+exists; Trafikverket's NVDB covers road infrastructure, not municipal
+signal control, confirming this needs a direct request via Miroslaw, not
+something obtainable by more web research). This module fixes something
+different and real: our own synthetic baseline's internal consistency with
+the LAW every real Swedish signal must also obey, which is buildable right
+now from data already in this repo. tls_provenance for this program is the
+NEW value "synthetic_regulation_compliant" — more grounded than
+"synthetic", still not "city-configured".
+
+SOURCES (every number below is directly cited, not invented) — TSFS
+2014:30, https://www.transportstyrelsen.se/tsfs/TSFS%202014_30.pdf (read
+in full, all 14 pages, 2026-07-11):
+  - kap 2 § 11: red+yellow ("röd+gul") shown 1.5 s before every green phase
+    (vehicle and cycle signals).
+  - kap 2 § 12: yellow shown 4 s where the speed limit is <60 km/h, 5 s
+    where >=60 km/h.
+  - kap 2 § 14: green shown >=4 s (vehicle signals).
+  - kap 2 §§ 2-10 ("Separering i tid"): the inter-green clearance time must
+    satisfy t_s = (s_out + l_f)/v_out - s_in/v_in > 0, using the
+    standardized speed table in § 9 (vehicles: 8/10/12/14/15 m/s for
+    posted limits 30/40/50/60/70 km/h) and the default vehicle length in
+    § 10 (6 m).
+
+MEASURED against our own deployed net.net.xml before writing this
+(2026-07-11): yellow phases were only ever 3.0 s or 5.0 s — the 3.0 s ones
+violate the >=4 s minimum for any approach under 60 km/h, which is nearly
+every inner-city street; only 3 of the network's ~330 phases across 57
+real TLS junctions have ANY red-red clearance interval at all, and there
+is no red+yellow transition anywhere. netconvert's guess is not merely
+unlabelled, it is measurably non-compliant with the law every real Swedish
+signal must follow.
+
+DELIBERATE SIMPLIFICATIONS (engineering judgement, kept separate from the
+citations above so a future reader can tell law from choice):
+  - s_in (the entering direction's own distance-to-conflict-point) is
+    taken as 0 rather than measured per movement pair. This can only ever
+    make the computed clearance LARGER (more conservative), never smaller
+    — it drops a term that would otherwise REDUCE t_s.
+  - s_out (the clearing direction's distance to the conflict point) uses
+    the REAL internal-junction lane length SUMO already computed for that
+    connection (net.net.xml's own internal <lane length=...>), taking the
+    MAX among the phase's clearing links — a real, not fabricated,
+    distance, conservatively worst-cased across simultaneous movements
+    rather than resolved per specific conflicting pair (which would need
+    the junction's own foes/request bitstring — out of scope here).
+  - v_out uses the MIN (slowest, most conservative) TSFS speed-bucket
+    value among the phase's clearing links.
+  - Sequencing choice (not itself dictated by a single TSFS paragraph,
+    since §§2-10's clearance and §11's red+yellow are two separate
+    requirements): the computed all-red interval is shown FIRST, then the
+    1.5 s red+yellow warm-up for the entering direction is appended after
+    it — this satisfies both requirements independently rather than
+    assuming one covers the other.
+  - TSFS's speed table (§9) only covers 30-70 km/h; edges below/above that
+    range are clamped to the table's own end values (8 / 15 m/s) rather
+    than extrapolated, since the regulation defines no tier outside it.
+  - Any link that is already green (G/g) going into a yellow-phase
+    transition and stays green in the following phase (an unrelated,
+    continuously-flowing movement at a junction with more than two
+    alternating groups) is left green through the inserted all-red/
+    red+yellow phases rather than forced red — those movements were never
+    part of the conflict this clearance interval protects against.
+
+Usage:
+  python3 signal_regulation.py [--out PATH]
+
+Reads sumo/net.net.xml (build_sumo_net.py). Writes a content-addressed
+<additional> file (programID="reg" per real TLS) — content-addressed by
+net_fingerprint alone, since this transform depends only on network
+geometry, never on demand/window. Loading it as run_sumo's sole add_path
+makes SUMO activate "reg" (SUMO's own "last-loaded program wins" behaviour
+for a given TLS id, verified via TraCI in D2) exactly the same way D2's
+tlsCycleAdaptation output already does — no new activation machinery.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+import run_scenario as rs
+from signal_lab import net_fingerprint
+
+MIN_GREEN_S = 4.0             # TSFS 2014:30 kap 2 § 14
+REDYELLOW_S = 1.5             # TSFS 2014:30 kap 2 § 11
+DEFAULT_VEHICLE_LENGTH_M = 6.0  # TSFS 2014:30 kap 2 § 10
+
+# TSFS 2014:30 kap 2 § 9 — standardized speed values (m/s) for the
+# separering-i-tid formula, keyed by posted speed limit (km/h).
+_SPEED_TABLE_KMH_MS = [(30, 8.0), (40, 10.0), (50, 12.0), (60, 14.0), (70, 15.0)]
+
+
+def speed_bucket_ms(speed_kmh: float) -> float:
+    """TSFS 2014:30 § 9's standardized speed table, nearest tier. Clamped
+    to the table's own 30-70 km/h range (see module docstring)."""
+    if speed_kmh <= _SPEED_TABLE_KMH_MS[0][0]:
+        return _SPEED_TABLE_KMH_MS[0][1]
+    if speed_kmh >= _SPEED_TABLE_KMH_MS[-1][0]:
+        return _SPEED_TABLE_KMH_MS[-1][1]
+    return min(_SPEED_TABLE_KMH_MS, key=lambda t: abs(t[0] - speed_kmh))[1]
+
+
+def yellow_time_s(speed_kmh: float) -> float:
+    """TSFS 2014:30 kap 2 § 12: 4 s if speed limit <60 km/h, 5 s if >=60."""
+    return 5.0 if speed_kmh >= 60 else 4.0
+
+
+def parse_tls_link_geometry(net_path: Path) -> dict[str, dict[int, dict]]:
+    """tls_id -> {linkIndex: {"speed_kmh": v, "clear_dist_m": d}}, built
+    from net.net.xml's real <connection tl=...> elements: v from the
+    approach edge's own lane speed (SUMO stores speed on <lane>, not
+    <edge>), d from the REAL internal-junction lane length SUMO already
+    computed for that specific connection's via-lane. Multiple connections
+    sharing one linkIndex (grouped lanes) collapse to the conservative
+    values: min speed, max distance."""
+    root = ET.parse(net_path).getroot()
+
+    edge_speed_ms: dict[str, float] = {}
+    internal_lane_length_m: dict[str, float] = {}
+    for e in root.findall("edge"):
+        lanes = e.findall("lane")
+        if e.get("function") == "internal":
+            for l in lanes:
+                internal_lane_length_m[l.get("id")] = float(l.get("length", 0))
+        elif lanes:
+            edge_speed_ms[e.get("id")] = max(float(l.get("speed", 0)) for l in lanes)
+
+    tls_links: dict[str, dict[int, dict]] = {}
+    for c in root.findall("connection"):
+        tl = c.get("tl")
+        if not tl:
+            continue
+        idx = int(c.get("linkIndex"))
+        speed_ms = edge_speed_ms.get(c.get("from"))
+        speed_kmh = speed_ms * 3.6 if speed_ms is not None else 50.0
+        via = c.get("via")
+        dist_m = internal_lane_length_m.get(via, 0.0) if via else 0.0
+        bucket = tls_links.setdefault(tl, {}).setdefault(
+            idx, {"speed_kmh": [], "clear_dist_m": []})
+        bucket["speed_kmh"].append(speed_kmh)
+        bucket["clear_dist_m"].append(dist_m)
+
+    for links in tls_links.values():
+        for agg in links.values():
+            agg["speed_kmh"] = min(agg["speed_kmh"])
+            agg["clear_dist_m"] = max(agg["clear_dist_m"])
+    return tls_links
+
+
+def rebuild_phases(phases: list[tuple[float, str]],
+                   link_geo: dict[int, dict]) -> list[tuple[float, str]]:
+    """Apply TSFS 2014:30's minimums/formula to one tlLogic's phase list
+    (list of (duration_s, state_str) in netconvert's original order).
+    Green phases are floored to MIN_GREEN_S; yellow phases are resized per
+    § 12; an all-red clearance phase (sized via the § 2-10 formula) plus a
+    REDYELLOW_S red+yellow warm-up (§ 11) are inserted before every
+    transition into a green phase. See module docstring for the exact
+    simplifications this makes when real per-movement conflict geometry
+    isn't cheaply available."""
+    n = len(phases)
+    n_links = len(phases[0][1]) if phases else 0
+    out: list[tuple[float, str]] = []
+    for i, (dur, state) in enumerate(phases):
+        # 'y' checked first: a phase with ANY yellow character is a
+        # clearing phase needing yellow-time/clearance handling for that
+        # link, even if some OTHER link in the same phase is already (and
+        # stays) green -- a legitimate SUMO construct for asymmetric ring
+        # designs, not just this network's simple all-green/all-yellow
+        # phases. Only a phase with no 'y' anywhere is a pure green phase.
+        is_yellow = "y" in state
+        is_green = (not is_yellow) and any(c in "Gg" for c in state)
+        if is_green:
+            out.append((max(dur, MIN_GREEN_S), state))
+            continue
+        if not is_yellow:
+            # Not a plain green/yellow alternation phase (shouldn't occur
+            # for netconvert --tls.guess's own output) -- pass through
+            # unchanged rather than silently dropping it.
+            out.append((dur, state))
+            continue
+
+        clearing_idxs = [j for j, c in enumerate(state) if c == "y"]
+        kmh_values = [link_geo[j]["speed_kmh"] for j in clearing_idxs if j in link_geo]
+        worst_kmh = min(kmh_values) if kmh_values else 50.0
+        out.append((yellow_time_s(worst_kmh), state))
+
+        nxt_state = phases[(i + 1) % n][1]
+        newly_green = [j for j, c in enumerate(nxt_state)
+                      if c in "Gg" and state[j] not in "Gg"]
+        if not newly_green:
+            continue
+
+        dists = [link_geo[j]["clear_dist_m"] for j in clearing_idxs if j in link_geo]
+        s_out = max(dists) if dists else 0.0
+        v_out = speed_bucket_ms(worst_kmh)
+        t_s = max(0.0, (s_out + DEFAULT_VEHICLE_LENGTH_M) / v_out)
+        allred_s = round(max(0.0, t_s - REDYELLOW_S), 1)
+
+        if allred_s > 0:
+            allred_state = "".join(
+                state[j] if state[j] in "Gg" else "r" for j in range(n_links))
+            out.append((allred_s, allred_state))
+        redyellow_state = "".join(
+            "u" if j in newly_green else (state[j] if state[j] in "Gg" else "r")
+            for j in range(n_links))
+        out.append((REDYELLOW_S, redyellow_state))
+    return out
+
+
+def build_regulation_compliant_tls(net_path: Path, out_path: Path) -> int:
+    """Write a programID="reg" <additional> file with a TSFS 2014:30-
+    compliant phase list for every real <tlLogic> in net_path. Returns the
+    number of TLS programs written."""
+    root = ET.parse(net_path).getroot()
+    link_geo = parse_tls_link_geometry(net_path)
+
+    out_root = ET.Element("additional")
+    n = 0
+    for tl in root.findall("tlLogic"):
+        tl_id = tl.get("id")
+        phases = [(float(p.get("duration")), p.get("state")) for p in tl.findall("phase")]
+        if not phases:
+            continue
+        new_phases = rebuild_phases(phases, link_geo.get(tl_id, {}))
+        out_tl = ET.SubElement(out_root, "tlLogic", {
+            "id": tl_id, "type": "static", "programID": "reg", "offset": "0",
+        })
+        for dur, state in new_phases:
+            ET.SubElement(out_tl, "phase", {"duration": str(dur), "state": state})
+        n += 1
+
+    ET.ElementTree(out_root).write(out_path, xml_declaration=True, encoding="UTF-8")
+    return n
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--out", type=Path, default=None,
+                   help="Additional-file output path (default: "
+                        "sumo/tls_regulation_<net_fingerprint>.add.xml).")
+    return p.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    if not rs.NET_PATH.exists():
+        sys.exit(f"{rs.NET_PATH} not found — run build_sumo_net.py first")
+    net_fp = net_fingerprint(rs.NET_PATH)
+    out_path = args.out or rs.SUMO_DIR / f"tls_regulation_{net_fp}.add.xml"
+    n = build_regulation_compliant_tls(rs.NET_PATH, out_path)
+    print(f"Wrote {n} TSFS 2014:30-compliant TLS program(s) to {out_path}")
+
+
+if __name__ == "__main__":
+    main()

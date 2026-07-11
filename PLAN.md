@@ -1676,6 +1676,126 @@ logic, bus priority. When delivered: import layer replacing the 65 guessed
 programs, re-enable full junction control in meso (CLAUDE.md's stated
 condition), and flip provenance to `city-configured`.
 
+RESEARCHED 2026-07-11: before doing anything else, checked whether D6's own
+ask could be answered from public sources instead of waiting on the city.
+It cannot — checked `data.goteborg.se`, `goteborg.se/psidata`, and the
+Teknisk Handbok's own traffiksignaler page directly: no public dataset of
+OPERATIONAL signal programs exists (the open-data portal covers air
+quality, bike infrastructure, bridges, parking, water levels, permits,
+traffic cameras — nothing on signal control), and the handbook explicitly
+routes such requests to Stadsmiljöförvaltningen, not a public register.
+Trafikverket's NVDB is road INFRASTRUCTURE data, not municipal signal
+control. This confirms D6's own "external" framing was correct — this
+part still genuinely needs Miroslaw.
+
+DONE (partial, 2026-07-11), a different and real question answerable right
+now: not "what ARE Gothenburg's real signals doing" (needs the city) but
+"what is every real Swedish signal LEGALLY REQUIRED to do" — Sweden's
+binding national regulation for traffic signals, Transportstyrelsens
+föreskrifter **TSFS 2014:30** (read in full, all 14 pages:
+https://www.transportstyrelsen.se/tsfs/TSFS%202014_30.pdf), which specifies
+real, citable, legally-binding minimums:
+  - kap 2 § 11: red+yellow ("röd+gul") shown 1.5 s before every green phase.
+  - kap 2 § 12: yellow shown 4 s where the speed limit is <60 km/h, 5 s
+    where ≥60 km/h.
+  - kap 2 § 14: green shown ≥4 s (vehicle signals).
+  - kap 2 §§ 2-10 ("Separering i tid"): inter-green clearance time
+    t_s = (s_out + l_f)/v_out − s_in/v_in > 0, using a standardized speed
+    table (§9: vehicles 8/10/12/14/15 m/s for posted limits 30/40/50/60/
+    70 km/h) and a default vehicle length (§10: 6 m).
+
+**Checked our own deployed net.net.xml against this BEFORE building
+anything**, and found a real, measurable gap: yellow phases were only ever
+3.0 s or 5.0 s across all 57 real TLS junctions with any yellow phase at
+all — the 3.0 s ones violate the ≥4 s minimum for any street under
+60 km/h, which is nearly every inner-city approach; only 3 of ~330 phases
+across 65 real `<tlLogic>` elements have ANY red-red clearance interval,
+and there is no red+yellow transition anywhere. netconvert's guess is not
+merely unlabelled, it is measurably non-compliant with the law every real
+Swedish signal must follow.
+
+**New `signal_regulation.py`**: parses net.net.xml's real per-connection
+geometry (approach-edge lane speed, and — the key move that keeps this
+grounded in real data rather than more guessing — the REAL internal-
+junction lane length SUMO already computes for every connection, used
+directly as the clearance formula's s_out distance) and rebuilds every
+TLS's phase list: floors green to ≥4 s, resizes yellow per the speed-limit
+rule, and inserts a computed all-red phase plus the mandatory 1.5 s
+red+yellow warm-up before every transition into a green phase. Writes one
+content-addressed `<additional>` file (`programID="reg"`, cached by
+net_fingerprint ALONE — this depends only on geometry, never demand/
+window) that SUMO activates via the exact same "last-loaded program wins"
+mechanism D2's tlsCycleAdaptation output already relies on (re-verified
+directly via TraCI here too: `getProgram()` returns `"reg"`) — no new
+activation machinery needed. Every number in the module docstring is
+directly cited to a TSFS paragraph; every SIMPLIFICATION (s_in=0 as a
+deliberately conservative choice since it only ever grows t_s; s_out taken
+as the MAX internal-lane length among a phase's clearing links rather than
+resolved per exact conflicting pair; v_out the MIN — slowest, most
+conservative — speed bucket; all-red shown before red+yellow rather than
+the two requirements being assumed to overlap) is documented separately
+from the citations so a future reader can tell law from engineering
+judgement.
+
+**A real bug found by testing, not assumed away**: the first version
+classified any phase containing a 'G' character as a pure green phase,
+even when it ALSO contained a 'y' for a different, actually-clearing link
+(a legitimate SUMO construct for asymmetric ring designs where one
+movement flows continuously while another clears) — such a phase would
+have silently skipped ALL yellow-time/clearance handling for its own
+clearing link. A test using a constructed mixed-state phase caught this
+before it shipped; fixed by checking `"y" in state` first, `is_green` only
+when `y` is absent. Verified this was not merely a hypothetical worry: it
+changes the real, deployed rebuild for 2 of the network's 65 actual
+junctions (`25658722`, `26025184`), both of which have a continuously-
+green link mixed into a yellow-clearing phase — without the fix those two
+junctions would have silently gotten NO yellow-time correction or
+clearance insertion at all.
+
+**Wired into D2 as a sixth condition**, `regulation_compliant`
+(`signal_optimize.build_signal_conditions`), evaluated by the exact same
+MICRO harness as baseline/adapted/adapted_coordinated/actuated/
+delay_based, and automatically inherited by D3's meso-screening
+comparison and available wherever D2's conditions dict flows (D5's UI
+picks `baseline`/`adapted_coordinated` specifically by key, so this
+addition doesn't change D5's rendering). Given its own distinct, more-
+grounded-but-still-not-real provenance, added a new
+`tls_provenance_by_condition` field (`"synthetic_regulation_compliant"`
+for this one condition, `"synthetic"` for the other five) rather than
+letting the file's single top-level `tls_provenance` field imply they're
+all equally arbitrary.
+
+**Real measured result** (07:00-08:00, 1 seed, real demand): baseline
+timeLoss=308 593 s (6 teleports) → regulation_compliant timeLoss=317 896 s
+(6 teleports, same as baseline) — **+3.0%**, a small, plausible regression
+consistent with what adding real clearance/warm-up safety margins should
+do (less green capacity per cycle in exchange for legally-mandated safety
+time), not a sign of something broken. Still DISQUALIFIED under the
+existing scorecard rule (baseline itself already carries 6 teleports, so
+`compare_metrics` flags the comparison regardless of which side moved) —
+an honest artifact of the disqualification rule being baseline-relative
+here, not a claim that regulation-compliant timing itself causes new
+instability (teleport count is UNCHANGED from baseline).
+
+**Still explicitly NOT `city-configured`**: this grounds our synthetic
+baseline in real, binding Swedish law instead of an arbitrary uniform
+guess, but it is still not Gothenburg's actual deployed signal plans —
+cycle length, phase count, and time-of-day variation remain netconvert's
+own geometric guess, only the TIMING MINIMUMS are now legally grounded.
+The city-data half of D6 (signal-object↔TLS-ID mapping, phase diagrams,
+real cycle/green/offset plans, detector logic, bus priority) remains
+external and blocked on Miroslaw, exactly as before.
+
+22 new unit tests (`signal_regulation.py`'s speed-bucket/yellow-time
+lookup tables, `rebuild_phases`'s green-flooring/yellow-resizing/
+all-red-and-redyellow-insertion/continuously-green-preservation logic,
+`parse_tls_link_geometry`'s connection/lane parsing against constructed
+fixtures, `build_regulation_compliant_tls` end-to-end on a small fixture
+net) plus 1 new `build_signal_conditions` test confirming the new
+artifact caches by net_fingerprint independent of label. Full suite: 662
+passed, 20 skipped, 0 failed (up from 639). No tracked files changed by
+the real verification runs (`sumo/` is gitignored).
+
 ---
 
 ## Known issues from the 2026-07-10 deep review (deferred, not fixed)

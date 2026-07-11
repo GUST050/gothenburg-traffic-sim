@@ -186,9 +186,15 @@ class TestBuildSignalConditions:
             calls.append(("net", tls_type, out_path))
             out_path.write_text("<net/>")
 
+        def fake_regulation(net_path, out_path):
+            calls.append(("regulation", out_path))
+            out_path.write_text("<additional/>")
+            return 0
+
         monkeypatch.setattr(so, "run_tls_cycle_adaptation", fake_adapt)
         monkeypatch.setattr(so, "run_tls_coordinator", fake_coord)
         monkeypatch.setattr(so, "build_alt_type_net", fake_alt_net)
+        monkeypatch.setattr(so, "build_regulation_compliant_tls", fake_regulation)
         monkeypatch.setattr(so.rs, "SUMO_DIR", tmp_path)
         monkeypatch.setattr(so.rs, "NET_PATH", tmp_path / "net.net.xml")
         (tmp_path / "net.net.xml").write_text("<net/>")
@@ -198,9 +204,9 @@ class TestBuildSignalConditions:
         self._stub_tools(monkeypatch, tmp_path, calls)
         conditions = so.build_signal_conditions(
             tmp_path, [tmp_path / "calibrated.rou.xml"], 0, "label1")
-        assert {c[0] for c in calls} == {"adapt", "coord", "net", "net"}
+        assert {c[0] for c in calls} == {"adapt", "coord", "net", "regulation"}
         assert set(conditions) == {"baseline", "adapted", "adapted_coordinated",
-                                   "actuated", "delay_based"}
+                                   "actuated", "delay_based", "regulation_compliant"}
 
     def test_second_call_with_the_same_label_reuses_cached_artifacts(self, tmp_path, monkeypatch):
         calls = []
@@ -208,7 +214,7 @@ class TestBuildSignalConditions:
         so.build_signal_conditions(tmp_path, [tmp_path / "calibrated.rou.xml"], 0, "label1")
         calls.clear()
         so.build_signal_conditions(tmp_path, [tmp_path / "calibrated.rou.xml"], 0, "label1")
-        assert calls == []   # nothing rebuilt -- all 4 artifacts already exist
+        assert calls == []   # nothing rebuilt -- all 5 artifacts already exist
 
     def test_different_label_rebuilds_instead_of_reusing_stale_artifacts(self, tmp_path, monkeypatch):
         # The actual bug: a NEW demand/network (-> new label) must NOT
@@ -218,7 +224,18 @@ class TestBuildSignalConditions:
         so.build_signal_conditions(tmp_path, [tmp_path / "calibrated.rou.xml"], 0, "label1")
         calls.clear()
         so.build_signal_conditions(tmp_path, [tmp_path / "calibrated.rou.xml"], 0, "label2")
-        assert {c[0] for c in calls} == {"adapt", "coord", "net", "net"}
+        assert {c[0] for c in calls} == {"adapt", "coord", "net"}
+
+    def test_regulation_compliant_is_cached_by_net_fingerprint_not_label(self, tmp_path, monkeypatch):
+        # Unlike adapted/coordinated/alt-nets, this artifact depends only
+        # on network geometry (TSFS 2014:30 is demand/window-independent)
+        # -- a label change alone must NOT rebuild it.
+        calls = []
+        self._stub_tools(monkeypatch, tmp_path, calls)
+        so.build_signal_conditions(tmp_path, [tmp_path / "calibrated.rou.xml"], 0, "label1")
+        calls.clear()
+        so.build_signal_conditions(tmp_path, [tmp_path / "calibrated.rou.xml"], 0, "label2")
+        assert "regulation" not in {c[0] for c in calls}
 
 
 class TestConditionNetFingerprints:
