@@ -560,7 +560,7 @@ def main() -> None:
              f"(topology-only check) — expect truncated/stranded vehicles "
              f"regardless of which window is chosen.")
 
-    variants = rs.demand_variants()
+    variants = rs.demand_variants(meta)
     adj = rs.build_edge_graph(set(args.edge))
     freeflow = rs.edge_freeflow_times()
     rerouter_edges = rs.edges_near(args.edge, rs.REROUTER_RADIUS_M)

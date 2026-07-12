@@ -151,7 +151,7 @@ def main() -> None:
         sys.exit(f"window {args.window_start}-{args.window_end} falls outside "
                  f"the calibrated demand period (0-{total_duration_s / 3600:.1f}h)")
 
-    variants = rs.demand_variants()
+    variants = rs.demand_variants(meta)
     demand_sig = rs.demand_signature(meta)
     baseline_net_fp = net_fingerprint(rs.NET_PATH)
     label = signal_artifact_label(args.window_start, args.window_end,

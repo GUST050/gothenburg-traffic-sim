@@ -161,6 +161,22 @@ def test_no_bound_violations_is_silent(capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_calibrated_agent_summary_reports_real_purpose_counts(tmp_path):
+    route = tmp_path / "calibrated.rou.xml"
+    route.write_text("<routes/>")
+    (tmp_path / "calibrated.agents.json").write_text(json.dumps({
+        "schema_version": 1,
+        "agents": [{"purpose": "arbete"}, {"purpose": "arbete"},
+                   {"purpose": "service"}],
+    }))
+
+    assert bsd.calibrated_agent_summary(route) == {
+        "agent_file": "calibrated.agents.json",
+        "n_agents": 3,
+        "purpose_counts": {"arbete": 2, "service": 1},
+    }
+
+
 def test_write_counts_splits_two_way_total_by_direction_share(monkeypatch, tmp_path):
     monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
     write_direction_split(tmp_path, {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96})

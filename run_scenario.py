@@ -489,15 +489,27 @@ def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
     return n_truncated, n_dropped
 
 
-def demand_variants() -> list[Path]:
+def demand_variants(meta: dict) -> list[Path]:
     """Calibrated route sets — q50 plus (if built) the q10/q90 direction-
     split variants. Monte Carlo seeds are spread over them so the seed
-    spread — and the confidence — includes direction uncertainty."""
+    spread — and the confidence — includes direction uncertainty.
+
+    The metadata is the authoritative contract. Looking only for sibling
+    files let a new q50-only demand build silently reuse stale q10/q90 files
+    left by an older calibration.
+    """
     paths = [SUMO_DIR / "calibrated.rou.xml"]
+    n_variants = int(meta.get("n_variants", 1))
+    if n_variants == 1:
+        return paths
+    if n_variants != 3:
+        raise ValueError(f"unsupported demand metadata n_variants={n_variants}")
     for suffix in ("_v1", "_v2"):
         p = SUMO_DIR / f"calibrated{suffix}.rou.xml"
-        if p.exists():
-            paths.append(p)
+        if not p.exists():
+            raise FileNotFoundError(
+                f"demand metadata requires {p.name}, but it is missing")
+        paths.append(p)
     return paths
 
 
@@ -815,7 +827,7 @@ def main() -> None:
 
     print(f"Scenario '{name}'  ({label})  —  {args.seeds} seeds × {n_intervals} × 15 min")
 
-    variants = demand_variants()
+    variants = demand_variants(meta)
     if len(variants) > 1:
         print(f"  {len(variants)} demand variants (q50 + direction-split bounds)")
 
@@ -903,6 +915,7 @@ def main() -> None:
             "closures": closures,
             "window": window_label,
             "source": meta.get("source", "historical"),
+            "agent_demand": meta.get("agent_demand"),
             # Disruption-quality signal, previously only printed to the
             # build log and lost — a closure with a high truncated/dropped
             # count is a lower-confidence scenario and the UI/API consumer

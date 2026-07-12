@@ -202,7 +202,7 @@ def main() -> None:
         if e not in prior:
             sys.exit(f"--close {e}: not an edge in network.geojson")
 
-    variants = rs.demand_variants()
+    variants = rs.demand_variants(meta)
     demand_sig = rs.demand_signature(meta)
     net_fp = net_fingerprint(rs.NET_PATH)
     window_key = f"{args.window_start.replace(':', '')}_{args.window_end.replace(':', '')}"

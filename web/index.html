@@ -198,6 +198,7 @@
     }
     #new-days-input { width: 3.2em; }
     #sim-day-hint { font-size: 0.72rem; color: var(--ink-3); }
+    #sim-agent-hint { font-size: 0.70rem; color: var(--ink-2); white-space: nowrap; }
     #recal-progress {
       display: none; align-items: center; gap: 8px; min-width: 190px;
       font-size: 0.69rem; color: var(--ink-2); font-variant-numeric: tabular-nums;
@@ -508,6 +509,7 @@
       <span class="label">Simulering</span>
       <select id="scen-select"></select>
       <span class="hint" id="sim-day-hint" title="Byt med knappen till höger — kräver ny kalibrering, ~6 min"></span>
+      <span id="sim-agent-hint" hidden></span>
       <div class="v-divider"></div>
       <button id="close-mode-btn" class="action-btn"
               title="Klicka på vägar i kartan för att simulera en avstängning">+ Ny avstängning</button>
@@ -773,6 +775,21 @@
             currentSimSource = provider.source || 'historical';
             const srcLabel = currentSimSource === 'forecast' ? 'Prognos' : 'Historik';
             simDayHint.textContent = `${srcLabel}: ${currentSimDate}`;
+            const demand = provider.agentDemand;
+            if (demand?.n_agents && demand.purpose_counts) {
+              const labels = { work: 'arbete', arbete: 'arbete', service: 'service',
+                               leisure: 'fritid', fritid: 'fritid', through: 'genomfart',
+                               external: 'extern', unknown: 'okänd' };
+              const parts = Object.entries(demand.purpose_counts).map(([purpose, count]) =>
+                `${labels[purpose] || purpose} ${Math.round(100 * count / demand.n_agents)}%`);
+              simAgentHint.textContent = `Resor: ${parts.join(' · ')}`;
+              simAgentHint.title = `${demand.n_agents} individuella kalibrerade resor`;
+              simAgentHint.hidden = false;
+            } else {
+              simAgentHint.hidden = true;
+            }
+          } else if (!isSim) {
+            simAgentHint.hidden = true;
           }
         }
 
@@ -900,6 +917,7 @@
         const recalProgressFill = document.getElementById('recal-progress-fill');
         const recalProgressLabel = document.getElementById('recal-progress-label');
         const simDayHint = document.getElementById('sim-day-hint');
+        const simAgentHint = document.getElementById('sim-agent-hint');
         let dayPickMode = false;
         let currentSimDate = '2025-09-16';
         let currentSimSource = 'historical';

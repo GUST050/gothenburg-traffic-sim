@@ -248,7 +248,7 @@ def main() -> None:
         sys.exit(f"window {args.window_start}-{args.window_end} falls outside "
                  f"the calibrated demand period (0-{total_duration_s / 3600:.1f}h)")
 
-    variants = rs.demand_variants()
+    variants = rs.demand_variants(meta)
     print(f"Signal lab: {args.window_start}-{args.window_end} window "
          f"({(end_s - begin_s) / 60:.0f} min), {args.seeds} seed(s), MICRO, "
          f"tls_provenance={TLS_PROVENANCE}")

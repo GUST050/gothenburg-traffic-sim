@@ -98,6 +98,26 @@ class TestValidScenarioName:
         assert not run_scenario.valid_scenario_name("has space")
         assert not run_scenario.valid_scenario_name("")
         assert not run_scenario.valid_scenario_name("x" * 81)
+
+
+class TestDemandVariants:
+    def test_q50_metadata_ignores_stale_quantile_files(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        (tmp_path / "calibrated.rou.xml").write_text("<routes/>")
+        (tmp_path / "calibrated_v1.rou.xml").write_text("<routes/>")
+        (tmp_path / "calibrated_v2.rou.xml").write_text("<routes/>")
+
+        assert run_scenario.demand_variants({"n_variants": 1}) == [
+            tmp_path / "calibrated.rou.xml"
+        ]
+
+    def test_quantile_metadata_requires_every_declared_route_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        (tmp_path / "calibrated.rou.xml").write_text("<routes/>")
+        (tmp_path / "calibrated_v1.rou.xml").write_text("<routes/>")
+
+        with pytest.raises(FileNotFoundError, match="calibrated_v2"):
+            run_scenario.demand_variants({"n_variants": 3})
         assert run_scenario.valid_scenario_name("x" * 80)
 
 

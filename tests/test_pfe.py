@@ -1,5 +1,6 @@
 """Unit tests for pfe.py — the level-4 reconciliation engine."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -422,3 +423,27 @@ class TestRelaxationRungTracking:
             shapes, tmp_path / "out.rou.xml", targets_per_q, solutions)
 
         assert "relaxation_summary" not in report
+
+
+class TestCalibratedAgentProvenance:
+    def test_calibrated_vehicles_keep_candidate_purpose_and_od(self, tmp_path):
+        work = Candidate(
+            depart=0.0, edges=["O", "M", "D1"], source_id="work-1",
+            intent={"purpose": "work", "tour_id": "tour-1", "leg": "outbound",
+                    "origin_edge": "O", "destination_edge": "D1"})
+        service = Candidate(
+            depart=0.0, edges=["O", "M", "D1"], source_id="service-1",
+            intent={"purpose": "service", "tour_id": "tour-2", "leg": "outbound",
+                    "origin_edge": "O", "destination_edge": "D1"})
+        shape = Candidate(depart=0.0, edges=["O", "M", "D1"],
+                          source_candidates=[work, service])
+        out = tmp_path / "calibrated.rou.xml"
+
+        write_calibration_report([shape], out, [{"M": 4.0}], [np.array([4.0])])
+
+        agents = json.loads((tmp_path / "calibrated.agents.json").read_text())["agents"]
+        assert len(agents) == 4
+        assert {a["purpose"] for a in agents} == {"work", "service"}
+        assert {a["origin_edge"] for a in agents} == {"O"}
+        assert {a["destination_edge"] for a in agents} == {"D1"}
+        assert len({a["departure_s"] for a in agents}) == 4

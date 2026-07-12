@@ -1171,13 +1171,14 @@ def generate_sensor_anchored_trips(
     # ── E-E: through traffic, gate->gate — unchanged mechanism, invoked
     # per-sensor here instead of in a separate block ────────────────────
     hours = rng.choice(24, size=n_through, p=shape_hourly)
-    for h in hours:
+    for trip_no, h in enumerate(hours):
         for m_edge in by_quota():
             pairs = good_pairs_ee[m_edge]
             if not pairs:
                 continue
             e_in, e_out = pairs[rng.integers(len(pairs))]
-            trips.append(((h + rng.random()) * 3600, e_in, e_out, m_edge))
+            trips.append(((h + rng.random()) * 3600, e_in, e_out, m_edge,
+                          "through", f"ee-{trip_no}", "through"))
             quota[m_edge] -= 1
             break
 
@@ -1214,10 +1215,10 @@ def generate_sensor_anchored_trips(
     # independently-drawn gate, not the same one reused) — this design
     # only adds the sensor-naturalness mask on top of that existing shape,
     # it doesn't change which edge plays which role.
-    def draw_purpose_weights(h_out: int) -> np.ndarray:
+    def draw_purpose_weights(h_out: int) -> tuple[str, np.ndarray]:
         purpose_shares = purpose_shares_for_hour(int(h_out), is_weekend)
         purpose = rng.choice(PURPOSE_CATEGORIES, p=list(purpose_shares.values()))
-        return amass[purpose]
+        return purpose, amass[purpose]
 
     home_anchor_p = hmass / hmass.sum()
     entry_anchor_p = w_entry / w_entry.sum()
@@ -1225,9 +1226,9 @@ def generate_sensor_anchored_trips(
     # I-I: home -> activity -> home. Both ends are ordinary internal
     # edges, so the return leg simply reuses both fixed edges — only
     # needs to verify SOME sensor naturally connects them (no new draw).
-    for _ in range(n_internal):
+    for tour_no in range(n_internal):
         h_out, h_ret = am_pm_hours()
-        far_base = draw_purpose_weights(h_out)
+        purpose, far_base = draw_purpose_weights(h_out)
         anchor_p = home_anchor_p
         succeeded = False
         for m_edge in by_quota():
@@ -1255,9 +1256,11 @@ def generate_sensor_anchored_trips(
                 quota[return_sensor] -= 1
                 tour_lengths_km.append(float(d_km[f_pos]))
                 trips.append(((h_out + rng.random()) * 3600,
-                              edge_ids[a_pos], edge_ids[f_pos], m_edge))
+                              edge_ids[a_pos], edge_ids[f_pos], m_edge,
+                              purpose, f"ii-{tour_no}", "outbound"))
                 trips.append(((h_ret + rng.random()) * 3600,
-                              edge_ids[f_pos], edge_ids[a_pos], return_sensor))
+                              edge_ids[f_pos], edge_ids[a_pos], return_sensor,
+                              purpose, f"ii-{tour_no}", "return"))
                 succeeded = True
                 break
             if succeeded:
@@ -1267,9 +1270,9 @@ def generate_sensor_anchored_trips(
 
     # E-I: entry gate -> activity, return leg to an INDEPENDENTLY-drawn
     # exit gate (never back through the entry gate — see note above).
-    for _ in range(n_ei):
+    for tour_no in range(n_ei):
         h_out, h_ret = am_pm_hours()
-        far_base = draw_purpose_weights(h_out)
+        purpose, far_base = draw_purpose_weights(h_out)
         anchor_p = entry_anchor_p
         succeeded = False
         for m_edge in by_quota():
@@ -1301,9 +1304,11 @@ def generate_sensor_anchored_trips(
                     quota[return_m_edge] -= 1
                     tour_lengths_km.append(float(d_km[f_pos]))
                     trips.append(((h_out + rng.random()) * 3600,
-                                  entry_ids[a_pos], edge_ids[f_pos], m_edge))
+                                  entry_ids[a_pos], edge_ids[f_pos], m_edge,
+                                  purpose, f"ei-{tour_no}", "inbound"))
                     trips.append(((h_ret + rng.random()) * 3600,
-                                  edge_ids[f_pos], exit_ids[g_pos], return_m_edge))
+                                  edge_ids[f_pos], exit_ids[g_pos], return_m_edge,
+                                  purpose, f"ei-{tour_no}", "outbound"))
                     succeeded = True
                     break
                 if succeeded:
@@ -1315,7 +1320,7 @@ def generate_sensor_anchored_trips(
 
     # I-E: internal home -> exit gate, return leg FROM an INDEPENDENTLY-
     # drawn entry gate (never from the same exit gate — see note above).
-    for _ in range(n_ie):
+    for tour_no in range(n_ie):
         h_out, h_ret = am_pm_hours()
         anchor_p = home_anchor_p
         succeeded = False
@@ -1348,9 +1353,11 @@ def generate_sensor_anchored_trips(
                     quota[return_m_edge] -= 1
                     tour_lengths_km.append(float(d_km[f_pos]))
                     trips.append(((h_out + rng.random()) * 3600,
-                                  edge_ids[a_pos], exit_ids[f_pos], m_edge))
+                                  edge_ids[a_pos], exit_ids[f_pos], m_edge,
+                                  "external", f"ie-{tour_no}", "outbound"))
                     trips.append(((h_ret + rng.random()) * 3600,
-                                  entry_ids[g_pos], edge_ids[a_pos], return_m_edge))
+                                  entry_ids[g_pos], edge_ids[a_pos], return_m_edge,
+                                  "external", f"ie-{tour_no}", "inbound"))
                     succeeded = True
                     break
                 if succeeded:
@@ -1393,7 +1400,7 @@ def generate_day_block(
     id_prefix: str, seed: int, day_index: int, n_total: int,
     through_fraction: float, cross_fraction: float, gravity_km: float,
     is_weekend: bool, min_per_sensor: int, template_trips: list[tuple] | None = None,
-) -> tuple[list[tuple[str, float, str, str, str]], list[float], dict[str, int], list[tuple]]:
+) -> tuple[list[tuple], list[float], dict[str, int], list[tuple]]:
     """Generate one calendar-day candidate block.
 
     A first block for a day type creates the route geometry. Later blocks of
@@ -1409,7 +1416,13 @@ def generate_day_block(
             structure.w_entry, structure.w_exit, profile, structure.measured,
             n_total, through_fraction, cross_fraction, gravity_km, is_weekend,
             min_per_sensor)
-        template_trips = [(t[1], t[2], t[3] if len(t) > 3 else "") for t in raw_trips]
+        template_trips = [
+            (t[1], t[2], t[3],
+             t[4] if len(t) > 4 else "unknown",
+             t[5] if len(t) > 5 else f"legacy-{i}",
+             t[6] if len(t) > 6 else "unknown")
+            for i, t in enumerate(raw_trips)
+        ]
     else:
         # Reusing geometry is deliberate: diversity, not a linearly growing
         # number of near-duplicate routes, is what the calibration needs.
@@ -1420,8 +1433,9 @@ def generate_day_block(
     hours = rng.choice(24, size=len(template_trips), p=profile)
     block = [
         (f"{id_prefix}{i}", offset_s + (hour + rng.random()) * 3600,
-         from_edge, to_edge, via)
-        for i, ((from_edge, to_edge, via), hour) in enumerate(zip(template_trips, hours))
+         from_edge, to_edge, via, purpose, f"{id_prefix}{tour_id}", leg)
+        for i, ((from_edge, to_edge, via, purpose, tour_id, leg), hour)
+        in enumerate(zip(template_trips, hours))
     ]
     return block, lengths, short, template_trips
 
@@ -1592,18 +1606,31 @@ def main() -> None:
     if multi_day_trips is not None:
         multi_day_trips.sort(key=lambda t: t[1])
     trips_path = SUMO_DIR / f"tours{args.out_suffix}.trips.xml"
+    candidate_meta: dict[str, dict] = {}
     with open(trips_path, "w") as f:
         f.write("<routes>\n")
         if multi_day_trips is None:
             for i, t in enumerate(trips):
-                via = f' via="{t[3]}"' if len(t) > 3 else ""
-                f.write(f'  <trip id="t{i}" depart="{t[0]:.1f}" '
+                trip_id = f"t{i}"
+                via = f' via="{t[3]}"' if t[3] else ""
+                f.write(f'  <trip id="{trip_id}" depart="{t[0]:.1f}" '
                         f'from="{t[1]}" to="{t[2]}"{via}/>\n')
+                candidate_meta[trip_id] = {
+                    "purpose": t[4], "tour_id": t[5], "leg": t[6],
+                    "origin_edge": t[1], "destination_edge": t[2],
+                    "via_edge": t[3] or None, "candidate_depart_s": round(t[0], 3),
+                }
         else:
-            for trip_id, depart, from_edge, to_edge, via_edge in multi_day_trips:
+            for (trip_id, depart, from_edge, to_edge, via_edge,
+                 purpose, tour_id, leg) in multi_day_trips:
                 via = f' via="{via_edge}"' if via_edge else ""
                 f.write(f'  <trip id="{trip_id}" depart="{depart:.1f}" '
                         f'from="{from_edge}" to="{to_edge}"{via}/>\n')
+                candidate_meta[trip_id] = {
+                    "purpose": purpose, "tour_id": tour_id, "leg": leg,
+                    "origin_edge": from_edge, "destination_edge": to_edge,
+                    "via_edge": via_edge or None, "candidate_depart_s": round(depart, 3),
+                }
         f.write("</routes>\n")
     n_written = len(multi_day_trips) if multi_day_trips is not None else len(trips)
     print(f"{n_written} trips written, all sensor-anchored — target mix "
@@ -1622,6 +1649,10 @@ def main() -> None:
 
     home = sumo_home()
     out = SUMO_DIR / f"candidates{args.out_suffix}.rou.xml"
+    meta_out = SUMO_DIR / f"candidates{args.out_suffix}.meta.json"
+    with open(meta_out, "w") as f:
+        json.dump({"schema_version": 1, "candidates": candidate_meta}, f,
+                  separators=(",", ":"))
     weight_args = duarouter_weight_args(args.weight_file, args.weight_period)
     if args.weight_file:
         print(f"  routing by MEASURED travel time from {args.weight_file} "

@@ -45,9 +45,10 @@ from __future__ import annotations
 
 import os
 import hashlib
+import json
 import xml.etree.ElementTree as ET
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -63,14 +64,25 @@ MEAS_TOL_MIN  = 2.0
 class Candidate:
     depart: float
     edges: list[str]
+    source_id: str = ""
+    intent: dict = field(default_factory=dict)
+    source_candidates: list["Candidate"] = field(default_factory=list, repr=False)
 
 
 def load_candidates(path: Path) -> list[Candidate]:
+    meta_path = path.with_name(path.name.replace(".rou.xml", ".meta.json"))
+    metadata: dict[str, dict] = {}
+    if meta_path.exists():
+        with open(meta_path) as f:
+            metadata = json.load(f).get("candidates", {})
     out = []
     for veh in ET.parse(path).getroot().iter("vehicle"):
         route = veh.find("route")
+        source_id = veh.get("id") or ""
         out.append(Candidate(depart=float(veh.get("depart")),
-                             edges=route.get("edges").split()))
+                             edges=route.get("edges").split(),
+                             source_id=source_id,
+                             intent=dict(metadata.get(source_id, {}))))
     return out
 
 
@@ -700,7 +712,12 @@ def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndar
     # Dedupe to distinct shapes — the LP/IPF variables.
     seen: dict[str, Candidate] = {}
     for cand in cands:
-        seen.setdefault(" ".join(cand.edges), cand)
+        key = " ".join(cand.edges)
+        if key in seen:
+            seen[key].source_candidates.append(cand)
+        else:
+            cand.source_candidates.append(cand)
+            seen[key] = cand
     shapes = list(seen.values())
     print(f"  shape pool: {len(shapes)} distinct routes "
           f"(from {len(cands)} candidates)")
@@ -776,6 +793,7 @@ def write_calibration_report(
     infeasible = sum(sol is None for sol in solutions)
     achieved: dict[str, list[float]] = {}
     vid = 0
+    agents: list[dict] = []
     write_path = (out_path.with_suffix(out_path.suffix + ".tmp")
                   if enforce_integer_bounds else out_path)
     with open(write_path, "w") as f:
@@ -795,23 +813,37 @@ def write_calibration_report(
             # route at exactly :07:30, so thousands of independent routes
             # entered SUMO as a visible convoy. Counts and route choices stay
             # unchanged; only departure time is stratified globally.
-            route_instances: list[str] = []
+            route_instances: list[tuple[str, Candidate]] = []
             for cand, k in zip(shapes, counts):
                 edges_str = " ".join(cand.edges)
-                route_instances.extend([edges_str] * int(k))
+                source_pool = cand.source_candidates or [cand]
+                route_instances.extend(
+                    (edges_str, source_pool[dup % len(source_pool)])
+                    for dup in range(int(k)))
                 for e in set(cand.edges):
                     achieved.setdefault(e, [0.0] * nq)
                     if k:
                         achieved[e][i] += float(k)
             # Hash order is deterministic and avoids grouping equal routes
             # together, while positions remain uniformly spaced.
-            route_instances.sort(key=lambda route: hashlib.sha1(
-                f"{i}:{route}".encode()).digest())
+            route_instances.sort(key=lambda item: hashlib.sha1(
+                f"{i}:{item[0]}:{item[1].source_id}".encode()).digest())
             n_departures = len(route_instances)
-            for pos, edges_str in enumerate(route_instances):
+            for pos, (edges_str, source) in enumerate(route_instances):
                 depart = i * 900 + (pos + 0.5) * 900 / max(1, n_departures)
-                f.write(f'  <vehicle id="pfe{vid}" depart="{depart:.1f}">'
+                vehicle_id = f"pfe{vid}"
+                f.write(f'  <vehicle id="{vehicle_id}" depart="{depart:.1f}">'
                         f'<route edges="{edges_str}"/></vehicle>\n')
+                agents.append({
+                    "vehicle_id": vehicle_id,
+                    "candidate_id": source.source_id or None,
+                    "purpose": source.intent.get("purpose", "unknown"),
+                    "tour_id": source.intent.get("tour_id"),
+                    "leg": source.intent.get("leg"),
+                    "origin_edge": source.intent.get("origin_edge", source.edges[0]),
+                    "destination_edge": source.intent.get("destination_edge", source.edges[-1]),
+                    "departure_s": round(depart, 1),
+                })
                 vid += 1
         f.write("</routes>\n")
 
@@ -844,6 +876,16 @@ def write_calibration_report(
         )
     if enforce_integer_bounds:
         os.replace(write_path, out_path)
+
+    # Publish agent provenance only after the route file passed the same
+    # validation gate. Otherwise a rejected calibration could leave a fresh
+    # looking purpose/OD file beside an older valid route file.
+    agent_path = out_path.with_name(out_path.name.replace(".rou.xml", ".agents.json"))
+    agent_write = agent_path.with_suffix(agent_path.suffix + ".tmp")
+    with open(agent_write, "w") as f:
+        json.dump({"schema_version": 1, "agents": agents}, f,
+                  separators=(",", ":"))
+    os.replace(agent_write, agent_path)
 
     # GEH on hourly aggregates at measured edges — the standard fit metric.
     # An edge counts for an hour if ANY of its 4 quarters has a measurement —

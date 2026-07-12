@@ -33,6 +33,7 @@ class HistoricalProvider {
     this.closures    = payload.scenario?.closures ?? null;
     this.label       = payload.scenario?.label ?? null;
     this.source      = payload.scenario?.source ?? 'historical';  // 'forecast' = simulated 2027
+    this.agentDemand = payload.scenario?.agent_demand ?? null;
     this.confidence  = payload.confidence ?? null;  // per-edge, per-scenario
     // Length in quarters (96 for a one-day scenario, 35 040 for a full
     // year) — State.setMaxQI() uses this so playback loops within THIS

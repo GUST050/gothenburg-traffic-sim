@@ -28,6 +28,7 @@ Writes (sumo/):
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import multiprocessing as mp
 import os
@@ -209,6 +210,25 @@ def demand_metadata(*, start_date: str, days: int, source: str, begin: str,
     if days == 1:
         meta.update({"date": start_date, "begin": begin, "end": end})
     return meta
+
+
+def calibrated_agent_summary(route_path: Path) -> dict | None:
+    """Summarise the individual demand agents emitted beside a PFE route file.
+
+    Older candidate pools have no purpose sidecar, so absence stays explicit
+    rather than fabricating a purpose split from route geometry.
+    """
+    agent_path = route_path.with_name(route_path.name.replace(".rou.xml", ".agents.json"))
+    if not agent_path.exists():
+        return None
+    with open(agent_path) as f:
+        agents = json.load(f).get("agents", [])
+    purposes = Counter(agent.get("purpose", "unknown") for agent in agents)
+    return {
+        "agent_file": agent_path.name,
+        "n_agents": len(agents),
+        "purpose_counts": dict(sorted(purposes.items())),
+    }
 
 
 def classify_day(date_str: str, dayofweek: int) -> tuple[bool, str]:
@@ -1292,6 +1312,9 @@ def main() -> None:
                          for name, seconds in timings_s.items()}
     if args.engine == "pfe" and report is not None and report.get("timings_s"):
         meta["pfe_timing_s"] = report["timings_s"]
+    agent_summary = calibrated_agent_summary(calib_path)
+    if agent_summary is not None:
+        meta["agent_demand"] = agent_summary
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")
