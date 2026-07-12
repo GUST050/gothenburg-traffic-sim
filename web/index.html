@@ -545,10 +545,6 @@
                title="Antal sammanhängande dagar att simulera, 1-7 (en vecka max — kostnaden växer med antalet dagar)">
         <button id="day-run-btn" class="action-btn primary">Räkna om (~6 min)</button>
         <button id="day-cancel-btn" class="action-btn">Avbryt</button>
-        <div id="recal-progress" role="status" aria-live="polite">
-          <div id="recal-progress-track"><div id="recal-progress-fill"></div></div>
-          <span id="recal-progress-label">Förbereder simulering…</span>
-        </div>
       </div>
 
       <div id="suggest-banner">
@@ -558,6 +554,11 @@
         <input type="number" id="suggest-duration-input" value="6" min="0.25" max="24" step="0.25">
         <button id="suggest-run-btn" class="action-btn primary" disabled>Sök bästa tid</button>
         <button id="suggest-cancel-btn" class="action-btn">Avbryt</button>
+      </div>
+
+      <div id="recal-progress" role="status" aria-live="polite">
+        <div id="recal-progress-track"><div id="recal-progress-fill"></div></div>
+        <span id="recal-progress-label">Förbereder simulering…</span>
       </div>
     </div>
 
@@ -896,6 +897,7 @@
         const pickCount  = document.getElementById('pick-count');
         const selected = new Set();
         let closureMode = false;
+        let closureJobRunning = false;
         let apiAvailable = false;
 
         // ── Byt simuleringsdag — den andra halvan av "vilka dagar vill jag
@@ -913,6 +915,7 @@
         const simDayHint = document.getElementById('sim-day-hint');
         const simAgentHint = document.getElementById('sim-agent-hint');
         let dayPickMode = false;
+        let recalibrationJobRunning = false;
         let currentSimDate = '2025-09-16';
         let currentSimSource = 'historical';
 
@@ -980,15 +983,18 @@
         function estimatedMinutes(days) {
           return Math.round(6 + (45 - 6) / 6 * (Math.max(1, days) - 1));
         }
-        function showRecalibrationProgress(elapsedS = 0) {
-          const expectedS = estimatedMinutes(Number(daysInput.value) || 1) * 60;
+        function showJobProgress(label, elapsedS = 0, expectedS = 90) {
           // This is deliberately an estimate, capped below 100 until the
-          // server reports completion. It communicates work without lying
-          // about exact progress in a multi-stage calibration pipeline.
+          // server reports completion. It communicates work without claiming
+          // an exact percentage for a multi-stage simulation job.
           const pct = Math.min(92, Math.max(4, 4 + elapsedS / expectedS * 88));
           recalProgress.classList.add('show');
           recalProgressFill.style.width = `${pct.toFixed(0)}%`;
-          recalProgressLabel.textContent = `Bygger simulering · ${elapsedS}s`;
+          recalProgressLabel.textContent = `${label} · ${elapsedS}s`;
+        }
+        function showRecalibrationProgress(elapsedS = 0) {
+          showJobProgress('Bygger simulering', elapsedS,
+                          estimatedMinutes(Number(daysInput.value) || 1) * 60);
         }
         function hideRecalibrationProgress() {
           recalProgress.classList.remove('show');
@@ -1130,7 +1136,19 @@
         });
 
         btnClose.addEventListener('click', enterPicking);
-        btnCancel.addEventListener('click', exitPicking);
+        btnCancel.addEventListener('click', async () => {
+          if (!closureJobRunning) return exitPicking();
+          btnCancel.disabled = true;
+          btnCancel.textContent = 'Avbryter…';
+          try {
+            const res = await fetch('/api/cancel?kind=close');
+            if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+          } catch (e) {
+            alert('Kunde inte avbryta simuleringen: ' + e.message);
+            btnCancel.disabled = false;
+            btnCancel.textContent = 'Avbryt';
+          }
+        });
         btnSuggest.addEventListener('click', enterSuggestPicking);
         btnSuggestCancel.addEventListener('click', exitSuggestPicking);
         btnSuggestResultsClose.addEventListener('click', () => {
@@ -1160,7 +1178,7 @@
             } catch (e) {
               continue;
             }
-            if (status.status === 'running') {
+            if (status.status === 'running' || status.status === 'cancelling') {
               onProgress?.(status.elapsed_s);
               continue;
             }
@@ -1347,9 +1365,22 @@
           updateDayRunLabel();
           refreshCloseUI();
         });
-        btnDayCancel.addEventListener('click', () => {
-          dayPickMode = false;
-          refreshCloseUI();
+        btnDayCancel.addEventListener('click', async () => {
+          if (!recalibrationJobRunning) {
+            dayPickMode = false;
+            refreshCloseUI();
+            return;
+          }
+          btnDayCancel.disabled = true;
+          btnDayCancel.textContent = 'Avbryter…';
+          try {
+            const res = await fetch('/api/cancel?kind=recalibrate');
+            if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+          } catch (e) {
+            alert('Kunde inte avbryta omkalibreringen: ' + e.message);
+            btnDayCancel.disabled = false;
+            btnDayCancel.textContent = 'Avbryt';
+          }
         });
 
         Render.onEdgeClick(id => {
@@ -1392,22 +1423,36 @@
         }
 
         btnRun.addEventListener('click', async () => {
+          closureJobRunning = true;
           btnRun.disabled = true;
+          btnCancel.disabled = false;
           btnRun.textContent = 'Startar…';
+          showJobProgress('Startar simulering', 0, 90);
           try {
             const res  = await fetch('/api/close?edges=' + [...selected].join(','));
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
             btnRun.textContent = 'Simulerar… (0s)';
-            const status = await pollClose(s => btnRun.textContent = `Simulerar… (${s}s)`);
+            const status = await pollClose(s => {
+              btnRun.textContent = `Simulerar… (${s}s)`;
+              showJobProgress('Simulerar avstängning', s, 90);
+            });
             if (status.status === 'error') throw new Error(status.error);
+            if (status.status === 'cancelled') {
+              exitPicking();
+              return;
+            }
             exitPicking();
             await activateClosedScenario(status);
           } catch (e) {
             alert('Simuleringen misslyckades: ' + e.message);
           } finally {
+            closureJobRunning = false;
+            hideRecalibrationProgress();
             btnRun.disabled = false;
             btnRun.textContent = 'Simulera avstängning';
+            btnCancel.disabled = false;
+            btnCancel.textContent = 'Avbryt';
           }
         });
 
@@ -1630,15 +1675,20 @@
             } catch (e) {
               continue;   // transient network hiccup — keep polling
             }
-            if (status.status === 'running') {
+            if (status.status === 'running' || status.status === 'cancelling') {
               btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s}s)`;
               showRecalibrationProgress(status.elapsed_s || 0);
+              if (status.status === 'cancelling') {
+                recalProgressLabel.textContent = 'Avbryter simulering…';
+              }
               continue;
             }
             hideRecalibrationProgress();
             if (status.status === 'error') {
               forgetPendingRecal();
               alert('Omkalibreringen misslyckades: ' + status.error);
+            } else if (status.status === 'cancelled') {
+              forgetPendingRecal();
             } else if (status.status === 'done') {
               await applyFinishedRecalibration(status);
             }
@@ -1662,6 +1712,7 @@
             if (status.status === 'done') {
               await applyFinishedRecalibration(status);
             } else {
+              recalibrationJobRunning = true;
               btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s || 0}s)`;
               showRecalibrationProgress(status.elapsed_s || 0);
               await pollRecalibration();
@@ -1673,8 +1724,10 @@
         }
 
         btnDayRun.addEventListener('click', async () => {
+          recalibrationJobRunning = true;
           btnDayRun.disabled = true;
-          btnDayCancel.disabled = true;
+          btnDayCancel.disabled = false;
+          btnDayCancel.textContent = 'Avbryt';
           const days = Number(daysInput.value) || 1;
           const date = dateInput.value;
           const source = currentSource;
@@ -1701,9 +1754,12 @@
             if (await recoverStartedRecalibration(date, source, days)) return;
             alert('Kunde inte starta omkalibreringen: ' + e.message);
           } finally {
+            recalibrationJobRunning = false;
             hideRecalibrationProgress();
+            recalibrationJobRunning = false;
             btnDayRun.disabled = false;
             btnDayCancel.disabled = false;
+            btnDayCancel.textContent = 'Avbryt';
             updateDayRunLabel();
           }
         });
@@ -1733,9 +1789,10 @@
             const status = await (await fetch('/api/recalibrate/status')).json();
             if (status.status === 'running') {
               dayPickMode = true;
+              recalibrationJobRunning = true;
               refreshCloseUI();
               btnDayRun.disabled = true;
-              btnDayCancel.disabled = true;
+              btnDayCancel.disabled = false;
               btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s}s)`;
               await pollRecalibration();
               btnDayRun.disabled = false;

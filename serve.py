@@ -36,6 +36,10 @@ Endpoints:
                                 job started from one tab/session is visible
                                 from any other and survives a dropped
                                 connection, laptop sleep, or closed tab.
+  GET /api/cancel?kind=close|recalibrate
+                              — stops the active process group for the
+                                selected job and reports status="cancelled"
+                                once cleanup has completed.
   GET /api/suggest_closure?edges=a,b&duration_hours=6&slide_hours=1
                             &top_k=15&extra_bad=2&seeds=3
                               — PLAN.md Phase C5: runs suggest_closure_time.py
@@ -145,6 +149,43 @@ _suggest_state: dict = {"status": "idle"}
 _optimize_lock = threading.Lock()  # guards _optimize_state below
 _optimize_state: dict = {"status": "idle"}
 
+# There is only one simulation-class job at a time (_sim_lock). Keep the
+# process-group leader for that job so the UI's Avbryt action can stop the
+# actual SUMO/build process tree rather than merely hiding its controls.
+_active_job_lock = threading.Lock()
+_active_job: dict = {"kind": None, "process": None, "cancel_requested": False}
+
+
+def begin_active_job(kind: str) -> None:
+    with _active_job_lock:
+        _active_job.update(kind=kind, process=None, cancel_requested=False)
+
+
+def finish_active_job(kind: str) -> None:
+    with _active_job_lock:
+        if _active_job["kind"] == kind:
+            _active_job.update(kind=None, process=None, cancel_requested=False)
+
+
+def cancel_active_job(kind: str) -> bool:
+    """Request cancellation and kill the current process group if spawned."""
+    with _active_job_lock:
+        if _active_job["kind"] != kind:
+            return False
+        _active_job["cancel_requested"] = True
+        proc = _active_job["process"]
+    if proc is not None and proc.poll() is None:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    return True
+
+
+def active_job_cancelled(kind: str) -> bool:
+    with _active_job_lock:
+        return _active_job["kind"] == kind and bool(_active_job["cancel_requested"])
+
 
 def run_in_new_session(cmd: list[str], *, cwd: str,
                        timeout: float) -> subprocess.CompletedProcess:
@@ -163,6 +204,14 @@ def run_in_new_session(cmd: list[str], *, cwd: str,
     proc = subprocess.Popen(cmd, cwd=cwd, start_new_session=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True)
+    with _active_job_lock:
+        if _active_job["kind"] is not None:
+            _active_job["process"] = proc
+            cancel_now = bool(_active_job["cancel_requested"])
+        else:
+            cancel_now = False
+    if cancel_now:
+        os.killpg(proc.pid, signal.SIGKILL)
     try:
         out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -172,6 +221,10 @@ def run_in_new_session(cmd: list[str], *, cwd: str,
             pass   # group already gone — the child died just as we timed out
         proc.wait()
         raise
+    finally:
+        with _active_job_lock:
+            if _active_job["process"] is proc:
+                _active_job["process"] = None
     return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 
 
@@ -340,6 +393,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/api/ping"):
             return self._json(200, {"ok": True})
+        if self.path.startswith("/api/cancel"):
+            return self._cancel()
         if self.path.startswith("/api/close/status"):
             return self._close_status()
         if self.path.startswith("/api/close"):
@@ -357,6 +412,24 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/optimize_signals"):
             return self._optimize_signals()
         return super().do_GET()
+
+    def _cancel(self) -> None:
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        kind = qs.get("kind", [""])[0]
+        states = {
+            "close": (_close_lock, _close_state),
+            "recalibrate": (_recal_lock, _recal_state),
+        }
+        if kind not in states:
+            return self._json(400, {"error": "okänd körning att avbryta"})
+        lock, state = states[kind]
+        with lock:
+            if state.get("status") not in {"running", "cancelling"}:
+                return self._json(409, {"error": "ingen sådan körning pågår"})
+            state["status"] = "cancelling"
+        if not cancel_active_job(kind):
+            return self._json(409, {"error": "körningen avslutades redan"})
+        return self._json(202, {"status": "cancelling", "kind": kind})
 
     def _close(self) -> None:
         # Async (2026-07-10, same reasoning and pattern as /api/recalibrate
@@ -398,6 +471,7 @@ class Handler(SimpleHTTPRequestHandler):
             _close_state.update(status="running", edges=edges,
                                 begin=begin or None, end=end or None,
                                 started_at=time.time())
+        begin_active_job("close")
         threading.Thread(target=self._run_close, args=(edges, begin or None, end or None),
                          daemon=True).start()
         return self._json(202, {"status": "started", "edges": edges})
@@ -424,6 +498,9 @@ class Handler(SimpleHTTPRequestHandler):
             else:
                 cmd = [sys.executable, "run_scenario.py", "--close", *edges]
             res = run_in_new_session(cmd, cwd=str(ROOT), timeout=600)
+            if active_job_cancelled("close"):
+                self._set_close(status="cancelled")
+                return
             if res.returncode != 0:
                 print(res.stdout[-1500:], res.stderr[-1500:])
                 self._set_close(status="error",
@@ -468,12 +545,13 @@ class Handler(SimpleHTTPRequestHandler):
             self._set_close(status="error",
                             error=f"oväntat fel — se serverloggen ({type(e).__name__})")
         finally:
+            finish_active_job("close")
             _sim_lock.release()
 
     def _close_status(self) -> None:
         with _close_lock:
             state = dict(_close_state)
-        if state.get("status") == "running":
+        if state.get("status") in {"running", "cancelling"}:
             state["elapsed_s"] = round(time.time() - state["started_at"])
         return self._json(200, state)
 
@@ -502,6 +580,7 @@ class Handler(SimpleHTTPRequestHandler):
             _recal_state.clear()
             _recal_state.update(status="running", date=date, source=source,
                                 days=days, started_at=time.time())
+        begin_active_job("recalibrate")
         threading.Thread(target=self._run_recalibrate, args=(date, source, days),
                          daemon=True).start()
         return self._json(202, {"status": "started", "date": date, "source": source,
@@ -538,6 +617,9 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             res = run_in_new_session(build_cmd, cwd=str(ROOT),
                                      timeout=build_timeout)
+            if active_job_cancelled("recalibrate"):
+                self._set_recal(status="cancelled")
+                return
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])
                 last_line = res.stderr.strip().splitlines()[-1] if res.stderr.strip() else ""
@@ -556,6 +638,9 @@ class Handler(SimpleHTTPRequestHandler):
                 [sys.executable, "run_scenario.py"],
                 cwd=str(ROOT), timeout=300 + 60 * (days - 1),
             )
+            if active_job_cancelled("recalibrate"):
+                self._set_recal(status="cancelled")
+                return
             if res2.returncode != 0:
                 print(res2.stdout[-2000:], res2.stderr[-2000:])
                 self._set_recal(status="error",
@@ -578,12 +663,13 @@ class Handler(SimpleHTTPRequestHandler):
             self._set_recal(status="error",
                             error=f"oväntat fel — se serverloggen ({type(e).__name__})")
         finally:
+            finish_active_job("recalibrate")
             _sim_lock.release()
 
     def _recalibrate_status(self) -> None:
         with _recal_lock:
             state = dict(_recal_state)
-        if state.get("status") == "running":
+        if state.get("status") in {"running", "cancelling"}:
             state["elapsed_s"] = round(time.time() - state["started_at"])
         return self._json(200, state)
 

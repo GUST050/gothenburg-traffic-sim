@@ -70,6 +70,8 @@ def base_url(tmp_path, monkeypatch):
     serve._suggest_state.update(status="idle")
     serve._optimize_state.clear()
     serve._optimize_state.update(status="idle")
+    serve.finish_active_job("close")
+    serve.finish_active_job("recalibrate")
     if serve._sim_lock.locked():
         serve._sim_lock.release()
 
@@ -221,6 +223,50 @@ class TestClose:
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
         assert not serve._sim_lock.locked()
+
+
+class TestCancel:
+    def test_cancel_close_stops_job_and_never_marks_it_done(self, base_url, monkeypatch):
+        release = threading.Event()
+
+        def fake_run(cmd, **kw):
+            release.wait(timeout=2)
+            index = {"scenarios": [{"closed_edges": ["a_b_0"],
+                                    "name": "close_a_b_0", "file": "close_a_b_0.json"}]}
+            (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
+            return FakeCompletedProcess(returncode=0, stdout="Scenario 'close_a_b_0' (...)" )
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert get_json(f"{base_url}/api/close?edges=a_b_0")[0] == 202
+        assert get_json(f"{base_url}/api/cancel?kind=close")[0] == 202
+        release.set()
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "cancelled")
+        _, status = get_json(f"{base_url}/api/close/status")
+        assert "file" not in status
+        assert not serve._sim_lock.locked()
+
+    def test_cancel_recalibration_preserves_existing_scenarios(self, base_url, monkeypatch):
+        release = threading.Event()
+        old = serve.SCEN_DIR / "baseline.json"
+        old.write_text('{"old": true}')
+
+        def fake_run(cmd, **kw):
+            release.wait(timeout=2)
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert get_json(f"{base_url}/api/recalibrate?date=2025-09-16")[0] == 202
+        assert get_json(f"{base_url}/api/cancel?kind=recalibrate")[0] == 202
+        release.set()
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "cancelled")
+        assert old.exists()
+        assert not serve._sim_lock.locked()
+
+    def test_cancel_rejects_an_idle_or_unknown_job(self, base_url):
+        assert get_json_or_error(f"{base_url}/api/cancel?kind=close")[0] == 409
+        assert get_json_or_error(f"{base_url}/api/cancel?kind=unknown")[0] == 400
 
 
 class TestCloseWindowed:
