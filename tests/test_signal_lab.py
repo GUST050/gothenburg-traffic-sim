@@ -7,12 +7,81 @@ independent of SUMO: window-offset parsing and the fingerprint helpers.
 """
 
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import signal_lab
+
+
+class TestMergeRouteFiles:
+    """Shared by signal_optimize.merge_demand_variants and signal_closure_
+    combine.merge_vehroute_outputs (found near-duplicated independently in
+    review 2026-07-12)."""
+
+    def test_prefixes_vehicle_ids_by_source_index(self, tmp_path):
+        a = tmp_path / "a.rou.xml"
+        a.write_text('<routes><vehicle id="v0" depart="0"><route edges="x y"/>'
+                    '</vehicle></routes>')
+        b = tmp_path / "b.rou.xml"
+        b.write_text('<routes><vehicle id="v0" depart="10"><route edges="p q"/>'
+                    '</vehicle></routes>')
+        out = tmp_path / "merged.rou.xml"
+
+        n = signal_lab.merge_route_files([a, b], out, prefix="src")
+
+        assert n == 2
+        ids = [v.get("id") for v in ET.parse(out).getroot().findall("vehicle")]
+        assert ids == ["src0_v0", "src1_v0"]   # globally unique, no collision
+
+    def test_preserves_a_vehicle_routedistribution_child(self, tmp_path):
+        a = tmp_path / "a.xml"
+        a.write_text("""<routes>
+  <vehicle id="v0" depart="0">
+    <routeDistribution>
+      <route replacedOnEdge="x" probability="0" edges="x y"/>
+      <route edges="x z"/>
+    </routeDistribution>
+  </vehicle>
+</routes>""")
+        out = tmp_path / "merged.rou.xml"
+
+        signal_lab.merge_route_files([a], out, prefix="run")
+
+        veh = ET.parse(out).getroot().find("vehicle")
+        assert veh.get("id") == "run0_v0"
+        assert veh.find("routeDistribution") is not None
+        assert len(veh.find("routeDistribution").findall("route")) == 2
+
+    def test_vehicle_with_no_id_is_skipped_not_crashed(self, tmp_path):
+        a = tmp_path / "a.xml"
+        a.write_text('<routes><vehicle depart="0"><route edges="x y"/></vehicle>'
+                    '</routes>')
+        out = tmp_path / "merged.rou.xml"
+
+        n = signal_lab.merge_route_files([a], out, prefix="run")
+
+        assert n == 0
+        assert ET.parse(out).getroot().findall("vehicle") == []
+
+    def test_empty_input_returns_zero_by_default(self, tmp_path):
+        a = tmp_path / "a.xml"
+        a.write_text("<routes/>")
+        out = tmp_path / "merged.rou.xml"
+
+        n = signal_lab.merge_route_files([a], out, prefix="run")
+
+        assert n == 0
+
+    def test_require_nonempty_raises_on_zero_vehicles(self, tmp_path):
+        a = tmp_path / "a.xml"
+        a.write_text("<routes/>")
+        out = tmp_path / "merged.rou.xml"
+
+        with pytest.raises(ValueError, match="empty"):
+            signal_lab.merge_route_files([a], out, prefix="run", require_nonempty=True)
 
 
 class TestWindowOffsetsS:

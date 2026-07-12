@@ -50,7 +50,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import copy
 import dataclasses
 import json
 import sys
@@ -60,8 +59,9 @@ from pathlib import Path
 
 import closure_metrics as cm
 import run_scenario as rs
-from signal_lab import (TLS_PROVENANCE, net_fingerprint, sumo_version,
-                        tls_plan_diff, tls_timing_schedule, window_offsets_s)
+from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
+                        sumo_version, tls_plan_diff, tls_timing_schedule,
+                        window_offsets_s)
 from signal_optimize import (CAVEAT, paired_comparison, relative_pct, run_condition,
                              run_tls_coordinator, run_tls_cycle_adaptation)
 from signal_regulation import enforce_timing_minimums
@@ -76,20 +76,7 @@ def merge_vehroute_outputs(paths: list[Path], out_path: Path) -> int:
     prefix its ID with the run index; ``extract_final_routes`` then turns this
     exact ensemble into the route file used for timing adaptation.
     """
-    out_root = ET.Element("routes")
-    n = 0
-    for run_index, path in enumerate(paths):
-        root = ET.parse(path).getroot()
-        for vehicle in root.findall("vehicle"):
-            copied = copy.deepcopy(vehicle)
-            vehicle_id = copied.get("id")
-            if not vehicle_id:
-                continue
-            copied.set("id", f"run{run_index}_{vehicle_id}")
-            out_root.append(copied)
-            n += 1
-    ET.ElementTree(out_root).write(out_path, xml_declaration=True, encoding="UTF-8")
-    return n
+    return merge_route_files(paths, out_path, prefix="run")
 
 
 def extract_final_routes(vehroute_path: Path, out_path: Path) -> int:

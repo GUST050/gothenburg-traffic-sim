@@ -103,8 +103,15 @@ def closure_integrity_status(active_closure_entries: int | None,
     Truthiness alone (`if active_closure_entries else ...`) would treat 0
     identically to None — a verified-clean closure reported the same way
     as "we never checked" — the exact "missing != zero" mistake
-    ARCHITECTURE.md calls out explicitly. Found in review 2026-07-12."""
-    if active_closure_entries is not None and active_closure_entries > 0:
+    ARCHITECTURE.md calls out explicitly. Found in review 2026-07-12.
+
+    Uses closure_metrics.closure_edge_leaked() for the actual "is this a
+    leak" threshold rather than reimplementing it — the same underlying
+    measurement closure_metrics.disqualification_reasons() judges for the
+    ranking tools (suggest_closure_time.py, signal_optimize.py,
+    signal_closure_combine.py), so a future tolerance change can never
+    silently apply to only one of the two."""
+    if cm.closure_edge_leaked(active_closure_entries):
         return "failed_active_edge_flow"
     if active_closure_entries == 0:
         return "verified_clean"

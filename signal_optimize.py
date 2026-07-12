@@ -48,7 +48,6 @@ delay_based network variants.
 from __future__ import annotations
 
 import argparse
-import copy
 import dataclasses
 import hashlib
 import json
@@ -61,8 +60,9 @@ import xml.etree.ElementTree as ET
 
 import closure_metrics as cm
 import run_scenario as rs
-from signal_lab import (TLS_PROVENANCE, net_fingerprint, sumo_version,
-                        tls_plan_diff, tls_timing_schedule, window_offsets_s)
+from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
+                        sumo_version, tls_plan_diff, tls_timing_schedule,
+                        window_offsets_s)
 from signal_regulation import (build_demand_weighted_tls,
                                build_regulation_compliant_tls,
                                enforce_timing_minimums)
@@ -193,22 +193,7 @@ def merge_demand_variants(variants: list[Path], out_path: Path) -> int:
     them while merging so SUMO's timing tools see all uncertainty variants
     rather than silently treating q50 as the sole optimization target.
     """
-    root_out = ET.Element("routes")
-    count = 0
-    for variant_index, path in enumerate(variants):
-        root = ET.parse(path).getroot()
-        for vehicle in root.findall("vehicle"):
-            copied = copy.deepcopy(vehicle)
-            vehicle_id = copied.get("id")
-            if not vehicle_id:
-                continue
-            copied.set("id", f"variant{variant_index}_{vehicle_id}")
-            root_out.append(copied)
-            count += 1
-    if not count:
-        raise ValueError("cannot optimize signals from an empty demand-variant set")
-    ET.ElementTree(root_out).write(out_path, xml_declaration=True, encoding="UTF-8")
-    return count
+    return merge_route_files(variants, out_path, prefix="variant", require_nonempty=True)
 
 
 def build_alt_type_net(home: Path, tls_type: str, out_path: Path) -> None:
@@ -380,6 +365,19 @@ def condition_non_tls_fingerprints(conditions: dict[str, dict]) -> dict[str, str
             seen[path] = non_tls_network_fingerprint(path)
         out[name] = seen[path]
     return out
+
+
+def condition_tls_provenance(conditions: dict[str, dict]) -> dict[str, str]:
+    """REGULATION_PROVENANCE for every TSFS-grounded condition, plain
+    TLS_PROVENANCE otherwise — found in review 2026-07-12: this used to
+    special-case only "regulation_compliant" by name, so "adapted",
+    "adapted_coordinated", and "demand_weighted_coordinated" (which ALSO
+    go through signal_regulation.rebuild_phases(), via
+    enforce_timing_minimums/build_demand_weighted_tls) were silently
+    reported under the same plain "synthetic" label as netconvert's raw
+    arbitrary guess."""
+    return {name: (REGULATION_PROVENANCE if name in TSFS_INFORMED_CONDITIONS else TLS_PROVENANCE)
+            for name in conditions}
 
 
 def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path],
@@ -591,10 +589,7 @@ def main() -> None:
         "recommendation_allowed": TLS_PROVENANCE != "synthetic",
         # Per-condition override: every TSFS-grounded condition is
         # explicitly labelled, not just "regulation_compliant" by name.
-        "tls_provenance_by_condition": {
-            name: (REGULATION_PROVENANCE if name in TSFS_INFORMED_CONDITIONS else TLS_PROVENANCE)
-            for name in conditions
-        },
+        "tls_provenance_by_condition": condition_tls_provenance(conditions),
         "net_fingerprint": baseline_net_fp,
         "net_fingerprints_by_condition": net_fps,
         "non_tls_network_fingerprints_by_condition": non_tls_net_fps,

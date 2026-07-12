@@ -421,6 +421,61 @@ class TestBuildSignalConditions:
         so.build_signal_conditions(tmp_path, [tmp_path / "calibrated.rou.xml"], 0, 900, "label2")
         assert "regulation" not in {c[0] for c in calls}
 
+    def test_alt_net_with_changed_non_tls_structure_aborts(self, tmp_path, monkeypatch):
+        # Found in review 2026-07-12: this abort path (a full netconvert
+        # --tls.default-type rebuild perturbing something besides <tlLogic>)
+        # had zero test coverage — only the standalone non_tls_network_
+        # fingerprint helper was tested on hand-built fixtures, never this
+        # comparison-and-sys.exit branch inside build_signal_conditions.
+        calls = []
+        self._stub_tools(monkeypatch, tmp_path, calls)
+
+        def fake_alt_net_diverged(home, tls_type, out_path):
+            calls.append(("net", tls_type, out_path))
+            # "actuated" rebuild silently adds a real edge -- a genuine
+            # non-TLS structural change netconvert must never introduce.
+            content = ('<net><edge id="new_edge"/></net>' if tls_type == "actuated"
+                      else "<net/>")
+            out_path.write_text(content)
+
+        monkeypatch.setattr(so, "build_alt_type_net", fake_alt_net_diverged)
+        with pytest.raises(SystemExit, match="actuated.*non-TLS structure"):
+            so.build_signal_conditions(
+                tmp_path, [tmp_path / "calibrated.rou.xml"], 0, 900, "label1")
+
+    def test_alt_net_with_identical_non_tls_structure_succeeds(self, tmp_path, monkeypatch):
+        calls = []
+        self._stub_tools(monkeypatch, tmp_path, calls)
+        conditions = so.build_signal_conditions(
+            tmp_path, [tmp_path / "calibrated.rou.xml"], 0, 900, "label1")
+        assert set(conditions) == set(so.SIGNAL_CONDITION_NAMES)
+
+
+class TestConditionTlsProvenance:
+    """Found in review 2026-07-12: this used to special-case only
+    "regulation_compliant" by name, silently labelling "adapted"/
+    "adapted_coordinated"/"demand_weighted_coordinated" (which ALSO go
+    through the TSFS-informed rebuild_phases() pipeline) the same as
+    netconvert's raw arbitrary guess."""
+
+    def test_every_tsfs_grounded_condition_gets_the_regulation_label(self):
+        conditions = {name: {} for name in so.SIGNAL_CONDITION_NAMES}
+        prov = so.condition_tls_provenance(conditions)
+        for name in ("adapted", "adapted_coordinated", "regulation_compliant",
+                    "demand_weighted_coordinated"):
+            assert prov[name] == so.REGULATION_PROVENANCE
+
+    def test_conditions_that_never_touch_tsfs_logic_stay_plain_synthetic(self):
+        conditions = {name: {} for name in so.SIGNAL_CONDITION_NAMES}
+        prov = so.condition_tls_provenance(conditions)
+        for name in ("baseline", "actuated", "delay_based"):
+            assert prov[name] == so.TLS_PROVENANCE
+
+    def test_regulation_and_plain_provenance_are_distinct_values(self):
+        # A future D6 flipping TLS_PROVENANCE to "city-configured" must not
+        # accidentally make these two literally the same string again.
+        assert so.REGULATION_PROVENANCE != so.TLS_PROVENANCE
+
 
 class TestConditionNetFingerprints:
     def test_baseline_and_adapted_share_the_deployed_network_fingerprint(self, tmp_path):

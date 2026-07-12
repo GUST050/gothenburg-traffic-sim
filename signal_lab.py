@@ -34,6 +34,7 @@ build_sumo_demand.py first) and sumo/net.net.xml (build_sumo_net.py).
 from __future__ import annotations
 
 import argparse
+import copy
 import dataclasses
 import hashlib
 import json
@@ -87,6 +88,42 @@ def sumo_version(home: Path) -> str:
         return first_line or "unknown"
     except (subprocess.SubprocessError, OSError, IndexError):
         return "unknown"
+
+
+def merge_route_files(paths: list[Path], out_path: Path, prefix: str,
+                      require_nonempty: bool = False) -> int:
+    """Merge per-source SUMO route/vehroute files into one, making vehicle
+    IDs globally unique by prefixing each with its source's index in
+    ``paths``. Shared by signal_optimize.py's merge_demand_variants (the
+    q10/q50/q90 direction-split demand variants reuse vehicle IDs) and
+    signal_closure_combine.py's merge_vehroute_outputs (per-seed vehroute
+    files reuse the same PFE-prefixed IDs too) — found near-duplicated,
+    independently, in review 2026-07-12: both parse each file, deep-copy
+    every <vehicle>, prefix its id, and write one merged <routes> root,
+    differing only in the prefix string.
+
+    require_nonempty (default False, matching merge_vehroute_outputs'
+    prior behaviour): merge_demand_variants' caller has nothing else
+    checking for zero vehicles, so it opts into ValueError immediately;
+    signal_closure_combine.py's caller has its own later, more specific
+    check (n_extracted == 0, after route extraction) that gives a clearer
+    error message, so it leaves this False."""
+    out_root = ET.Element("routes")
+    count = 0
+    for index, path in enumerate(paths):
+        root = ET.parse(path).getroot()
+        for vehicle in root.findall("vehicle"):
+            copied = copy.deepcopy(vehicle)
+            vehicle_id = copied.get("id")
+            if not vehicle_id:
+                continue
+            copied.set("id", f"{prefix}{index}_{vehicle_id}")
+            out_root.append(copied)
+            count += 1
+    if require_nonempty and not count:
+        raise ValueError("cannot merge an empty set of route files")
+    ET.ElementTree(out_root).write(out_path, xml_declaration=True, encoding="UTF-8")
+    return count
 
 
 def _parse_tl_logics(path: Path) -> dict[str, dict]:

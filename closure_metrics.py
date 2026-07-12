@@ -229,6 +229,19 @@ def build_metrics(tripinfo_path: Path, statistics_path: Path, *,
     )
 
 
+def closure_edge_leaked(throughput: int | None) -> bool:
+    """True only when a closed edge was MEASURED to carry real traffic.
+
+    None (never measured) and 0 (measured, genuinely clean) must both read
+    as "not a leak" — the same "missing != zero" distinction this
+    project's own conventions require elsewhere. Shared between
+    disqualification_reasons() below and run_scenario.py's
+    closure_integrity_status() (found independently defining this same
+    threshold in review 2026-07-12) so a future tolerance change can never
+    silently apply to only one of the two."""
+    return throughput is not None and throughput > 0
+
+
 def disqualification_reasons(metrics: DisruptionMetrics) -> tuple[str, ...]:
     """Return hard integrity failures; no time-loss trade-off is permitted."""
     reasons = []
@@ -236,7 +249,7 @@ def disqualification_reasons(metrics: DisruptionMetrics) -> tuple[str, ...]:
         reasons.append("teleports")
     if metrics.dropped_unreachable:
         reasons.append("dropped_unreachable_vehicles")
-    if metrics.closed_edge_throughput is not None and metrics.closed_edge_throughput > 0:
+    if closure_edge_leaked(metrics.closed_edge_throughput):
         reasons.append("active_closure_edge_throughput")
     return tuple(reasons)
 
