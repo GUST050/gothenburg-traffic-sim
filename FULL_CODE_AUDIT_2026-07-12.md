@@ -236,3 +236,144 @@ The rerouter is attached in a fixed closure radius. Upstream traffic may reroute
 It does not validate interval count, begin/end boundaries, coverage or seed/network/demand identity.
 **Fix:** add output validation gate and a simulation-health report before aggregation.
 
+## Current Verified Findings - 2026-07-12
+
+This section supersedes the severity order above. It was produced from a
+fresh source inventory, direct artifact checks and a full pytest run. Only
+findings with a concrete code path and reproducible evidence or primary-source
+documentation are included. Local uncommitted changes in `build_candidates.py`
+and generated scenario files were observed but not changed or attributed.
+
+### P0 - Individual-vehicle simulation is currently misleading
+
+#### P0-1. Trips are generated with destinations immediately after sensors
+**Where:** `build_candidates.py:795-835`, `1016-1050`, `1229-1410`; `pfe.py:708-951`.
+
+`natural_far_end_weights()` verifies only that a sensor lies on the shortest
+path. It does not require any onward path distance after the sensor. The
+generators then favour the closest permitted endpoint using
+`exp(-distance/gravity_km)`, and PFE can repeat that route to match a count.
+
+**Measured effect:** 5,973 of 22,301 vehicles in the active calibrated route
+file (26.8%) have their last sensor on the final edge or one edge before it.
+For internal-work outbound trips, 2,593 of 5,403 (48.0%) do. This directly
+causes cars to end at the first junction after a sensor. It is not a renderer
+failure or SUMO teleport.
+
+**Required fix:** establish destination and route-choice priors before count
+calibration, add a validated downstream network-distance condition, replace
+the zero-mode exponential deterrence shape, and publish calibrated trip-length
+and sensor-tail distributions. The detailed evidence is in
+`DESTINATION_BIAS_RESEARCH_2026-07-12.md`.
+
+#### P0-2. Rerouted closure vehicles are omitted from trajectory playback
+**Where:** `run_scenario.py:654-726`, particularly `veh.find("route")`.
+
+SUMO writes a rerouted vehicle's final route inside `routeDistribution`; the
+exporter reads only a direct `route` child and skips the vehicle. The map can
+therefore aggregate that vehicle's edge flow while the individual-car layer
+does not show it.
+
+**Primary evidence:** [SUMO VehRoutes](https://sumo.dlr.de/docs/Simulation/Output/VehRoutes.html)
+documents the nested `routeDistribution` output for replaced routes.
+
+**Required fix:** parse the final nested route as well as direct routes; add a
+rerouted-vehicle fixture and publish trajectory export coverage by seed and
+demand variant.
+
+#### P0-3. Unfinished vehicles are absent from the car layer
+**Where:** `run_scenario.py:654-726`; `web/render.js:181-239`.
+
+The exporter does not request `--vehroute-output.write-unfinished`. SUMO
+therefore exports only finished trips by default. A queued or still-driving
+vehicle may affect the edge-flow aggregate but be invisible in the animation.
+
+**Primary evidence:** [SUMO VehRoutes](https://sumo.dlr.de/docs/Simulation/Output/VehRoutes.html)
+documents the default and the unfinished-trip option.
+
+**Required fix:** export unfinished vehicles with an explicit state/last point,
+or state that the layer contains completed trips only; reconcile it with SUMO
+vehicle totals before publishing.
+
+### P1 - High-risk correctness, safety and reproducibility defects
+
+#### P1-1. Scenario publication has no complete vehicle-health gate
+**Where:** `run_scenario.py:518-651`, `822-955`.
+
+Publication follows edgeData parsing, not a per-seed/variant reconciliation of
+loaded, inserted, arrived, running, waiting, teleported and ignored-route-error
+vehicles. A plausible mean flow can therefore conceal failed insertion or
+teleports.
+
+**Primary evidence:** [SUMO Statistic Output](https://sumo.dlr.de/userdoc/Simulation/Output/StatisticOutput.html)
+and [SUMO Output](https://sumo.dlr.de/docs/Simulation/Output/index.html) define
+these categories and caution that fixed-end comparisons must include missing
+vehicles.
+
+**Required fix:** immutable per-seed health reports and a publication gate on
+vehicle conservation, route errors and teleport thresholds.
+
+#### P1-2. Road colours and visible cars represent different populations
+**Where:** `run_scenario.py:872-913`, `928-955`.
+
+Road flows average seeds and q50/q10/q90 demand variants, while the trajectory
+export always runs `variants[0]` with seed 1000. The UI does not disclose that
+the car layer is one representative run rather than the map aggregate.
+
+**Required fix:** label seed/variant, let the operator select one, or remove
+individual cars when displaying an uncertainty aggregate.
+
+#### P1-3. Only two long-running job types are cancellable
+**Where:** `serve.py:145-239`, `409-659`; `web/index.html` job controls.
+
+Cancellation tracks direct closures and recalibration, but not the similarly
+long suggestion or signal-optimisation jobs sharing the same simulation lock.
+
+**Required fix:** one durable job model for every job type, with id, state,
+process-group handle and common cancellation endpoint.
+
+#### P1-4. Mutating API operations use unauthenticated GET
+**Where:** `serve.py` handlers and `web/index.html` fetch calls.
+
+Closures, recalibration, cancellation, suggestion and signal optimisation are
+state-changing GET requests. This is acceptable only on trusted localhost, not
+shared deployment.
+
+**Required fix:** authenticated POST JSON plus CSRF protection; GET only for
+read-only status and artifacts.
+
+#### P1-5. Shared mutable artifacts prevent reproducible provenance
+**Where:** `build_sumo_demand.py`, `run_scenario.py`, `serve.py`, signal tools.
+
+The server lock cannot protect command-line runs, restarts or another server
+process from overwriting `sumo/` and `web/data/scenarios/`.
+
+**Required fix:** immutable run directories with input/environment hashes and
+atomic activation after validation.
+
+#### P1-6. Recalibration deletes valid scenarios before the replacement exists
+**Where:** `serve.py:628-641`.
+
+After demand succeeds, every scenario JSON is removed before the new baseline
+is validated. A later failure leaves no prior valid baseline.
+
+**Required fix:** build into a new run and switch the active manifest only
+after the replacement passes its health gate.
+
+### P2 - Important verified engineering gaps
+
+1. Dynamic suggestion/signal results still cross `innerHTML` boundaries; use
+   DOM construction with `textContent` and add CSP before shared deployment.
+2. PFE has no deterministic benchmark for runtime, memory, diversity,
+   relaxation-rung distribution and fit on a realistic fixture.
+3. Raw input, external API and model provenance is not uniformly hashed into
+   every scenario manifest; add a versioned intake/environment manifest.
+
+### Rechecked Status
+
+- The prior stale q10/q90 issue is resolved: current `demand_variants()`
+  follows declared `n_variants` and rejects an incomplete declared set.
+- Direct closure/recalibration cancellation now kills its registered process
+  group and has integration tests. The remaining coverage gap is P1-3.
+- The full test suite was run during this audit. Passing tests do not cover
+  the trajectory XML schemas or destination-tail distribution gates above.
