@@ -198,7 +198,13 @@
     }
     #new-days-input { width: 3.2em; }
     #sim-day-hint { font-size: 0.72rem; color: var(--ink-3); }
-    #sim-agent-hint { font-size: 0.70rem; color: var(--ink-2); white-space: nowrap; }
+    #sim-agent-hint {
+      font-size: 0.70rem;
+      color: var(--ink-2);
+      line-height: 1.25;
+      max-width: 240px;
+      white-space: normal;
+    }
     #recal-progress {
       display: none; align-items: center; gap: 8px; min-width: 190px;
       font-size: 0.69rem; color: var(--ink-2); font-variant-numeric: tabular-nums;
@@ -775,19 +781,7 @@
             currentSimSource = provider.source || 'historical';
             const srcLabel = currentSimSource === 'forecast' ? 'Prognos' : 'Historik';
             simDayHint.textContent = `${srcLabel}: ${currentSimDate}`;
-            const demand = provider.agentDemand;
-            if (demand?.n_agents && demand.purpose_counts) {
-              const labels = { work: 'arbete', arbete: 'arbete', service: 'service',
-                               leisure: 'fritid', fritid: 'fritid', through: 'genomfart',
-                               external: 'extern', unknown: 'okänd' };
-              const parts = Object.entries(demand.purpose_counts).map(([purpose, count]) =>
-                `${labels[purpose] || purpose} ${Math.round(100 * count / demand.n_agents)}%`);
-              simAgentHint.textContent = `Resor: ${parts.join(' · ')}`;
-              simAgentHint.title = `${demand.n_agents} individuella kalibrerade resor`;
-              simAgentHint.hidden = false;
-            } else {
-              simAgentHint.hidden = true;
-            }
+            renderAgentDemand(provider, State.qi);
           } else if (!isSim) {
             simAgentHint.hidden = true;
           }
@@ -921,6 +915,34 @@
         let dayPickMode = false;
         let currentSimDate = '2025-09-16';
         let currentSimSource = 'historical';
+
+        function renderAgentDemand(provider, qi) {
+          const demand = provider.agentDemand;
+          if (!demand?.n_agents || !demand.purpose_counts) {
+            simAgentHint.hidden = true;
+            return;
+          }
+          const counts = demand.purpose_counts_by_quarter?.[qi] ?? demand.purpose_counts;
+          const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+          if (!total) {
+            simAgentHint.textContent = 'Resor nu: inga avgångar';
+            simAgentHint.title = 'Inga kalibrerade fordonsavgångar i denna 15-minutersruta';
+            simAgentHint.hidden = false;
+            return;
+          }
+          const labels = { work: 'arbete', arbete: 'arbete', service: 'service',
+                           leisure: 'fritid', fritid: 'fritid', through: 'genomfart',
+                           external: 'extern', unknown: 'okänd' };
+          const parts = Object.entries(counts).map(([purpose, count]) =>
+            `${labels[purpose] || purpose} ${Math.round(100 * count / total)}%`);
+          simAgentHint.textContent = `Resor nu: ${parts.join(' · ')}`;
+          simAgentHint.title = `${total} individuella kalibrerade avgångar i denna 15-minutersruta`;
+          simAgentHint.hidden = false;
+        }
+
+        window.addEventListener('tick', event => {
+          if (currentProvider?.isScenario) renderAgentDemand(currentProvider, event.detail.qi);
+        });
 
         // Scopes the "recover a recalibration on page load" check (below)
         // to THIS tab's own session, not every future visitor forever.

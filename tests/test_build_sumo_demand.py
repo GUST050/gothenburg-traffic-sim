@@ -167,13 +167,14 @@ def test_calibrated_agent_summary_reports_real_purpose_counts(tmp_path):
     (tmp_path / "calibrated.agents.json").write_text(json.dumps({
         "schema_version": 1,
         "agents": [{"purpose": "arbete"}, {"purpose": "arbete"},
-                   {"purpose": "service"}],
+                   {"purpose": "service", "departure_s": 900}],
     }))
 
-    assert bsd.calibrated_agent_summary(route) == {
+    assert bsd.calibrated_agent_summary(route, 2) == {
         "agent_file": "calibrated.agents.json",
         "n_agents": 3,
         "purpose_counts": {"arbete": 2, "service": 1},
+        "purpose_counts_by_quarter": [{"arbete": 2}, {"service": 1}],
     }
 
 

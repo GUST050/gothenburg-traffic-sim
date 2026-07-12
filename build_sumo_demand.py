@@ -212,7 +212,7 @@ def demand_metadata(*, start_date: str, days: int, source: str, begin: str,
     return meta
 
 
-def calibrated_agent_summary(route_path: Path) -> dict | None:
+def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
     """Summarise the individual demand agents emitted beside a PFE route file.
 
     Older candidate pools have no purpose sidecar, so absence stays explicit
@@ -224,10 +224,17 @@ def calibrated_agent_summary(route_path: Path) -> dict | None:
     with open(agent_path) as f:
         agents = json.load(f).get("agents", [])
     purposes = Counter(agent.get("purpose", "unknown") for agent in agents)
+    by_quarter = [Counter() for _ in range(n_intervals)]
+    for agent in agents:
+        quarter = int(float(agent.get("departure_s", 0)) // 900)
+        if 0 <= quarter < n_intervals:
+            by_quarter[quarter][agent.get("purpose", "unknown")] += 1
     return {
         "agent_file": agent_path.name,
         "n_agents": len(agents),
         "purpose_counts": dict(sorted(purposes.items())),
+        "purpose_counts_by_quarter": [dict(sorted(counts.items()))
+                                      for counts in by_quarter],
     }
 
 
@@ -1312,7 +1319,7 @@ def main() -> None:
                          for name, seconds in timings_s.items()}
     if args.engine == "pfe" and report is not None and report.get("timings_s"):
         meta["pfe_timing_s"] = report["timings_s"]
-    agent_summary = calibrated_agent_summary(calib_path)
+    agent_summary = calibrated_agent_summary(calib_path, n_intervals)
     if agent_summary is not None:
         meta["agent_demand"] = agent_summary
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
