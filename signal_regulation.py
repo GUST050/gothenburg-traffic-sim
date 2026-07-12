@@ -1,10 +1,9 @@
 """
 signal_regulation.py — PLAN.md Phase D6 (partial): a synthetic
-signal-timing baseline that complies with Sweden's binding national
-regulation for traffic signals — Transportstyrelsens föreskrifter TSFS
-2014:30, "Transportstyrelsens föreskrifter och allmänna råd om
-trafiksignaler" — instead of netconvert --tls.guess's arbitrary uniform
-90 s-cycle guess.
+signal-timing baseline informed by Sweden's binding national regulation
+for traffic signals — Transportstyrelsens föreskrifter TSFS 2014:30,
+"Transportstyrelsens föreskrifter och allmänna råd om trafiksignaler" —
+instead of netconvert --tls.guess's arbitrary uniform 90 s-cycle guess.
 
 NOT Gothenburg's real signal plans. D6's original ask (signal-object <->
 intersection <-> SUMO TLS-ID mapping, phase diagrams, cycle/green/offset
@@ -14,10 +13,11 @@ and the Teknisk Handbok — no public dataset of operational signal PROGRAMS
 exists; Trafikverket's NVDB covers road infrastructure, not municipal
 signal control, confirming this needs a direct request via Miroslaw, not
 something obtainable by more web research). This module fixes something
-different and real: our own synthetic baseline's internal consistency with
-the LAW every real Swedish signal must also obey, which is buildable right
-now from data already in this repo. tls_provenance for this program is the
-NEW value "synthetic_regulation_compliant" — more grounded than
+different and useful: a conservative synthetic timing template derived from
+selected TSFS minimums using data already in this repository. It does not
+establish compliance for a physical junction because it lacks a verified
+movement-conflict matrix and city controller data. tls_provenance is the
+NEW value "synthetic_tsfs_informed" — more grounded than
 "synthetic", still not "city-configured".
 
 SOURCES (every number below is directly cited, not invented) — TSFS
@@ -224,7 +224,7 @@ def rebuild_phases(phases: list[tuple[float, str]],
 
 def build_regulation_compliant_tls(net_path: Path, out_path: Path) -> int:
     """Write a programID="reg" <additional> file with a TSFS 2014:30-
-    compliant phase list for every real <tlLogic> in net_path. Returns the
+    TSFS-informed synthetic phase list for every real <tlLogic> in net_path. Returns the
     number of TLS programs written."""
     root = ET.parse(net_path).getroot()
     link_geo = parse_tls_link_geometry(net_path)
@@ -248,6 +248,174 @@ def build_regulation_compliant_tls(net_path: Path, out_path: Path) -> int:
     return n
 
 
+def enforce_timing_minimums(net_path: Path, proposed_path: Path,
+                            out_path: Path) -> int:
+    """Apply the conservative TSFS timing envelope to an optimizer proposal.
+
+    ``tlsCycleAdaptation.py`` is free to optimize green splits and cycle
+    lengths, but its output is not a safety proof. This preserves its green
+    allocations where they exceed the legal minimum, derives red implicitly
+    from the complete phase sequence, and replaces unsafe yellow/intergreen/
+    red-yellow transitions using ``rebuild_phases``. The program ID is kept
+    unchanged so ``tlsCoordinator.py`` can subsequently optimize offsets for
+    the exact same program.
+
+    This remains a synthetic safety envelope, not a certified physical signal
+    plan: real conflict matrices, pedestrians, cyclists, transit priority,
+    and controller logic are unavailable.
+    """
+    proposed_root = ET.parse(proposed_path).getroot()
+    link_geo = parse_tls_link_geometry(net_path)
+    out_root = ET.Element("additional")
+    count = 0
+    for tl in proposed_root.findall("tlLogic"):
+        phases = [(float(p.get("duration")), p.get("state"))
+                  for p in tl.findall("phase")]
+        if not phases:
+            continue
+        attrs = dict(tl.attrib)
+        attrs["type"] = "static"
+        attrs.setdefault("programID", "a")
+        out_tl = ET.SubElement(out_root, "tlLogic", attrs)
+        for duration, state in rebuild_phases(phases, link_geo.get(tl.get("id"), {})):
+            ET.SubElement(out_tl, "phase", {"duration": str(duration), "state": state})
+        count += 1
+    ET.ElementTree(out_root).write(out_path, xml_declaration=True, encoding="UTF-8")
+    return count
+
+
+def parse_tls_movements(net_path: Path) -> dict[str, dict[int, tuple[str, str]]]:
+    """Map each TLS link index to its incoming/outgoing edge movement."""
+    out: dict[str, dict[int, tuple[str, str]]] = {}
+    for connection in ET.parse(net_path).getroot().findall("connection"):
+        tls_id = connection.get("tl")
+        link_index = connection.get("linkIndex")
+        if not tls_id or link_index is None:
+            continue
+        out.setdefault(tls_id, {})[int(link_index)] = (
+            connection.get("from", ""), connection.get("to", ""))
+    return out
+
+
+def route_link_demands(route_path: Path,
+                       movements: dict[str, dict[int, tuple[str, str]]],
+                       begin_s: float | None = None,
+                       end_s: float | None = None,
+                       ) -> dict[str, dict[int, float]]:
+    """Count planned vehicle movements for every controlled TLS link.
+
+    begin_s/end_s (default None = every vehicle in route_path) restrict
+    counting to vehicles departing within [begin_s, end_s). Found in review
+    2026-07-12: without this, the demand-weighted TLS condition allocated
+    green time from route_path's FULL movement mix (typically a whole
+    day's calibrated demand) rather than the actual analysis window it was
+    being optimized for and compared against — a vehicle with an
+    unparseable depart (e.g. "triggered") is skipped rather than guessed
+    into or out of the window."""
+    by_pair: dict[tuple[str, str], list[tuple[str, int]]] = {}
+    for tls_id, links in movements.items():
+        for link_index, pair in links.items():
+            by_pair.setdefault(pair, []).append((tls_id, link_index))
+    demands: dict[str, dict[int, float]] = {}
+    for vehicle in ET.parse(route_path).getroot().findall("vehicle"):
+        if begin_s is not None or end_s is not None:
+            try:
+                depart_s = float(vehicle.get("depart"))
+            except (TypeError, ValueError):
+                continue
+            if begin_s is not None and depart_s < begin_s:
+                continue
+            if end_s is not None and depart_s >= end_s:
+                continue
+        route = vehicle.find("route")
+        if route is None or not route.get("edges"):
+            continue
+        edges = route.get("edges").split()
+        for pair in zip(edges, edges[1:]):
+            for tls_id, link_index in by_pair.get(pair, []):
+                per_tls = demands.setdefault(tls_id, {})
+                per_tls[link_index] = per_tls.get(link_index, 0.0) + 1.0
+    return demands
+
+
+def allocate_junction_green_times(phases: list[tuple[float, str]],
+                                  link_demand: dict[int, float]
+                                  ) -> list[tuple[float, str]]:
+    """Allocate one junction's green budget jointly across phase groups.
+
+    The phase states define compatibility and therefore cannot be changed by
+    this synthetic optimizer. Every pure-green phase receives the legal
+    minimum; remaining green seconds are split in proportion to the demand
+    of its simultaneously served links. Yellow, all-red, and red-yellow
+    durations stay fixed, so red time is the safe residual of the cycle.
+    """
+    green_indexes = [i for i, (_, state) in enumerate(phases)
+                     if "y" not in state and any(c in "Gg" for c in state)]
+    if not green_indexes:
+        return phases
+    cycle_s = sum(duration for duration, _ in phases)
+    fixed_s = cycle_s - sum(phases[i][0] for i in green_indexes)
+    green_budget = max(cycle_s - fixed_s, MIN_GREEN_S * len(green_indexes))
+    weights = []
+    for i in green_indexes:
+        state = phases[i][1]
+        weights.append(sum(link_demand.get(link, 0.0)
+                           for link, signal in enumerate(state)
+                           if signal in "Gg"))
+    total_weight = sum(weights)
+    if total_weight <= 0:
+        weights = [1.0] * len(green_indexes)
+        total_weight = float(len(green_indexes))
+    remaining = max(0.0, green_budget - MIN_GREEN_S * len(green_indexes))
+    out = list(phases)
+    for index, weight in zip(green_indexes, weights):
+        out[index] = (round(MIN_GREEN_S + remaining * weight / total_weight, 1),
+                      phases[index][1])
+    return out
+
+
+def build_demand_weighted_tls(net_path: Path, route_path: Path,
+                              out_path: Path, program_id: str = "dw",
+                              begin_s: float | None = None,
+                              end_s: float | None = None) -> int:
+    """Build independently timed but jointly allocated plans for all TLS.
+
+    Each junction has its own movement demand and cycle. The function first
+    builds the conservative timing envelope, then redistributes only its
+    safe green phases jointly within that junction. It is a deterministic
+    candidate generator for simulation-based selection, not a claim of a
+    globally optimal controller.
+
+    begin_s/end_s (found in review 2026-07-12): the analysis window this
+    plan is being built for and will be evaluated against — passed through
+    to route_link_demands so green-time allocation reflects the movement
+    mix DURING that window, not route_path's full (often whole-day)
+    demand. Default None preserves the prior whole-file behaviour for any
+    caller that genuinely wants it."""
+    network_root = ET.parse(net_path).getroot()
+    movements = parse_tls_movements(net_path)
+    demands = route_link_demands(route_path, movements, begin_s=begin_s, end_s=end_s)
+    link_geometry = parse_tls_link_geometry(net_path)
+    out_root = ET.Element("additional")
+    count = 0
+    for tls in network_root.findall("tlLogic"):
+        tls_id = tls.get("id")
+        raw = [(float(phase.get("duration")), phase.get("state"))
+               for phase in tls.findall("phase")]
+        if not raw:
+            continue
+        safe_phases = rebuild_phases(raw, link_geometry.get(tls_id, {}))
+        allocated = allocate_junction_green_times(safe_phases, demands.get(tls_id, {}))
+        out_tls = ET.SubElement(out_root, "tlLogic", {
+            "id": tls_id, "type": "static", "programID": program_id, "offset": "0",
+        })
+        for duration, state in allocated:
+            ET.SubElement(out_tls, "phase", {"duration": str(duration), "state": state})
+        count += 1
+    ET.ElementTree(out_root).write(out_path, xml_declaration=True, encoding="UTF-8")
+    return count
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--out", type=Path, default=None,
@@ -263,7 +431,7 @@ def main() -> None:
     net_fp = net_fingerprint(rs.NET_PATH)
     out_path = args.out or rs.SUMO_DIR / f"tls_regulation_{net_fp}.add.xml"
     n = build_regulation_compliant_tls(rs.NET_PATH, out_path)
-    print(f"Wrote {n} TSFS 2014:30-compliant TLS program(s) to {out_path}")
+    print(f"Wrote {n} TSFS-informed synthetic TLS program(s) to {out_path}")
 
 
 if __name__ == "__main__":

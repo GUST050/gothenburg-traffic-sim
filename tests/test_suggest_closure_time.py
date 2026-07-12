@@ -59,6 +59,18 @@ class TestWindowQuarters:
         assert list(sct.window_quarters(95 * 900, 200 * 900, 96)) == [95]
 
 
+class TestAlignedQuarters:
+    def test_accepts_exact_quarter_hour_multiples(self):
+        assert sct.aligned_quarters(0.25, "duration") == 1
+        assert sct.aligned_quarters(1.5, "duration") == 6
+
+    def test_rejects_fractional_bucket_and_nonfinite_values(self):
+        with pytest.raises(ValueError, match="multiple of 0.25"):
+            sct.aligned_quarters(1.1, "duration")
+        with pytest.raises(ValueError, match="finite"):
+            sct.aligned_quarters(float("nan"), "duration")
+
+
 class TestDetourAvailability:
     """Topology-only: build_edge_graph/reachable already have their own
     correctness tests (TestTruncateStrandedVehicles); this checks the

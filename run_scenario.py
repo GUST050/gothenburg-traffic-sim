@@ -42,6 +42,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import closure_metrics as cm
 from build_sumo_net import sumo_home
 
 SUMO_DIR  = Path("sumo")
@@ -90,6 +91,26 @@ def want_trajectories(args: argparse.Namespace, n_intervals: int) -> bool:
     if args.trajectories:
         return True
     return n_intervals <= 96
+
+
+def closure_integrity_status(active_closure_entries: int | None,
+                             closures: list[dict]) -> str | None:
+    """Classify the active-closure-edge-throughput measurement honestly.
+
+    active_closure_entries is None when nothing was measurable, 0 when
+    every seed measured zero leaked vehicles (a genuine, successful, fully-
+    measured clean result), or a positive int when a leak was detected.
+    Truthiness alone (`if active_closure_entries else ...`) would treat 0
+    identically to None — a verified-clean closure reported the same way
+    as "we never checked" — the exact "missing != zero" mistake
+    ARCHITECTURE.md calls out explicitly. Found in review 2026-07-12."""
+    if active_closure_entries is not None and active_closure_entries > 0:
+        return "failed_active_edge_flow"
+    if active_closure_entries == 0:
+        return "verified_clean"
+    if closures:
+        return "not_measurable"
+    return None
 
 
 def demand_window_label(meta: dict) -> str:
@@ -250,11 +271,17 @@ def load_geojson_meta() -> tuple[dict[str, float], dict[str, str]]:
 
 
 def write_edgedata_additional(path: Path, edgedata_file: Path,
-                              duration_s: int) -> None:
+                              duration_s: int, begin_s: int = 0) -> None:
+    """duration_s/begin_s are absolute sim-time (same clock as --begin/--end),
+    matching every other windowed-experiment convention in this project —
+    begin_s=0 (default) preserves every existing caller's whole-run
+    behaviour exactly. A windowed caller (e.g. signal_optimize.run_condition
+    evaluating a bounded time-of-day window) must pass its own begin_s so
+    the edgeData interval doesn't also count activity before the window."""
     with open(path, "w") as f:
         f.write("<additional>\n")
         f.write(f'  <edgeData id="ed" file="{edgedata_file.name}" period="900" '
-                f'begin="0" end="{duration_s}" excludeEmpty="true"/>\n')
+                f'begin="{begin_s}" end="{duration_s}" excludeEmpty="true"/>\n')
         f.write("</additional>\n")
 
 
@@ -479,7 +506,8 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              metrics: bool = False, begin_s: int = 0,
              net_path: Path | None = None,
              flush_s: int = 3600,
-             vehroute_output: Path | None = None) -> dict[str, Path] | None:
+             vehroute_output: Path | None = None,
+             run_label: str | None = None) -> dict[str, Path] | None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
     # Mesoscopic by default: our product is 15-min edge flows, which does not
@@ -562,7 +590,14 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         # Deliberately opt-in: interactive closures only need edgeData and
         # retain their current fast command path. The stem makes per-seed,
         # per-demand-variant output names deterministic for batch callers.
-        stem = f"metrics_{route_path.stem}_{seed}"
+        # Batch experiments can run the same route/seed under different
+        # signal conditions. Keep their evidence separate instead of letting
+        # the later condition overwrite the earlier XML files. Existing
+        # callers retain their historical filename shape when no label is
+        # supplied.
+        safe_label = "".join(c if c.isalnum() or c in "_-" else "_"
+                             for c in run_label) if run_label else ""
+        stem = f"metrics_{safe_label + '_' if safe_label else ''}{route_path.stem}_{seed}"
         metric_paths.update({
             "tripinfo": SUMO_DIR / f"{stem}_tripinfo.xml",
             "statistics": SUMO_DIR / f"{stem}_statistics.xml",
@@ -838,6 +873,15 @@ def main() -> None:
     # ── Aggregate: mean flows + Monte Carlo confidence ─────────────────────────
     web_edges = set(prior)   # only edges the map can draw
     flows_out, conf_out = aggregate_flows(per_seed, web_edges, prior, n_intervals)
+    # Integrity is evaluated on each raw seed before the display mean is
+    # rounded. A single seed with prohibited active-closure flow must not be
+    # hidden by averaging it with zero-flow seeds.
+    active_entries_by_seed = ([cm.active_closure_throughput(seed_flows, closures)
+                               for seed_flows in per_seed] if closures else [])
+    active_closure_entries = (sum(value for value in active_entries_by_seed
+                                  if value is not None)
+                              if any(value is not None for value in active_entries_by_seed)
+                              else None)
 
     window_label = demand_window_label(meta)
 
@@ -865,6 +909,9 @@ def main() -> None:
             # has no other way to see that (found in review 2026-07-10).
             "truncated_vehicles": n_truncated,
             "dropped_vehicles":   n_dropped,
+            "active_closure_edge_entries": active_closure_entries,
+            "active_closure_edge_entries_by_seed": active_entries_by_seed,
+            "closure_integrity": closure_integrity_status(active_closure_entries, closures),
             **({"date": meta["date"], "begin": meta["begin"], "end": meta["end"]}
                if "date" in meta else
                {"start_date": meta["start_date"],

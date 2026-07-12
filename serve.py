@@ -110,6 +110,8 @@ from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from signal_optimize import SIGNAL_CONDITION_COUNT
+
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
 
@@ -126,6 +128,9 @@ OPTIMIZE_CLOSURE_OUT = SUMO_DIR / "signal_closure_combine_web.json"
 OPTIMIZE_WINDOW_START = "07:00"
 OPTIMIZE_WINDOW_END = "09:00"
 OPTIMIZE_SEEDS = 3
+# D2 owns this count; import it so an added/removed experiment condition
+# cannot silently leave the HTTP job timeout stale.
+OPTIMIZE_SIGNAL_CONDITIONS = SIGNAL_CONDITION_COUNT
 PORT     = 8000
 
 _sim_lock   = threading.Lock()     # one simulation (close OR recalibrate OR
@@ -246,6 +251,7 @@ def summarize_signal_optimization(result: dict, closure: bool) -> dict:
         before = result["pass1_baseline_signals"]["metrics"]
         after = result["pass2_optimized_signals"]["metrics"]
         comparison = result["comparison"]
+        paired = result.get("paired_comparison")
         extra = {
             "closed_edges": result["closed_edges"], "streets": result["streets"],
             "truncated_vehicles": result["truncated_vehicles"],
@@ -256,6 +262,7 @@ def summarize_signal_optimization(result: dict, closure: bool) -> dict:
         before = result["conditions"]["baseline"]["metrics"]
         after = result["conditions"]["adapted_coordinated"]["metrics"]
         comparison = result["comparisons_vs_baseline"]["adapted_coordinated"]
+        paired = comparison.get("paired")
         extra = {"closed_edges": [], "streets": [],
                  "truncated_vehicles": None, "dropped_vehicles": None,
                  "route_stability": None}
@@ -263,6 +270,19 @@ def summarize_signal_optimization(result: dict, closure: bool) -> dict:
     plan_diff = result["tls_plan_diff"]
     cycle_deltas = [d["cycle_delta_pct"] for d in plan_diff if d["cycle_delta_pct"] is not None]
     median_cycle_delta_pct = statistics.median(cycle_deltas) if cycle_deltas else None
+
+    # The paired (common-random-numbers, seed/demand-variant-matched)
+    # comparison was computed by signal_optimize.py/signal_closure_
+    # combine.py but, before this fix, never reached the UI — surfaced
+    # here alongside a threshold-free sign-agreement check (found in
+    # review 2026-07-12). No numeric "practical equivalence" tolerance is
+    # invented — that is a research-methodology call for whoever reads
+    # these numbers, not something to decide here.
+    paired_sign_disagrees = None
+    if paired is not None:
+        agg = comparison["delta_time_loss_s"]
+        med = paired["median_time_loss_delta_s"]
+        paired_sign_disagrees = bool(agg != 0 and med != 0 and (agg > 0) != (med > 0))
 
     return {
         "closure": closure,
@@ -277,9 +297,12 @@ def summarize_signal_optimization(result: dict, closure: bool) -> dict:
         "relative_time_loss_pct": comparison["relative_time_loss_pct"],
         "disqualified": comparison["candidate_disqualified"],
         "disqualification_reasons": list(comparison["disqualification_reasons"]),
+        "paired_comparison": paired,
+        "paired_sign_disagrees": paired_sign_disagrees,
         "n_junctions": len(plan_diff),
         "median_cycle_delta_pct": median_cycle_delta_pct,
         "tls_plan_diff": plan_diff,
+        "tls_timing_schedule": result.get("tls_timing_schedule", []),
         **extra,
     }
 
@@ -591,14 +614,18 @@ class Handler(SimpleHTTPRequestHandler):
         # round(args.duration_hours * 3600) then raises an unhandled
         # ValueError instead of a clean 400 at the API boundary. Found in
         # external review 2026-07-11 (NEW_CHANGES_REVIEW section 7.2).
-        if not math.isfinite(duration_hours) or duration_hours <= 0:
-            return self._json(400, {"error": "duration_hours måste vara > 0"})
+        if (not math.isfinite(duration_hours) or duration_hours <= 0 or
+                not math.isclose(duration_hours * 4, round(duration_hours * 4),
+                                 rel_tol=0.0, abs_tol=1e-9)):
+            return self._json(400, {"error": "duration_hours måste vara ett positivt multipel av 0.25"})
         try:
             slide_hours = float(qs.get("slide_hours", ["1"])[0])
         except ValueError:
             return self._json(400, {"error": "slide_hours måste vara ett tal"})
-        if not math.isfinite(slide_hours) or slide_hours <= 0:
-            return self._json(400, {"error": "slide_hours måste vara > 0"})
+        if (not math.isfinite(slide_hours) or slide_hours <= 0 or
+                not math.isclose(slide_hours * 4, round(slide_hours * 4),
+                                 rel_tol=0.0, abs_tol=1e-9)):
+            return self._json(400, {"error": "slide_hours måste vara ett positivt multipel av 0.25"})
 
         def int_param(name: str, default: int, lo: int, hi: int) -> int | None:
             try:
@@ -740,7 +767,7 @@ class Handler(SimpleHTTPRequestHandler):
                       "--window-end", OPTIMIZE_WINDOW_END,
                       "--seeds", str(OPTIMIZE_SEEDS),
                       "--out", str(out_path)]
-                n_sumo_runs = 5   # D2: five named conditions, each OPTIMIZE_SEEDS seeds
+                n_sumo_runs = OPTIMIZE_SIGNAL_CONDITIONS
             # Budget: generous per-seed margin for MICRO (much slower than
             # meso) plus the tlsCycleAdaptation/tlsCoordinator/netconvert
             # setup steps, same reasoning as /api/suggest_closure's timeout.

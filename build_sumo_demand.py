@@ -34,6 +34,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -825,8 +826,8 @@ def _run_pfe_interval_job(job: dict):
 
 
 def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, str]],
-                                  variant_inputs: dict[str, dict],
-                                  max_workers: int | None = None) -> dict[str, dict]:
+                                   variant_inputs: dict[str, dict],
+                                   max_workers: int | None = None) -> dict[str, dict]:
     """Solve all final direction variants through one flat worker pool.
 
     This avoids nesting multiprocessing pools: the unit of parallel work is one
@@ -836,7 +837,10 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     import pfe
 
     global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST
+    phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
+    prepare_s = time.perf_counter() - phase_started
+    print(f"  timing PFE prepare: {prepare_s:.1f}s")
     _PFE_PAR_SHAPES = shapes
     _PFE_PAR_ROUTE_COST = route_cost
     try:
@@ -861,19 +865,30 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
         print(f"  PFE final variants: solving {len(tasks)} independent "
               f"variant×quarter intervals in one pool ({n_workers} workers)")
+        solve_started = time.perf_counter()
         with mp.get_context("fork").Pool(processes=n_workers) as pool:
             for suffix, _key, quarter, sol, rung in pool.imap_unordered(
                 _run_pfe_interval_job, tasks
             ):
                 solutions[suffix][quarter] = sol
                 rungs[suffix][quarter] = rung
+        solve_s = time.perf_counter() - solve_started
+        print(f"  timing PFE interval solving: {solve_s:.1f}s")
 
         reports = {}
         for suffix, key in variants:
             data = variant_inputs[suffix]
+            report_started = time.perf_counter()
             reports[suffix] = pfe.write_calibration_report(
                 shapes, data["out_path"], data["targets"], solutions[suffix],
-                data["bounds_pq"], rungs[suffix])
+                data["hard_bounds_pq"], rungs[suffix], enforce_integer_bounds=True)
+            publish_s = time.perf_counter() - report_started
+            reports[suffix]["timings_s"] = {
+                "prepare_shared": round(prepare_s, 3),
+                "interval_solving_shared": round(solve_s, 3),
+                "route_publish": round(publish_s, 3),
+            }
+            print(f"  timing PFE route publish {key}: {publish_s:.1f}s")
             if not data.get("keep_achieved", False):
                 reports[suffix] = {
                     k: v for k, v in reports[suffix].items() if k != "achieved"
@@ -923,6 +938,16 @@ def warn_bound_violations(report: dict, label: str) -> None:
 
 def main() -> None:
     args = parse_args()
+    timings_s: dict[str, float] = {}
+
+    def timed(name: str, fn):
+        started = time.perf_counter()
+        result = fn()
+        elapsed = time.perf_counter() - started
+        timings_s[name] = timings_s.get(name, 0.0) + elapsed
+        print(f"  timing {name}: {elapsed:.1f}s")
+        return result
+
     flows_path = FLOWS_FORECAST_PATH if args.source == "forecast" else FLOWS_PATH
     with open(flows_path) as f:
         flows_payload = json.load(f)
@@ -982,6 +1007,7 @@ def main() -> None:
     cand_path = SUMO_DIR / "candidates.rou.xml"
 
     def generate_candidates(weight_file: Path | None = None) -> None:
+        started = time.perf_counter()
         if args.legacy_random_pool:
             print("\nGenerating candidate route pool (LEGACY: uniform randomTrips) …")
             # The pool needs DIVERSITY, not volume — cap it so whole-day windows
@@ -1022,6 +1048,10 @@ def main() -> None:
             if res.returncode != 0:
                 print(res.stderr[-1500:])
                 sys.exit("build_candidates.py failed")
+        elapsed = time.perf_counter() - started
+        timings_s["candidate_generation"] = (
+            timings_s.get("candidate_generation", 0.0) + elapsed)
+        print(f"  timing candidate_generation: {elapsed:.1f}s")
 
     # ── Calibrate: one route set per direction-split variant ───────────────────
     # q50 = the default (calibrated.rou.xml). If the split file carries
@@ -1039,13 +1069,17 @@ def main() -> None:
         import pfe
         # Structural (see STRUCTURAL_REFERENCE_DATE) — always the real 2025
         # reference date, even when simulating a --source forecast date.
-        bounds_data, priors_data = structural_bounds_and_priors(args.begin, args.end)
-        obs_data    = ensure_observability()
+        bounds_data, priors_data = timed(
+            "structural_bounds_priors",
+            lambda: structural_bounds_and_priors(args.begin, args.end))
+        obs_data = timed("observability", ensure_observability)
         corridor    = obs_data.get("corridor_priors", {})
         if corridor:
             print(f"  corridor coupling: {len(corridor)} edges between "
                   f"sensor pairs get data-derived priors")
-        assign_data = ensure_assignment_priors() if not args.no_assignment_prior else {"weight": 0.0, "flows": {}}
+        assign_data = (timed("assignment_priors", ensure_assignment_priors)
+                       if not args.no_assignment_prior
+                       else {"weight": 0.0, "flows": {}})
         assign_w    = assign_data.get("weight", 0.0)
         assign_flows = assign_data.get("flows", {})
         if assign_flows:
@@ -1053,16 +1087,20 @@ def main() -> None:
                   f"unconstrained edges get a weak (w={assign_w}) realistic pull")
         prior_variant = {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
 
-        def build_bounds_priors(suffix: str) -> tuple[list[dict], list[dict]]:
-            bounds_pq, priors_pq = [], []
+        def build_bounds_priors(suffix: str) -> tuple[list[dict], list[dict], list[dict]]:
+            bounds_pq, priors_pq, hard_bounds_pq = [], [], []
             for i in range(n_intervals):
-                bq = {}
+                hard_bq = {}
                 for e, arr in bounds_data["bounds"].items():
                     # Bounds are structural reference-day relationships;
                     # repeat their 96 time-of-day slots for each target day.
                     slot_i = i % 96
                     if slot_i < len(arr) and arr[slot_i]:
-                        bq[e] = (arr[slot_i][0], arr[slot_i][1])
+                        hard_bq[e] = (arr[slot_i][0], arr[slot_i][1])
+                # The solver uses mathematical constraints plus wide
+                # behavioral assignment ranges below. Only this first set is
+                # a true post-rounding publication gate.
+                bq = dict(hard_bq)
                 pq = {}
                 slot = (qi_start + i) % 96
                 pkey = prior_variant.get(suffix, "prior")
@@ -1102,7 +1140,8 @@ def main() -> None:
                         bq[e] = (0.0, max(5.0, 5.0 * v))
                 bounds_pq.append(bq)
                 priors_pq.append(pq)
-            return bounds_pq, priors_pq
+                hard_bounds_pq.append(hard_bq)
+            return bounds_pq, priors_pq, hard_bounds_pq
 
         # ── Congestion-feedback loop (primary "" / q50 variant only) ──────────
         # PFE picks route USE COUNTS to match sensor totals, but the candidate
@@ -1128,18 +1167,21 @@ def main() -> None:
                     for suffix, key in variants:
                         targets = build_targets(flows, sensor_edges, qi_start,
                                                 n_intervals, split_key=key)
-                        bounds_pq, priors_pq = build_bounds_priors(suffix)
+                        bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors(suffix)
                         out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
                         variant_inputs[suffix] = {
                             "out_path": out,
                             "targets": targets,
                             "bounds_pq": bounds_pq,
+                            "hard_bounds_pq": hard_bounds_pq,
                             "priors_pq": priors_pq,
                             "keep_achieved": False,
                         }
-                    reports = run_pfe_variants_flat_parallel(
-                        cand_path, variants, variant_inputs,
-                        max_workers=os.cpu_count() or 1)
+                    reports = timed(
+                        "pfe_variants_and_rounding",
+                        lambda: run_pfe_variants_flat_parallel(
+                            cand_path, variants, variant_inputs,
+                            max_workers=os.cpu_count() or 1))
                     for suffix, key in variants:
                         variant_report = reports[suffix]
                         label = "PFE" if suffix == "" and n_iter == 1 else (
@@ -1157,9 +1199,14 @@ def main() -> None:
                 else:
                     targets = build_targets(flows, sensor_edges, qi_start,
                                             n_intervals, split_key="edge_shares")
-                    bounds_pq, priors_pq = build_bounds_priors("")
-                    report = pfe.calibrate(cand_path, calib_path, targets,
-                                           bounds_pq, priors_pq)
+                    bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors("")
+                    report = timed(
+                        "pfe_and_rounding",
+                        lambda: pfe.calibrate(
+                            cand_path, calib_path, targets,
+                            bounds_pq, priors_pq,
+                            enforce_integer_bounds=True,
+                            integer_bounds_per_q=hard_bounds_pq))
                     tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
                     print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                           f"GEH<5: {report['geh_pct']}%  "
@@ -1170,9 +1217,14 @@ def main() -> None:
 
             targets = build_targets(flows, sensor_edges, qi_start,
                                     n_intervals, split_key="edge_shares")
-            bounds_pq, priors_pq = build_bounds_priors("")
-            report = pfe.calibrate(cand_path, calib_path, targets,
-                                   bounds_pq, priors_pq)
+            bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors("")
+            report = timed(
+                "pfe_and_rounding",
+                lambda: pfe.calibrate(
+                    cand_path, calib_path, targets,
+                    bounds_pq, priors_pq,
+                    enforce_integer_bounds=True,
+                    integer_bounds_per_q=hard_bounds_pq))
             tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
             print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                   f"GEH<5: {report['geh_pct']}%  "
@@ -1236,6 +1288,10 @@ def main() -> None:
         direction_split="estimated" if load_direction_split() else "even",
         n_variants=len(variants),
     )
+    meta["timings_s"] = {name: round(seconds, 3)
+                         for name, seconds in timings_s.items()}
+    if args.engine == "pfe" and report is not None and report.get("timings_s"):
+        meta["pfe_timing_s"] = report["timings_s"]
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")

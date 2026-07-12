@@ -271,16 +271,13 @@ class TestRounding:
 
 
 class TestBoundViolationsFromRounding:
-    """round_preserving_measured has no visibility into level-2 bounds at
-    all (found in a bug review 2026-07-10, independently verified and
-    empirically reproduced here, not just argued structurally): a route
-    shared between a measured edge and a separately-bounded edge can be
-    nudged to hit the measured edge's exact integer target in a way that
-    pushes the bounded edge's rounded total outside its own bound. This
-    is diagnostic-only — write_calibration_report reports the violation,
-    it does not repair the rounding (that needs its own dedicated pass)."""
+    """A measurement-first rounding nudge can breach a shared edge bound.
 
-    def test_reports_a_real_bound_violation_from_rounding(self, tmp_path):
+    The writer must repair the common, integer-feasible case and only reject
+    publication when the integer constraints truly cannot coexist.
+    """
+
+    def test_repairs_a_real_bound_violation_from_rounding(self, tmp_path):
         # Route A touches only the measured edge M; route B touches BOTH M
         # and the separately-bounded (but unmeasured) edge U. M's target
         # (10) requires more integer vehicles than the continuous solution's
@@ -292,15 +289,44 @@ class TestBoundViolationsFromRounding:
         targets_per_q = [{"M": 10.0}]
         bounds_per_q = [{"U": (0.0, 3.0)}]
 
+        # enforce_integer_bounds=True: repair only fires for callers that
+        # actually want enforcement (build_sumo_demand.py's real deployment
+        # calls). A caller passing bounds diagnostically only
+        # (enforce_integer_bounds=False, e.g. validate_sim.py's LOSO folds)
+        # must get back the UNREPAIRED counts — see
+        # test_diagnostic_only_bounds_are_reported_but_not_repaired below.
+        report = write_calibration_report(
+            shapes, tmp_path / "out.rou.xml", targets_per_q, solutions, bounds_per_q,
+            enforce_integer_bounds=True)
+
+        assert report["achieved"]["M"] == [10.0]
+        assert report["achieved"]["U"] == [3.0]
+        assert report["bound_violations"] == []
+
+    def test_diagnostic_only_bounds_are_reported_but_not_repaired(self, tmp_path):
+        # Same violation as test_repairs_a_real_bound_violation_from_rounding
+        # above, but enforce_integer_bounds=False (the default, and
+        # validate_sim.py's LOSO fold calibration's actual call signature):
+        # the writer must report the violation honestly, NOT silently
+        # rewrite the published route counts to hide it. Found in review
+        # 2026-07-12: repair used to fire whenever bounds_per_q was merely
+        # supplied, regardless of this flag, which would have silently
+        # altered LOSO's published route counts (and therefore its GEH/
+        # recovery-ratio numbers) even though validate_sim.py explicitly
+        # opts out of enforcement.
+        shapes = [Candidate(depart=0.0, edges=["M"]),
+                 Candidate(depart=0.0, edges=["M", "U"])]
+        solutions = [np.array([5.1, 2.3])]
+        targets_per_q = [{"M": 10.0}]
+        bounds_per_q = [{"U": (0.0, 3.0)}]
+
         report = write_calibration_report(
             shapes, tmp_path / "out.rou.xml", targets_per_q, solutions, bounds_per_q)
 
-        assert report["achieved"]["M"] == [10.0]     # measured target still hit exactly
-        assert report["achieved"]["U"][0] > 3.0       # but U's bound is breached
-        assert report["bound_violations"] == [
-            {"edge": "U", "quarter": 0, "achieved": report["achieved"]["U"][0],
-             "bound_lo": 0.0, "bound_hi": 3.0},
-        ]
+        assert report["achieved"]["M"] == [10.0]
+        assert report["achieved"]["U"] == [4.0]   # UNREPAIRED — the real rounding result
+        assert len(report["bound_violations"]) == 1
+        assert report["bound_violations"][0]["edge"] == "U"
 
     def test_no_violations_when_rounding_stays_within_bounds(self, tmp_path):
         shapes = [Candidate(depart=0.0, edges=["M"])]
@@ -312,6 +338,21 @@ class TestBoundViolationsFromRounding:
             shapes, tmp_path / "out.rou.xml", targets_per_q, solutions, bounds_per_q)
 
         assert report["bound_violations"] == []
+
+    def test_enforced_bound_violation_does_not_publish_route_file(self, tmp_path):
+        # Every vehicle that can serve M also traverses U, so M=10 and
+        # U<=3 have no integer-feasible reconciliation.
+        shapes = [Candidate(depart=0.0, edges=["M", "U"])]
+        out = tmp_path / "out.rou.xml"
+        out.write_text("previous valid route")
+
+        with pytest.raises(RuntimeError, match="no route file was published"):
+            write_calibration_report(
+                shapes, out, [{"M": 10.0}], [np.array([10.0])],
+                [{"U": (0.0, 3.0)}], enforce_integer_bounds=True)
+
+        assert out.read_text() == "previous valid route"
+        assert not (tmp_path / "out.rou.xml.tmp").exists()
 
     def test_bounds_per_q_is_optional_and_defaults_to_no_check(self, tmp_path):
         shapes = [Candidate(depart=0.0, edges=["M"])]

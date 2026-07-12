@@ -90,6 +90,20 @@ class TestExtractFinalRoutes:
         assert ET.parse(out).getroot().findall("vehicle") == []
 
 
+class TestMergeVehrouteOutputs:
+    def test_preserves_all_vehicles_and_makes_ids_unique(self, tmp_path):
+        first = tmp_path / "first.xml"
+        second = tmp_path / "second.xml"
+        write_vehroute(first, """<routes><vehicle id="pfe0" depart="0"><route edges="a b"/></vehicle></routes>""")
+        write_vehroute(second, """<routes><vehicle id="pfe0" depart="0"><route edges="c d"/></vehicle></routes>""")
+        merged = tmp_path / "merged.xml"
+
+        assert scc.merge_vehroute_outputs([first, second], merged) == 2
+        vehicles = ET.parse(merged).getroot().findall("vehicle")
+        assert [v.get("id") for v in vehicles] == ["run0_pfe0", "run1_pfe0"]
+        assert [v.find("route").get("edges") for v in vehicles] == ["a b", "c d"]
+
+
 class TestRouteStability:
     def test_identical_routes_in_both_passes_score_1_0(self, tmp_path):
         vr1 = tmp_path / "vr1.xml"

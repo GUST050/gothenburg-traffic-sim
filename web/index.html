@@ -198,6 +198,19 @@
     }
     #new-days-input { width: 3.2em; }
     #sim-day-hint { font-size: 0.72rem; color: var(--ink-3); }
+    #recal-progress {
+      display: none; align-items: center; gap: 8px; min-width: 190px;
+      font-size: 0.69rem; color: var(--ink-2); font-variant-numeric: tabular-nums;
+    }
+    #recal-progress.show { display: flex; }
+    #recal-progress-track {
+      width: 92px; height: 5px; overflow: hidden; border-radius: 3px;
+      background: rgba(148,163,184,0.24);
+    }
+    #recal-progress-fill {
+      height: 100%; width: 4%; border-radius: inherit; background: var(--sim-2);
+      transition: width 0.8s ease;
+    }
 
     #suggest-banner {
       display: none; align-items: center; gap: 12px; flex: 1;
@@ -232,7 +245,7 @@
       padding: 8px 16px; font-size: 0.7rem; color: var(--ink-3); line-height: 1.6;
     }
     #suggest-results-meta b { color: var(--ink-2); }
-    #suggest-results-warn { color: #f59e0b; }
+    #suggest-results-warn, .opt-warn { color: #f59e0b; }
     #suggest-results-body-wrap { overflow-y: auto; padding: 0 8px 8px; }
     #suggest-results-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
     #suggest-results-table th {
@@ -524,6 +537,10 @@
                title="Antal sammanhängande dagar att simulera, 1-7 (en vecka max — kostnaden växer med antalet dagar)">
         <button id="day-run-btn" class="action-btn primary">Räkna om (~6 min)</button>
         <button id="day-cancel-btn" class="action-btn">Avbryt</button>
+        <div id="recal-progress" role="status" aria-live="polite">
+          <div id="recal-progress-track"><div id="recal-progress-fill"></div></div>
+          <span id="recal-progress-label">Förbereder simulering…</span>
+        </div>
       </div>
 
       <div id="suggest-banner">
@@ -879,6 +896,9 @@
         const daysInput  = document.getElementById('new-days-input');
         const btnDayRun  = document.getElementById('day-run-btn');
         const btnDayCancel = document.getElementById('day-cancel-btn');
+        const recalProgress = document.getElementById('recal-progress');
+        const recalProgressFill = document.getElementById('recal-progress-fill');
+        const recalProgressLabel = document.getElementById('recal-progress-label');
         const simDayHint = document.getElementById('sim-day-hint');
         let dayPickMode = false;
         let currentSimDate = '2025-09-16';
@@ -919,6 +939,20 @@
         // points (B3, PLAN.md): 1 day ~6 min, a full week ~45 min.
         function estimatedMinutes(days) {
           return Math.round(6 + (45 - 6) / 6 * (Math.max(1, days) - 1));
+        }
+        function showRecalibrationProgress(elapsedS = 0) {
+          const expectedS = estimatedMinutes(Number(daysInput.value) || 1) * 60;
+          // This is deliberately an estimate, capped below 100 until the
+          // server reports completion. It communicates work without lying
+          // about exact progress in a multi-stage calibration pipeline.
+          const pct = Math.min(92, Math.max(4, 4 + elapsedS / expectedS * 88));
+          recalProgress.classList.add('show');
+          recalProgressFill.style.width = `${pct.toFixed(0)}%`;
+          recalProgressLabel.textContent = `Bygger simulering · ${elapsedS}s`;
+        }
+        function hideRecalibrationProgress() {
+          recalProgress.classList.remove('show');
+          recalProgressFill.style.width = '4%';
         }
         function updateDayRunLabel() {
           btnDayRun.textContent = `Räkna om (~${estimatedMinutes(Number(daysInput.value))} min)`;
@@ -1149,6 +1183,23 @@
           metaLines.push(`Medianförändring cykeltid: ` +
             `${summary.median_cycle_delta_pct === null ? '–' : summary.median_cycle_delta_pct.toFixed(1) + '%'} ` +
             `över ${summary.n_junctions} korsningar (${summary.seeds} seeds).`);
+          // Seed/demand-variant-matched (common-random-numbers) comparison,
+          // shown alongside the aggregate Δ above so a reader can judge
+          // whether that headline number is one outlier seed or a real,
+          // consistent effect (found inert — computed but never shown —
+          // in review 2026-07-12).
+          if (summary.paired_comparison) {
+            const p = summary.paired_comparison;
+            metaLines.push(`Parad jämförelse (samma seed/variant båda sidor): ` +
+              `median Δ ${p.median_time_loss_delta_s >= 0 ? '+' : ''}` +
+              `${Math.round(p.median_time_loss_delta_s)}s, ` +
+              `std ${Math.round(p.stddev_time_loss_delta_s)}s över ${p.n_pairs} par.` +
+              (summary.paired_sign_disagrees
+                ? ' <span class="opt-warn">⚠ medianen och den totala ' +
+                  'förändringen pekar åt OLIKA håll — lita inte blint på ' +
+                  'procentsatsen ovan.</span>'
+                : ''));
+          }
           if (summary.closure) {
             metaLines.push(`${summary.truncated_vehicles} förkortade, ` +
               `${summary.dropped_vehicles} borttagna fordon (ingen omväg runt avstängningen).`);
@@ -1541,8 +1592,10 @@
             }
             if (status.status === 'running') {
               btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s}s)`;
+              showRecalibrationProgress(status.elapsed_s || 0);
               continue;
             }
+            hideRecalibrationProgress();
             if (status.status === 'error') {
               forgetPendingRecal();
               alert('Omkalibreringen misslyckades: ' + status.error);
@@ -1570,6 +1623,7 @@
               await applyFinishedRecalibration(status);
             } else {
               btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s || 0}s)`;
+              showRecalibrationProgress(status.elapsed_s || 0);
               await pollRecalibration();
             }
             return true;
@@ -1585,6 +1639,7 @@
           const date = dateInput.value;
           const source = currentSource;
           btnDayRun.textContent = 'Startar…';
+          showRecalibrationProgress(0);
           rememberPendingRecal(date, source, days);
           try {
             const res  = await fetch('/api/recalibrate?date=' + date
@@ -1606,6 +1661,7 @@
             if (await recoverStartedRecalibration(date, source, days)) return;
             alert('Kunde inte starta omkalibreringen: ' + e.message);
           } finally {
+            hideRecalibrationProgress();
             btnDayRun.disabled = false;
             btnDayCancel.disabled = false;
             updateDayRunLabel();

@@ -162,6 +162,59 @@ def tls_plan_diff(baseline_net_path: Path, adapted_path: Path,
     return diffs
 
 
+def tls_timing_schedule(adapted_path: Path,
+                        coordinated_path: Path | None = None,
+                        net_path: Path | None = None) -> list[dict]:
+    """Return green/red/yellow totals for each modeled TLS link/light."""
+    programs = _parse_tl_logics(adapted_path)
+    if coordinated_path is not None:
+        for tls_id, coordinated in _parse_tl_logics(coordinated_path).items():
+            if tls_id in programs:
+                programs[tls_id]["offset_s"] = coordinated["offset_s"]
+
+    movements = {}
+    if net_path is not None:
+        for connection in ET.parse(net_path).getroot().findall("connection"):
+            tls_id, link_index = connection.get("tl"), connection.get("linkIndex")
+            if tls_id and link_index is not None:
+                movements[(tls_id, int(link_index))] = {
+                    "from_edge": connection.get("from"),
+                    "to_edge": connection.get("to"),
+                }
+    rows = []
+    root = ET.parse(adapted_path).getroot()
+    for tl in root.iter("tlLogic"):
+        tls_id = tl.get("id")
+        phases = [(float(phase.get("duration")), phase.get("state"))
+                  for phase in tl.findall("phase")]
+        if not phases:
+            continue
+        cycle_s = sum(duration for duration, _ in phases)
+        all_red_s = sum(duration for duration, state in phases if set(state) == {"r"})
+        for link_index in range(len(phases[0][1])):
+            totals = {"green_s": 0.0, "yellow_s": 0.0,
+                      "redyellow_s": 0.0, "red_s": 0.0}
+            for duration, state in phases:
+                signal = state[link_index]
+                if signal in "Gg":
+                    totals["green_s"] += duration
+                elif signal == "y":
+                    totals["yellow_s"] += duration
+                elif signal == "u":
+                    totals["redyellow_s"] += duration
+                elif signal == "r":
+                    totals["red_s"] += duration
+            rows.append({
+                "tls_id": tls_id, "link_index": link_index,
+                "cycle_s": round(cycle_s, 1),
+                "offset_s": round(programs.get(tls_id, {}).get("offset_s", 0.0), 1),
+                "all_red_s": round(all_red_s, 1),
+                **movements.get((tls_id, link_index), {}),
+                **{key: round(value, 1) for key, value in totals.items()},
+            })
+    return sorted(rows, key=lambda row: (row["tls_id"], row["link_index"]))
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--window-start", default="07:00", metavar="HH:MM",

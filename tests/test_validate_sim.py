@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import validate_sim
-from validate_sim import corridor_priors_for_fold
+from validate_sim import corridor_priors_for_fold, require_historical_demand
 
 
 def make_corridor(from_edge, to_edge, prior, band):
@@ -87,6 +87,21 @@ class TestCorridorPriorsForFold:
 
 
 class TestHistoricalDemandGuard:
+    def test_supported_multi_day_historical_metadata_is_accepted(self):
+        start, end = require_historical_demand({
+            "source": "historical", "start_date": "2025-09-16",
+            "end_date_exclusive": "2025-09-18", "days": 2,
+        })
+        assert str(start.date()) == "2025-09-16"
+        assert str(end.date()) == "2025-09-18"
+
+    def test_cross_year_multi_day_metadata_is_rejected_clearly(self):
+        with pytest.raises(SystemExit, match="helt inom 2025"):
+            require_historical_demand({
+                "source": "historical", "start_date": "2025-12-31",
+                "end_date_exclusive": "2026-01-02", "days": 2,
+            })
+
     def test_forecast_demand_exits_before_assignment_or_sumo(self, monkeypatch):
         meta = {"source": "forecast", "date": "2027-09-16"}
         monkeypatch.setattr(validate_sim, "load_inputs",

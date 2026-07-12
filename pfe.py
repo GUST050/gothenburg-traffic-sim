@@ -43,14 +43,16 @@ Not a CLI — imported by build_sumo_demand.py (--engine pfe).
 
 from __future__ import annotations
 
+import os
+import hashlib
 import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from scipy.optimize import linprog
-from scipy.sparse import lil_matrix, vstack
+from scipy.optimize import Bounds, LinearConstraint, linprog, milp
+from scipy.sparse import hstack, identity, lil_matrix, vstack
 
 EPS_PARSIMONY = 1e-3
 MEAS_TOL_FRAC = 0.05      # hard band around measured counts
@@ -193,12 +195,7 @@ def solve_interval(
     return res.x[:n]
 
 
-IPF_MAX_ITERATIONS = 200   # no early-exit convergence check (removed
-                          # 2026-07-10 — see the burn-in/averaging comment
-                          # below for why): each iteration is a handful of
-                          # cheap vector ops, not an LP solve, so always
-                          # running the full budget costs little and
-                          # avoids having to detect convergence at all
+IPF_MAX_ITERATIONS = 200
 
 
 def solve_interval_entropy(
@@ -423,6 +420,7 @@ def solve_interval_entropy(
             x_sum += x
             n_samples += 1
 
+
         # Level 3 — priors, soft partial pull (weight=0 -> no pull at all;
         # weight->inf -> a full rescale to the target, same as level 1/2).
         for js, target, weight in priors_items:
@@ -562,6 +560,96 @@ def round_preserving_measured(
     return counts
 
 
+def repair_integer_bounds(
+    counts: np.ndarray,
+    shapes: list[Candidate],
+    measured: dict[str, float],
+    bounds: dict[str, tuple[float, float]],
+) -> np.ndarray | None:
+    """Repair a rounded route vector without weakening its constraints.
+
+    The fast measurement-preserving rounding above is the normal path.  It
+    can, however, move a shared route by one vehicle while closing a measured
+    count and thereby breach a separate structural edge bound.  Only in that
+    case solve a small integer reconciliation problem: minimise the number of
+    changed route counts while keeping every measured count at its rounded
+    target and every supplied bound in its integer-feasible interval.
+
+    Returning ``None`` means the discrete problem is genuinely infeasible or
+    did not finish in its bounded time; callers must keep the publication gate
+    closed in that case rather than silently emitting an invalid route file.
+    """
+    if not bounds:
+        return counts
+
+    constrained = set(measured) | set(bounds)
+    touch: dict[str, list[int]] = {e: [] for e in constrained}
+    for j, cand in enumerate(shapes):
+        for e in set(cand.edges) & constrained:
+            touch[e].append(j)
+
+    def total(e: str) -> int:
+        return int(sum(counts[j] for j in touch.get(e, [])))
+
+    violating = [
+        e for e, (lo, hi) in bounds.items()
+        if total(e) < np.ceil(lo - 0.5) or total(e) > np.floor(hi + 0.5)
+    ]
+    if not violating:
+        return counts
+
+    active = sorted({j for e in constrained for j in touch.get(e, [])})
+    if not active:
+        return None
+    active_index = {j: k for k, j in enumerate(active)}
+    n = len(active)
+
+    # z are integer route counts. p/n are continuous absolute-deviation
+    # auxiliaries so the solver preserves the fast round wherever possible.
+    # A ±20 local window is deliberately wider than the single-vehicle
+    # reconciliation nudges and avoids a route-count explosion in the repair.
+    aeq = hstack((identity(n, format="csr"), -identity(n, format="csr"),
+                  identity(n, format="csr")), format="csr")
+    rows = [aeq]
+    lower = [float(counts[j]) for j in active]
+    upper = [float(counts[j]) for j in active]
+
+    def add_edge_constraint(edge: str, lo: float, hi: float) -> None:
+        row = lil_matrix((1, 3 * n), dtype=float)
+        for j in touch.get(edge, []):
+            k = active_index.get(j)
+            if k is not None:
+                row[0, k] = 1.0
+        rows.append(row.tocsr())
+        lower.append(lo)
+        upper.append(hi)
+
+    for edge, target in measured.items():
+        # The existing rounding contract is an integer measured total, not a
+        # fractional target band. Preserve that exact behaviour in repair.
+        target_i = float(int(round(target)))
+        add_edge_constraint(edge, target_i, target_i)
+    for edge, (lo, hi) in bounds.items():
+        add_edge_constraint(edge, float(np.ceil(lo - 0.5)),
+                            float(np.floor(hi + 0.5)))
+
+    base = np.asarray([counts[j] for j in active], dtype=float)
+    result = milp(
+        c=np.r_[np.zeros(n), np.ones(2 * n)],
+        integrality=np.r_[np.ones(n), np.zeros(2 * n)],
+        bounds=Bounds(np.r_[np.maximum(0.0, base - 20.0), np.zeros(2 * n)],
+                      np.r_[base + 20.0, np.full(2 * n, np.inf)]),
+        constraints=LinearConstraint(vstack(rows, format="csr"), lower, upper),
+        options={"time_limit": 20.0},
+    )
+    if not result.success or result.x is None:
+        return None
+    repaired = np.rint(result.x[:n]).astype(int)
+    out = counts.copy()
+    out[active] = repaired
+    return out
+
+
 # solve_interval_with_relaxation's rung markers — which stage of the
 # relaxation ladder actually produced a solution, so calibration reports
 # can show a real convergence diagnostic (2026-07-10, found in a review:
@@ -656,47 +744,72 @@ def write_calibration_report(
     solutions: list[np.ndarray | None],
     bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
     rungs: list[int] | None = None,
+    enforce_integer_bounds: bool = False,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
 
-    bounds_per_q is optional and DIAGNOSTIC ONLY (2026-07-10): the continuous
+    bounds_per_q is optional. The continuous
     LP/entropy solution respects bounds by construction, but
     round_preserving_measured()'s integer ±1 nudges (needed to hit a
     measured edge's EXACT target) have no visibility into bounds at all —
     a route shared between a measured edge and a separately-bounded edge
     can be nudged in a way that pushes the bounded edge's rounded total
-    outside its own [lower, upper]. This is a structural gap, not
-    (necessarily) an observed failure — round_preserving_measured's own
-    comments document routes with total overlap between measured edges
-    occurring in real runs, so the precondition is real, but fixing the
-    rounding logic itself needs its own careful pass (that function has a
-    documented history of three separate subtle failed designs before
-    landing on its current one). This check only counts and reports
-    violations after the fact — it does not alter which counts get
-    written to the .rou.xml."""
+    outside its own [lower, upper].
+
+    The repair itself is gated on ``enforce_integer_bounds``, not merely on
+    ``bounds_per_q is not None``: a caller passing bounds for DIAGNOSTIC
+    reporting only (enforce_integer_bounds=False — validate_sim.py's LOSO
+    fold calibration, which explicitly opts out of enforcement because
+    those bounds are wide assignment-prior bounds, not the narrow
+    structural hard_bounds_pq build_sumo_demand.py enforces) must get back
+    exactly the pre-repair counts it always has, not silently-repaired
+    ones — found in review 2026-07-12: the repair used to fire whenever
+    bounds were merely supplied, which would have altered LOSO's published
+    route counts (and therefore its GEH/recovery-ratio numbers) without
+    validate_sim.py ever asking for that. When enforce_integer_bounds=True
+    (build_sumo_demand.py's real deployment calls), the writer DOES run a
+    small constrained integer repair before reporting a violation, and
+    remains a publication gate: route XML is written to a sibling
+    temporary path and atomically published only when the repaired
+    integer counts respect every supplied bound."""
     nq = len(targets_per_q)
     infeasible = sum(sol is None for sol in solutions)
     achieved: dict[str, list[float]] = {}
     vid = 0
-    with open(out_path, "w") as f:
+    write_path = (out_path.with_suffix(out_path.suffix + ".tmp")
+                  if enforce_integer_bounds else out_path)
+    with open(write_path, "w") as f:
         f.write("<routes>\n")
         for i in range(nq):
             sol = solutions[i]
             if sol is None:
                 continue
             counts = round_preserving_measured(sol, shapes, targets_per_q[i])
-            # SUMO requires the route file sorted by depart — collect the
-            # interval's departures first, then write in ascending order.
-            departures: list[tuple[float, str]] = []
+            if bounds_per_q is not None and enforce_integer_bounds:
+                repaired = repair_integer_bounds(
+                    counts, shapes, targets_per_q[i], bounds_per_q[i])
+                if repaired is not None:
+                    counts = repaired
+            # Spread ALL vehicles in this quarter across its full 15-minute
+            # interval. The old per-route schedule put every one-vehicle
+            # route at exactly :07:30, so thousands of independent routes
+            # entered SUMO as a visible convoy. Counts and route choices stay
+            # unchanged; only departure time is stratified globally.
+            route_instances: list[str] = []
             for cand, k in zip(shapes, counts):
-                for dup in range(int(k)):
-                    depart = i * 900 + (dup + 0.5) * 900 / max(1, k)
-                    departures.append((depart, " ".join(cand.edges)))
+                edges_str = " ".join(cand.edges)
+                route_instances.extend([edges_str] * int(k))
                 for e in set(cand.edges):
                     achieved.setdefault(e, [0.0] * nq)
                     if k:
                         achieved[e][i] += float(k)
-            for depart, edges_str in sorted(departures):
+            # Hash order is deterministic and avoids grouping equal routes
+            # together, while positions remain uniformly spaced.
+            route_instances.sort(key=lambda route: hashlib.sha1(
+                f"{i}:{route}".encode()).digest())
+            n_departures = len(route_instances)
+            for pos, edges_str in enumerate(route_instances):
+                depart = i * 900 + (pos + 0.5) * 900 / max(1, n_departures)
                 f.write(f'  <vehicle id="pfe{vid}" depart="{depart:.1f}">'
                         f'<route edges="{edges_str}"/></vehicle>\n')
                 vid += 1
@@ -721,6 +834,16 @@ def write_calibration_report(
                         "edge": e, "quarter": i, "achieved": v,
                         "bound_lo": lo, "bound_hi": hi,
                     })
+    if enforce_integer_bounds and bound_violations:
+        write_path.unlink(missing_ok=True)
+        first = bound_violations[0]
+        raise RuntimeError(
+            "integer route rounding violates a hard bound; no route file was "
+            f"published ({first['edge']}@q{first['quarter']}: "
+            f"{first['achieved']} outside [{first['bound_lo']}, {first['bound_hi']}])"
+        )
+    if enforce_integer_bounds:
+        os.replace(write_path, out_path)
 
     # GEH on hourly aggregates at measured edges — the standard fit metric.
     # An edge counts for an hour if ANY of its 4 quarters has a measurement —
@@ -763,6 +886,8 @@ def calibrate(
     targets_per_q: list[dict[str, float]],          # measured, per quarter
     bounds_per_q: list[dict[str, tuple[float, float]]],
     priors_per_q: list[dict[str, tuple[float, float]]],
+    enforce_integer_bounds: bool = False,
+    integer_bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
 ) -> dict:
     """Solve all intervals; write a .rou.xml; return a fit report.
 
@@ -783,4 +908,5 @@ def calibrate(
     solutions, rungs = solve_calibration_intervals(
         shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q)
     return write_calibration_report(shapes, out_path, targets_per_q, solutions,
-                                    bounds_per_q, rungs)
+                                    integer_bounds_per_q if integer_bounds_per_q is not None else bounds_per_q,
+                                    rungs, enforce_integer_bounds)

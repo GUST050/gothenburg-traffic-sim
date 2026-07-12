@@ -14,7 +14,7 @@ survivors? Or is meso's TLS approximation too different from micro's to
 trust for that purpose, meaning any real signal-timing search has to pay
 micro's cost for every candidate?
 
-METHOD: reuses PLAN.md D2's exact 5-condition setup (signal_optimize.py) —
+METHOD: reuses PLAN.md D2's shared condition setup (signal_optimize.py) —
 baseline / adapted / adapted_coordinated / actuated / delay_based — and runs
 each condition BOTH in micro (real ground truth) and meso (the cheap
 screen), over the SAME window and seeds. Spearman correlation between the
@@ -58,6 +58,7 @@ import closure_metrics as cm
 import run_scenario as rs
 from signal_lab import TLS_PROVENANCE, net_fingerprint, sumo_version, window_offsets_s
 from signal_optimize import (build_signal_conditions, condition_net_fingerprints,
+                             condition_non_tls_fingerprints,
                              relative_pct, run_condition, signal_artifact_label)
 
 SHORT_APPROACH_THRESHOLD_M = 15.0
@@ -156,7 +157,7 @@ def main() -> None:
     label = signal_artifact_label(args.window_start, args.window_end,
                                   demand_sig, baseline_net_fp)
     print(f"Signal meso screen: {args.window_start}-{args.window_end} window, "
-         f"{args.seeds} seed(s) — micro ground truth vs meso screen, 6 conditions")
+         f"{args.seeds} seed(s) — micro ground truth vs meso screen")
 
     approach_report = short_tls_approaches(rs.NET_PATH)
     print(f"  {approach_report['short_count']}/{approach_report['total_tls_approach_edges']} "
@@ -164,8 +165,9 @@ def main() -> None:
          f"{SHORT_APPROACH_THRESHOLD_M} m")
 
     print("  building/reusing tlsCycleAdaptation + tlsCoordinator outputs …")
-    conditions = build_signal_conditions(home, variants, begin_s, label)
+    conditions = build_signal_conditions(home, variants, begin_s, end_s, label)
     net_fps = condition_net_fingerprints(conditions)
+    non_tls_net_fps = condition_non_tls_fingerprints(conditions)
 
     per_condition = {}
     t_total = time.time()
@@ -173,15 +175,22 @@ def main() -> None:
         row = {}
         for mode, is_micro in (("micro", True), ("meso", False)):
             t0 = time.time()
-            metrics, per_seed = run_condition(
+            metrics, per_seed_runs = run_condition(
                 net_path=cfg["net_path"], add_paths=cfg["add_paths"], variants=variants,
-                seeds=args.seeds, begin_s=begin_s, end_s=end_s, home=home, micro=is_micro)
+                seeds=args.seeds, begin_s=begin_s, end_s=end_s, home=home, micro=is_micro,
+                run_label=f"d3_{name}_{mode}")
             elapsed = time.time() - t0
             print(f"  [{name}/{mode}] {elapsed:.0f}s: "
                  f"timeLoss={metrics.total_time_loss_s:.0f}s, "
                  f"{metrics.teleport_total} teleports")
             row[mode] = {"metrics": dataclasses.asdict(metrics),
-                        "per_seed_time_loss_s": per_seed, "elapsed_s": round(elapsed, 1)}
+                        "per_seed_time_loss_s": [run.metrics.total_time_loss_s
+                                                  for run in per_seed_runs],
+                        "runs": [{"seed": run.seed,
+                                  "demand_variant": run.demand_variant,
+                                  "metrics": dataclasses.asdict(run.metrics)}
+                                 for run in per_seed_runs],
+                        "elapsed_s": round(elapsed, 1)}
         per_condition[name] = row
     total_elapsed = time.time() - t_total
 
@@ -233,6 +242,7 @@ def main() -> None:
         "recommendation_allowed": TLS_PROVENANCE != "synthetic",
         "net_fingerprint": baseline_net_fp,
         "net_fingerprints_by_condition": net_fps,
+        "non_tls_network_fingerprints_by_condition": non_tls_net_fps,
         "demand_signature": demand_sig,
         "sumo_version": sumo_version(home),
         "command": sys.argv,

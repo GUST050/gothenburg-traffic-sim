@@ -231,3 +231,115 @@ class TestBuildRegulationCompliantTls:
         n = sr.build_regulation_compliant_tls(net_path, out_path)
         assert n == 0
         assert ET.parse(out_path).getroot().findall("tlLogic") == []
+
+
+class TestEnforceTimingMinimums:
+    def test_preserves_optimizer_program_id_and_enforces_safety_minimums(self, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <edge id="A" from="a" to="J"><lane id="A_0" speed="13.89" length="50"/></edge>
+  <edge id=":J" function="internal"><lane id=":J_0" speed="13.89" length="20"/></edge>
+  <connection from="A" to="B" via=":J_0" tl="J" linkIndex="0"/>
+</net>""")
+        proposed = tmp_path / "proposal.add.xml"
+        proposed.write_text("""<additional><tlLogic id="J" type="static" programID="a" offset="7">
+  <phase duration="2" state="Grr"/><phase duration="3" state="yrr"/>
+  <phase duration="2" state="rGG"/><phase duration="3" state="ryy"/>
+</tlLogic></additional>""")
+        out = tmp_path / "safe.add.xml"
+
+        assert sr.enforce_timing_minimums(net_path, proposed, out) == 1
+        tl = ET.parse(out).getroot().find("tlLogic")
+        phases = [(float(p.get("duration")), p.get("state")) for p in tl.findall("phase")]
+        assert tl.get("programID") == "a"
+        assert tl.get("offset") == "7"
+        assert any(duration == sr.MIN_GREEN_S and state == "Grr" for duration, state in phases)
+        assert any(duration == sr.yellow_time_s(50) and state == "yrr" for duration, state in phases)
+        assert any(duration == sr.REDYELLOW_S and "u" in state for duration, state in phases)
+
+
+class TestJunctionGreenAllocation:
+    def test_joint_budget_moves_green_from_low_to_high_demand_phase(self):
+        phases = [(10.0, "Grr"), (4.0, "yrr"),
+                  (10.0, "rGG"), (4.0, "ryy")]
+        allocated = sr.allocate_junction_green_times(phases, {0: 90.0, 1: 5.0, 2: 5.0})
+        # The total junction cycle is preserved, and phase 0 receives more
+        # green only because the other green group receives less.
+        assert sum(duration for duration, _ in allocated) == pytest.approx(28.0)
+        assert allocated[0][0] > allocated[2][0] >= sr.MIN_GREEN_S
+
+    def test_no_demand_falls_back_to_equal_green_allocation(self):
+        phases = [(12.0, "Grr"), (4.0, "yrr"),
+                  (8.0, "rGG"), (4.0, "ryy")]
+        allocated = sr.allocate_junction_green_times(phases, {})
+        assert allocated[0][0] == allocated[2][0] == 10.0
+
+    def test_route_demands_follow_controlled_movements(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        net.write_text("""<net>
+  <connection from="A" to="B" tl="J" linkIndex="0"/>
+  <connection from="A" to="C" tl="J" linkIndex="1"/>
+</net>""")
+        routes = tmp_path / "demand.rou.xml"
+        routes.write_text("""<routes>
+  <vehicle id="a" depart="0"><route edges="A B"/></vehicle>
+  <vehicle id="b" depart="0"><route edges="A B"/></vehicle>
+  <vehicle id="c" depart="0"><route edges="A C"/></vehicle>
+</routes>""")
+        demands = sr.route_link_demands(routes, sr.parse_tls_movements(net))
+        assert demands == {"J": {0: 2.0, 1: 1.0}}
+
+    def test_no_window_counts_every_vehicle_in_the_file(self, tmp_path):
+        # Default (begin_s=end_s=None) preserves the prior whole-file
+        # behaviour for any caller that genuinely wants it.
+        net = tmp_path / "net.net.xml"
+        net.write_text('<net><connection from="A" to="B" tl="J" linkIndex="0"/></net>')
+        routes = tmp_path / "demand.rou.xml"
+        routes.write_text("""<routes>
+  <vehicle id="morning" depart="1000"><route edges="A B"/></vehicle>
+  <vehicle id="evening" depart="50000"><route edges="A B"/></vehicle>
+</routes>""")
+        demands = sr.route_link_demands(routes, sr.parse_tls_movements(net))
+        assert demands == {"J": {0: 2.0}}
+
+    def test_window_excludes_vehicles_departing_outside_it(self, tmp_path):
+        # Found in review 2026-07-12: without a window, the demand-weighted
+        # TLS condition allocated green time from the FULL demand file
+        # (typically a whole day) rather than the analysis window it was
+        # being optimized for and compared against.
+        net = tmp_path / "net.net.xml"
+        net.write_text('<net><connection from="A" to="B" tl="J" linkIndex="0"/></net>')
+        routes = tmp_path / "demand.rou.xml"
+        routes.write_text("""<routes>
+  <vehicle id="before" depart="1000"><route edges="A B"/></vehicle>
+  <vehicle id="during1" depart="25300"><route edges="A B"/></vehicle>
+  <vehicle id="during2" depart="30000"><route edges="A B"/></vehicle>
+  <vehicle id="after" depart="50000"><route edges="A B"/></vehicle>
+</routes>""")
+        demands = sr.route_link_demands(routes, sr.parse_tls_movements(net),
+                                        begin_s=25200, end_s=32400)
+        assert demands == {"J": {0: 2.0}}   # only during1/during2 counted
+
+    def test_window_boundaries_are_half_open(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        net.write_text('<net><connection from="A" to="B" tl="J" linkIndex="0"/></net>')
+        routes = tmp_path / "demand.rou.xml"
+        routes.write_text("""<routes>
+  <vehicle id="at_begin" depart="100"><route edges="A B"/></vehicle>
+  <vehicle id="at_end" depart="200"><route edges="A B"/></vehicle>
+</routes>""")
+        demands = sr.route_link_demands(routes, sr.parse_tls_movements(net),
+                                        begin_s=100, end_s=200)
+        assert demands == {"J": {0: 1.0}}   # [begin_s, end_s) -- at_begin in, at_end out
+
+    def test_unparseable_depart_is_skipped_not_crashed(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        net.write_text('<net><connection from="A" to="B" tl="J" linkIndex="0"/></net>')
+        routes = tmp_path / "demand.rou.xml"
+        routes.write_text("""<routes>
+  <vehicle id="triggered" depart="triggered"><route edges="A B"/></vehicle>
+  <vehicle id="normal" depart="25300"><route edges="A B"/></vehicle>
+</routes>""")
+        demands = sr.route_link_demands(routes, sr.parse_tls_movements(net),
+                                        begin_s=25200, end_s=32400)
+        assert demands == {"J": {0: 1.0}}   # only "normal" counted

@@ -101,6 +101,30 @@ class TestValidScenarioName:
         assert run_scenario.valid_scenario_name("x" * 80)
 
 
+class TestClosureIntegrityStatus:
+    """closure_integrity_status (found in review 2026-07-12): a genuinely
+    verified-clean closure (active_closure_entries == 0) must not be
+    reported the same way as "never measured" — 0 is falsy in Python, so
+    the original inline `if active_closure_entries else ...` conflated the
+    two. Extracted to a pure function so this is directly testable without
+    a real SUMO run."""
+
+    def test_positive_entries_is_a_failure(self):
+        assert run_scenario.closure_integrity_status(3, [{"edge_id": "a"}]) == \
+            "failed_active_edge_flow"
+
+    def test_zero_entries_is_verified_clean_not_unmeasured(self):
+        assert run_scenario.closure_integrity_status(0, [{"edge_id": "a"}]) == \
+            "verified_clean"
+
+    def test_none_entries_with_closures_is_not_measurable(self):
+        assert run_scenario.closure_integrity_status(None, [{"edge_id": "a"}]) == \
+            "not_measurable"
+
+    def test_none_entries_without_closures_is_none(self):
+        assert run_scenario.closure_integrity_status(None, []) is None
+
+
 class TestAtomicWriteJson:
     """atomic_write_json (found in review 2026-07-10): a live browser polling
     a scenario/index file with cache: 'no-store' must never observe a
@@ -248,6 +272,23 @@ class TestSumoTimeout:
         assert "--statistic-output" in commands[1]
         assert "--summary-output" in commands[1]
         assert measured is not None
+
+    def test_metrics_run_label_separates_signal_condition_artifacts(self, monkeypatch, tmp_path):
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        baseline = run_scenario.run_sumo(
+            1000, tmp_path / "demand.rou.xml", [], 900, tmp_path,
+            metrics=True, run_label="d2_baseline")
+        candidate = run_scenario.run_sumo(
+            1000, tmp_path / "demand.rou.xml", [], 900, tmp_path,
+            metrics=True, run_label="d2_adapted")
+
+        assert baseline["tripinfo"] != candidate["tripinfo"]
+        assert "d2_baseline" in baseline["tripinfo"].name
+        assert "d2_adapted" in candidate["tripinfo"].name
 
 
 class TestRunSumoFlushOffset:

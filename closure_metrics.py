@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Sequence
 import xml.etree.ElementTree as ET
 
 
@@ -152,6 +152,40 @@ def read_closed_edge_throughput(path: Path, closed_edges: set[str]) -> int:
                if edge.get("id") in closed_edges)
 
 
+def active_closure_throughput(flows: Mapping[str, Sequence[float]],
+                              closures: Sequence[Mapping[str, object]],
+                              interval_s: int = 900) -> int | None:
+    """Return entries on closed edges during fully-contained flow buckets.
+
+    SUMO edgeData is aggregated by interval, so a bucket crossing a closure
+    boundary cannot safely be assigned to before or after closure. Count only
+    complete buckets inside ``[begin_s, end_s)``. This avoids falsely failing
+    vehicles that entered before closure start while making measured active
+    closure flow a hard integrity signal.
+    """
+    total = 0.0
+    measured = False
+    seen: set[tuple[str, int]] = set()
+    for closure in closures:
+        edge = closure.get("edge_id")
+        begin = closure.get("begin_s")
+        end = closure.get("end_s")
+        if not isinstance(edge, str) or not isinstance(begin, (int, float)) or \
+           not isinstance(end, (int, float)) or end <= begin:
+            raise ValueError("closures require edge_id and increasing begin_s/end_s")
+        first_full = int((begin + interval_s - 1) // interval_s)
+        end_full = int(end // interval_s)
+        series = flows.get(edge)
+        if series is None:
+            continue
+        for quarter in range(first_full, min(end_full, len(series))):
+            if (edge, quarter) not in seen:
+                seen.add((edge, quarter))
+                total += float(series[quarter])
+                measured = True
+    return int(round(total)) if measured else None
+
+
 def read_summary_max_queue(path: Path) -> int:
     """Largest summary ``halting`` count, reported as a diagnostic proxy.
 
@@ -202,6 +236,8 @@ def disqualification_reasons(metrics: DisruptionMetrics) -> tuple[str, ...]:
         reasons.append("teleports")
     if metrics.dropped_unreachable:
         reasons.append("dropped_unreachable_vehicles")
+    if metrics.closed_edge_throughput is not None and metrics.closed_edge_throughput > 0:
+        reasons.append("active_closure_edge_throughput")
     return tuple(reasons)
 
 

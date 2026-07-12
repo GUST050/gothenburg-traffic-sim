@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from closure_metrics import (DisruptionMetrics, build_metrics, compare_metrics,
+                             active_closure_throughput, disqualification_reasons,
                              is_disqualified, read_closed_edge_throughput,
                              read_statistics, read_summary_max_queue, read_tripinfo)
 
@@ -79,3 +80,20 @@ def test_lower_time_loss_with_teleports_or_drops_is_disqualified():
     assert comparison.disqualification_reasons == (
         "teleports", "dropped_unreachable_vehicles",
     )
+
+
+def test_active_closure_throughput_uses_only_complete_active_quarters():
+    flows = {"closed": [4, 5, 6, 7]}
+    # 850-2750 overlaps quarters 0 and 3, but only 1 and 2 are fully active.
+    assert active_closure_throughput(
+        flows, [{"edge_id": "closed", "begin_s": 850, "end_s": 2750}]) == 11
+
+
+def test_active_closure_flow_is_an_integrity_disqualification():
+    metrics = DisruptionMetrics(
+        total_time_loss_s=1.0, trip_count=1, unfinished_trips=0,
+        unfinished_waiting_trips=0, teleport_total=0, teleport_reasons={},
+        loaded=1, inserted=1, running_at_end=0, waiting_at_end=0,
+        closed_edge_throughput=1,
+    )
+    assert "active_closure_edge_throughput" in disqualification_reasons(metrics)

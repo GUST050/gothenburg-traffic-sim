@@ -23,6 +23,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import serve
+import signal_optimize as so
 
 
 class FakeCompletedProcess:
@@ -694,6 +695,14 @@ class TestSuggestClosure:
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6&slide_hours=nan")
         assert status == 400
 
+    def test_fractional_duration_or_slide_is_rejected_before_starting_a_job(self, base_url):
+        duration_status, _ = get_json_or_error(
+            f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=1.1")
+        slide_status, _ = get_json_or_error(
+            f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=1&slide_hours=0.3")
+        assert duration_status == 400
+        assert slide_status == 400
+
     def test_top_k_out_of_range_is_400(self, base_url):
         status, _ = get_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6&top_k=999")
@@ -833,6 +842,14 @@ def _fake_signal_optimize_result(**overrides) -> dict:
                 "delta_teleports": 1, "delta_dropped_unreachable": 0,
                 "candidate_disqualified": True, "disqualification_reasons": ["teleports"],
                 "relative_time_loss_pct": -20.0,
+                "paired": {
+                    "pair_keys": ["1000:q50.rou.xml", "1001:q10.rou.xml"],
+                    "n_pairs": 2, "time_loss_delta_s": [-1800.0, -2200.0],
+                    "mean_time_loss_delta_s": -2000.0, "median_time_loss_delta_s": -2000.0,
+                    "stddev_time_loss_delta_s": 282.8,
+                    "min_time_loss_delta_s": -2200.0, "max_time_loss_delta_s": -1800.0,
+                    "teleport_delta": [1, 1], "unfinished_trip_delta": [0, 0],
+                },
             },
         },
         "tls_plan_diff": _FAKE_PLAN_DIFF,
@@ -866,6 +883,13 @@ def _fake_signal_closure_combine_result(**overrides) -> dict:
             "candidate_disqualified": True, "disqualification_reasons": ["teleports"],
             "relative_time_loss_pct": -13.3,
         },
+        "paired_comparison": {
+            "pair_keys": ["1000:q50.rou.xml"], "n_pairs": 1,
+            "time_loss_delta_s": [-40000.0], "mean_time_loss_delta_s": -40000.0,
+            "median_time_loss_delta_s": -40000.0, "stddev_time_loss_delta_s": 0.0,
+            "min_time_loss_delta_s": -40000.0, "max_time_loss_delta_s": -40000.0,
+            "teleport_delta": [0], "unfinished_trip_delta": [-22],
+        },
         "route_stability": {"n_common_vehicles": 1227, "n_identical_routes": 1226,
                             "fraction_identical": 0.999},
         "tls_plan_diff": _FAKE_PLAN_DIFF,
@@ -898,6 +922,42 @@ class TestSummarizeSignalOptimization:
         assert summary["after"]["total_time_loss_s"] == 260000.0
         assert summary["closed_edges"] == ["a_b_0"]
         assert summary["route_stability"]["fraction_identical"] == 0.999
+
+    def test_paired_comparison_surfaced_for_no_closure_case(self):
+        # Found in review 2026-07-12: the seed/demand-variant-matched
+        # paired comparison was computed by signal_optimize.py but never
+        # reached the UI-facing summary at all.
+        summary = serve.summarize_signal_optimization(
+            _fake_signal_optimize_result(), closure=False)
+        assert summary["paired_comparison"]["median_time_loss_delta_s"] == -2000.0
+        assert summary["paired_comparison"]["n_pairs"] == 2
+        assert summary["paired_sign_disagrees"] is False   # both agree: improvement
+
+    def test_paired_comparison_surfaced_for_closure_case(self):
+        summary = serve.summarize_signal_optimization(
+            _fake_signal_closure_combine_result(), closure=True)
+        assert summary["paired_comparison"]["median_time_loss_delta_s"] == -40000.0
+        assert summary["paired_sign_disagrees"] is False
+
+    def test_paired_sign_disagreement_is_flagged(self):
+        # Aggregate says IMPROVED (-2000s) but the paired median says WORSE
+        # (+500s) -- exactly the case this check exists to catch: an
+        # aggregate mean dominated by one outlier seed contradicting the
+        # seed-matched comparison.
+        result = _fake_signal_optimize_result()
+        result["comparisons_vs_baseline"]["adapted_coordinated"]["paired"][
+            "median_time_loss_delta_s"] = 500.0
+        summary = serve.summarize_signal_optimization(result, closure=False)
+        assert summary["paired_sign_disagrees"] is True
+
+    def test_missing_paired_data_degrades_to_none_not_a_crash(self):
+        # Older result files (pre-dating the paired-comparison feature)
+        # have no "paired"/"paired_comparison" key at all.
+        result = _fake_signal_optimize_result()
+        del result["comparisons_vs_baseline"]["adapted_coordinated"]["paired"]
+        summary = serve.summarize_signal_optimization(result, closure=False)
+        assert summary["paired_comparison"] is None
+        assert summary["paired_sign_disagrees"] is None
 
     def test_synthetic_provenance_disallows_recommendation(self):
         summary = serve.summarize_signal_optimization(
@@ -942,6 +1002,20 @@ class TestSummarizeSignalOptimization:
 
 
 class TestOptimizeSignals:
+    def test_plain_signal_timeout_covers_every_registered_condition(self, base_url, monkeypatch):
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen["timeout"] = kw["timeout"]
+            serve.OPTIMIZE_OUT.write_text(json.dumps(_fake_signal_optimize_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        get_json(f"{base_url}/api/optimize_signals")
+        assert wait_until(lambda: "timeout" in seen)
+        assert seen["timeout"] == 180 + serve.OPTIMIZE_SIGNAL_CONDITIONS * serve.OPTIMIZE_SEEDS * 90
+        assert serve.OPTIMIZE_SIGNAL_CONDITIONS == len(so.SIGNAL_CONDITION_NAMES)
+
     def test_unknown_edge_is_400(self, base_url):
         status, body = get_json_or_error(f"{base_url}/api/optimize_signals?edges=nope_0")
         assert status == 400

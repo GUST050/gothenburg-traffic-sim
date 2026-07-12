@@ -209,6 +209,27 @@ class TestTlsPlanDiff:
         assert [d["tls_id"] for d in diffs] == ["A1", "Z9"]
 
 
+class TestTlsTimingSchedule:
+    def test_reports_green_red_yellow_and_coordinated_offset_per_link(self, tmp_path):
+        adapted = tmp_path / "adapted.add.xml"
+        write_net(adapted, """
+        <tlLogic id="J1" type="static" programID="a" offset="0">
+          <phase duration="10" state="Gr"/>
+          <phase duration="4" state="yr"/>
+          <phase duration="8" state="rG"/>
+          <phase duration="4" state="ry"/>
+        </tlLogic>""")
+        coordinated = tmp_path / "coordinated.add.xml"
+        write_net(coordinated, '<tlLogic id="J1" programID="a" offset="6"/>')
+
+        rows = signal_lab.tls_timing_schedule(adapted, coordinated)
+        assert rows[0] == {"tls_id": "J1", "link_index": 0, "cycle_s": 26.0,
+                           "offset_s": 6.0, "all_red_s": 0.0, "green_s": 10.0,
+                           "yellow_s": 4.0, "redyellow_s": 0.0, "red_s": 12.0}
+        assert rows[1]["green_s"] == 8.0
+        assert rows[1]["red_s"] == 14.0
+
+
 class TestMainWindowValidation:
     """main()'s guard against a window outside the calibrated demand
     period — exercised through window_offsets_s + the same bound check

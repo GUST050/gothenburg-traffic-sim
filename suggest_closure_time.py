@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import math
 import sys
 import time
 import xml.etree.ElementTree as ET
@@ -111,6 +112,25 @@ def window_quarters(begin_s: int, end_s: int, n_intervals: int) -> range:
     lo = max(0, begin_s // 900)
     hi = min(n_intervals, -(-end_s // 900))   # ceil division
     return range(lo, hi)
+
+
+def aligned_quarters(hours: float, parameter: str) -> int:
+    """Convert a positive hour duration to exact 15-minute buckets.
+
+    Proxy flow is available only in complete 15-minute intervals. Rounding a
+    request such as 1.1h to seconds and treating each partly-overlapped bucket
+    equally produces an unlabelled, biased duration. Reject it at the shared
+    CLI boundary instead.
+    """
+    if not math.isfinite(hours) or hours <= 0:
+        raise ValueError(f"{parameter} must be a finite value > 0")
+    quarters = hours * 4
+    rounded = round(quarters)
+    if not math.isclose(quarters, rounded, rel_tol=0.0, abs_tol=1e-9):
+        raise ValueError(f"{parameter} must be an exact multiple of 0.25 hours")
+    if rounded < 1:
+        raise ValueError(f"{parameter} must be at least one quarter (0.25h)")
+    return int(rounded)
 
 
 # ── Detour availability (per edge set, NOT per window) ──────────────────
@@ -350,10 +370,15 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         metric_paths = rs.run_sumo(seed, route_path, [add_path] + closure_add,
                                    duration_s, home, micro=micro, metrics=True)
         scratch.extend(metric_paths.values())
+        active_throughput = None
+        if closures and ed_file.exists():
+            seed_flows = rs.parse_edgedata(ed_file, n_intervals)
+            active_throughput = cm.active_closure_throughput(seed_flows, closures)
         per_seed_metrics.append(cm.build_metrics(
             metric_paths["tripinfo"], metric_paths["statistics"],
             truncated_unreachable=seed_truncated, dropped_unreachable=seed_dropped,
-            summary_path=metric_paths["summary"]))
+            summary_path=metric_paths["summary"],
+            closed_edge_throughput=active_throughput))
     per_seed_time_loss = [m.total_time_loss_s for m in per_seed_metrics]
     # Candidate-level totals: sum over the DISTINCT variants actually used
     # (not over seeds — repeat seeds on the same variant don't add new
@@ -426,6 +451,8 @@ def aggregate_seed_metrics(per_seed: list[cm.DisruptionMetrics]) -> cm.Disruptio
         for k, v in m.teleport_reasons.items():
             teleport_reasons[k] = teleport_reasons.get(k, 0) + v
     queues = [m.max_queue_vehicles for m in per_seed if m.max_queue_vehicles is not None]
+    throughputs = [m.closed_edge_throughput for m in per_seed
+                   if m.closed_edge_throughput is not None]
     return cm.DisruptionMetrics(
         total_time_loss_s=mean("total_time_loss_s"),
         trip_count=round(mean("trip_count")),
@@ -440,7 +467,7 @@ def aggregate_seed_metrics(per_seed: list[cm.DisruptionMetrics]) -> cm.Disruptio
         truncated_unreachable=max(m.truncated_unreachable for m in per_seed),
         dropped_unreachable=max(m.dropped_unreachable for m in per_seed),
         max_queue_vehicles=max(queues) if queues else None,
-        closed_edge_throughput=None,
+        closed_edge_throughput=sum(throughputs) if throughputs else None,
     )
 
 
@@ -507,11 +534,11 @@ def main() -> None:
         if e not in prior:
             sys.exit(f"--edge {e}: not an edge in network.geojson")
 
-    duration_s = round(args.duration_hours * 3600)
-    slide_s = round(args.slide_hours * 3600)
-    if duration_s < 900 or slide_s < 900:
-        sys.exit("--duration-hours and --slide-hours must both be at least "
-                 "one quarter (0.25h) — flows are only resolved to 15-min buckets")
+    try:
+        duration_s = aligned_quarters(args.duration_hours, "--duration-hours") * 900
+        slide_s = aligned_quarters(args.slide_hours, "--slide-hours") * 900
+    except ValueError as exc:
+        sys.exit(str(exc))
     windows = generate_windows(duration_s, total_duration_s, slide_s)
     if not windows:
         sys.exit(f"closure duration {args.duration_hours}h does not fit inside "

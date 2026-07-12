@@ -164,7 +164,8 @@ def calibrate_fold_parallel(
                 solutions[quarter] = sol
                 rungs[quarter] = rung
         return pfe.write_calibration_report(shapes, out_path, targets, solutions,
-                                            bounds_pq, rungs)
+                                            bounds_pq, rungs,
+                                            enforce_integer_bounds=False)
     finally:
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
@@ -182,7 +183,35 @@ def simulated_series(ed_file: Path, edge: str, nq: int) -> np.ndarray:
     return out
 
 
-def require_historical_demand(meta: dict) -> None:
+def historical_demand_window(meta: dict) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Return the half-open historical-demand window declared in metadata.
+
+    Single-day demand retains legacy ``date`` while the supported multi-day
+    calibration contract uses ``start_date`` and ``end_date_exclusive``.
+    Keeping this parsing in one place prevents LOSO from accepting a build it
+    later cannot describe in its own report.
+    """
+    try:
+        if "start_date" in meta or "end_date_exclusive" in meta:
+            start = pd.Timestamp(meta["start_date"]).normalize()
+            end = pd.Timestamp(meta["end_date_exclusive"]).normalize()
+        else:
+            start = pd.Timestamp(meta["date"]).normalize()
+            end = start + pd.Timedelta(days=1)
+    except (KeyError, TypeError, ValueError):
+        raise SystemExit(
+            "LOSO kräver giltiga date eller start_date/end_date_exclusive i "
+            "sumo/demand_meta.json."
+        ) from None
+    if end <= start:
+        raise SystemExit(
+            "LOSO kräver att end_date_exclusive ligger efter start_date i "
+            "sumo/demand_meta.json."
+        )
+    return start, end
+
+
+def require_historical_demand(meta: dict) -> tuple[pd.Timestamp, pd.Timestamp]:
     """Reject demand that cannot be compared with the 2025 observations."""
     source = meta.get("source")
     if source != "historical":
@@ -191,18 +220,16 @@ def require_historical_demand(meta: dict) -> None:
             f"sumo/demand_meta.json har 'source': {source!r}. Kör om "
             "build_sumo_demand.py med --source historical först."
         )
-    try:
-        year = pd.Timestamp(meta["date"]).year
-    except (KeyError, TypeError, ValueError):
+    start, end = historical_demand_window(meta)
+    # ``end`` is exclusive, so a 2025-12-31 one-day demand legitimately
+    # ends on 2026-01-01 while all measured quarters remain in 2025.
+    if start.year != EPOCH.year or (end - pd.Timedelta(nanoseconds=1)).year != EPOCH.year:
         raise SystemExit(
-            "LOSO kräver ett giltigt datum under 2025 i "
-            "sumo/demand_meta.json."
+            "LOSO kräver kalibrerad historisk demand helt inom 2025, samma "
+            "år som web/data/flows.json — demand_meta.json beskriver "
+            f"{start.date()} till {end.date()} (exklusivt)."
         )
-    if year != EPOCH.year:
-        raise SystemExit(
-            "LOSO kräver kalibrerad historisk demand för 2025, samma år som "
-            f"web/data/flows.json — demand_meta.json har datum {meta['date']!r}."
-        )
+    return start, end
 
 
 def main() -> None:
@@ -213,7 +240,7 @@ def main() -> None:
     args = ap.parse_args()
 
     flows, meta, all_priors, corridor = load_inputs()
-    require_historical_demand(meta)
+    demand_start, demand_end = require_historical_demand(meta)
     assignment_load = None
     if not args.no_assignment_prior:
         print("Computing structural assignment load once for LOSO folds …")
@@ -232,7 +259,7 @@ def main() -> None:
     # all_priors' d["sensor"] == held check below).
     edge_to_sensor = {e: sid for sid, edges in sensor_edges.items() for e in edges}
 
-    report = {"window": f"{meta['date']} {meta['begin']}–{meta['end']}",
+    report = {"window": f"{demand_start.date()} → {demand_end.date()} (exclusive)",
               "note": "leave-one-station-out — simulated vs measured at the "
                       "held-out station; level-2 bounds, priors, corridor "
                       "priors, and the assignment-prior scale factor are all "
