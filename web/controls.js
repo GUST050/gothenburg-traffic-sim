@@ -34,12 +34,23 @@ const Controls = (() => {
       `linear-gradient(to right, #3b82f6 0% ${pct}%, #1c2740 ${pct}% 100%)`;
   }
 
-  function onTick({ detail: { qi, playing } }) {
-    // Use the FRACTIONAL quarter index (not the rounded one in the event)
-    // for the clock — real-time vehicle playback needs actual seconds to
-    // visibly move; at 1 real-time speed a whole quarter takes 15 real
-    // minutes; without this the displayed clock would sit on the same
-    // minute the entire time.
+  // Reads current State fresh (not from an event payload) so it can be
+  // called both from the 'tick' event AND every animation frame during
+  // playback (see Clock.js) — State.advance() only DISPATCHES 'tick' when
+  // the INTEGER quarter index changes (correct: Render's edge/sensor
+  // redraw only needs per-quarter granularity), but Simulering's real-
+  // time-anchored speeds (10x-300x, all far slower than 1 quarter/sec)
+  // mean that gate can go 90+ real seconds between events — the clock,
+  // date, and sliders would sit frozen the whole time even though
+  // qiFloat (and the map's own independent per-frame animation loop) are
+  // both actually advancing. Found via browser testing: play a Simulering
+  // scenario and watch the clock never move for a minute and a half.
+  function updateDisplay() {
+    // Use the FRACTIONAL quarter index (not the rounded one) for the
+    // clock — real-time vehicle playback needs actual seconds to visibly
+    // move; at 1x real-time speed a whole quarter takes 15 real minutes;
+    // without this the displayed clock would sit on the same minute the
+    // entire time.
     const d = _provider.dateFromQI(State.qiFloat);
     const h = String(d.getUTCHours()).padStart(2, '0');
     const m = String(d.getUTCMinutes()).padStart(2, '0');
@@ -49,8 +60,9 @@ const Controls = (() => {
     _tdDate.textContent =
       `${DAYS[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, '0')} ` +
       `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-    _playBtn.textContent = playing ? '⏸' : '▶';
+    _playBtn.textContent = State.playing ? '⏸' : '▶';
 
+    const qi  = State.qi;
     const day = Math.floor(qi / 96);
     const tod = qi % 96;
     if (Number(_daySlider.value) !== day) { _daySlider.value = day; setFill(_daySlider); }
@@ -122,7 +134,12 @@ const Controls = (() => {
 
       setFill(_daySlider);
       setFill(_todSlider);
-      window.addEventListener('tick', onTick);
+      window.addEventListener('tick', updateDisplay);
     },
+
+    // Called every animation frame during playback by Clock.js, in
+    // addition to the coarser 'tick' event above — see updateDisplay's
+    // own comment for why both paths are needed.
+    updateDisplay,
   };
 })();

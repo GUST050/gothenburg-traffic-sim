@@ -31,6 +31,49 @@
        hardcoded height to keep in sync. */
     body { display: flex; flex-direction: column; }
     #map { flex: 1 1 auto; min-height: 0; position: relative; background: #f2f2f0; }
+    body[data-task="home"] #controls,
+    body[data-task="home"] #brand,
+    body[data-task="home"] #legend { display: none; }
+
+    /* ── Task workspace ──────────────────────────────────────────────── */
+    #workspace-nav {
+      position: absolute; top: 14px; left: 14px; z-index: 1100;
+      display: flex; align-items: center; gap: 10px;
+      background: var(--panel); border: 1px solid var(--panel-line);
+      border-radius: 8px; padding: 7px 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.32);
+    }
+    #workspace-nav button {
+      border: 0; background: transparent; color: var(--ink); font-size: 1rem;
+      width: 28px; height: 28px; cursor: pointer;
+    }
+    #workspace-task-title { color: var(--ink); font-size: 0.76rem; font-weight: 700; }
+    body[data-task="home"] #workspace-nav { display: none; }
+    #task-home {
+      position: absolute; inset: 0; z-index: 1050; display: grid;
+      place-items: center; padding: 24px; background: rgba(7, 10, 19, 0.9);
+    }
+    #task-home[hidden] { display: none; }
+    .task-home-inner { width: min(960px, 100%); }
+    .task-home-title { color: var(--ink); font-size: 1.45rem; font-weight: 750; }
+    .task-home-subtitle { color: var(--ink-2); font-size: 0.78rem; margin-top: 6px; }
+    #task-grid {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
+      margin-top: 22px;
+    }
+    .task-card {
+      min-height: 118px; text-align: left; color: var(--ink); cursor: pointer;
+      background: rgba(20, 27, 45, 0.96); border: 1px solid var(--panel-line);
+      border-radius: 8px; padding: 16px; transition: border-color .15s, background .15s, transform .15s;
+    }
+    .task-card:hover { border-color: var(--accent-2); background: rgba(31, 43, 70, 0.98); transform: translateY(-2px); }
+    .task-card-icon { color: var(--accent-2); font-size: 1.05rem; }
+    .task-card strong { display: block; margin-top: 14px; font-size: 0.86rem; }
+    .task-card span { display: block; margin-top: 4px; color: var(--ink-2); font-size: 0.68rem; }
+    @media (max-width: 700px) {
+      #task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .task-card { min-height: 100px; }
+      #workspace-nav { top: 10px; left: 10px; }
+    }
 
     /* ── Title chip ─────────────────────────────────────────────────────── */
     #brand {
@@ -354,8 +397,28 @@
     .leaflet-control-attribution a { color: var(--ink-2) !important; }
   </style>
 </head>
-<body>
+<body data-task="home">
   <div id="map"></div>
+
+  <nav id="workspace-nav" aria-label="Arbetsyta">
+    <button id="workspace-menu-btn" title="Öppna arbetsytor" aria-label="Öppna arbetsytor">☰</button>
+    <span id="workspace-task-title">Trafik</span>
+  </nav>
+  <section id="task-home" aria-label="Välj arbetsyta">
+    <div class="task-home-inner">
+      <h1 class="task-home-title">Göteborg Trafik</h1>
+      <p class="task-home-subtitle">Välj en arbetsyta</p>
+      <div id="task-grid">
+        <button class="task-card" data-task="traffic"><span class="task-card-icon">↗</span><strong>Historisk trafik</strong><span>2025 flöden</span></button>
+        <button class="task-card" data-task="forecast"><span class="task-card-icon">↗</span><strong>Prognos</strong><span>2027 flöden</span></button>
+        <button class="task-card" data-task="scenario"><span class="task-card-icon">▣</span><strong>Scenario</strong><span>Visa simulering</span></button>
+        <button class="task-card" data-task="demand"><span class="task-card-icon">▦</span><strong>Simulera datum</strong><span>En dag eller flera</span></button>
+        <button class="task-card" data-task="closure"><span class="task-card-icon">×</span><strong>Stäng väg</strong><span>Skapa avstängning</span></button>
+        <button class="task-card" data-task="suggest"><span class="task-card-icon">◷</span><strong>Välj stängningstid</strong><span>Analysera tidpunkt</span></button>
+        <button class="task-card" data-task="signals"><span class="task-card-icon">≡</span><strong>Optimera signaler</strong><span>Grönt och rött</span></button>
+      </div>
+    </div>
+  </section>
 
   <div id="brand">
     <h1>Göteborgs trafikflöde</h1>
@@ -505,7 +568,7 @@
           <thead>
             <tr>
               <th>Korsning</th><th>Cykeltid före → efter</th><th>Δ cykeltid</th>
-              <th>Fasförskjutning före → efter</th><th>Max Δ grönsplit</th>
+              <th>Fasförskjutning före → efter</th><th>Max Δ grönsplit</th><th>Efter: grönt/rött per länk</th>
             </tr>
           </thead>
           <tbody id="optimize-plan-tbody"></tbody>
@@ -535,11 +598,11 @@
   <!-- ?v= forces the browser to fetch fresh JS when the HTML updates —
        bump the number whenever the JS files change, or stale cached JS
        can run against new HTML and crash on missing elements -->
-  <script src="state.js?v=10"></script>
-  <script src="provider.js?v=10"></script>
-  <script src="render.js?v=10"></script>
-  <script src="controls.js?v=10"></script>
-  <script src="clock.js?v=10"></script>
+  <script src="state.js?v=11"></script>
+  <script src="provider.js?v=11"></script>
+  <script src="render.js?v=11"></script>
+  <script src="controls.js?v=11"></script>
+  <script src="clock.js?v=11"></script>
   <script>
     (async () => {
       try {
@@ -564,12 +627,21 @@
         const btnHist    = document.getElementById('btn-hist');
         const btnFore    = document.getElementById('btn-fore');
         const btnScen    = document.getElementById('btn-scen');
+        const modeToggle = document.getElementById('mode-toggle');
         const scenSelect = document.getElementById('scen-select');
         const simPanel   = document.getElementById('sim-panel');
         const dayGroup   = document.getElementById('day-group');
         const dayHint    = document.getElementById('day-hint');
         const daySlider  = document.getElementById('day-slider');
         const YEAR_DAY_MAX = 364;   // day-slider's original range, for Historisk/Prognos
+        const taskHome = document.getElementById('task-home');
+        const taskTitle = document.getElementById('workspace-task-title');
+        const taskNames = {
+          traffic: 'Historisk trafik', forecast: 'Prognos', scenario: 'Scenario',
+          demand: 'Simulera datum', closure: 'Stäng väg',
+          suggest: 'Välj stängningstid', signals: 'Optimera signaler',
+        };
+        let workspaceTask = 'home';
 
         const trajCache = {};
 
@@ -689,7 +761,7 @@
 
         btnHist.addEventListener('click', () => setMode(btnHist, histProvider));
 
-        btnFore.addEventListener('click', async () => {
+        async function openForecast() {
           // Lazy-load forecast on first click
           if (!foreProvider) {
             btnFore.textContent = 'Laddar…';
@@ -705,7 +777,8 @@
             }
           }
           setMode(btnFore, foreProvider);
-        });
+        }
+        btnFore.addEventListener('click', openForecast);
 
         // ── Simulering (SUMO output — run run_scenario.py) ────────────────────
         // Shareable URLs: ?mode=scenario&file=<name>.json&qi=6, ?mode=forecast
@@ -771,7 +844,7 @@
           State.setQI(params.get('qi') ? Number(params.get('qi')) : 0);
         }
 
-        btnScen.addEventListener('click', async () => {
+        async function openScenario() {
           try {
             await loadScenIndex();
             const wanted = params.get('file');
@@ -782,7 +855,8 @@
           } catch (e) {
             console.error('Inga scenarier — kör run_scenario.py först', e);
           }
-        });
+        }
+        btnScen.addEventListener('click', openScenario);
 
         scenSelect.addEventListener('change', e => activateScenario(e.target.value));
 
@@ -809,6 +883,37 @@
         let dayPickMode = false;
         let currentSimDate = '2025-09-16';
         let currentSimSource = 'historical';
+
+        // Scopes the "recover a recalibration on page load" check (below)
+        // to THIS tab's own session, not every future visitor forever.
+        // /api/recalibrate/status is server-global — without this, a
+        // recalibration anyone ever ran stays "done" in server memory
+        // indefinitely, so a brand-new visitor with no query params would
+        // silently get switched out of the default Historisk 2025 view
+        // into whatever Simulering scenario the LAST recalibration (by
+        // anyone, at any point) produced. Found via browser testing
+        // 2026-07-12: a completely fresh page load landed in Simulering
+        // mode on a 2027 forecast scenario nobody in that session asked
+        // for. sessionStorage survives a reload within the same tab (the
+        // original incident this code protects against — CLAUDE.md's
+        // 2026-07-06 production incident) but not a new tab/visitor.
+        const RECAL_SESSION_KEY = 'pendingRecal';
+        function rememberPendingRecal(date, source, days) {
+          try {
+            sessionStorage.setItem(RECAL_SESSION_KEY, JSON.stringify({ date, source, days }));
+          } catch (_) { /* sessionStorage unavailable (private mode etc.) — degrade to no recovery */ }
+        }
+        function forgetPendingRecal() {
+          try { sessionStorage.removeItem(RECAL_SESSION_KEY); } catch (_) {}
+        }
+        function pendingRecalMatches(status) {
+          let pending;
+          try { pending = JSON.parse(sessionStorage.getItem(RECAL_SESSION_KEY) || 'null'); }
+          catch (_) { return false; }
+          return !!pending && pending.date === status.date &&
+                 pending.source === status.source &&
+                 Number(pending.days || 1) === Number(status.days || 1);
+        }
 
         // Linear interpolation between the two measured/documented anchor
         // points (B3, PLAN.md): 1 day ~6 min, a full week ~45 min.
@@ -857,12 +962,13 @@
         function refreshCloseUI() {
           const showNormal = !closureMode && !dayPickMode && !suggestMode;
           const showApiActions = showNormal && apiAvailable;
-          scenSelect.style.display   = showNormal ? '' : 'none';
+          const showScenarioPicker = ['scenario', 'demand', 'closure', 'suggest', 'signals'].includes(workspaceTask);
+          scenSelect.style.display   = showNormal && showScenarioPicker ? '' : 'none';
           simDayHint.style.display   = showNormal ? '' : 'none';
-          btnClose.style.display     = showApiActions ? '' : 'none';
-          btnDay.style.display       = showApiActions ? '' : 'none';
-          btnSuggest.style.display   = showApiActions ? '' : 'none';
-          btnOptimize.style.display  = showApiActions ? '' : 'none';
+          btnClose.style.display     = showApiActions && workspaceTask === 'closure' ? '' : 'none';
+          btnDay.style.display       = showApiActions && workspaceTask === 'demand' ? '' : 'none';
+          btnSuggest.style.display   = showApiActions && workspaceTask === 'suggest' ? '' : 'none';
+          btnOptimize.style.display  = showApiActions && workspaceTask === 'signals' ? '' : 'none';
           pickBanner.classList.toggle('show', closureMode);
           dayBanner.classList.toggle('show', dayPickMode);
           suggestBanner.classList.toggle('show', suggestMode);
@@ -874,6 +980,44 @@
             btnSuggestRun.disabled = selected.size === 0;
           }
           Render.setPending([...selected]);
+        }
+
+        async function openWorkspace(task) {
+          workspaceTask = task;
+          document.body.dataset.task = task;
+          taskHome.hidden = true;
+          modeToggle.style.display = 'none';
+          taskTitle.textContent = taskNames[task] || 'Göteborg Trafik';
+          exitPicking();
+          exitSuggestPicking();
+          dayPickMode = false;
+          if (task === 'traffic') {
+            setMode(btnHist, histProvider);
+          } else if (task === 'forecast') {
+            await openForecast();
+          } else {
+            await openScenario();
+            if (task === 'demand') {
+              dayPickMode = true;
+            } else if (task === 'closure') {
+              enterPicking();
+            } else if (task === 'suggest') {
+              enterSuggestPicking();
+            }
+          }
+          refreshCloseUI();
+          requestAnimationFrame(() => Render.invalidateSize());
+        }
+
+        function showTaskHome() {
+          workspaceTask = 'home';
+          document.body.dataset.task = 'home';
+          taskHome.hidden = false;
+          exitPicking();
+          exitSuggestPicking();
+          dayPickMode = false;
+          refreshCloseUI();
+          requestAnimationFrame(() => Render.invalidateSize());
         }
 
         function enterPicking() {
@@ -917,6 +1061,10 @@
         btnSuggestCancel.addEventListener('click', exitSuggestPicking);
         btnSuggestResultsClose.addEventListener('click', () => {
           suggestResults.classList.remove('show');
+        });
+        document.getElementById('workspace-menu-btn').addEventListener('click', showTaskHome);
+        document.querySelectorAll('#task-grid [data-task]').forEach(button => {
+          button.addEventListener('click', () => openWorkspace(button.dataset.task));
         });
 
         // ── Optimera signaler (PLAN.md Phase D5) — same async start/poll
@@ -1017,6 +1165,12 @@
           }
           optimizeResultsMeta.innerHTML = metaLines.join('<br>');
 
+          const scheduleByTls = new Map();
+          for (const row of summary.tls_timing_schedule ?? []) {
+            const rows = scheduleByTls.get(row.tls_id) ?? [];
+            rows.push(row);
+            scheduleByTls.set(row.tls_id, rows);
+          }
           const sorted = [...summary.tls_plan_diff].sort((a, b) =>
             Math.abs(b.cycle_delta_pct ?? 0) - Math.abs(a.cycle_delta_pct ?? 0));
           optimizePlanBody.replaceChildren(...sorted.map(d => {
@@ -1033,7 +1187,11 @@
             const splitTd = document.createElement('td');
             splitTd.textContent = d.max_split_change_pct === null ? '–' :
               `${d.max_split_change_pct.toFixed(1)} pp`;
-            tr.append(idTd, cycleTd, deltaTd, offsetTd, splitTd);
+            const timingTd = document.createElement('td');
+            timingTd.textContent = (scheduleByTls.get(d.tls_id) ?? []).map(row =>
+              `${row.from_edge && row.to_edge ? row.from_edge + '→' + row.to_edge : 'L' + row.link_index}: ` +
+              `G ${row.green_s.toFixed(0)}s, R ${row.red_s.toFixed(0)}s, Y ${row.yellow_s.toFixed(0)}s`).join(' | ') || '–';
+            tr.append(idTd, cycleTd, deltaTd, offsetTd, splitTd, timingTd);
             return tr;
           }));
 
@@ -1359,6 +1517,7 @@
         // already-running (or already-finished) job rather than assuming
         // idle.
         async function applyFinishedRecalibration(data) {
+          forgetPendingRecal();
           currentSimDate = data.date;
           currentSimSource = data.source;
           const srcLabel = data.source === 'forecast' ? 'Prognos' : 'Historik';
@@ -1385,6 +1544,7 @@
               continue;
             }
             if (status.status === 'error') {
+              forgetPendingRecal();
               alert('Omkalibreringen misslyckades: ' + status.error);
             } else if (status.status === 'done') {
               await applyFinishedRecalibration(status);
@@ -1393,22 +1553,57 @@
           }
         }
 
+        async function recoverStartedRecalibration(date, source, days) {
+          // A dev tunnel or sleeping browser can drop the small 202 response
+          // after the server has already accepted the background job. Status
+          // is authoritative, so do not show a false start failure in that
+          // case.
+          try {
+            const response = await fetch('/api/recalibrate/status', { cache: 'no-store' });
+            const status = await response.json();
+            const sameJob = status.date === date && status.source === source &&
+              Number(status.days || 1) === days;
+            if (!sameJob || !['running', 'done'].includes(status.status)) return false;
+            dayPickMode = false;
+            refreshCloseUI();
+            if (status.status === 'done') {
+              await applyFinishedRecalibration(status);
+            } else {
+              btnDayRun.textContent = `Kalibrerar om… (${status.elapsed_s || 0}s)`;
+              await pollRecalibration();
+            }
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }
+
         btnDayRun.addEventListener('click', async () => {
           btnDayRun.disabled = true;
           btnDayCancel.disabled = true;
           const days = Number(daysInput.value) || 1;
+          const date = dateInput.value;
+          const source = currentSource;
           btnDayRun.textContent = 'Startar…';
+          rememberPendingRecal(date, source, days);
           try {
-            const res  = await fetch('/api/recalibrate?date=' + dateInput.value
-                                     + '&source=' + currentSource
+            const res  = await fetch('/api/recalibrate?date=' + date
+                                     + '&source=' + source
                                      + '&days=' + days);
-            const data = await res.json();
+            const body = await res.text();
+            let data;
+            try {
+              data = body ? JSON.parse(body) : {};
+            } catch (_) {
+              throw new Error('servern gav ett ofullständigt startsvar');
+            }
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
             dayPickMode = false;
             refreshCloseUI();
             btnDayRun.textContent = 'Kalibrerar om… (0s)';
             await pollRecalibration();
           } catch (e) {
+            if (await recoverStartedRecalibration(date, source, days)) return;
             alert('Kunde inte starta omkalibreringen: ' + e.message);
           } finally {
             btnDayRun.disabled = false;
@@ -1423,6 +1618,20 @@
         // since closed is still visible here — check once on load instead
         // of assuming idle (this is exactly the gap that caused the site
         // to silently end up on a forecast date nobody saw finish).
+        //
+        // A currently-RUNNING job is genuinely shared, current server
+        // state — any visitor benefits from being told the server is busy
+        // recalibrating right now, so that branch is unconditional. A
+        // job that already finished is different: /api/recalibrate/status
+        // stays "done" in server memory indefinitely (it's the last
+        // completed job, not "yours"), so applying it unconditionally
+        // switches EVERY future fresh page load into whatever scenario
+        // that old job produced — pendingRecalMatches() (sessionStorage,
+        // set when THIS tab itself started a recalibration) scopes the
+        // recovery to a tab that actually has a reason to expect it,
+        // fixing a real bug found via browser testing 2026-07-12: a
+        // completely fresh page load with no query params landed in
+        // Simulering mode on a stale 2027 forecast scenario.
         (async () => {
           try {
             const status = await (await fetch('/api/recalibrate/status')).json();
@@ -1436,7 +1645,8 @@
               btnDayRun.disabled = false;
               btnDayCancel.disabled = false;
               btnDayRun.textContent = 'Räkna om (~6 min)';
-            } else if (status.status === 'done' && status.date !== currentSimDate) {
+            } else if (status.status === 'done' && status.date !== currentSimDate &&
+                      pendingRecalMatches(status)) {
               await applyFinishedRecalibration(status);
             }
           } catch (e) { /* serve.py not running (static hosting) — ignore */ }
