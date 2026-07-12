@@ -222,6 +222,31 @@ This is the best defensible solution with the available data: use sensors to
 condition and calibrate a behavioural OD/route model, not to invent the OD
 model itself.
 
+### Primary sources for purpose, time, day type and trip length
+
+- **Swedish source for local transfer:** [SCB / Transport Analysis RES](https://www.scb.se/en/finding-statistics/statistics-by-subject-area/transport-and-communications/transport-patterns/the-national-travel-survey-res/)
+  states that the official Swedish travel survey covers when trips are made,
+  mode and trip purpose. The project should request/use the corresponding
+  trip-diary microdata where permitted rather than infer a Gothenburg joint
+  length distribution from sensor counts.
+- **Trip-level empirical schema:** the [UK National Travel Survey technical
+  report](https://www.gov.uk/government/statistics/national-travel-survey-2024-technical-report/chapter-3-fieldwork-procedures-and-response-rate)
+  states that its seven-day diary records origin, destination, purpose, mode,
+  distance and time for every trip. This is the type of microdata required to
+  estimate a joint `purpose x time x day type x length` model.
+- **Published joint marginals for a defensible prior:** the official [NTS
+  purpose tables](https://www.gov.uk/government/statistical-data-sets/nts04-purpose-of-trips)
+  provide purpose by weekday start time, day of week and average trip length
+  by purpose. The official [ad-hoc NTS table index](https://www.gov.uk/government/statistical-data-sets/ad-hoc-national-travel-survey-analysis)
+  additionally lists car-driver purpose-by-start-time, purpose-by-trip-length
+  and weekday/weekend rush-period purpose tables.
+
+These tables justify modelling the dimensions jointly, but they must not be
+multiplied as if independent or presented as Gothenburg ground truth. Until
+local diary microdata supports the interaction, fit broad periods with partial
+pooling toward the VGR/RVU purpose-level distance distribution and publish the
+uncertainty.
+
 ### Stage-1 fixes (build_candidates.py)
 
 **Fix 1 — replace the exponential deterrence kernel with a Tanner/gamma
