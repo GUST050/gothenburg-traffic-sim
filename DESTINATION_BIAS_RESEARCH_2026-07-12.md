@@ -517,6 +517,63 @@ infeasible intervals; **no drift flags**.
 
 ---
 
+## 8. G1 CLOSED (2026-07-13) — the 1076 fold: artifact hypothesis PROVEN
+
+§7 hypothesized that the old, better-looking LOSO recovery at sensor 1076
+was "substantially powered by the artifact itself". PLAN.md step G1
+demanded that be tested, not asserted: rerun the PRE-fix pipeline (a clean
+clone at commit be2bb8b, the commit that produced the old report; SUMO net
++ gitignored inputs copied in; full `make demand` + a single-fold LOSO
+driver mirroring validate_sim.main()), then decompose every vehicle
+crossing 1076's edge (30420757_30421744_0) in each artifact: how far does
+the route CONTINUE after the crossing, and does it also cross any OTHER
+measured sensor (i.e., did any remaining count band actually need it)?
+
+**Replication first**: the pre-fix fold reproduced the checked-in report
+to three decimals — ratio 1.516 (7 307 simulated vs 4 820 measured), PFE
+GEH 100%. The clone methodology is sound.
+
+**Decomposition of everything that crosses 1076** (whole-day 2025-09-16):
+
+| artifact | crossing veh | onward median | ends <500 m | also crosses another sensor |
+|---|---|---|---|---|
+| PRE-fix deployed (all bands) | 4 820 | **162 m** | **92.8%** | 0.0% (2 veh) |
+| PRE-fix LOSO fold (1076 out) | 7 307 | **188 m** | **99.6%** | **0.4%** (28 veh) |
+| POST-fix deployed (all bands) | 5 384 | 1 652 m | 23.8% | 7.4% |
+| POST-fix LOSO fold (1076 out) | 242 | 1 415 m | ~33% | 67.8% |
+| POST-fix candidate pool | 1 812 | 4 406 m | 2.7% | 33.8% |
+
+**Verdict — both G1 branches answered:**
+
+1. **The old recovery was artifact, essentially in full.** With 1076 held
+   out, the pre-fix pipeline pushed 7 307 vehicles across it of which
+   99.6% served NO other sensor's band and 99.6% evaporated within 500 m
+   of the crossing (median 188 m onward) — vehicle-shaped free variables,
+   not corridor traffic. Excluding near-terminating routes collapses the
+   old ratio 1.516 → ~0.006. The old fold didn't "recover" 1076; it
+   over-shot it 52% with phantom trips. (Note the old number was never
+   0.83-good at this fold anyway — 1.516 with GEH 33% was already poor;
+   the artifact made it LOOK like flow was present.)
+2. **The fix lost no real corridor continuation.** The post-fix deployed
+   build serves 1076's full measured count with routes whose onward
+   median is 1 652 m (was 162 m) — real through-traffic — and the pool
+   offers abundant continuation routes across 1076 (median 4 406 m
+   onward). The post-fix fold's 0.05 is honest parsimony: 92.6% of
+   1076's deployed flow crosses no other sensor, so when its band is
+   removed, no remaining measurement requires that flow, and the 242
+   vehicles that survive are almost exactly the genuine shared-corridor
+   share (400/5 384 deployed). DEST_GROUP_CAP_MULT and the conditional
+   sampling need NO retuning on this evidence.
+
+**What 0.05 means going forward**: LOSO ratio at 1076 measures the
+sensor's informational isolation, not model quality — the other five
+stations genuinely tell us almost nothing about Skånegatan S. That is
+exactly the honesty the per-edge confidence layer is supposed to carry.
+Corollary for E3 (publication gates): the current post-fix baselines ARE
+the reference baselines; no demand retuning precedes the run registry.
+
+---
+
 ## 5. Sources
 
 - SUMO routeSampler documentation (short-route problem area, `--min-count`,

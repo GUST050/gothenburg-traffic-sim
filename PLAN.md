@@ -1986,17 +1986,18 @@ state), not silently vanish — same honesty rule as closure truncation.
 
 ## Phase G — Scientific revalidation (improvement plan Phase 3; partially DONE)
 
-### G1. LOSO 1076-fold investigation — size M — no dependencies
-The honest post-fix LOSO has fold 1076 at 0.05 (median 0.78). Hypothesis
-(documented, unproven): the old 0.83+ recovery there was artifact-powered.
-TEST IT: decompose sensor 1076's measured daily flow by what the OTHER
-sensors' constrained routes imply across it (a) pre-fix pipeline (git
-checkout the candidates generator at 51ad47f~1), (b) post-fix. If (a)'s
-recovery collapses when the near-sensor-terminating shapes are excluded
-from its implied flow, the hypothesis is proven and goes in the doc; if
-not, the fix genuinely lost corridor continuation and the cap slack
-(DEST_GROUP_CAP_MULT / conditional-sampling acceptance) needs revisiting.
-Either way: one number, one paragraph, no hand-waving.
+### G1. LOSO 1076-fold investigation — DONE 2026-07-13, hypothesis PROVEN
+Full method + table in DESTINATION_BIAS_RESEARCH_2026-07-12.md §8. Rerun
+the pre-fix pipeline in a clean clone at be2bb8b: fold-1076 ratio
+replicated to three decimals (1.516). Decomposition: 99.6% of the
+pre-fix fold's 7 307 crossing vehicles served no other sensor's band and
+terminated within 500 m of 1076 (onward median 188 m) — excluding them
+collapses the ratio to ~0.006. The old recovery was phantom flow. The
+post-fix 0.05 is honest parsimony over an informationally isolated
+sensor (92.6% of 1076's deployed flow crosses no other sensor; the pool
+has abundant real continuation routes, onward median 4 406 m).
+DEST_GROUP_CAP_MULT needs no retuning; current post-fix baselines are
+the reference baselines for E3's gates.
 
 ### G2. Purpose-route compatibility monitoring — size S — DONE in 62a1584,
 keep as a gate: `purpose_route_compatible` per vehicle + demand-level

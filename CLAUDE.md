@@ -156,10 +156,13 @@ Goal arc, in order:
     The ratios above (0.830/0.896/2.410) were partly ARTIFACT-POWERED:
     36.5% of calibrated vehicles then terminated within 200 m of a sensor,
     and those near-sensor-ending routes inflated held-out recovery. The
-    worst new fold (1076 at 0.05) sits immediately upstream of the old
-    artifact's hot edges — whether its old recovery was entirely artifact
-    or the fix lost real corridor continuation is PLAN.md step G1. Do not
-    quote the old ratios as current performance.
+    worst new fold (1076 at 0.05) was PROVEN artifact-powered (G1, closed
+    2026-07-13, DESTINATION_BIAS_RESEARCH §8): a pre-fix rerun replicated
+    its old ratio 1.516 exactly, and 99.6% of that crossing flow served no
+    other sensor's band and evaporated within 500 m of the sensor. The fix
+    lost no real corridor continuation; 0.05 measures 1076's informational
+    isolation from the other stations. Do not quote the old ratios as
+    current performance.
   - EMPIRICAL CONFIDENCE DECAY (2026-07-09, `build_data.py` consuming
     `web/data/loso_report.json`): the old guessed `CONF_SIGMA_M = 250 m`
     placeholder has been replaced by a LOSO-derived sigma when the report
