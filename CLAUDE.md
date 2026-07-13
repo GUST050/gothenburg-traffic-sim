@@ -149,6 +149,17 @@ Goal arc, in order:
     (`calibrate_fold_parallel`) — full 6-station run in 895 s (~15 min),
     down from a projected ~60-75 min sequential. Written to
     `web/data/loso_report.json`.
+    SUPERSEDED 2026-07-13: after the destination-bias fix (sensor-
+    conditioned OD, structure-preservation caps, purpose×time priors —
+    commits 51ad47f/6632bfc/62a1584, DESTINATION_BIAS_RESEARCH_2026-07-12.md
+    §7), the honest LOSO baseline is min 0.05 / median 0.78 / max 1.95.
+    The ratios above (0.830/0.896/2.410) were partly ARTIFACT-POWERED:
+    36.5% of calibrated vehicles then terminated within 200 m of a sensor,
+    and those near-sensor-ending routes inflated held-out recovery. The
+    worst new fold (1076 at 0.05) sits immediately upstream of the old
+    artifact's hot edges — whether its old recovery was entirely artifact
+    or the fix lost real corridor continuation is PLAN.md step G1. Do not
+    quote the old ratios as current performance.
   - EMPIRICAL CONFIDENCE DECAY (2026-07-09, `build_data.py` consuming
     `web/data/loso_report.json`): the old guessed `CONF_SIGMA_M = 250 m`
     placeholder has been replaced by a LOSO-derived sigma when the report

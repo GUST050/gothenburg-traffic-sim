@@ -1016,19 +1016,26 @@ def write_calibration_report(
             # route at exactly :07:30, so thousands of independent routes
             # entered SUMO as a visible convoy. Counts and route choices stay
             # unchanged; only departure time is stratified globally.
-            route_instances: list[Candidate] = []
+            # Hash order is deterministic and avoids grouping equal routes
+            # together, while positions remain uniformly spaced. The dup
+            # index MUST be in the key: shapes are unique by edge string
+            # (prepare_calibration dedups on it), so without it all k
+            # copies of a shape share one key and the stable sort parks
+            # them in consecutive departure slots — an identical-route
+            # platoon, the very artifact this ordering exists to prevent.
+            keyed: list[tuple[bytes, Candidate]] = []
             for cand, k in zip(shapes, counts):
-                route_instances.extend(cand for _ in range(int(k)))
+                edges_str = " ".join(cand.edges)
+                keyed.extend(
+                    (hashlib.sha1(f"{i}:{edges_str}:{dup}".encode()).digest(),
+                     cand)
+                    for dup in range(int(k)))
                 for e in set(cand.edges):
                     achieved.setdefault(e, [0.0] * nq)
                     if k:
                         achieved[e][i] += float(k)
-            # Hash order is deterministic and avoids grouping equal routes
-            # together, while positions remain uniformly spaced.
-            route_instances.sort(key=lambda cand: hashlib.sha1(
-                f"{i}:{' '.join(cand.edges)}:"
-                f"{','.join(source.source_id for source in cand.source_candidates)}".encode()
-            ).digest())
+            keyed.sort(key=lambda item: item[0])
+            route_instances: list[Candidate] = [c for _digest, c in keyed]
             sources, purposes, allocation = allocate_interval_provenance(
                 route_instances, purpose_targets[i])
             purpose_allocation.append({"quarter": i, **allocation})

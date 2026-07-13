@@ -1917,3 +1917,171 @@ Everything committed to `main` with the session's established discipline:
 verify with the full test suite + an end-to-end run before every push;
 Codex review for anything subtle; honest commit messages recording what was
 measured, not just what was written.
+
+---
+
+# Phase E-K — Execution plan for PROGRAM_IMPROVEMENT_PLAN_2026-07-13 (written 2026-07-13)
+
+The strategic goals live in `PROGRAM_IMPROVEMENT_PLAN_2026-07-13.md` (7
+phases) and the findings backlog in `FULL_CODE_AUDIT_2026-07-12.md`
+(P0-1…P1-12 + the 2026-07-13 addendum, whose own 5 findings are already
+FIXED in commit 62a1584). This section turns those into the same kind of
+concrete, independently-executable steps Phases A-D used. Sizes: S ≤ half a
+day, M ≈ a day, L = multi-day.
+
+## Phase E — Immutable, health-gated runs (improvement plan Phase 1; audit P0-1, P0-2, P0-4)
+
+### E0. Stale-number hygiene — size S — DONE 2026-07-13
+CLAUDE.md quoted the PRE-fix LOSO ratios (0.830/0.896/2.410). Replaced with
+the honest post-fix baseline (min 0.05 / median 0.78 / max 1.95, 2026-07-13,
+see DESTINATION_BIAS_RESEARCH §7) including the 1076-fold caveat. Standing
+rule: any number quoted anywhere must be reproducible by the current
+pipeline — improvement plan Phase 3.1's "replace stale LOSO numbers
+everywhere" applies to prose, not just loso_report.json.
+
+### E1. Run registry — size L — GATE for E2-E4
+`runs/<run_id>/` per demand build and per scenario: manifest.json written
+BEFORE launch (command, argv, source commit, net_fingerprint,
+demand_signature, SUMO version, seeds, variant list, expected outputs),
+status flipped atomically running→succeeded/failed. run_id =
+content-hash of inputs + short random suffix. All generated route/edgeData/
+metric/vehroute/result files land inside. `sumo/` becomes scratch-only.
+Keep a `latest` PONTER file per product (demand, baseline scenario) that
+names a run_id — the web manifest reads through it. This is audit P0-1's
+fix and the precondition for safe parallelism (improvement plan Phase 5.4).
+
+### E2. Publish-after-validate — size M — depends E1 (audit P0-2)
+serve.py's recalibration currently deletes every scenario JSON before the
+new baseline exists. Invert: build into the new run dir, run the validation
+gates (E3), THEN atomically switch `latest` and prune. On failure the
+previous active run stays untouched and the UI says why the new one was
+rejected.
+
+### E3. Per-seed health gate — size M — depends E1
+Emit per-seed: loaded/inserted/arrived/running/waiting/teleports/route
+errors/ignored + the existing structural gates (calibrated_structure).
+Publication REFUSES (not warns) when: vehicle conservation fails, any seed
+died, teleports exceed threshold, or a structure drift flag fires. Thresholds
+derived from the current healthy baselines and written into the manifest so
+a regression is diffable.
+
+### E4. Durable jobs — size M — depends E1 (audit P0-4; supersedes the 4 per-type dicts)
+One jobs table (JSON file per job under runs/jobs/): id, kind, args, pid,
+pgid, status, log path, started/finished. `/api/jobs/<id>` +
+`/api/jobs/<id>/cancel` (killpg, then status=cancelled). The 4 existing
+status endpoints become thin views over it; a server restart re-reads job
+files and reconciles against live pids.
+
+## Phase F — Truthful individual-car playback (improvement plan Phase 2; audit "P0 - Individual-vehicle simulation is misleading")
+
+### F1. Trajectory provenance — size M
+Store seed + demand variant in the trajectory artifact; UI labels playback
+"representativ körning (seed 1000, q50)" whenever road colours are the
+3-seed Monte Carlo mean. Reconcile trajectory vehicle count against that
+seed's health report; fail the artifact on mismatch.
+
+### F2. Unfinished/queued vehicles — size M — depends F1
+Vehicles still running/waiting at scenario end must appear (parked/queued
+state), not silently vanish — same honesty rule as closure truncation.
+
+## Phase G — Scientific revalidation (improvement plan Phase 3; partially DONE)
+
+### G1. LOSO 1076-fold investigation — size M — no dependencies
+The honest post-fix LOSO has fold 1076 at 0.05 (median 0.78). Hypothesis
+(documented, unproven): the old 0.83+ recovery there was artifact-powered.
+TEST IT: decompose sensor 1076's measured daily flow by what the OTHER
+sensors' constrained routes imply across it (a) pre-fix pipeline (git
+checkout the candidates generator at 51ad47f~1), (b) post-fix. If (a)'s
+recovery collapses when the near-sensor-terminating shapes are excluded
+from its implied flow, the hypothesis is proven and goes in the doc; if
+not, the fix genuinely lost corridor continuation and the cap slack
+(DEST_GROUP_CAP_MULT / conditional-sampling acceptance) needs revisiting.
+Either way: one number, one paragraph, no hand-waving.
+
+### G2. Purpose-route compatibility monitoring — size S — DONE in 62a1584,
+keep as a gate: `purpose_route_compatible` per vehicle + demand-level
+diagnostic. Add its threshold to E3's publication gate when E3 lands.
+
+### G3. Per-purpose validation report — size M — depends E1
+One report per build (improvement plan 3.2): GEH, held-out recovery,
+candidate→calibrated drift, onward-after-last-sensor, sensor passages,
+purpose×time allocation vs prior, purpose-route compatibility. Most metrics
+exist (calibrated_structure, agents summary) — this step is assembling them
+into runs/<id>/validation.json + a UI surface.
+
+### G4. Local diary data request — EXTERNAL
+Ask (via Miroslaw, same channel as D6) whether RVU Västra Götaland
+microdata or an regional OD matrix is available for research use — would
+upgrade PURPOSE_LENGTH_SCALE from national-ratio partial pooling to local
+estimation. Until then the disclosed shrinkage stands.
+
+## Phase H — Demand architecture refactor (improvement plan Phase 4; audit P1-4)
+
+### H0. Review-found cleanup backlog — size S-M — no dependencies, safe any time
+From the 2026-07-13 reuse/simplification review of e591bed..HEAD (each
+verified against the working tree by the reviewer):
+1. The two-pass structure-guard block in `_run_pfe_interval_job` is
+   character-identical in build_sumo_demand.py (~:1102) and validate_sim.py
+   (~:122), maintained by hand — extract to
+   `pfe.solve_interval_with_structure_guard(...) -> (sol, rung)` so LOSO
+   can never silently calibrate under a different guard policy than the
+   deployed pipeline (the exact validated-vs-shipped mismatch class fixed
+   twice already).
+2. `GEO_PATH` midpoint/sensor parsing duplicated in
+   `_route_structure_metrics` and `structure_groups_for_shapes`; the
+   near-sensor predicate exists 3× with the 200 m radius parameterised in
+   one copy and hard-coded in another — one cached
+   `load_edge_geometry()` + a shared `NEAR_SENSOR_RADIUS_M` constant, so
+   the enforced PFE cap and the drift-flag metric can't decohere.
+3. The conditional-acceptance outbound-leg body is ~20 lines repeated 3×
+   (I-I/E-I/I-E loops in generate_sensor_anchored_trips) — extract a
+   `_draw_conditioned_outbound(...)` helper (return legs genuinely differ,
+   keep those per-category). This is the statistical core of the
+   destination-bias fix; three copies invite category-divergent drift the
+   aggregate proximity guard can mask.
+4. Delete dead `sample_anchor_and_far_end` (+ its 4 tests) — zero
+   production callers, and the conditional-sampling design structurally
+   cannot use its API. (`via_naturally_on_path` is ALIVE — E-E path.)
+Non-issues, measured by the same review (do NOT "optimize" these): geojson
+re-parse is 0.02 s ×3/build; the per-vertex edge-length loop is ~0.3 s/build;
+`natural_sensor_masks` is 0.125 ms/call (~10-30 s of the ~100 s generation
+budget — an anchor-keyed mask cache is the lever IF multi-day/more sensors
+ever make it dominant).
+
+### H1. Split build_sumo_demand.py — size L — depends E1 (do AFTER E, not before)
+Modules: intake (dates/windows), candidates, bounds/priors, calibration,
+feedback, publication. One orchestration path (the 62a1584 single-path fix
+is the seed of this). Typed artifact schemas (demand_meta, health,
+manifest) with versions — audit P1-10.
+
+### H2. PFE benchmark fixture — size M (audit P1-3)
+A deterministic realistic fixture (fixed candidates + targets) with recorded
+runtime/GEH/rungs/structure metrics; CI-style check that a solver change
+stays within tolerance. Protects against the next "optimization" silently
+changing results.
+
+## Phase I — Measured performance (improvement plan Phase 5) — ONLY after E+H
+Timing breakdown already exists (timings_s). Candidates for measurement:
+natural_sensor_masks per-try cost in generation (~100 s stage), the
+two-pass PFE re-solves (534 s stage), geojson re-parsing (3× per build).
+Rule: profile first, optimize the dominant stage only, benchmark fixture
+(H2) must stay green.
+
+## Phase J — Product & security hardening (improvement plan Phase 6; audit P0-3, P1-5, P1-6, P1-12)
+POST + auth for mutating endpoints; CSP; innerHTML → safe DOM; job-centric
+UI views reading E4's durable jobs. Explicitly LAST among the local work:
+the server is loopback-only today (documented), so this blocks shared
+deployment, not current research use.
+
+## Phase K — Real-data signal upgrade (improvement plan Phase 7 = old D6 external)
+Unchanged: blocked on city signal plans via Miroslaw. When they arrive:
+import layer, flip provenance to city-configured, re-enable full meso
+junction control, revisit signal scores per audit P0-5's ExperimentProtocol
+(warm-up/measurement/admission/completion windows) — which should be
+designed together with the import, not before it.
+
+## Execution order
+E0 (DONE) → E1 → {E2, E3, E4} → F1 → F2 ∥ G1 (independent of E) →
+G3 → H1 → H2 → I → J. K external. G1 and H0 can start any time — neither
+needs new infrastructure; G1 is two controlled pipeline runs and honest
+arithmetic, H0 is verified-safe cleanup.

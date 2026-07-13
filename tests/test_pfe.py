@@ -1,6 +1,8 @@
 """Unit tests for pfe.py — the level-4 reconciliation engine."""
 
+import itertools
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -558,6 +560,32 @@ class TestCalibratedAgentProvenance:
         assert sum(a["purpose"] == "arbete" for a in agents) == 5
         assert sum(a["purpose"] == "fritid" for a in agents) == 5
         assert report["purpose_allocation"][0]["incompatible"] == {}
+
+    def test_duplicate_route_copies_are_spread_not_platooned(self, tmp_path):
+        # Regression (found reviewing 62a1584): the departure-order hash key
+        # dropped the per-duplicate component, so all k copies of one shape
+        # shared a key and the stable sort parked them in consecutive slots —
+        # an identical-route platoon. Copies must interleave with other routes.
+        shape_a = Candidate(depart=0.0, edges=["O", "M", "A"],
+                            source_candidates=[Candidate(
+                                0.0, ["O", "M", "A"], source_id="a",
+                                intent={"purpose": "arbete"})])
+        shape_b = Candidate(depart=0.0, edges=["O", "M", "B"],
+                            source_candidates=[Candidate(
+                                0.0, ["O", "M", "B"], source_id="b",
+                                intent={"purpose": "arbete"})])
+        out = tmp_path / "calibrated.rou.xml"
+
+        write_calibration_report([shape_a, shape_b], out, [{"M": 16.0}],
+                                 [np.array([8.0, 8.0])])
+
+        routes_in_depart_order = re.findall(r'<route edges="([^"]+)"', out.read_text())
+        assert sorted(routes_in_depart_order) == ["O M A"] * 8 + ["O M B"] * 8
+        longest_run = max(len(list(g)) for _r, g in
+                          itertools.groupby(routes_in_depart_order))
+        assert longest_run < 8, (
+            f"identical route occupies {longest_run} consecutive departure "
+            f"slots — duplicates are platooning instead of interleaving")
 
 
 class TestProvenanceAllocation:
