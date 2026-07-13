@@ -169,6 +169,13 @@ def parse_args() -> argparse.Namespace:
                         "effect for single-day demand, which already "
                         "exports by default; use --no-trajectories there "
                         "to skip it instead.")
+    p.add_argument("--out-dir", default=None, metavar="DIR",
+                   help="Write scenario JSON + trajectories + index to DIR "
+                        "instead of web/data/scenarios — the STAGING half "
+                        "of serve.py's publish-after-validate recalibration "
+                        "(PLAN.md E2): build the complete new set aside, "
+                        "validate it, then atomically switch. Default: the "
+                        "live directory, unchanged behaviour.")
     args = p.parse_args()
     if args.trajectories and args.no_trajectories:
         p.error("--trajectories and --no-trajectories are mutually exclusive")
@@ -526,7 +533,8 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              net_path: Path | None = None,
              flush_s: int = 3600,
              vehroute_output: Path | None = None,
-             run_label: str | None = None) -> dict[str, Path] | None:
+             run_label: str | None = None,
+             stats_path: Path | None = None) -> dict[str, Path] | None:
     # cwd=SUMO_DIR so the edgeData output file (relative in the additional
     # file) lands in sumo/ — inputs must therefore be absolute paths.
     # Mesoscopic by default: our product is 15-min edge flows, which does not
@@ -631,6 +639,14 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
             "--summary-output", str(metric_paths["summary"].resolve()),
             "--summary-output.period", "900",
         ])
+    if stats_path is not None and "statistics" not in metric_paths:
+        # E3 (PLAN.md): one tiny end-of-run XML with loaded/inserted/
+        # running/waiting/teleports — the per-seed health record. Separate
+        # from `metrics` because tripinfo is large and this must be cheap
+        # enough for every interactive closure seed. metrics=True already
+        # writes its own statistic-output; that one wins if both are asked.
+        metric_paths["statistics"] = stats_path
+        cmd.extend(["--statistic-output", str(stats_path.resolve())])
     if vehroute_output is not None:
         # PLAN.md D4: extracting the ACTUALLY-driven post-closure routes
         # (not the original pre-reroute demand) needs the runtime
@@ -656,6 +672,82 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
     # to include vehroute alongside the pre-existing tripinfo/statistics/
     # summary trio.
     return metric_paths or None
+
+
+# E3 health thresholds (PLAN.md; improvement plan 1.3-1.4: "thresholds from
+# baselines, not visual taste"). Basis: SUMO's own vehicle accounting
+# (loaded = read from route file; inserted = entered the network; waiting =
+# still in the insertion queue at end; running = still driving at end;
+# teleports = stuck-vehicle relocations, sumo docs "Simulation/Why Vehicles
+# are teleporting" — the exact mechanism behind the 2026-07-09 closure-leak
+# incident, where 39 teleported vehicles silently crossed a closed edge).
+# The whole-day meso baseline runs with a full flush hour, so a healthy run
+# drains: measured healthy values are ~0 unfinished and 0 teleports.
+# UNFINISHED_MAX_SHARE at 2% and TELEPORT_MAX at max(10, 0.5% of inserted)
+# leave room for legitimate closure-induced congestion while catching the
+# failure classes actually seen (mass non-insertion, gridlock, teleport
+# leaks). A seed that loads NOTHING is always fatal.
+HEALTH_UNFINISHED_MAX_SHARE = 0.02
+HEALTH_TELEPORT_MAX_ABS = 10
+HEALTH_TELEPORT_MAX_SHARE = 0.005
+
+
+def parse_seed_health(stats_path: Path, seed: int, variant: str) -> dict | None:
+    """Parse SUMO's --statistic-output into one per-seed health record."""
+    if not stats_path.exists():
+        return None
+    try:
+        root = ET.parse(stats_path).getroot()
+    except ET.ParseError:
+        return None
+
+    def num(tag: str, attr: str) -> int | None:
+        el = root.find(tag)
+        v = el.get(attr) if el is not None else None
+        return int(float(v)) if v is not None else None
+
+    return {
+        "seed": seed,
+        "variant": variant,
+        "loaded": num("vehicles", "loaded"),
+        "inserted": num("vehicles", "inserted"),
+        "running_at_end": num("vehicles", "running"),
+        "waiting_at_end": num("vehicles", "waiting"),
+        "teleports": num("teleports", "total"),
+        "collisions": num("safety", "collisions"),
+    }
+
+
+def seed_health_flags(seed_health: list[dict]) -> list[str]:
+    """Evaluate every seed's record against the E3 gates → list of failures.
+
+    Empty list == healthy. serve.py's publish gate refuses a staged
+    baseline whose payload carries any flag; the CLI prints them as
+    warnings (the artifact still exists for inspection — refusing to
+    PUBLISH is the gate, not refusing to compute)."""
+    flags = []
+    for h in seed_health:
+        if h is None:
+            continue
+        tag = f"seed {h['seed']}"
+        loaded, inserted = h.get("loaded"), h.get("inserted")
+        if loaded is not None and inserted is not None:
+            if inserted == 0 and loaded > 0:
+                flags.append(f"{tag}: 0 of {loaded} loaded vehicles inserted")
+                continue
+            unfinished = (h.get("running_at_end") or 0) + (h.get("waiting_at_end") or 0)
+            if loaded > 0 and unfinished / loaded > HEALTH_UNFINISHED_MAX_SHARE:
+                flags.append(
+                    f"{tag}: {unfinished}/{loaded} vehicles unfinished at end "
+                    f"({100 * unfinished / loaded:.1f}% > "
+                    f"{100 * HEALTH_UNFINISHED_MAX_SHARE:.0f}%)")
+        tele = h.get("teleports")
+        if tele is not None and inserted:
+            if tele > max(HEALTH_TELEPORT_MAX_ABS,
+                          HEALTH_TELEPORT_MAX_SHARE * inserted):
+                flags.append(f"{tag}: {tele} teleports (max "
+                             f"{max(HEALTH_TELEPORT_MAX_ABS, int(HEALTH_TELEPORT_MAX_SHARE * inserted))})")
+    return flags
 
 
 def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
@@ -781,7 +873,10 @@ def aggregate_flows(
 
 
 def main() -> None:
+    global OUT_DIR
     args = parse_args()
+    if args.out_dir:
+        OUT_DIR = Path(args.out_dir)
     home = sumo_home()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -877,17 +972,30 @@ def main() -> None:
         variants = filtered_variants
 
     per_seed: list[dict[str, np.ndarray]] = []
+    seed_health: list[dict] = []
     for s in range(args.seeds):
         seed = 1000 + s
         route_path = variants[s % len(variants)]
         ed_file  = SUMO_DIR / f"edgedata_{name}_{seed}.xml"
         add_path = SUMO_DIR / f"additional_{name}_{seed}.add.xml"
+        stats_file = SUMO_DIR / f"stats_{name}_{seed}.xml"
         write_edgedata_additional(add_path, ed_file, duration_s)
         run_sumo(seed, route_path, [add_path] + closure_add, duration_s, home,
-                 micro=args.micro)
+                 micro=args.micro, stats_path=stats_file)
         per_seed.append(parse_edgedata(ed_file, n_intervals))
+        health = parse_seed_health(stats_file, seed, route_path.name)
+        if health is not None:
+            seed_health.append(health)
+        h_note = ""
+        if health is not None:
+            h_note = (f", {health['inserted']}/{health['loaded']} inserted, "
+                      f"{health['teleports']} teleports")
         print(f"  seed {seed} ({route_path.name}): "
-              f"{len(per_seed[-1])} edges with traffic")
+              f"{len(per_seed[-1])} edges with traffic{h_note}")
+
+    health_flags = seed_health_flags(seed_health)
+    for flag in health_flags:
+        print(f"  WARNING seed health: {flag}")
 
     # ── Aggregate: mean flows + Monte Carlo confidence ─────────────────────────
     web_edges = set(prior)   # only edges the map can draw
@@ -940,6 +1048,8 @@ def main() -> None:
             "seeds": args.seeds,
             "demand_signature": sig,
         },
+        "seed_health":       seed_health,
+        "seed_health_flags": health_flags,
         "flows":      flows_out,
         "confidence": conf_out,
     }

@@ -89,6 +89,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--end",   default="10:00",
                    help="Window end HH:MM; '24:00' = whole day (default 10:00)")
     p.add_argument("--seed",  type=int, default=42)
+    p.add_argument("--keep-scenarios", action="store_true",
+                   help="Do NOT delete the existing web scenario JSONs after "
+                        "this build. serve.py's publish-after-validate "
+                        "recalibration (PLAN.md E2) passes this so the live, "
+                        "coherent old scenario set keeps serving until the "
+                        "NEW baseline has been built and validated in "
+                        "staging — the old set is then replaced atomically. "
+                        "CLI default stays the documented 2026-07-09 "
+                        "behaviour (clear + empty manifest), because a bare "
+                        "`make demand` has no guarantee run_scenario.py "
+                        "runs next.")
     p.add_argument("--engine", choices=["pfe", "routesampler"], default="pfe",
                    help="Calibration engine: pfe = the level-1/2/3 hierarchy "
                         "(hard counts, conservation bounds, learned priors); "
@@ -1672,6 +1683,14 @@ def main() -> None:
                          for name, seconds in timings_s.items()}
     if args.engine == "pfe" and report is not None and report.get("timings_s"):
         meta["pfe_timing_s"] = report["timings_s"]
+    if report is not None:
+        # Machine-readable fit summary — E2's publish gate (serve.py) and
+        # E3's health gates read this instead of scraping stdout.
+        meta["pfe_fit"] = {
+            "geh_pct": report.get("geh_pct"),
+            "infeasible_intervals": report.get("infeasible_intervals"),
+            "vehicles": report.get("vehicles"),
+        }
     agent_summary = calibrated_agent_summary(calib_path, n_intervals)
     if agent_summary is not None:
         meta["agent_demand"] = agent_summary
@@ -1695,9 +1714,13 @@ def main() -> None:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")
 
-    n_stale = clear_stale_scenarios()
-    if n_stale:
-        print(f"Removed {n_stale} stale web scenario JSON files — run run_scenario.py to rebuild")
+    if args.keep_scenarios:
+        print("Keeping existing web scenarios (--keep-scenarios): caller "
+              "is responsible for replacing them after validation")
+    else:
+        n_stale = clear_stale_scenarios()
+        if n_stale:
+            print(f"Removed {n_stale} stale web scenario JSON files — run run_scenario.py to rebuild")
 
     export_od(calib_path, sensor_edges, meta)
 

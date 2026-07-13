@@ -52,6 +52,16 @@ def base_url(tmp_path, monkeypatch):
     scen_dir = tmp_path / "scenarios"
     scen_dir.mkdir()
     monkeypatch.setattr(serve, "SCEN_DIR", scen_dir)
+    staging_dir = tmp_path / "scenarios_staging"
+    monkeypatch.setattr(serve, "SCEN_STAGING_DIR", staging_dir)
+    sumo_dir = tmp_path / "sumo"
+    sumo_dir.mkdir()
+    # A healthy demand_meta so E2's publish gate passes in success-path
+    # lifecycle tests; failure-path tests never reach validation.
+    (sumo_dir / "demand_meta.json").write_text(json.dumps({
+        "pfe_fit": {"geh_pct": 100.0, "infeasible_intervals": 0,
+                    "vehicles": 20000}}))
+    monkeypatch.setattr(serve, "SUMO_DIR", sumo_dir)
     monkeypatch.setattr(serve, "SUGGEST_OUT", tmp_path / "suggest_closure_web.json")
     monkeypatch.setattr(serve, "OPTIMIZE_OUT", tmp_path / "signal_optimize_web.json")
     monkeypatch.setattr(serve, "OPTIMIZE_CLOSURE_OUT",
@@ -476,6 +486,22 @@ class TestRecalibrateValidation:
         assert seen["timeout"] == 1700 + 700 * 3   # scaled, not the flat 2400 s
 
 
+def _fake_staged_build(cmd, staging_dir):
+    """Mimic run_scenario.py --out-dir: write a minimal valid staged set.
+
+    E2 made publication conditional on a real staged artifact — a fake
+    that returns success without producing one now correctly fails the
+    publish gate, so success-path lifecycle fakes must model the output,
+    not just the exit code."""
+    if any("run_scenario.py" in str(part) for part in cmd):
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        (staging_dir / "baseline.json").write_text(
+            json.dumps({"flows": {"a_b_0": [1]}}))
+        (staging_dir / "baseline_traj.json").write_text(json.dumps({}))
+        (staging_dir / "index.json").write_text(json.dumps(
+            {"scenarios": [{"name": "baseline", "file": "baseline.json"}]}))
+
+
 class TestRecalibrateAsyncLifecycle:
     """The actual production-incident territory: a request must return
     immediately, and the job's true state must be visible via /status from
@@ -503,6 +529,7 @@ class TestRecalibrateAsyncLifecycle:
 
         def fake_run(cmd, **kw):
             release.wait(timeout=2)
+            _fake_staged_build(cmd, serve.SCEN_STAGING_DIR)
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
@@ -555,8 +582,11 @@ class TestRecalibrateAsyncLifecycle:
         the other way around), so a client polling status until it sees a
         terminal state must never observe the lock as still held — and a
         fresh recalibrate request right after must be accepted, not 409."""
-        monkeypatch.setattr(serve, "run_in_new_session",
-                            lambda cmd, **kw: FakeCompletedProcess(returncode=0))
+        def fake_run(cmd, **kw):
+            _fake_staged_build(cmd, serve.SCEN_STAGING_DIR)
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "done")
@@ -584,8 +614,12 @@ class TestRecalibrateAsyncLifecycle:
     def test_old_scenario_files_are_wiped_on_successful_recalibration(self, base_url, monkeypatch):
         stale = serve.SCEN_DIR / "stale_scenario.json"
         stale.write_text("{}")
-        monkeypatch.setattr(serve, "run_in_new_session",
-                            lambda cmd, **kw: FakeCompletedProcess(returncode=0))
+
+        def fake_run(cmd, **kw):
+            _fake_staged_build(cmd, serve.SCEN_STAGING_DIR)
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "done")

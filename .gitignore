@@ -31,3 +31,6 @@ data_in/deso/osm_pois.geojson
 # Run registry (PLAN.md E1): immutable per-run artifact dirs — large,
 # machine-local, reproducible from their manifests; never tracked
 runs/
+# E2 recalibration staging (serve.py builds the new scenario set here,
+# validates, then atomically publishes into web/data/scenarios/)
+web/data/scenarios_staging/

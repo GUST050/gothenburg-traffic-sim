@@ -1960,20 +1960,42 @@ Keep a `latest` PONTER file per product (demand, baseline scenario) that
 names a run_id — the web manifest reads through it. This is audit P0-1's
 fix and the precondition for safe parallelism (improvement plan Phase 5.4).
 
-### E2. Publish-after-validate — size M — depends E1 (audit P0-2)
-serve.py's recalibration currently deletes every scenario JSON before the
-new baseline exists. Invert: build into the new run dir, run the validation
-gates (E3), THEN atomically switch `latest` and prune. On failure the
-previous active run stays untouched and the UI says why the new one was
-rejected.
+### E2. Publish-after-validate — DONE 2026-07-13 (audit P0-2)
+Implemented as staging + gate + atomic switch (blue-green publication;
+per-file atomicity from POSIX rename(2) via os.replace):
+`run_scenario --out-dir` builds the complete new set into
+`web/data/scenarios_staging/`; `build_sumo_demand --keep-scenarios` defers
+the old stale-clear so the live set keeps serving during the rebuild;
+serve.py's recalibration then runs `validate_staged_scenarios` (index
+coherence, every referenced file present + parseable + non-empty flows,
+demand pfe_fit gates: GEH<5 ≥99%, zero infeasible intervals — pfe_fit is
+newly written into demand_meta.json for machine reading) and only on pass
+calls `publish_staged_scenarios` (files first, index.json LAST, prune
+unreferenced after — a crash mid-publish leaves a superset of a valid
+state, never a hole). Every failure path now ends "gamla scenarier
+behålls" and the previous set is untouched. Unit tests in
+tests/test_serve_publish.py. Known accepted residual: after a successful
+demand build + failed baseline, the old scenarios display the previous
+demand until a retry succeeds (coherent-but-dated beats blank; full run-
+dir indirection is E1 slice 2). CLI `make demand` keeps the documented
+2026-07-09 clear-by-default behaviour.
 
-### E3. Per-seed health gate — size M — depends E1
-Emit per-seed: loaded/inserted/arrived/running/waiting/teleports/route
-errors/ignored + the existing structural gates (calibrated_structure).
-Publication REFUSES (not warns) when: vehicle conservation fails, any seed
-died, teleports exceed threshold, or a structure drift flag fires. Thresholds
-derived from the current healthy baselines and written into the manifest so
-a regression is diffable.
+### E3. Per-seed health gate — DONE 2026-07-13
+Every scenario seed now runs with `--statistic-output` (tiny end-of-run
+XML; cheap enough for interactive closures, unlike tripinfo).
+`parse_seed_health` reads loaded/inserted/running/waiting/teleports/
+collisions per seed into the scenario payload (`seed_health`);
+`seed_health_flags` evaluates the gates: zero-insertion is fatal,
+unfinished share >2% of loaded (the whole-day meso baseline has a full
+flush hour, healthy ≈ 0), teleports > max(10, 0.5% of inserted) —
+teleports being the exact mechanism of the 2026-07-09 closure-leak
+incident (SUMO stuck-vehicle relocation). The CLI prints flags as
+warnings (computing is not gated — publishing is);
+serve.validate_staged_scenarios refuses a staged baseline whose payload
+carries any flag ("simuleringshälsa underkänd"). Flags also ship in
+closure payloads for UI display. Tests: tests/test_seed_health.py.
+Remaining for a later pass: thresholds could move into the run manifest
+(E1 slice 2) so a regression is diffable per run.
 
 ### E4. Durable jobs — size M — depends E1 (audit P0-4; supersedes the 4 per-type dicts)
 One jobs table (JSON file per job under runs/jobs/): id, kind, args, pid,

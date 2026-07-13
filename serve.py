@@ -122,6 +122,13 @@ DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
 ROOT     = Path(__file__).parent
 WEB_DIR  = ROOT / "web"
 SCEN_DIR = WEB_DIR / "data" / "scenarios"
+# E2 staging area (PLAN.md, audit P0-2): a recalibration builds its complete
+# new scenario set HERE, validates it, and only then replaces the live set —
+# the standard build-aside/atomic-switch publication pattern (blue-green
+# deployment, Humble & Farley "Continuous Delivery"; per-file atomicity from
+# POSIX rename(2) via os.replace). Same filesystem as SCEN_DIR so os.replace
+# is guaranteed atomic, not a copy.
+SCEN_STAGING_DIR = WEB_DIR / "data" / "scenarios_staging"
 SUMO_DIR = ROOT / "sumo"
 SUGGEST_OUT = SUMO_DIR / "suggest_closure_web.json"
 OPTIMIZE_OUT = SUMO_DIR / "signal_optimize_web.json"
@@ -233,6 +240,101 @@ def known_edges() -> frozenset[str]:
     with open(WEB_DIR / "data" / "network.geojson") as f:
         geo = json.load(f)
     return frozenset(feat["properties"]["id"] for feat in geo["features"])
+
+
+def validate_staged_scenarios(staging_dir: Path,
+                              demand_meta_path: Path) -> tuple[bool, str]:
+    """E2 publish gate: may this freshly built scenario set replace the live one?
+
+    Checks are deliberately structural (does the set hold together?) rather
+    than statistical — the statistical gates (GEH, structure flags) already
+    ran inside the demand build and land in demand_meta; this function
+    refuses to publish when they failed or when the staged set is
+    incomplete/corrupt. Returns (ok, reason) — reason is user-displayable
+    Swedish on failure, "" on success.
+    """
+    index_path = staging_dir / "index.json"
+    if not index_path.exists():
+        return False, "staging saknar index.json"
+    try:
+        with open(index_path) as f:
+            index = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False, "index.json i staging är ogiltig JSON"
+    files = [s.get("file") for s in index.get("scenarios", [])]
+    if "baseline.json" not in files:
+        return False, "den nya baslinjen saknas i staging-manifestet"
+    for fname in files:
+        p = staging_dir / str(fname)
+        if not p.exists():
+            return False, f"manifestet refererar {fname} som saknas i staging"
+        try:
+            with open(p) as f:
+                payload = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return False, f"{fname} i staging är ogiltig JSON"
+        if not payload.get("flows"):
+            return False, f"{fname} innehåller inga flöden"
+        # E3: a seed that failed its health gates (mass non-insertion,
+        # gridlock, teleport leak — run_scenario.seed_health_flags) must
+        # not silently become the published truth. Older payloads without
+        # the field pass (gate is new).
+        if payload.get("seed_health_flags"):
+            first = payload["seed_health_flags"][0]
+            return False, f"{fname}: simuleringshälsa underkänd ({first})"
+    if not demand_meta_path.exists():
+        return False, "demand_meta.json saknas efter ombyggnad"
+    try:
+        with open(demand_meta_path) as f:
+            meta = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False, "demand_meta.json är ogiltig JSON"
+    fit = meta.get("pfe_fit") or {}
+    geh = fit.get("geh_pct")
+    # The deployed pipeline has measured 100.0 on every healthy build; the
+    # gate uses 99.0 so a marginal rounding artifact can't block a good
+    # build, while a genuinely broken calibration (GEH collapse) cannot
+    # publish. Older demand_meta without pfe_fit passes (gate is new).
+    if geh is not None and geh < 99.0:
+        return False, f"kalibreringen nådde bara GEH<5 {geh}% — publiceras inte"
+    if fit.get("infeasible_intervals"):
+        return False, (f"{fit['infeasible_intervals']} kvartar var olösliga — "
+                       "publiceras inte")
+    return True, ""
+
+
+def publish_staged_scenarios(staging_dir: Path, live_dir: Path) -> int:
+    """Atomically switch the live scenario set to the staged one.
+
+    Order matters and is deliberate: (1) scenario/trajectory files first,
+    (2) index.json LAST — the index is the UI's entry point, so a reader
+    can never see the new manifest before every file it references exists;
+    (3) only after the new index is live, delete old files it no longer
+    references. Each step is an os.replace/unlink — per-file atomic on the
+    same filesystem (POSIX rename(2)); a crash mid-publish leaves a
+    superset of a valid state, never a hole. Known, accepted window: a
+    reader holding the OLD index for the milliseconds of step (1) can
+    fetch a same-named file (baseline.json) that is already new — the next
+    index fetch self-heals, and the alternative (unique per-run filenames)
+    is E1 slice 2's pointer indirection, deferred with it. Returns the
+    number of files published.
+    """
+    live_dir.mkdir(parents=True, exist_ok=True)
+    staged = sorted(p.name for p in staging_dir.glob("*.json"))
+    for name in staged:
+        if name != "index.json":
+            os.replace(staging_dir / name, live_dir / name)
+    os.replace(staging_dir / "index.json", live_dir / "index.json")
+    with open(live_dir / "index.json") as f:
+        index = json.load(f)
+    referenced = {s.get("file") for s in index.get("scenarios", [])}
+    referenced |= {str(s.get("file", "")).replace(".json", "_traj.json")
+                   for s in index.get("scenarios", [])}
+    referenced.add("index.json")
+    for p in live_dir.glob("*.json"):
+        if p.name not in referenced:
+            p.unlink()
+    return len(staged)
 
 
 def summarize_suggestion(result: dict) -> dict:
@@ -608,7 +710,14 @@ class Handler(SimpleHTTPRequestHandler):
         # over the ~45 min a week is documented to cost in the UI, matching
         # the safety margin the single-day timeout already had relative to
         # its own measured ~6-19 min runtime.
-        build_cmd = [sys.executable, "build_sumo_demand.py", "--source", source]
+        # E2 publish-after-validate (PLAN.md; audit P0-2): the old flow
+        # deleted every live scenario BETWEEN the demand build and the
+        # baseline rebuild, so a failure/timeout/cancel in that window left
+        # the UI with nothing. Now: keep the old coherent set serving, build
+        # the new set into staging, gate it, then switch atomically. On any
+        # failure the previous set is untouched (the error message says so).
+        build_cmd = [sys.executable, "build_sumo_demand.py", "--source", source,
+                     "--keep-scenarios"]
         if days > 1:
             build_cmd += ["--start-date", date, "--days", str(days)]
         else:
@@ -624,18 +733,16 @@ class Handler(SimpleHTTPRequestHandler):
                 print(res.stdout[-2000:], res.stderr[-2000:])
                 last_line = res.stderr.strip().splitlines()[-1] if res.stderr.strip() else ""
                 msg = last_line if len(last_line) < 200 else "omkalibreringen misslyckades — se serverloggen"
-                self._set_recal(status="error", error=msg)
+                self._set_recal(status="error",
+                                error=f"{msg} (gamla scenarier behålls)")
                 return
 
-            # Old scenarios/closures reflect the PREVIOUS date's demand —
-            # discard them rather than leave stale, silently-wrong entries
-            # in the picker (a scenario file has no version marker to tell
-            # them apart from a fresh one otherwise).
-            for f in SCEN_DIR.glob("*.json"):
-                f.unlink()
-
+            if SCEN_STAGING_DIR.exists():
+                for f in SCEN_STAGING_DIR.glob("*"):
+                    f.unlink()
             res2 = run_in_new_session(
-                [sys.executable, "run_scenario.py"],
+                [sys.executable, "run_scenario.py",
+                 "--out-dir", str(SCEN_STAGING_DIR)],
                 cwd=str(ROOT), timeout=300 + 60 * (days - 1),
             )
             if active_job_cancelled("recalibrate"):
@@ -644,8 +751,19 @@ class Handler(SimpleHTTPRequestHandler):
             if res2.returncode != 0:
                 print(res2.stdout[-2000:], res2.stderr[-2000:])
                 self._set_recal(status="error",
-                                error="ny baslinje kunde inte byggas — se serverloggen")
+                                error="ny baslinje kunde inte byggas — "
+                                      "gamla scenarier behålls")
                 return
+
+            ok, reason = validate_staged_scenarios(
+                SCEN_STAGING_DIR, SUMO_DIR / "demand_meta.json")
+            if not ok:
+                print(f"recalibrate: staged set failed validation: {reason}")
+                self._set_recal(status="error",
+                                error=f"{reason} — gamla scenarier behålls")
+                return
+            n = publish_staged_scenarios(SCEN_STAGING_DIR, SCEN_DIR)
+            print(f"recalibrate: published {n} staged scenario files")
 
             known_edges.cache_clear()   # network.geojson is unchanged but be safe
             self._set_recal(status="done", file="baseline.json",
