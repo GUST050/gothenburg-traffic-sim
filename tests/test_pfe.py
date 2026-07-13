@@ -336,6 +336,36 @@ class TestRouteIndexGroups:
         assert x is not None
         assert served(x, cands, "m") == pytest.approx(50, rel=0.06)
 
+    def test_structure_guard_caps_a_violating_group_share(self):
+        # solve_interval_with_structure_guard is THE shared two-pass policy
+        # (deployed pipeline + LOSO both delegate here): pass 1 free, pass 2
+        # re-solved with each group capped at cap_share x pass-1 total.
+        cands = [cand("m", "stub"), cand("m", "onward", "far")]
+        sol, rung = pfe.solve_interval_with_structure_guard(
+            cands, {"m": 100.0}, {}, {},
+            structure_groups=[("near_sensor_dest", [0], 0.2)])
+        assert sol is not None
+        assert sol[0] <= 0.2 * sol.sum() + 1.0
+        assert served(sol, cands, "m") == pytest.approx(100, rel=0.06)
+
+    def test_structure_guard_counts_win_over_impossible_cap(self):
+        # Every route serving "m" is capped: the ladder drops the cap
+        # (never the count) — the interval must still be served.
+        cands = [cand("m", "stub")]
+        sol, _rung = pfe.solve_interval_with_structure_guard(
+            cands, {"m": 100.0}, {}, {},
+            structure_groups=[("g", [0], 0.2)])
+        assert sol is not None
+        assert served(sol, cands, "m") == pytest.approx(100, rel=0.06)
+
+    def test_structure_guard_without_groups_is_plain_relaxation(self):
+        cands = [cand("m")]
+        sol, rung = pfe.solve_interval_with_structure_guard(
+            cands, {"m": 50.0}, {}, {}, structure_groups=None)
+        ref, ref_rung = solve_interval_with_relaxation(cands, {"m": 50.0}, {}, {})
+        assert rung == ref_rung
+        assert sol == pytest.approx(ref)
+
     def test_integer_repair_enforces_a_group_cap_preserving_measured(self):
         # The rounding-stage leak this exists for: a rounded vector that
         # satisfies the measured count but puts too much of it on the

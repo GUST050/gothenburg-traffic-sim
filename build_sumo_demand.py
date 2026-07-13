@@ -125,13 +125,13 @@ def parse_args() -> argparse.Namespace:
                         "conditional-sampling redesign: with β=1.8 the "
                         "kernel mode sits at 2.7 km and the generated "
                         "destination near-sensor share lands exactly at "
-                        "the all-edges baseline (1.9% vs 1.8% — no "
+                        "the all-edges baseline (1.9%% vs 1.8%% — no "
                         "unexplained spike, the research doc's acceptance "
                         "criterion) while still emitting short trips. "
                         "DELIBERATE DEVIATION from the sweep's pre-declared "
                         "lowest-L1 rule: the L1 winner (α=3, β=2.6, "
                         "L1=0.746) got there by erasing the 0-1 km bin to "
-                        "0.1% vs RVU's 15% — 'do not simply forbid all "
+                        "0.1%% vs RVU's 15%% — 'do not simply forbid all "
                         "short trips' is an explicit constraint in the "
                         "research doc, so L1 (which rewards that erasure) "
                         "was overruled for the in-range α the doc itself "
@@ -257,6 +257,48 @@ def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
     }
 
 
+_EDGE_GEOMETRY_CACHE: tuple | None = None
+
+
+def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
+                                  set[str], dict[str, float]]:
+    """Parse GEO_PATH once per process: edge midpoints as (lat, lon),
+    measured-edge ids, and polyline lengths in metres.
+
+    THE shared geometry source for the destination-bias guard chain
+    (_route_structure_metrics and structure_groups_for_shapes) — one parse,
+    one midpoint convention, so the enforced PFE cap and the drift metric
+    can never disagree about where an edge is. Cached on the file's
+    (mtime, size), not unconditionally: serve.py-driven recalibrations can
+    rewrite network.geojson while a process lives."""
+    global _EDGE_GEOMETRY_CACHE
+    from build_candidates import gravity_distance_km
+    st = GEO_PATH.stat()
+    key = (st.st_mtime_ns, st.st_size)
+    if _EDGE_GEOMETRY_CACHE is not None and _EDGE_GEOMETRY_CACHE[0] == key:
+        return _EDGE_GEOMETRY_CACHE[1], _EDGE_GEOMETRY_CACHE[2], _EDGE_GEOMETRY_CACHE[3]
+    with open(GEO_PATH) as f:
+        geo = json.load(f)
+    edge_latlon: dict[str, tuple[float, float]] = {}
+    sensor_edge_ids: set[str] = set()
+    edge_len_m: dict[str, float] = {}
+    for feat in geo["features"]:
+        if feat["geometry"]["type"] != "LineString":
+            continue
+        coords = feat["geometry"]["coordinates"]
+        mid = coords[len(coords) // 2]
+        eid = feat["properties"]["id"]
+        edge_latlon[eid] = (mid[1], mid[0])          # (lat, lon)
+        lats = np.array([c[1] for c in coords])
+        lons = np.array([c[0] for c in coords])
+        edge_len_m[eid] = float(gravity_distance_km(
+            lats[1:], lons[1:], lats[:-1], lons[:-1]).sum() * 1000.0)
+        if feat["properties"].get("sensor_id"):
+            sensor_edge_ids.add(eid)
+    _EDGE_GEOMETRY_CACHE = (key, edge_latlon, sensor_edge_ids, edge_len_m)
+    return edge_latlon, sensor_edge_ids, edge_len_m
+
+
 def _route_structure_metrics(route_path: Path) -> dict | None:
     """Per-vehicle structure metrics for one SUMO route file — the shared
     machinery behind calibrated_structure_report (below). Emits, per
@@ -278,26 +320,7 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
                                   gravity_distance_km, trip_length_fit)
     if not route_path.exists() or not GEO_PATH.exists():
         return None
-    with open(GEO_PATH) as f:
-        geo = json.load(f)
-    edge_latlon: dict[str, tuple[float, float]] = {}
-    edge_len_m: dict[str, float] = {}
-    sensor_edge_ids: set[str] = set()
-    for feat in geo["features"]:
-        if feat["geometry"]["type"] != "LineString":
-            continue
-        coords = feat["geometry"]["coordinates"]
-        mid = coords[len(coords) // 2]
-        eid = feat["properties"]["id"]
-        edge_latlon[eid] = (mid[1], mid[0])          # (lat, lon)
-        lats = np.array([c[1] for c in coords])
-        lons = np.array([c[0] for c in coords])
-        edge_len_m[eid] = float(sum(
-            gravity_distance_km(np.array([lats[k + 1]]), np.array([lons[k + 1]]),
-                                lats[k], lons[k])[0] * 1000.0
-            for k in range(len(coords) - 1)))
-        if feat["properties"].get("sensor_id"):
-            sensor_edge_ids.add(eid)
+    edge_latlon, sensor_edge_ids, edge_len_m = load_edge_geometry()
 
     lengths_km: list[float] = []
     dest_edges: list[str] = []
@@ -1027,32 +1050,22 @@ def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
     fallback in _run_pfe_interval_job, and the integer-stage repair in
     write_calibration_report. Groups whose cap would be >= 100% are
     omitted (no-ops)."""
-    from build_candidates import gravity_distance_km
+    from build_candidates import NEAR_SENSOR_RADIUS_M, gravity_distance_km
     if not GEO_PATH.exists():
         return []
-    with open(GEO_PATH) as f:
-        geo = json.load(f)
-    edge_latlon: dict[str, tuple[float, float]] = {}
-    s_lats, s_lons = [], []
-    for feat in geo["features"]:
-        if feat["geometry"]["type"] != "LineString":
-            continue
-        coords = feat["geometry"]["coordinates"]
-        mid = coords[len(coords) // 2]
-        edge_latlon[feat["properties"]["id"]] = (mid[1], mid[0])
-        if feat["properties"].get("sensor_id"):
-            s_lats.append(mid[1])
-            s_lons.append(mid[0])
-    if not s_lats:
+    edge_latlon, sensor_edge_ids, _edge_len_m = load_edge_geometry()
+    sensor_pts = [edge_latlon[e] for e in sorted(sensor_edge_ids)]
+    if not sensor_pts:
         return []
-    s_lats_a, s_lons_a = np.array(s_lats), np.array(s_lons)
+    s_lats_a = np.array([p[0] for p in sensor_pts])
+    s_lons_a = np.array([p[1] for p in sensor_pts])
 
     def near(eid: str) -> bool:
         ll = edge_latlon.get(eid)
         if ll is None:
             return False
         return bool((gravity_distance_km(s_lats_a, s_lons_a, ll[0], ll[1])
-                     * 1000.0).min() <= 200.0)
+                     * 1000.0).min() <= NEAR_SENSOR_RADIUS_M)
 
     def od_length_km(shape) -> float | None:
         o = edge_latlon.get(shape.edges[0])
@@ -1105,42 +1118,21 @@ def _run_pfe_interval_job(job: dict):
     The shared shape pool and route-cost vector are inherited by fork, so the
     heavy candidate geometry is not pickled once per quarter.
 
-    Two-pass structure preservation (2026-07-12): pass 1 solves with counts/
-    bounds/priors only; if ANY structure group (near-sensor destinations,
-    length bins) exceeds its cap share of the interval's total, pass 2
-    re-solves with every group capped at cap_share × pass-1 total (the
-    bands need ABSOLUTE ceilings, which only exist once a total is known).
-    If pass 2 is infeasible, the pass-1 solution is kept — the structure
-    caps must never cost an interval its real sensor counts.
+    Structure preservation is pfe.solve_interval_with_structure_guard's
+    two-pass policy — shared with validate_sim's LOSO workers by design.
     """
     import pfe
 
     if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
         raise RuntimeError("PFE interval worker was not initialized")
-    sol, rung = pfe.solve_interval_with_relaxation(
+    sol, rung = pfe.solve_interval_with_structure_guard(
         _PFE_PAR_SHAPES,
         job["targets"],
         job["bounds"],
         job["priors"],
         route_cost=_PFE_PAR_ROUTE_COST,
+        structure_groups=_PFE_PAR_STRUCTURE_GROUPS,
     )
-    if sol is not None and _PFE_PAR_STRUCTURE_GROUPS:
-        total = float(sol.sum())
-        violated = total > 0 and any(
-            float(sol[members].sum()) > cap_share * total
-            for _name, members, cap_share in _PFE_PAR_STRUCTURE_GROUPS)
-        if violated:
-            capped_sol, capped_rung = pfe.solve_interval_with_relaxation(
-                _PFE_PAR_SHAPES,
-                job["targets"],
-                job["bounds"],
-                job["priors"],
-                route_cost=_PFE_PAR_ROUTE_COST,
-                groups=[(members, 0.0, cap_share * total)
-                        for _name, members, cap_share in _PFE_PAR_STRUCTURE_GROUPS],
-            )
-            if capped_sol is not None:
-                sol, rung = capped_sol, capped_rung
     return job["suffix"], job["key"], job["quarter"], sol, rung
 
 

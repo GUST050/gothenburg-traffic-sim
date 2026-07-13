@@ -776,6 +776,46 @@ def solve_interval_with_relaxation(
     return sol, (RUNG_LP_FALLBACK if sol is not None else RUNG_INFEASIBLE)
 
 
+def solve_interval_with_structure_guard(
+    shapes: list[Candidate],
+    targets: dict[str, float],
+    bounds: dict[str, tuple[float, float]],
+    priors: dict[str, tuple[float, float]],
+    route_cost: np.ndarray | None = None,
+    structure_groups: list[tuple[str, list[int], float]] | None = None,
+) -> tuple[np.ndarray | None, int]:
+    """Two-pass structure preservation around the relaxation ladder.
+
+    Pass 1 solves with counts/bounds/priors only; if ANY structure group
+    (near-sensor destinations, length bins — (name, member_indices,
+    cap_share) tuples) exceeds its cap share of the interval's total,
+    pass 2 re-solves with every group capped at cap_share × pass-1 total
+    (the bands need ABSOLUTE ceilings, which only exist once a total is
+    known). If pass 2 is infeasible, the pass-1 solution is kept — the
+    structure caps must never cost an interval its real sensor counts.
+
+    This is the ONE shared guard policy: build_sumo_demand's deployed
+    pipeline and validate_sim's LOSO folds both delegate here, so LOSO can
+    never silently calibrate under a different constraint set than the
+    system that ships (the validated-vs-shipped mismatch class this
+    project has already had to fix twice)."""
+    sol, rung = solve_interval_with_relaxation(
+        shapes, targets, bounds, priors, route_cost=route_cost)
+    if sol is not None and structure_groups:
+        total = float(sol.sum())
+        violated = total > 0 and any(
+            float(sol[members].sum()) > cap_share * total
+            for _name, members, cap_share in structure_groups)
+        if violated:
+            capped_sol, capped_rung = solve_interval_with_relaxation(
+                shapes, targets, bounds, priors, route_cost=route_cost,
+                groups=[(members, 0.0, cap_share * total)
+                        for _name, members, cap_share in structure_groups])
+            if capped_sol is not None:
+                sol, rung = capped_sol, capped_rung
+    return sol, rung
+
+
 def _purpose(source: Candidate) -> str:
     """Stable provenance category; legacy candidates remain explicit."""
     return str(source.intent.get("purpose", "unknown"))

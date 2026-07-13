@@ -2017,7 +2017,15 @@ estimation. Until then the disclosed shrinkage stands.
 
 ## Phase H — Demand architecture refactor (improvement plan Phase 4; audit P1-4)
 
-### H0. Review-found cleanup backlog — size S-M — no dependencies, safe any time
+### H0. Review-found cleanup backlog — size S-M — DONE 2026-07-13
+All four items below implemented the same day. The generation-loop
+extraction (item 3) was verified SAME-SEED BYTE-IDENTICAL to the
+pre-refactor code on the real network (12 000 trips, seed 42, --fit-only
+run of HEAD's build_candidates.py vs the refactored one: tours.trips.xml
+byte-equal, fit metrics equal). Bonus find while verifying: four argparse
+help strings contained unescaped % ("36.5% of", "5%, vs RVU's 32%", …),
+crashing --help on build_candidates.py and build_sumo_demand.py — fixed
+(%%), and --help now verified on every pipeline CLI.
 From the 2026-07-13 reuse/simplification review of e591bed..HEAD (each
 verified against the working tree by the reviewer):
 1. The two-pass structure-guard block in `_run_pfe_interval_job` is
@@ -2081,7 +2089,11 @@ junction control, revisit signal scores per audit P0-5's ExperimentProtocol
 designed together with the import, not before it.
 
 ## Execution order
-E0 (DONE) → E1 → {E2, E3, E4} → F1 → F2 ∥ G1 (independent of E) →
-G3 → H1 → H2 → I → J. K external. G1 and H0 can start any time — neither
-needs new infrastructure; G1 is two controlled pipeline runs and honest
-arithmetic, H0 is verified-safe cleanup.
+E0 (DONE) → H0 → G1 → E1 → {E2, E3, E4} → F1 → F2 → G3 → H1 → H2 → I → J.
+K external. H0 and G1 deliberately come BEFORE E1 (revised 2026-07-13):
+E3's publication thresholds are derived from "current healthy baselines",
+and G1's verdict decides whether the current demand config IS that baseline
+or needs retuning (a corridor-continuation loss would change
+DEST_GROUP_CAP_MULT and move every baseline). H0's guard extraction also
+ensures LOSO and the deployed pipeline share one guard implementation
+before G1 leans on LOSO numbers. Neither needs new infrastructure.

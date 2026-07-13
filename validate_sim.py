@@ -122,37 +122,21 @@ _PFE_PAR_STRUCTURE_GROUPS = None
 def _run_pfe_interval_job(job: dict):
     """ProcessPool worker for one independent quarter PFE solve.
 
-    Mirrors build_sumo_demand._run_pfe_interval_job's two-pass structure
-    preservation (2026-07-13) — LOSO must calibrate with the SAME
-    constraint set the deployed pipeline uses, or it validates a different
-    system than the one shipping (the exact mismatch class this project
-    already fixed once for the meso junction-control config)."""
+    Delegates to the SAME pfe.solve_interval_with_structure_guard the
+    deployed pipeline uses — LOSO must calibrate with the same constraint
+    set as the system that ships, or it validates a different one (the
+    exact mismatch class this project already fixed once for the meso
+    junction-control config)."""
     if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
         raise RuntimeError("PFE interval worker was not initialized")
-    sol, rung = pfe.solve_interval_with_relaxation(
+    sol, rung = pfe.solve_interval_with_structure_guard(
         _PFE_PAR_SHAPES,
         job["targets"],
         job["bounds"],
         job["priors"],
         route_cost=_PFE_PAR_ROUTE_COST,
+        structure_groups=_PFE_PAR_STRUCTURE_GROUPS,
     )
-    if sol is not None and _PFE_PAR_STRUCTURE_GROUPS:
-        total = float(sol.sum())
-        violated = total > 0 and any(
-            float(sol[members].sum()) > cap_share * total
-            for _name, members, cap_share in _PFE_PAR_STRUCTURE_GROUPS)
-        if violated:
-            capped_sol, capped_rung = pfe.solve_interval_with_relaxation(
-                _PFE_PAR_SHAPES,
-                job["targets"],
-                job["bounds"],
-                job["priors"],
-                route_cost=_PFE_PAR_ROUTE_COST,
-                groups=[(members, 0.0, cap_share * total)
-                        for _name, members, cap_share in _PFE_PAR_STRUCTURE_GROUPS],
-            )
-            if capped_sol is not None:
-                sol, rung = capped_sol, capped_rung
     return job["quarter"], sol, rung
 
 

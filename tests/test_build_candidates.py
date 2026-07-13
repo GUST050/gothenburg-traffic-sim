@@ -564,65 +564,6 @@ class TestNaturalOriginWeights:
         assert w[0] == pytest.approx(0.0)
 
 
-class TestSampleAnchorAndFarEnd:
-    def test_returns_a_natural_pair_when_one_exists(self):
-        G = nx.MultiDiGraph()
-        G.add_edge(1, 10, key=0, length=10.0)
-        G.add_edge(10, 11, key=0, length=10.0)
-        G.add_edge(11, 20, key=0, length=10.0)
-        D, node_idx = bc.build_shortest_distance_matrix(G)
-        rng = np.random.default_rng(0)
-        result = bc.sample_anchor_and_far_end(
-            rng, D, node_idx,
-            anchor_node_ids=np.array([10]), anchor_weights=np.array([1.0]),
-            far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
-            m_u=10, m_v=11, m_length=10.0)
-        assert result == (0, 0)   # anchor index 0 (-> node 10), far index 0 (-> node 11)
-
-    def test_redraws_anchor_when_first_choice_has_no_natural_far_end(self):
-        """Two candidate anchors: one (5) has zero natural far ends, the
-        other (10) has one -- must keep redrawing until it finds 10, not
-        give up on the first bad draw."""
-        G = nx.MultiDiGraph()
-        G.add_edge(5, 99, key=0, length=1.0)     # anchor 5's only path bypasses the sensor
-        G.add_edge(99, 11, key=0, length=1.0)
-        G.add_edge(10, 11, key=0, length=10.0)   # via edge, anchor 10 -> sensor -> 11
-        D, node_idx = bc.build_shortest_distance_matrix(G)
-        rng = np.random.default_rng(0)
-        result = bc.sample_anchor_and_far_end(
-            rng, D, node_idx,
-            anchor_node_ids=np.array([5, 10]), anchor_weights=np.array([0.99, 0.01]),
-            far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
-            m_u=10, m_v=11, m_length=10.0, max_anchor_redraws=50)
-        assert result is not None
-        assert result[0] == 1   # index 1 (node 10) is the only anchor that can ever succeed
-
-    def test_returns_none_when_no_anchor_has_a_natural_far_end(self):
-        G = nx.MultiDiGraph()
-        G.add_edge(5, 11, key=0, length=1.0)     # direct, bypasses the sensor entirely
-        G.add_edge(10, 12, key=0, length=10.0)   # unrelated via edge
-        D, node_idx = bc.build_shortest_distance_matrix(G)
-        rng = np.random.default_rng(0)
-        result = bc.sample_anchor_and_far_end(
-            rng, D, node_idx,
-            anchor_node_ids=np.array([5]), anchor_weights=np.array([1.0]),
-            far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
-            m_u=10, m_v=12, m_length=10.0, max_anchor_redraws=10)
-        assert result is None
-
-    def test_returns_none_when_anchor_weights_are_all_zero(self):
-        G = nx.MultiDiGraph()
-        G.add_edge(10, 11, key=0, length=10.0)
-        D, node_idx = bc.build_shortest_distance_matrix(G)
-        rng = np.random.default_rng(0)
-        result = bc.sample_anchor_and_far_end(
-            rng, D, node_idx,
-            anchor_node_ids=np.array([10]), anchor_weights=np.array([0.0]),
-            far_u_idx=np.array([node_idx[11]]), far_base_weights=np.array([1.0]),
-            m_u=10, m_v=11, m_length=10.0)
-        assert result is None
-
-
 class TestGenerateSensorAnchoredTripsEIandIE:
     """Regression test for a real, confirmed, SHIPPED bug (found 2026-07-10
     during a full-structure review Gustav asked for, after the previous
