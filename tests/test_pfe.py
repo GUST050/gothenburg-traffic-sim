@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+import pfe
 from pfe import (Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
                  RUNG_LP_FALLBACK, calibrate, largest_remainder_round,
                  path_size_weights, solve_calibration_intervals,
@@ -539,3 +540,72 @@ class TestCalibratedAgentProvenance:
         assert {a["origin_edge"] for a in agents} == {"O"}
         assert {a["destination_edge"] for a in agents} == {"D1"}
         assert len({a["departure_s"] for a in agents}) == 4
+
+    def test_purpose_mix_is_preserved_for_the_calibrated_quarter(self, tmp_path):
+        work = Candidate(depart=0.0, edges=["O", "M", "D"], source_id="w",
+                         intent={"purpose": "arbete"})
+        leisure = Candidate(depart=0.0, edges=["O", "M", "D"], source_id="f",
+                            intent={"purpose": "fritid"})
+        shape = Candidate(depart=0.0, edges=["O", "M", "D"],
+                          source_candidates=[work, leisure])
+        out = tmp_path / "calibrated.rou.xml"
+
+        report = write_calibration_report(
+            [shape], out, [{"M": 10.0}], [np.array([10.0])])
+
+        agents = json.loads((tmp_path / "calibrated.agents.json").read_text())["agents"]
+        assert {a["purpose"] for a in agents} == {"arbete", "fritid"}
+        assert sum(a["purpose"] == "arbete" for a in agents) == 5
+        assert sum(a["purpose"] == "fritid" for a in agents) == 5
+        assert report["purpose_allocation"][0]["incompatible"] == {}
+
+
+class TestProvenanceAllocation:
+    def test_scarce_purpose_keeps_a_compatible_route_instance(self):
+        def source(route, purpose, source_id):
+            return Candidate(0.0, route, source_id=source_id,
+                             intent={"purpose": purpose})
+
+        flexible = Candidate(0.0, ["O", "M", "A"], source_candidates=[
+            source(["O", "M", "A"], "arbete", "a"),
+            source(["O", "M", "A"], "service", "s"),
+        ])
+        leisure_only = Candidate(0.0, ["O", "M", "B"], source_candidates=[
+            source(["O", "M", "B"], "fritid", "f"),
+        ])
+
+        selected, purposes, report = pfe.allocate_interval_provenance(
+            [flexible, flexible, flexible, leisure_only],
+            {"arbete": 2, "service": 1, "fritid": 1},
+        )
+
+        assert purposes.count("arbete") == 2
+        assert purposes.count("service") == 1
+        assert purposes.count("fritid") == 1
+        assert [s.intent["purpose"] for s in selected] == purposes
+        assert report["incompatible"] == {}
+
+    def test_keeps_time_purpose_target_when_selected_routes_lack_provenance(self):
+        work = Candidate(0.0, ["O", "M", "D"], source_id="w",
+                         intent={"purpose": "arbete"})
+        shape = Candidate(0.0, ["O", "M", "D"], source_candidates=[work])
+
+        selected, purposes, report = pfe.allocate_interval_provenance(
+            [shape, shape], {"arbete": 1, "fritid": 1})
+
+        assert purposes == ["arbete", "fritid"]
+        assert [s.intent["purpose"] for s in selected] == ["arbete", "arbete"]
+        assert report["incompatible"] == {"fritid": 1}
+
+    def test_lp_fallback_drops_groups_after_the_counts_first_rung(self, monkeypatch):
+        # Force the final fallback. The measured count is feasible only after
+        # the impossible group cap has been discarded.
+        monkeypatch.setattr(pfe, "solve_interval_entropy", lambda *args, **kwargs: None)
+        sol, rung = pfe.solve_interval_with_relaxation(
+            [cand("M")], {"M": 10.0}, {}, {}, groups=[([0], 0.0, 3.0)])
+
+        assert sol is not None
+        # The continuous solver respects its standard ±max(2, 5%) measured
+        # band; integer publication closes this to the exact target.
+        assert served(sol, [cand("M")], "M") >= 8.0
+        assert rung == RUNG_LP_FALLBACK

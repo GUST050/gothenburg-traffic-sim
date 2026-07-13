@@ -1237,6 +1237,17 @@ def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
               "hard measurements; regenerate/fix the candidate pool.")
 
 
+def warn_purpose_allocation_drift(report: dict, label: str) -> None:
+    """Expose selected routes lacking same-purpose candidate provenance."""
+    summary = report.get("purpose_allocation_summary", {})
+    n = summary.get("quarters_with_incompatible_routes", 0)
+    if n:
+        print(f"  ⚠ PURPOSE-ROUTE COMPATIBILITY DRIFT ({label}): {n} quarter(s), "
+              f"routes {summary.get('incompatible_routes_by_purpose', {})} — "
+              "the purpose-time mix is exact, but those selected route shapes "
+              "lack same-purpose candidate provenance")
+
+
 def warn_bound_violations(report: dict, label: str) -> None:
     """Surface a structural gap found in a bug review 2026-07-10: the
     integer-rounding step (round_preserving_measured, pfe.py) has no
@@ -1487,57 +1498,43 @@ def main() -> None:
         for iteration in range(n_iter):
             generate_candidates(weight_file)
             if iteration == n_iter - 1:
-                if len(variants) > 1:
-                    variant_inputs = {}
-                    for suffix, key in variants:
-                        targets = build_targets(flows, sensor_edges, qi_start,
-                                                n_intervals, split_key=key)
-                        bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors(suffix)
-                        out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
-                        variant_inputs[suffix] = {
-                            "out_path": out,
-                            "targets": targets,
-                            "bounds_pq": bounds_pq,
-                            "hard_bounds_pq": hard_bounds_pq,
-                            "priors_pq": priors_pq,
-                            "keep_achieved": False,
-                        }
-                    reports = timed(
-                        "pfe_variants_and_rounding",
-                        lambda: run_pfe_variants_flat_parallel(
-                            cand_path, variants, variant_inputs,
-                            max_workers=os.cpu_count() or 1))
-                    for suffix, key in variants:
-                        variant_report = reports[suffix]
-                        label = "PFE" if suffix == "" and n_iter == 1 else (
-                            f"[congestion-feedback {iteration+1}/{n_iter}]"
-                            if suffix == "" else "PFE"
-                        )
-                        print(f"  {label} {key:<16} {variant_report['vehicles']:>6} veh  "
-                              f"GEH<5: {variant_report['geh_pct']}%  "
-                              f"(infeasible intervals: {variant_report['infeasible_intervals']})")
-                        warn_unserviceable_measured_edges(variant_report, key)
-                        warn_bound_violations(variant_report, key)
-                        if variant_report["geh_pct"] < 100:
-                            print("  ⚠ measured-edge fit below gate — inspect before use")
-                    report = reports[""]
-                else:
+                # Always use the guarded flat solver, even for a single q50
+                # variant. The old q50-only pfe.calibrate() path omitted the
+                # destination/length structure groups entirely.
+                variant_inputs = {}
+                for suffix, key in variants:
                     targets = build_targets(flows, sensor_edges, qi_start,
-                                            n_intervals, split_key="edge_shares")
-                    bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors("")
-                    report = timed(
-                        "pfe_and_rounding",
-                        lambda: pfe.calibrate(
-                            cand_path, calib_path, targets,
-                            bounds_pq, priors_pq,
-                            enforce_integer_bounds=True,
-                            integer_bounds_per_q=hard_bounds_pq))
-                    tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
-                    print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
-                          f"GEH<5: {report['geh_pct']}%  "
-                          f"(infeasible intervals: {report['infeasible_intervals']})")
-                    warn_unserviceable_measured_edges(report, "edge_shares")
-                    warn_bound_violations(report, "edge_shares")
+                                            n_intervals, split_key=key)
+                    bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors(suffix)
+                    out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
+                    variant_inputs[suffix] = {
+                        "out_path": out,
+                        "targets": targets,
+                        "bounds_pq": bounds_pq,
+                        "hard_bounds_pq": hard_bounds_pq,
+                        "priors_pq": priors_pq,
+                        "keep_achieved": False,
+                    }
+                reports = timed(
+                    "pfe_variants_and_rounding",
+                    lambda: run_pfe_variants_flat_parallel(
+                        cand_path, variants, variant_inputs,
+                        max_workers=os.cpu_count() or 1))
+                for suffix, key in variants:
+                    variant_report = reports[suffix]
+                    label = "PFE" if suffix == "" and n_iter == 1 else (
+                        f"[congestion-feedback {iteration+1}/{n_iter}]"
+                        if suffix == "" else "PFE"
+                    )
+                    print(f"  {label} {key:<16} {variant_report['vehicles']:>6} veh  "
+                          f"GEH<5: {variant_report['geh_pct']}%  "
+                          f"(infeasible intervals: {variant_report['infeasible_intervals']})")
+                    warn_unserviceable_measured_edges(variant_report, key)
+                    warn_purpose_allocation_drift(variant_report, key)
+                    warn_bound_violations(variant_report, key)
+                    if variant_report["geh_pct"] < 100:
+                        print("  ⚠ measured-edge fit below gate — inspect before use")
+                report = reports[""]
                 break
 
             targets = build_targets(flows, sensor_edges, qi_start,

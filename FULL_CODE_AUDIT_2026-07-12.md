@@ -377,3 +377,137 @@ after the replacement passes its health gate.
   group and has integration tests. The remaining coverage gap is P1-3.
 - The full test suite was run during this audit. Passing tests do not cover
   the trajectory XML schemas or destination-tail distribution gates above.
+
+## Verified Review Of The 2026-07-13 Demand Changes
+
+This review covers commits `51ad47f` and `6632bfc`. It was performed after
+the destination-clustering and purpose-length changes were committed, with a
+focused demand/PFE test run (`211 passed`). The tests establish unit-level
+assertions; the findings below concern production paths they do not exercise.
+Application code was not changed as part of this review.
+
+### P0 - Structure guards are bypassed in a supported default configuration
+
+**Where:** `build_sumo_demand.py:1525-1540`; `pfe.py:1013-1042`.
+
+The new near-sensor-destination and trip-length-bin guards are constructed
+only by `run_pfe_variants_flat_parallel()`. That function is called only when
+`has_split_quantiles()` returns true. When `sumo/direction_split.json` lacks
+q10/q90 fields, the supported one-variant path calls `pfe.calibrate()` instead.
+`pfe.calibrate()` accepts neither structure groups nor a group-builder, so it
+publishes unrestricted PFE results.
+
+This is not merely diagnostic: the new guards prevent PFE from re-amplifying
+routes ending near a sensor or routes in the shortest-length bin. The exact
+regression that the two commits claim to fix can return whenever direction
+quantiles are unavailable, disabled, or not yet built.
+
+**Required fix:** use one PFE orchestration path for one or many variants,
+always build/pass structure groups, and add an integration test with a valid
+direction-split file that deliberately has no quantiles. Assert that a group
+cap constrains the final integer route file, not only the continuous solver.
+
+### P0 - Calibrated vehicle purposes are not conditioned on departure time
+
+**Where:** `pfe.py:1024-1028`, `890-934`; `build_candidates.py:1362-1365`.
+
+Candidate generation selects a purpose from the intended outbound hour.
+Calibration then solves every 15-minute interval over **all** route shapes,
+regardless of each candidate's sampled hour. When route counts are written,
+`source_pool[dup % len(source_pool)]` merely rotates provenance records among
+duplicates. It does not filter by the calibrated quarter, reweight by
+`purpose_shares_for_hour()`, or preserve the sampled purpose distribution.
+
+Consequently, `calibrated.agents.json` labels are not a calibrated purpose-by-
+time demand model. In the current artifact, work-labelled traffic is 35.0% at
+07:00 and 28.4% at 18:00, while the declared weekday prior has 85.9% work at
+07:00 and 47.0% at 18:00 before through/external categories. The new
+purpose-specific distance scale changes route inventory but cannot guarantee a
+purpose-specific or time-specific final vehicle population.
+
+**Required fix:** partition route-shape variables by purpose and broad time
+period, or retain purpose-time availability mass per shape and constrain each
+calibrated quarter to it. Allocate vehicle provenance from the same
+purpose-time distribution, and validate published agents after PFE.
+
+### P1 - Multi-day demand breaks the new purpose-time relationship
+
+**Where:** `build_candidates.py:1601-1627`, `1767-1797`;
+`build_sumo_demand.py:461-487`.
+
+For multi-day runs, a template's geometry and purpose are sampled using
+`h_out` inside `generate_sensor_anchored_trips()`. `generate_day_block()` then
+discards that hour and gives the template an independently resampled departure
+hour from the exact-day profile. An AM work-purpose geometry can therefore be
+emitted in the evening, and a leisure-purpose geometry in the AM peak.
+Template reuse makes this systematic for later days sharing a pool key.
+
+Because destination distance now varies by purpose, the multi-day path does
+not preserve the stated joint distribution
+`P(purpose, departure time, trip length | day type)`.
+
+**Required fix:** retain a purpose-time stratum in each template and resample
+only within that stratum, or generate/reweight purpose-time route pools. Add a
+two-day test proving that both weekday and weekend output respect the intended
+purpose-time distribution after template reuse.
+
+### P1 - Weekday length-scale normalisation uses the wrong average
+
+**Where:** `build_candidates.py:251-270`.
+
+The code says `_WEEKDAY_AVG_MIX` preserves aggregate weekday calibration. It
+is the flat arithmetic mean of 24 hourly purpose shares, but trips use
+`daily_shape(False)`, whose peak hours have more mass. The actual
+traffic-weighted weekday mix is work 52.77%, service 30.32%, leisure 16.91%,
+not the hard-coded 59.8% / 24.0% / 16.2%.
+
+On current constants the traffic-weighted mean scale is `1.00898`, not the
+documented exact `1.0`. The numerical error is modest, but the contract is
+false and will drift if either hourly table changes.
+
+**Required fix:** derive the mix as
+`daily_shape(False) @ PURPOSE_HOURLY_WEEKDAY`, or normalise inside the
+day-profile pipeline. Test the traffic-weighted identity, not the flat-hour
+identity.
+
+### P2 - LP fallback can reintroduce a group after it was dropped
+
+**Where:** `pfe.py:753-773`.
+
+The relaxation contract says group caps are discarded with bounds at
+`RUNG_RELAX_NOBND` so measured counts always win. The entropy pass does this,
+but the final LP fallback calls `solve_interval(..., groups=groups)` again.
+If entropy fails and the cap conflicts with counts, the LP can report an
+interval infeasible even though the no-group policy says it should serve the
+measurements.
+
+This is a fallback-path risk, not evidence that the active artifact failed.
+
+**Required fix:** pass `groups=None` to the LP fallback after the no-bounds
+stage, and test an entropy failure with a feasible unconstrained LP.
+
+## Resolution Of The 2026-07-13 Findings
+
+Implemented after the review; the demand solver's route-count variables and
+network simulation were not expanded.
+
+- The final q50-only path now uses `run_pfe_variants_flat_parallel()` too, so
+  destination and trip-length structure guards apply with or without q10/q90
+  direction variants.
+- The LP fallback now retains the documented counts-first relaxation policy:
+  it does not restore bounds or structure groups after the no-bounds rung.
+- Multi-day template reuse samples each retained template hour conditional on
+  its purpose and the exact-day profile, rather than independently assigning
+  an arbitrary hour.
+- PFE publication allocates each quarter's **exact candidate purpose mix** to
+  the selected vehicles. It records `purpose_route_compatible` per vehicle
+  and a demand-level compatibility diagnostic when a selected route lacks a
+  source candidate of the allocated purpose. This preserves simulator routes
+  and performance while making the remaining OD-purpose uncertainty visible.
+- Weekday purpose-length normalisation now uses the measured traffic-weighted
+  `daily_shape(False)` rather than a flat 24-hour arithmetic mean.
+
+Regression coverage includes structure-group solver behaviour, the LP
+fallback, purpose allocation, purpose-compatible provenance and
+multi-day conditional sampling. The focused suite passed with `216 passed`;
+the full project suite passed with `745 passed, 21 skipped`.

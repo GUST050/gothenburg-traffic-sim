@@ -249,11 +249,10 @@ PURPOSE_CATEGORIES = ("arbete", "service", "fritid")
 # same disclosed-shrinkage pattern dirsplit already uses for its national-
 # to-local transfer; the wide CIs — service ±27% — are why the shrinkage is
 # this conservative). The shrunk ratios are then NORMALIZED so the
-# AVERAGE-WEEKDAY purpose mix (PURPOSE_HOURLY_WEEKDAY's flat hourly mean:
-# arbete 59.8% / service 24.0% / fritid 16.2%) gets a weighted mean scale
-# of exactly 1.0 — the weekday aggregate calibration (gravity_km, RVU
-# aggregate bins) is preserved and purposes only redistribute length AMONG
-# themselves: fritid longer, arbete/service shorter, matching both the
+# TRAFFIC-WEIGHTED weekday purpose mix gets a weighted mean scale of exactly
+# 1.0 — the weekday aggregate calibration (gravity_km, RVU aggregate bins)
+# is preserved and purposes only redistribute length AMONG themselves:
+# fritid longer, arbete/service shorter, matching both the
 # national table's ordering and VGR Analys 2023:56's local Tabell 3
 # (avstånd till arbete/skola). Under the WEEKEND mix the mean scale comes
 # out ~1.11 — deliberately NOT normalized away: leisure dominates weekends
@@ -263,11 +262,6 @@ PURPOSE_CATEGORIES = ("arbete", "service", "fritid")
 # "external" (I-E exit-gate trips) has no survey purpose row — scale 1.0.
 _PURPOSE_RAW_RATIO = {"arbete": 24 / 37, "service": 30 / 37, "fritid": 56 / 37}
 _PURPOSE_SHRUNK = {p: 1.0 + 0.5 * (r - 1.0) for p, r in _PURPOSE_RAW_RATIO.items()}
-_WEEKDAY_AVG_MIX = {"arbete": 0.598, "service": 0.240, "fritid": 0.162}
-_WEEKDAY_MEAN_SCALE = sum(_WEEKDAY_AVG_MIX[p] * _PURPOSE_SHRUNK[p]
-                          for p in _PURPOSE_SHRUNK)
-PURPOSE_LENGTH_SCALE = {p: s / _WEEKDAY_MEAN_SCALE
-                        for p, s in _PURPOSE_SHRUNK.items()}   # 0.90/0.99/1.38
 
 
 def purpose_shares_for_hour(hour: int, is_weekend: bool) -> dict[str, float]:
@@ -1140,6 +1134,18 @@ def daily_shape(is_weekend: bool = False) -> np.ndarray:
     return acc / acc.sum()
 
 
+# Use the actual traffic-weighted weekday mix, not the arithmetic mean of
+# hourly shares. The latter silently changes the aggregate deterrence scale
+# whenever rush-hour volume differs from off-peak volume.
+_weekday_shape = daily_shape(False)
+_weekday_mix_values = np.asarray(PURPOSE_HOURLY_WEEKDAY).T @ _weekday_shape
+_WEEKDAY_AVG_MIX = dict(zip(PURPOSE_CATEGORIES, _weekday_mix_values))
+_WEEKDAY_MEAN_SCALE = sum(_WEEKDAY_AVG_MIX[p] * _PURPOSE_SHRUNK[p]
+                          for p in _PURPOSE_SHRUNK)
+PURPOSE_LENGTH_SCALE = {p: s / _WEEKDAY_MEAN_SCALE
+                        for p, s in _PURPOSE_SHRUNK.items()}
+
+
 REAL_DAY_SHAPE_WEIGHT = 0.7   # fixed shrinkage toward --real-day-shape-file's
                              # measured/forecast shape, applied even when
                              # that day's data is complete — hedges against
@@ -1618,12 +1624,32 @@ def generate_day_block(
         lengths = []
         short = {}
 
-    hours = rng.choice(24, size=len(template_trips), p=profile)
+    # Geometry reuse must not sever a route's purpose from its departure
+    # period. Draw h conditional on the template's already-sampled purpose:
+    # P(h | p, day) ∝ P(h | day) P(p | h, day). This retains route diversity
+    # and the exact-day departure profile without regenerating templates.
+    purposes = [template[3] for template in template_trips]
+    hours = np.empty(len(template_trips), dtype=int)
+    purpose_indices: dict[str, list[int]] = {}
+    for i, purpose in enumerate(purposes):
+        purpose_indices.setdefault(purpose, []).append(i)
+    for purpose, indices in purpose_indices.items():
+        weights = profile
+        if purpose in PURPOSE_CATEGORIES:
+            p_by_hour = np.array([
+                purpose_shares_for_hour(hour, is_weekend)[purpose]
+                for hour in range(24)
+            ])
+            conditional = profile * p_by_hour
+            if conditional.sum() > 0:
+                weights = conditional / conditional.sum()
+        hours[indices] = rng.choice(24, size=len(indices), p=weights)
     block = [
         (f"{id_prefix}{i}", offset_s + (hour + rng.random()) * 3600,
          from_edge, to_edge, via, purpose, f"{id_prefix}{tour_id}", leg)
-        for i, ((from_edge, to_edge, via, purpose, tour_id, leg), hour)
+        for i, (template, hour)
         in enumerate(zip(template_trips, hours))
+        for from_edge, to_edge, via, purpose, tour_id, leg in [template[:6]]
     ]
     return block, lengths, short, template_trips
 

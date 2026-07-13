@@ -768,9 +768,122 @@ def solve_interval_with_relaxation(
             groups=groups if use_bounds else None)
         if sol is not None:
             return sol, rung
-    sol = solve_interval(shapes, targets, bounds, priors,
-                         route_cost=route_cost, groups=groups)
+    # Bounds and structural caps have already been deliberately dropped at
+    # RUNG_RELAX_NOBND. The LP backstop must preserve that counts-first
+    # contract rather than making an otherwise feasible interval fail.
+    sol = solve_interval(shapes, targets, {}, priors,
+                         route_cost=route_cost, groups=None)
     return sol, (RUNG_LP_FALLBACK if sol is not None else RUNG_INFEASIBLE)
+
+
+def _purpose(source: Candidate) -> str:
+    """Stable provenance category; legacy candidates remain explicit."""
+    return str(source.intent.get("purpose", "unknown"))
+
+
+def _purpose_targets_per_quarter(shapes: list[Candidate], nq: int) -> list[Counter]:
+    """Candidate purpose mix at each original departure quarter.
+
+    PFE intentionally shares route geometry across time to keep the solve
+    small. Its selected vehicles must still inherit a purpose distribution
+    compatible with the candidate generator's purpose x time x day-type
+    demand. This captures that distribution before calibration, without
+    introducing purpose-specific PFE variables.
+    """
+    targets = [Counter() for _ in range(nq)]
+    for shape in shapes:
+        for source in shape.source_candidates or [shape]:
+            qi = int(source.depart // 900)
+            if 0 <= qi < nq:
+                targets[qi][_purpose(source)] += 1
+    return targets
+
+
+def _integer_mix_targets(source_mix: Counter, n: int) -> Counter:
+    """Scale a candidate category mix to n vehicles by largest remainder."""
+    if n <= 0 or not source_mix:
+        return Counter()
+    total = sum(source_mix.values())
+    raw = {category: n * count / total for category, count in source_mix.items()}
+    out = Counter({category: int(np.floor(value)) for category, value in raw.items()})
+    for category, _value in sorted(raw.items(), key=lambda item: (
+            -(item[1] - np.floor(item[1])), item[0]))[:n - sum(out.values())]:
+        out[category] += 1
+    return out
+
+
+def allocate_interval_provenance(
+    route_instances: list[Candidate], source_mix: Counter,
+) -> tuple[list[Candidate], list[str], dict]:
+    """Allocate the exact quarter mix and retain compatible provenance where possible.
+
+    A selected shape can be repeated by PFE, but it may only receive a purpose
+    that occurred among its own source candidates. Categories are allocated
+    scarce-first to avoid consuming the few compatible shapes needed by a
+    category. This is a small post-solve matching problem (O(vehicles x
+    categories)), deliberately outside the PFE so calibration performance and
+    route-count feasibility do not change.
+    """
+    if not route_instances:
+        return [], [], {"target": {}, "achieved": {}, "incompatible": {}}
+    pools = [shape.source_candidates or [shape] for shape in route_instances]
+    available = [{_purpose(source) for source in pool} for pool in pools]
+    target = _integer_mix_targets(source_mix, len(route_instances))
+    if not target:
+        # A sparse candidate pool can have no original departures in a
+        # calibrated quarter. Retain compatible provenance rather than
+        # inventing a time-specific target that the input did not provide.
+        selected = [pool[i % len(pool)] for i, pool in enumerate(pools)]
+        categories = [_purpose(source) for source in selected]
+        return selected, categories, {
+            "target": {}, "achieved": dict(sorted(Counter(categories).items())),
+            "incompatible": {},
+        }
+    assigned: list[str | None] = [None] * len(route_instances)
+
+    # Give categories with few compatible selected routes first claim.
+    for category in sorted(target, key=lambda p: (
+            sum(p in choices for choices in available), p)):
+        compatible = [i for i, choices in enumerate(available)
+                      if assigned[i] is None and category in choices]
+        compatible.sort(key=lambda i: (len(available[i]),
+                                        " ".join(route_instances[i].edges), i))
+        for i in compatible[:target[category]]:
+            assigned[i] = category
+
+    # Preserve the target mix exactly. A purpose is an inferred behavioural
+    # attribute, not a SUMO route constraint: when PFE selected no shape with
+    # matching source provenance, keep the real selected route and disclose
+    # the incompatibility instead of silently changing the quarter's purpose
+    # mix. The traffic simulation itself is unchanged.
+    achieved = Counter(category for category in assigned if category is not None)
+    for i, choices in enumerate(available):
+        if assigned[i] is not None:
+            continue
+        category = max(sorted(target), key=lambda p: (target[p] - achieved[p], p))
+        assigned[i] = category
+        achieved[category] += 1
+
+    # Rotate only within the selected purpose, retaining OD/tour provenance
+    # that genuinely belongs to the exact selected route shape.
+    source_offsets = Counter()
+    selected = []
+    incompatible = Counter()
+    for pool, category in zip(pools, assigned):
+        matching = [source for source in pool if _purpose(source) == category]
+        if matching:
+            selected.append(matching[source_offsets[category] % len(matching)])
+        else:
+            selected.append(pool[source_offsets["fallback"] % len(pool)])
+            source_offsets["fallback"] += 1
+            incompatible[category] += 1
+        source_offsets[category] += 1
+    achieved = Counter(assigned)
+    return selected, [str(category) for category in assigned], {
+        "target": dict(sorted(target.items())),
+        "achieved": dict(sorted(achieved.items())),
+        "incompatible": dict(sorted(incompatible.items())),
+    }
 
 
 def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndarray]:
@@ -861,6 +974,8 @@ def write_calibration_report(
     nq = len(targets_per_q)
     infeasible = sum(sol is None for sol in solutions)
     achieved: dict[str, list[float]] = {}
+    purpose_targets = _purpose_targets_per_quarter(shapes, nq)
+    purpose_allocation: list[dict] = []
     vid = 0
     agents: list[dict] = []
     write_path = (out_path.with_suffix(out_path.suffix + ".tmp")
@@ -901,31 +1016,35 @@ def write_calibration_report(
             # route at exactly :07:30, so thousands of independent routes
             # entered SUMO as a visible convoy. Counts and route choices stay
             # unchanged; only departure time is stratified globally.
-            route_instances: list[tuple[str, Candidate]] = []
+            route_instances: list[Candidate] = []
             for cand, k in zip(shapes, counts):
-                edges_str = " ".join(cand.edges)
-                source_pool = cand.source_candidates or [cand]
-                route_instances.extend(
-                    (edges_str, source_pool[dup % len(source_pool)])
-                    for dup in range(int(k)))
+                route_instances.extend(cand for _ in range(int(k)))
                 for e in set(cand.edges):
                     achieved.setdefault(e, [0.0] * nq)
                     if k:
                         achieved[e][i] += float(k)
             # Hash order is deterministic and avoids grouping equal routes
             # together, while positions remain uniformly spaced.
-            route_instances.sort(key=lambda item: hashlib.sha1(
-                f"{i}:{item[0]}:{item[1].source_id}".encode()).digest())
+            route_instances.sort(key=lambda cand: hashlib.sha1(
+                f"{i}:{' '.join(cand.edges)}:"
+                f"{','.join(source.source_id for source in cand.source_candidates)}".encode()
+            ).digest())
+            sources, purposes, allocation = allocate_interval_provenance(
+                route_instances, purpose_targets[i])
+            purpose_allocation.append({"quarter": i, **allocation})
             n_departures = len(route_instances)
-            for pos, (edges_str, source) in enumerate(route_instances):
+            for pos, (cand, source, purpose) in enumerate(
+                    zip(route_instances, sources, purposes)):
                 depart = i * 900 + (pos + 0.5) * 900 / max(1, n_departures)
                 vehicle_id = f"pfe{vid}"
+                edges_str = " ".join(cand.edges)
                 f.write(f'  <vehicle id="{vehicle_id}" depart="{depart:.1f}">'
                         f'<route edges="{edges_str}"/></vehicle>\n')
                 agents.append({
                     "vehicle_id": vehicle_id,
                     "candidate_id": source.source_id or None,
-                    "purpose": source.intent.get("purpose", "unknown"),
+                    "purpose": purpose,
+                    "purpose_route_compatible": _purpose(source) == purpose,
                     "tour_id": source.intent.get("tour_id"),
                     "leg": source.intent.get("leg"),
                     "origin_edge": source.intent.get("origin_edge", source.edges[0]),
@@ -991,12 +1110,22 @@ def write_calibration_report(
                 geh = float(np.sqrt(2 * (m - c) ** 2 / (m + c)))
                 geh_all += 1
                 geh_ok += geh < 5
+    allocation_incompatible = Counter()
+    for allocation in purpose_allocation:
+        allocation_incompatible.update(allocation["incompatible"])
     report = {"vehicles": vid, "infeasible_intervals": infeasible,
               "geh_ok": geh_ok, "geh_total": geh_all,
               "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
               "achieved": achieved,
               "unserviceable_edges": unserviceable_edges,
-              "bound_violations": bound_violations}
+              "bound_violations": bound_violations,
+              "purpose_allocation": purpose_allocation,
+              "purpose_allocation_summary": {
+                  "quarters_with_incompatible_routes": sum(
+                      bool(allocation["incompatible"]) for allocation in purpose_allocation),
+                  "incompatible_routes_by_purpose": dict(
+                      sorted(allocation_incompatible.items())),
+              }}
     if rungs is not None:
         # Which relaxation-ladder rung each interval actually converged at —
         # a solver that's quietly living on RUNG_LP_FALLBACK every interval

@@ -58,6 +58,24 @@ def test_generate_day_block_reuses_geometry_but_resamples_each_days_departures(m
     assert lengths == []
 
 
+def test_reused_purpose_templates_sample_hours_conditional_on_purpose():
+    structure = bc.CandidateStructure(
+        G=None, edges=[], hmass=np.array([]), amass={}, entries=[], exits=[],
+        entry_ids=[], exit_ids=[], w_entry=np.array([]), w_exit=np.array([]), measured=[])
+    # The profile treats 07:00 and 20:00 equally. Weekday work-purpose prior
+    # strongly favours 07:00, so conditional resampling must retain that.
+    profile = np.zeros(24); profile[7] = profile[20] = 0.5
+    templates = [("from", "to", "via", "arbete", f"t{i}", "outbound", 7)
+                 for i in range(2000)]
+
+    block, _, _, _ = bc.generate_day_block(
+        structure, profile, 0, "d0_", 42, 0, len(templates), .5, .3, 2.6,
+        False, 1, template_trips=templates)
+    hours = [int(trip[1] // 3600) for trip in block]
+
+    assert hours.count(7) > 2 * hours.count(20)
+
+
 class TestReverseEdgeId:
     def test_swaps_endpoints_keeps_key(self):
         assert bc.reverse_edge_id("100_200_0") == "200_100_0"
