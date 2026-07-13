@@ -1100,6 +1100,51 @@ class TestGravityDistanceKm:
         assert d_ns[0] > d_ew[0]
 
 
+class TestPurposeLengthScale:
+    """Per-purpose kernel-scale table (2026-07-13, §4A step 1) — national
+    RVU (Trafikanalys Resvanor i Sverige 2023, Tabell 3, car mode) purpose
+    ratios shrunk 50% toward 1 (partial pooling, disclosed)."""
+
+    def test_covers_every_purpose_category(self):
+        for p in bc.PURPOSE_CATEGORIES:
+            assert p in bc.PURPOSE_LENGTH_SCALE
+
+    def test_ordering_matches_the_national_survey(self):
+        # fritid trips are the longest, work trips the shortest — Tabell 3's
+        # car-mode ordering (56 > 30 > 24 km) must survive the shrinkage.
+        s = bc.PURPOSE_LENGTH_SCALE
+        assert s["fritid"] > s["service"] > s["arbete"]
+
+    def test_shrinkage_stays_well_inside_the_raw_national_ratios(self):
+        # 50% pooling toward 1 (then weekday-mix normalization): no scale
+        # may reach the raw national ratio — that would mean the shrinkage
+        # silently vanished and the wide-CI national values were taken at
+        # face value.
+        assert bc._PURPOSE_RAW_RATIO["arbete"] < bc.PURPOSE_LENGTH_SCALE["arbete"] < 1.0
+        assert bc.PURPOSE_LENGTH_SCALE["fritid"] < bc._PURPOSE_RAW_RATIO["fritid"]
+
+    def test_average_weekday_mix_weighted_mean_is_exactly_one(self):
+        # The normalization contract: under the average WEEKDAY purpose
+        # mix, the scales redistribute length among purposes without
+        # changing the aggregate weekday calibration at all.
+        mean = sum(bc._WEEKDAY_AVG_MIX[p] * bc.PURPOSE_LENGTH_SCALE[p]
+                   for p in bc.PURPOSE_CATEGORIES)
+        assert mean == pytest.approx(1.0, abs=1e-9)
+
+    def test_weekend_mix_gives_longer_trips_by_design(self):
+        # Leisure dominates weekends and leisure trips are the long ones —
+        # the survey-implied day-type signal must survive normalization,
+        # not be flattened away.
+        we = {"arbete": 0.232, "service": 0.408, "fritid": 0.361}
+        mean = sum(we[p] * bc.PURPOSE_LENGTH_SCALE[p] for p in bc.PURPOSE_CATEGORIES)
+        assert 1.05 < mean < 1.2
+
+    def test_unknown_purpose_falls_back_to_unscaled(self):
+        # I-E trips carry purpose="external" (no survey row) — callers use
+        # .get(purpose, 1.0), so absence must not KeyError anywhere.
+        assert "external" not in bc.PURPOSE_LENGTH_SCALE
+
+
 class TestDeterrenceWeights:
     """Tanner/gamma kernel (2026-07-12, DESTINATION_BIAS_RESEARCH doc): the
     pure negative exponential's mode at d=0, combined with the naturalness

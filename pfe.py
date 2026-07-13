@@ -830,7 +830,7 @@ def write_calibration_report(
     bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
     rungs: list[int] | None = None,
     enforce_integer_bounds: bool = False,
-    dest_group: tuple[list[int], float] | None = None,
+    structure_groups: list[tuple[list[int], float]] | None = None,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
 
@@ -875,20 +875,21 @@ def write_calibration_report(
             repair_bounds = (bounds_per_q[i]
                              if bounds_per_q is not None and enforce_integer_bounds
                              else {})
-            # dest_group (2026-07-12, structure preservation): the group cap
-            # needs an ABSOLUTE per-quarter ceiling, only known once the
-            # quarter's integer total exists. Floor of 2 vehicles keeps tiny
-            # (night) quarters integer-feasible — a 20-vehicle quarter at a
-            # 7% cap cannot meaningfully hold "1.4 vehicles". The repair is
-            # best-effort by design: if the MILP can't reconcile the cap
-            # with the measured counts, the unrepaired counts stand (the
-            # counts always win; the calibrated_structure guard in
-            # demand_meta.json reports whatever the residual is).
+            # structure_groups (2026-07-12, structure preservation): each
+            # group cap needs an ABSOLUTE per-quarter ceiling, only known
+            # once the quarter's integer total exists. Floor of 2 vehicles
+            # keeps tiny (night) quarters integer-feasible — a 20-vehicle
+            # quarter at a 7% cap cannot meaningfully hold "1.4 vehicles".
+            # The repair is best-effort by design: if the MILP can't
+            # reconcile the caps with the measured counts, the unrepaired
+            # counts stand (the counts always win; the calibrated_structure
+            # guard in demand_meta.json reports whatever the residual is).
             quarter_groups = None
-            if dest_group is not None:
-                members, cap_share = dest_group
-                quarter_groups = [(members, 0.0,
-                                   max(2.0, cap_share * float(counts.sum())))]
+            if structure_groups:
+                q_total = float(counts.sum())
+                quarter_groups = [
+                    (members, 0.0, max(2.0, cap_share * q_total))
+                    for members, cap_share in structure_groups]
             if repair_bounds or quarter_groups:
                 repaired = repair_integer_bounds(
                     counts, shapes, targets_per_q[i], repair_bounds,

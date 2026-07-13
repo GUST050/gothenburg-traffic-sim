@@ -419,6 +419,104 @@ visual result warrants it.
 
 ---
 
+## 7. COMPLETION PASS (2026-07-13) — full §4A audit, gaps closed
+
+Gustav asked whether §4A prescribed anything better/beyond what was
+implemented. Honest audit answer: the §4A core (conditional sampling) was
+already in and had proven decisively better than this doc's own original
+Fix-2 (importance division). Three prescribed items were still missing;
+two are now implemented, measured, and gated:
+
+**§4A step 3, length-bin bands (was: spatial group only).** Measured
+first: even with the near-sensor cap in place, PFE inflated the 0-1 km
+bin 1.2% (pool) → 7.5% (calibrated) — the same under-determination
+family, exactly the drift step 3 prohibits. `structure_groups_for_shapes`
+now emits per-length-bin caps (RVU bin edges, 2× pool share, ceilings
+only, no-op bins omitted) through the same groups machinery (continuous
+two-pass + integer MILP repair). Result: 0-1 km share 7.5% → **2.4%**
+(pool 1.2%, cap 2.3% + the per-quarter 2-vehicle integer floors).
+
+**§4A step 4, the full gate set (was: proximity + aggregate length
+only).** `calibrated_structure_report` now also measures:
+- **onward distance after the LAST sensor the route actually crosses** —
+  §4A's own metric, sharper than nearest-sensor proximity (immune to a
+  destination that happens to sit near a DIFFERENT sensor the route never
+  crossed). Final build: **median 2 902 m onward, only 6.0% under
+  200 m** — vehicles visibly continue past the sensors.
+- **sensor-passage count per route** (final build: 86% cross 1 sensor,
+  12% cross 2, 1.6% cross 3+),
+- **drift FLAGS vs the pool** (calibrated > 2.5× pool on proximity,
+  onward-under-200m, or under-1km share ⇒ WARNING printed + stored in
+  demand_meta.json's structure_flags). The final build carries **no
+  drift flags**.
+
+**Honest tension surfaced by the length-bin cap**: aggregate RVU L1
+worsened 0.33 → 0.40, because RVU actually wants MORE 0-1 km trips
+(15.3%) than the pool contains (1.2%) — but §4A step 3's principle is
+that CALIBRATION must not invent structure the seed doesn't have; a
+short-trip deficit in the pool is a GENERATION question (the
+purpose-level prior below), not something PFE should backfill from
+count-fitting freedom.
+
+**§4A step 1's full form — length priors per purpose × day type —
+IMPLEMENTED (2026-07-13)** after Gustav challenged the claim that it
+needed unavailable data ("why can you not implement this with found data
+online") — he was right; the claim was made without actually searching:
+- **Trafikanalys "Resvanor i Sverige 2023"** (official national RVU,
+  published Excel: trafa.se/globalassets/statistik/resvanor/2023/
+  resvanor-i-sverige-2023.xlsx), Tabell 3 — distance per trip by MAIN
+  PURPOSE and mode, car: arbete/tjänste/skola 24 km (±3), service/inköp
+  30 km (±8), fritid 56 km (±9), samtliga 37 km (±4).
+- **VGR Analys 2023:56 itself** (fetched: mellanarkiv-offentlig.vgregion
+  .se/.../RVU231103.pdf), Tabell 3 — LOCAL distance-to-work/school
+  distribution (0-3/3-5/5-10/>10 km = 19/14/19/46%), confirming the
+  purpose ordering locally.
+Implementation (build_candidates.PURPOSE_LENGTH_SCALE): national absolute
+distances do NOT transfer to a 7.8 km canvas, so only the between-purpose
+RATIOS are used, shrunk 50% toward 1 (partial pooling — §4A's own
+prescription; the dirsplit national-to-local precedent; service's CI is
+±27%), then normalized so the average-WEEKDAY purpose mix preserves the
+aggregate calibration exactly (a unit test asserts mean == 1.0 — the
+first draft claimed "≈1" and the test caught it failing at commute
+hours). Final scales on the kernel's β: arbete 0.90, service 0.99,
+fritid 1.38. Day-type/hour variation arrives through composition —
+P(length | purpose) × P(purpose | hour, day type) — so the leisure-heavy
+weekend mix yields ~1.11× mean length by design, the survey-implied
+signal, not an artifact.
+
+**§4A's LOSO acceptance criterion — run 2026-07-13, with LOSO's fold
+calibration first brought into line with the deployed pipeline**
+(validate_sim.calibrate_fold_parallel now applies the SAME
+structure-preservation groups as deployment — the LOSO/production
+config-mismatch class this project has fixed once before):
+- Final ratios (full pipeline rerun 2026-07-13 with every fix, including
+  the purpose scales, in both the candidates AND the fold calibration):
+  **min 0.05 / median 0.78 / max 1.95** — per fold: 107-N 0.71,
+  107-S 1.95, 1074 0.50, **1076 0.05**, 133 1.30, 134 0.78, 2276 0.81.
+  (Previously documented: 0.830 / 0.896 / 2.410 — measured on the
+  PRE-fix pipeline.)
+- HONEST INTERPRETATION, not spin: the median held-out recovery DROPPED
+  (0.90 → 0.78). The extreme fold (sensor 1076, edge
+  30420757_30421744_0, ratio 0.05) is the strongest evidence for why:
+  that edge is immediately upstream of the exact hot edges the amplified
+  sensor-terminating shapes used to drive through — the OLD,
+  better-looking recovery there was substantially powered by the
+  artifact itself (count-matching freely dumping vehicles onto
+  sensor-adjacent routes also inflated flow past neighbouring corridor
+  sensors). Removing invented flow reduces apparent generalization
+  measured against sensors that sit inside the same two compact
+  clusters. The new numbers are the honest baseline for the fixed
+  pipeline; the old ones should no longer be quoted for it.
+
+**Final deployed build (2027-10-22 forecast, everything active):**
+destinations within 200 m of a sensor **7.3%** (baseline 1.9%, field
+2.6-3.5%, was 36.5%); onward after last crossed sensor **median
+2 902 m**, only 5.9% under 200 m; 0-1 km share 2.1%; sensor passages
+86%/14%/0.3% (1/2/3+); GEH<5 **100.0%** on all three variants, 0
+infeasible intervals; **no drift flags**.
+
+---
+
 ## 5. Sources
 
 - SUMO routeSampler documentation (short-route problem area, `--min-count`,

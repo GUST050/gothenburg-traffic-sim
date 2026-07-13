@@ -49,7 +49,8 @@ import pandas as pd
 from assignment_priors import (DEFAULT_N_SAMPLES, calibrate_assignment_priors,
                                compute_assignment_load)
 import pfe
-from build_sumo_demand import build_targets, ensure_observability, load_sensor_edges
+from build_sumo_demand import (build_targets, ensure_observability,
+                               load_sensor_edges, structure_groups_for_shapes)
 from build_sumo_net import sumo_home
 
 SUMO_DIR = Path("sumo")
@@ -115,10 +116,17 @@ def corridor_priors_for_fold(corridor: dict, edge_to_sensor: dict[str, str],
 
 _PFE_PAR_SHAPES = None
 _PFE_PAR_ROUTE_COST = None
+_PFE_PAR_STRUCTURE_GROUPS = None
 
 
 def _run_pfe_interval_job(job: dict):
-    """ProcessPool worker for one independent quarter PFE solve."""
+    """ProcessPool worker for one independent quarter PFE solve.
+
+    Mirrors build_sumo_demand._run_pfe_interval_job's two-pass structure
+    preservation (2026-07-13) — LOSO must calibrate with the SAME
+    constraint set the deployed pipeline uses, or it validates a different
+    system than the one shipping (the exact mismatch class this project
+    already fixed once for the meso junction-control config)."""
     if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
         raise RuntimeError("PFE interval worker was not initialized")
     sol, rung = pfe.solve_interval_with_relaxation(
@@ -128,6 +136,23 @@ def _run_pfe_interval_job(job: dict):
         job["priors"],
         route_cost=_PFE_PAR_ROUTE_COST,
     )
+    if sol is not None and _PFE_PAR_STRUCTURE_GROUPS:
+        total = float(sol.sum())
+        violated = total > 0 and any(
+            float(sol[members].sum()) > cap_share * total
+            for _name, members, cap_share in _PFE_PAR_STRUCTURE_GROUPS)
+        if violated:
+            capped_sol, capped_rung = pfe.solve_interval_with_relaxation(
+                _PFE_PAR_SHAPES,
+                job["targets"],
+                job["bounds"],
+                job["priors"],
+                route_cost=_PFE_PAR_ROUTE_COST,
+                groups=[(members, 0.0, cap_share * total)
+                        for _name, members, cap_share in _PFE_PAR_STRUCTURE_GROUPS],
+            )
+            if capped_sol is not None:
+                sol, rung = capped_sol, capped_rung
     return job["quarter"], sol, rung
 
 
@@ -140,10 +165,14 @@ def calibrate_fold_parallel(
     max_workers: int | None = None,
 ) -> dict:
     """Solve this LOSO fold through one flat per-quarter worker pool."""
-    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST
+    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     _PFE_PAR_SHAPES = shapes
     _PFE_PAR_ROUTE_COST = route_cost
+    # Same structure-preservation groups as the deployed build (set BEFORE
+    # the pool forks so workers inherit them). These depend only on route
+    # geometry, never on which sensor a fold holds out — no leakage.
+    _PFE_PAR_STRUCTURE_GROUPS = structure_groups_for_shapes(shapes)
     try:
         tasks = [
             {
@@ -163,12 +192,15 @@ def calibrate_fold_parallel(
             for quarter, sol, rung in pool.imap_unordered(_run_pfe_interval_job, tasks):
                 solutions[quarter] = sol
                 rungs[quarter] = rung
-        return pfe.write_calibration_report(shapes, out_path, targets, solutions,
-                                            bounds_pq, rungs,
-                                            enforce_integer_bounds=False)
+        return pfe.write_calibration_report(
+            shapes, out_path, targets, solutions, bounds_pq, rungs,
+            enforce_integer_bounds=False,
+            structure_groups=[(members, cap_share) for _n, members, cap_share
+                              in (_PFE_PAR_STRUCTURE_GROUPS or [])])
     finally:
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
+        _PFE_PAR_STRUCTURE_GROUPS = None
 
 
 def simulated_series(ed_file: Path, edge: str, nq: int) -> np.ndarray:

@@ -231,6 +231,44 @@ PURPOSE_HOURLY_WEEKEND: list[tuple[float, float, float]] = [
 ]
 PURPOSE_CATEGORIES = ("arbete", "service", "fritid")
 
+# Per-purpose trip-length SCALE on the deterrence kernel's β (2026-07-13,
+# DESTINATION_BIAS_RESEARCH §4A step 1's "length priors by purpose and day
+# type"). SOURCE: Trafikanalys "Resvanor i Sverige 2023" (official national
+# RVU statistics, published Excel at trafa.se/globalassets/statistik/
+# resvanor/2023/resvanor-i-sverige-2023.xlsx), Tabell 3 "Färdlängd
+# (kilometer) per huvudresa ... efter huvudsakligt ärende och huvudsakligt
+# färdsätt", CAR mode, year 2023:
+#     arbete/tjänste/skola 24 km (±3)   -> ratio to all-purposes 24/37 = 0.65
+#     service och inköp    30 km (±8)   -> 30/37 = 0.81
+#     fritid               56 km (±9)   -> 56/37 = 1.51
+#     samtliga             37 km (±4)
+# National ABSOLUTE distances do not transfer to a ~7.8 km inner-city
+# canvas (they include rural/intercity travel) — only the between-purpose
+# RATIOS are used, and even those are SHRUNK 50% toward 1 (partial pooling,
+# the research doc's own prescription for exactly this situation, and the
+# same disclosed-shrinkage pattern dirsplit already uses for its national-
+# to-local transfer; the wide CIs — service ±27% — are why the shrinkage is
+# this conservative). The shrunk ratios are then NORMALIZED so the
+# AVERAGE-WEEKDAY purpose mix (PURPOSE_HOURLY_WEEKDAY's flat hourly mean:
+# arbete 59.8% / service 24.0% / fritid 16.2%) gets a weighted mean scale
+# of exactly 1.0 — the weekday aggregate calibration (gravity_km, RVU
+# aggregate bins) is preserved and purposes only redistribute length AMONG
+# themselves: fritid longer, arbete/service shorter, matching both the
+# national table's ordering and VGR Analys 2023:56's local Tabell 3
+# (avstånd till arbete/skola). Under the WEEKEND mix the mean scale comes
+# out ~1.11 — deliberately NOT normalized away: leisure dominates weekends
+# and leisure trips are the long ones, so slightly longer weekend trips is
+# the survey-implied day-type signal §4A step 1 asks for, arriving through
+# the joint P(length | purpose) × P(purpose | hour, day type).
+# "external" (I-E exit-gate trips) has no survey purpose row — scale 1.0.
+_PURPOSE_RAW_RATIO = {"arbete": 24 / 37, "service": 30 / 37, "fritid": 56 / 37}
+_PURPOSE_SHRUNK = {p: 1.0 + 0.5 * (r - 1.0) for p, r in _PURPOSE_RAW_RATIO.items()}
+_WEEKDAY_AVG_MIX = {"arbete": 0.598, "service": 0.240, "fritid": 0.162}
+_WEEKDAY_MEAN_SCALE = sum(_WEEKDAY_AVG_MIX[p] * _PURPOSE_SHRUNK[p]
+                          for p in _PURPOSE_SHRUNK)
+PURPOSE_LENGTH_SCALE = {p: s / _WEEKDAY_MEAN_SCALE
+                        for p, s in _PURPOSE_SHRUNK.items()}   # 0.90/0.99/1.38
+
 
 def purpose_shares_for_hour(hour: int, is_weekend: bool) -> dict[str, float]:
     table = PURPOSE_HOURLY_WEEKEND if is_weekend else PURPOSE_HOURLY_WEEKDAY
@@ -1380,7 +1418,9 @@ def generate_sensor_anchored_trips(
                 continue
             d_km = gravity_distance_km(edge_lats, edge_lons,
                                        edge_lats[a_pos], edge_lons[a_pos])
-            far_w = far_base * deterrence_weights(d_km, gravity_km, gravity_alpha)
+            far_w = far_base * deterrence_weights(
+                d_km, gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0),
+                gravity_alpha)
             total_w = far_w.sum()
             if total_w <= 0:
                 continue
@@ -1424,7 +1464,9 @@ def generate_sensor_anchored_trips(
                 continue
             d_km = gravity_distance_km(edge_lats, edge_lons,
                                        entry_lats[a_pos], entry_lons[a_pos])
-            far_w = far_base * deterrence_weights(d_km, gravity_km, gravity_alpha)
+            far_w = far_base * deterrence_weights(
+                d_km, gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0),
+                gravity_alpha)
             total_w = far_w.sum()
             if total_w <= 0:
                 continue

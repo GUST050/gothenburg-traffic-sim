@@ -257,23 +257,22 @@ def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
     }
 
 
-def calibrated_structure_report(route_path: Path) -> dict | None:
-    """Trip-length bins + destination-near-sensor share of the CALIBRATED
-    output, per vehicle — the permanent validation gate for the 2026-07-12
-    destination-clustering bug (DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A
-    step 4: "Publish validation gates with every demand build").
+def _route_structure_metrics(route_path: Path) -> dict | None:
+    """Per-vehicle structure metrics for one SUMO route file — the shared
+    machinery behind calibrated_structure_report (below). Emits, per
+    DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 4:
 
-    Measured then: the candidate POOL looked acceptable while the PFE-
-    calibrated output had 36.5% of vehicles ending within 200 m of a sensor
-    (2.1% random-edge baseline) and a median trip shortened from 3.54 km to
-    2.18 km — calibration distorted the seed's structure invisibly, because
-    the only fit ever computed (trip_length_fit) ran at candidate-generation
-    time. This reruns both structure metrics on what SUMO will actually
-    simulate and stores them in demand_meta.json, so the distortion is a
-    number in every build, not a visual impression someone has to notice.
+    - trip_length_fit (straight-line O→D, RVU bins)
+    - dest_sensor_proximity (share ending within 200 m of a sensor)
+    - onward_after_last_sensor: how far each vehicle's route CONTINUES
+      after the last measured sensor edge it crosses (polyline metres) —
+      the sharpest signature of the original bug ("crosses the sensor,
+      then vanishes"), sharper than nearest-sensor distance because it
+      cannot be confused by a destination that happens to sit near a
+      DIFFERENT sensor the route never crossed.
+    - sensor_passages: how many measured edges each route crosses.
 
-    Reuses build_candidates' own metric implementations (trip_length_fit,
-    destination_sensor_proximity, gravity_distance_km) — imported lazily so
+    Reuses build_candidates' metric implementations — imported lazily so
     build_sumo_demand's import time doesn't pay for osmnx/shapely."""
     from build_candidates import (destination_sensor_proximity,
                                   gravity_distance_km, trip_length_fit)
@@ -282,7 +281,8 @@ def calibrated_structure_report(route_path: Path) -> dict | None:
     with open(GEO_PATH) as f:
         geo = json.load(f)
     edge_latlon: dict[str, tuple[float, float]] = {}
-    sensor_edge_ids: list[str] = []
+    edge_len_m: dict[str, float] = {}
+    sensor_edge_ids: set[str] = set()
     for feat in geo["features"]:
         if feat["geometry"]["type"] != "LineString":
             continue
@@ -290,11 +290,20 @@ def calibrated_structure_report(route_path: Path) -> dict | None:
         mid = coords[len(coords) // 2]
         eid = feat["properties"]["id"]
         edge_latlon[eid] = (mid[1], mid[0])          # (lat, lon)
+        lats = np.array([c[1] for c in coords])
+        lons = np.array([c[0] for c in coords])
+        edge_len_m[eid] = float(sum(
+            gravity_distance_km(np.array([lats[k + 1]]), np.array([lons[k + 1]]),
+                                lats[k], lons[k])[0] * 1000.0
+            for k in range(len(coords) - 1)))
         if feat["properties"].get("sensor_id"):
-            sensor_edge_ids.append(eid)
+            sensor_edge_ids.add(eid)
 
     lengths_km: list[float] = []
     dest_edges: list[str] = []
+    onward_m: list[float] = []
+    passages = Counter()
+    n_no_sensor = 0
     for veh in ET.parse(route_path).getroot().iter("vehicle"):
         route = veh.find("route")
         if route is None or not route.get("edges"):
@@ -305,14 +314,92 @@ def calibrated_structure_report(route_path: Path) -> dict | None:
         if o is not None and d is not None:
             lengths_km.append(float(gravity_distance_km(
                 np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0]))
+        n_pass = sum(1 for e in edges if e in sensor_edge_ids)
+        passages[min(n_pass, 3)] += 1   # 3 == "3 or more"
+        if n_pass == 0:
+            n_no_sensor += 1
+        else:
+            last = max(k for k, e in enumerate(edges) if e in sensor_edge_ids)
+            onward_m.append(sum(edge_len_m.get(e, 0.0) for e in edges[last + 1:]))
 
     if not dest_edges:
         return None
+    onward_sorted = sorted(onward_m)
     return {
         "trip_length_fit": trip_length_fit(lengths_km),
         "dest_sensor_proximity": destination_sensor_proximity(
-            dest_edges, edge_latlon, sensor_edge_ids),
+            dest_edges, edge_latlon, sorted(sensor_edge_ids)),
+        "onward_after_last_sensor": {
+            "median_m": round(onward_sorted[len(onward_sorted) // 2], 1)
+                        if onward_sorted else None,
+            "pct_under_200m": round(100 * sum(1 for v in onward_m if v < 200.0)
+                                    / len(onward_m), 1) if onward_m else None,
+            "n_routes_without_sensor": n_no_sensor,
+        },
+        "sensor_passages": {("3+" if k == 3 else str(k)): passages[k]
+                            for k in sorted(passages)},
     }
+
+
+# Structure-preservation slack: a structural group's calibrated share may be
+# at most this multiple of the candidate pool's own share. 2.0 gives the
+# solver genuine freedom (activity near sensors is real — Korsvägen etc.)
+# while blocking the measured 5-10x amplification.
+DEST_GROUP_CAP_MULT = 2.0
+# Straight-line O→D length bins whose calibrated share is likewise capped
+# relative to the pool — RVU's own bin edges, matching trip_length_fit.
+LENGTH_BIN_EDGES_KM = (1.0, 5.0, 10.0)
+
+# Flag threshold: calibrated may exceed the pool by at most the structure-
+# cap multiple plus a 25% margin (the per-quarter caps carry a 2-vehicle
+# integer floor, so mild aggregate overshoot is expected, not a defect).
+STRUCTURE_FLAG_MULT = DEST_GROUP_CAP_MULT * 1.25
+
+
+def calibrated_structure_report(route_path: Path,
+                                pool_path: Path | None = None) -> dict | None:
+    """Structure metrics of the CALIBRATED output + drift FLAGS vs the
+    candidate pool it was calibrated from — the permanent validation gate
+    for the 2026-07-12 destination-clustering bug (DESTINATION_BIAS_
+    RESEARCH_2026-07-12.md §4A step 4: "Publish validation gates with
+    every demand build ... Reject or flag a build when it has good GEH but
+    fails those structural checks").
+
+    Measured then: the candidate POOL looked acceptable while the PFE-
+    calibrated output had 36.5% of vehicles ending within 200 m of a sensor
+    (2.1% random-edge baseline) — calibration distorted the seed's
+    structure invisibly, because the only fit ever computed ran at
+    candidate-generation time. Flags compare calibrated vs pool (the seed
+    structure PFE is supposed to preserve), not vs an absolute number."""
+    report = _route_structure_metrics(route_path)
+    if report is None:
+        return None
+    if pool_path is not None:
+        pool = _route_structure_metrics(pool_path)
+        if pool is not None:
+            report["pool"] = pool
+            flags = []
+
+            def ratio_flag(name: str, calibrated_v, pool_v) -> None:
+                if calibrated_v is None or pool_v is None:
+                    return
+                if calibrated_v > max(pool_v, 0.5) * STRUCTURE_FLAG_MULT:
+                    flags.append(f"{name}: calibrated {calibrated_v} vs pool "
+                                 f"{pool_v} (over {STRUCTURE_FLAG_MULT:.2f}x)")
+
+            ratio_flag("dest_within_200m_of_sensor_pct",
+                       report["dest_sensor_proximity"]["pct_within"],
+                       pool["dest_sensor_proximity"]["pct_within"])
+            ratio_flag("onward_under_200m_pct",
+                       report["onward_after_last_sensor"]["pct_under_200m"],
+                       pool["onward_after_last_sensor"]["pct_under_200m"])
+            ratio_flag("trips_under_1km_pct",
+                       report["trip_length_fit"]["shares"][0] * 100,
+                       pool["trip_length_fit"]["shares"][0] * 100)
+            report["structure_flags"] = flags
+            for flag in flags:
+                print(f"  WARNING structure drift: {flag}")
+    return report
 
 
 def classify_day(date_str: str, dayofweek: int) -> tuple[bool, str]:
@@ -907,38 +994,42 @@ def run_tool(script: str, args: list[str], home: Path) -> None:
 
 _PFE_PAR_SHAPES = None
 _PFE_PAR_ROUTE_COST = None
-_PFE_PAR_DEST_GROUP = None   # (member shape indices, cap share) or None
+_PFE_PAR_STRUCTURE_GROUPS = None   # list of (name, member indices, cap share)
 
-# Structure-preservation slack: the calibrated share of vehicles ending
-# near a sensor may be at most this multiple of the candidate pool's own
-# share. 2.0 gives the solver genuine freedom (activity near sensors is
-# real — Korsvägen etc.) while blocking the measured 5-10x amplification.
-DEST_GROUP_CAP_MULT = 2.0
+def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
+    """PFE structure-preservation groups (name, member shape indices, capped
+    assigned share) — DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 3:
+    "PFE may adjust route use to satisfy sensor counts, but it may not turn
+    a realistic candidate distribution into mostly sensor-adjacent
+    destinations." Two families, both capped at DEST_GROUP_CAP_MULT × the
+    pool's own share:
 
+    1. near_sensor_dest — routes ENDING within 200 m of a sensor. ROOT
+       CAUSE (measured 2026-07-12, after the stage-1 generation fix had
+       already brought the POOL's share down to the activity-field level
+       of ~2-4%): PFE still calibrated 19.4% of vehicles onto such routes
+       — 87 of 948 active shapes carried 4 550 vehicles at 52 veh/shape vs
+       24 for all others. A route crossing exactly one sensor and ENDING
+       is a free variable for closing that sensor's hard count band
+       without disturbing any other sensor's band (ruled OUT empirically:
+       assignment-prior bounds — a --no-assignment-prior build still
+       showed 18.3%).
+    2. length_bin_* — straight-line O→D length bins (RVU's edges). Same
+       under-determination family, measured after the near-sensor cap was
+       already in place: the calibrated 0-1 km share was still inflated
+       1.2% → 7.5% (6×) relative to the pool. §4A step 3 prescribes
+       length-bin bands explicitly.
 
-def dest_group_for_shapes(shapes) -> tuple[list[int], float] | None:
-    """(near-sensor-ending shape indices, capped assigned share) for PFE's
-    structure-preservation group — DESTINATION_BIAS_RESEARCH_2026-07-12.md
-    §4A step 3.
-
-    ROOT CAUSE this constrains (measured 2026-07-12, after the stage-1
-    generation fix had already brought the candidate POOL's near-sensor-
-    destination share down to the activity-field level of ~2-4%): PFE still
-    calibrated 19.4% of vehicles onto near-sensor-ending routes — 87 of 948
-    active shapes carried 4 550 vehicles at 52 veh/shape vs 24 for all
-    others. A route that crosses exactly one sensor and ENDS is a free
-    variable for closing that sensor's hard count band without disturbing
-    any other sensor's band, so under-determined count-matching loads
-    exactly those routes (ruled OUT empirically the same day: assignment-
-    prior bounds — a --no-assignment-prior build still showed 18.3%). The
-    cap share = DEST_GROUP_CAP_MULT × the pool's own share, so the solver
-    keeps full freedom up to twice the seed structure and hard-stops the
-    runaway amplification there. The cap is dropped (never the counts) if
-    an interval can't otherwise be served — see solve_interval_with_
-    relaxation's ladder and the pass-1 fallback in _run_pfe_interval_job."""
+    Caps are ceilings only (lo=0 — a group must never force flow), applied
+    per quarter with an absolute value derived from that quarter's total,
+    and dropped (never the counts) if an interval can't otherwise be
+    served — see solve_interval_with_relaxation's ladder, the pass-1
+    fallback in _run_pfe_interval_job, and the integer-stage repair in
+    write_calibration_report. Groups whose cap would be >= 100% are
+    omitted (no-ops)."""
     from build_candidates import gravity_distance_km
     if not GEO_PATH.exists():
-        return None
+        return []
     with open(GEO_PATH) as f:
         geo = json.load(f)
     edge_latlon: dict[str, tuple[float, float]] = {}
@@ -953,7 +1044,7 @@ def dest_group_for_shapes(shapes) -> tuple[list[int], float] | None:
             s_lats.append(mid[1])
             s_lons.append(mid[0])
     if not s_lats:
-        return None
+        return []
     s_lats_a, s_lons_a = np.array(s_lats), np.array(s_lons)
 
     def near(eid: str) -> bool:
@@ -963,19 +1054,49 @@ def dest_group_for_shapes(shapes) -> tuple[list[int], float] | None:
         return bool((gravity_distance_km(s_lats_a, s_lons_a, ll[0], ll[1])
                      * 1000.0).min() <= 200.0)
 
-    members = [i for i, shape in enumerate(shapes) if near(shape.edges[-1])]
-    if not members:
-        return None
-    # Pool share weighted by how many source candidates each shape carries —
-    # the seed structure the calibration is supposed to preserve.
-    n_members = sum(len(shapes[i].source_candidates) for i in members)
+    def od_length_km(shape) -> float | None:
+        o = edge_latlon.get(shape.edges[0])
+        d = edge_latlon.get(shape.edges[-1])
+        if o is None or d is None:
+            return None
+        return float(gravity_distance_km(
+            np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0])
+
+    def length_bin(km: float) -> int:
+        for b, edge in enumerate(LENGTH_BIN_EDGES_KM):
+            if km <= edge:
+                return b
+        return len(LENGTH_BIN_EDGES_KM)
+
+    candidate_groups: dict[str, list[int]] = {"near_sensor_dest": []}
+    bin_names = [f"length_bin_{lo}-{hi}km" for lo, hi in
+                 zip((0,) + LENGTH_BIN_EDGES_KM, LENGTH_BIN_EDGES_KM + ("inf",))]
+    for name in bin_names:
+        candidate_groups[name] = []
+    for i, shape in enumerate(shapes):
+        if near(shape.edges[-1]):
+            candidate_groups["near_sensor_dest"].append(i)
+        km = od_length_km(shape)
+        if km is not None:
+            candidate_groups[bin_names[length_bin(km)]].append(i)
+
     n_total = sum(len(s.source_candidates) for s in shapes)
-    pool_share = n_members / max(1, n_total)
-    cap_share = min(1.0, DEST_GROUP_CAP_MULT * pool_share)
-    print(f"  PFE structure guard: {len(members)} shapes end within 200 m of "
-          f"a sensor ({100 * pool_share:.1f}% of pool candidates) — assigned "
-          f"share capped at {100 * cap_share:.1f}%")
-    return members, cap_share
+    groups: list[tuple[str, list[int], float]] = []
+    for name, members in candidate_groups.items():
+        if not members:
+            continue
+        n_members = sum(len(shapes[i].source_candidates) for i in members)
+        # Pool share weighted by how many source candidates each shape
+        # carries — the seed structure the calibration must preserve.
+        pool_share = n_members / max(1, n_total)
+        cap_share = DEST_GROUP_CAP_MULT * pool_share
+        if cap_share >= 1.0:
+            continue   # cap can never bind — omit the no-op
+        groups.append((name, members, cap_share))
+        print(f"  PFE structure guard [{name}]: {len(members)} shapes, "
+              f"{100 * pool_share:.1f}% of pool candidates — assigned share "
+              f"capped at {100 * cap_share:.1f}%")
+    return groups
 
 
 def _run_pfe_interval_job(job: dict):
@@ -985,12 +1106,12 @@ def _run_pfe_interval_job(job: dict):
     heavy candidate geometry is not pickled once per quarter.
 
     Two-pass structure preservation (2026-07-12): pass 1 solves with counts/
-    bounds/priors only; if the near-sensor-destination group exceeds its
-    cap share of the interval's total, pass 2 re-solves with the group
-    capped at cap_share × pass-1 total (the band needs an ABSOLUTE ceiling,
-    which only exists once a total is known). If pass 2 is infeasible, the
-    pass-1 solution is kept — the structure cap must never cost an interval
-    its real sensor counts.
+    bounds/priors only; if ANY structure group (near-sensor destinations,
+    length bins) exceeds its cap share of the interval's total, pass 2
+    re-solves with every group capped at cap_share × pass-1 total (the
+    bands need ABSOLUTE ceilings, which only exist once a total is known).
+    If pass 2 is infeasible, the pass-1 solution is kept — the structure
+    caps must never cost an interval its real sensor counts.
     """
     import pfe
 
@@ -1003,18 +1124,20 @@ def _run_pfe_interval_job(job: dict):
         job["priors"],
         route_cost=_PFE_PAR_ROUTE_COST,
     )
-    if sol is not None and _PFE_PAR_DEST_GROUP is not None:
-        members, cap_share = _PFE_PAR_DEST_GROUP
+    if sol is not None and _PFE_PAR_STRUCTURE_GROUPS:
         total = float(sol.sum())
-        group_sum = float(sol[members].sum())
-        if total > 0 and group_sum > cap_share * total:
+        violated = total > 0 and any(
+            float(sol[members].sum()) > cap_share * total
+            for _name, members, cap_share in _PFE_PAR_STRUCTURE_GROUPS)
+        if violated:
             capped_sol, capped_rung = pfe.solve_interval_with_relaxation(
                 _PFE_PAR_SHAPES,
                 job["targets"],
                 job["bounds"],
                 job["priors"],
                 route_cost=_PFE_PAR_ROUTE_COST,
-                groups=[(members, 0.0, cap_share * total)],
+                groups=[(members, 0.0, cap_share * total)
+                        for _name, members, cap_share in _PFE_PAR_STRUCTURE_GROUPS],
             )
             if capped_sol is not None:
                 sol, rung = capped_sol, capped_rung
@@ -1032,7 +1155,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     """
     import pfe
 
-    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_DEST_GROUP
+    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
@@ -1040,7 +1163,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     _PFE_PAR_SHAPES = shapes
     _PFE_PAR_ROUTE_COST = route_cost
     # Set BEFORE the pool forks so workers inherit it, like the shape pool.
-    _PFE_PAR_DEST_GROUP = dest_group_for_shapes(shapes)
+    _PFE_PAR_STRUCTURE_GROUPS = structure_groups_for_shapes(shapes)
     try:
         tasks = []
         solutions = {}
@@ -1080,7 +1203,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             reports[suffix] = pfe.write_calibration_report(
                 shapes, data["out_path"], data["targets"], solutions[suffix],
                 data["hard_bounds_pq"], rungs[suffix], enforce_integer_bounds=True,
-                dest_group=_PFE_PAR_DEST_GROUP)
+                structure_groups=[(members, cap_share) for _n, members, cap_share
+                                  in (_PFE_PAR_STRUCTURE_GROUPS or [])])
             publish_s = time.perf_counter() - report_started
             reports[suffix]["timings_s"] = {
                 "prepare_shared": round(prepare_s, 3),
@@ -1096,7 +1220,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     finally:
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
-        _PFE_PAR_DEST_GROUP = None
+        _PFE_PAR_STRUCTURE_GROUPS = None
 
 
 def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
@@ -1496,15 +1620,22 @@ def main() -> None:
     agent_summary = calibrated_agent_summary(calib_path, n_intervals)
     if agent_summary is not None:
         meta["agent_demand"] = agent_summary
-    structure = calibrated_structure_report(calib_path)
+    structure = calibrated_structure_report(
+        calib_path, pool_path=SUMO_DIR / "candidates.rou.xml")
     if structure is not None:
         meta["calibrated_structure"] = structure
         prox = structure["dest_sensor_proximity"]
         tl = structure["trip_length_fit"]
+        onward = structure["onward_after_last_sensor"]
         print(f"  calibrated structure: destinations within {prox['radius_m']:.0f} m "
               f"of a sensor {prox['pct_within']}% (all-edges baseline "
               f"{prox['baseline_pct_within']}%), trip-length shares {tl['shares']} "
               f"L1={tl['l1_distance']} vs RVU short bins")
+        print(f"    onward after last crossed sensor: median {onward['median_m']} m, "
+              f"{onward['pct_under_200m']}% under 200 m; sensor passages "
+              f"{structure['sensor_passages']}"
+              + (f"; {len(structure.get('structure_flags', []))} drift flag(s)"
+                 if structure.get('structure_flags') else "; no drift flags"))
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")
