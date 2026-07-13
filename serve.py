@@ -156,22 +156,143 @@ _suggest_state: dict = {"status": "idle"}
 _optimize_lock = threading.Lock()  # guards _optimize_state below
 _optimize_state: dict = {"status": "idle"}
 
+# Per-kind live state, one map — the durable job layer below reads a
+# kind's terminal status through this instead of four hardcoded branches.
+_STATE_BY_KIND: dict = {
+    "recalibrate": (_recal_lock, _recal_state),
+    "close": (_close_lock, _close_state),
+    "suggest": (_suggest_lock, _suggest_state),
+    "optimize": (_optimize_lock, _optimize_state),
+}
+
 # There is only one simulation-class job at a time (_sim_lock). Keep the
 # process-group leader for that job so the UI's Avbryt action can stop the
 # actual SUMO/build process tree rather than merely hiding its controls.
 _active_job_lock = threading.Lock()
-_active_job: dict = {"kind": None, "process": None, "cancel_requested": False}
+_active_job: dict = {"kind": None, "process": None, "cancel_requested": False,
+                     "job_id": None}
+
+# ── E4: durable job records (PLAN.md; audit P0-4) ──────────────────────────
+# The four in-memory state dicts vanish with the process: a server restart
+# (or crash) mid-job left the UI polling an "idle" server while the
+# detached subprocess tree kept running and writing — invisible,
+# uncancellable. Every job now also writes runs/jobs/<id>.json at start
+# (kind, args, server pid, subprocess pgid once known) and at each terminal
+# transition; startup reconciles records left in "running" against live
+# pids. In-memory dicts stay the fast path for the existing per-kind
+# status endpoints — the durable layer is evidence + recovery, mirroring
+# runs.py's manifest-before-work principle at the HTTP-job level.
+JOBS_DIR = ROOT / "runs" / "jobs"
+_jobs_file_lock = threading.Lock()
 
 
-def begin_active_job(kind: str) -> None:
+def _job_write(job_id: str, record: dict) -> None:
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    path = JOBS_DIR / f"{job_id}.json"
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w") as f:
+        json.dump(record, f, indent=1, sort_keys=True)
+    os.replace(tmp, path)
+
+
+def job_read(job_id: str) -> dict | None:
+    path = JOBS_DIR / f"{job_id}.json"
+    if not path.exists() or "/" in job_id or ".." in job_id:
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def job_record(job_id: str, **fields) -> None:
+    """Read-modify-write one job record (atomic replace, lock serialized)."""
+    with _jobs_file_lock:
+        record = job_read(job_id) or {"id": job_id}
+        record.update(fields)
+        _job_write(job_id, record)
+
+
+def job_list(limit: int = 20) -> list[dict]:
+    if not JOBS_DIR.exists():
+        return []
+    records = [r for p in JOBS_DIR.glob("*.json")
+               if (r := job_read(p.stem)) is not None]
+    records.sort(key=lambda r: r.get("started_at", 0), reverse=True)
+    return records[:limit]
+
+
+def reconcile_jobs_on_startup() -> int:
+    """Resolve records stranded in 'running' by a dead server.
+
+    A subprocess started via start_new_session survives its parent, so a
+    record's pgid may still be live after a server crash: mark those
+    'orphaned_running' (visible, cancellable by pgid) rather than guessing
+    an outcome. A dead pgid is marked 'orphaned' — the job's real outcome
+    is unknown and saying so beats claiming failure or success."""
+    n = 0
+    for record in job_list(limit=1000):
+        if record.get("status") != "running":
+            continue
+        pgid = record.get("pgid")
+        alive = False
+        if pgid:
+            try:
+                os.killpg(int(pgid), 0)
+                alive = True
+            except (ProcessLookupError, PermissionError, ValueError):
+                alive = False
+        job_record(record["id"],
+                   status="orphaned_running" if alive else "orphaned",
+                   reconciled_at=time.time())
+        n += 1
+    if n:
+        print(f"jobs: reconciled {n} stranded record(s) from a previous server")
+    return n
+
+
+def begin_active_job(kind: str, args: dict | None = None) -> None:
+    job_id = f"{kind}-{time.strftime('%Y%m%d-%H%M%S')}-{os.urandom(2).hex()}"
     with _active_job_lock:
-        _active_job.update(kind=kind, process=None, cancel_requested=False)
+        _active_job.update(kind=kind, process=None, cancel_requested=False,
+                           job_id=job_id)
+    job_record(job_id, kind=kind, args=args or {}, status="running",
+               started_at=time.time(), server_pid=os.getpid())
 
 
 def finish_active_job(kind: str) -> None:
     with _active_job_lock:
-        if _active_job["kind"] == kind:
-            _active_job.update(kind=None, process=None, cancel_requested=False)
+        if _active_job["kind"] != kind:
+            return
+        job_id = _active_job["job_id"]
+        _active_job.update(kind=None, process=None, cancel_requested=False,
+                           job_id=None)
+    if job_id is None:
+        return
+    # The per-kind state dict was already written by the job thread (state
+    # BEFORE lock-release ordering, see _run_recalibrate) — snapshot it NOW,
+    # synchronously, as the job's terminal record: a second job of the same
+    # kind may overwrite the state dict the instant _sim_lock is released.
+    entry = _STATE_BY_KIND.get(kind)
+    terminal = {}
+    if entry is not None:
+        lock, state = entry
+        with lock:
+            terminal = {k: v for k, v in state.items()
+                        if isinstance(v, (str, int, float, bool, type(None)))}
+    finished = time.time()
+    # The FILE write happens off-thread: finish_active_job runs in every
+    # job's finally block between the terminal-state write and
+    # _sim_lock.release(), and synchronous I/O there widens the exact
+    # status-terminal-but-lock-still-held race the state-before-release
+    # ordering exists to keep negligible (caught by the existing lifecycle
+    # tests). The record's CONTENT is already frozen in `terminal`.
+    threading.Thread(
+        target=job_record, args=(job_id,),
+        kwargs={"status": terminal.get("status", "unknown"),
+                "finished_at": finished, "result": terminal},
+        daemon=True).start()
 
 
 def cancel_active_job(kind: str) -> bool:
@@ -215,8 +336,14 @@ def run_in_new_session(cmd: list[str], *, cwd: str,
         if _active_job["kind"] is not None:
             _active_job["process"] = proc
             cancel_now = bool(_active_job["cancel_requested"])
+            job_id = _active_job["job_id"]
         else:
             cancel_now = False
+            job_id = None
+    if job_id is not None:
+        # start_new_session makes the child a group leader: pgid == pid.
+        # Durable, so a post-crash reconcile can see/kill the live tree.
+        job_record(job_id, pgid=proc.pid)
     if cancel_now:
         os.killpg(proc.pid, signal.SIGKILL)
     try:
@@ -513,7 +640,20 @@ class Handler(SimpleHTTPRequestHandler):
             return self._optimize_signals_status()
         if self.path.startswith("/api/optimize_signals"):
             return self._optimize_signals()
+        if self.path.startswith("/api/jobs"):
+            return self._jobs()
         return super().do_GET()
+
+    def _jobs(self) -> None:
+        """E4 durable job records: /api/jobs (recent) or /api/jobs/<id>."""
+        tail = urllib.parse.urlparse(self.path).path[len("/api/jobs"):]
+        job_id = tail.strip("/")
+        if job_id:
+            record = job_read(job_id)
+            if record is None:
+                return self._json(404, {"error": "okänt jobb-id"})
+            return self._json(200, record)
+        return self._json(200, {"jobs": job_list()})
 
     def _cancel(self) -> None:
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -573,7 +713,8 @@ class Handler(SimpleHTTPRequestHandler):
             _close_state.update(status="running", edges=edges,
                                 begin=begin or None, end=end or None,
                                 started_at=time.time())
-        begin_active_job("close")
+        begin_active_job("close", {"edges": edges, "begin": begin or None,
+                           "end": end or None})
         threading.Thread(target=self._run_close, args=(edges, begin or None, end or None),
                          daemon=True).start()
         return self._json(202, {"status": "started", "edges": edges})
@@ -682,7 +823,8 @@ class Handler(SimpleHTTPRequestHandler):
             _recal_state.clear()
             _recal_state.update(status="running", date=date, source=source,
                                 days=days, started_at=time.time())
-        begin_active_job("recalibrate")
+        begin_active_job("recalibrate", {"date": date, "source": source,
+                                 "days": days})
         threading.Thread(target=self._run_recalibrate, args=(date, source, days),
                          daemon=True).start()
         return self._json(202, {"status": "started", "date": date, "source": source,
@@ -854,6 +996,8 @@ class Handler(SimpleHTTPRequestHandler):
             _suggest_state.clear()
             _suggest_state.update(status="running", edges=edges,
                                   duration_hours=duration_hours, started_at=time.time())
+        begin_active_job("suggest", {"edges": edges,
+                                     "duration_hours": duration_hours})
         threading.Thread(
             target=self._run_suggest_closure,
             args=(edges, duration_hours, slide_hours, top_k, extra_bad, seeds),
@@ -912,6 +1056,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._set_suggest(status="error",
                               error=f"oväntat fel — se serverloggen ({type(e).__name__})")
         finally:
+            finish_active_job("suggest")
             _sim_lock.release()
 
     def _suggest_closure_status(self) -> None:
@@ -943,6 +1088,7 @@ class Handler(SimpleHTTPRequestHandler):
         with _optimize_lock:
             _optimize_state.clear()
             _optimize_state.update(status="running", edges=edges, started_at=time.time())
+        begin_active_job("optimize", {"edges": edges})
         threading.Thread(target=self._run_optimize_signals, args=(edges,),
                          daemon=True).start()
         return self._json(202, {"status": "started", "edges": edges})
@@ -1003,6 +1149,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._set_optimize(status="error",
                                error=f"oväntat fel — se serverloggen ({type(e).__name__})")
         finally:
+            finish_active_job("optimize")
             _sim_lock.release()
 
     def _optimize_signals_status(self) -> None:
@@ -1015,6 +1162,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main() -> None:
     known_edges()   # fail fast if data is missing
+    reconcile_jobs_on_startup()   # E4: resolve records a dead server left "running"
     # Mutating API endpoints have no authentication, so do not expose them
     # to the LAN by default. Explicit LAN support, if ever needed, should be
     # an intentional opt-in rather than the server's implicit bind address.

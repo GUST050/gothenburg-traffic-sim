@@ -1997,12 +1997,27 @@ closure payloads for UI display. Tests: tests/test_seed_health.py.
 Remaining for a later pass: thresholds could move into the run manifest
 (E1 slice 2) so a regression is diffable per run.
 
-### E4. Durable jobs — size M — depends E1 (audit P0-4; supersedes the 4 per-type dicts)
-One jobs table (JSON file per job under runs/jobs/): id, kind, args, pid,
-pgid, status, log path, started/finished. `/api/jobs/<id>` +
-`/api/jobs/<id>/cancel` (killpg, then status=cancelled). The 4 existing
-status endpoints become thin views over it; a server restart re-reads job
-files and reconciles against live pids.
+### E4. Durable jobs — DONE 2026-07-13 (audit P0-4)
+JSON record per job under runs/jobs/ (id, kind, args, server pid, child
+pgid, status, started/finished, terminal-state snapshot), written at start
+and terminal transition. All FOUR job kinds registered (suggest/optimize
+previously never used the active-job tracker at all). `/api/jobs` +
+`/api/jobs/<id>`. `reconcile_jobs_on_startup()`: records left "running"
+by a dead server become `orphaned_running` (pgid still alive — visible,
+killable) or `orphaned` (outcome honestly unknown), never a guessed
+success/failure. Verified live: SIGKILLed the server mid-closure,
+restarted — the job surfaced as orphaned_running with its real pgid, and
+the detached SUMO tree's invisible completion (the exact P0-4 failure)
+is now on the record. Design notes: the terminal snapshot is taken
+synchronously in finish_active_job (a same-kind successor may overwrite
+the state dict the instant _sim_lock releases) but the FILE write is
+off-thread — synchronous I/O there widens the status-terminal-but-lock-
+held race the state-before-release ordering exists to minimize (caught
+by the existing lifecycle tests). The in-memory dicts stay the fast path
+for the per-kind status endpoints (deliberately NOT replaced — the
+durable layer is evidence + recovery). Deferred to a later pass:
+/api/jobs/<id>/cancel by pgid for orphaned_running records (cancel today
+only handles the in-process job). Tests: tests/test_jobs.py.
 
 ## Phase F — Truthful individual-car playback (improvement plan Phase 2; audit "P0 - Individual-vehicle simulation is misleading")
 
