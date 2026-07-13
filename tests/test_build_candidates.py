@@ -1100,6 +1100,110 @@ class TestGravityDistanceKm:
         assert d_ns[0] > d_ew[0]
 
 
+class TestDeterrenceWeights:
+    """Tanner/gamma kernel (2026-07-12, DESTINATION_BIAS_RESEARCH doc): the
+    pure negative exponential's mode at d=0, combined with the naturalness
+    mask only admitting destinations beyond the sensor, made 'the edge
+    immediately past the sensor' the modal trip destination."""
+
+    def test_alpha_zero_is_exactly_the_old_exponential(self):
+        d = np.array([0.0, 0.5, 1.8, 4.0, 9.0])
+        old = np.exp(-d / 1.8)
+        new = bc.deterrence_weights(d, 1.8, alpha=0.0)
+        assert np.allclose(new, old)
+
+    def test_positive_alpha_gives_zero_weight_at_zero_distance(self):
+        d = np.array([0.0, 1.0])
+        w = bc.deterrence_weights(d, 1.8, alpha=1.5)
+        assert w[0] == 0.0
+        assert w[1] > 0.0
+
+    def test_mode_sits_at_alpha_times_beta(self):
+        # f(d) = (d/b)^a exp(-d/b) has its maximum at d = a*b.
+        d = np.linspace(0.01, 15.0, 3000)
+        w = bc.deterrence_weights(d, 1.8, alpha=1.5)
+        assert d[np.argmax(w)] == pytest.approx(1.5 * 1.8, abs=0.05)
+
+    def test_no_nan_or_inf_in_output(self):
+        d = np.array([0.0, 1e-12, 1.0, 1e6])
+        w = bc.deterrence_weights(d, 1.8, alpha=2.0)
+        assert np.isfinite(w).all()
+
+
+class TestNaturalSensorMasks:
+    """Per-sensor naturalness masks for one anchor — the building block of
+    the conditional joint sampling that replaced per-sensor pre-commitment
+    (2026-07-12). Must agree exactly with natural_far_end_weights."""
+
+    def test_agrees_with_natural_far_end_weights_per_sensor(self):
+        # Line graph: n0 -> n1 -> n2 -> n3 -> n4, sensor edge = n1->n2.
+        import networkx as nx
+        G = nx.MultiDiGraph()
+        for u, v in [(0, 1), (1, 2), (2, 3), (3, 4)]:
+            G.add_edge(u, v, key=0, length=100.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        dest_u_idx = np.array([node_idx[2], node_idx[3], node_idx[0]])
+        m_info = {"1_2_0": (1, 2, 100.0)}
+
+        masks = bc.natural_sensor_masks(D, node_idx, 1, m_info, dest_u_idx)
+        base = np.ones(3)
+        expected = bc.natural_far_end_weights(
+            D, node_idx, 1, 1, 2, 100.0, dest_u_idx, base) > 0
+        assert (masks["1_2_0"] == expected).all()
+        # Sanity: from node 1, destinations starting at n2/n3 are reached
+        # naturally THROUGH the sensor edge; n0 is behind it (unreachable
+        # on this directed line graph).
+        assert masks["1_2_0"][0] and masks["1_2_0"][1]
+        assert not masks["1_2_0"][2]
+
+    def test_union_over_sensors_is_or_of_individual_masks(self):
+        import networkx as nx
+        G = nx.MultiDiGraph()
+        # Diamond: 0->1->3 and 0->2->3, two "sensors" on the two branches.
+        for u, v in [(0, 1), (1, 3), (0, 2), (2, 3)]:
+            G.add_edge(u, v, key=0, length=100.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        dest_u_idx = np.array([node_idx[3], node_idx[1], node_idx[2]])
+        m_info = {"0_1_0": (0, 1, 100.0), "0_2_0": (0, 2, 100.0)}
+
+        masks = bc.natural_sensor_masks(D, node_idx, 0, m_info, dest_u_idx)
+        union = masks["0_1_0"] | masks["0_2_0"]
+        # dest at node 1 is only natural via sensor 0->1; node 2 only via
+        # 0->2; node 3 via either — the union covers all three.
+        assert masks["0_1_0"][1] and not masks["0_2_0"][1]
+        assert masks["0_2_0"][2] and not masks["0_1_0"][2]
+        assert union.all()
+
+
+class TestDestinationSensorProximity:
+    """The permanent guard metric for the destination-clustering bug."""
+
+    def test_counts_destinations_within_radius(self):
+        edge_latlon = {
+            "sensor": (57.70, 11.97),
+            "next_door": (57.7001, 11.9701),   # ~15 m away
+            "far": (57.75, 12.05),             # km away
+        }
+        result = bc.destination_sensor_proximity(
+            ["next_door", "far", "far"], edge_latlon, ["sensor"], radius_m=200.0)
+        assert result["n"] == 3
+        assert result["pct_within"] == pytest.approx(33.3, abs=0.1)
+        # baseline: 2 of 3 edges in the network are within 200 m (the
+        # sensor itself + next_door)
+        assert result["baseline_pct_within"] == pytest.approx(66.7, abs=0.1)
+
+    def test_no_sensors_degrades_to_none_not_crash(self):
+        result = bc.destination_sensor_proximity(
+            ["a"], {"a": (57.7, 11.97)}, [], radius_m=200.0)
+        assert result["pct_within"] is None
+
+    def test_unknown_destination_edges_are_excluded_from_n(self):
+        edge_latlon = {"sensor": (57.70, 11.97), "known": (57.71, 11.98)}
+        result = bc.destination_sensor_proximity(
+            ["known", "not_in_network"], edge_latlon, ["sensor"])
+        assert result["n"] == 1
+
+
 class TestTripLengthFit:
     """RVU Västra Götaland's trip-length bins (p.12 table 2: 0-1/1.1-5/
     5.1-10/>10 km = 9/31/19/41%) were documented since 2026-07-05 as having

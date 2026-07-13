@@ -270,6 +270,37 @@ def gravity_distance_km(lats: np.ndarray, lons: np.ndarray,
                   + ((lons - lon0) * KLON_M / 1000.0) ** 2)
 
 
+def deterrence_weights(d_km: np.ndarray, gravity_km: float,
+                       alpha: float = 0.0) -> np.ndarray:
+    """Tanner/gamma trip-distance deterrence: (d/β)^α · exp(−d/β).
+
+    alpha=0 reproduces the previous pure negative exponential EXACTLY
+    (x^0 = 1). alpha>0 makes the kernel rise from zero to a mode at
+    α·β km before decaying — the standard "combined" deterrence function
+    of the gravity-model literature (Tanner; Wilson-family models; see
+    DESTINATION_BIAS_RESEARCH_2026-07-12.md for sources and the measured
+    failure that motivated this).
+
+    WHY (found 2026-07-12, Gustav watching the simulation: "many cars end
+    their trip at the sensor or just next to it"): the sensor-anchoring
+    mask (natural_far_end_weights) only admits destinations path-wise
+    BEYOND the sensor, and a monotone-DECREASING exponential then always
+    prefers the closest admitted destination — the edge immediately past
+    the sensor. Measured on the real deployed artifacts: 36.5% of all
+    simulated vehicles ended within 200 m of a sensor (random-edge
+    baseline: 2.1%). Real trip-length distributions are unimodal with a
+    mode of a few km (RVU Västra Götaland: only 9% of trips under 1 km),
+    which no scale choice of a pure exponential can reproduce — the SHAPE
+    was wrong, not the calibration (build_candidates' own history: "best
+    fit across gravity_km 1-15km still under 5%" for RVU's 5.1-10 km bin).
+
+    d=0 gets weight 0 for alpha>0 (0^α), which is desirable: a "trip" to
+    the anchor's own edge is not a car trip."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        w = np.power(d_km / gravity_km, alpha) * np.exp(-d_km / gravity_km)
+    return np.where(np.isfinite(w), w, 0.0)
+
+
 # RVU Västra Götaland 2022-2023 (VGR Analys 2023:56), p.12 table 2 — ALL
 # trips (home leg included), 0-1/1.1-5/5.1-10/>10 km = 9/31/19/41%. The >10
 # km bin structurally cannot occur for a HOME-BASED TOUR whose both ends are
@@ -308,6 +339,44 @@ def trip_length_fit(lengths_km: list[float]) -> dict:
     l1 = sum(abs(s - r) for s, r in zip(shares, RVU_SHORT_BIN_SHARES))
     return {"shares": [round(s, 4) for s in shares], "l1_distance": round(l1, 4),
            "n": n, "over_10km_pct": round(100 * over_10km / n, 1)}
+
+
+def destination_sensor_proximity(dest_edge_ids: list[str],
+                                 edge_latlon: dict[str, tuple[float, float]],
+                                 sensor_edge_ids: list[str],
+                                 radius_m: float = 200.0) -> dict:
+    """Share of trips whose DESTINATION edge lies within radius_m of the
+    nearest measured sensor edge, plus the all-edges baseline share for
+    context (how much of the network is simply near a sensor anyway).
+
+    THE guard metric for the 2026-07-12 destination-clustering bug ("many
+    cars end their trip at the sensor or just next to it") — measured then
+    at 36.5% of simulated vehicles within 200 m vs a 2.1% random-edge
+    baseline. Sensor-anchored demand legitimately concentrates TRAFFIC near
+    sensors; trips should not disproportionately END there. Edge positions
+    are midpoints; distances use the same cos-corrected flat-earth maths as
+    gravity_distance_km."""
+    sensor_pts = [edge_latlon[s] for s in sensor_edge_ids if s in edge_latlon]
+    if not sensor_pts:
+        return {"radius_m": radius_m, "pct_within": None, "baseline_pct_within": None,
+                "n": len(dest_edge_ids)}
+    s_lats = np.array([p[0] for p in sensor_pts])
+    s_lons = np.array([p[1] for p in sensor_pts])
+
+    def near(lat: float, lon: float) -> bool:
+        d_km = gravity_distance_km(s_lats, s_lons, lat, lon)
+        return bool(d_km.min() * 1000.0 <= radius_m)
+
+    n_near = sum(1 for e in dest_edge_ids
+                 if e in edge_latlon and near(*edge_latlon[e]))
+    n_known = sum(1 for e in dest_edge_ids if e in edge_latlon)
+    all_near = sum(1 for ll in edge_latlon.values() if near(*ll))
+    return {
+        "radius_m": radius_m,
+        "pct_within": round(100 * n_near / n_known, 1) if n_known else None,
+        "baseline_pct_within": round(100 * all_near / len(edge_latlon), 1),
+        "n": n_known,
+    }
 
 
 def duarouter_weight_args(weight_file: str | None,
@@ -835,6 +904,42 @@ def natural_far_end_weights(
     return np.where(natural, base_weights, 0.0)
 
 
+def natural_sensor_masks(
+    D: np.ndarray, node_idx: dict[int, int], anchor_v: int,
+    m_info: dict[str, tuple[int, int, float]],
+    dest_u_idx: np.ndarray,
+    tol_abs: float = 0.5, tol_rel: float = 1e-6,
+) -> dict[str, np.ndarray]:
+    """For ONE anchor: per-sensor boolean masks over the destination pool —
+    natural_m(dest) = "routing anchor→sensor m→dest is the true shortest
+    anchor→dest path" — the same arithmetic as natural_far_end_weights,
+    returned per sensor so the caller can take both the UNION (does any
+    sensor lie naturally on the way?) and the attribution (which ones?).
+
+    Built for the 2026-07-12 destination-clustering fix (see
+    DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 2): instead of
+    forcing every anchor draw through one pre-chosen sensor and
+    renormalizing within whatever that sensor's mask happens to admit
+    (which lets an anchor whose only admissible destinations are next to
+    the sensor emit exactly those with probability 1 — the measured
+    dominant near-sensor bias), the tour sampler now draws destinations
+    from the city-wide activity field CONDITIONED on the union mask, and
+    anchors are accepted in proportion to their sensor-passing mass
+    (rejection sampling of the joint), which is the exact conditional
+    P(anchor, dest | natural route passes ≥1 sensor)."""
+    a = node_idx[anchor_v]
+    d_direct = D[a, dest_u_idx]
+    finite_direct = np.isfinite(d_direct)
+    tol = np.maximum(tol_abs, tol_rel * np.where(finite_direct, d_direct, 0.0))
+    masks: dict[str, np.ndarray] = {}
+    for m_edge, (m_u, m_v, m_length) in m_info.items():
+        via = D[a, node_idx[m_u]] + m_length + D[node_idx[m_v], dest_u_idx]
+        finite = finite_direct & np.isfinite(via)
+        with np.errstate(invalid="ignore"):
+            masks[m_edge] = finite & (np.abs(via - d_direct) <= tol)
+    return masks
+
+
 def natural_origin_weights(
     D: np.ndarray, node_idx: dict[int, int],
     candidate_v_idx: np.ndarray, m_u: int, m_v: int, m_length: float,
@@ -1055,6 +1160,7 @@ def generate_sensor_anchored_trips(
     n_total: int, through_fraction: float, cross_fraction: float,
     gravity_km: float, is_weekend: bool,
     min_per_sensor: int = 50, max_anchor_redraws: int = 25,
+    gravity_alpha: float = 0.0,
 ) -> tuple[list[tuple], list[float], dict[str, int]]:
     """Replaces the old E-E/I-I/E-I/I-E blocks + separate via-trip
     coverage block with ONE principle: every generated trip must be
@@ -1223,48 +1329,85 @@ def generate_sensor_anchored_trips(
     home_anchor_p = hmass / hmass.sum()
     entry_anchor_p = w_entry / w_entry.sum()
 
+    # ── Conditional joint sampling (REDESIGNED 2026-07-12, see
+    # DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 2 and
+    # natural_sensor_masks' docstring). Each tour's outbound leg now:
+    #   1. draws its anchor from the UNCONDITIONED anchor field,
+    #   2. computes city-wide destination weights (activity mass ×
+    #      deterrence kernel) over the whole pool,
+    #   3. masks them by the UNION of all sensors' naturalness, and
+    #   4. ACCEPTS the anchor with probability (sensor-passing mass /
+    #      total mass) — rejection sampling that yields exactly
+    #      P(anchor, dest | natural route passes ≥1 sensor).
+    # The PREVIOUS design pre-committed each draw to ONE sensor (quota
+    # order) and renormalized within that sensor's admitted set — so an
+    # anchor whose only admissible destinations sat right next to the
+    # sensor emitted exactly those with probability 1. Measured: ~10-12%
+    # of generated destinations within 200 m of a sensor (all-edges
+    # baseline 1.8%), nearly FLAT across the entire deterrence-kernel
+    # (α, β) grid, and a within-anchor importance division (Frejinger-
+    # style q-correction) only moved it 11.1%→10.4% — per-anchor
+    # renormalization itself was the bias, so the fix is to stop
+    # renormalizing and condition the joint instead.
+    # The sensor a trip is ATTRIBUTED to (its via= edge + quota
+    # bookkeeping) is chosen among the sensors its route naturally
+    # passes — most-behind quota first, the same balancing spirit as
+    # before — AFTER the draw, so attribution can no longer distort the
+    # OD itself. E-E through trips keep the per-sensor quota mechanism
+    # unchanged: they are the guaranteed-coverage backbone, and their
+    # gate endpoints sit on the canvas boundary where the near-sensor
+    # mechanism cannot apply.
+    n_accept_tries = max_anchor_redraws * 8   # rejection tries are cheap and
+                                              # MUST be plentiful: a low
+                                              # P(pass any sensor) is handled
+                                              # by retrying, not by biasing
+
+    def attribute_sensor(masks: dict[str, np.ndarray], pos: int) -> str:
+        passed = [m for m in measured if masks[m][pos]]
+        return max(passed, key=lambda m: quota[m])
+
     # I-I: home -> activity -> home. Both ends are ordinary internal
     # edges, so the return leg simply reuses both fixed edges — only
     # needs to verify SOME sensor naturally connects them (no new draw).
     for tour_no in range(n_internal):
         h_out, h_ret = am_pm_hours()
         purpose, far_base = draw_purpose_weights(h_out)
-        anchor_p = home_anchor_p
         succeeded = False
-        for m_edge in by_quota():
-            m_u, m_v, m_length = m_info[m_edge]
-            for _ in range(max_anchor_redraws):
-                a_pos = int(rng.choice(len(edge_v_nodes), p=anchor_p))
-                anchor_v = edge_v_nodes[a_pos]
-                if anchor_v not in node_idx:
-                    continue
-                d_km = gravity_distance_km(edge_lats, edge_lons,
-                                           edge_lats[a_pos], edge_lons[a_pos])
-                far_w = far_base * np.exp(-d_km / gravity_km)
-                masked = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v,
-                                                 m_length, edge_u_idx, far_w)
-                total = masked.sum()
-                if total <= 0:
-                    continue
-                f_pos = int(rng.choice(len(edge_u_idx), p=masked / total))
-                return_sensor = _natural_sensor_for_leg(
-                    D, node_idx, edge_v_nodes[f_pos], edge_u_nodes[a_pos],
-                    m_info, quota)
-                if return_sensor is None:
-                    continue
-                quota[m_edge] -= 1
-                quota[return_sensor] -= 1
-                tour_lengths_km.append(float(d_km[f_pos]))
-                trips.append(((h_out + rng.random()) * 3600,
-                              edge_ids[a_pos], edge_ids[f_pos], m_edge,
-                              purpose, f"ii-{tour_no}", "outbound"))
-                trips.append(((h_ret + rng.random()) * 3600,
-                              edge_ids[f_pos], edge_ids[a_pos], return_sensor,
-                              purpose, f"ii-{tour_no}", "return"))
-                succeeded = True
-                break
-            if succeeded:
-                break
+        for _ in range(n_accept_tries):
+            a_pos = int(rng.choice(len(edge_v_nodes), p=home_anchor_p))
+            anchor_v = edge_v_nodes[a_pos]
+            if anchor_v not in node_idx:
+                continue
+            d_km = gravity_distance_km(edge_lats, edge_lons,
+                                       edge_lats[a_pos], edge_lons[a_pos])
+            far_w = far_base * deterrence_weights(d_km, gravity_km, gravity_alpha)
+            total_w = far_w.sum()
+            if total_w <= 0:
+                continue
+            masks = natural_sensor_masks(D, node_idx, anchor_v, m_info, edge_u_idx)
+            masked = np.where(np.logical_or.reduce([masks[m] for m in measured]),
+                              far_w, 0.0)
+            z = masked.sum()
+            if z <= 0 or rng.random() >= z / total_w:
+                continue   # anchor rejected — this IS the conditioning
+            f_pos = int(rng.choice(len(edge_u_idx), p=masked / z))
+            return_sensor = _natural_sensor_for_leg(
+                D, node_idx, edge_v_nodes[f_pos], edge_u_nodes[a_pos],
+                m_info, quota)
+            if return_sensor is None:
+                continue
+            m_edge = attribute_sensor(masks, f_pos)
+            quota[m_edge] -= 1
+            quota[return_sensor] -= 1
+            tour_lengths_km.append(float(d_km[f_pos]))
+            trips.append(((h_out + rng.random()) * 3600,
+                          edge_ids[a_pos], edge_ids[f_pos], m_edge,
+                          purpose, f"ii-{tour_no}", "outbound"))
+            trips.append(((h_ret + rng.random()) * 3600,
+                          edge_ids[f_pos], edge_ids[a_pos], return_sensor,
+                          purpose, f"ii-{tour_no}", "return"))
+            succeeded = True
+            break
         if not succeeded:
             n_dropped_no_sensor += 1
 
@@ -1273,48 +1416,48 @@ def generate_sensor_anchored_trips(
     for tour_no in range(n_ei):
         h_out, h_ret = am_pm_hours()
         purpose, far_base = draw_purpose_weights(h_out)
-        anchor_p = entry_anchor_p
         succeeded = False
-        for m_edge in by_quota():
-            m_u, m_v, m_length = m_info[m_edge]
-            for _ in range(max_anchor_redraws):
-                a_pos = int(rng.choice(len(entry_v_nodes), p=anchor_p))
-                anchor_v = entry_v_nodes[a_pos]
-                if anchor_v not in node_idx:
-                    continue
-                d_km = gravity_distance_km(edge_lats, edge_lons,
-                                           entry_lats[a_pos], entry_lons[a_pos])
-                far_w = far_base * np.exp(-d_km / gravity_km)
-                masked = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v,
-                                                 m_length, edge_u_idx, far_w)
-                total = masked.sum()
-                if total <= 0:
-                    continue
-                f_pos = int(rng.choice(len(edge_u_idx), p=masked / total))
-                for return_m_edge in by_quota():
-                    rm_u, rm_v, rm_length = m_info[return_m_edge]
-                    return_masked = natural_far_end_weights(
-                        D, node_idx, edge_v_nodes[f_pos], rm_u, rm_v, rm_length,
-                        exit_u_idx, w_exit)
-                    return_total = return_masked.sum()
-                    if return_total <= 0:
-                        continue
-                    g_pos = int(rng.choice(len(exit_u_idx), p=return_masked / return_total))
-                    quota[m_edge] -= 1
-                    quota[return_m_edge] -= 1
-                    tour_lengths_km.append(float(d_km[f_pos]))
-                    trips.append(((h_out + rng.random()) * 3600,
-                                  entry_ids[a_pos], edge_ids[f_pos], m_edge,
-                                  purpose, f"ei-{tour_no}", "inbound"))
-                    trips.append(((h_ret + rng.random()) * 3600,
-                                  edge_ids[f_pos], exit_ids[g_pos], return_m_edge,
-                                  purpose, f"ei-{tour_no}", "outbound"))
-                    succeeded = True
-                    break
-                if succeeded:
-                    break
-            if succeeded:
-                break
+        for _ in range(n_accept_tries):
+            a_pos = int(rng.choice(len(entry_v_nodes), p=entry_anchor_p))
+            anchor_v = entry_v_nodes[a_pos]
+            if anchor_v not in node_idx:
+                continue
+            d_km = gravity_distance_km(edge_lats, edge_lons,
+                                       entry_lats[a_pos], entry_lons[a_pos])
+            far_w = far_base * deterrence_weights(d_km, gravity_km, gravity_alpha)
+            total_w = far_w.sum()
+            if total_w <= 0:
+                continue
+            masks = natural_sensor_masks(D, node_idx, anchor_v, m_info, edge_u_idx)
+            masked = np.where(np.logical_or.reduce([masks[m] for m in measured]),
+                              far_w, 0.0)
+            z = masked.sum()
+            if z <= 0 or rng.random() >= z / total_w:
+                continue
+            f_pos = int(rng.choice(len(edge_u_idx), p=masked / z))
+            # Return leg: fixed activity origin -> fresh exit gate, union
+            # over sensors (no per-sensor pre-commitment here either).
+            ret_masks = natural_sensor_masks(D, node_idx, edge_v_nodes[f_pos],
+                                             m_info, exit_u_idx)
+            ret_w = np.where(np.logical_or.reduce([ret_masks[m] for m in measured]),
+                             w_exit, 0.0)
+            rz = ret_w.sum()
+            if rz <= 0:
+                continue   # no sensor-passing way out from this activity — retry
+            g_pos = int(rng.choice(len(exit_u_idx), p=ret_w / rz))
+            m_edge = attribute_sensor(masks, f_pos)
+            return_m_edge = attribute_sensor(ret_masks, g_pos)
+            quota[m_edge] -= 1
+            quota[return_m_edge] -= 1
+            tour_lengths_km.append(float(d_km[f_pos]))
+            trips.append(((h_out + rng.random()) * 3600,
+                          entry_ids[a_pos], edge_ids[f_pos], m_edge,
+                          purpose, f"ei-{tour_no}", "inbound"))
+            trips.append(((h_ret + rng.random()) * 3600,
+                          edge_ids[f_pos], exit_ids[g_pos], return_m_edge,
+                          purpose, f"ei-{tour_no}", "outbound"))
+            succeeded = True
+            break
         if not succeeded:
             n_dropped_no_sensor += 1
 
@@ -1322,48 +1465,50 @@ def generate_sensor_anchored_trips(
     # drawn entry gate (never from the same exit gate — see note above).
     for tour_no in range(n_ie):
         h_out, h_ret = am_pm_hours()
-        anchor_p = home_anchor_p
         succeeded = False
-        for m_edge in by_quota():
-            m_u, m_v, m_length = m_info[m_edge]
-            for _ in range(max_anchor_redraws):
-                a_pos = int(rng.choice(len(edge_v_nodes), p=anchor_p))
-                anchor_v = edge_v_nodes[a_pos]
-                if anchor_v not in node_idx:
-                    continue
-                d_km = gravity_distance_km(exit_lats, exit_lons,
-                                           edge_lats[a_pos], edge_lons[a_pos])
-                far_w = w_exit * np.exp(-d_km / gravity_km)
-                masked = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v,
-                                                 m_length, exit_u_idx, far_w)
-                total = masked.sum()
-                if total <= 0:
-                    continue
-                f_pos = int(rng.choice(len(exit_u_idx), p=masked / total))
-                for return_m_edge in by_quota():
-                    rm_u, rm_v, rm_length = m_info[return_m_edge]
-                    return_masked = natural_origin_weights(
-                        D, node_idx, entry_v_idx, rm_u, rm_v, rm_length,
-                        edge_u_nodes[a_pos], w_entry)
-                    return_total = return_masked.sum()
-                    if return_total <= 0:
-                        continue
-                    g_pos = int(rng.choice(len(entry_v_idx), p=return_masked / return_total))
-                    quota[m_edge] -= 1
-                    quota[return_m_edge] -= 1
-                    tour_lengths_km.append(float(d_km[f_pos]))
-                    trips.append(((h_out + rng.random()) * 3600,
-                                  edge_ids[a_pos], exit_ids[f_pos], m_edge,
-                                  "external", f"ie-{tour_no}", "outbound"))
-                    trips.append(((h_ret + rng.random()) * 3600,
-                                  entry_ids[g_pos], edge_ids[a_pos], return_m_edge,
-                                  "external", f"ie-{tour_no}", "inbound"))
-                    succeeded = True
-                    break
-                if succeeded:
-                    break
-            if succeeded:
-                break
+        for _ in range(n_accept_tries):
+            a_pos = int(rng.choice(len(edge_v_nodes), p=home_anchor_p))
+            anchor_v = edge_v_nodes[a_pos]
+            if anchor_v not in node_idx:
+                continue
+            d_km = gravity_distance_km(exit_lats, exit_lons,
+                                       edge_lats[a_pos], edge_lons[a_pos])
+            far_w = w_exit * deterrence_weights(d_km, gravity_km, gravity_alpha)
+            total_w = far_w.sum()
+            if total_w <= 0:
+                continue
+            masks = natural_sensor_masks(D, node_idx, anchor_v, m_info, exit_u_idx)
+            masked = np.where(np.logical_or.reduce([masks[m] for m in measured]),
+                              far_w, 0.0)
+            z = masked.sum()
+            if z <= 0 or rng.random() >= z / total_w:
+                continue
+            f_pos = int(rng.choice(len(exit_u_idx), p=masked / z))
+            # Return leg: fresh entry gate -> fixed home destination —
+            # union of the per-sensor natural_origin_weights maskings
+            # (elementwise max is the union: same base weights, 0/w each).
+            ret_w_by_m = {m: natural_origin_weights(
+                D, node_idx, entry_v_idx, *m_info[m],
+                edge_u_nodes[a_pos], w_entry) for m in measured}
+            ret_w = np.maximum.reduce(list(ret_w_by_m.values()))
+            rz = ret_w.sum()
+            if rz <= 0:
+                continue
+            g_pos = int(rng.choice(len(entry_v_idx), p=ret_w / rz))
+            ret_passed = [m for m in measured if ret_w_by_m[m][g_pos] > 0]
+            return_m_edge = max(ret_passed, key=lambda m: quota[m])
+            m_edge = attribute_sensor(masks, f_pos)
+            quota[m_edge] -= 1
+            quota[return_m_edge] -= 1
+            tour_lengths_km.append(float(d_km[f_pos]))
+            trips.append(((h_out + rng.random()) * 3600,
+                          edge_ids[a_pos], exit_ids[f_pos], m_edge,
+                          "external", f"ie-{tour_no}", "outbound"))
+            trips.append(((h_ret + rng.random()) * 3600,
+                          entry_ids[g_pos], edge_ids[a_pos], return_m_edge,
+                          "external", f"ie-{tour_no}", "inbound"))
+            succeeded = True
+            break
         if not succeeded:
             n_dropped_no_sensor += 1
 
@@ -1400,6 +1545,7 @@ def generate_day_block(
     id_prefix: str, seed: int, day_index: int, n_total: int,
     through_fraction: float, cross_fraction: float, gravity_km: float,
     is_weekend: bool, min_per_sensor: int, template_trips: list[tuple] | None = None,
+    gravity_alpha: float = 0.0,
 ) -> tuple[list[tuple], list[float], dict[str, int], list[tuple]]:
     """Generate one calendar-day candidate block.
 
@@ -1415,7 +1561,7 @@ def generate_day_block(
             structure.entries, structure.exits, structure.entry_ids, structure.exit_ids,
             structure.w_entry, structure.w_exit, profile, structure.measured,
             n_total, through_fraction, cross_fraction, gravity_km, is_weekend,
-            min_per_sensor)
+            min_per_sensor, gravity_alpha=gravity_alpha)
         template_trips = [
             (t[1], t[2], t[3],
              t[4] if len(t) > 4 else "unknown",
@@ -1445,7 +1591,27 @@ def main() -> None:
     ap.add_argument("--through-fraction", type=float, default=0.5,
                     help="θ: share of trips that are E-E through traffic")
     ap.add_argument("--gravity-km", type=float, default=1.8,
-                    help="θ: distance-deterrence scale (km) for tours")
+                    help="θ: distance-deterrence scale β (km) for tours")
+    ap.add_argument("--gravity-alpha", type=float, default=1.5,
+                    help="θ: Tanner/gamma deterrence shape α — weight is "
+                        "(d/β)^α·exp(−d/β), so 0 is the previous pure "
+                        "negative exponential and α>0 puts the kernel's "
+                        "mode at α·β km instead of at d=0. Added 2026-07-12 "
+                        "after measuring that the monotone-decreasing "
+                        "exponential, combined with the sensor-anchoring "
+                        "mask (which only admits destinations path-wise "
+                        "BEYOND the sensor), made 'the edge immediately "
+                        "past the sensor' the modal destination — 36.5% of "
+                        "simulated vehicles ended within 200 m of a sensor "
+                        "vs a 2.1% random-edge baseline. See "
+                        "DESTINATION_BIAS_RESEARCH_2026-07-12.md and "
+                        "deterrence_weights().")
+    ap.add_argument("--fit-only", action="store_true",
+                    help="Stop after generating trips and writing "
+                        "trip_length_fit<suffix>.json — skips duarouter "
+                        "routing entirely. For kernel/θ calibration sweeps "
+                        "(tools/fit_deterrence_kernel.py), where only the "
+                        "fit metrics are needed per parameter combination.")
     ap.add_argument("--cross-fraction", type=float, default=0.3,
                     help="θ: share of the (non-through) tour budget that is "
                         "E-I/I-E cross-boundary commuting (one end at a "
@@ -1580,7 +1746,7 @@ def main() -> None:
                 str(block_spec["id_prefix"]), args.seed, day_index, args.n_total,
                 args.through_fraction, args.cross_fraction, args.gravity_km,
                 bool(block_spec.get("is_weekend", False)), args.min_per_sensor,
-                templates.get(pool_key))
+                templates.get(pool_key), gravity_alpha=args.gravity_alpha)
             templates.setdefault(pool_key, template)
             multi_day_trips.extend(block)
             tour_lengths_km.extend(lengths)
@@ -1593,7 +1759,8 @@ def main() -> None:
             rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
             w_entry, w_exit, shape_hourly, measured,
             args.n_total, args.through_fraction, args.cross_fraction,
-            args.gravity_km, args.is_weekend, args.min_per_sensor)
+            args.gravity_km, args.is_weekend, args.min_per_sensor,
+            gravity_alpha=args.gravity_alpha)
 
     n_through     = int(args.n_total * args.through_fraction)
     n_tours_total = (args.n_total - n_through) // 2
@@ -1641,11 +1808,27 @@ def main() -> None:
     fit = trip_length_fit(tour_lengths_km)
     fit["through_fraction"] = args.through_fraction
     fit["gravity_km"] = args.gravity_km
+    fit["gravity_alpha"] = args.gravity_alpha
+    # Destination-clustering guard (2026-07-12, "many cars end their trip at
+    # the sensor or just next to it") — measured on the generated pool here,
+    # and again on the CALIBRATED output in build_sumo_demand.py, so both
+    # stages of the original bug stay visible as numbers.
+    edge_latlon = {e["id"]: (e["lat"], e["lon"]) for e in edges}
+    dest_edges = ([t[2] for t in trips] if multi_day_trips is None
+                  else [t[3] for t in multi_day_trips])
+    fit["dest_sensor_proximity"] = destination_sensor_proximity(
+        dest_edges, edge_latlon, measured)
     with open(SUMO_DIR / f"trip_length_fit{args.out_suffix}.json", "w") as f:
         json.dump(fit, f, indent=1)
     print(f"  trip-length fit vs RVU short bins {RVU_SHORT_BIN_SHARES}: "
           f"generated {fit['shares']}  L1={fit['l1_distance']}  "
           f"(>10km: {fit.get('over_10km_pct', 0)}%)")
+    prox = fit["dest_sensor_proximity"]
+    print(f"  destinations within {prox['radius_m']:.0f} m of a sensor: "
+          f"{prox['pct_within']}%  (all-edges baseline {prox['baseline_pct_within']}%)")
+    if args.fit_only:
+        print("  --fit-only: skipping duarouter routing")
+        return
 
     home = sumo_home()
     out = SUMO_DIR / f"candidates{args.out_suffix}.rou.xml"

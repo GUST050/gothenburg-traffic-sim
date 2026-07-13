@@ -102,21 +102,40 @@ def parse_args() -> argparse.Namespace:
                         "identifiable (no external cordon counts exist to "
                         "discriminate it) — 0.5 is a disclosed neutral prior, "
                         "not a calibrated value.")
-    p.add_argument("--gravity-km", type=float, default=2.6,
-                   help="θ passed to build_candidates.py. CORRECTED "
-                        "2026-07-08: this had claimed since 2026-07-05 to be "
-                        "'frozen from a trip-length fit against RVU' — that "
-                        "fit was never actually implemented (calibrate_theta.py "
-                        "only ever did GEH-based scoring, which saturates at "
-                        "100% and carries no signal). Now that the real fit "
-                        "exists (build_candidates.trip_length_fit), 2.6 sits "
-                        "near a real but shallow optimum (L1=0.59, vs 0.58 "
-                        "best found up to 12km) — a genuine, if modest, "
-                        "improvement over the untested claim, not a precise "
-                        "calibration. See calibrate_theta.py's docstring for "
-                        "why the RVU 5.1-10km/>10km bins cannot be matched "
-                        "regardless of θ: this network's own diameter is "
-                        "~7.8 km, a hard geometric ceiling.")
+    p.add_argument("--gravity-km", type=float, default=1.8,
+                   help="θ passed to build_candidates.py: deterrence scale "
+                        "β (km). RE-FIT 2026-07-12 alongside the new "
+                        "--gravity-alpha under the conditional-sampling "
+                        "redesign (tools/fit_deterrence_kernel.py) — the "
+                        "old 2.6 default came from a fit against the "
+                        "pre-redesign sampler and pure-exponential kernel, "
+                        "both replaced. (History: the 2.6 value was itself "
+                        "a 2026-07-08 correction of an earlier untested "
+                        "claim; see calibrate_theta.py for why RVU's "
+                        "5.1-10km/>10km bins cannot be matched regardless "
+                        "of θ — this network's own diameter is ~7.8 km, a "
+                        "hard geometric ceiling.)")
+    p.add_argument("--gravity-alpha", type=float, default=1.5,
+                   help="θ passed to build_candidates.py: Tanner/gamma "
+                        "deterrence shape α — see build_candidates."
+                        "deterrence_weights and DESTINATION_BIAS_RESEARCH_"
+                        "2026-07-12.md. Default 1.5 chosen from a real "
+                        "9-combo sweep on the real graph (tools/"
+                        "fit_deterrence_kernel.py, 2026-07-12) under the "
+                        "conditional-sampling redesign: with β=1.8 the "
+                        "kernel mode sits at 2.7 km and the generated "
+                        "destination near-sensor share lands exactly at "
+                        "the all-edges baseline (1.9% vs 1.8% — no "
+                        "unexplained spike, the research doc's acceptance "
+                        "criterion) while still emitting short trips. "
+                        "DELIBERATE DEVIATION from the sweep's pre-declared "
+                        "lowest-L1 rule: the L1 winner (α=3, β=2.6, "
+                        "L1=0.746) got there by erasing the 0-1 km bin to "
+                        "0.1% vs RVU's 15% — 'do not simply forbid all "
+                        "short trips' is an explicit constraint in the "
+                        "research doc, so L1 (which rewards that erasure) "
+                        "was overruled for the in-range α the doc itself "
+                        "recommends (α≈1.5-2).")
     p.add_argument("--cross-fraction", type=float, default=0.3,
                    help="θ passed to build_candidates.py: share of tours "
                         "that are E-I/I-E cross-boundary commuting (one end "
@@ -235,6 +254,64 @@ def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
         "purpose_counts": dict(sorted(purposes.items())),
         "purpose_counts_by_quarter": [dict(sorted(counts.items()))
                                       for counts in by_quarter],
+    }
+
+
+def calibrated_structure_report(route_path: Path) -> dict | None:
+    """Trip-length bins + destination-near-sensor share of the CALIBRATED
+    output, per vehicle — the permanent validation gate for the 2026-07-12
+    destination-clustering bug (DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A
+    step 4: "Publish validation gates with every demand build").
+
+    Measured then: the candidate POOL looked acceptable while the PFE-
+    calibrated output had 36.5% of vehicles ending within 200 m of a sensor
+    (2.1% random-edge baseline) and a median trip shortened from 3.54 km to
+    2.18 km — calibration distorted the seed's structure invisibly, because
+    the only fit ever computed (trip_length_fit) ran at candidate-generation
+    time. This reruns both structure metrics on what SUMO will actually
+    simulate and stores them in demand_meta.json, so the distortion is a
+    number in every build, not a visual impression someone has to notice.
+
+    Reuses build_candidates' own metric implementations (trip_length_fit,
+    destination_sensor_proximity, gravity_distance_km) — imported lazily so
+    build_sumo_demand's import time doesn't pay for osmnx/shapely."""
+    from build_candidates import (destination_sensor_proximity,
+                                  gravity_distance_km, trip_length_fit)
+    if not route_path.exists() or not GEO_PATH.exists():
+        return None
+    with open(GEO_PATH) as f:
+        geo = json.load(f)
+    edge_latlon: dict[str, tuple[float, float]] = {}
+    sensor_edge_ids: list[str] = []
+    for feat in geo["features"]:
+        if feat["geometry"]["type"] != "LineString":
+            continue
+        coords = feat["geometry"]["coordinates"]
+        mid = coords[len(coords) // 2]
+        eid = feat["properties"]["id"]
+        edge_latlon[eid] = (mid[1], mid[0])          # (lat, lon)
+        if feat["properties"].get("sensor_id"):
+            sensor_edge_ids.append(eid)
+
+    lengths_km: list[float] = []
+    dest_edges: list[str] = []
+    for veh in ET.parse(route_path).getroot().iter("vehicle"):
+        route = veh.find("route")
+        if route is None or not route.get("edges"):
+            continue
+        edges = route.get("edges").split()
+        o, d = edge_latlon.get(edges[0]), edge_latlon.get(edges[-1])
+        dest_edges.append(edges[-1])
+        if o is not None and d is not None:
+            lengths_km.append(float(gravity_distance_km(
+                np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0]))
+
+    if not dest_edges:
+        return None
+    return {
+        "trip_length_fit": trip_length_fit(lengths_km),
+        "dest_sensor_proximity": destination_sensor_proximity(
+            dest_edges, edge_latlon, sensor_edge_ids),
     }
 
 
@@ -830,6 +907,75 @@ def run_tool(script: str, args: list[str], home: Path) -> None:
 
 _PFE_PAR_SHAPES = None
 _PFE_PAR_ROUTE_COST = None
+_PFE_PAR_DEST_GROUP = None   # (member shape indices, cap share) or None
+
+# Structure-preservation slack: the calibrated share of vehicles ending
+# near a sensor may be at most this multiple of the candidate pool's own
+# share. 2.0 gives the solver genuine freedom (activity near sensors is
+# real — Korsvägen etc.) while blocking the measured 5-10x amplification.
+DEST_GROUP_CAP_MULT = 2.0
+
+
+def dest_group_for_shapes(shapes) -> tuple[list[int], float] | None:
+    """(near-sensor-ending shape indices, capped assigned share) for PFE's
+    structure-preservation group — DESTINATION_BIAS_RESEARCH_2026-07-12.md
+    §4A step 3.
+
+    ROOT CAUSE this constrains (measured 2026-07-12, after the stage-1
+    generation fix had already brought the candidate POOL's near-sensor-
+    destination share down to the activity-field level of ~2-4%): PFE still
+    calibrated 19.4% of vehicles onto near-sensor-ending routes — 87 of 948
+    active shapes carried 4 550 vehicles at 52 veh/shape vs 24 for all
+    others. A route that crosses exactly one sensor and ENDS is a free
+    variable for closing that sensor's hard count band without disturbing
+    any other sensor's band, so under-determined count-matching loads
+    exactly those routes (ruled OUT empirically the same day: assignment-
+    prior bounds — a --no-assignment-prior build still showed 18.3%). The
+    cap share = DEST_GROUP_CAP_MULT × the pool's own share, so the solver
+    keeps full freedom up to twice the seed structure and hard-stops the
+    runaway amplification there. The cap is dropped (never the counts) if
+    an interval can't otherwise be served — see solve_interval_with_
+    relaxation's ladder and the pass-1 fallback in _run_pfe_interval_job."""
+    from build_candidates import gravity_distance_km
+    if not GEO_PATH.exists():
+        return None
+    with open(GEO_PATH) as f:
+        geo = json.load(f)
+    edge_latlon: dict[str, tuple[float, float]] = {}
+    s_lats, s_lons = [], []
+    for feat in geo["features"]:
+        if feat["geometry"]["type"] != "LineString":
+            continue
+        coords = feat["geometry"]["coordinates"]
+        mid = coords[len(coords) // 2]
+        edge_latlon[feat["properties"]["id"]] = (mid[1], mid[0])
+        if feat["properties"].get("sensor_id"):
+            s_lats.append(mid[1])
+            s_lons.append(mid[0])
+    if not s_lats:
+        return None
+    s_lats_a, s_lons_a = np.array(s_lats), np.array(s_lons)
+
+    def near(eid: str) -> bool:
+        ll = edge_latlon.get(eid)
+        if ll is None:
+            return False
+        return bool((gravity_distance_km(s_lats_a, s_lons_a, ll[0], ll[1])
+                     * 1000.0).min() <= 200.0)
+
+    members = [i for i, shape in enumerate(shapes) if near(shape.edges[-1])]
+    if not members:
+        return None
+    # Pool share weighted by how many source candidates each shape carries —
+    # the seed structure the calibration is supposed to preserve.
+    n_members = sum(len(shapes[i].source_candidates) for i in members)
+    n_total = sum(len(s.source_candidates) for s in shapes)
+    pool_share = n_members / max(1, n_total)
+    cap_share = min(1.0, DEST_GROUP_CAP_MULT * pool_share)
+    print(f"  PFE structure guard: {len(members)} shapes end within 200 m of "
+          f"a sensor ({100 * pool_share:.1f}% of pool candidates) — assigned "
+          f"share capped at {100 * cap_share:.1f}%")
+    return members, cap_share
 
 
 def _run_pfe_interval_job(job: dict):
@@ -837,6 +983,14 @@ def _run_pfe_interval_job(job: dict):
 
     The shared shape pool and route-cost vector are inherited by fork, so the
     heavy candidate geometry is not pickled once per quarter.
+
+    Two-pass structure preservation (2026-07-12): pass 1 solves with counts/
+    bounds/priors only; if the near-sensor-destination group exceeds its
+    cap share of the interval's total, pass 2 re-solves with the group
+    capped at cap_share × pass-1 total (the band needs an ABSOLUTE ceiling,
+    which only exists once a total is known). If pass 2 is infeasible, the
+    pass-1 solution is kept — the structure cap must never cost an interval
+    its real sensor counts.
     """
     import pfe
 
@@ -849,6 +1003,21 @@ def _run_pfe_interval_job(job: dict):
         job["priors"],
         route_cost=_PFE_PAR_ROUTE_COST,
     )
+    if sol is not None and _PFE_PAR_DEST_GROUP is not None:
+        members, cap_share = _PFE_PAR_DEST_GROUP
+        total = float(sol.sum())
+        group_sum = float(sol[members].sum())
+        if total > 0 and group_sum > cap_share * total:
+            capped_sol, capped_rung = pfe.solve_interval_with_relaxation(
+                _PFE_PAR_SHAPES,
+                job["targets"],
+                job["bounds"],
+                job["priors"],
+                route_cost=_PFE_PAR_ROUTE_COST,
+                groups=[(members, 0.0, cap_share * total)],
+            )
+            if capped_sol is not None:
+                sol, rung = capped_sol, capped_rung
     return job["suffix"], job["key"], job["quarter"], sol, rung
 
 
@@ -863,13 +1032,15 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     """
     import pfe
 
-    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST
+    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_DEST_GROUP
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
     print(f"  timing PFE prepare: {prepare_s:.1f}s")
     _PFE_PAR_SHAPES = shapes
     _PFE_PAR_ROUTE_COST = route_cost
+    # Set BEFORE the pool forks so workers inherit it, like the shape pool.
+    _PFE_PAR_DEST_GROUP = dest_group_for_shapes(shapes)
     try:
         tasks = []
         solutions = {}
@@ -908,7 +1079,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             report_started = time.perf_counter()
             reports[suffix] = pfe.write_calibration_report(
                 shapes, data["out_path"], data["targets"], solutions[suffix],
-                data["hard_bounds_pq"], rungs[suffix], enforce_integer_bounds=True)
+                data["hard_bounds_pq"], rungs[suffix], enforce_integer_bounds=True,
+                dest_group=_PFE_PAR_DEST_GROUP)
             publish_s = time.perf_counter() - report_started
             reports[suffix]["timings_s"] = {
                 "prepare_shared": round(prepare_s, 3),
@@ -924,6 +1096,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     finally:
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
+        _PFE_PAR_DEST_GROUP = None
 
 
 def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
@@ -1059,6 +1232,7 @@ def main() -> None:
             cmd = [sys.executable, "build_candidates.py",
                   "--through-fraction", str(args.through_fraction),
                   "--gravity-km", str(args.gravity_km),
+                  "--gravity-alpha", str(args.gravity_alpha),
                   "--cross-fraction", str(args.cross_fraction),
                   "--n-total", str(n_total), "--seed", str(args.seed)]
             if use_weekend_shape:
@@ -1322,6 +1496,15 @@ def main() -> None:
     agent_summary = calibrated_agent_summary(calib_path, n_intervals)
     if agent_summary is not None:
         meta["agent_demand"] = agent_summary
+    structure = calibrated_structure_report(calib_path)
+    if structure is not None:
+        meta["calibrated_structure"] = structure
+        prox = structure["dest_sensor_proximity"]
+        tl = structure["trip_length_fit"]
+        print(f"  calibrated structure: destinations within {prox['radius_m']:.0f} m "
+              f"of a sensor {prox['pct_within']}% (all-edges baseline "
+              f"{prox['baseline_pct_within']}%), trip-length shares {tl['shares']} "
+              f"L1={tl['l1_distance']} vs RVU short bins")
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")

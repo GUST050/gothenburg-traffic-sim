@@ -271,6 +271,98 @@ class TestRounding:
         assert (largest_remainder_round(x) == [1, 2, 0]).all()
 
 
+class TestRouteIndexGroups:
+    """`groups` (2026-07-12, DESTINATION_BIAS_RESEARCH §4A step 3): a band
+    over an explicit ROUTE-INDEX set, used to stop count-matching from
+    loading near-sensor-ending routes far beyond their pool share (measured:
+    19.4% of calibrated vehicles vs a ~2-4% pool/field share; the routes
+    are 'free variables' for closing one sensor's band without touching any
+    other's). Held to the same observable contract in BOTH solvers."""
+
+    def test_entropy_group_cap_redirects_flow_to_uncapped_routes(self):
+        # Both routes serve measured edge "m" (target 100); route 0 is in
+        # the capped group (max 20), so route 1 must carry the rest.
+        cands = [cand("m", "stub"), cand("m", "onward", "far")]
+        x = solve_interval_entropy(cands, {"m": 100.0}, {}, {},
+                                   groups=[([0], 0.0, 20.0)])
+        assert x is not None
+        assert x[0] <= 20.0 + 1e-6
+        assert served(x, cands, "m") == pytest.approx(100, rel=0.06)
+
+    def test_lp_group_cap_redirects_flow_to_uncapped_routes(self):
+        cands = [cand("m", "stub"), cand("m", "onward", "far")]
+        x = solve_interval(cands, {"m": 100.0}, {}, {},
+                           groups=[([0], 0.0, 20.0)])
+        assert x is not None
+        assert x[0] <= 20.0 + 1e-6
+        assert served(x, cands, "m") == pytest.approx(100, rel=0.06)
+
+    def test_infeasible_group_cap_returns_none_not_a_violation(self):
+        # EVERY route serving "m" is in the capped group -> target 100 and
+        # cap 20 cannot coexist; the solver must say so, not silently
+        # violate one of them (the relaxation ladder/two-pass fallback
+        # above this layer decides what to drop).
+        cands = [cand("m", "stub")]
+        assert solve_interval_entropy(cands, {"m": 100.0}, {}, {},
+                                      groups=[([0], 0.0, 20.0)]) is None
+
+    def test_relaxation_ladder_drops_the_group_before_the_counts(self):
+        # Same impossible combination through the ladder: the group cap is
+        # a plausibility constraint and must be sacrificed (RUNG_RELAX_NOBND
+        # stage) so the measured count still gets served.
+        cands = [cand("m", "stub")]
+        sol, rung = solve_interval_with_relaxation(
+            cands, {"m": 100.0}, {}, {}, groups=[([0], 0.0, 20.0)])
+        assert sol is not None
+        assert served(sol, cands, "m") == pytest.approx(100, rel=0.06)
+        assert rung != RUNG_INFEASIBLE
+
+    def test_group_with_zero_lo_does_not_activate_its_members(self):
+        # A pure ceiling must not, by itself, put flow on a route nothing
+        # else asked for — same activation rule as a lo=0 bound.
+        cands = [cand("m"), cand("unrelated")]
+        x = solve_interval_entropy(cands, {"m": 50.0}, {}, {},
+                                   groups=[([1], 0.0, 30.0)])
+        assert x is not None
+        assert x[1] == pytest.approx(0.0, abs=1e-9)
+
+    def test_empty_group_is_ignored(self):
+        cands = [cand("m")]
+        x = solve_interval_entropy(cands, {"m": 50.0}, {}, {},
+                                   groups=[([], 0.0, 1.0)])
+        assert x is not None
+        assert served(x, cands, "m") == pytest.approx(50, rel=0.06)
+
+    def test_integer_repair_enforces_a_group_cap_preserving_measured(self):
+        # The rounding-stage leak this exists for: a rounded vector that
+        # satisfies the measured count but puts too much of it on the
+        # capped group must be repaired by shifting whole vehicles to
+        # uncapped routes serving the SAME measured edge — never by
+        # changing the measured total.
+        from pfe import repair_integer_bounds
+        cands = [cand("m", "stub"), cand("m", "onward")]
+        counts = np.array([8, 2])   # group route carries 8 of 10
+        repaired = repair_integer_bounds(
+            counts, cands, {"m": 10.0}, {}, groups=[([0], 0.0, 3.0)])
+        assert repaired is not None
+        assert repaired[0] <= 3
+        assert repaired.sum() == 10          # measured total preserved
+        assert repaired[0] + repaired[1] == 10
+
+    def test_integer_repair_group_infeasible_returns_none(self):
+        from pfe import repair_integer_bounds
+        cands = [cand("m", "stub")]          # only ONE route serves m
+        counts = np.array([10])
+        assert repair_integer_bounds(
+            counts, cands, {"m": 10.0}, {}, groups=[([0], 0.0, 3.0)]) is None
+
+    def test_integer_repair_no_groups_no_bounds_is_a_noop(self):
+        from pfe import repair_integer_bounds
+        cands = [cand("m")]
+        counts = np.array([5])
+        assert (repair_integer_bounds(counts, cands, {"m": 5.0}, {}) == counts).all()
+
+
 class TestBoundViolationsFromRounding:
     """A measurement-first rounding nudge can breach a shared edge bound.
 

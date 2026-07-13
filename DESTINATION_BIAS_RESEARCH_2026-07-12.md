@@ -316,6 +316,109 @@ explicit external-world OD anchoring could, which is a separate decision.
 
 ---
 
+## 6. IMPLEMENTATION RESULTS (2026-07-12, same day — measured, not planned)
+
+Implemented per §4A's order, with every step measured on the real graph
+before the next. Two findings materially updated the plan itself:
+
+**Finding A — the kernel was nearly irrelevant under the OLD sampler.** A
+20-combo (α, β) sweep (tools/fit_deterrence_kernel.py, --fit-only runs on
+the real graph) moved the generated destination near-sensor share only
+12.2% → 9.6% (baseline 1.8%) and left the RVU L1 flat (~0.84-0.88) across
+the entire grid. Fix 1 alone was NOT the dominant stage-1 mechanism.
+
+**Finding B — a within-anchor importance division was not enough either.**
+Implementing the Frejinger q-correction inside the existing per-sensor
+sampler moved the share only 11.1% → 10.4%. Root cause of the residual: the
+sampler pre-commits each draw to ONE sensor and renormalizes within that
+sensor's admitted set, so an anchor whose only admissible destinations sit
+next to the sensor emits exactly those with probability 1 — the per-anchor
+renormalization is itself the bias, and no within-anchor reweighting can
+remove it.
+
+**The fix that worked — conditional joint sampling (§4A step 2, implemented
+as natural_sensor_masks + rejection acceptance in
+build_candidates.generate_sensor_anchored_trips):** draw the anchor from its
+unconditioned field, compute city-wide destination weights, mask by the
+UNION of all sensors' naturalness, and accept the anchor with probability
+(sensor-passing mass / total mass) — exactly
+P(anchor, dest | natural route passes ≥1 sensor). Sensor attribution
+(via=, quota bookkeeping) moved AFTER the draw. Measured, generated pool at
+the old kernel (α=0, β=1.8): near-sensor share **11.1% → 3.0%** (baseline
+1.8%). Generation cost 16 s → ~100 s (real rejection retries) — acceptable
+for a once-per-build stage.
+
+**Kernel re-sweep under the fixed sampler** (9 combos): the kernel now
+matters (the mask no longer dominates). The pre-declared lowest-L1 rule
+selected α=3, β=2.6 (L1=0.746, near-sensor 1.1%) — but it wins by erasing
+the 0-1 km bin to 0.1% vs RVU's 15%, violating §4A's explicit "do not
+simply forbid all short trips". DOCUMENTED DEVIATION from the pre-declared
+rule: deployed default is **α=1.5, β=1.8** (mode 2.7 km, inside §4A's own
+recommended α≈1.5-2 range), whose near-sensor share lands exactly at the
+all-edges baseline (**1.9% vs 1.8%** — no unexplained spike, §4A's actual
+acceptance criterion) while still emitting short trips. L1 was rejected as
+the selector because it structurally rewards short-trip erasure on this
+canvas (the 1-5 km bin dominates all combos at ~90-95% for geometric
+reasons; see "explicitly out of scope").
+
+**Guard (Fix 6) implemented at both stages**: trip_length_fit +
+destination_sensor_proximity now computed on the generated pool (written to
+trip_length_fit.json) AND on the calibrated per-vehicle output
+(build_sumo_demand.calibrated_structure_report → demand_meta.json's
+calibrated_structure + printed at build time).
+
+**Stage 2 (PFE) — three diagnostic builds, mechanism pinned down, then
+fixed (§4A step 3):**
+
+- With the stage-1 fix alone: pool 1.9% (== 1.8% baseline, fully
+  compliant) but calibrated **19.4%** — the entire remaining spike was
+  PFE's count-matching. Mechanism candidates tested empirically:
+  - assignment-prior bounds: RULED OUT (a --no-assignment-prior build
+    still showed 18.3%);
+  - the actual mechanism, measured: 87 of 948 active shapes ended near a
+    sensor and carried 4 550 vehicles at 52 veh/shape vs 24 for all
+    others — a route crossing exactly one sensor and ENDING is a free
+    variable for closing that sensor's hard count band without touching
+    any other sensor's band, so under-determined count-matching loads
+    exactly those routes. The reference field: the POI/activity mass puts
+    2.6-3.5% of destination weight within 200 m of sensors (homes 1.7%),
+    so ~19% was a genuine ~6× unexplained spike.
+- **Fix implemented**: `groups` — a band constraint over an explicit
+  route-index set, structurally identical to the existing edge bounds —
+  added to solve_interval_entropy, solve_interval (LP fallback),
+  solve_interval_with_relaxation (dropped at the same ladder stage as
+  bounds: never at the counts' expense), AND repair_integer_bounds.
+  build_sumo_demand caps the near-sensor-ending group's assigned share at
+  2× its pool share (7.4%), two-pass per quarter (the band needs an
+  absolute ceiling, known only after a first solve).
+- **The integer stage mattered as much as the continuous one**: with only
+  the continuous cap, the published result was still 13.7% and 95 of 96
+  quarters violated the cap — largest-remainder rounding hands whole
+  vehicles to the individually-largest fractional values, which are
+  exactly the near-enders the cap squeezed into fewer, relatively larger
+  shares. Extending the existing post-rounding MILP repair
+  (repair_integer_bounds) with the same group band closed the leak.
+
+**FINAL MEASURED RESULT (full 2027-10-22 forecast-day rebuild):**
+
+| stage                      | destinations ≤200 m of a sensor |
+|----------------------------|--------------------------------:|
+| original (before any fix)  | **36.5 %** |
+| activity/POI field (expected) | 2.6-3.5 % |
+| generated pool (after stage-1 fix) | 1.9 % (baseline 1.8 %) |
+| calibrated, continuous cap only    | 13.7 % |
+| **calibrated, full fix**   | **7.5 %** (designed cap 7.4 %) |
+
+GEH<5 stayed **100.0%** on all three variants (0 infeasible intervals);
+calibrated trip-length shares [7.5, 68.9, 23.7]% vs RVU [15.3, 52.5,
+32.2]% (L1 0.33); publish cost +5 s/variant for the MILP group repairs;
+total PFE stage 534 s (was 300 s — the per-quarter two-pass re-solves).
+The residual 7.5-vs-3.5% gap is the deliberate 2× cap slack
+(DEST_GROUP_CAP_MULT) — tightening it is a one-constant change if the
+visual result warrants it.
+
+---
+
 ## 5. Sources
 
 - SUMO routeSampler documentation (short-route problem area, `--min-count`,

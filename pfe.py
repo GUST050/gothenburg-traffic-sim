@@ -121,6 +121,7 @@ def solve_interval(
     tol_mult: float = 1.0,
     route_cost: np.ndarray | None = None,     # per-route parsimony cost;
                                               # flat EPS_PARSIMONY if None
+    groups: list[tuple[list[int], float, float]] | None = None,
 ) -> np.ndarray | None:
     """Return route-use vector for one interval, or None if infeasible.
 
@@ -185,6 +186,16 @@ def solve_interval(
         if lo > 0:
             rows_ub.append(row(js, [-1] * len(js))); b_ub.append(-lo)
 
+    # Level 2b — route-index groups (2026-07-12, structure preservation;
+    # see solve_interval_entropy's groups comment) — same band shape as a
+    # bound, just over an explicit index set instead of an edge's touch set.
+    for js, lo, hi in (groups or []):
+        if not js:
+            continue
+        rows_ub.append(row(js, [1] * len(js)));  b_ub.append(hi)
+        if lo > 0:
+            rows_ub.append(row(js, [-1] * len(js))); b_ub.append(-lo)
+
     # Level 3 — priors, soft L1 pull
     for pi, (e, (target, weight)) in enumerate(priors.items()):
         js = touch.get(e, [])
@@ -218,6 +229,7 @@ def solve_interval_entropy(
     route_cost: np.ndarray | None = None,
     tol_mult: float = 1.0,
     max_iterations: int = IPF_MAX_ITERATIONS,
+    groups: list[tuple[list[int], float, float]] | None = None,
 ) -> np.ndarray | None:
     """Entropy-maximising route flow via Iterative Proportional Fitting
     (Bregman/Sinkhorn balancing) — 2026-07-10, replacing solve_interval's
@@ -315,6 +327,13 @@ def solve_interval_entropy(
         if requires_flow:
             for j in js:
                 relevant[j] = True
+    if groups:
+        # Same activation rule as bounds: only a group that REQUIRES flow
+        # (lo>0) is a reason to seed its members active.
+        for js, lo, _hi in groups:
+            if lo > 0:
+                for j in js:
+                    relevant[j] = True
     if route_cost is not None:
         prior = SEED_SCALE / np.clip(route_cost, 1e-12, None)
     else:
@@ -374,6 +393,19 @@ def solve_interval_entropy(
     measured_items = [(touch[e], target) for e, target in measured.items()]
     bounds_items = [(touch.get(e, []), lo, hi) for e, (lo, hi) in bounds.items()
                     if touch.get(e)]
+    # groups (2026-07-12, DESTINATION_BIAS_RESEARCH §4A step 3): a band over
+    # an arbitrary ROUTE-INDEX set instead of an edge's touching set —
+    # structurally identical to a bound, enforced by the exact same
+    # rescale-into-band correction below. Used for structure preservation:
+    # e.g. "routes ENDING within 200 m of a sensor may carry at most
+    # cap·total vehicles this quarter", which count-matching alone would
+    # otherwise violate freely (such routes are 'free variables' for
+    # closing one sensor's band without touching any other sensor's).
+    # Like a pure-ceiling bound (lo=0), a group does NOT activate its
+    # member routes by itself — it only clips what lands there.
+    if groups:
+        bounds_items = bounds_items + [
+            (list(js), lo, hi) for js, lo, hi in groups if js]
     priors_items = [(touch.get(e, []), target, weight)
                     for e, (target, weight) in priors.items()
                     if touch.get(e) and target > 0 and weight > 0]
@@ -466,6 +498,12 @@ def solve_interval_entropy(
             total = x[js].sum()
             if not (lo - 1e-6 <= total <= hi + 1e-6):
                 return None
+    if groups:
+        for js, lo, hi in groups:
+            if js:
+                total = x[js].sum()
+                if not (lo - 1e-6 <= total <= hi + 1e-6):
+                    return None
 
     return x
 
@@ -577,6 +615,7 @@ def repair_integer_bounds(
     shapes: list[Candidate],
     measured: dict[str, float],
     bounds: dict[str, tuple[float, float]],
+    groups: list[tuple[list[int], float, float]] | None = None,
 ) -> np.ndarray | None:
     """Repair a rounded route vector without weakening its constraints.
 
@@ -587,11 +626,22 @@ def repair_integer_bounds(
     changed route counts while keeping every measured count at its rounded
     target and every supplied bound in its integer-feasible interval.
 
+    ``groups`` (2026-07-12, structure preservation — see solve_interval_
+    entropy's groups comment): the same band shape over an explicit
+    route-index set. Needed HERE, at the integer stage, because rounding
+    can undo a continuously-satisfied group cap wholesale: with thousands
+    of tiny fractional route-uses, largest-remainder rounding hands whole
+    vehicles to the individually-largest values — which are exactly the
+    near-sensor-ending routes the continuous cap squeezed into fewer,
+    relatively larger shares (measured: 95 of 96 quarters violated the
+    published cap despite every continuous solution honouring it).
+
     Returning ``None`` means the discrete problem is genuinely infeasible or
     did not finish in its bounded time; callers must keep the publication gate
     closed in that case rather than silently emitting an invalid route file.
     """
-    if not bounds:
+    groups = [g for g in (groups or []) if g[0]]
+    if not bounds and not groups:
         return counts
 
     constrained = set(measured) | set(bounds)
@@ -607,10 +657,15 @@ def repair_integer_bounds(
         e for e, (lo, hi) in bounds.items()
         if total(e) < np.ceil(lo - 0.5) or total(e) > np.floor(hi + 0.5)
     ]
-    if not violating:
+    group_violating = [
+        (js, lo, hi) for js, lo, hi in groups
+        if not (np.ceil(lo - 0.5) <= sum(counts[j] for j in js) <= np.floor(hi + 0.5))
+    ]
+    if not violating and not group_violating:
         return counts
 
-    active = sorted({j for e in constrained for j in touch.get(e, [])})
+    active = sorted({j for e in constrained for j in touch.get(e, [])}
+                    | {j for js, _lo, _hi in groups for j in js})
     if not active:
         return None
     active_index = {j: k for k, j in enumerate(active)}
@@ -626,15 +681,18 @@ def repair_integer_bounds(
     lower = [float(counts[j]) for j in active]
     upper = [float(counts[j]) for j in active]
 
-    def add_edge_constraint(edge: str, lo: float, hi: float) -> None:
+    def add_index_constraint(js: list[int], lo: float, hi: float) -> None:
         row = lil_matrix((1, 3 * n), dtype=float)
-        for j in touch.get(edge, []):
+        for j in js:
             k = active_index.get(j)
             if k is not None:
                 row[0, k] = 1.0
         rows.append(row.tocsr())
         lower.append(lo)
         upper.append(hi)
+
+    def add_edge_constraint(edge: str, lo: float, hi: float) -> None:
+        add_index_constraint(touch.get(edge, []), lo, hi)
 
     for edge, target in measured.items():
         # The existing rounding contract is an integer measured total, not a
@@ -644,6 +702,9 @@ def repair_integer_bounds(
     for edge, (lo, hi) in bounds.items():
         add_edge_constraint(edge, float(np.ceil(lo - 0.5)),
                             float(np.floor(hi + 0.5)))
+    for js, lo, hi in groups:
+        add_index_constraint(js, float(np.ceil(lo - 0.5)),
+                             float(np.floor(hi + 0.5)))
 
     base = np.asarray([counts[j] for j in active], dtype=float)
     result = milp(
@@ -681,14 +742,20 @@ def solve_interval_with_relaxation(
     bounds: dict[str, tuple[float, float]],
     priors: dict[str, tuple[float, float]],
     route_cost: np.ndarray | None = None,
+    groups: list[tuple[list[int], float, float]] | None = None,
 ) -> tuple[np.ndarray | None, int]:
     """Solve one interval using calibrate()'s exact relaxation ladder.
 
     Returns (solution, rung) — rung is one of the RUNG_* constants above,
     telling the caller WHICH stage actually produced the solution (or
-    RUNG_INFEASIBLE if none did), not just whether one exists."""
+    RUNG_INFEASIBLE if none did), not just whether one exists.
+
+    ``groups`` (structure preservation, 2026-07-12) are dropped at the same
+    ladder stage as bounds (RUNG_RELAX_NOBND): both are plausibility
+    constraints, strictly weaker than the measured counts — a group cap
+    must never be the reason an interval's real sensor counts go unserved."""
     sol = solve_interval_entropy(shapes, targets, bounds, priors,
-                                 route_cost=route_cost)
+                                 route_cost=route_cost, groups=groups)
     if sol is not None:
         return sol, RUNG_CLEAN
     for rung, (tol_mult, use_bounds) in zip(
@@ -697,11 +764,12 @@ def solve_interval_with_relaxation(
     ):
         sol = solve_interval_entropy(
             shapes, targets, bounds if use_bounds else {}, priors,
-            tol_mult=tol_mult, route_cost=route_cost)
+            tol_mult=tol_mult, route_cost=route_cost,
+            groups=groups if use_bounds else None)
         if sol is not None:
             return sol, rung
     sol = solve_interval(shapes, targets, bounds, priors,
-                         route_cost=route_cost)
+                         route_cost=route_cost, groups=groups)
     return sol, (RUNG_LP_FALLBACK if sol is not None else RUNG_INFEASIBLE)
 
 
@@ -762,6 +830,7 @@ def write_calibration_report(
     bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
     rungs: list[int] | None = None,
     enforce_integer_bounds: bool = False,
+    dest_group: tuple[list[int], float] | None = None,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
 
@@ -803,9 +872,27 @@ def write_calibration_report(
             if sol is None:
                 continue
             counts = round_preserving_measured(sol, shapes, targets_per_q[i])
-            if bounds_per_q is not None and enforce_integer_bounds:
+            repair_bounds = (bounds_per_q[i]
+                             if bounds_per_q is not None and enforce_integer_bounds
+                             else {})
+            # dest_group (2026-07-12, structure preservation): the group cap
+            # needs an ABSOLUTE per-quarter ceiling, only known once the
+            # quarter's integer total exists. Floor of 2 vehicles keeps tiny
+            # (night) quarters integer-feasible — a 20-vehicle quarter at a
+            # 7% cap cannot meaningfully hold "1.4 vehicles". The repair is
+            # best-effort by design: if the MILP can't reconcile the cap
+            # with the measured counts, the unrepaired counts stand (the
+            # counts always win; the calibrated_structure guard in
+            # demand_meta.json reports whatever the residual is).
+            quarter_groups = None
+            if dest_group is not None:
+                members, cap_share = dest_group
+                quarter_groups = [(members, 0.0,
+                                   max(2.0, cap_share * float(counts.sum())))]
+            if repair_bounds or quarter_groups:
                 repaired = repair_integer_bounds(
-                    counts, shapes, targets_per_q[i], bounds_per_q[i])
+                    counts, shapes, targets_per_q[i], repair_bounds,
+                    groups=quarter_groups)
                 if repaired is not None:
                     counts = repaired
             # Spread ALL vehicles in this quarter across its full 15-minute
