@@ -1939,7 +1939,17 @@ rule: any number quoted anywhere must be reproducible by the current
 pipeline — improvement plan Phase 3.1's "replace stale LOSO numbers
 everywhere" applies to prose, not just loso_report.json.
 
-### E1. Run registry — size L — GATE for E2-E4
+### E1. Run registry — size L — GATE for E2-E4 — SLICE 1 DONE 2026-07-13
+Slice 1 shipped (`runs.py` + `_tracked_main` on build_sumo_demand.py and
+run_scenario.py, 7 contract tests): every demand build and scenario run
+now writes `runs/<id>/manifest.json` BEFORE work starts (argv, git commit
++ dirty flag, input digest, platform, pid), archives key products into the
+run dir, records structure metrics, and flips `runs/latest_<kind>.json`
+atomically only on success; failures are stamped with the error. Legacy
+shared output paths are intentionally unchanged — full path redirection
+(sumo/ scratch-only, web manifest reading through the pointer) is E1
+slice 2, to land with the H1 module split. serve.py recalibrations are
+tracked for free (they shell out through the same entry points).
 `runs/<run_id>/` per demand build and per scenario: manifest.json written
 BEFORE launch (command, argv, source commit, net_fingerprint,
 demand_signature, SUMO version, seeds, variant list, expected outputs),

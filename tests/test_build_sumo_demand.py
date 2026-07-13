@@ -496,3 +496,60 @@ class TestGracefulDegradationOnSubprocessFailure:
         with pytest.raises(SystemExit):
             bsd.run_tool("randomTrips.py", [], tmp_path)
         assert "the real error" in capsys.readouterr().out
+
+
+class TestPurposeLengthOrdering:
+    """Purpose-conditional trip length is the piece of the distance data
+    (Trafikanalys Tabell 3: fritid LONGEST) that must survive calibration.
+    Found 2026-07-13: the pool had the right ordering but the calibrated
+    output inverted it — this gate makes that visible on every build."""
+
+    @staticmethod
+    def _write_fixture(tmp_path, fritid_dest):
+        # Three edges: A (origin), B ~5.5 km north, C ~100 m north of A.
+        def feat(eid, lat, sensor=None):
+            props = {"id": eid}
+            if sensor:
+                props["sensor_id"] = sensor
+            return {"type": "Feature", "properties": props,
+                    "geometry": {"type": "LineString",
+                                 "coordinates": [[11.97, lat], [11.971, lat]]}}
+        geo = tmp_path / "network.geojson"
+        geo.write_text(json.dumps({"features": [
+            feat("A", 57.700, sensor="s1"), feat("B", 57.750), feat("C", 57.701),
+        ]}))
+        rou = tmp_path / "calibrated.rou.xml"
+        rou.write_text('<routes><vehicle id="0" depart="0.0">'
+                       '<route edges="A B"/></vehicle></routes>')
+        agents = ([{"purpose": "arbete", "origin_edge": "A",
+                    "destination_edge": "B"}] * 60
+                  + [{"purpose": "fritid", "origin_edge": "A",
+                      "destination_edge": fritid_dest}] * 60)
+        (tmp_path / "calibrated.agents.json").write_text(
+            json.dumps({"agents": agents}))
+        return geo, rou
+
+    def test_inverted_ordering_is_flagged(self, monkeypatch, tmp_path):
+        geo, rou = self._write_fixture(tmp_path, fritid_dest="C")  # short
+        monkeypatch.setattr(bsd, "GEO_PATH", geo)
+        report = bsd.calibrated_structure_report(rou)
+        pl = report["purpose_length_km"]
+        assert pl["arbete"]["n"] == 60 and pl["fritid"]["n"] == 60
+        assert pl["fritid"]["mean_km"] < pl["arbete"]["mean_km"]
+        assert any("purpose_length_ordering" in f
+                   for f in report["structure_flags"])
+
+    def test_correct_ordering_is_not_flagged(self, monkeypatch, tmp_path):
+        geo, rou = self._write_fixture(tmp_path, fritid_dest="B")  # long
+        monkeypatch.setattr(bsd, "GEO_PATH", geo)
+        report = bsd.calibrated_structure_report(rou)
+        assert not any("purpose_length_ordering" in f
+                       for f in report["structure_flags"])
+
+    def test_missing_agents_sidecar_is_tolerated(self, monkeypatch, tmp_path):
+        geo, rou = self._write_fixture(tmp_path, fritid_dest="B")
+        (tmp_path / "calibrated.agents.json").unlink()
+        monkeypatch.setattr(bsd, "GEO_PATH", geo)
+        report = bsd.calibrated_structure_report(rou)
+        assert report is not None
+        assert "purpose_length_km" not in report

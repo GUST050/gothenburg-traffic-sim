@@ -839,6 +839,25 @@ def _purpose_targets_per_quarter(shapes: list[Candidate], nq: int) -> list[Count
     return targets
 
 
+def purpose_length_means(shapes: list[Candidate],
+                         shape_km: list[float]) -> dict[str, float]:
+    """Mean route length per purpose over ALL source candidates.
+
+    This is the generation-side P(length | purpose) signal (fritid long,
+    arbete short — RVU Tabell 3 via PURPOSE_LENGTH_SCALE) that a purpose-
+    blind count calibration cannot see: PFE picks whichever geometry closes
+    the bands, so the purposes stamped on its selection must be steered
+    back toward each purpose's own length profile."""
+    tot: Counter = Counter()
+    weighted: dict[str, float] = {}
+    for shape, km in zip(shapes, shape_km):
+        for source in shape.source_candidates or [shape]:
+            p = _purpose(source)
+            tot[p] += 1
+            weighted[p] = weighted.get(p, 0.0) + km
+    return {p: weighted[p] / tot[p] for p in tot}
+
+
 def _integer_mix_targets(source_mix: Counter, n: int) -> Counter:
     """Scale a candidate category mix to n vehicles by largest remainder."""
     if n <= 0 or not source_mix:
@@ -854,15 +873,26 @@ def _integer_mix_targets(source_mix: Counter, n: int) -> Counter:
 
 def allocate_interval_provenance(
     route_instances: list[Candidate], source_mix: Counter,
+    lengths_km: list[float] | None = None,
+    category_length_km: dict[str, float] | None = None,
 ) -> tuple[list[Candidate], list[str], dict]:
     """Allocate the exact quarter mix and retain compatible provenance where possible.
 
     A selected shape can be repeated by PFE, but it may only receive a purpose
-    that occurred among its own source candidates. Categories are allocated
-    scarce-first to avoid consuming the few compatible shapes needed by a
-    category. This is a small post-solve matching problem (O(vehicles x
-    categories)), deliberately outside the PFE so calibration performance and
-    route-count feasibility do not change.
+    that occurred among its own source candidates. This is a small post-solve
+    matching problem (O(vehicles x categories)), deliberately outside the PFE
+    so calibration performance and route-count feasibility do not change.
+
+    LENGTH-AWARE MODE (2026-07-13, when lengths_km + category_length_km are
+    given): compatibility alone measurably INVERTED P(length | purpose) —
+    PFE's purpose-blind selection loads the short tail of fritid-provenance
+    geometry, and since fritid's quarter target exceeds its compatible
+    supply, compatibility-first assignment stamped fritid on 1.4 km-median
+    routes (pool: 3.1 km). Fix: instances are assigned LONGEST-FIRST to the
+    remaining category with the greatest mean candidate length, preferring
+    compatible categories per instance, falling back across compatibility
+    (disclosed as before) only when no compatible category still needs
+    vehicles. Quarter purpose counts stay exact; routes are untouched.
     """
     if not route_instances:
         return [], [], {"target": {}, "achieved": {}, "incompatible": {}}
@@ -880,29 +910,54 @@ def allocate_interval_provenance(
             "incompatible": {},
         }
     assigned: list[str | None] = [None] * len(route_instances)
+    pool_share = [
+        {c: sum(_purpose(s) == c for s in pool) / len(pool) for c in choices}
+        for pool, choices in zip(pools, available)]
 
-    # Give categories with few compatible selected routes first claim.
-    for category in sorted(target, key=lambda p: (
-            sum(p in choices for choices in available), p)):
-        compatible = [i for i, choices in enumerate(available)
-                      if assigned[i] is None and category in choices]
-        compatible.sort(key=lambda i: (len(available[i]),
-                                        " ".join(route_instances[i].edges), i))
-        for i in compatible[:target[category]]:
+    if lengths_km is not None and category_length_km is not None:
+        # Length-aware greedy (see docstring): longest instances feed the
+        # longest-mean categories, so each purpose's calibrated length
+        # profile tracks its own candidates' profile.
+        remaining = {c: k for c, k in target.items() if k > 0}
+        order = sorted(range(len(route_instances)),
+                       key=lambda i: (-lengths_km[i],
+                                      " ".join(route_instances[i].edges), i))
+        for i in order:
+            open_cats = sorted(remaining)
+            compat = [c for c in open_cats if c in available[i]]
+            pick_from = compat or open_cats
+            category = max(pick_from, key=lambda c: (
+                category_length_km.get(c, 0.0), pool_share[i].get(c, 0.0), c))
             assigned[i] = category
+            remaining[category] -= 1
+            if not remaining[category]:
+                del remaining[category]
+    else:
+        # Legacy compatibility-first path (callers without geometry).
+        # Give categories with few compatible selected routes first claim.
+        for category in sorted(target, key=lambda p: (
+                sum(p in choices for choices in available), p)):
+            compatible = [i for i, choices in enumerate(available)
+                          if assigned[i] is None and category in choices]
+            compatible.sort(key=lambda i: (-pool_share[i][category],
+                                           len(available[i]),
+                                           " ".join(route_instances[i].edges), i))
+            for i in compatible[:target[category]]:
+                assigned[i] = category
 
-    # Preserve the target mix exactly. A purpose is an inferred behavioural
-    # attribute, not a SUMO route constraint: when PFE selected no shape with
-    # matching source provenance, keep the real selected route and disclose
-    # the incompatibility instead of silently changing the quarter's purpose
-    # mix. The traffic simulation itself is unchanged.
-    achieved = Counter(category for category in assigned if category is not None)
-    for i, choices in enumerate(available):
-        if assigned[i] is not None:
-            continue
-        category = max(sorted(target), key=lambda p: (target[p] - achieved[p], p))
-        assigned[i] = category
-        achieved[category] += 1
+        # Preserve the target mix exactly. A purpose is an inferred
+        # behavioural attribute, not a SUMO route constraint: when PFE
+        # selected no shape with matching source provenance, keep the real
+        # selected route and disclose the incompatibility instead of
+        # silently changing the quarter's purpose mix.
+        achieved = Counter(c for c in assigned if c is not None)
+        for i, choices in enumerate(available):
+            if assigned[i] is not None:
+                continue
+            category = max(sorted(target),
+                           key=lambda p: (target[p] - achieved[p], p))
+            assigned[i] = category
+            achieved[category] += 1
 
     # Rotate only within the selected purpose, retaining OD/tour provenance
     # that genuinely belongs to the exact selected route shape.
@@ -984,6 +1039,7 @@ def write_calibration_report(
     rungs: list[int] | None = None,
     enforce_integer_bounds: bool = False,
     structure_groups: list[tuple[list[int], float]] | None = None,
+    edge_length_m: dict[str, float] | None = None,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
 
@@ -1015,6 +1071,16 @@ def write_calibration_report(
     infeasible = sum(sol is None for sol in solutions)
     achieved: dict[str, list[float]] = {}
     purpose_targets = _purpose_targets_per_quarter(shapes, nq)
+    # Length-aware purpose allocation (see allocate_interval_provenance):
+    # needs each shape's route length and each purpose's candidate mean.
+    shape_km: list[float] | None = None
+    category_length_km: dict[str, float] | None = None
+    shape_km_by_id: dict[int, float] = {}
+    if edge_length_m is not None:
+        shape_km = [sum(edge_length_m.get(e, 0.0) for e in s.edges) / 1000.0
+                    for s in shapes]
+        category_length_km = purpose_length_means(shapes, shape_km)
+        shape_km_by_id = {id(s): km for s, km in zip(shapes, shape_km)}
     purpose_allocation: list[dict] = []
     vid = 0
     agents: list[dict] = []
@@ -1076,8 +1142,12 @@ def write_calibration_report(
                         achieved[e][i] += float(k)
             keyed.sort(key=lambda item: item[0])
             route_instances: list[Candidate] = [c for _digest, c in keyed]
+            instance_km = ([shape_km_by_id[id(c)] for c in route_instances]
+                           if edge_length_m is not None else None)
             sources, purposes, allocation = allocate_interval_provenance(
-                route_instances, purpose_targets[i])
+                route_instances, purpose_targets[i],
+                lengths_km=instance_km,
+                category_length_km=category_length_km)
             purpose_allocation.append({"quarter": i, **allocation})
             n_departures = len(route_instances)
             for pos, (cand, source, purpose) in enumerate(

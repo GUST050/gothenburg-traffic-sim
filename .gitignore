@@ -27,3 +27,7 @@ sumo/
 data/dirsplit/volumes/
 data/dirsplit/graphs/
 data_in/deso/osm_pois.geojson
+
+# Run registry (PLAN.md E1): immutable per-run artifact dirs — large,
+# machine-local, reproducible from their manifests; never tracked
+runs/

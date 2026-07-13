@@ -965,5 +965,35 @@ def main() -> None:
     print(f"Updated {index_path}  ({len(index['scenarios'])} scenarios)")
 
 
+def _tracked_main() -> None:
+    """Run main() under the E1 run registry (see build_sumo_demand's
+    _tracked_main for the rationale). Scenario products stay on their
+    legacy web/data/scenarios paths; the run directory archives the
+    scenario JSON + index, and the manifest ties them to code + inputs."""
+    import sys
+
+    import runs
+
+    run = runs.start_run("scenario", inputs={"argv": sys.argv[1:]})
+    try:
+        main()
+    except BaseException as exc:
+        run.finish("failed", error=f"{type(exc).__name__}: {exc}")
+        raise
+    index_path = OUT_DIR / "index.json"
+    run.add_output(index_path)
+    if index_path.exists():
+        with open(index_path) as f:
+            index = json.load(f)
+        run.record("scenarios", [s.get("file") for s in
+                                 index.get("scenarios", [])])
+        newest = max((p for p in OUT_DIR.glob("*.json")
+                      if p.name != "index.json"),
+                     key=lambda p: p.stat().st_mtime, default=None)
+        if newest is not None:
+            run.add_output(newest)
+    run.finish("succeeded")
+
+
 if __name__ == "__main__":
-    main()
+    _tracked_main()

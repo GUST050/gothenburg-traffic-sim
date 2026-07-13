@@ -655,6 +655,77 @@ class TestProvenanceAllocation:
         assert [s.intent["purpose"] for s in selected] == ["arbete", "arbete"]
         assert report["incompatible"] == {"fritid": 1}
 
+    def test_purpose_lands_on_the_route_its_generation_favoured(self):
+        # Regression (measured 2026-07-13): fritid candidates are the LONG
+        # trips, but compatibility-only assignment let fritid stamps land on
+        # short arbete-dominated shapes — calibrated P(length|purpose) came
+        # out inverted vs the pool. Each category must prefer the routes
+        # whose own source pool it dominates.
+        def source(route, purpose, source_id):
+            return Candidate(0.0, route, source_id=source_id,
+                             intent={"purpose": purpose})
+
+        long_route = ["O", "M", "FAR1", "FAR2"]
+        short_route = ["O", "M", "NEAR"]
+        mostly_fritid_long = Candidate(0.0, long_route, source_candidates=[
+            source(long_route, "fritid", "f1"),
+            source(long_route, "fritid", "f2"),
+            source(long_route, "arbete", "a1"),
+        ])
+        mostly_arbete_short = Candidate(0.0, short_route, source_candidates=[
+            source(short_route, "arbete", "a2"),
+            source(short_route, "arbete", "a3"),
+            source(short_route, "fritid", "f3"),
+        ])
+
+        selected, purposes, report = pfe.allocate_interval_provenance(
+            [mostly_fritid_long, mostly_arbete_short],
+            {"arbete": 1, "fritid": 1})
+
+        assert purposes[0] == "fritid" and purposes[1] == "arbete", (
+            "fritid must be stamped on the fritid-dominated (long) route, "
+            f"got {purposes}")
+        assert [s.intent["purpose"] for s in selected] == purposes
+        assert report["incompatible"] == {}
+
+    def test_length_aware_mode_gives_long_routes_to_long_categories(self):
+        # Measured 2026-07-13 (2nd round): compatibility-first assignment
+        # stamped fritid on the SHORT tail of its compatible supply (median
+        # 1.44 km vs pool 3.1 km) because PFE's purpose-blind selection is
+        # what picks the geometry. Length-aware mode must hand the longest
+        # instances to the categories whose candidates are longest.
+        def source(route, purpose, source_id):
+            return Candidate(0.0, route, source_id=source_id,
+                             intent={"purpose": purpose})
+
+        long_r, short_r = ["O", "M", "F1", "F2"], ["O", "M", "N"]
+        both_long = Candidate(0.0, long_r, source_candidates=[
+            source(long_r, "arbete", "a1"), source(long_r, "fritid", "f1")])
+        both_short = Candidate(0.0, short_r, source_candidates=[
+            source(short_r, "arbete", "a2"), source(short_r, "fritid", "f2")])
+
+        selected, purposes, report = pfe.allocate_interval_provenance(
+            [both_short, both_long], {"arbete": 1, "fritid": 1},
+            lengths_km=[1.2, 4.0],
+            category_length_km={"arbete": 2.9, "fritid": 3.1})
+
+        assert purposes == ["arbete", "fritid"], (
+            f"long instance must be fritid (longer category mean), got {purposes}")
+        assert [s.intent["purpose"] for s in selected] == purposes
+        assert report["incompatible"] == {}
+        assert report["achieved"] == {"arbete": 1, "fritid": 1}
+
+    def test_length_aware_mode_discloses_forced_incompatibility(self):
+        work = Candidate(0.0, ["O", "M", "D"], source_candidates=[
+            Candidate(0.0, ["O", "M", "D"], source_id="w",
+                      intent={"purpose": "arbete"})])
+        selected, purposes, report = pfe.allocate_interval_provenance(
+            [work, work], {"arbete": 1, "fritid": 1},
+            lengths_km=[2.0, 2.0],
+            category_length_km={"arbete": 2.9, "fritid": 3.1})
+        assert sorted(purposes) == ["arbete", "fritid"]
+        assert report["incompatible"] == {"fritid": 1}
+
     def test_lp_fallback_drops_groups_after_the_counts_first_rung(self, monkeypatch):
         # Force the final fallback. The measured count is feasible only after
         # the impossible group cap has been discarded.

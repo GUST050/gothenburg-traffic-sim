@@ -364,6 +364,46 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
     }
 
 
+def purpose_lengths_km(route_path: Path) -> dict | None:
+    """Straight-line O→D length per PURPOSE for the agents emitted beside a
+    calibrated route file.
+
+    The time/day-type distance behaviour is composed as
+    P(length | purpose) × P(purpose | hour, day type), so purpose-
+    conditional length is the piece the survey data actually pins down
+    (Trafikanalys RVU 2023 Tabell 3, car: arbete 24 km < service 30 km <
+    fritid 56 km — fritid LONGEST). Found 2026-07-13: the pool preserved
+    that ordering but the pre-62a1584 purpose stamping inverted it in the
+    calibrated output, invisibly — hence this standing metric."""
+    agent_path = route_path.with_name(
+        route_path.name.replace(".rou.xml", ".agents.json"))
+    if not agent_path.exists() or not GEO_PATH.exists():
+        return None
+    from build_candidates import gravity_distance_km
+    edge_latlon, _sensor_ids, _len_m = load_edge_geometry()
+    with open(agent_path) as f:
+        agents = json.load(f).get("agents", [])
+    by_p: dict[str, list[float]] = {}
+    for a in agents:
+        o = edge_latlon.get(a.get("origin_edge"))
+        d = edge_latlon.get(a.get("destination_edge"))
+        if o is None or d is None:
+            continue
+        km = float(gravity_distance_km(
+            np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0])
+        by_p.setdefault(a.get("purpose", "unknown"), []).append(km)
+    out = {}
+    for p, lens in sorted(by_p.items()):
+        lens.sort()
+        out[p] = {"n": len(lens),
+                  "mean_km": round(float(np.mean(lens)), 2),
+                  "median_km": round(lens[len(lens) // 2], 2)}
+    return out or None
+
+
+# The ordering flag needs enough vehicles per purpose to mean anything.
+PURPOSE_LENGTH_MIN_N = 50
+
 # Structure-preservation slack: a structural group's calibrated share may be
 # at most this multiple of the candidate pool's own share. 2.0 gives the
 # solver genuine freedom (activity near sensors is real — Korsvägen etc.)
@@ -397,11 +437,36 @@ def calibrated_structure_report(route_path: Path,
     report = _route_structure_metrics(route_path)
     if report is None:
         return None
+    flags = []
+
+    # Purpose-conditional length: the RVU distance data orders fritid
+    # LONGEST (see purpose_lengths_km). The pool respects it via
+    # PURPOSE_LENGTH_SCALE; an inversion in the calibrated output means the
+    # calibration/purpose-allocation stage decohered P(length | purpose).
+    lengths = purpose_lengths_km(route_path)
+    if lengths:
+        report["purpose_length_km"] = lengths
+        arb, fri = lengths.get("arbete"), lengths.get("fritid")
+        # MEDIAN, deliberately: the length-aware allocator (pfe.
+        # allocate_interval_provenance) restores the ordering robustly
+        # (measured 2026-07-13: fritid median 1.80 → 2.80 km, now above
+        # arbete), but the MEAN keeps a small permanent gap because long
+        # routes with arbete-only provenance rightly stay arbete —
+        # relabeling them would invent leisure trips to work POIs. A flag
+        # that fires on every healthy build is alarm-fatigue noise; both
+        # statistics stay reported above.
+        if (arb and fri and min(arb["n"], fri["n"]) >= PURPOSE_LENGTH_MIN_N
+                and fri["median_km"] < arb["median_km"]):
+            flags.append(
+                f"purpose_length_ordering: fritid median {fri['median_km']} km"
+                f" < arbete median {arb['median_km']} km — RVU (Trafikanalys "
+                "Tabell 3) orders fritid longest; P(length|purpose) decohered "
+                "in calibration")
+
     if pool_path is not None:
         pool = _route_structure_metrics(pool_path)
         if pool is not None:
             report["pool"] = pool
-            flags = []
 
             def ratio_flag(name: str, calibrated_v, pool_v) -> None:
                 if calibrated_v is None or pool_v is None:
@@ -419,9 +484,9 @@ def calibrated_structure_report(route_path: Path,
             ratio_flag("trips_under_1km_pct",
                        report["trip_length_fit"]["shares"][0] * 100,
                        pool["trip_length_fit"]["shares"][0] * 100)
-            report["structure_flags"] = flags
-            for flag in flags:
-                print(f"  WARNING structure drift: {flag}")
+    report["structure_flags"] = flags
+    for flag in flags:
+        print(f"  WARNING structure drift: {flag}")
     return report
 
 
@@ -1196,7 +1261,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
                 shapes, data["out_path"], data["targets"], solutions[suffix],
                 data["hard_bounds_pq"], rungs[suffix], enforce_integer_bounds=True,
                 structure_groups=[(members, cap_share) for _n, members, cap_share
-                                  in (_PFE_PAR_STRUCTURE_GROUPS or [])])
+                                  in (_PFE_PAR_STRUCTURE_GROUPS or [])],
+                edge_length_m=load_edge_geometry()[2] if GEO_PATH.exists() else None)
             publish_s = time.perf_counter() - report_started
             reports[suffix]["timings_s"] = {
                 "prepare_shared": round(prepare_s, 3),
@@ -1636,5 +1702,38 @@ def main() -> None:
     export_od(calib_path, sensor_edges, meta)
 
 
+def _tracked_main() -> None:
+    """Run main() under the E1 run registry (runs.py).
+
+    Slice 1 of PLAN.md E1: products keep their legacy shared paths, but
+    every build additionally gets an immutable runs/<id>/ directory with a
+    manifest written BEFORE work starts, archived copies of the key
+    products, and a latest_demand pointer flipped only on success — so a
+    finished-looking artifact can never again be separated from the code
+    and inputs that made it."""
+    import runs
+
+    run = runs.start_run("demand", inputs={"argv": sys.argv[1:]})
+    try:
+        main()
+    except BaseException as exc:
+        run.finish("failed", error=f"{type(exc).__name__}: {exc}")
+        raise
+    meta_path = SUMO_DIR / "demand_meta.json"
+    for product in (meta_path, SUMO_DIR / "calibrated.rou.xml",
+                    SUMO_DIR / "calibrated.agents.json",
+                    SUMO_DIR / "calibrated_q10.rou.xml",
+                    SUMO_DIR / "calibrated_q90.rou.xml"):
+        run.add_output(product)
+    if meta_path.exists():
+        with open(meta_path) as f:
+            meta = json.load(f)
+        run.record("calibrated_structure",
+                   meta.get("calibrated_structure", {}))
+        run.record("structure_flags", meta.get(
+            "calibrated_structure", {}).get("structure_flags", []))
+    run.finish("succeeded")
+
+
 if __name__ == "__main__":
-    main()
+    _tracked_main()

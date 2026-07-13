@@ -1,5 +1,5 @@
 {
-  "demand_signature": "1fd6bc7412c5",
+  "demand_signature": "b5116ac70049",
   "scenarios": [
     {
       "name": "baseline",
@@ -7,8 +7,31 @@
       "file": "baseline.json",
       "closed_edges": [],
       "closures": [],
-      "demand_signature": "1fd6bc7412c5",
-      "window": "2027-10-22 00:00\u201324:00 \u00b7 Prognos"
+      "demand_signature": "b5116ac70049",
+      "window": "2025-09-16 00:00\u201324:00"
+    },
+    {
+      "name": "close_60786979_3575001205_0+1455801464_18241874_0",
+      "label": "Avst\u00e4ngning: Sk\u00e5negatan",
+      "file": "close_60786979_3575001205_0+1455801464_18241874_0.json",
+      "closed_edges": [
+        "60786979_3575001205_0",
+        "1455801464_18241874_0"
+      ],
+      "closures": [
+        {
+          "edge_id": "60786979_3575001205_0",
+          "begin_s": 0,
+          "end_s": 90000
+        },
+        {
+          "edge_id": "1455801464_18241874_0",
+          "begin_s": 0,
+          "end_s": 90000
+        }
+      ],
+      "demand_signature": "b5116ac70049",
+      "window": "2025-09-16 00:00\u201324:00"
     }
   ]
 }

@@ -574,6 +574,60 @@ the reference baselines; no demand retuning precedes the run registry.
 
 ---
 
+## 9. P(length | purpose) THROUGH CALIBRATION (2026-07-13, after Gustav:
+"every purpose should have a length data so based on the day and time …
+the trips in that purpose should be divided in different length trips")
+
+The generation side was already right — each purpose samples from its own
+Tanner kernel (β × PURPOSE_LENGTH_SCALE, §7) and the pool ordered
+arbete 2.92 < service 3.03 < fritid 3.10 km. But THREE successive
+measurements showed calibration destroying it:
+
+1. **Pre-62a1584 stamping** (dup-rotation, no time conditioning):
+   fritid 1.90 km mean vs arbete 2.76 — hard inversion.
+2. **62a1584 allocation** (compatibility-first, exact purpose×time
+   counts): fritid 2.75 vs arbete 2.99 — still inverted. Root cause
+   measured via the `purpose_route_compatible` split: the COMPATIBLE
+   fritid stamps sat on 1.44 km-median geometry (pool: 3.1) — PFE's
+   purpose-blind selection loads the short tail of fritid-provenance
+   shapes, and fritid's targets exceed its compatible supply, so
+   compatibility-first assignment HAD to take them all. (A first attempt
+   — ranking compatible instances by the category's share of the route's
+   own pool — changed nothing, byte-identically, for exactly this
+   reason: ranking is irrelevant when you take everything.)
+3. **Length-aware allocation** (deployed): pfe.allocate_interval_
+   provenance now assigns instances LONGEST-FIRST to the open category
+   with the greatest candidate mean length (pfe.purpose_length_means),
+   preferring compatible categories per instance, disclosing forced
+   incompatibility as before; quarter purpose counts stay exact and
+   routes are untouched. Threaded from load_edge_geometry through
+   write_calibration_report (edge_length_m) in BOTH the deployed
+   pipeline and validate_sim (validated == shipped). Result:
+   fritid median 1.80 → **2.80 km**, ordering fritid > arbete (2.69) >
+   service (2.46) restored on the median.
+
+**Honest residuals, by design:**
+- fritid MEAN stays ~6% under arbete (2.63 vs 2.81): long routes whose
+  provenance is arbete-only KEEP arbete — relabeling work-POI
+  destinations as leisure would invent structure the seed doesn't have
+  (§4A's core principle). This is the allocation-altitude limit; going
+  further means purpose-aware PFE selection (deferred, would be a
+  structure-group variant).
+- Disclosed purpose-route incompatibility rose to ~22% of vehicles
+  (`purpose_allocation_summary`) — the visible price of exact
+  purpose×time counts under purpose-blind selection.
+- The standing gate (`purpose_length_km` in every demand_meta +
+  `purpose_length_ordering` drift flag) fires on MEDIAN inversion;
+  means are reported but not flagged, because the residual mean gap is
+  permanent and understood — a flag that fires on every healthy build
+  is alarm fatigue, not honesty.
+- Canvas compression stands (§7): survey fritid/arbete ≈ 1.5× cannot
+  physically exist inside a ~5 km canvas; ordering + time-of-day
+  composition (r = 0.59 hour-level correlation with the purpose-mix
+  prior) is what the data can enforce here.
+
+---
+
 ## 5. Sources
 
 - SUMO routeSampler documentation (short-route problem area, `--min-count`,

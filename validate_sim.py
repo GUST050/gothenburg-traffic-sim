@@ -49,8 +49,9 @@ import pandas as pd
 from assignment_priors import (DEFAULT_N_SAMPLES, calibrate_assignment_priors,
                                compute_assignment_load)
 import pfe
-from build_sumo_demand import (build_targets, ensure_observability,
-                               load_sensor_edges, structure_groups_for_shapes)
+from build_sumo_demand import (GEO_PATH, build_targets, ensure_observability,
+                               load_edge_geometry, load_sensor_edges,
+                               structure_groups_for_shapes)
 from build_sumo_net import sumo_home
 
 SUMO_DIR = Path("sumo")
@@ -176,11 +177,14 @@ def calibrate_fold_parallel(
             for quarter, sol, rung in pool.imap_unordered(_run_pfe_interval_job, tasks):
                 solutions[quarter] = sol
                 rungs[quarter] = rung
+        # edge_length_m: LOSO stamps purposes with the same length-aware
+        # allocation as the deployed build (validated == shipped).
         return pfe.write_calibration_report(
             shapes, out_path, targets, solutions, bounds_pq, rungs,
             enforce_integer_bounds=False,
             structure_groups=[(members, cap_share) for _n, members, cap_share
-                              in (_PFE_PAR_STRUCTURE_GROUPS or [])])
+                              in (_PFE_PAR_STRUCTURE_GROUPS or [])],
+            edge_length_m=load_edge_geometry()[2] if GEO_PATH.exists() else None)
     finally:
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
