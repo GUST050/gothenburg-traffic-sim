@@ -772,6 +772,11 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
           if closure_add else ()),
         "--vehroute-output", vr_file.name,
         "--vehroute-output.exit-times", "true",
+        # F1 (PLAN.md): the trajectory run writes its own health record so
+        # the artifact's vehicle count can be reconciled against what the
+        # run actually loaded/inserted — a truncated vehroute parse must
+        # not silently animate a subset as if it were everyone.
+        "--statistic-output", f"stats_traj_{name}.xml",
         "--begin", "0", "--end", str(duration_s + 3600),
         "--no-step-log", "true", "--no-warnings", "true",
         "--ignore-route-errors", "true", "--seed", "1000",
@@ -789,7 +794,9 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
 
     edge_index: dict[str, int] = {}
     vehicles = []
+    n_in_file = 0
     for veh in ET.parse(vr_file).getroot().iter("vehicle"):
+        n_in_file += 1
         route = veh.find("route")
         if route is None or not route.get("exitTimes"):
             continue
@@ -816,12 +823,41 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
     inv = [None] * len(edge_index)
     for e, i in edge_index.items():
         inv[i] = e
+
+    # F1 provenance + reconciliation (PLAN.md; improvement plan Phase 2.3-
+    # 2.4). Two distinct counts, deliberately NOT conflated:
+    # - PARSE INTEGRITY: vehicles in the vehroute FILE vs vehicles SUMO
+    #   says it inserted — a shortfall means truncated output/lost
+    #   vehicles, and the artifact is withheld (returning None keeps the
+    #   established failed-export behaviour: flow colours without dots,
+    #   never a partial animation presented as complete).
+    # - DISPLAY FILTER: vehicles whose route leaves the drawable edge set
+    #   are skipped BY DESIGN; that share is disclosed in the artifact
+    #   (displayed_share) instead of gated, because it reflects the map's
+    #   scope, not the run's health.
+    health = parse_seed_health(SUMO_DIR / f"stats_traj_{name}.xml",
+                               seed=1000, variant=route_path.name)
+    inserted = health.get("inserted") if health else None
+    if inserted:
+        integrity = n_in_file / inserted
+        if integrity < 0.98:
+            print(f"  trajectories: FAILED reconciliation — vehroute file "
+                  f"holds {n_in_file} of {inserted} inserted vehicles "
+                  f"({100 * integrity:.1f}% < 98%); artifact withheld")
+            return None
     traj_name = f"{name}_traj.json"
-    atomic_write_json(OUT_DIR / traj_name, {"edges": inv, "vehicles": vehicles},
+    atomic_write_json(OUT_DIR / traj_name,
+                      {"seed": 1000, "variant": route_path.name,
+                       "n_vehicles": len(vehicles),
+                       "inserted_in_run": inserted,
+                       "displayed_share": (round(len(vehicles) / inserted, 4)
+                                           if inserted else None),
+                       "edges": inv, "vehicles": vehicles},
                       separators=(",", ":"))
     size_mb = (OUT_DIR / traj_name).stat().st_size / 1e6
-    print(f"  trajectories: {len(vehicles)} vehicles → {traj_name} "
-          f"({size_mb:.1f} MB)")
+    print(f"  trajectories: {len(vehicles)} of {inserted or '?'} vehicles "
+          f"drawable → {traj_name} ({size_mb:.1f} MB; seed 1000, "
+          f"{route_path.name})")
     return traj_name
 
 

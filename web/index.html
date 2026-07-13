@@ -516,6 +516,10 @@
       <select id="scen-select"></select>
       <span class="hint" id="sim-day-hint" title="Byt med knappen till höger — kräver ny kalibrering, ~6 min"></span>
       <span id="sim-agent-hint" hidden></span>
+      <!-- F1 honesty label: road COLOURS are the mean of 3 Monte Carlo
+           seeds, but the animated cars are ONE representative run — say so
+           instead of letting the animation imply it equals the mean. -->
+      <span class="hint" id="traj-provenance" hidden></span>
       <div class="v-divider"></div>
       <button id="close-mode-btn" class="action-btn"
               title="Klicka på vägar i kartan för att simulera en avstängning">+ Ny avstängning</button>
@@ -697,6 +701,7 @@
           vehicleAbort = null;
           if (!provider.trajectories) {
             Render.setVehicleMode(false);
+            document.getElementById('traj-provenance').hidden = true;
             return;
           }
           if (!trajCache[provider.trajectories]) {
@@ -719,8 +724,29 @@
             trajCache[provider.trajectories] = await res.json();
           }
           if (token !== modeToken) return;   // a newer mode switch happened meanwhile
-          Render.setTrajectories(trajCache[provider.trajectories]);
+          const traj = trajCache[provider.trajectories];
+          Render.setTrajectories(traj);
           Render.setVehicleMode(true);
+          // F1 provenance: label the vehicles as the single run they are.
+          // Older artifacts without the fields keep an unlabelled display
+          // rather than a made-up claim.
+          const provEl = document.getElementById('traj-provenance');
+          if (traj?.seed != null) {
+            const variantLabel = { 'calibrated.rou.xml': 'q50',
+                                   'calibrated_v1.rou.xml': 'q10',
+                                   'calibrated_v2.rou.xml': 'q90' }[traj.variant] || traj.variant;
+            provEl.textContent = `🚗 representativ körning (frö ${traj.seed}, ${variantLabel})`;
+            provEl.title = 'Vägfärgerna är medelvärdet av 3 Monte Carlo-körningar; '
+              + 'de animerade bilarna är EN av dessa körningar — representativ, '
+              + 'inte identisk med medelvärdet.'
+              + (traj.displayed_share != null
+                 ? ` ${traj.n_vehicles} av ${traj.inserted_in_run} fordon ritas `
+                   + '(resten kör delvis utanför kartans vägnät).'
+                 : '');
+            provEl.hidden = false;
+          } else {
+            provEl.hidden = true;
+          }
         }
 
         let currentProvider = histProvider;
@@ -767,7 +793,12 @@
           Controls.setSpeedMode(isSim);   // real-time seconds vs fast quarter-scrubbing
           Render.setProvider(provider);
           Controls.setProvider(provider);
-          if (isSim) loadVehiclesFor(provider, token); else Render.setVehicleMode(false);
+          if (isSim) {
+            loadVehiclesFor(provider, token);
+          } else {
+            Render.setVehicleMode(false);
+            document.getElementById('traj-provenance').hidden = true;
+          }
           // Entering a scenario always starts at its own beginning (qi=0
           // in the OLD provider could be past the scenario's own length).
           // Switching between Historisk <-> Prognos keeps the scrubbed

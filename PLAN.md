@@ -2021,11 +2021,21 @@ only handles the in-process job). Tests: tests/test_jobs.py.
 
 ## Phase F — Truthful individual-car playback (improvement plan Phase 2; audit "P0 - Individual-vehicle simulation is misleading")
 
-### F1. Trajectory provenance — size M
-Store seed + demand variant in the trajectory artifact; UI labels playback
-"representativ körning (seed 1000, q50)" whenever road colours are the
-3-seed Monte Carlo mean. Reconcile trajectory vehicle count against that
-seed's health report; fail the artifact on mismatch.
+### F1. Trajectory provenance — DONE 2026-07-13
+The trajectory artifact now records seed (1000), demand variant,
+n_vehicles, inserted_in_run, displayed_share; the trajectory run writes
+its own --statistic-output. Two counts deliberately NOT conflated:
+PARSE INTEGRITY (vehroute file vs SUMO's inserted count — <98% withholds
+the artifact, returning the established colours-without-dots failure
+mode, never a partial animation presented as complete) vs the DISPLAY
+FILTER (routes leaving the drawable edge set are skipped by design —
+disclosed as displayed_share, not gated). UI: "🚗 representativ körning
+(frö 1000, q50)" in the sim panel with the Monte Carlo-mean explanation
+in the tooltip; hidden outside Simulering. Verified in headless Chrome
+(CDP): label visible in Simulering, hides on Historisk, returns on
+re-entry — the browser test itself caught that the non-sim mode path
+bypassed the hide (fixed). Baseline artifact: 21600/21600 vehicles,
+displayed_share 1.0.
 
 ### F2. Unfinished/queued vehicles — size M — depends F1
 Vehicles still running/waiting at scenario end must appear (parked/queued
