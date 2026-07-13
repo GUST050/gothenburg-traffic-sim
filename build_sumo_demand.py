@@ -109,10 +109,15 @@ def parse_args() -> argparse.Namespace:
                         "RVU candidate generator (build_candidates.py). Kept "
                         "only for comparison; the grounded generator is default.")
     p.add_argument("--through-fraction", type=float, default=0.5,
-                   help="θ passed to build_candidates.py. NOT locally "
-                        "identifiable (no external cordon counts exist to "
-                        "discriminate it) — 0.5 is a disclosed neutral prior, "
-                        "not a calibrated value.")
+                   help="θ passed to build_candidates.py: the sensor-"
+                        "conditioned candidate pool's E-E supply share — "
+                        "NOT the area-wide through share (Stockholm ANPR "
+                        "measures that at ~9.4%%, Trafikverket 2017:123; "
+                        "small German cores 18-25%%). A 2026-07-13 3-point "
+                        "sweep showed re-mixing the pool toward those "
+                        "numbers degrades every structural gate; see "
+                        "build_candidates.py --through-fraction for the "
+                        "full investigation.")
     p.add_argument("--gravity-km", type=float, default=1.8,
                    help="θ passed to build_candidates.py: deterrence scale "
                         "β (km). RE-FIT 2026-07-12 alongside the new "
@@ -150,9 +155,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--cross-fraction", type=float, default=0.3,
                    help="θ passed to build_candidates.py: share of tours "
                         "that are E-I/I-E cross-boundary commuting (one end "
-                        "at a gate) rather than pure I-I. Disclosed-"
-                        "unidentifiable neutral prior, same status as "
-                        "through-fraction.")
+                        "at a gate) rather than pure I-I. Supply-tuned "
+                        "value — see build_candidates.py --cross-fraction "
+                        "and --through-fraction for the 2026-07-13 "
+                        "investigation and sources.")
     p.add_argument("--no-assignment-prior", action="store_true",
                    help="Disable the weak gravity-assignment prior "
                         "(assignment_priors.py) — kept for the controlled "

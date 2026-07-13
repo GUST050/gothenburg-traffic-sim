@@ -3,7 +3,7 @@ Subarea/cordon candidate generator — Agent C's route population, grounded in
 real data instead of graph-density proxies.
 
 Run (or via build_sumo_demand, which calls this by default):
-  python3 build_candidates.py [--through-fraction 0.5 --gravity-km 1.8]
+  python3 build_candidates.py [--through-fraction 0.15 --gravity-km 1.8]
 
 METHOD (the "subarea/cordon" structure standard in traffic-model practice:
 FHWA/state DOT subarea-analysis manuals; Cascetta's quasi-dynamic OD):
@@ -84,7 +84,7 @@ page references to the extracted report text):
 
 θ (free parameters, bounded-grid-searched by build_sumo_demand.py against
 PFE fit quality — see calibrate_theta.py):
-  --through-fraction   share of trips that are E-E (default 0.5)
+  --through-fraction   share of trips that are E-E (default 0.5; supply-tuned — see main())
   --gravity-km         distance-deterrence scale for tour destination choice
 
 Writes sumo/candidates.rou.xml (identical contract to the old randomTrips
@@ -1607,7 +1607,40 @@ def generate_day_block(
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--through-fraction", type=float, default=0.5,
-                    help="θ: share of trips that are E-E through traffic")
+                    help="θ: share of the candidate POOL that is E-E "
+                        "through traffic. INVESTIGATED 2026-07-13 (Gustav "
+                        "challenged the 0.5 neutral prior; research + a "
+                        "3-point empirical sweep followed). Measured "
+                        "area-wide through-shares exist: Stockholm inner "
+                        "city (Trafikverket 2017:123, ANPR at every "
+                        "betalstation, Oct 2015) — 28 500 genomfartsresor/"
+                        "day vs 331 500 cordon passages = ~9.4%% of "
+                        "boundary-touching trips, at the same ~35 km² "
+                        "scale as this canvas (bbox ~37.5 km²); small "
+                        "German cores via Kennzeichenerfassung: Eisenach "
+                        "25%%, Feuchtwangen Altstadt 18%%. BUT setting the "
+                        "pool to those shares (0.15, and midpoint 0.30/"
+                        "0.65) degraded EVERY structural gate "
+                        "monotonically on full same-day builds — "
+                        "near-sensor destinations 7.5→10.4→11.9%%, RVU "
+                        "length L1 0.40→0.57→0.61, onward-after-last-"
+                        "sensor median 2902→2738→2401 m, purpose-length "
+                        "ordering flag firing — while GEH stayed 100%% "
+                        "throughout. Two reasons, both real: (1) this "
+                        "pool is CONDITIONED on crossing a sensor on a "
+                        "major arterial, where through traffic "
+                        "legitimately concentrates — the unconditional "
+                        "area-wide share is a different quantity and NOT "
+                        "this parameter's target (a category error to "
+                        "equate them); (2) the pool doubles as the "
+                        "calibration's route-shape SUPPLY — E-E candidates "
+                        "are the long routes, and starving them forces "
+                        "PFE onto short/near-sensor shapes, the original "
+                        "destination-bias failure class. 0.5 therefore "
+                        "stands as the supply-tuned value; the sourced "
+                        "area-wide composition is reporting context, and "
+                        "agent_demand.purpose_counts in demand_meta.json "
+                        "discloses each build's calibrated through share.")
     ap.add_argument("--gravity-km", type=float, default=1.8,
                     help="θ: distance-deterrence scale β (km) for tours")
     ap.add_argument("--gravity-alpha", type=float, default=1.5,
@@ -1634,10 +1667,15 @@ def main() -> None:
                     help="θ: share of the (non-through) tour budget that is "
                         "E-I/I-E cross-boundary commuting (one end at a "
                         "gate, one end an internal home/activity edge) "
-                        "rather than pure I-I (both ends internal). "
-                        "Disclosed-unidentifiable neutral prior, same "
-                        "status as through-fraction — no local cordon "
-                        "count exists to calibrate a real split. Added "
+                        "rather than pure I-I (both ends internal). Same "
+                        "2026-07-13 investigation as --through-fraction "
+                        "(see there): Stockholm ANPR says boundary-"
+                        "crossing dominates through ~10:1 AREA-WIDE, but "
+                        "the pool is sensor-conditioned supply, and the "
+                        "0.15/0.70 and 0.30/0.65 re-mixes degraded every "
+                        "structural gate; 0.3 stands as the supply-tuned "
+                        "value with the area-wide composition kept as "
+                        "reporting context. Added "
                         "2026-07-08: E-I/I-E were documented in this "
                         "docstring's METHOD section from the start but "
                         "never actually implemented — every 'tour' was "

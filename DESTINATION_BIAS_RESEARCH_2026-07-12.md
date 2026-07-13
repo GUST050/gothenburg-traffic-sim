@@ -628,6 +628,59 @@ measurements showed calibration destroying it:
 
 ---
 
+## 10. THROUGH-SHARE INVESTIGATION (2026-07-13) — sourced, swept, and the
+right lesson drawn
+
+Gustav challenged the demand-mix prior ("detta känns inte bra …
+Efterfrågemix: 50 % genomfart"): θ=0.5/cross=0.3 was a disclosed neutral
+prior with no source. Research found real measurements:
+
+- **Stockholm inner city** (Trafikverket rapport 2017:123, ANPR at every
+  betalstation, Oct 2015 baseline): 28 500 genomfartsresor/day vs
+  331 500 cordon passages during charged hours → through trips ≈ **9.4%**
+  of boundary-touching trips; boundary-crossing dominates through ~10:1.
+  Scale directly comparable: Stockholm zone ≈35 km², this canvas bbox
+  ≈37.5 km².
+- **German ANPR cordon studies** (small cores, expectedly higher):
+  Eisenach 25%, Feuchtwangen Altstadt 18%.
+
+**The sweep** (full same-day builds, 2025-09-16, all gates measured):
+
+| pool mix (θ/cross) | E-E share | near-sensor dest | RVU L1 | onward median | ordering flag | GEH |
+|---|---|---|---|---|---|---|
+| 0.5/0.3 (deployed) | 50% | **7.5%** | **0.40** | **2 902 m** | quiet | 100% |
+| 0.30/0.65 | 30% | 10.4% | 0.57 | 2 738 m | FIRES | 100% |
+| 0.15/0.70 (sourced) | 15% | 11.9% | 0.61 | 2 401 m | FIRES | 100% |
+
+Monotone degradation of every structural gate as the pool moves toward
+the literature share, with perfect GEH throughout — the exact
+"good counts, bad structure" signature §4A step 4 exists to catch.
+
+**Two causes, both real:**
+1. **Category error (mine):** the Stockholm/German numbers are
+   UNCONDITIONAL area-wide shares. This pool is conditioned on crossing
+   a sensor on a major arterial, where through traffic legitimately
+   concentrates — the two quantities are not comparable, and no
+   measurement of the sensor-conditioned share exists.
+2. **Supply role:** the pool is also the calibration's route-shape
+   supply. E-E candidates are the long routes; starving them forces PFE
+   onto short/near-sensor shapes — reopening the original destination-
+   bias failure class from the supply side.
+
+**Resolution:** θ=0.5/cross=0.3 restored as the SUPPLY-TUNED pool values
+(empirically optimal across all gates); the sourced area-wide
+composition is kept as reporting context (this section + the CLI help),
+and each build's calibrated through share is already disclosed in
+demand_meta.json (agent_demand.purpose_counts). What would genuinely
+identify the parameter remains a Gothenburg cordon measurement — the
+same external-data class as the city signal plans (PLAN.md K).
+
+Sources: Trafikverket rapport 2017:123 (trafikverket.diva-portal.org/
+smash/get/diva2:1364434), Feuchtwangen IVK 2019 (feuchtwangen.de),
+Friedrich/Schlaich/Jehlicka ANPR methodology (Uni Stuttgart 2009).
+
+---
+
 ## 5. Sources
 
 - SUMO routeSampler documentation (short-route problem area, `--min-count`,
