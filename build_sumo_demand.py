@@ -1761,6 +1761,15 @@ def _tracked_main() -> None:
                    meta.get("calibrated_structure", {}))
         run.record("structure_flags", meta.get(
             "calibrated_structure", {}).get("structure_flags", []))
+    # G3: refresh the assembled validation report whenever demand changes;
+    # never let reporting fail the build it reports on.
+    try:
+        import validation_report
+        report = validation_report.write_report()
+        run.record("validation_overall", report["overall"])
+        run.add_output(validation_report.OUT_PATH)
+    except Exception as exc:
+        print(f"validation report: {type(exc).__name__}: {exc}")
     run.finish("succeeded")
 
 

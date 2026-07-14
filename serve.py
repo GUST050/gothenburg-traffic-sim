@@ -906,6 +906,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             n = publish_staged_scenarios(SCEN_STAGING_DIR, SCEN_DIR)
             print(f"recalibrate: published {n} staged scenario files")
+            # G3: the report must describe the LIVE set — refresh after
+            # the atomic switch, not from staging.
+            try:
+                import validation_report
+                validation_report.write_report()
+            except Exception as exc:
+                print(f"validation report: {type(exc).__name__}: {exc}")
 
             known_edges.cache_clear()   # network.geojson is unchanged but be safe
             self._set_recal(status="done", file="baseline.json",

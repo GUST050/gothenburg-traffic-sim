@@ -1,0 +1,113 @@
+{
+ "schema_version": 1,
+ "generated_at": "2026-07-14T07:17:08Z",
+ "demand_window": "2025-09-16",
+ "demand_source": "historical",
+ "overall": "pass",
+ "sections": {
+  "counts_fit": {
+   "status": "pass",
+   "geh_pct": 100.0,
+   "infeasible_intervals": 0,
+   "vehicles": 21600,
+   "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
+  },
+  "structure": {
+   "status": "pass",
+   "flags": [],
+   "dest_within_200m_pct": 7.5,
+   "dest_baseline_pct": 1.9,
+   "trip_length_shares": [
+    0.0206,
+    0.727,
+    0.2525
+   ],
+   "trip_length_l1_vs_rvu": 0.4031,
+   "onward_after_sensor_median_m": 2901.9,
+   "onward_under_200m_pct": 5.9,
+   "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
+  },
+  "purposes": {
+   "status": "pass",
+   "purpose_counts": {
+    "arbete": 5410,
+    "external": 1777,
+    "fritid": 1597,
+    "service": 3010,
+    "through": 9806
+   },
+   "purpose_length_km": {
+    "arbete": {
+     "n": 5410,
+     "mean_km": 2.81,
+     "median_km": 2.69
+    },
+    "external": {
+     "n": 1777,
+     "mean_km": 3.64,
+     "median_km": 3.72
+    },
+    "fritid": {
+     "n": 1597,
+     "mean_km": 2.63,
+     "median_km": 2.8
+    },
+    "service": {
+     "n": 3010,
+     "mean_km": 2.6,
+     "median_km": 2.46
+    },
+    "through": {
+     "n": 9806,
+     "mean_km": 4.73,
+     "median_km": 4.99
+    }
+   },
+   "ordering_violated": false,
+   "gate": "fritid ska ha l\u00e4ngst medianresa (Trafikanalys RVU Tabell 3); exakt \u00e4rende\u00d7tid-mix per kvart"
+  },
+  "simulation": {
+   "status": "pass",
+   "flags": [],
+   "seeds": [
+    {
+     "seed": 1000,
+     "inserted": 21600,
+     "loaded": 21600,
+     "unfinished": 0,
+     "teleports": 0
+    },
+    {
+     "seed": 1001,
+     "inserted": 20823,
+     "loaded": 20823,
+     "unfinished": 0,
+     "teleports": 0
+    },
+    {
+     "seed": 1002,
+     "inserted": 22428,
+     "loaded": 22428,
+     "unfinished": 0,
+     "teleports": 0
+    }
+   ],
+   "gate": "alla fordon insatta, <2% ofullbordade, teleporteringar under tr\u00f6skel, per fr\u00f6"
+  },
+  "held_out": {
+   "status": "info",
+   "window": "2025-09-16 \u2192 2025-09-17 (exclusive)",
+   "ratios": {
+    "107:60786979_3575001205_0": 0.706,
+    "107:1455801464_18241874_0": 1.953,
+    "1074:60790252_60790253_0": 0.502,
+    "1076:30420757_30421744_0": 0.05,
+    "133:26842525_26355153_0": 1.298,
+    "134:26355153_96523321_0": 0.778,
+    "2276:26355153_91615277_0": 0.812
+   },
+   "median_ratio": 0.778,
+   "note": "utel\u00e4mnad-station-\u00e5terskapande; karakterisering, inte grind \u2014 extrema veck kan spegla sensorns informationsisolering, inte modellfel"
+  }
+ }
+}

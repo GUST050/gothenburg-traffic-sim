@@ -415,6 +415,24 @@
     }
     .leaflet-control-attribution { background: rgba(11,14,26,0.7) !important; color: var(--ink-3) !important; }
     .leaflet-control-attribution a { color: var(--ink-2) !important; }
+    #validation-panel {
+      flex-basis: 100%;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.74rem;
+      line-height: 1.45;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    #validation-panel table { border-collapse: collapse; width: 100%; }
+    #validation-panel td { padding: 2px 8px 2px 0; vertical-align: top; }
+    #validation-panel .v-pass { color: #1f9d55; font-weight: 700; }
+    #validation-panel .v-warn { color: #d97706; font-weight: 700; }
+    #validation-panel .v-missing { color: #9ca3af; font-weight: 700; }
+    #validation-panel .v-info { color: #2563eb; font-weight: 700; }
+    #validation-panel .v-detail { color: var(--ink-2); }
   </style>
 </head>
 <body data-task="home">
@@ -529,6 +547,10 @@
               title="Klicka på en väg för att hitta den bästa tiden att stänga den">🕐 Föreslå tid</button>
       <button id="optimize-signals-btn" class="action-btn"
               title="Optimera trafikljusen för det valda scenariot (~2-5 min, syntetiska ljusprogram)">⚡ Optimera signaler</button>
+      <!-- G3: assembled validation report (web/data/validation.json) —
+           every gate the pipeline runs, visible without reading logs. -->
+      <button id="validation-btn" class="action-btn" hidden
+              title="Alla valideringsgrindar för det aktiva bygget">🛡 Validering</button>
 
       <div id="pick-banner">
         <span class="hint">Klicka på vägar i kartan att stänga</span>
@@ -563,6 +585,10 @@
       <div id="recal-progress" role="status" aria-live="polite">
         <div id="recal-progress-track"><div id="recal-progress-fill"></div></div>
         <span id="recal-progress-label">Förbereder simulering…</span>
+      </div>
+
+      <div id="validation-panel" hidden>
+        <div id="validation-body"></div>
       </div>
     </div>
 
@@ -977,6 +1003,80 @@
         window.addEventListener('tick', event => {
           if (currentProvider?.isScenario) renderAgentDemand(currentProvider, event.detail.qi);
         });
+
+        // ── G3: assembled validation report (static file — works even
+        //    without the API server). Button shows only when the file
+        //    exists; panel renders every gate with its status.
+        const validationBtn = document.getElementById('validation-btn');
+        const validationPanel = document.getElementById('validation-panel');
+        const validationBody = document.getElementById('validation-body');
+        const V_LABELS = {
+          counts_fit: 'Sensorräkningar', structure: 'Strukturrealism',
+          purposes: 'Ärenden & längder', simulation: 'Simuleringshälsa',
+          held_out: 'Utelämnad-station (LOSO)',
+        };
+        const V_MARK = { pass: ['✓', 'v-pass'], warn: ['⚠', 'v-warn'],
+                         missing: ['–', 'v-missing'], info: ['ℹ', 'v-info'] };
+
+        function describeSection(name, s) {
+          if (s.status === 'missing') return s.reason || 'saknas';
+          switch (name) {
+            case 'counts_fit':
+              return `GEH<5 på ${s.geh_pct}% av intervallen, `
+                + `${s.infeasible_intervals} olösliga kvartar, ${s.vehicles} fordon`;
+            case 'structure':
+              return `destinationer <200 m från sensor ${s.dest_within_200m_pct}% `
+                + `(nätbaslinje ${s.dest_baseline_pct}%) · L1 mot RVU `
+                + `${s.trip_length_l1_vs_rvu} · fortsättning efter sensor `
+                + `median ${Math.round(s.onward_after_sensor_median_m)} m`
+                + (s.flags?.length ? ` · FLAGGOR: ${s.flags.join('; ')}` : '');
+            case 'purposes': {
+              const l = s.purpose_length_km || {};
+              const rows = ['arbete', 'service', 'fritid']
+                .filter(p => l[p]).map(p => `${p} ${l[p].median_km} km`);
+              return `medianlängd: ${rows.join(' · ')}`
+                + (s.ordering_violated ? ' · ORDNING BRUTEN (fritid ska vara längst)' : '');
+            }
+            case 'simulation':
+              return (s.seeds || []).map(x =>
+                `frö ${x.seed}: ${x.inserted}/${x.loaded} insatta, `
+                + `${x.unfinished} ofullbordade, ${x.teleports} teleport`).join(' · ')
+                + (s.flags?.length ? ` · FLAGGOR: ${s.flags.join('; ')}` : '');
+            case 'held_out':
+              return `medianåterskapande ${s.median_ratio} — ${s.note}`;
+          }
+          return '';
+        }
+
+        async function loadValidation() {
+          let res;
+          try {
+            res = await fetch('data/validation.json?t=' + Date.now());
+          } catch { return; }
+          if (!res.ok) return;
+          const r = await res.json();
+          const [mark, cls] = V_MARK[r.overall] || V_MARK.missing;
+          validationBtn.hidden = false;
+          validationBtn.innerHTML = `🛡 Validering <span class="${cls}">${mark}</span>`;
+          const rows = Object.entries(r.sections).map(([name, s]) => {
+            const [m, c] = V_MARK[s.status] || V_MARK.missing;
+            return `<tr><td class="${c}">${m}</td>`
+              + `<td><strong>${V_LABELS[name] || name}</strong><br>`
+              + `<span class="v-detail">${describeSection(name, s)}</span><br>`
+              + (s.gate ? `<span class="v-detail" style="opacity:.7">grind: ${s.gate}</span>` : '')
+              + `</td></tr>`;
+          }).join('');
+          validationBody.innerHTML =
+            `<table>${rows}</table>`
+            + `<div class="v-detail" style="margin-top:4px">`
+            + `bygge ${r.demand_window} (${r.demand_source}) · genererad ${r.generated_at}</div>`;
+        }
+        validationBtn.addEventListener('click', () => {
+          validationPanel.hidden = !validationPanel.hidden;
+          if (!validationPanel.hidden) loadValidation();
+          Render.invalidateSize?.();
+        });
+        loadValidation();
 
         // Scopes the "recover a recalibration on page load" check (below)
         // to THIS tab's own session, not every future visitor forever.

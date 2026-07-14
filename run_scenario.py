@@ -1138,6 +1138,16 @@ def _tracked_main() -> None:
                      key=lambda p: p.stat().st_mtime, default=None)
         if newest is not None:
             run.add_output(newest)
+    # G3: the baseline's seed health feeds the assembled validation
+    # report — refresh it after every LIVE scenario rebuild (a staged E2
+    # build refreshes on publish instead: the report must describe what
+    # the UI actually serves, not a staging candidate).
+    if OUT_DIR == Path("web/data/scenarios"):
+        try:
+            import validation_report
+            validation_report.write_report()
+        except Exception as exc:
+            print(f"validation report: {type(exc).__name__}: {exc}")
     run.finish("succeeded")
 
 

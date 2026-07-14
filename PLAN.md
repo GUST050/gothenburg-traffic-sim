@@ -2060,12 +2060,21 @@ the reference baselines for E3's gates.
 keep as a gate: `purpose_route_compatible` per vehicle + demand-level
 diagnostic. Add its threshold to E3's publication gate when E3 lands.
 
-### G3. Per-purpose validation report — size M — depends E1
-One report per build (improvement plan 3.2): GEH, held-out recovery,
-candidate→calibrated drift, onward-after-last-sensor, sensor passages,
-purpose×time allocation vs prior, purpose-route compatibility. Most metrics
-exist (calibrated_structure, agents summary) — this step is assembling them
-into runs/<id>/validation.json + a UI surface.
+### G3. Assembled validation report — DONE 2026-07-14
+`validation_report.py` assembles every existing gate into ONE
+web/data/validation.json (schema_version 1): counts_fit (GEH/infeasible),
+structure (destination realism, RVU L1, onward-after-sensor, drift flags),
+purposes (mix, per-purpose lengths, RVU ordering), simulation (per-seed
+health), held_out (LOSO ratios — deliberately status "info", never a
+blocking gate: extreme folds can reflect a sensor's informational
+isolation, §8). Missing inputs are STATED ("saknas"), never silently
+skipped; the module only aggregates flags the pipeline already computed
+(one-threshold-one-place rule). Refreshed by `make demand`, live scenario
+rebuilds, and E2's recalibration AFTER the atomic publish (the report must
+describe what the UI serves, not a staging candidate); archived into the
+run dir. UI: "🛡 Validering ✓/⚠" badge + expandable per-gate panel in the
+sim panel — verified in headless Chrome against real data (5 sections,
+correct values). Tests: tests/test_validation_report.py (8).
 
 ### G4. Local diary data request — EXTERNAL
 Ask (via Miroslaw, same channel as D6) whether RVU Västra Götaland
