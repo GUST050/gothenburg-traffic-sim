@@ -1,0 +1,16 @@
+{
+ "vehicles": 1548,
+ "geh_pct": 100.0,
+ "infeasible": 0,
+ "rungs": {
+  "0": 12
+ },
+ "near_group_share": 0.1518,
+ "purpose_mix": {
+  "arbete": 0.343,
+  "fritid": 0.3398,
+  "service": 0.3172
+ },
+ "bound_violations": 0,
+ "quarters_with_incompatible_purposes": 12
+}

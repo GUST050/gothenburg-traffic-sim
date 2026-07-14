@@ -2140,11 +2140,21 @@ feedback, publication. One orchestration path (the 62a1584 single-path fix
 is the seed of this). Typed artifact schemas (demand_meta, health,
 manifest) with versions — audit P1-10.
 
-### H2. PFE benchmark fixture — size M (audit P1-3)
-A deterministic realistic fixture (fixed candidates + targets) with recorded
-runtime/GEH/rungs/structure metrics; CI-style check that a solver change
-stays within tolerance. Protects against the next "optimization" silently
-changing results.
+### H2. PFE benchmark fixture — DONE 2026-07-14 (deliberately before H1)
+tools/pfe_benchmark.py: fully seeded synthetic problem shaped like the
+real one (120 sensor-anchored shapes, 12 quarters, planted integer demand
+that a perfect solver can hit at GEH 100%, a near-sensor group the
+planted demand overloads at ~38% so the 25% structure cap genuinely
+binds), run through the EXACT deployed path (solve_interval_with_
+structure_guard + write_calibration_report with integer repair and
+length-aware purpose allocation). Fingerprint: vehicles, GEH, rungs,
+near-group share, purpose mix, bound violations, incompatible-purpose
+quarters → tests/data/pfe_benchmark_baseline.json.
+tests/test_pfe_benchmark.py asserts exact equality on deterministic
+fields and ±2pp on shares; a failure means a solver change ALTERED
+RESULTS — re-baseline only deliberately (--write-baseline), never loosen
+tolerances. Done before H1 so the refactor has a results-invariance net
+beyond the same-seed byte-compare.
 
 ## Phase I — Measured performance (improvement plan Phase 5) — ONLY after E+H
 Timing breakdown already exists (timings_s). Candidates for measurement:
