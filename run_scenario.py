@@ -750,6 +750,57 @@ def seed_health_flags(seed_health: list[dict]) -> list[str]:
     return flags
 
 
+def parse_vehroute_file(vr_file: Path, web_edges: set[str]
+                        ) -> tuple[dict[str, int], list[dict], int, int]:
+    """vehroute XML → compact vehicle timelines for the web animation.
+
+    Returns (edge_index, vehicles, n_in_file, n_unfinished). F2: an
+    UNFINISHED vehicle (still driving at end of run — requires
+    --vehroute-output.write-unfinished) has exit times only for the edges
+    it actually left; sumo emits -1 for the rest. The driven prefix is
+    kept and the vehicle marked "u": 1 so the renderer parks it at its
+    last known position instead of erasing the trip."""
+    edge_index: dict[str, int] = {}
+    vehicles: list[dict] = []
+    n_in_file = 0
+    n_unfinished = 0
+    for veh in ET.parse(vr_file).getroot().iter("vehicle"):
+        n_in_file += 1
+        route = veh.find("route")
+        if route is None or not route.get("exitTimes"):
+            continue
+        edges = route.get("edges").split()
+        exits: list[int] = []
+        for t in route.get("exitTimes").split():
+            v = int(float(t))
+            if v < 0:
+                break
+            exits.append(v)
+        unfinished = len(exits) < len(edges)
+        if unfinished:
+            if not exits:
+                continue   # never left its first edge — no drawable path
+            edges = edges[:len(exits)]
+            n_unfinished += 1
+        # keep only edges the map can draw (all net edges are in the geojson,
+        # but guard against internal/unknown ids)
+        idxs = []
+        for e in edges:
+            if e not in edge_index:
+                if e not in web_edges:
+                    idxs = None
+                    break
+                edge_index[e] = len(edge_index)
+            idxs.append(edge_index[e])
+        if not idxs:
+            continue
+        rec = {"d": int(float(veh.get("depart"))), "e": idxs, "x": exits}
+        if unfinished:
+            rec["u"] = 1
+        vehicles.append(rec)
+    return edge_index, vehicles, n_in_file, n_unfinished
+
+
 def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
                         duration_s: int, home: Path,
                         web_edges: set[str], micro: bool = False) -> str | None:
@@ -772,6 +823,12 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
           if closure_add else ()),
         "--vehroute-output", vr_file.name,
         "--vehroute-output.exit-times", "true",
+        # F2 (PLAN.md): vehicles still driving/queued when the run ends
+        # must appear in the artifact (drawn parked at their last known
+        # position) instead of silently vanishing — the same honesty rule
+        # as closure truncation. Without this flag sumo omits them from
+        # vehroute-output entirely.
+        "--vehroute-output.write-unfinished", "true",
         # F1 (PLAN.md): the trajectory run writes its own health record so
         # the artifact's vehicle count can be reconciled against what the
         # run actually loaded/inserted — a truncated vehroute parse must
@@ -792,32 +849,8 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
         print(res.stderr[-800:])
         return None
 
-    edge_index: dict[str, int] = {}
-    vehicles = []
-    n_in_file = 0
-    for veh in ET.parse(vr_file).getroot().iter("vehicle"):
-        n_in_file += 1
-        route = veh.find("route")
-        if route is None or not route.get("exitTimes"):
-            continue
-        edges = route.get("edges").split()
-        exits = [int(float(t)) for t in route.get("exitTimes").split()]
-        if len(edges) != len(exits):
-            continue
-        # keep only edges the map can draw (all net edges are in the geojson,
-        # but guard against internal/unknown ids)
-        idxs = []
-        for e in edges:
-            if e not in edge_index:
-                if e not in web_edges:
-                    idxs = None
-                    break
-                edge_index[e] = len(edge_index)
-            idxs.append(edge_index[e])
-        if not idxs:
-            continue
-        vehicles.append({"d": int(float(veh.get("depart"))),
-                         "e": idxs, "x": exits})
+    edge_index, vehicles, n_in_file, n_unfinished = parse_vehroute_file(
+        vr_file, web_edges)
 
     vehicles.sort(key=lambda v: v["d"])
     inv = [None] * len(edge_index)
@@ -849,6 +882,7 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
     atomic_write_json(OUT_DIR / traj_name,
                       {"seed": 1000, "variant": route_path.name,
                        "n_vehicles": len(vehicles),
+                       "n_unfinished": n_unfinished,
                        "inserted_in_run": inserted,
                        "displayed_share": (round(len(vehicles) / inserted, 4)
                                            if inserted else None),

@@ -656,7 +656,7 @@
        can run against new HTML and crash on missing elements -->
   <script src="state.js?v=11"></script>
   <script src="provider.js?v=11"></script>
-  <script src="render.js?v=11"></script>
+  <script src="render.js?v=12"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
   <script>
@@ -768,6 +768,11 @@
               + (traj.displayed_share != null
                  ? ` ${traj.n_vehicles} av ${traj.inserted_in_run} fordon ritas `
                    + '(resten kör delvis utanför kartans vägnät).'
+                 : '')
+              + (traj.n_unfinished
+                 ? ` ${traj.n_unfinished} fordon hann inte fram före `
+                   + 'scenariots slut och visas parkerade (ihåliga orange '
+                   + 'prickar) vid sin sista kända position.'
                  : '');
             provEl.hidden = false;
           } else {

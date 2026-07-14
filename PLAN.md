@@ -2037,9 +2037,20 @@ re-entry — the browser test itself caught that the non-sim mode path
 bypassed the hide (fixed). Baseline artifact: 21600/21600 vehicles,
 displayed_share 1.0.
 
-### F2. Unfinished/queued vehicles — size M — depends F1
-Vehicles still running/waiting at scenario end must appear (parked/queued
-state), not silently vanish — same honesty rule as closure truncation.
+### F2. Unfinished/queued vehicles — DONE 2026-07-14
+The trajectory run now passes --vehroute-output.write-unfinished;
+parse_vehroute_file (extracted for testability) keeps an unfinished
+vehicle's driven prefix (sumo emits -1 exit times for edges not yet
+left) and marks it "u": 1; the renderer draws such vehicles PARKED at
+their last known position (hollow amber dot) for the rest of the
+scenario instead of erasing them; the provenance tooltip discloses the
+count (n_unfinished in the artifact). Never-inserted vehicles have no
+position and remain disclosed via seed_health.waiting_at_end. Empirical
+reality check: healthy whole-day builds (baseline AND the two-edge
+closure) drain completely — n_unfinished 0 — so this is a safety net
+for congested closures and future bounded-window playback, exercised
+via unit tests (TestParseVehrouteFile) and a synthetic-injection
+browser check (no render errors).
 
 ## Phase G — Scientific revalidation (improvement plan Phase 3; partially DONE)
 

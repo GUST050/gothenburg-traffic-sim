@@ -857,3 +857,48 @@ class TestTimeWindowedClosures:
             route_path, ["closed"], out_path, adj, closures=closures) == (0, 0)
         assert ET.parse(out_path).getroot().find("vehicle/route").get("edges") == \
                "lead closed destination"
+
+
+class TestParseVehrouteFile:
+    """F2 (PLAN.md): unfinished vehicles (still driving at end of run) keep
+    their driven prefix and get marked "u": 1, so playback can park them at
+    their last known position instead of erasing the trip."""
+
+    @staticmethod
+    def _write_vehroutes(tmp_path, body):
+        p = tmp_path / "vehroutes.xml"
+        p.write_text(f"<routes>{body}</routes>")
+        return p
+
+    def test_finished_vehicle_unchanged(self, tmp_path):
+        vr = self._write_vehroutes(tmp_path,
+            '<vehicle id="a" depart="10.0">'
+            '<route edges="e1 e2 e3" exitTimes="20 30 40"/></vehicle>')
+        _idx, vehicles, n_file, n_unf = run_scenario.parse_vehroute_file(
+            vr, {"e1", "e2", "e3"})
+        assert n_file == 1 and n_unf == 0
+        assert vehicles == [{"d": 10, "e": [0, 1, 2], "x": [20, 30, 40]}]
+
+    def test_unfinished_vehicle_keeps_prefix_and_is_marked(self, tmp_path):
+        # sumo writes -1 for edges not yet left at end of run
+        vr = self._write_vehroutes(tmp_path,
+            '<vehicle id="b" depart="10.0">'
+            '<route edges="e1 e2 e3" exitTimes="20 30 -1"/></vehicle>')
+        _idx, vehicles, _n, n_unf = run_scenario.parse_vehroute_file(
+            vr, {"e1", "e2", "e3"})
+        assert n_unf == 1
+        assert vehicles == [{"d": 10, "e": [0, 1], "x": [20, 30], "u": 1}]
+
+    def test_unfinished_on_first_edge_is_dropped_not_crashed(self, tmp_path):
+        vr = self._write_vehroutes(tmp_path,
+            '<vehicle id="c" depart="10.0">'
+            '<route edges="e1 e2" exitTimes="-1 -1"/></vehicle>')
+        _idx, vehicles, n_file, n_unf = run_scenario.parse_vehroute_file(vr, {"e1", "e2"})
+        assert n_file == 1 and vehicles == [] and n_unf == 0
+
+    def test_route_leaving_drawable_set_is_skipped(self, tmp_path):
+        vr = self._write_vehroutes(tmp_path,
+            '<vehicle id="d" depart="0.0">'
+            '<route edges="e1 offmap" exitTimes="5 9"/></vehicle>')
+        _idx, vehicles, n_file, _n = run_scenario.parse_vehroute_file(vr, {"e1"})
+        assert n_file == 1 and vehicles == []

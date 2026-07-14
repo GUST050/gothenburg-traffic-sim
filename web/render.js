@@ -213,21 +213,46 @@ const Render = (() => {
     for (const a of _vehActive) {
       const { v } = a;
       const arrival = v.x[v.x.length - 1];
-      if (arrival <= tSec) continue;   // reached its destination
+      // F2: an UNFINISHED vehicle (v.u — still driving/queued when the
+      // simulation ended) must not vanish at its last recorded exit time:
+      // it is drawn PARKED at the end of its last known edge for the rest
+      // of the scenario — the same honesty rule as closure truncation
+      // (erasing it would erase its real contribution to the picture).
+      if (arrival <= tSec && !v.u) continue;   // reached its destination
       alive.push(a);
-      while (a.j < v.x.length - 1 && v.x[a.j] <= tSec) a.j++;
-      const enter = a.j === 0 ? v.d : v.x[a.j - 1];
-      const exit  = v.x[a.j];
-      const g = edgeGeom(_traj.edges[v.e[a.j]]);
-      if (!g || exit <= enter) continue;
-      const frac = Math.min(1, Math.max(0, (tSec - enter) / (exit - enter)));
-      const ll = pointAlong(g, frac);
+      let ll;
+      if (arrival <= tSec && v.u) {
+        const g = edgeGeom(_traj.edges[v.e[v.e.length - 1]]);
+        if (!g) continue;
+        ll = pointAlong(g, 1);
+      } else {
+        while (a.j < v.x.length - 1 && v.x[a.j] <= tSec) a.j++;
+        const enter = a.j === 0 ? v.d : v.x[a.j - 1];
+        const exit  = v.x[a.j];
+        const g = edgeGeom(_traj.edges[v.e[a.j]]);
+        if (!g || exit <= enter) continue;
+        const frac = Math.min(1, Math.max(0, (tSec - enter) / (exit - enter)));
+        ll = pointAlong(g, frac);
+      }
       const p = _map.latLngToContainerPoint(ll);
       if (p.x < -10 || p.y < -10 || p.x > size.x + 10 || p.y > size.y + 10) continue;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 2.6, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.stroke();
+      const parked = arrival <= tSec && v.u;
+      if (parked) {
+        // hollow amber dot: present but no longer moving
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.6, 0, 2 * Math.PI);
+        ctx.save();
+        ctx.fillStyle = '#fff7ed';
+        ctx.strokeStyle = '#d97706';
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.6, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      }
     }
     _vehActive = alive;
   }
