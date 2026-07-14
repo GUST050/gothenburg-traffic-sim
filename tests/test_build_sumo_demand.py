@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 import build_sumo_demand as bsd
+from demand import priors as dpriors
 from demand import structure as dstructure
 
 
@@ -77,9 +78,11 @@ class TestB1DateRangeContract:
 
     def test_bounds_and_priors_remain_tied_to_structural_reference(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(bsd, "ensure_bounds", lambda date, begin, end: calls.append(
+        # structural_bounds_and_priors lives in demand.priors now — its
+        # internal calls resolve against THAT module's globals.
+        monkeypatch.setattr(dpriors, "ensure_bounds", lambda date, begin, end: calls.append(
             ("bounds", date, begin, end)) or {"bounds": {}})
-        monkeypatch.setattr(bsd, "ensure_priors", lambda date: calls.append(
+        monkeypatch.setattr(dpriors, "ensure_priors", lambda date: calls.append(
             ("priors", date)) or {"edges": {}})
 
         bsd.structural_bounds_and_priors("00:00", "24:00")
@@ -469,21 +472,21 @@ class TestGracefulDegradationOnSubprocessFailure:
     def test_ensure_observability_degrades_gracefully_on_failure(self, monkeypatch, tmp_path):
         geo = tmp_path / "network.geojson"
         geo.write_text(json.dumps({"features": []}))
-        monkeypatch.setattr(bsd, "GEO_PATH", geo)
+        monkeypatch.setattr(dpriors, "GEO_PATH", geo)
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(bsd.subprocess, "run", self._fake_run_returncode_1)
+        monkeypatch.setattr(dpriors.subprocess, "run", self._fake_run_returncode_1)
         result = bsd.ensure_observability()
         assert result == {"corridor_priors": {}, "derived_flows": {}}
 
     def test_ensure_assignment_priors_degrades_gracefully_on_failure(self, monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(bsd.subprocess, "run", self._fake_run_returncode_1)
+        monkeypatch.setattr(dpriors.subprocess, "run", self._fake_run_returncode_1)
         result = bsd.ensure_assignment_priors()
         assert result == {"weight": 0.0, "flows": {}}
 
     def test_ensure_priors_degrades_gracefully_on_failure(self, monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(bsd.subprocess, "run", self._fake_run_returncode_1)
+        monkeypatch.setattr(dpriors.subprocess, "run", self._fake_run_returncode_1)
         result = bsd.ensure_priors("2025-09-16")
         assert result == {"edges": {}}
 
