@@ -647,10 +647,15 @@ def _tracked_main() -> None:
         run.finish("failed", error=f"{type(exc).__name__}: {exc}")
         raise
     meta_path = SUMO_DIR / "demand_meta.json"
-    for product in (meta_path, SUMO_DIR / "calibrated.rou.xml",
-                    SUMO_DIR / "calibrated.agents.json",
-                    SUMO_DIR / "calibrated_q10.rou.xml",
-                    SUMO_DIR / "calibrated_q90.rou.xml"):
+    # Archive the outputs that actually exist (2026-07-14 accuracy review
+    # §P1-7: the uncertainty variants are named calibrated_v1/_v2, not
+    # calibrated_q10/_q90 — every earlier manifest recorded the two
+    # phantom names as missing_outputs).
+    products = [meta_path, SUMO_DIR / "calibrated.rou.xml",
+                SUMO_DIR / "calibrated.agents.json"]
+    products += sorted(SUMO_DIR.glob("calibrated_v*.rou.xml"))
+    products += sorted(SUMO_DIR.glob("calibrated_v*.agents.json"))
+    for product in products:
         run.add_output(product)
     if meta_path.exists():
         with open(meta_path) as f:

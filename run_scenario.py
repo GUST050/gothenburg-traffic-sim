@@ -750,6 +750,24 @@ def seed_health_flags(seed_health: list[dict]) -> list[str]:
     return flags
 
 
+def final_route(veh: ET.Element) -> ET.Element | None:
+    """The route the vehicle ACTUALLY drove.
+
+    SUMO wraps a vehicle whose route was changed at runtime (the closure
+    rerouter) in <routeDistribution>, last <route> = final. FOUND by the
+    2026-07-14 accuracy review (SIMULATION_ACCURACY_..._PLAN §P0-1) and
+    verified on the real closure artifact: 3182/21594 vehicles sat in
+    routeDistribution and were silently DROPPED from the animation —
+    exactly the rerouted vehicles that matter most after a closure. F1's
+    displayed_share had mislabelled them as "drives outside the map".
+    Same selection as signal_closure_combine.extract_final_routes."""
+    dist = veh.find("routeDistribution")
+    if dist is not None:
+        routes = dist.findall("route")
+        return routes[-1] if routes else None
+    return veh.find("route")
+
+
 def parse_vehroute_file(vr_file: Path, web_edges: set[str]
                         ) -> tuple[dict[str, int], list[dict], int, int]:
     """vehroute XML → compact vehicle timelines for the web animation.
@@ -766,7 +784,7 @@ def parse_vehroute_file(vr_file: Path, web_edges: set[str]
     n_unfinished = 0
     for veh in ET.parse(vr_file).getroot().iter("vehicle"):
         n_in_file += 1
-        route = veh.find("route")
+        route = final_route(veh)
         if route is None or not route.get("exitTimes"):
             continue
         edges = route.get("edges").split()
@@ -1064,6 +1082,15 @@ def main() -> None:
               f"{len(per_seed[-1])} edges with traffic{h_note}")
 
     health_flags = seed_health_flags(seed_health)
+    # FAIL CLOSED (2026-07-14 accuracy review §P0-3): a seed whose
+    # statistics file is missing/corrupt is UNMEASURED, not healthy — it
+    # previously produced no record, no flag, and published as clean.
+    # Missing telemetry now flags exactly like a failed gate (E2's
+    # publisher refuses any flagged baseline).
+    if len(seed_health) < args.seeds:
+        health_flags.append(
+            f"hälsotelemetri saknas för {args.seeds - len(seed_health)} av "
+            f"{args.seeds} frön — omätt är inte friskt")
     for flag in health_flags:
         print(f"  WARNING seed health: {flag}")
 
