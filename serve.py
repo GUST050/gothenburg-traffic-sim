@@ -609,7 +609,38 @@ class Handler(SimpleHTTPRequestHandler):
         # this only forces a revalidation round-trip, not a real refetch,
         # so it costs nothing at this app's scale.
         self.send_header("Cache-Control", "no-cache")
+        # J (PLAN.md; audit P0-3/P1-12): Content-Security-Policy. script-src
+        # 'self' works because the app's JS lives in files (the 1300-line
+        # inline block moved to app.js for exactly this); unpkg.com serves
+        # Leaflet; CARTO serves the basemap tiles; style-src needs
+        # unsafe-inline because Leaflet positions panes via inline styles.
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "script-src 'self' https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://unpkg.com; "
+            "img-src 'self' data: https://*.basemaps.cartocdn.com; "
+            "connect-src 'self'; "
+            "object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header("X-Content-Type-Options", "nosniff")
         super().end_headers()
+
+    def _same_origin_ok(self) -> bool:
+        """CSRF guard for mutating endpoints (J; audit P0-3).
+
+        The server is loopback-only, but ANY website the user visits can
+        fire cross-origin POSTs at http://localhost:8000 — the browser
+        blocks reading the RESPONSE, not sending the REQUEST, so a
+        malicious page could start recalibrations/closures blind.
+        Browsers always attach an Origin header to cross-origin POSTs;
+        same-origin fetches from our own page send our own origin. Accept
+        only loopback origins — or a missing header (curl and the test
+        client, which are not browsers and carry no ambient authority)."""
+        origin = self.headers.get("Origin")
+        if origin is None:
+            return True
+        host = urllib.parse.urlparse(origin).hostname
+        return host in ("localhost", "127.0.0.1", "::1")
 
     def _json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload).encode()
@@ -619,30 +650,54 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    # J (PLAN.md; audit P0-3): read-only endpoints stay GET; every endpoint
+    # that STARTS or CANCELS work is POST-only — GET must never mutate
+    # (prefetchers, link previews and crawlers follow GETs), and the POST
+    # path carries the same-origin CSRF guard above.
+    _MUTATING = ("/api/close", "/api/recalibrate", "/api/suggest_closure",
+                 "/api/optimize_signals", "/api/cancel")
+
     def do_GET(self):
         if self.path.startswith("/api/ping"):
             return self._json(200, {"ok": True})
+        if self.path.startswith("/api/close/status"):
+            return self._close_status()
+        if self.path.startswith("/api/recalibrate/status"):
+            return self._recalibrate_status()
+        if self.path.startswith("/api/suggest_closure/status"):
+            return self._suggest_closure_status()
+        if self.path.startswith("/api/optimize_signals/status"):
+            return self._optimize_signals_status()
+        if self.path.startswith("/api/jobs"):
+            return self._jobs()
+        if any(self.path.startswith(p) for p in self._MUTATING):
+            return self._json(405, {"error": "denna endpoint ändrar "
+                                             "tillstånd — använd POST"})
+        return super().do_GET()
+
+    def do_POST(self):
+        if not self._same_origin_ok():
+            return self._json(403, {"error": "förfrågan från främmande "
+                                             "webbplats avvisad (CSRF-skydd)"})
         if self.path.startswith("/api/cancel"):
             return self._cancel()
         if self.path.startswith("/api/close/status"):
-            return self._close_status()
+            return self._json(405, {"error": "statusläsning använder GET"})
         if self.path.startswith("/api/close"):
             return self._close()
         if self.path.startswith("/api/recalibrate/status"):
-            return self._recalibrate_status()
+            return self._json(405, {"error": "statusläsning använder GET"})
         if self.path.startswith("/api/recalibrate"):
             return self._recalibrate()
         if self.path.startswith("/api/suggest_closure/status"):
-            return self._suggest_closure_status()
+            return self._json(405, {"error": "statusläsning använder GET"})
         if self.path.startswith("/api/suggest_closure"):
             return self._suggest_closure()
         if self.path.startswith("/api/optimize_signals/status"):
-            return self._optimize_signals_status()
+            return self._json(405, {"error": "statusläsning använder GET"})
         if self.path.startswith("/api/optimize_signals"):
             return self._optimize_signals()
-        if self.path.startswith("/api/jobs"):
-            return self._jobs()
-        return super().do_GET()
+        return self._json(404, {"error": "okänd endpoint"})
 
     def _jobs(self) -> None:
         """E4 durable job records: /api/jobs (recent) or /api/jobs/<id>."""

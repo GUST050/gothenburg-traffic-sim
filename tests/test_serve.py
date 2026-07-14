@@ -47,6 +47,20 @@ def get_json_or_error(url, timeout=5):
         return e.code, json.loads(e.read())
 
 
+def post_json(url, timeout=5):
+    """J (2026-07-14): mutating endpoints are POST-only now."""
+    req = urllib.request.Request(url, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.status, json.loads(r.read())
+
+
+def post_json_or_error(url, timeout=5):
+    try:
+        return post_json(url, timeout)
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
 @pytest.fixture
 def base_url(tmp_path, monkeypatch):
     scen_dir = tmp_path / "scenarios"
@@ -149,19 +163,19 @@ class TestClose:
     TestRecalibrateAsyncLifecycle exactly."""
 
     def test_missing_edges_is_400(self, base_url):
-        status, body = get_json_or_error(f"{base_url}/api/close")
+        status, body = post_json_or_error(f"{base_url}/api/close")
         assert status == 400
         assert "error" in body
 
     def test_unknown_edge_is_400(self, base_url):
-        status, body = get_json_or_error(f"{base_url}/api/close?edges=nonexistent_0")
+        status, body = post_json_or_error(f"{base_url}/api/close?edges=nonexistent_0")
         assert status == 400
         assert "nonexistent_0" in body["error"]
 
     def test_busy_lock_returns_409(self, base_url):
         serve._sim_lock.acquire()
         try:
-            status, body = get_json_or_error(f"{base_url}/api/close?edges=a_b_0")
+            status, body = post_json_or_error(f"{base_url}/api/close?edges=a_b_0")
             assert status == 409
         finally:
             serve._sim_lock.release()
@@ -178,7 +192,7 @@ class TestClose:
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         t0 = time.time()
-        status, body = get_json(f"{base_url}/api/close?edges=a_b_0")
+        status, body = post_json(f"{base_url}/api/close?edges=a_b_0")
         elapsed = time.time() - t0
         assert status == 202
         assert body["status"] == "started"
@@ -194,7 +208,7 @@ class TestClose:
             return FakeCompletedProcess(returncode=0, stdout="Scenario 'close_a_b_0' (...)")
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        status, body = get_json(f"{base_url}/api/close?edges=a_b_0")
+        status, body = post_json(f"{base_url}/api/close?edges=a_b_0")
         assert status == 202
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "done")
@@ -205,11 +219,11 @@ class TestClose:
     def test_failed_simulation_reports_error_status_and_releases_the_lock(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="boom"))
-        get_json(f"{base_url}/api/close?edges=a_b_0")
+        post_json(f"{base_url}/api/close?edges=a_b_0")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
         assert not serve._sim_lock.locked()   # must not leak the lock on failure
-        status, _ = get_json(f"{base_url}/api/close?edges=a_b_0")
+        status, _ = post_json(f"{base_url}/api/close?edges=a_b_0")
         assert status == 202   # lock really is free, not just the status flipped
 
     def test_missing_manifest_after_successful_simulation_is_clear_error(self, base_url, monkeypatch):
@@ -218,7 +232,7 @@ class TestClose:
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(
                                 returncode=0, stdout="Scenario 'close_a_b_0' (...)"))
-        get_json(f"{base_url}/api/close?edges=a_b_0")
+        post_json(f"{base_url}/api/close?edges=a_b_0")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
         _, final = get_json(f"{base_url}/api/close/status")
@@ -229,7 +243,7 @@ class TestClose:
         def fake_run(cmd, **kw):
             raise FileNotFoundError("run_scenario.py vanished")
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/close?edges=a_b_0")
+        post_json(f"{base_url}/api/close?edges=a_b_0")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
         assert not serve._sim_lock.locked()
@@ -247,8 +261,8 @@ class TestCancel:
             return FakeCompletedProcess(returncode=0, stdout="Scenario 'close_a_b_0' (...)" )
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        assert get_json(f"{base_url}/api/close?edges=a_b_0")[0] == 202
-        assert get_json(f"{base_url}/api/cancel?kind=close")[0] == 202
+        assert post_json(f"{base_url}/api/close?edges=a_b_0")[0] == 202
+        assert post_json(f"{base_url}/api/cancel?kind=close")[0] == 202
         release.set()
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "cancelled")
@@ -266,8 +280,8 @@ class TestCancel:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        assert get_json(f"{base_url}/api/recalibrate?date=2025-09-16")[0] == 202
-        assert get_json(f"{base_url}/api/cancel?kind=recalibrate")[0] == 202
+        assert post_json(f"{base_url}/api/recalibrate?date=2025-09-16")[0] == 202
+        assert post_json(f"{base_url}/api/cancel?kind=recalibrate")[0] == 202
         release.set()
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "cancelled")
@@ -275,8 +289,8 @@ class TestCancel:
         assert not serve._sim_lock.locked()
 
     def test_cancel_rejects_an_idle_or_unknown_job(self, base_url):
-        assert get_json_or_error(f"{base_url}/api/cancel?kind=close")[0] == 409
-        assert get_json_or_error(f"{base_url}/api/cancel?kind=unknown")[0] == 400
+        assert post_json_or_error(f"{base_url}/api/cancel?kind=close")[0] == 409
+        assert post_json_or_error(f"{base_url}/api/cancel?kind=unknown")[0] == 400
 
 
 class TestCloseWindowed:
@@ -285,13 +299,13 @@ class TestCloseWindowed:
     instead of a whole-run --close."""
 
     def test_begin_without_end_is_400(self, base_url):
-        status, body = get_json_or_error(
+        status, body = post_json_or_error(
             f"{base_url}/api/close?edges=a_b_0&begin=2025-09-16T08:00:00")
         assert status == 400
         assert "error" in body
 
     def test_malformed_datetime_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/close?edges=a_b_0&begin=not-a-date&end=also-not")
         assert status == 400
 
@@ -308,7 +322,7 @@ class TestCloseWindowed:
                                         stdout="Scenario 'close_a_b_0_deadbeef' (...)")
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        status, body = get_json(
+        status, body = post_json(
             f"{base_url}/api/close?edges=a_b_0&begin=2025-09-16T08:00:00&end=2025-09-16T10:00:00")
         assert status == 202
         assert wait_until(
@@ -337,7 +351,7 @@ class TestCloseWindowed:
                                         stdout="Scenario 'close_a_b_0_deadbeef' (...)")
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/close?edges=a_b_0&begin=2025-09-16T08:00:00"
+        post_json(f"{base_url}/api/close?edges=a_b_0&begin=2025-09-16T08:00:00"
                 f"&end=2025-09-16T10:00:00")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "done")
@@ -353,7 +367,7 @@ class TestCloseWindowed:
             return FakeCompletedProcess(returncode=0, stdout="no scenario line here")
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/close?edges=a_b_0")
+        post_json(f"{base_url}/api/close?edges=a_b_0")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
         _, final = get_json(f"{base_url}/api/close/status")
@@ -416,11 +430,11 @@ class TestRunInNewSession:
 
 class TestRecalibrateValidation:
     def test_bad_date_format_is_400(self, base_url):
-        status, _ = get_json_or_error(f"{base_url}/api/recalibrate?date=2025-9-16")
+        status, _ = post_json_or_error(f"{base_url}/api/recalibrate?date=2025-9-16")
         assert status == 400
 
     def test_bad_source_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/recalibrate?date=2025-09-16&source=astrology")
         assert status == 400
 
@@ -433,7 +447,7 @@ class TestRecalibrateValidation:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         wait_until(lambda: seen.get("source") is not None)
         assert seen["source"] == "historical"
 
@@ -446,24 +460,24 @@ class TestRecalibrateValidation:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         wait_until(lambda: seen.get("cmd") is not None)
         # days=1 keeps the original --date/--begin/--end call shape —
         # no behaviour change for existing single-day callers.
         assert "--date" in seen["cmd"] and "--start-date" not in seen["cmd"]
 
     def test_days_zero_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/recalibrate?date=2025-09-16&days=0")
         assert status == 400
 
     def test_days_eight_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/recalibrate?date=2025-09-16&days=8")
         assert status == 400
 
     def test_days_not_an_integer_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/recalibrate?date=2025-09-16&days=abc")
         assert status == 400
 
@@ -477,7 +491,7 @@ class TestRecalibrateValidation:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16&days=3")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16&days=3")
         wait_until(lambda: seen.get("cmd") is not None)
         cmd = seen["cmd"]
         assert "--date" not in cmd
@@ -517,7 +531,7 @@ class TestRecalibrateAsyncLifecycle:
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         t0 = time.time()
-        status, body = get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        status, body = post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         elapsed = time.time() - t0
         assert status == 202
         assert body["status"] == "started"
@@ -533,7 +547,7 @@ class TestRecalibrateAsyncLifecycle:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
 
         _, status_body = get_json(f"{base_url}/api/recalibrate/status")
         assert status_body["status"] == "running"
@@ -549,7 +563,7 @@ class TestRecalibrateAsyncLifecycle:
         monkeypatch.setattr(
             serve, "run_in_new_session",
             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="line1\nfatal: boom"))
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "error")
         _, final = get_json(f"{base_url}/api/recalibrate/status")
@@ -562,7 +576,7 @@ class TestRecalibrateAsyncLifecycle:
             return FakeCompletedProcess(returncode=1, stderr="scenario boom")
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "error")
 
@@ -570,8 +584,8 @@ class TestRecalibrateAsyncLifecycle:
         release = threading.Event()
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: (release.wait(timeout=2), FakeCompletedProcess())[1])
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
-        status, _ = get_json_or_error(f"{base_url}/api/recalibrate?date=2025-09-17")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        status, _ = post_json_or_error(f"{base_url}/api/recalibrate?date=2025-09-17")
         assert status == 409
         release.set()
         wait_until(lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] != "running")
@@ -587,11 +601,11 @@ class TestRecalibrateAsyncLifecycle:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "done")
 
-        status, _ = get_json(f"{base_url}/api/recalibrate?date=2025-09-17")
+        status, _ = post_json(f"{base_url}/api/recalibrate?date=2025-09-17")
         assert status == 202
         wait_until(lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] != "running")
 
@@ -604,11 +618,11 @@ class TestRecalibrateAsyncLifecycle:
         def fake_run(cmd, **kw):
             raise FileNotFoundError("build_sumo_demand.py vanished")
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "error")
         # and the lock must be released too, not just the status flipped
-        status, _ = get_json(f"{base_url}/api/recalibrate?date=2025-09-17")
+        status, _ = post_json(f"{base_url}/api/recalibrate?date=2025-09-17")
         assert status == 202
 
     def test_old_scenario_files_are_wiped_on_successful_recalibration(self, base_url, monkeypatch):
@@ -620,7 +634,7 @@ class TestRecalibrateAsyncLifecycle:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/recalibrate?date=2025-09-16")
+        post_json(f"{base_url}/api/recalibrate?date=2025-09-16")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/recalibrate/status")[1]["status"] == "done")
         assert not stale.exists()
@@ -734,23 +748,23 @@ class TestSummarizeSuggestion:
 
 class TestSuggestClosure:
     def test_missing_edges_is_400(self, base_url):
-        status, body = get_json_or_error(
+        status, body = post_json_or_error(
             f"{base_url}/api/suggest_closure?duration_hours=6")
         assert status == 400
         assert "error" in body
 
     def test_unknown_edge_is_400(self, base_url):
-        status, body = get_json_or_error(
+        status, body = post_json_or_error(
             f"{base_url}/api/suggest_closure?edges=nope_0&duration_hours=6")
         assert status == 400
         assert "nope_0" in body["error"]
 
     def test_missing_duration_hours_is_400(self, base_url):
-        status, _ = get_json_or_error(f"{base_url}/api/suggest_closure?edges=a_b_0")
+        status, _ = post_json_or_error(f"{base_url}/api/suggest_closure?edges=a_b_0")
         assert status == 400
 
     def test_zero_duration_hours_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=0")
         assert status == 400
 
@@ -760,38 +774,38 @@ class TestSuggestClosure:
         # would let it through to the background job, where
         # round(nan * 3600) raises an unhandled ValueError instead of a
         # clean 400 here. Found in external review 2026-07-11.
-        status, body = get_json_or_error(
+        status, body = post_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=nan")
         assert status == 400
         assert "error" in body
 
     def test_infinite_duration_hours_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=inf")
         assert status == 400
 
     def test_nan_slide_hours_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6&slide_hours=nan")
         assert status == 400
 
     def test_fractional_duration_or_slide_is_rejected_before_starting_a_job(self, base_url):
-        duration_status, _ = get_json_or_error(
+        duration_status, _ = post_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=1.1")
-        slide_status, _ = get_json_or_error(
+        slide_status, _ = post_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=1&slide_hours=0.3")
         assert duration_status == 400
         assert slide_status == 400
 
     def test_top_k_out_of_range_is_400(self, base_url):
-        status, _ = get_json_or_error(
+        status, _ = post_json_or_error(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6&top_k=999")
         assert status == 400
 
     def test_busy_lock_returns_409(self, base_url):
         serve._sim_lock.acquire()
         try:
-            status, _ = get_json_or_error(
+            status, _ = post_json_or_error(
                 f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
             assert status == 409
         finally:
@@ -808,7 +822,7 @@ class TestSuggestClosure:
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         t0 = time.time()
-        status, body = get_json(
+        status, body = post_json(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
         elapsed = time.time() - t0
         assert status == 202
@@ -824,7 +838,7 @@ class TestSuggestClosure:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        status, body = get_json(
+        status, body = post_json(
             f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
         assert status == 202
         assert wait_until(
@@ -839,7 +853,7 @@ class TestSuggestClosure:
                                 returncode=1,
                                 stderr="web/data/scenarios/baseline.json not found — "
                                       "run `python3 run_scenario.py` first"))
-        get_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
+        post_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/suggest_closure/status")[1]["status"] == "error")
         _, final = get_json(f"{base_url}/api/suggest_closure/status")
@@ -848,7 +862,7 @@ class TestSuggestClosure:
     def test_missing_output_file_after_success_is_a_clear_error(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=0))
-        get_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
+        post_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/suggest_closure/status")[1]["status"] == "error")
         _, final = get_json(f"{base_url}/api/suggest_closure/status")
@@ -857,11 +871,11 @@ class TestSuggestClosure:
     def test_failure_releases_the_lock(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="boom"))
-        get_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
+        post_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/suggest_closure/status")[1]["status"] == "error")
         assert not serve._sim_lock.locked()
-        status, _ = get_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
+        status, _ = post_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
         assert status == 202
 
     def test_shares_the_sim_lock_with_close(self, base_url):
@@ -869,7 +883,7 @@ class TestSuggestClosure:
         resource class (both real SUMO batches) — must not run concurrently."""
         serve._sim_lock.acquire()
         try:
-            status, _ = get_json_or_error(f"{base_url}/api/close?edges=a_b_0")
+            status, _ = post_json_or_error(f"{base_url}/api/close?edges=a_b_0")
             assert status == 409
         finally:
             serve._sim_lock.release()
@@ -1091,13 +1105,13 @@ class TestOptimizeSignals:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/optimize_signals")
+        post_json(f"{base_url}/api/optimize_signals")
         assert wait_until(lambda: "timeout" in seen)
         assert seen["timeout"] == 180 + serve.OPTIMIZE_SIGNAL_CONDITIONS * serve.OPTIMIZE_SEEDS * 90
         assert serve.OPTIMIZE_SIGNAL_CONDITIONS == len(so.SIGNAL_CONDITION_NAMES)
 
     def test_unknown_edge_is_400(self, base_url):
-        status, body = get_json_or_error(f"{base_url}/api/optimize_signals?edges=nope_0")
+        status, body = post_json_or_error(f"{base_url}/api/optimize_signals?edges=nope_0")
         assert status == 400
         assert "nope_0" in body["error"]
 
@@ -1114,7 +1128,7 @@ class TestOptimizeSignals:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        status, body = get_json(f"{base_url}/api/optimize_signals")
+        status, body = post_json(f"{base_url}/api/optimize_signals")
         assert status == 202
         assert started.wait(timeout=2)
 
@@ -1127,7 +1141,7 @@ class TestOptimizeSignals:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        status, body = get_json(f"{base_url}/api/optimize_signals?edges=a_b_0")
+        status, body = post_json(f"{base_url}/api/optimize_signals?edges=a_b_0")
         assert status == 202
         assert wait_until(
             lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
@@ -1135,7 +1149,7 @@ class TestOptimizeSignals:
     def test_busy_lock_returns_409(self, base_url):
         serve._sim_lock.acquire()
         try:
-            status, _ = get_json_or_error(f"{base_url}/api/optimize_signals")
+            status, _ = post_json_or_error(f"{base_url}/api/optimize_signals")
             assert status == 409
         finally:
             serve._sim_lock.release()
@@ -1151,7 +1165,7 @@ class TestOptimizeSignals:
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
         t0 = time.time()
-        status, body = get_json(f"{base_url}/api/optimize_signals")
+        status, body = post_json(f"{base_url}/api/optimize_signals")
         elapsed = time.time() - t0
         assert status == 202
         assert body["status"] == "started"
@@ -1164,7 +1178,7 @@ class TestOptimizeSignals:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/optimize_signals")
+        post_json(f"{base_url}/api/optimize_signals")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
         _, final = get_json(f"{base_url}/api/optimize_signals/status")
@@ -1178,7 +1192,7 @@ class TestOptimizeSignals:
             return FakeCompletedProcess(returncode=0)
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
-        get_json(f"{base_url}/api/optimize_signals?edges=a_b_0")
+        post_json(f"{base_url}/api/optimize_signals?edges=a_b_0")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
         _, final = get_json(f"{base_url}/api/optimize_signals/status")
@@ -1189,7 +1203,7 @@ class TestOptimizeSignals:
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(
                                 returncode=1, stderr="demand_meta.json not found"))
-        get_json(f"{base_url}/api/optimize_signals")
+        post_json(f"{base_url}/api/optimize_signals")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "error")
         _, final = get_json(f"{base_url}/api/optimize_signals/status")
@@ -1198,7 +1212,7 @@ class TestOptimizeSignals:
     def test_missing_output_file_after_success_is_a_clear_error(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=0))
-        get_json(f"{base_url}/api/optimize_signals")
+        post_json(f"{base_url}/api/optimize_signals")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "error")
         _, final = get_json(f"{base_url}/api/optimize_signals/status")
@@ -1207,11 +1221,11 @@ class TestOptimizeSignals:
     def test_failure_releases_the_lock(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="boom"))
-        get_json(f"{base_url}/api/optimize_signals")
+        post_json(f"{base_url}/api/optimize_signals")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "error")
         assert not serve._sim_lock.locked()
-        status, _ = get_json(f"{base_url}/api/optimize_signals")
+        status, _ = post_json(f"{base_url}/api/optimize_signals")
         assert status == 202
 
     def test_shares_the_sim_lock_with_close(self, base_url):
@@ -1219,7 +1233,53 @@ class TestOptimizeSignals:
         resource class (both real SUMO batches) — must not run concurrently."""
         serve._sim_lock.acquire()
         try:
-            status, _ = get_json_or_error(f"{base_url}/api/close?edges=a_b_0")
+            status, _ = post_json_or_error(f"{base_url}/api/close?edges=a_b_0")
             assert status == 409
         finally:
             serve._sim_lock.release()
+
+
+class TestSecurityHardening:
+    """J (PLAN.md; audit P0-3/P1-12): GET must never mutate; cross-origin
+    POSTs are refused; every response carries the CSP."""
+
+    def test_get_on_mutating_endpoint_is_405(self, base_url):
+        for ep in ("close?edges=a_b_0", "recalibrate?date=2025-09-16",
+                   "cancel?kind=close", "suggest_closure?edges=a_b_0",
+                   "optimize_signals?edges="):
+            status, body = get_json_or_error(f"{base_url}/api/{ep}")
+            assert status == 405, ep
+            assert "POST" in body["error"]
+
+    def test_cross_origin_post_is_403(self, base_url):
+        req = urllib.request.Request(
+            f"{base_url}/api/cancel?kind=close", method="POST",
+            headers={"Origin": "https://evil.example"})
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            status = 200
+        except urllib.error.HTTPError as e:
+            status = e.code
+        assert status == 403
+
+    def test_loopback_origin_post_is_accepted(self, base_url):
+        req = urllib.request.Request(
+            f"{base_url}/api/cancel?kind=close", method="POST",
+            headers={"Origin": "http://localhost:8000"})
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                status = r.status
+        except urllib.error.HTTPError as e:
+            status = e.code
+        assert status != 403   # cancel with no active job is 409/200, never CSRF
+
+    def test_csp_header_present_on_api_and_static(self, base_url):
+        for path in ("/api/ping", "/index.html"):
+            with urllib.request.urlopen(f"{base_url}{path}", timeout=5) as r:
+                csp = r.headers.get("Content-Security-Policy", "")
+            assert "script-src 'self' https://unpkg.com" in csp, path
+            assert "frame-ancestors 'none'" in csp, path
+
+    def test_status_endpoints_stay_get(self, base_url):
+        status, _ = get_json(f"{base_url}/api/recalibrate/status")
+        assert status == 200

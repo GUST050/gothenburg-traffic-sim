@@ -2169,18 +2169,52 @@ RESULTS — re-baseline only deliberately (--write-baseline), never loosen
 tolerances. Done before H1 so the refactor has a results-invariance net
 beyond the same-seed byte-compare.
 
-## Phase I — Measured performance (improvement plan Phase 5) — ONLY after E+H
-Timing breakdown already exists (timings_s). Candidates for measurement:
-natural_sensor_masks per-try cost in generation (~100 s stage), the
-two-pass PFE re-solves (534 s stage), geojson re-parsing (3× per build).
-Rule: profile first, optimize the dominant stage only, benchmark fixture
-(H2) must stay green.
+## Phase I — Measured performance — CLOSED 2026-07-14 (measured; no safe lever)
+Profiled per the rule (profile first, dominant stage only, H2 green).
+Whole-day build ≈ 500 s: interval solving 405 s (81%), publish 19 s,
+candidates 29 s. cProfile on a real AM-peak quarter with the real 6 513
+assignment bounds: 5.05 of 5.28 s inside solve_interval_entropy's
+pure-Python Gauss-Seidel IPF loops (200 iterations × ~6 500 bound
+rescales); the per-solve `touch` index build measured 68 ms (~2 s of the
+whole stage — not worth hoisting); geojson parsing and the H0-flagged
+loops were already measured negligible. CONCLUSION, documented rather
+than forced: the stage is already flat-parallel across all cores
+(288 independent solves / 10 workers), and the per-solve cost is the
+deliberately SEQUENTIAL per-edge update the solver's own history pins
+down (vectorizing across edges is a Jacobi-semantics change — a
+documented 2026-07-10 near-miss; per-edge numpy was measured 4x SLOWER
+on these tiny index sets). Known escalations if multi-day/city-scale
+ever makes this matter: a JIT dependency (numba) on the inner loop, or
+worker-count tuning (improvement plan 5.4) — both deliberate decisions
+for that day, not free wins today.
 
-## Phase J — Product & security hardening (improvement plan Phase 6; audit P0-3, P1-5, P1-6, P1-12)
-POST + auth for mutating endpoints; CSP; innerHTML → safe DOM; job-centric
-UI views reading E4's durable jobs. Explicitly LAST among the local work:
-the server is loopback-only today (documented), so this blocks shared
-deployment, not current research use.
+## Phase J — Security hardening — CORE DONE 2026-07-14 (audit P0-3, P1-6, P1-12)
+- Every state-changing endpoint (close/recalibrate/suggest_closure/
+  optimize_signals/cancel) is POST-only; GET returns 405 ("använd POST") —
+  prefetchers/crawlers can no longer trigger simulations. Status endpoints
+  stay GET.
+- CSRF guard: cross-origin POSTs carry an Origin header by browser
+  contract; non-loopback origins → 403. This closes the real localhost
+  attack (any website can SEND a POST to http://localhost:8000 — the
+  browser only blocks reading the response). curl/tests send no Origin
+  and pass.
+- Content-Security-Policy on every response (script-src 'self' +unpkg,
+  connect-src 'self', img-src CARTO tiles, object-src 'none',
+  frame-ancestors 'none') + X-Content-Type-Options. Enabled by moving the
+  1300-line inline script to web/app.js (script-src 'self' is only
+  possible without inline JS).
+- Reflected-XSS vector fixed with safe DOM: the fatal-error renderer
+  interpolated err.message (which echoes the attacker-controllable ?file=
+  URL parameter via fetch error text) into innerHTML — now
+  createElement/textContent; CSP would have blocked payload execution,
+  the fix removes the injection itself.
+Verified live: GET-mutate 405, evil-origin POST 403, legitimate POST 202
++ full closure simulation; whole app exercised under the CSP in headless
+Chrome — zero violations, tiles/scenarios/panels all working. New tests:
+TestSecurityHardening (5). REMAINING (deliberately deferred): real
+authentication (needed only for shared deployment — server stays
+loopback-bound), remaining low-risk innerHTML sites with own-pipeline
+literal content (P1-6 tail), job-centric UI views over /api/jobs (P1-5).
 
 ## Phase K — Real-data signal upgrade (improvement plan Phase 7 = old D6 external)
 Unchanged: blocked on city signal plans via Miroslaw. When they arrive:
