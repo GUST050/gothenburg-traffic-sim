@@ -15,6 +15,7 @@ import pytest
 
 import build_sumo_demand as bsd
 from demand import intake as dintake
+from demand import publication as dpub
 from demand import priors as dpriors
 from demand import structure as dstructure
 
@@ -204,7 +205,7 @@ def test_clear_stale_scenarios_removes_only_json(monkeypatch, tmp_path):
     (scen_dir / "baseline.json").write_text("{}")
     (scen_dir / "close_x.json").write_text("{}")
     (scen_dir / "README.txt").write_text("keep")
-    monkeypatch.setattr(bsd, "SCEN_DIR", scen_dir)
+    monkeypatch.setattr(dpub, "SCEN_DIR", scen_dir)
 
     assert bsd.clear_stale_scenarios() == 2
     assert not (scen_dir / "baseline.json").exists()
@@ -222,7 +223,7 @@ def test_clear_stale_scenarios_leaves_a_valid_empty_manifest(monkeypatch, tmp_pa
     scen_dir.mkdir()
     (scen_dir / "baseline.json").write_text("{}")
     (scen_dir / "index.json").write_text(json.dumps({"scenarios": [{"name": "old"}]}))
-    monkeypatch.setattr(bsd, "SCEN_DIR", scen_dir)
+    monkeypatch.setattr(dpub, "SCEN_DIR", scen_dir)
 
     assert bsd.clear_stale_scenarios() == 2
     index_path = scen_dir / "index.json"
