@@ -456,6 +456,21 @@ class TestRunSumoVehrouteOutput:
         assert "--vehroute-output.exit-times" in cmd
         assert result == {"vehroute": vr_path}
 
+    def test_unfinished_vehroute_output_is_explicit_opt_in(self, monkeypatch, tmp_path):
+        commands = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        vr_path = tmp_path / "vehroutes.xml"
+        run_scenario.run_sumo(1000, tmp_path / "demand.rou.xml", [], 900,
+                              tmp_path, vehroute_output=vr_path,
+                              vehroute_write_unfinished=True)
+        assert "--vehroute-output.write-unfinished" in commands[0]
+
     def test_metrics_and_vehroute_output_combine_in_one_run(self, monkeypatch, tmp_path):
         commands = []
 
@@ -471,6 +486,72 @@ class TestRunSumoVehrouteOutput:
         assert set(result) == {"tripinfo", "statistics", "summary", "vehroute"}
         assert "--tripinfo-output" in commands[0]
         assert "--vehroute-output" in commands[0]
+
+    def test_work_dir_is_used_for_process_and_metric_outputs(self, monkeypatch, tmp_path):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(kwargs)
+            return subprocess.CompletedProcess(cmd, 0, stderr="")
+
+        monkeypatch.setattr(run_scenario.subprocess, "run", fake_run)
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path / "shared")
+        work = tmp_path / "run" / "seed-1000"
+        result = run_scenario.run_sumo(
+            1000, tmp_path / "demand.rou.xml", [], 900, tmp_path,
+            metrics=True, work_dir=work)
+
+        assert calls[0]["cwd"] == str(work)
+        assert result["tripinfo"].parent == work
+        assert result["statistics"].parent == work
+
+
+class TestScenarioWorkspace:
+    def test_tracked_workspace_is_created_under_run_directory(self, tmp_path,
+                                                                monkeypatch):
+        run_dir = tmp_path / "scenario-run"
+        run_dir.mkdir()
+        monkeypatch.setattr(run_scenario, "_ACTIVE_RUN_DIR", run_dir)
+
+        workspace = run_scenario.create_scenario_workspace("baseline")
+
+        assert workspace == run_dir / "scratch"
+        assert workspace.is_dir()
+        run_scenario.cleanup_scenario_workspace(workspace)
+        assert not workspace.exists()
+
+
+class TestTrajectoryPublication:
+    """The normal scenario must publish from the already-completed seed-1000
+    vehroute file instead of launching a fourth SUMO process."""
+
+    def test_publishes_from_existing_vehroute_and_health_files(self, tmp_path,
+                                                                monkeypatch):
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+        monkeypatch.setattr(run_scenario, "OUT_DIR", out_dir)
+        vr = tmp_path / "vehroutes.xml"
+        vr.write_text(
+            "<routes><vehicle id='v1' depart='0'>"
+            "<route edges='a b' exitTimes='10 20'/>"
+            "</vehicle></routes>"
+        )
+        stats = tmp_path / "stats.xml"
+        stats.write_text(
+            "<statistics><vehicles loaded='1' inserted='1' running='0' "
+            "waiting='0'/><teleports total='0'/><safety collisions='0'/>"
+            "</statistics>"
+        )
+
+        result = run_scenario.publish_trajectories_from_vehroute(
+            "baseline", tmp_path / "calibrated.rou.xml", vr, stats,
+            {"a", "b"})
+
+        assert result == "baseline_traj.json"
+        payload = json.loads((out_dir / result).read_text())
+        assert payload["inserted_in_run"] == 1
+        assert payload["n_vehicles"] == 1
+        assert payload["vehicles"][0]["e"] == [0, 1]
 
 
 class TestTrajectorySimulationMode:

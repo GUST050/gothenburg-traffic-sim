@@ -4,16 +4,25 @@
 // (after state/provider/render/controls/clock).
     (async () => {
       try {
-        const histProvider = await new HistoricalProvider().load('data/flows.json');
+        // These assets are independent. Start all requests together so the
+        // largest network JSON is not delayed behind flow/profile parsing.
+        const networkPromise = fetch('data/network.geojson?v=' + Date.now())
+          .then(res => {
+            if (!res.ok) throw new Error('Could not load data/network.geojson');
+            return res.json();
+          });
+        const histPromise = new HistoricalProvider().load('data/flows.json');
+        const normalPromise = new NormalProfile().load('data/normal_profile.json')
+          .catch(e => {
+            console.warn('normal_profile.json not found — run build_features.py to enable ratio colouring');
+            return null;
+          });
+        const [histProvider, normalProfile, networkPayload] = await Promise.all([
+          histPromise, normalPromise, networkPromise,
+        ]);
 
-        let normalProfile = null;
-        try {
-          normalProfile = await new NormalProfile().load('data/normal_profile.json');
-        } catch (e) {
-          console.warn('normal_profile.json not found — run build_features.py to enable ratio colouring');
-        }
-
-        await Render.init(document.getElementById('map'), histProvider, normalProfile);
+        await Render.init(document.getElementById('map'), histProvider,
+                          normalProfile, networkPayload);
         Controls.init(histProvider);
         Clock.start();
         State.setQI(0);

@@ -5,7 +5,7 @@
 # station to SENSOR_MEASURED_DIRECTION in build_data.py, then `make refresh`.
 # Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
-.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso
+.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso benchmark-speed
 
 all: data features agent1 forecast test
 
@@ -43,6 +43,11 @@ demand-morning:
 scenario:
 	python3 run_scenario.py
 	python3 run_scenario.py --close 60786979_3575001205_0 1455801464_18241874_0
+
+# Standalone speed/semantic benchmark; intentionally not part of `make test`.
+benchmark-speed:
+	python3 tools/benchmark_speed.py --trials 3 --workers 1 2 3 \
+		--write /private/tmp/gs-speed-benchmark.json
 
 # ── Direction-split model (dirsplit/) ─────────────────────────────────────
 # Full fetch takes hours (394 stations, throttled APIs) — run overnight.

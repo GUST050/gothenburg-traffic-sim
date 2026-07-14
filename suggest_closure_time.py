@@ -39,10 +39,13 @@ build_sumo_demand.py first) and sumo/net.net.xml (build_sumo_net.py).
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import dataclasses
 import json
 import math
+import shutil
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -304,7 +307,10 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      home: Path, micro: bool,
                      adj: dict[str, list[str]] | None,
                      freeflow: dict[str, float] | None,
-                     scratch: list[Path]
+                     scratch: list[Path],
+                     rerouter_edges: list[str] | None = None,
+                     work_dir: Path | None = None,
+                     seed_workers: int = 1,
                      ) -> tuple[cm.DisruptionMetrics, int, int, list[float]]:
     """Run `seeds` Monte Carlo replications of one candidate (or the
     baseline, when close_edges is empty) and aggregate their disruption
@@ -339,16 +345,23 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     # the demand realization a seed actually used was itself truncated.
     per_variant_trunc: list[tuple[int, int]] = [(0, 0)] * len(variants)
     closure_add: list[Path] = []
+    if seed_workers < 1:
+        raise ValueError("seed_workers must be >= 1")
+    base_dir = Path(work_dir) if work_dir is not None else rs.SUMO_DIR
+    if work_dir is not None:
+        base_dir.mkdir(parents=True, exist_ok=False)
     if close_edges:
         assert closures is not None and adj is not None and freeflow is not None
-        cpath = rs.SUMO_DIR / f"{SCT_PREFIX}closure_{name}.add.xml"
-        rerouter_edges = rs.edges_near(close_edges, rs.REROUTER_RADIUS_M)
-        rs.write_closure_additional(cpath, closures, rerouter_edges)
+        cpath = base_dir / f"{SCT_PREFIX}closure_{name}.add.xml"
+        selected_rerouter_edges = (rerouter_edges if rerouter_edges is not None
+                                   else rs.edges_near(close_edges,
+                                                      rs.REROUTER_RADIUS_M))
+        rs.write_closure_additional(cpath, closures, selected_rerouter_edges)
         closure_add = [cpath]
         scratch.append(cpath)
         filtered = []
         for i, vp in enumerate(variants):
-            fp = rs.SUMO_DIR / f"{vp.stem}_{SCT_PREFIX}{name}.rou.xml"
+            fp = base_dir / f"{vp.stem}_{SCT_PREFIX}{name}.rou.xml"
             t, d = rs.truncate_stranded_vehicles(
                 vp, close_edges, fp, adj, closures=closures,
                 edge_travel_s=freeflow)
@@ -357,28 +370,61 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             scratch.append(fp)
         run_variants = filtered
 
-    per_seed_metrics: list[cm.DisruptionMetrics] = []
+    jobs = []
     for s in range(seeds):
         seed = 1000 + s
         variant_idx = s % len(run_variants)
         route_path = run_variants[variant_idx]
         seed_truncated, seed_dropped = per_variant_trunc[variant_idx]
-        ed_file = rs.SUMO_DIR / f"{SCT_PREFIX}ed_{name}_{seed}.xml"
-        add_path = rs.SUMO_DIR / f"{SCT_PREFIX}add_{name}_{seed}.add.xml"
+        seed_dir = base_dir / f"seed-{seed}" if work_dir is not None else base_dir
+        if work_dir is not None:
+            seed_dir.mkdir(parents=True, exist_ok=False)
+        ed_file = seed_dir / f"{SCT_PREFIX}ed_{name}_{seed}.xml"
+        add_path = seed_dir / f"{SCT_PREFIX}add_{name}_{seed}.add.xml"
         rs.write_edgedata_additional(add_path, ed_file, duration_s)
         scratch += [ed_file, add_path]
-        metric_paths = rs.run_sumo(seed, route_path, [add_path] + closure_add,
-                                   duration_s, home, micro=micro, metrics=True)
-        scratch.extend(metric_paths.values())
+        jobs.append({"seed": seed, "route_path": route_path,
+                     "variant_idx": variant_idx, "seed_dir": seed_dir,
+                     "ed_file": ed_file, "add_path": add_path,
+                     "seed_truncated": seed_truncated,
+                     "seed_dropped": seed_dropped})
+
+    def run_one(job: dict) -> tuple[int, cm.DisruptionMetrics, list[Path]]:
+        metric_paths = rs.run_sumo(
+            job["seed"], job["route_path"], [job["add_path"]] + closure_add,
+            duration_s, home, micro=micro, metrics=True,
+            **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
         active_throughput = None
-        if closures and ed_file.exists():
-            seed_flows = rs.parse_edgedata(ed_file, n_intervals)
+        if closures and job["ed_file"].exists():
+            seed_flows = rs.parse_edgedata(job["ed_file"], n_intervals)
             active_throughput = cm.active_closure_throughput(seed_flows, closures)
-        per_seed_metrics.append(cm.build_metrics(
+        metrics = cm.build_metrics(
             metric_paths["tripinfo"], metric_paths["statistics"],
-            truncated_unreachable=seed_truncated, dropped_unreachable=seed_dropped,
+            truncated_unreachable=job["seed_truncated"],
+            dropped_unreachable=job["seed_dropped"],
             summary_path=metric_paths["summary"],
-            closed_edge_throughput=active_throughput))
+            closed_edge_throughput=active_throughput)
+        return job["seed"], metrics, list(metric_paths.values())
+
+    if seed_workers == 1 or len(jobs) == 1:
+        completed = [run_one(job) for job in jobs]
+    else:
+        executor = ThreadPoolExecutor(max_workers=min(seed_workers, len(jobs)),
+                                      thread_name_prefix="closure-seed")
+        futures = [executor.submit(run_one, job) for job in jobs]
+        try:
+            completed = [future.result() for future in as_completed(futures)]
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            raise
+        else:
+            executor.shutdown(wait=True)
+    completed.sort(key=lambda item: item[0])
+    per_seed_metrics = [item[1] for item in completed]
+    for item in completed:
+        scratch.extend(item[2])
     per_seed_time_loss = [m.total_time_loss_s for m in per_seed_metrics]
     # Candidate-level totals: sum over the DISTINCT variants actually used
     # (not over seeds — repeat seeds on the same variant don't add new
@@ -507,6 +553,8 @@ def parse_args() -> argparse.Namespace:
                         "controls (default 2).")
     p.add_argument("--seeds", type=int, default=3,
                    help="Monte Carlo seeds per simulated candidate (default 3).")
+    p.add_argument("--seed-workers", type=int, default=1,
+                   help="Concurrent SUMO seeds per candidate (default 1; benchmark first).")
     p.add_argument("--micro", action="store_true",
                    help="Use microscopic simulation (default: mesoscopic).")
     p.add_argument("--out", type=Path, default=None,
@@ -521,6 +569,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.seed_workers < 1:
+        sys.exit("--seed-workers must be >= 1")
     home = rs.sumo_home()
     rs.SUMO_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -583,13 +633,19 @@ def main() -> None:
     # candidate's Δ comparison (unavoidable — Δ timeLoss needs a real
     # simulated baseline; the scenario JSON only has flows, not timeLoss). ─
     scratch: list[Path] = []
+    batch_workspace = Path(tempfile.mkdtemp(prefix=".suggest_closure_",
+                                             dir=str(rs.SUMO_DIR)))
+    completed_ok = False
     try:
         print("  running baseline (metrics) …")
         t0 = time.time()
         baseline_metrics, _, _, baseline_per_seed = simulate_closure(
             name="baseline", closures=None, close_edges=[], variants=variants,
             seeds=args.seeds, n_intervals=n_intervals, duration_s=total_duration_s,
-            home=home, micro=args.micro, adj=None, freeflow=None, scratch=scratch)
+            home=home, micro=args.micro, adj=None, freeflow=None, scratch=scratch,
+            rerouter_edges=rerouter_edges,
+            work_dir=batch_workspace / "baseline",
+            seed_workers=args.seed_workers)
         print(f"  baseline done ({time.time() - t0:.0f}s): "
              f"timeLoss={baseline_metrics.total_time_loss_s:.0f}s, "
              f"{baseline_metrics.trip_count} trips")
@@ -607,7 +663,10 @@ def main() -> None:
                 name=name, closures=closures, close_edges=args.edge,
                 variants=variants, seeds=args.seeds, n_intervals=n_intervals,
                 duration_s=total_duration_s, home=home, micro=args.micro,
-                adj=adj, freeflow=freeflow, scratch=scratch)
+                adj=adj, freeflow=freeflow, scratch=scratch,
+                rerouter_edges=rerouter_edges,
+                work_dir=batch_workspace / name,
+                seed_workers=args.seed_workers)
             comparison = cm.compare_metrics(baseline_metrics, metrics)
             interval = delta_time_loss_interval(candidate_per_seed, baseline_per_seed)
             elapsed = time.time() - t0
@@ -681,6 +740,7 @@ def main() -> None:
         out_path = args.out or rs.SUMO_DIR / f"suggest_closure_{'+'.join(args.edge)[:60]}.json"
         rs.atomic_write_json(out_path, result, indent=2)
         print(f"Wrote {out_path}")
+        completed_ok = True
     finally:
         # ALWAYS runs, even on a SUMO timeout (sys.exit inside run_sumo) or
         # any other exception mid-search — a search that dies partway
@@ -699,6 +759,10 @@ def main() -> None:
                 except FileNotFoundError:
                     pass
             print(f"  cleaned up {removed} intermediate file(s)")
+            if completed_ok:
+                shutil.rmtree(batch_workspace, ignore_errors=True)
+        if not completed_ok or args.keep_scratch:
+            print(f"  kept isolated workspace: {batch_workspace}")
 
 
 if __name__ == "__main__":

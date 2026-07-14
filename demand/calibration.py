@@ -27,29 +27,34 @@ from demand.structure import (GEO_PATH, load_edge_geometry,
 _PFE_PAR_SHAPES = None
 _PFE_PAR_ROUTE_COST = None
 _PFE_PAR_STRUCTURE_GROUPS = None
+_PFE_PAR_VARIANT_INPUTS = None
 
 def _run_pfe_interval_job(job: dict):
     """ProcessPool worker for one independent (variant, quarter) PFE solve.
 
-    The shared shape pool and route-cost vector are inherited by fork, so the
-    heavy candidate geometry is not pickled once per quarter.
+    The shared shape pool, route-cost vector, and immutable variant inputs are
+    inherited by fork, so large candidate/bounds payloads are not pickled once
+    per quarter.
 
     Structure preservation is pfe.solve_interval_with_structure_guard's
     two-pass policy — shared with validate_sim's LOSO workers by design.
     """
     import pfe
 
-    if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
+    if (_PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None or
+            _PFE_PAR_VARIANT_INPUTS is None):
         raise RuntimeError("PFE interval worker was not initialized")
+    suffix, key, quarter = job
+    data = _PFE_PAR_VARIANT_INPUTS[suffix]
     sol, rung = pfe.solve_interval_with_structure_guard(
         _PFE_PAR_SHAPES,
-        job["targets"],
-        job["bounds"],
-        job["priors"],
+        data["targets"][quarter],
+        data["bounds_pq"][quarter],
+        data["priors_pq"][quarter],
         route_cost=_PFE_PAR_ROUTE_COST,
         structure_groups=_PFE_PAR_STRUCTURE_GROUPS,
     )
-    return job["suffix"], job["key"], job["quarter"], sol, rung
+    return suffix, key, quarter, sol, rung
 
 
 def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, str]],
@@ -64,6 +69,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     import pfe
 
     global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
+    global _PFE_PAR_VARIANT_INPUTS
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
@@ -72,6 +78,9 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     _PFE_PAR_ROUTE_COST = route_cost
     # Set BEFORE the pool forks so workers inherit it, like the shape pool.
     _PFE_PAR_STRUCTURE_GROUPS = structure_groups_for_shapes(shapes)
+    # Set before fork.  Each task now carries only a small tuple instead of
+    # repeatedly serializing the same per-quarter bounds/priors dictionaries.
+    _PFE_PAR_VARIANT_INPUTS = variant_inputs
     try:
         tasks = []
         solutions = {}
@@ -82,14 +91,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             solutions[suffix] = [None] * nq
             rungs[suffix] = [pfe.RUNG_INFEASIBLE] * nq
             for i in range(nq):
-                tasks.append({
-                    "suffix": suffix,
-                    "key": key,
-                    "quarter": i,
-                    "targets": data["targets"][i],
-                    "bounds": data["bounds_pq"][i],
-                    "priors": data["priors_pq"][i],
-                })
+                tasks.append((suffix, key, i))
 
         n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
         print(f"  PFE final variants: solving {len(tasks)} independent "
@@ -130,6 +132,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
         _PFE_PAR_STRUCTURE_GROUPS = None
+        _PFE_PAR_VARIANT_INPUTS = None
 
 
 def warn_unserviceable_measured_edges(report: dict, label: str) -> None:

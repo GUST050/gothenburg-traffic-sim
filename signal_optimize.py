@@ -48,12 +48,15 @@ delay_based network variants.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import dataclasses
 import hashlib
 import json
+import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -387,6 +390,8 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
                   vehroute_outputs: list[Path] | None = None,
                   run_label: str = "signal",
                   closed_edges: list[str] | None = None,
+                  work_dir: Path | None = None,
+                  seed_workers: int = 1,
                   ) -> tuple[cm.DisruptionMetrics, list[SignalRun]]:
     """micro=True (default, every existing caller's behaviour unchanged) for
     D2's own ground-truth comparisons; micro=False reruns the SAME five
@@ -411,19 +416,26 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
         raise ValueError("provide vehroute_output or vehroute_outputs, not both")
     if vehroute_outputs is not None and len(vehroute_outputs) != seeds:
         raise ValueError("vehroute_outputs must contain exactly one path per seed")
-    per_seed_metrics = []
-    per_seed_runs = []
+    if seed_workers < 1:
+        raise ValueError("seed_workers must be >= 1")
+    base_dir = Path(work_dir) if work_dir is not None else rs.SUMO_DIR
+    if work_dir is not None:
+        base_dir.mkdir(parents=True, exist_ok=False)
     scratch: list[Path] = []
+    jobs = []
     for s in range(seeds):
         seed = 1000 + s
         route_path = variants[s % len(variants)]
+        seed_dir = base_dir / f"seed-{seed}" if work_dir is not None else base_dir
+        if work_dir is not None:
+            seed_dir.mkdir(parents=True, exist_ok=False)
         run_add_paths = add_paths
         ed_file = None
         if closed_edges:
             safe_label = "".join(c if c.isalnum() or c in "_-" else "_" for c in run_label)
             stem = f"{safe_label}_{route_path.stem}_{seed}"
-            ed_file = rs.SUMO_DIR / f"edgedata_{stem}.xml"
-            ed_add_path = rs.SUMO_DIR / f"edgedata_add_{stem}.add.xml"
+            ed_file = seed_dir / f"edgedata_{stem}.xml"
+            ed_add_path = seed_dir / f"edgedata_add_{stem}.add.xml"
             rs.write_edgedata_additional(ed_add_path, ed_file, end_s, begin_s=begin_s)
             run_add_paths = add_paths + [ed_add_path]
             scratch.append(ed_add_path)
@@ -434,25 +446,66 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
         # contamination at the default window with the old default). A
         # vehicle that departed in-window but hasn't finished by end_s is
         # honestly tracked via unfinished_trips, not silently padded in.
-        metric_paths = rs.run_sumo(seed, route_path, run_add_paths, end_s, home,
-                                   micro=micro, metrics=True, begin_s=begin_s,
-                                   net_path=net_path, flush_s=0,
-                                   vehroute_output=(vehroute_outputs[s]
-                                                    if vehroute_outputs is not None
-                                                    else vehroute_output if s == 0 else None),
-                                   run_label=run_label)
-        closed_edge_throughput = None
+        jobs.append({
+            "seed": seed, "route_path": route_path, "run_add_paths": run_add_paths,
+            "end_s": end_s, "home": home, "micro": micro, "begin_s": begin_s,
+            "net_path": net_path, "ed_file": ed_file, "seed_dir": seed_dir,
+            "vehroute_output": (vehroute_outputs[s]
+                                 if vehroute_outputs is not None
+                                 else vehroute_output if s == 0 else None),
+        })
         if ed_file is not None:
-            closed_edge_throughput = cm.read_closed_edge_throughput(ed_file, set(closed_edges))
             scratch.append(ed_file)
-        metrics = cm.build_metrics(metric_paths["tripinfo"], metric_paths["statistics"],
-                                   summary_path=metric_paths["summary"],
-                                   closed_edge_throughput=closed_edge_throughput)
-        per_seed_metrics.append(metrics)
-        per_seed_runs.append(SignalRun(seed=seed, demand_variant=route_path.name,
-                                       metrics=metrics))
+
+    def run_one(job: dict) -> tuple[int, cm.DisruptionMetrics, SignalRun, list[Path]]:
+        metric_paths = rs.run_sumo(
+            job["seed"], job["route_path"], job["run_add_paths"], job["end_s"],
+            job["home"], micro=job["micro"], metrics=True,
+            begin_s=job["begin_s"], net_path=job["net_path"], flush_s=0,
+            vehroute_output=job["vehroute_output"], run_label=run_label,
+            **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
+        closed_edge_throughput = None
+        if job["ed_file"] is not None:
+            closed_edge_throughput = cm.read_closed_edge_throughput(
+                job["ed_file"], set(closed_edges))
+        metrics = cm.build_metrics(
+            metric_paths["tripinfo"], metric_paths["statistics"],
+            summary_path=metric_paths["summary"],
+            closed_edge_throughput=closed_edge_throughput)
+        return (job["seed"], metrics,
+                SignalRun(seed=job["seed"], demand_variant=job["route_path"].name,
+                          metrics=metrics), list(metric_paths.values()))
+
+    if seed_workers == 1 or len(jobs) == 1:
+        completed = [run_one(job) for job in jobs]
+    else:
+        executor = ThreadPoolExecutor(max_workers=min(seed_workers, len(jobs)),
+                                      thread_name_prefix="signal-seed")
+        futures = [executor.submit(run_one, job) for job in jobs]
+        try:
+            completed = [future.result() for future in as_completed(futures)]
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            raise
+        else:
+            executor.shutdown(wait=True)
+    completed.sort(key=lambda item: item[0])
+    per_seed_metrics = [item[1] for item in completed]
+    per_seed_runs = [item[2] for item in completed]
+    for item in completed:
+        scratch.extend(item[3])
     for p in scratch:
         p.unlink(missing_ok=True)
+    if work_dir is not None:
+        # Empty seed directories are disposable; the parent owner decides
+        # whether to remove the complete condition workspace after validation.
+        for seed_dir in sorted(base_dir.glob("seed-*")):
+            try:
+                seed_dir.rmdir()
+            except OSError:
+                pass
     return aggregate_seed_metrics(per_seed_metrics), per_seed_runs
 
 
@@ -468,6 +521,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--window-end", default="09:00", metavar="HH:MM")
     p.add_argument("--seeds", type=int, default=3,
                    help="Fixed Monte Carlo seeds, 1000..1000+seeds-1 (default 3).")
+    p.add_argument("--seed-workers", type=int, default=1,
+                   help="Concurrent SUMO seeds per condition (default 1; benchmark first).")
+    p.add_argument("--keep-scratch", action="store_true",
+                   help="Keep isolated condition workspaces after completion.")
     p.add_argument("--out", type=Path, default=None,
                    help="Result JSON path (default: sumo/signal_optimize_<window>.json).")
     return p.parse_args()
@@ -477,6 +534,8 @@ def main() -> None:
     args = parse_args()
     if args.seeds < 1:
         sys.exit("--seeds must be >= 1")
+    if args.seed_workers < 1:
+        sys.exit("--seed-workers must be >= 1")
     home = rs.sumo_home()
     rs.SUMO_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -505,29 +564,39 @@ def main() -> None:
     net_fps = condition_net_fingerprints(conditions)
     non_tls_net_fps = condition_non_tls_fingerprints(conditions)
 
+    batch_workspace = Path(tempfile.mkdtemp(prefix=".signal_optimize_",
+                                             dir=str(rs.SUMO_DIR)))
     results = {}
     condition_runs: dict[str, list[SignalRun]] = {}
     t_total = time.time()
-    for name, cfg in conditions.items():
-        print(f"  running condition '{name}' ({args.seeds} seeds) …")
-        t0 = time.time()
-        metrics, per_seed_runs = run_condition(
-            net_path=cfg["net_path"], add_paths=cfg["add_paths"], variants=variants,
-            seeds=args.seeds, begin_s=begin_s, end_s=end_s, home=home,
-            run_label=f"d2_{name}")
-        elapsed = time.time() - t0
-        print(f"    {elapsed:.0f}s: timeLoss={metrics.total_time_loss_s:.0f}s, "
-             f"{metrics.trip_count} trips, {metrics.teleport_total} teleports")
-        results[name] = {"metrics": dataclasses.asdict(metrics),
-                         "per_seed_time_loss_s": [run.metrics.total_time_loss_s
-                                                   for run in per_seed_runs],
-                         "runs": [{"seed": run.seed,
-                                   "demand_variant": run.demand_variant,
-                                   "metrics": dataclasses.asdict(run.metrics)}
-                                  for run in per_seed_runs],
-                         "elapsed_s": round(elapsed, 1)}
-        condition_runs[name] = per_seed_runs
-    total_elapsed = time.time() - t_total
+    try:
+        for name, cfg in conditions.items():
+            print(f"  running condition '{name}' ({args.seeds} seeds) …")
+            t0 = time.time()
+            metrics, per_seed_runs = run_condition(
+                net_path=cfg["net_path"], add_paths=cfg["add_paths"], variants=variants,
+                seeds=args.seeds, begin_s=begin_s, end_s=end_s, home=home,
+                run_label=f"d2_{name}",
+                work_dir=batch_workspace / name,
+                seed_workers=args.seed_workers)
+            elapsed = time.time() - t0
+            print(f"    {elapsed:.0f}s: timeLoss={metrics.total_time_loss_s:.0f}s, "
+                 f"{metrics.trip_count} trips, {metrics.teleport_total} teleports")
+            results[name] = {"metrics": dataclasses.asdict(metrics),
+                             "per_seed_time_loss_s": [run.metrics.total_time_loss_s
+                                                       for run in per_seed_runs],
+                             "runs": [{"seed": run.seed,
+                                       "demand_variant": run.demand_variant,
+                                       "metrics": dataclasses.asdict(run.metrics)}
+                                      for run in per_seed_runs],
+                             "elapsed_s": round(elapsed, 1)}
+            condition_runs[name] = per_seed_runs
+        total_elapsed = time.time() - t_total
+    finally:
+        # Keep the workspace until the complete result has been validated and
+        # atomically written below. If a later comparison or serialization
+        # fails, the artifacts remain available for diagnosis.
+        pass
 
     baseline_metrics = cm.DisruptionMetrics(**results["baseline"]["metrics"])
     comparisons = {}
@@ -606,6 +675,10 @@ def main() -> None:
     out_path = args.out or rs.SUMO_DIR / f"signal_optimize_{label}.json"
     rs.atomic_write_json(out_path, result, indent=2)
     print(f"Wrote {out_path}  ({total_elapsed:.0f}s total)")
+    if args.keep_scratch:
+        print(f"  kept signal workspace: {batch_workspace}")
+    else:
+        shutil.rmtree(batch_workspace, ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -28,8 +28,8 @@ import sys
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
-import osmnx as ox
-from pyproj import Transformer
+from sumo_runtime import sumo_home
+from sumo_network_metadata import write_metadata
 
 GRAPHML_PATH = Path("web/data/graph.graphml")
 SUMO_DIR     = Path("sumo")
@@ -47,12 +47,6 @@ DEFAULT_LANES = {
     "motorway": 2, "trunk": 2, "primary": 2,
     "secondary": 1, "tertiary": 1,
 }
-
-
-def sumo_home() -> Path:
-    """Locate the eclipse-sumo pip package (binaries in bin/, tools in tools/)."""
-    import sumo  # pip install eclipse-sumo
-    return Path(sumo.__file__).parent
 
 
 def scalar(val: object) -> object:
@@ -91,6 +85,11 @@ def parse_lanes(data: dict) -> int:
 
 
 def main() -> None:
+    # Network construction is the only path that needs these heavyweight
+    # dependencies.  Keep them out of scenario/demand import paths.
+    import osmnx as ox
+    from pyproj import Transformer
+
     SUMO_DIR.mkdir(exist_ok=True)
 
     print(f"Loading {GRAPHML_PATH} …")
@@ -160,6 +159,9 @@ def main() -> None:
 
     size_kb = net_path.stat().st_size / 1024
     print(f"Wrote {net_path}  ({size_kb:.0f} KB)")
+    metadata_path = SUMO_DIR / "network_metadata.json"
+    metadata = write_metadata(net_path, metadata_path)
+    print(f"Wrote {metadata_path}  ({len(metadata['edges'])} indexed edges)")
     print("SUMO edge IDs are identical to network.geojson/flows.json edge IDs.")
 
 

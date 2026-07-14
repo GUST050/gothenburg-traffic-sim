@@ -2,6 +2,14 @@ const Render = (() => {
   let _map           = null;
   let _provider      = null;
   let _normalProfile = null;
+  // flowAt() is a deliberately small seam, but calling it twice for every
+  // edge on every animation frame repeats the same array lookup while the
+  // current quarter is unchanged.  Cache only the two source buckets for the
+  // current provider/quarter; interpolation still happens every frame, so
+  // smooth playback fidelity is unchanged.
+  let _flowCacheProvider = null;
+  let _flowCacheQI = null;
+  const _flowCache = Object.create(null);
   let _onEdgeClick   = null;   // closure-mode callback (set by index.html)
   const _edges       = {};
   const _pending     = new Set();   // edges selected for closure, not yet simulated
@@ -275,12 +283,22 @@ const Render = (() => {
     const qiF  = typeof State !== 'undefined' ? State.qiFloat : 0;
     const qi0  = Math.floor(qiF);
     const frac = qiF - qi0;
+    if (_flowCacheProvider !== _provider || _flowCacheQI !== qi0) {
+      _flowCacheProvider = _provider;
+      _flowCacheQI = qi0;
+      for (const key of Object.keys(_flowCache)) delete _flowCache[key];
+    }
 
     for (const [id, e] of Object.entries(_edges)) {
       if (!e.isSensor && !_provider.hasEdge(id)) continue;
 
-      const c0 = _provider.flowAt(id, qi0);
-      const c1 = _provider.flowAt(id, qi0 + 1);
+      let pair = _flowCache[id];
+      if (!pair) {
+        pair = _flowCache[id] = [_provider.flowAt(id, qi0),
+                                 _provider.flowAt(id, qi0 + 1)];
+      }
+      const c0 = pair[0];
+      const c1 = pair[1];
       const blended = (c0 !== null && c1 !== null) ? c0 + (c1 - c0) * frac : c0;
       const styleKey = blended === null ? 'null' : Math.round(blended * 4);
       if (e._styleKey !== styleKey) {
@@ -327,7 +345,7 @@ const Render = (() => {
   // ── Public API ────────────────────────────────────────────────────────────────
 
   return {
-    async init(mapEl, provider, normalProfile = null) {
+    async init(mapEl, provider, normalProfile = null, networkPayload = null) {
       _provider      = provider;
       _normalProfile = normalProfile;
 
@@ -343,9 +361,12 @@ const Render = (() => {
         { attribution: '© OSM © CARTO', subdomains: 'abcd', maxZoom: 19 }
       ).addTo(_map);
 
-      const res = await fetch('data/network.geojson?v=' + Date.now());
-      if (!res.ok) throw new Error('Could not load data/network.geojson');
-      const geojson = await res.json();
+      let geojson = networkPayload;
+      if (!geojson) {
+        const res = await fetch('data/network.geojson?v=' + Date.now());
+        if (!res.ok) throw new Error('Could not load data/network.geojson');
+        geojson = await res.json();
+      }
 
       const bg = L.layerGroup().addTo(_map);
       const fg = L.layerGroup().addTo(_map);
@@ -474,6 +495,9 @@ const Render = (() => {
 
     setProvider(p) {
       _provider = p;
+      _flowCacheProvider = null;
+      _flowCacheQI = null;
+      for (const key of Object.keys(_flowCache)) delete _flowCache[key];
       // Invalidate the per-frame style cache so every edge restyles (or
       // resets to base look) under the new provider
       for (const e of Object.values(_edges)) e._styleKey = undefined;

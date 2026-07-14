@@ -29,10 +29,12 @@ Writes:
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -43,12 +45,20 @@ import numpy as np
 import pandas as pd
 
 import closure_metrics as cm
-from build_sumo_net import sumo_home
+from sumo_runtime import sumo_home
+from sumo_network_metadata import load_metadata
 
 SUMO_DIR  = Path("sumo")
 NET_PATH  = SUMO_DIR / "net.net.xml"
 GEO_PATH  = Path("web/data/network.geojson")
 OUT_DIR   = Path("web/data/scenarios")
+
+# _tracked_main assigns the immutable run directory before main() starts.
+# Direct library callers get a disposable fallback workspace.  New scenario
+# intermediates never write to the shared sumo/ directory.
+_ACTIVE_RUN_DIR: Path | None = None
+_LAST_SCRATCH_DIR: Path | None = None
+_LAST_SCRATCH_KEPT = False
 
 # A whole-day meso run normally takes ~10-15 s (measured: 3-seed whole-day
 # closure ~35 s total). This is a safety net, not a normal-path limit: without
@@ -156,6 +166,9 @@ def parse_args() -> argparse.Namespace:
                    help="Scenario name (default: 'baseline' or 'close_<edge…>')")
     p.add_argument("--seeds", type=int, default=3,
                    help="Monte Carlo runs (default 3)")
+    p.add_argument("--seed-workers", type=int, default=1,
+                   help="Concurrent independent SUMO seed processes "
+                        "(default 1; benchmark before increasing).")
     p.add_argument("--micro", action="store_true",
                    help="Use microscopic simulation (default: mesoscopic — "
                         "~20x faster, adequate for 15-min edge flows)")
@@ -176,7 +189,14 @@ def parse_args() -> argparse.Namespace:
                         "(PLAN.md E2): build the complete new set aside, "
                         "validate it, then atomically switch. Default: the "
                         "live directory, unchanged behaviour.")
+    p.add_argument("--keep-scratch", action="store_true",
+                   help="Keep this run's isolated SUMO workspace for diagnosis "
+                        "instead of deleting it after successful publication.")
     args = p.parse_args()
+    if args.seeds < 1:
+        p.error("--seeds must be >= 1")
+    if args.seed_workers < 1:
+        p.error("--seed-workers must be >= 1")
     if args.trajectories and args.no_trajectories:
         p.error("--trajectories and --no-trajectories are mutually exclusive")
     return args
@@ -218,6 +238,11 @@ def structured_closures(raw: list[str], whole_edges: list[str], epoch: str,
 
 def edge_freeflow_times() -> dict[str, float]:
     """Free-flow seconds per net edge for the conservative window prefilter."""
+    metadata = load_metadata(NET_PATH, SUMO_DIR / "network_metadata.json")
+    if metadata is not None:
+        return {edge_id: item["length_m"] / item["speed_m_s"]
+                for edge_id, item in metadata["edges"].items()
+                if item.get("length_m", 0) > 0 and item.get("speed_m_s", 0) > 0}
     times = {}
     for edge in ET.parse(NET_PATH).getroot().findall("edge"):
         # SUMO stores these on the first lane in normal net.net.xml files;
@@ -312,12 +337,17 @@ def edges_near(close_edges: list[str], radius_m: float) -> list[str]:
     they encounter the closure area, not telepathically at departure.
     """
     import math
-    import xml.etree.ElementTree as ET
+    metadata = load_metadata(NET_PATH, SUMO_DIR / "network_metadata.json")
     mids: dict[str, tuple[float, float]] = {}
-    for e in ET.parse(SUMO_DIR / "plain.edg.xml").getroot().findall("edge"):
-        pts = [tuple(map(float, p.split(","))) for p in e.get("shape").split()]
-        mids[e.get("id")] = (sum(p[0] for p in pts) / len(pts),
-                             sum(p[1] for p in pts) / len(pts))
+    if metadata is not None:
+        mids = {eid: tuple(item["midpoint"])
+                for eid, item in metadata["edges"].items()
+                if item.get("midpoint")}
+    else:
+        for e in ET.parse(SUMO_DIR / "plain.edg.xml").getroot().findall("edge"):
+            pts = [tuple(map(float, p.split(","))) for p in e.get("shape").split()]
+            mids[e.get("id")] = (sum(p[0] for p in pts) / len(pts),
+                                 sum(p[1] for p in pts) / len(pts))
     centres = [mids[ce] for ce in close_edges if ce in mids]
     out = set(close_edges)
     for eid, (x, y) in mids.items():
@@ -346,6 +376,16 @@ def build_edge_graph(banned: set[str]) -> dict[str, list[str]]:
     """Directed edge->edge adjacency from net.net.xml's <connection> elements,
     with `banned` edges (the closure) removed from both ends — the same
     graph SUMO's own router uses to find a path, minus the closed edges."""
+    metadata = load_metadata(NET_PATH, SUMO_DIR / "network_metadata.json")
+    if metadata is not None:
+        adj: dict[str, list[str]] = {}
+        for frm, targets in metadata["successors"].items():
+            if frm in banned:
+                continue
+            for to in targets:
+                if to not in banned:
+                    adj.setdefault(frm, []).append(to)
+        return adj
     adj: dict[str, list[str]] = {}
     for c in ET.parse(NET_PATH).getroot().findall("connection"):
         frm, to = c.get("from"), c.get("to")
@@ -533,10 +573,15 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              net_path: Path | None = None,
              flush_s: int = 3600,
              vehroute_output: Path | None = None,
+             vehroute_write_unfinished: bool = False,
              run_label: str | None = None,
-             stats_path: Path | None = None) -> dict[str, Path] | None:
-    # cwd=SUMO_DIR so the edgeData output file (relative in the additional
-    # file) lands in sumo/ — inputs must therefore be absolute paths.
+             stats_path: Path | None = None,
+             work_dir: Path | None = None) -> dict[str, Path] | None:
+    # EdgeData's file attribute is relative to the SUMO cwd. A private
+    # work_dir therefore isolates every generated XML while all input paths
+    # remain absolute. The default keeps direct diagnostic callers working.
+    run_cwd = Path(work_dir or SUMO_DIR)
+    run_cwd.mkdir(parents=True, exist_ok=True)
     # Mesoscopic by default: our product is 15-min edge flows, which does not
     # need microscopic car-following — meso is ~20x faster (whole-day seed:
     # minutes → seconds), which is what makes interactive closures possible.
@@ -626,9 +671,9 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
                              for c in run_label) if run_label else ""
         stem = f"metrics_{safe_label + '_' if safe_label else ''}{route_path.stem}_{seed}"
         metric_paths.update({
-            "tripinfo": SUMO_DIR / f"{stem}_tripinfo.xml",
-            "statistics": SUMO_DIR / f"{stem}_statistics.xml",
-            "summary": SUMO_DIR / f"{stem}_summary.xml",
+            "tripinfo": run_cwd / f"{stem}_tripinfo.xml",
+            "statistics": run_cwd / f"{stem}_statistics.xml",
+            "summary": run_cwd / f"{stem}_summary.xml",
         })
         cmd.extend([
             "--tripinfo-output", str(metric_paths["tripinfo"].resolve()),
@@ -657,9 +702,11 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         metric_paths["vehroute"] = vehroute_output
         cmd.extend(["--vehroute-output", str(vehroute_output.resolve()),
                    "--vehroute-output.exit-times", "true"])
+        if vehroute_write_unfinished:
+            cmd.extend(["--vehroute-output.write-unfinished", "true"])
     try:
         res = subprocess.run(cmd, capture_output=True, text=True,
-                             cwd=str(SUMO_DIR), env={"SUMO_HOME": str(home)},
+                             cwd=str(run_cwd), env={"SUMO_HOME": str(home)},
                              timeout=SUMO_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         sys.exit(f"sumo timed out after {SUMO_TIMEOUT_S}s (seed {seed})")
@@ -819,10 +866,67 @@ def parse_vehroute_file(vr_file: Path, web_edges: set[str]
     return edge_index, vehicles, n_in_file, n_unfinished
 
 
+def publish_trajectories_from_vehroute(
+        name: str, route_path: Path, vr_file: Path, stats_path: Path,
+        web_edges: set[str]) -> str | None:
+    """Publish trajectories from an already-completed SUMO run.
+
+    The normal scenario path requests vehroute output during its seed-1000
+    flow run and calls this function afterward. Keeping parsing and
+    publication separate from process launch prevents a second simulation
+    with the same seed from being mistaken for the representative run.
+    """
+    if not vr_file.exists():
+        print(f"  trajectories: missing vehroute output {vr_file}")
+        return None
+
+    edge_index, vehicles, n_in_file, n_unfinished = parse_vehroute_file(
+        vr_file, web_edges)
+    vehicles.sort(key=lambda v: v["d"])
+    inv = [None] * len(edge_index)
+    for e, i in edge_index.items():
+        inv[i] = e
+
+    # Keep parse integrity separate from the deliberate off-map display
+    # filter. A short vehroute file is withheld; an off-map route is disclosed.
+    health = parse_seed_health(stats_path, seed=1000,
+                               variant=route_path.name)
+    inserted = health.get("inserted") if health else None
+    if inserted:
+        integrity = n_in_file / inserted
+        if integrity < 0.98:
+            print(f"  trajectories: FAILED reconciliation — vehroute file "
+                  f"holds {n_in_file} of {inserted} inserted vehicles "
+                  f"({100 * integrity:.1f}% < 98%); artifact withheld")
+            return None
+
+    traj_name = f"{name}_traj.json"
+    atomic_write_json(OUT_DIR / traj_name,
+                      {"seed": 1000, "variant": route_path.name,
+                       "n_vehicles": len(vehicles),
+                       "n_unfinished": n_unfinished,
+                       "inserted_in_run": inserted,
+                       "displayed_share": (round(len(vehicles) / inserted, 4)
+                                           if inserted else None),
+                       "edges": inv, "vehicles": vehicles},
+                      separators=(",", ":"))
+    size_mb = (OUT_DIR / traj_name).stat().st_size / 1e6
+    print(f"  trajectories: {len(vehicles)} of {inserted or '?'} vehicles "
+          f"drawable → {traj_name} ({size_mb:.1f} MB; seed 1000, "
+          f"{route_path.name})")
+    return traj_name
+
+
 def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
                         duration_s: int, home: Path,
                         web_edges: set[str], micro: bool = False) -> str | None:
-    """One extra SUMO run with vehroute exit-times → a compact per-vehicle
+    """Legacy standalone SUMO run with vehroute exit-times.
+
+    The main scenario path no longer calls this function: it captures the
+    same output during the existing seed-1000 flow run. This wrapper remains
+    for diagnostic callers and backwards-compatible tests.
+
+    One extra SUMO run with vehroute exit-times → a compact per-vehicle
     edge-timeline the web animates: EVERY DOT IS A REAL SIMULATED VEHICLE
     with its origin, destination, route and congestion-accurate timing.
 
@@ -866,51 +970,9 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
     if res.returncode != 0:
         print(res.stderr[-800:])
         return None
-
-    edge_index, vehicles, n_in_file, n_unfinished = parse_vehroute_file(
-        vr_file, web_edges)
-
-    vehicles.sort(key=lambda v: v["d"])
-    inv = [None] * len(edge_index)
-    for e, i in edge_index.items():
-        inv[i] = e
-
-    # F1 provenance + reconciliation (PLAN.md; improvement plan Phase 2.3-
-    # 2.4). Two distinct counts, deliberately NOT conflated:
-    # - PARSE INTEGRITY: vehicles in the vehroute FILE vs vehicles SUMO
-    #   says it inserted — a shortfall means truncated output/lost
-    #   vehicles, and the artifact is withheld (returning None keeps the
-    #   established failed-export behaviour: flow colours without dots,
-    #   never a partial animation presented as complete).
-    # - DISPLAY FILTER: vehicles whose route leaves the drawable edge set
-    #   are skipped BY DESIGN; that share is disclosed in the artifact
-    #   (displayed_share) instead of gated, because it reflects the map's
-    #   scope, not the run's health.
-    health = parse_seed_health(SUMO_DIR / f"stats_traj_{name}.xml",
-                               seed=1000, variant=route_path.name)
-    inserted = health.get("inserted") if health else None
-    if inserted:
-        integrity = n_in_file / inserted
-        if integrity < 0.98:
-            print(f"  trajectories: FAILED reconciliation — vehroute file "
-                  f"holds {n_in_file} of {inserted} inserted vehicles "
-                  f"({100 * integrity:.1f}% < 98%); artifact withheld")
-            return None
-    traj_name = f"{name}_traj.json"
-    atomic_write_json(OUT_DIR / traj_name,
-                      {"seed": 1000, "variant": route_path.name,
-                       "n_vehicles": len(vehicles),
-                       "n_unfinished": n_unfinished,
-                       "inserted_in_run": inserted,
-                       "displayed_share": (round(len(vehicles) / inserted, 4)
-                                           if inserted else None),
-                       "edges": inv, "vehicles": vehicles},
-                      separators=(",", ":"))
-    size_mb = (OUT_DIR / traj_name).stat().st_size / 1e6
-    print(f"  trajectories: {len(vehicles)} of {inserted or '?'} vehicles "
-          f"drawable → {traj_name} ({size_mb:.1f} MB; seed 1000, "
-          f"{route_path.name})")
-    return traj_name
+    return publish_trajectories_from_vehroute(
+        name, route_path, vr_file, SUMO_DIR / f"stats_traj_{name}.xml",
+        web_edges)
 
 
 def parse_edgedata(path: Path, n_intervals: int) -> dict[str, np.ndarray]:
@@ -958,6 +1020,61 @@ def aggregate_flows(
         cv   = float((stack.std(axis=0)[busy] / mean[busy]).mean()) if busy.any() else 0.0
         conf_out[eid] = round(prior[eid] * float(np.exp(-cv)), 3)
     return flows_out, conf_out
+
+
+def create_scenario_workspace(name: str) -> Path:
+    """Create the exclusive scratch directory for one scenario run.
+
+    Tracked CLI runs use runs/<run-id>/scratch. Direct library callers use a
+    temporary child of SUMO_DIR so tests and integrations retain a simple
+    fallback without sharing files with another scenario.
+    """
+    global _LAST_SCRATCH_DIR, _LAST_SCRATCH_KEPT
+    if _ACTIVE_RUN_DIR is not None:
+        workspace = _ACTIVE_RUN_DIR / "scratch"
+        workspace.mkdir(parents=True, exist_ok=False)
+    else:
+        SUMO_DIR.mkdir(parents=True, exist_ok=True)
+        slug = re.sub(r"[^A-Za-z0-9_-]", "_", name)[:40]
+        workspace = Path(tempfile.mkdtemp(
+            prefix=f".scenario_{slug}_", dir=str(SUMO_DIR)))
+    _LAST_SCRATCH_DIR = workspace
+    _LAST_SCRATCH_KEPT = False
+    return workspace
+
+
+def cleanup_scenario_workspace(workspace: Path, keep: bool = False) -> None:
+    """Remove disposable scratch only after a successful publication."""
+    global _LAST_SCRATCH_KEPT
+    _LAST_SCRATCH_KEPT = bool(keep)
+    if keep:
+        print(f"  kept scenario scratch: {workspace}")
+        return
+    shutil.rmtree(workspace, ignore_errors=False)
+
+
+def run_seed_job(job: dict) -> dict:
+    """Run and parse one independent SUMO seed.
+
+    All paths in job are seed-specific. The function is intentionally free of
+    publication or aggregation side effects so a bounded executor can run it
+    concurrently while the parent retains deterministic seed ordering.
+    """
+    run_sumo(
+        job["seed"], job["route_path"], job["add_paths"], job["duration_s"],
+        job["home"], micro=job["micro"], stats_path=job["stats_file"],
+        vehroute_output=job.get("vehroute_output"),
+        vehroute_write_unfinished=job.get("vehroute_write_unfinished", False),
+        work_dir=job["work_dir"])
+    flows = parse_edgedata(job["edge_file"], job["n_intervals"])
+    health = parse_seed_health(job["stats_file"], job["seed"],
+                               job["route_path"].name)
+    return {
+        "seed": job["seed"],
+        "route_path": job["route_path"],
+        "flows": flows,
+        "health": health,
+    }
 
 
 def main() -> None:
@@ -1011,9 +1128,7 @@ def main() -> None:
     else:
         label = "Baslinje (ingen avstängning)"
 
-    # Edge list for the rerouter (net edge IDs = plain edge IDs, no internals)
-    net_edges = [e.get("id") for e in ET.parse(NET_PATH).getroot().findall("edge")
-                 if not e.get("function")]
+    scratch_dir = create_scenario_workspace(name)
 
     print(f"Scenario '{name}'  ({label})  —  {args.seeds} seeds × {n_intervals} × 15 min")
 
@@ -1027,7 +1142,7 @@ def main() -> None:
         rerouter_edges = edges_near(close_edges, REROUTER_RADIUS_M)
         print(f"  rerouter on {len(rerouter_edges)} edges within "
               f"{REROUTER_RADIUS_M} m of the closure")
-        cpath = SUMO_DIR / f"closure_{name}.add.xml"
+        cpath = scratch_dir / f"closure_{name}.add.xml"
         write_closure_additional(cpath, closures, rerouter_edges)
         closure_add = [cpath]
 
@@ -1040,7 +1155,7 @@ def main() -> None:
         freeflow = edge_freeflow_times()
         filtered_variants = []
         for vp in variants:
-            fp = SUMO_DIR / f"{vp.stem}_{name}.rou.xml"
+            fp = scratch_dir / f"{vp.stem}_{name}.rou.xml"
             t, d = truncate_stranded_vehicles(
                 vp, close_edges, fp, adj,
                 # Preserve the exact tested function path for legacy --close.
@@ -1059,26 +1174,74 @@ def main() -> None:
                   f"depart with the closure in place")
         variants = filtered_variants
 
-    per_seed: list[dict[str, np.ndarray]] = []
-    seed_health: list[dict] = []
+    trajectory_enabled = want_trajectories(args, n_intervals)
+    trajectory_stats_file = None
+
+    jobs = []
     for s in range(args.seeds):
         seed = 1000 + s
         route_path = variants[s % len(variants)]
-        ed_file  = SUMO_DIR / f"edgedata_{name}_{seed}.xml"
-        add_path = SUMO_DIR / f"additional_{name}_{seed}.add.xml"
-        stats_file = SUMO_DIR / f"stats_{name}_{seed}.xml"
+        # SUMO is an external process and writes relative edgeData files from
+        # its cwd. Give every seed a private directory, even when the parent
+        # schedules seeds concurrently. This makes the isolation contract
+        # executable instead of relying on filename conventions alone.
+        seed_dir = scratch_dir / f"seed-{seed}"
+        seed_dir.mkdir(parents=True, exist_ok=False)
+        ed_file  = seed_dir / f"edgedata_{name}_{seed}.xml"
+        add_path = seed_dir / f"additional_{name}_{seed}.add.xml"
+        stats_file = seed_dir / f"stats_{name}_{seed}.xml"
+        trajectory_vr_file = (seed_dir / f"vehroutes_{name}.xml"
+                              if seed == 1000 and trajectory_enabled else None)
+        if seed == 1000 and trajectory_enabled:
+            trajectory_stats_file = stats_file
         write_edgedata_additional(add_path, ed_file, duration_s)
-        run_sumo(seed, route_path, [add_path] + closure_add, duration_s, home,
-                 micro=args.micro, stats_path=stats_file)
-        per_seed.append(parse_edgedata(ed_file, n_intervals))
-        health = parse_seed_health(stats_file, seed, route_path.name)
+        jobs.append({
+            "seed": seed,
+            "route_path": route_path,
+            "add_paths": [add_path] + closure_add,
+            "duration_s": duration_s,
+            "home": home,
+            "micro": args.micro,
+            "stats_file": stats_file,
+            "edge_file": ed_file,
+            "n_intervals": n_intervals,
+            "vehroute_output": trajectory_vr_file,
+            "vehroute_write_unfinished": (seed == 1000 and trajectory_enabled),
+            "work_dir": seed_dir,
+        })
+
+    if args.seed_workers == 1 or len(jobs) == 1:
+        results = [run_seed_job(job) for job in jobs]
+    else:
+        executor = ThreadPoolExecutor(
+            max_workers=min(args.seed_workers, len(jobs)),
+            thread_name_prefix="sumo-seed")
+        futures = [executor.submit(run_seed_job, job) for job in jobs]
+        try:
+            results = [future.result() for future in as_completed(futures)]
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            raise
+        else:
+            executor.shutdown(wait=True)
+
+    # Completion order is intentionally discarded. Confidence and JSON output
+    # must use the same seed order for serial and parallel execution.
+    results.sort(key=lambda item: item["seed"])
+    per_seed: list[dict[str, np.ndarray]] = []
+    seed_health: list[dict] = []
+    for result in results:
+        per_seed.append(result["flows"])
+        health = result["health"]
         if health is not None:
             seed_health.append(health)
         h_note = ""
         if health is not None:
             h_note = (f", {health['inserted']}/{health['loaded']} inserted, "
                       f"{health['teleports']} teleports")
-        print(f"  seed {seed} ({route_path.name}): "
+        print(f"  seed {result['seed']} ({result['route_path'].name}): "
               f"{len(per_seed[-1])} edges with traffic{h_note}")
 
     health_flags = seed_health_flags(seed_health)
@@ -1110,10 +1273,11 @@ def main() -> None:
     window_label = demand_window_label(meta)
 
     traj_name = None
-    if want_trajectories(args, n_intervals):
-        traj_name = export_trajectories(name, variants[0], closure_add,
-                                        duration_s, home, web_edges,
-                                        micro=args.micro)
+    if trajectory_enabled and trajectory_stats_file is not None:
+        traj_name = publish_trajectories_from_vehroute(
+            name, variants[0], scratch_dir / "seed-1000" / f"vehroutes_{name}.xml",
+            trajectory_stats_file,
+            web_edges)
 
     payload = {
         "epoch":            meta["epoch_sim"],
@@ -1170,6 +1334,13 @@ def main() -> None:
     index["scenarios"].sort(key=lambda s: s["name"])
     atomic_write_json(index_path, index, indent=2)
     print(f"Updated {index_path}  ({len(index['scenarios'])} scenarios)")
+    try:
+        cleanup_scenario_workspace(scratch_dir, keep=args.keep_scratch)
+    except OSError as exc:
+        # Publication is complete. Keep the result visible but record cleanup
+        # failure instead of turning a successful simulation into a false
+        # failed run.
+        print(f"  WARNING could not remove scratch {scratch_dir}: {exc}")
 
 
 def _tracked_main() -> None:
@@ -1181,12 +1352,28 @@ def _tracked_main() -> None:
 
     import runs
 
+    global _ACTIVE_RUN_DIR
     run = runs.start_run("scenario", inputs={"argv": sys.argv[1:]})
+    _ACTIVE_RUN_DIR = run.dir
     try:
         main()
     except BaseException as exc:
+        if _LAST_SCRATCH_DIR is not None:
+            run.record("scratch", {
+                "path": str(_LAST_SCRATCH_DIR),
+                "kept": True,
+                "status": "preserved_after_failure",
+            })
         run.finish("failed", error=f"{type(exc).__name__}: {exc}")
         raise
+    finally:
+        _ACTIVE_RUN_DIR = None
+    if _LAST_SCRATCH_DIR is not None:
+        run.record("scratch", {
+            "path": str(_LAST_SCRATCH_DIR),
+            "kept": _LAST_SCRATCH_KEPT,
+            "status": "kept" if _LAST_SCRATCH_KEPT else "removed",
+        })
     index_path = OUT_DIR / "index.json"
     run.add_output(index_path)
     if index_path.exists():

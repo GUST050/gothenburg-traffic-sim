@@ -9,6 +9,7 @@ const Controls = (() => {
   let _daySlider = null;
   let _todSlider = null;
   let _speedBtns = null;
+  let _displayCache = {};
 
   // "Speed" is quarters (900 s of simulated time) advanced per real second.
   // The historical/forecast flow view is a 15-min-bucket conveyor — there's
@@ -55,23 +56,45 @@ const Controls = (() => {
     const h = String(d.getUTCHours()).padStart(2, '0');
     const m = String(d.getUTCMinutes()).padStart(2, '0');
     const s = String(d.getUTCSeconds()).padStart(2, '0');
-    _tdClock.textContent = `${h}:${m}:${s}`;
+    const clock = `${h}:${m}:${s}`;
+    if (_displayCache.clock !== clock) {
+      _tdClock.textContent = clock;
+      _displayCache.clock = clock;
+    }
     // Year is always shown — otherwise 2025/2027 modes are indistinguishable
-    _tdDate.textContent =
+    const date =
       `${DAYS[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, '0')} ` +
       `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-    _playBtn.textContent = State.playing ? '⏸' : '▶';
+    if (_displayCache.date !== date) {
+      _tdDate.textContent = date;
+      _displayCache.date = date;
+    }
+    const play = State.playing ? '⏸' : '▶';
+    if (_displayCache.play !== play) {
+      _playBtn.textContent = play;
+      _displayCache.play = play;
+    }
 
     const qi  = State.qi;
     const day = Math.floor(qi / 96);
     const tod = qi % 96;
-    if (Number(_daySlider.value) !== day) { _daySlider.value = day; setFill(_daySlider); }
-    if (Number(_todSlider.value) !== tod) { _todSlider.value = tod; setFill(_todSlider); }
+    if (Number(_daySlider.value) !== day) {
+      _daySlider.value = day;
+      setFill(_daySlider);
+    }
+    if (Number(_todSlider.value) !== tod) {
+      _todSlider.value = tod;
+      setFill(_todSlider);
+    }
   }
 
   return {
     setProvider(p) {
       _provider = p;
+      // A provider switch can keep the same qi while changing the displayed
+      // epoch (2025 historical -> 2027 forecast); invalidate only the tiny
+      // DOM memo, not the provider data.
+      _displayCache = {};
     },
 
     // Call when entering/leaving Simulering — swaps the 4 speed buttons
@@ -95,6 +118,7 @@ const Controls = (() => {
       _tdDate    = document.getElementById('td-date');
       _daySlider = document.getElementById('day-slider');
       _todSlider = document.getElementById('tod-slider');
+      _displayCache = {};
 
       _playBtn.addEventListener('click', () => State.toggle());
 

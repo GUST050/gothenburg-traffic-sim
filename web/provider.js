@@ -21,6 +21,7 @@ class HistoricalProvider {
     );
     this.intervalMinutes = payload.interval_minutes;
     this._flows = payload.flows;
+    this._maxByEdge = {};
 
     // Scenario files (from run_scenario.py) carry extra fields; plain
     // historical/forecast files leave these empty.
@@ -42,11 +43,20 @@ class HistoricalProvider {
       ?? Object.values(this._flows)[0]?.length
       ?? 35040;
 
+    // Compute the normalisation maximum in one pass.  The previous
+    // filter+reduce allocated a second array for every edge; with thousands
+    // of edges and year-long flows that was a large, avoidable parse-time
+    // allocation.  null remains missing and never participates in the max.
     for (const [edgeId, arr] of Object.entries(this._flows)) {
-      const nums = arr.filter(v => v !== null);
-      this._maxByEdge[edgeId] = nums.length
-        ? nums.reduce((a, b) => a > b ? a : b)
-        : 1;
+      let max = 0;
+      let hasValue = false;
+      for (const value of arr) {
+        if (value !== null && value !== undefined) {
+          hasValue = true;
+          if (value > max) max = value;
+        }
+      }
+      this._maxByEdge[edgeId] = hasValue ? max : 1;
     }
     return this;
   }

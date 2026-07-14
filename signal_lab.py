@@ -34,12 +34,15 @@ build_sumo_demand.py first) and sumo/net.net.xml (build_sumo_net.py).
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
 import dataclasses
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -260,6 +263,10 @@ def parse_args() -> argparse.Namespace:
                    help="Window end, wall-clock on the calibrated day (default 09:00).")
     p.add_argument("--seeds", type=int, default=3,
                    help="Fixed Monte Carlo seeds, 1000..1000+seeds-1 (default 3).")
+    p.add_argument("--seed-workers", type=int, default=1,
+                   help="Concurrent SUMO seeds (default 1; benchmark before increasing).")
+    p.add_argument("--keep-scratch", action="store_true",
+                   help="Keep isolated signal-lab workspaces after completion.")
     p.add_argument("--out", type=Path, default=None,
                    help="Result JSON path (default: sumo/signal_lab_<window>.json).")
     return p.parse_args()
@@ -269,6 +276,8 @@ def main() -> None:
     args = parse_args()
     if args.seeds < 1:
         sys.exit("--seeds must be >= 1")
+    if args.seed_workers < 1:
+        sys.exit("--seed-workers must be >= 1")
     home = rs.sumo_home()
     rs.SUMO_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -290,31 +299,56 @@ def main() -> None:
          f"({(end_s - begin_s) / 60:.0f} min), {args.seeds} seed(s), MICRO, "
          f"tls_provenance={TLS_PROVENANCE}")
 
-    per_seed = []
-    t_total = time.time()
+    batch_workspace = Path(tempfile.mkdtemp(prefix=".signal_lab_",
+                                             dir=str(rs.SUMO_DIR)))
+    jobs = []
     for s in range(args.seeds):
         seed = 1000 + s
-        route_path = variants[s % len(variants)]
+        seed_dir = batch_workspace / f"seed-{seed}"
+        seed_dir.mkdir()
+        jobs.append({"seed": seed, "route_path": variants[s % len(variants)],
+                     "seed_dir": seed_dir})
+
+    def run_one(job: dict) -> dict:
         t0 = time.time()
         # flush_s=0: this IS a bounded time-of-day window experiment — the
         # default 3600s meso flush would let vehicles depart up to an hour
-        # PAST the requested window and still count toward it (verified
-        # empirically 2026-07-11: 55% contamination at the default window).
-        # A vehicle that departed in-window but hasn't finished by end_s is
-        # honestly tracked via unfinished_trips, not silently padded in or
-        # dropped.
-        metric_paths = rs.run_sumo(seed, route_path, [], end_s, home,
-                                   micro=True, metrics=True, begin_s=begin_s,
-                                   flush_s=0)
-        elapsed = time.time() - t0
+        # PAST the requested window and still count toward it. A vehicle that
+        # departed in-window but has not finished by end_s is honestly tracked
+        # via unfinished_trips, not silently padded in or dropped.
+        metric_paths = rs.run_sumo(
+            job["seed"], job["route_path"], [], end_s, home,
+            micro=True, metrics=True, begin_s=begin_s, flush_s=0,
+            work_dir=job["seed_dir"])
         metrics = cm.build_metrics(metric_paths["tripinfo"], metric_paths["statistics"],
                                    summary_path=metric_paths["summary"])
-        print(f"  seed {seed} ({route_path.name}): {elapsed:.0f}s, "
+        return {"seed": job["seed"], "route_file": job["route_path"].name,
+                "elapsed_s": round(time.time() - t0, 1),
+                "metrics": dataclasses.asdict(metrics)}
+
+    t_total = time.time()
+    if args.seed_workers == 1 or len(jobs) == 1:
+        per_seed = [run_one(job) for job in jobs]
+    else:
+        executor = ThreadPoolExecutor(max_workers=min(args.seed_workers, len(jobs)),
+                                      thread_name_prefix="signal-lab-seed")
+        futures = [executor.submit(run_one, job) for job in jobs]
+        try:
+            per_seed = [future.result() for future in as_completed(futures)]
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            print(f"  kept signal-lab workspace after failure: {batch_workspace}")
+            raise
+        else:
+            executor.shutdown(wait=True)
+    per_seed.sort(key=lambda row: row["seed"])
+    for row in per_seed:
+        metrics = cm.DisruptionMetrics(**row["metrics"])
+        print(f"  seed {row['seed']} ({row['route_file']}): {row['elapsed_s']:.0f}s, "
              f"timeLoss={metrics.total_time_loss_s:.0f}s, "
              f"{metrics.trip_count} trips, {metrics.teleport_total} teleports")
-        per_seed.append({"seed": seed, "route_file": route_path.name,
-                         "elapsed_s": round(elapsed, 1),
-                         "metrics": dataclasses.asdict(metrics)})
     total_elapsed = time.time() - t_total
 
     aggregate = aggregate_seed_metrics(
@@ -349,6 +383,10 @@ def main() -> None:
         f"_{args.window_end.replace(':', '')}.json")
     rs.atomic_write_json(out_path, result, indent=2)
     print(f"Wrote {out_path}  ({total_elapsed:.0f}s total)")
+    if args.keep_scratch:
+        print(f"  kept signal-lab workspace: {batch_workspace}")
+    else:
+        shutil.rmtree(batch_workspace, ignore_errors=True)
 
 
 if __name__ == "__main__":
