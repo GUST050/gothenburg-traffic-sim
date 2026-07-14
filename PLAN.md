@@ -2134,11 +2134,24 @@ re-parse is 0.02 s ×3/build; the per-vertex edge-length loop is ~0.3 s/build;
 budget — an anchor-keyed mask cache is the lever IF multi-day/more sensors
 ever make it dominant).
 
-### H1. Split build_sumo_demand.py — size L — depends E1 (do AFTER E, not before)
-Modules: intake (dates/windows), candidates, bounds/priors, calibration,
-feedback, publication. One orchestration path (the 62a1584 single-path fix
-is the seed of this). Typed artifact schemas (demand_meta, health,
-manifest) with versions — audit P1-10.
+### H1. Split build_sumo_demand.py — CORE DONE 2026-07-14
+Six checkpointed extraction commits (one module at a time, full suite
+green after each): demand/feedback.py (congestion feedback),
+demand/structure.py (geometry loader, structure gates, groups),
+demand/priors.py (ensure_* bounds/priors intake), demand/intake.py
+(dates, day types, targets/split loading), demand/publication.py
+(counts, OD export, stale-clear), demand/calibration.py (fork-pool
+worker + _PFE_PAR_* globals + flat-parallel solve — the pool globals'
+module-level None init was found LOST in an earlier in-file
+reorganisation and restored). build_sumo_demand.py: 1777 → 675 lines
+(parse_args + main() orchestration + _tracked_main), with re-export
+shims so every existing caller keeps working; tests that monkeypatch
+module globals now patch the owning module. VERIFIED: full same-seed
+demand build byte-identical to pre-refactor (md5 6e2e51f7… both sides),
+GEH 100%, no drift flags, benchmark fingerprint unchanged.
+REMAINING as H1b (belongs with E1 slice 2): typed artifact schemas
+(P1-10), sumo/ scratch-only path redirection, and folding main()'s
+~340-line body into stage functions.
 
 ### H2. PFE benchmark fixture — DONE 2026-07-14 (deliberately before H1)
 tools/pfe_benchmark.py: fully seeded synthetic problem shaped like the

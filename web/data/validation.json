@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "generated_at": "2026-07-14T07:44:58Z",
+ "generated_at": "2026-07-14T08:17:18Z",
  "demand_window": "2025-09-16",
  "demand_source": "historical",
  "overall": "pass",
@@ -67,32 +67,8 @@
    "gate": "fritid ska ha l\u00e4ngst medianresa (Trafikanalys RVU Tabell 3); exakt \u00e4rende\u00d7tid-mix per kvart"
   },
   "simulation": {
-   "status": "pass",
-   "flags": [],
-   "seeds": [
-    {
-     "seed": 1000,
-     "inserted": 21600,
-     "loaded": 21600,
-     "unfinished": 0,
-     "teleports": 0
-    },
-    {
-     "seed": 1001,
-     "inserted": 20823,
-     "loaded": 20823,
-     "unfinished": 0,
-     "teleports": 0
-    },
-    {
-     "seed": 1002,
-     "inserted": 22428,
-     "loaded": 22428,
-     "unfinished": 0,
-     "teleports": 0
-    }
-   ],
-   "gate": "alla fordon insatta, <2% ofullbordade, teleporteringar under tr\u00f6skel, per fr\u00f6"
+   "status": "missing",
+   "reason": "baseline.json saknas"
   },
   "held_out": {
    "status": "info",
