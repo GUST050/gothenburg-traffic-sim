@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 import build_sumo_demand as bsd
+from demand import structure as dstructure
 
 
 class TestB1DateRangeContract:
@@ -531,7 +532,7 @@ class TestPurposeLengthOrdering:
 
     def test_inverted_ordering_is_flagged(self, monkeypatch, tmp_path):
         geo, rou = self._write_fixture(tmp_path, fritid_dest="C")  # short
-        monkeypatch.setattr(bsd, "GEO_PATH", geo)
+        monkeypatch.setattr(dstructure, "GEO_PATH", geo)
         report = bsd.calibrated_structure_report(rou)
         pl = report["purpose_length_km"]
         assert pl["arbete"]["n"] == 60 and pl["fritid"]["n"] == 60
@@ -541,7 +542,7 @@ class TestPurposeLengthOrdering:
 
     def test_correct_ordering_is_not_flagged(self, monkeypatch, tmp_path):
         geo, rou = self._write_fixture(tmp_path, fritid_dest="B")  # long
-        monkeypatch.setattr(bsd, "GEO_PATH", geo)
+        monkeypatch.setattr(dstructure, "GEO_PATH", geo)
         report = bsd.calibrated_structure_report(rou)
         assert not any("purpose_length_ordering" in f
                        for f in report["structure_flags"])
@@ -549,7 +550,7 @@ class TestPurposeLengthOrdering:
     def test_missing_agents_sidecar_is_tolerated(self, monkeypatch, tmp_path):
         geo, rou = self._write_fixture(tmp_path, fritid_dest="B")
         (tmp_path / "calibrated.agents.json").unlink()
-        monkeypatch.setattr(bsd, "GEO_PATH", geo)
+        monkeypatch.setattr(dstructure, "GEO_PATH", geo)
         report = bsd.calibrated_structure_report(rou)
         assert report is not None
         assert "purpose_length_km" not in report
