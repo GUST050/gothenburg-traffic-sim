@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 import build_sumo_demand as bsd
+from demand import intake as dintake
 from demand import priors as dpriors
 from demand import structure as dstructure
 
@@ -100,7 +101,7 @@ def write_direction_split(tmp_path, shares: dict[str, list[float]]) -> None:
 
 
 def test_build_targets_splits_two_way_total_by_direction_share(monkeypatch, tmp_path):
-    monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
     write_direction_split(tmp_path, {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96})
 
     flows = {"edgeN": [100.0], "edgeS": [100.0]}
@@ -114,7 +115,7 @@ def test_build_targets_splits_two_way_total_by_direction_share(monkeypatch, tmp_
 
 
 def test_build_targets_single_direction_sensor_takes_full_count(monkeypatch, tmp_path):
-    monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
     # no direction_split.json at all -> even-split fallback, which for a
     # lone edge is 1/1 = the full count (matches single-direction sensors
     # like 1076, 133, 134, 2276, 1074)
@@ -127,7 +128,7 @@ def test_build_targets_single_direction_sensor_takes_full_count(monkeypatch, tmp
 
 def test_build_targets_multi_day_range_skips_dst_null_quarters(monkeypatch, tmp_path):
     """2025-03-30's four absent export quarters stay absent inside a range."""
-    monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
     march_29_qi = 87 * 96  # Jan+Feb+28 days of March before 29 March
     arr = [10.0] * (march_29_qi + 192)
     missing = [march_29_qi + 96 + q for q in range(8, 12)]
@@ -183,7 +184,7 @@ def test_calibrated_agent_summary_reports_real_purpose_counts(tmp_path):
 
 
 def test_write_counts_splits_two_way_total_by_direction_share(monkeypatch, tmp_path):
-    monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
     write_direction_split(tmp_path, {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96})
 
     flows = {"edgeN": [100.0], "edgeS": [100.0]}
