@@ -40,9 +40,10 @@ does not preserve obsolete intermediate proposals as separate instructions.
 - ScenarioSpec/ClosureSpec validation, time-windowed closures, paired closure
   comparisons, exhaustive candidate evaluation, network metadata and source-
   to-SUMO network auditing are implemented.
-- New web closure requests now carry the complete validated ScenarioSpec;
-  `serve.py` archives it and invokes `run_scenario.py --scenario-spec`.
-  Legacy query requests remain only as a compatibility path during migration.
+- New web closure and closure-time requests now carry the complete validated
+  base/closure ScenarioSpec; `serve.py` archives it and invokes the runner
+  with `--scenario-spec`. Legacy query requests remain only as a compatibility
+  path during migration.
 - The browser supports focused normal, closure, closure-timing and synthetic
   signal-study workflows. Signal output already shows numeric timing changes
   with provenance.
@@ -1063,9 +1064,8 @@ unlocks:
                                                                             not a mid-migration snapshot
 1. SensorRegistry + content-aware invalidation                (size M)  ◐ registry live (data_in/sensors.json, read by build_data);
                                                                           fingerprint/cache modules in flight
-2. ScenarioSpec/ClosureSpec + API migration                   (size L)  ◐ study_contracts.py live; closure API/browser migrated;
-                                                                          suggest_closure_time, recalibration and signal API
-                                                                          migration remain
+2. ScenarioSpec/ClosureSpec + API migration                   (size L)  ◐ study_contracts.py live; closure and closure-time API/browser
+                                                                          migrated; recalibration and signal API migration remain
 3. Normal demand realism and validation repairs               (size M–L)
 4. Closure decision engine, paired feasible evaluation        (size L)  ◐ --exhaustive window evaluation exists
 5. SignalPlan import/audit and synthetic-plan containment     (size M; import blocked on city data)
@@ -1079,8 +1079,8 @@ unlocks:
 to skip the phase's remaining items or its acceptance gate.)
 
 The immediate next implementation block is therefore: **finish the remaining
-Phase 1/2 migration** (suggest_closure_time, recalibration and signal jobs
-onto ScenarioSpec; complete the fingerprint/cache invalidation), then **Phase 0's
+Phase 1/2 migration** (recalibration and signal jobs onto ScenarioSpec;
+complete the fingerprint/cache invalidation), then **Phase 0's
 freeze** on top of the migrated state, then **Phase 3's purpose-compatibility
 work** — the largest remaining honesty gap in the demand model. Send the
 external data request package (see above) at the START of the block — the

@@ -889,6 +889,36 @@ class TestSuggestClosure:
         assert final["result"]["n_simulated"] == 2
         assert final["result"]["candidates"][0]["delta_time_loss_median_s"] == 500.0
 
+    def test_structured_base_spec_is_passed_to_search_tool(self, base_url, monkeypatch):
+        spec = {
+            "scenario_id": "normal-api-spec",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+        }
+        captured = {}
+
+        def fake_run(cmd, **kw):
+            captured["cmd"] = cmd
+            spec_path = Path(cmd[cmd.index("--scenario-spec") + 1])
+            captured["spec"] = json.loads(spec_path.read_text())
+            serve.SUGGEST_OUT.write_text(json.dumps(_fake_suggest_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        status, body = post_json(
+            f"{base_url}/api/suggest_closure",
+            payload={"scenario_spec": spec, "edges": ["a_b_0"],
+                     "duration_hours": 6},
+        )
+        assert status == 202
+        assert body["scenario_id"] == "normal-api-spec"
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/suggest_closure/status")[1]["status"] == "done")
+        assert "--scenario-spec" in captured["cmd"]
+        assert captured["spec"]["scenario_id"] == "normal-api-spec"
+
     def test_failed_search_surfaces_the_tool_own_error_message(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(

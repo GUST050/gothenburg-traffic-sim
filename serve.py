@@ -1148,8 +1148,30 @@ class Handler(SimpleHTTPRequestHandler):
         # keeps its OWN _suggest_lock/_suggest_state so its status polling
         # can never be confused with a recalibration's (IMPROVEMENT_PLAN.md: "separate
         # lock from demand-rebuild lock, understandable status").
+        try:
+            body = self._json_body()
+        except ValueError as exc:
+            return self._json(400, {"error": str(exc)})
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
+        structured = body.get("scenario_spec")
+        spec: ScenarioSpec | None = None
+        if structured is not None:
+            if qs:
+                return self._json(400, {"error":
+                                        "ScenarioSpec och query-parametrar får inte blandas"})
+            try:
+                spec = ScenarioSpec.from_dict(structured)
+            except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                return self._json(400, {"error": f"ogiltig ScenarioSpec: {exc}"})
+            if spec.closures:
+                return self._json(400, {"error":
+                                        "stängningstidssökningen kräver en bas-ScenarioSpec"})
+            raw_edges = body.get("edges", [])
+            edges = [str(edge) for edge in raw_edges] if isinstance(raw_edges, list) else []
+            value = lambda name, default=None: body.get(name, default)
+        else:
+            edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
+            value = lambda name, default=None: qs.get(name, [default])[0]
         if not edges:
             return self._json(400, {"error": "inga kanter angivna"})
         unknown = [e for e in edges if e not in known_edges()]
@@ -1157,7 +1179,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(400, {"error": f"okända kanter: {unknown}"})
 
         try:
-            duration_hours = float(qs.get("duration_hours", [""])[0])
+            duration_hours = float(value("duration_hours", ""))
         except ValueError:
             return self._json(400, {"error": "duration_hours krävs och måste vara ett tal"})
         # float("nan")/float("inf") parse successfully but satisfy neither
@@ -1172,7 +1194,7 @@ class Handler(SimpleHTTPRequestHandler):
                                  rel_tol=0.0, abs_tol=1e-9)):
             return self._json(400, {"error": "duration_hours måste vara ett positivt multipel av 0.25"})
         try:
-            slide_hours = float(qs.get("slide_hours", ["1"])[0])
+            slide_hours = float(value("slide_hours", "1"))
         except ValueError:
             return self._json(400, {"error": "slide_hours måste vara ett tal"})
         if (not math.isfinite(slide_hours) or slide_hours <= 0 or
@@ -1182,7 +1204,7 @@ class Handler(SimpleHTTPRequestHandler):
 
         def int_param(name: str, default: int, lo: int, hi: int) -> int | None:
             try:
-                v = int(qs.get(name, [str(default)])[0])
+                v = int(value(name, default))
             except ValueError:
                 return None
             return v if lo <= v <= hi else None
@@ -1205,14 +1227,18 @@ class Handler(SimpleHTTPRequestHandler):
         with _suggest_lock:
             _suggest_state.clear()
             _suggest_state.update(status="running", edges=edges,
-                                  duration_hours=duration_hours, started_at=time.time())
+                                  duration_hours=duration_hours,
+                                  scenario_spec=(spec.to_dict() if spec else None),
+                                  started_at=time.time())
         begin_active_job("suggest", {"edges": edges,
-                                     "duration_hours": duration_hours})
+                                     "duration_hours": duration_hours,
+                                     "scenario_spec": spec.to_dict() if spec else None})
         threading.Thread(
             target=self._run_suggest_closure,
-            args=(edges, duration_hours, slide_hours, top_k, extra_bad, seeds),
+            args=(edges, duration_hours, slide_hours, top_k, extra_bad, seeds, spec),
             daemon=True).start()
-        return self._json(202, {"status": "started", "edges": edges})
+        return self._json(202, {"status": "started", "edges": edges,
+                                "scenario_id": spec.scenario_id if spec else None})
 
     @staticmethod
     def _set_suggest(**kw) -> None:
@@ -1221,7 +1247,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _run_suggest_closure(self, edges: list[str], duration_hours: float,
                              slide_hours: float, top_k: int, extra_bad: int,
-                             seeds: int) -> None:
+                             seeds: int,
+                             spec: ScenarioSpec | None = None) -> None:
         try:
             # Budget: one baseline run plus (top_k + extra_bad + 1 low-
             # traffic control) candidate simulations, each up to `seeds`
@@ -1236,6 +1263,13 @@ class Handler(SimpleHTTPRequestHandler):
                   "--slide-hours", str(slide_hours),
                   "--top-k", str(top_k), "--extra-bad", str(extra_bad),
                   "--seeds", str(seeds), "--out", str(SUGGEST_OUT)]
+            if spec is not None:
+                SPEC_DIR.mkdir(parents=True, exist_ok=True)
+                spec_path = SPEC_DIR / (
+                    f"{spec.scenario_id}-search-{time.strftime('%Y%m%d-%H%M%S')}-"
+                    f"{os.urandom(2).hex()}.json")
+                write_scenario_spec(spec_path, spec)
+                cmd += ["--scenario-spec", str(spec_path.resolve())]
             res = run_in_new_session(cmd, cwd=str(ROOT), timeout=timeout)
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])

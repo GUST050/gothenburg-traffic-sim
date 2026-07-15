@@ -930,7 +930,7 @@
 
         let baselineSpecCache = null;
 
-        async function closureScenarioSpec(edges, begin = null, end = null) {
+        async function baseScenarioSpec() {
           if (!baselineSpecCache) {
             const res = await fetch('data/scenarios/baseline.json?t=' + Date.now(),
                                     { cache: 'no-store' });
@@ -941,7 +941,11 @@
             }
             baselineSpecCache = payload.scenario_spec;
           }
-          const spec = JSON.parse(JSON.stringify(baselineSpecCache));
+          return JSON.parse(JSON.stringify(baselineSpecCache));
+        }
+
+        async function closureScenarioSpec(edges, begin = null, end = null) {
+          const spec = await baseScenarioSpec();
           const start = begin || spec.start_time;
           const finish = end || spec.end_time;
           const suffix = begin
@@ -958,6 +962,23 @@
           }));
           spec.objective_profile = begin ? 'closure-window' : 'closure';
           return spec;
+        }
+
+        async function startSuggestJob(edges, durationHours) {
+          const scenario_spec = await baseScenarioSpec();
+          scenario_spec.objective_profile = 'closure-search';
+          const res = await fetch('/api/suggest_closure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              scenario_spec,
+              edges,
+              duration_hours: durationHours,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+          return data;
         }
 
         async function startCloseJob(edges, begin = null, end = null) {
@@ -1169,10 +1190,7 @@
           const durationHours = Number(durationInput.value) || 6;
           btnSuggestRun.textContent = 'Startar…';
           try {
-            const res  = await fetch('/api/suggest_closure?edges=' + [...selected].join(',') +
-                                     '&duration_hours=' + durationHours, { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            await startSuggestJob([...selected], durationHours);
             btnSuggestRun.textContent = 'Söker… (0s)';
             const status = await pollSuggest(
               s => btnSuggestRun.textContent = `Söker… (${s}s)`);

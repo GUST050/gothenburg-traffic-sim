@@ -55,6 +55,7 @@ from scipy import stats as scipy_stats
 
 import closure_metrics as cm
 import run_scenario as rs
+from study_contracts import load_scenario_spec
 
 SCT_PREFIX = "sct_"   # every scratch file this tool writes into sumo/
 BASELINE_SCENARIO = rs.OUT_DIR / "baseline.json"
@@ -560,6 +561,10 @@ def parse_args() -> argparse.Namespace:
                    help="Concurrent SUMO seeds per candidate (default 1; benchmark first).")
     p.add_argument("--micro", action="store_true",
                    help="Use microscopic simulation (default: mesoscopic).")
+    p.add_argument("--scenario-spec", default=None, metavar="PATH",
+                   help="Load a validated base ScenarioSpec. Its demand/network, "
+                        "seed set and simulation mode become authoritative for "
+                        "every candidate; the search adds candidate closures.")
     p.add_argument("--out", type=Path, default=None,
                    help="Result JSON path (default: "
                         "sumo/suggest_closure_<edges>.json).")
@@ -581,6 +586,20 @@ def main() -> None:
         meta = json.load(f)
     n_intervals = meta["n_intervals"]
     total_duration_s = n_intervals * 900
+
+    base_spec = None
+    if args.scenario_spec:
+        try:
+            base_spec = load_scenario_spec(Path(args.scenario_spec))
+            rs.validate_scenario_spec(
+                base_spec, meta=meta, duration_s=total_duration_s,
+                network_path=rs.NET_PATH)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            sys.exit(f"invalid base ScenarioSpec: {exc}")
+        if base_spec.closures:
+            sys.exit("closure-time search ScenarioSpec must be a base study without closures")
+        args.seeds = len(base_spec.seed_set)
+        args.micro = base_spec.simulation_mode == "micro"
 
     prior, names = rs.load_geojson_meta()
     for e in args.edge:
@@ -732,6 +751,7 @@ def main() -> None:
             "micro": args.micro,
             "demand_signature": rs.demand_signature(meta),
             "epoch_sim": meta["epoch_sim"],
+            "base_scenario_spec": (base_spec.to_dict() if base_spec is not None else None),
             "detour_availability": diagnostic,
             "baseline_metrics": dataclasses.asdict(baseline_metrics),
             "baseline_per_seed_time_loss_s": baseline_per_seed,
