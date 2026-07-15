@@ -108,7 +108,7 @@ from shapely.geometry import Point, shape
 from shapely.strtree import STRtree
 
 from build_data import INNER_CITY_BBOX
-from sumo_runtime import sumo_home
+from traffic_sim.simulation.runtime import sumo_home
 from dirsplit.geo import bearing_deg, is_ahead
 
 SUMO_DIR   = Path("sumo")

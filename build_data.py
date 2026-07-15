@@ -29,7 +29,7 @@ import osmnx as ox
 import pandas as pd
 from pyproj import Transformer
 
-from sensor_registry import load_registry
+from traffic_sim.intake.sensors import load_registry
 
 warnings.filterwarnings("ignore", message=".*OpenSSL.*", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)

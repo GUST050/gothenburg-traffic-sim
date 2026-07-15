@@ -44,6 +44,12 @@ does not preserve obsolete intermediate proposals as separate instructions.
   base/closure ScenarioSpec; `serve.py` archives it and invokes the runner
   with `--scenario-spec`. Legacy query requests remain only as a compatibility
   path during migration.
+- Shared runtime code has been reorganized under `traffic_sim/` without
+  breaking stable root CLI paths. Contracts, fingerprints, sensor intake,
+  demand caching, SUMO metadata/runtime, disruption metrics, and run/release
+  registries now each have one canonical implementation. Root compatibility
+  imports contain no duplicate logic, and demand cache/build fingerprints hash
+  the canonical package files.
 - The browser supports focused normal, closure, closure-timing and synthetic
   signal-study workflows. Signal output already shows numeric timing changes
   with provenance.
@@ -252,8 +258,9 @@ working tree 2026-07-15):
   the build), and the E2 publisher refuses any flagged baseline.
 - Build-ID equality and per-variant (q10/q50/q90) fit gating in the
   publish gate are implemented in the current working tree
-  (`validate_staged_scenarios`); `pipeline_fingerprint.py` and
-  `candidate_cache.py` are in flight.
+  (`validate_staged_scenarios`); the canonical fingerprint and candidate
+  cache implementations now live under `traffic_sim/` and are included in
+  invalidation keys.
 - An immutable run registry (`runs/<id>/` manifests, `latest_*` pointers,
   `/api/jobs` durable records with orphan reconciliation) exists — the
   release structure in Phase 0/1 must be an EXTENSION of it, never a
@@ -499,8 +506,8 @@ definitions of the same study.
 
 #### `SensorRegistry`
 
-Store it as a versioned data file, for example `data_in/sensors.csv` plus a
-machine-readable JSON representation. It must contain at least:
+Store it as the versioned machine-readable file `data_in/sensors.json`. It
+must contain at least:
 
 ```text
 sensor_id
@@ -1062,8 +1069,8 @@ unlocks:
 0. Freeze reference release                                   (size S–M)  — executes AFTER the 1/2 migration
                                                                             completes: freeze the migrated state,
                                                                             not a mid-migration snapshot
-1. SensorRegistry + content-aware invalidation                (size M)  ◐ registry live (data_in/sensors.json, read by build_data);
-                                                                          fingerprint/cache modules in flight
+1. SensorRegistry + content-aware invalidation                (size M)  ◐ registry and package migration complete;
+                                                                          finish recalibration/signal job invalidation and prove stale-artifact rejection
 2. ScenarioSpec/ClosureSpec + API migration                   (size L)  ◐ study_contracts.py live; closure and closure-time API/browser
                                                                           migrated; recalibration and signal API migration remain
 3. Normal demand realism and validation repairs               (size M–L)

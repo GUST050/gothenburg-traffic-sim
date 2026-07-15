@@ -58,7 +58,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
-import closure_metrics as cm
+from traffic_sim.simulation import metrics as cm
 import run_scenario as rs
 from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
                         sumo_version, tls_plan_diff, tls_timing_schedule,
@@ -66,7 +66,7 @@ from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
 from signal_optimize import (CAVEAT, paired_comparison, relative_pct, run_condition,
                              run_tls_coordinator, run_tls_cycle_adaptation)
 from signal_regulation import enforce_timing_minimums
-from study_contracts import load_scenario_spec
+from traffic_sim.core.contracts import load_scenario_spec
 
 
 def merge_vehroute_outputs(paths: list[Path], out_path: Path) -> int:

@@ -62,7 +62,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
-import closure_metrics as cm
+from traffic_sim.simulation import metrics as cm
 import run_scenario as rs
 from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
                         sumo_version, tls_plan_diff, tls_timing_schedule,
@@ -71,7 +71,7 @@ from signal_regulation import (build_demand_weighted_tls,
                                build_regulation_compliant_tls,
                                enforce_timing_minimums)
 from suggest_closure_time import aggregate_seed_metrics
-from study_contracts import load_scenario_spec
+from traffic_sim.core.contracts import load_scenario_spec
 
 CAVEAT = ("Measured against a SYNTHETIC netconvert --tls.guess baseline "
          "(90 s uniform cycle), not Gothenburg's real signal plans (IMPROVEMENT_PLAN.md "

@@ -44,11 +44,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import closure_metrics as cm
-from sumo_runtime import sumo_home
-from sumo_network_metadata import load_metadata
-from pipeline_fingerprint import sha256_file
-from study_contracts import ScenarioSpec, load_scenario_spec
+from traffic_sim.simulation import metrics as cm
+from traffic_sim.simulation.runtime import sumo_home
+from traffic_sim.simulation.metadata import load_metadata
+from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.core.contracts import ScenarioSpec, load_scenario_spec
 
 SUMO_DIR  = Path("sumo")
 NET_PATH  = SUMO_DIR / "net.net.xml"
@@ -1470,7 +1470,7 @@ def _tracked_main() -> None:
     scenario JSON + index, and the manifest ties them to code + inputs."""
     import sys
 
-    import runs
+    from traffic_sim.ops import runs
 
     global _ACTIVE_RUN_DIR
     run = runs.start_run("scenario", inputs={"argv": sys.argv[1:]})

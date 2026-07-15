@@ -52,7 +52,7 @@ import pfe
 from build_sumo_demand import (GEO_PATH, build_targets, ensure_observability,
                                load_edge_geometry, load_sensor_edges,
                                structure_groups_for_shapes)
-from sumo_runtime import sumo_home
+from traffic_sim.simulation.runtime import sumo_home
 
 SUMO_DIR = Path("sumo")
 EPOCH    = pd.Timestamp("2025-01-01")

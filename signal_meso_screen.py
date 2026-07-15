@@ -54,7 +54,7 @@ from pathlib import Path
 
 from scipy import stats as scipy_stats
 
-import closure_metrics as cm
+from traffic_sim.simulation import metrics as cm
 import run_scenario as rs
 from signal_lab import TLS_PROVENANCE, net_fingerprint, sumo_version, window_offsets_s
 from signal_optimize import (build_signal_conditions, condition_net_fingerprints,

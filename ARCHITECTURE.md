@@ -54,9 +54,42 @@ guess. Their trustworthiness is measured (stage F), not presumed.
  web/ + serve.py   (the window; interactive closures)
 ```
 
+## Code organization
+
+The repository keeps two deliberately different kinds of Python files
+separate:
+
+- **Root-level files are stable CLI entrypoints.** The build order, Makefile,
+  run manifests and content fingerprints refer to commands such as
+  `build_data.py`, `build_sumo_demand.py`, `run_scenario.py` and `serve.py`.
+  Their paths are therefore treated as an interface and are not moved just
+  to make the tree look tidy.
+- **Reusable implementation lives in `traffic_sim/`.** Cross-cutting
+  contracts and fingerprints are in `traffic_sim/core/`; sensor intake is in
+  `traffic_sim/intake/`; demand cache code is in `traffic_sim/demand/`;
+  SUMO runtime, metadata, network audits and disruption metrics are in
+  `traffic_sim/simulation/`; run/release bookkeeping is in `traffic_sim/ops/`.
+
+The former root modules (`study_contracts.py`, `pipeline_fingerprint.py`,
+`sensor_registry.py`, `candidate_cache.py`, `closure_metrics.py`,
+`sumo_network_metadata.py`, `sumo_runtime.py`, `network_audit.py`,
+`release_registry.py` and `runs.py`) are now thin compatibility imports. They
+contain no second implementation. This preserves existing scripts, tests and
+external command examples while giving new code one canonical import location.
+New reusable code must be added to `traffic_sim/` first; a root shim is added
+only when an existing public command or import still requires it. Fingerprint
+maps hash the canonical package files, so changing an implementation invalidates
+the relevant cache or published build.
+
+The domain packages `demand/` and `dirsplit/` remain separate because they are
+model-specific pipelines with their own data contracts. `web/` is the browser
+runtime, `tools/` contains bounded experiments, `tests/` contains contract and
+regression tests, and generated artifacts stay under `web/data/`, `sumo/`,
+`runs/` or `cache/` rather than in source packages.
+
 ### A — Intake (`build_data.py`) — built
 Validate 15-min CSVs; join coordinates + **measured-direction metadata**
-(`data_in/sensors.csv` — the delivered "Total" label is proven unreliable);
+(`data_in/sensors.json` — the delivered "Total" label is proven unreliable);
 direction-aware snapping (bearing must match; true point-to-polyline
 distances). Gate: every station snapped ≤ 60 m with matching bearing.
 
@@ -313,7 +346,7 @@ guesses · missing ≠ zero · every number carries provenance + confidence.
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).
 3. **D→C wiring** (`--source forecast --date …`) — "close a street next year".
 4. **F — leave-one-station-out + provenance surfacing.**
-5. data_in/sensors.csv metadata file (A's last hard-coding removed).
+5. data_in/sensors.json metadata file (A's last hard-coding removed).
 
 ## Parked (validated studies, not on the critical path)
 `dirsplit/` transfer model — now level 3's engine for street/time priors;

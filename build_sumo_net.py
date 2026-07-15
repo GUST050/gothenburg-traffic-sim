@@ -29,8 +29,8 @@ import re
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
-from sumo_runtime import sumo_home
-from sumo_network_metadata import write_metadata
+from traffic_sim.simulation.runtime import sumo_home
+from traffic_sim.simulation.metadata import write_metadata
 
 GRAPHML_PATH = Path("web/data/graph.graphml")
 SUMO_DIR     = Path("sumo")
@@ -155,7 +155,7 @@ def main() -> None:
     # dependencies.  Keep them out of scenario/demand import paths.
     import osmnx as ox
     from pyproj import Transformer
-    from network_audit import write_audit
+    from traffic_sim.simulation.network_audit import write_audit
 
     SUMO_DIR.mkdir(exist_ok=True)
 

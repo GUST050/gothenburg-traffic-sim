@@ -49,7 +49,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import closure_metrics as cm
+from traffic_sim.simulation import metrics as cm
 import run_scenario as rs
 from suggest_closure_time import aggregate_seed_metrics
 

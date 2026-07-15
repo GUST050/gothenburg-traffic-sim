@@ -205,28 +205,40 @@ cross-validated — with a single year of data each holiday is observed once.
 ## Repository layout
 
 ```
-build_data.py          raw CSVs + OSM → network.geojson, flows.json, graph.graphml
-build_features.py      flow matrix, adjacency, normal profile, train/val/test split
-build_dataset.py       windowed datasets for a future GNN
-train_agent1.py        LightGBM baseline + holiday factors
-build_agent1_flows.py  2027 forecast → flows_forecast.json
-build_sumo_net.py      graph.graphml → SUMO network (same edge IDs as the map)
-observability.py       mathematical (conservation) bounds + corridor priors, Agent B
-assignment_priors.py   structural gravity/stochastic-multipath assignment field
-pfe.py                 entropy-maximising route-flow solver, Agent C's core
-build_candidates.py    subarea/cordon (DeSO population + OSM POI + RVU) candidate routes
-build_sumo_demand.py   orchestrates the above → calibrated SUMO routes
-run_scenario.py        baseline/closure runs (incl. time-windowed) → web/data/scenarios/*.json
-closure_metrics.py     disruption scorecard (Δ timeLoss, teleport/stranded guards)
-validate_sim.py        leave-one-station-out validation → web/data/loso_report.json
-serve.py                static web/ + optional local API (closures, recalibration)
+traffic_sim/
+  core/                 shared contracts and content fingerprints
+  intake/               sensor registry and data-intake helpers
+  demand/               candidate-artifact cache
+  simulation/           SUMO runtime, network metadata/audits, disruption metrics
+  ops/                  run and release registries
+
+build_data.py           intake CLI -> network.geojson, flows.json, graph.graphml
+build_features.py       flow matrix, adjacency, normal profile and splits
+build_dataset.py        windowed datasets for a future GNN
+train_agent1.py         LightGBM baseline + holiday factors
+build_agent1_flows.py   2027 forecast -> flows_forecast.json
+build_sumo_net.py       graph.graphml -> SUMO network (stable edge IDs)
+build_candidates.py     DeSO/OSM/RVU-grounded candidate routes
+build_sumo_demand.py    demand orchestration and calibrated SUMO routes
+run_scenario.py         baseline/closure Monte Carlo runs
+serve.py                static web + optional local API
+observability.py,       demand-estimation stages (root CLI modules)
+assignment_priors.py,
+prior_flows.py, pfe.py
+validate_sim.py         leave-one-station-out validation
 dirsplit/               trained direction-split model package
-explore.py              one-off EDA, writes plots/
-tests/                  contract + pipeline tests (python3 -m pytest tests/)
-web/                    static Leaflet app (index.html, provider/state/render/clock/controls)
-web/data/               generated artifacts incl. graph.graphml (exact OSM snapshot —
-                        SUMO work must start from this graph, not a fresh download)
-IMPROVEMENT_PLAN.md  canonical improvement plan: status, evidence gates,
-                      development order and external-data requirements
-CLAUDE.md               full project rules, contracts and decisions
+demand/                 demand model components and data contracts
+web/                    static Leaflet browser runtime
+web/data/               generated artifacts and exact graph snapshot
+data_in/                user-delivered sensor/DeSO/POI inputs
+sumo/, runs/, cache/    generated intermediates, manifests and caches
+tools/                  bounded experiments and probes
+tests/                  contract + pipeline tests
+ARCHITECTURE.md         structural source of truth
+IMPROVEMENT_PLAN.md     canonical improvement and delivery plan
 ```
+
+The ten former shared root modules remain compatibility imports pointing at
+`traffic_sim/`; they are intentionally not duplicate source. Run existing
+commands from the repository root so relative artifact paths and Makefile
+contracts remain deterministic.

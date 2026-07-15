@@ -53,9 +53,9 @@ from pathlib import Path
 import numpy as np
 from scipy import stats as scipy_stats
 
-import closure_metrics as cm
+from traffic_sim.simulation import metrics as cm
 import run_scenario as rs
-from study_contracts import load_scenario_spec
+from traffic_sim.core.contracts import load_scenario_spec
 
 SCT_PREFIX = "sct_"   # every scratch file this tool writes into sumo/
 BASELINE_SCENARIO = rs.OUT_DIR / "baseline.json"

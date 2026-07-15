@@ -42,9 +42,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from sumo_runtime import sumo_home
-from pipeline_fingerprint import make_fingerprint
-import candidate_cache
+from traffic_sim.simulation.runtime import sumo_home
+from traffic_sim.core.fingerprint import make_fingerprint
+from traffic_sim.demand import cache as candidate_cache
 from train_agent1 import HOLIDAY_DATES_2025
 from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
 
@@ -394,7 +394,9 @@ def main() -> None:
                  "build_sumo_demand": Path(__file__),
                  "build_data": Path("build_data.py"),
                  "dirsplit_geo": Path("dirsplit/geo.py"),
-                 "candidate_cache": Path("candidate_cache.py")})
+                 "candidate_cache": Path("traffic_sim/demand/cache.py"),
+                 "pipeline_fingerprint": Path(
+                     "traffic_sim/core/fingerprint.py")})
             if candidate_cache.restore(candidate_cache.DEFAULT_ROOT,
                                        cache_key, cache_outputs):
                 elapsed = time.perf_counter() - started
@@ -715,13 +717,13 @@ def main() -> None:
     source_files = {
         "build_sumo_demand": Path(__file__),
         "build_data": Path("build_data.py"),
-        "sensor_registry": Path("sensor_registry.py"),
+        "sensor_registry": Path("traffic_sim/intake/sensors.py"),
         "sensor_registry_data": Path("data_in/sensors.json"),
         "build_candidates": Path("build_candidates.py"),
         "build_sumo_net": Path("build_sumo_net.py"),
         "pfe": Path("pfe.py"),
-        "candidate_cache": Path("candidate_cache.py"),
-        "pipeline_fingerprint": Path("pipeline_fingerprint.py"),
+        "candidate_cache": Path("traffic_sim/demand/cache.py"),
+        "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
         "assignment_priors": Path("assignment_priors.py"),
         "prior_flows": Path("prior_flows.py"),
         "observability": Path("observability.py"),
@@ -761,7 +763,7 @@ def _tracked_main() -> None:
     products, and a latest_demand pointer flipped only on success — so a
     finished-looking artifact can never again be separated from the code
     and inputs that made it."""
-    import runs
+    from traffic_sim.ops import runs
 
     run = runs.start_run("demand", inputs={"argv": sys.argv[1:]})
     try:

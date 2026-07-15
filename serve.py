@@ -116,7 +116,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from signal_optimize import SIGNAL_CONDITION_COUNT
-from study_contracts import ScenarioSpec, write_scenario_spec
+from traffic_sim.core.contracts import ScenarioSpec, write_scenario_spec
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
