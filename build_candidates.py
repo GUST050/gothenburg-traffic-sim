@@ -25,8 +25,12 @@ the road graph:
   I-I  short internal tours (also paired).
 
 HOME mass (per graph edge): real 2023 population from SCB, per DeSO zone
-(fetch_deso.py), distributed over each zone's residential-street length —
-the zone's real headcount, not a graph-density guess.
+(fetch_deso.py), spatialised to anonymous residential-building footprints
+and their nearest usable road access.  Building footprint area and levels are
+only a within-zone capacity proxy; every DeSO with routable access retains its
+real aggregate total.  OSM footprints are cached open-data fallback until an
+official ``data_in/deso/buildings.geojson`` is supplied; zones outside the
+routable inner-city graph are reported rather than invented as local homes.
 
 ACTIVITY mass (per graph edge): OSM points of interest, split into the
 SAME THREE categories RVU Västra Götaland 2022-2023 measures trip purpose
@@ -110,6 +114,8 @@ from shapely.strtree import STRtree
 from build_data import INNER_CITY_BBOX
 from traffic_sim.simulation.runtime import sumo_home
 from dirsplit.geo import bearing_deg, is_ahead
+from demand.locations import (EndpointField, build_activity_fields,
+                              build_home_field)
 
 SUMO_DIR   = Path("sumo")
 NET_PATH   = SUMO_DIR / "net.net.xml"
@@ -577,11 +583,8 @@ def exclude_sensor_endpoint_mass(
     """Remove measured edges from synthetic origin/destination mass.
 
     A sensor is an observation constraint, not a population residence or an
-    activity destination.  Keeping its mass non-zero lets the PFE reuse a
-    malformed/short route that starts at the sensor to satisfy a hard count,
-    producing the visible vehicle cluster at the roundabout.  Sensor edges
-    remain in ``edges`` for geometry, routing and calibration; only endpoint
-    probability mass is removed.
+    activity destination. Sensor edges remain in ``edges`` for geometry,
+    routing and calibration; only endpoint probability mass is removed.
     """
     sensor_ids = set(measured)
     mask = np.fromiter((edge["id"] in sensor_ids for edge in edges),
@@ -734,6 +737,54 @@ def activity_mass(G, edges: list[dict]) -> dict[str, np.ndarray]:
         print(f"  activity mass '{cat}': {len(pts)} OSM POIs, "
               f"{(mass > 0).sum()} edges reached")
     return out
+
+
+def home_location_field(G, edges: list[dict], measured: list[str]) -> EndpointField:
+    """Build DeSO-conserving anonymous home locations for route endpoints.
+
+    ``home_mass`` remains the small, pure legacy helper used by unit tests and
+    by the documented fallback inside :mod:`demand.locations`.  Production
+    candidate generation uses this building-based field instead: DeSO totals
+    stay unchanged, but their within-zone distribution is over anonymous
+    residential footprints rather than road length.
+    """
+    zones, population = ensure_deso()
+    field = build_home_field(
+        G, edges, zones, population, DESO_DIR, INNER_CITY_BBOX, RESIDENTIAL,
+        excluded_edge_ids=set(measured))
+    report = field.report
+    print("  home locations: "
+          f"{report['source']}, {report['zones_building']}/"
+          f"{report['zones_total']} DeSO zones from building footprints, "
+          f"{report['zones_road_fallback']} road-length fallback; "
+          f"{field.mass.sum():,.0f} residents allocated across "
+          f"{len(field.pools_by_edge)} access edges")
+    if report.get("population_without_routable_access", 0.0) > 0.01:
+        print("  WARNING home locations: "
+              f"{report['population_without_routable_access']:,.0f} residents in "
+              f"{len(report.get('zones_without_routable_access', []))} DeSO zone(s) "
+              "have no edge in the inner-city graph; they are not fabricated as "
+              "interior homes")
+    return field
+
+
+def activity_location_fields(G, edges: list[dict], measured: list[str]
+                             ) -> dict[str, EndpointField]:
+    """Return purpose-specific POI access fields, one endpoint per POI.
+
+    This replaces the previous 150m multi-edge halo.  The new mapping both
+    gives return trips a real POI departure position and prevents a single
+    POI near a sensor from becoming mass on every adjacent link.
+    """
+    fields = build_activity_fields(
+        G, edges, DESO_DIR, INNER_CITY_BBOX, POI_TAGS,
+        excluded_edge_ids=set(measured))
+    for category, field in fields.items():
+        report = field.report
+        print(f"  activity locations '{category}': "
+              f"{report['locations_mapped']}/{report['locations_input']} OSM POIs "
+              f"on {report['access_edges']} access edges")
+    return fields
 
 
 def find_gates(G, routable_edge_ids: set[str] | None = None):
@@ -2095,6 +2146,64 @@ class CandidateStructure:
     routing_costs: dict[str, float] | None = None
 
 
+def build_location_pool_document(home: EndpointField,
+                                 activities: dict[str, EndpointField]) -> dict[str, list[dict]]:
+    """Compact shared endpoint-location pools for PFE provenance.
+
+    Pools live once at the top of ``candidates.meta.json`` instead of being
+    copied into every candidate.  PFE samples from the selected candidate's
+    pool for each repeated vehicle, so a calibrated route can represent
+    several anonymous homes/POIs on its access edge rather than one frozen
+    road-start coordinate.
+    """
+    pools: dict[str, list[dict]] = {}
+    for edge_id, locations in home.pools_by_edge.items():
+        pools[f"home:{edge_id}"] = locations
+    for category, field in activities.items():
+        for edge_id, locations in field.pools_by_edge.items():
+            pools[f"{category}:{edge_id}"] = locations
+    return pools
+
+
+def _tour_kind(tour_id: str) -> str:
+    """Extract the stable E-E/I-I/E-I/I-E kind after multi-day ID prefixing."""
+    for kind in ("ee", "ii", "ei", "ie"):
+        if f"{kind}-" in str(tour_id):
+            return kind
+    return ""
+
+
+def endpoint_pool_keys(tour_id: str, leg: str, purpose: str,
+                       origin_edge: str, destination_edge: str,
+                       pools: dict[str, list[dict]]) -> tuple[str | None, str | None]:
+    """Return the physical endpoint pools implied by one paired-tour leg.
+
+    Gates deliberately have no synthetic address: their endpoint is the
+    simulation boundary.  Internal home/activity endpoints do, and the same
+    tour uses the same pool class in both directions.  The exact individual
+    is intentionally re-sampled by PFE for each emitted vehicle.
+    """
+    kind = _tour_kind(tour_id)
+    origin_key = destination_key = None
+    if kind == "ii":
+        if leg == "outbound":
+            origin_key, destination_key = f"home:{origin_edge}", f"{purpose}:{destination_edge}"
+        elif leg == "return":
+            origin_key, destination_key = f"{purpose}:{origin_edge}", f"home:{destination_edge}"
+    elif kind == "ei":
+        if leg == "inbound":
+            destination_key = f"{purpose}:{destination_edge}"
+        elif leg == "outbound":
+            origin_key = f"{purpose}:{origin_edge}"
+    elif kind == "ie":
+        if leg == "outbound":
+            origin_key = f"home:{origin_edge}"
+        elif leg == "inbound":
+            destination_key = f"home:{destination_edge}"
+    return (origin_key if origin_key in pools else None,
+            destination_key if destination_key in pools else None)
+
+
 def generate_day_block(
     structure: CandidateStructure, profile: np.ndarray, offset_s: float,
     id_prefix: str, seed: int, day_index: int, n_total: int,
@@ -2333,14 +2442,31 @@ def main() -> None:
         sys.exit("measured sensor edges missing from GraphML/SUMO graph: "
                  + ", ".join(missing_graph_sensor_edges))
 
-    hmass = home_mass(edges)
-    amass = activity_mass(routing_G, edges)
+    # Endpoints are now rooted in anonymous building/POI access locations.
+    # A real home near a sensor remains eligible; only the counter link itself
+    # is excluded as an OD endpoint.  Spatial concentration is handled by the
+    # distribution-preservation guard in demand/structure.py, not by erasing
+    # a legitimate local neighbourhood with an arbitrary distance buffer.
+    home_field = home_location_field(routing_G, edges, measured)
+    activity_fields = activity_location_fields(routing_G, edges, measured)
+    hmass = home_field.mass
+    amass = {category: field.mass for category, field in activity_fields.items()}
     n_sensor_mass = exclude_sensor_endpoint_mass(edges, hmass, amass, measured)
-    print(f"  excluded {n_sensor_mass} measured sensor edges from synthetic "
+    print(f"  excluded {n_sensor_mass} literal sensor edges from synthetic "
           "origin/destination mass")
     entries, exits = find_gates(routing_G)
+    # Gate endpoints are synthetic OD endpoints too.  They normally sit at
+    # the study-area boundary, but applying the same invariant makes a future
+    # sensor close to an approach road safe without a special-case code path.
+    entries = [(edge_id, node_id) for edge_id, node_id in entries
+               if edge_id not in measured]
+    exits = [(edge_id, node_id) for edge_id, node_id in exits
+             if edge_id not in measured]
     entry_ids = [e for e, _ in entries]
     exit_ids  = [e for e, _ in exits]
+    if not entry_ids or not exit_ids:
+        sys.exit("literal sensor-edge exclusion removed every entry or exit gate; "
+                 "expand the simulation boundary or review the sensor registry")
     w_entry = gate_weights(routing_G, entries)
     w_exit  = gate_weights(routing_G, exits)
     shape_hourly = daily_shape(args.is_weekend)
@@ -2352,6 +2478,10 @@ def main() -> None:
 
     if hmass.sum() == 0:
         sys.exit("home_mass is all-zero — check data_in/deso/ (run fetch_deso.py)")
+    empty_activity = sorted(name for name, mass in amass.items() if mass.sum() <= 0)
+    if empty_activity:
+        sys.exit("POI access mapping produced no activity mass for: "
+                 + ", ".join(empty_activity))
     multi_day_trips = None
     n_day_blocks = 1
     if args.day_blocks_file:
@@ -2410,6 +2540,16 @@ def main() -> None:
         multi_day_trips.sort(key=lambda t: t[1])
     trips_path = SUMO_DIR / f"tours{args.out_suffix}.trips.xml"
     candidate_meta: dict[str, dict] = {}
+    location_pools = build_location_pool_document(home_field, activity_fields)
+    location_report = {
+        "schema_version": 1,
+        "home": home_field.report,
+        "activities": {category: field.report
+                       for category, field in activity_fields.items()},
+        "location_pools": len(location_pools),
+    }
+    with open(SUMO_DIR / f"endpoint_location_report{args.out_suffix}.json", "w") as f:
+        json.dump(location_report, f, indent=1, sort_keys=True)
     with open(trips_path, "w") as f:
         f.write("<routes>\n")
         if multi_day_trips is None:
@@ -2418,22 +2558,36 @@ def main() -> None:
                 via = f' via="{t[3]}"' if t[3] else ""
                 f.write(f'  <trip id="{trip_id}" depart="{t[0]:.1f}" '
                         f'from="{t[1]}" to="{t[2]}"{via}/>\n')
-                candidate_meta[trip_id] = {
+                origin_pool, destination_pool = endpoint_pool_keys(
+                    t[5], t[6], t[4], t[1], t[2], location_pools)
+                record = {
                     "purpose": t[4], "tour_id": t[5], "leg": t[6],
                     "origin_edge": t[1], "destination_edge": t[2],
                     "via_edge": t[3] or None, "candidate_depart_s": round(t[0], 3),
                 }
+                if origin_pool is not None:
+                    record["origin_location_pool"] = origin_pool
+                if destination_pool is not None:
+                    record["destination_location_pool"] = destination_pool
+                candidate_meta[trip_id] = record
         else:
             for (trip_id, depart, from_edge, to_edge, via_edge,
                  purpose, tour_id, leg) in multi_day_trips:
                 via = f' via="{via_edge}"' if via_edge else ""
                 f.write(f'  <trip id="{trip_id}" depart="{depart:.1f}" '
                         f'from="{from_edge}" to="{to_edge}"{via}/>\n')
-                candidate_meta[trip_id] = {
+                origin_pool, destination_pool = endpoint_pool_keys(
+                    tour_id, leg, purpose, from_edge, to_edge, location_pools)
+                record = {
                     "purpose": purpose, "tour_id": tour_id, "leg": leg,
                     "origin_edge": from_edge, "destination_edge": to_edge,
                     "via_edge": via_edge or None, "candidate_depart_s": round(depart, 3),
                 }
+                if origin_pool is not None:
+                    record["origin_location_pool"] = origin_pool
+                if destination_pool is not None:
+                    record["destination_location_pool"] = destination_pool
+                candidate_meta[trip_id] = record
         f.write("</routes>\n")
     n_written = len(multi_day_trips) if multi_day_trips is not None else len(trips)
     print(f"{n_written} trips written, all sensor-anchored — target mix "
@@ -2450,7 +2604,8 @@ def main() -> None:
                 f"{MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor; refusing to "
                 "route a collapsed demand pool")
     try:
-        validate_trip_intents(load_trip_intents(trips_path), sumo_edge_ids, measured)
+        validate_trip_intents(
+            load_trip_intents(trips_path), sumo_edge_ids, measured)
     except ValueError as exc:
         sys.exit(str(exc))
 
@@ -2483,7 +2638,8 @@ def main() -> None:
     out = SUMO_DIR / f"candidates{args.out_suffix}.rou.xml"
     meta_out = SUMO_DIR / f"candidates{args.out_suffix}.meta.json"
     with open(meta_out, "w") as f:
-        json.dump({"schema_version": 1, "candidates": candidate_meta}, f,
+        json.dump({"schema_version": 2, "location_pools": location_pools,
+                   "candidates": candidate_meta}, f,
                   separators=(",", ":"))
     weight_args = duarouter_weight_args(args.weight_file, args.weight_period)
     if args.weight_file:

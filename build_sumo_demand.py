@@ -429,6 +429,7 @@ def main() -> None:
                 "tours.trips.xml": SUMO_DIR / "tours.trips.xml",
                 "trip_length_fit.json": SUMO_DIR / "trip_length_fit.json",
                 "sensor_coverage_report.json": SUMO_DIR / "sensor_coverage_report.json",
+                "endpoint_location_report.json": SUMO_DIR / "endpoint_location_report.json",
             }
             cache_inputs = {
                 "network": NET_PATH,
@@ -439,6 +440,11 @@ def main() -> None:
                 "direction_split": SUMO_DIR / "direction_split.json",
                 "population": Path("data_in/deso/population_2023.json"),
                 "deso": Path("data_in/deso/deso_goteborg.geojson"),
+                # An official GeoJSON, if later supplied, wins over the OSM
+                # fallback. Fingerprint both paths so either source changing
+                # invalidates the candidate pool that depends on it.
+                "official_buildings": Path("data_in/deso/buildings.geojson"),
+                "osm_buildings": Path("data_in/deso/osm_buildings.geojson"),
                 "poi": Path("data_in/deso/osm_pois.geojson"),
                 "real_day_shape": day_shape_path or Path(
                     "sumo/.missing-real-day-shape"),
@@ -461,15 +467,17 @@ def main() -> None:
                 # not create a needless second cache entry.
                 "routing_cost_mode": "feedback" if weight_file is not None else "free_flow",
             }
+            cache_sources = {
+                "build_candidates": Path("build_candidates.py"),
+                "build_sumo_demand": Path(__file__),
+                "build_data": Path("build_data.py"),
+                "dirsplit_geo": Path("dirsplit/geo.py"),
+                "endpoint_locations": Path("demand/locations.py"),
+                "candidate_cache": Path("traffic_sim/demand/cache.py"),
+                "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
+            }
             cache_key = candidate_cache.cache_key(
-                cache_config, cache_inputs,
-                {"build_candidates": Path("build_candidates.py"),
-                 "build_sumo_demand": Path(__file__),
-                 "build_data": Path("build_data.py"),
-                 "dirsplit_geo": Path("dirsplit/geo.py"),
-                 "candidate_cache": Path("traffic_sim/demand/cache.py"),
-                 "pipeline_fingerprint": Path(
-                     "traffic_sim/core/fingerprint.py")})
+                cache_config, cache_inputs, cache_sources)
             if candidate_cache.restore(candidate_cache.DEFAULT_ROOT,
                                        cache_key, cache_outputs):
                 elapsed = time.perf_counter() - started
@@ -498,9 +506,17 @@ def main() -> None:
                 print(res.stderr[-1500:])
                 sys.exit("build_candidates.py failed")
             try:
+                # The first candidate build may materialise an OSM building/
+                # POI cache that was absent when ``cache_key`` was computed.
+                # Store under the post-build input identity so the *next*
+                # run can restore immediately instead of needlessly doing a
+                # second complete candidate generation just to see the new
+                # cache file in its fingerprint.
+                store_key = candidate_cache.cache_key(
+                    cache_config, cache_inputs, cache_sources)
                 candidate_cache.store(candidate_cache.DEFAULT_ROOT,
-                                      cache_key, cache_outputs)
-                print(f"  candidate cache stored {cache_key}")
+                                      store_key, cache_outputs)
+                print(f"  candidate cache stored {store_key}")
             except (FileNotFoundError, OSError) as exc:
                 # Cache failure must never invalidate an otherwise valid
                 # demand build; the cache is an optimization, not an input.

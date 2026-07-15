@@ -617,6 +617,19 @@ class TestTrajectoryPublication:
         assert payload["n_vehicles"] == 1
         assert payload["vehicles"][0]["e"] == [0, 1]
 
+    def test_trajectory_keeps_calibrated_endpoint_positions(self, tmp_path):
+        vr = tmp_path / "vehroutes.xml"
+        vr.write_text(
+            "<routes><vehicle id='v1' depart='0'>"
+            "<route edges='a b' exitTimes='10 20'/>"
+            "</vehicle></routes>"
+        )
+        _edges, vehicles, _total, _unfinished = run_scenario.parse_vehroute_file(
+            vr, {"a", "b"}, endpoint_positions={"v1": {"p": 15.0, "a": 42.0}})
+
+        assert vehicles == [{"d": 0, "e": [0, 1], "x": [10, 20],
+                             "p": 15.0, "a": 42.0}]
+
 
 class TestTrajectorySimulationMode:
     """A micro scenario used micro edge-flow simulation but its vehroute

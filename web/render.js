@@ -17,7 +17,7 @@ const Render = (() => {
   const PENDING_STYLE = { color: '#b91c1c', weight: 5, opacity: 0.9, dashArray: '2 6' };
 
   // ── Vehicle playback state (every dot = one simulated car with real OD) ──
-  let _traj        = null;   // {edges:[ids], vehicles:[{d,e,x}]} sorted by depart
+  let _traj        = null;   // {edges:[ids], vehicles:[{d,e,x,p?,a?}]} sorted by depart
   let _vehicleMode = false;
   let _vehCanvas   = null, _vehCtx = null;
   let _vehCursor   = 0;      // sliding window into the depart-sorted list
@@ -239,7 +239,16 @@ const Render = (() => {
         const exit  = v.x[a.j];
         const g = edgeGeom(_traj.edges[v.e[a.j]]);
         if (!g || exit <= enter) continue;
-        const frac = Math.min(1, Math.max(0, (tSec - enter) / (exit - enter)));
+        // SUMO may start/end a route part-way along its first/last edge.
+        // The compact trajectory sidecar carries those metre offsets as p/a;
+        // without them the browser would draw every car at the upstream
+        // junction even though SUMO itself started it at a building/POI access.
+        const startM = a.j === 0 && Number.isFinite(v.p) ? v.p : 0;
+        const endM = a.j === v.e.length - 1 && Number.isFinite(v.a) ? v.a : g.total;
+        const startFrac = Math.min(1, Math.max(0, startM / g.total));
+        const endFrac = Math.min(1, Math.max(startFrac, endM / g.total));
+        const progress = Math.min(1, Math.max(0, (tSec - enter) / (exit - enter)));
+        const frac = startFrac + progress * (endFrac - startFrac);
         ll = pointAlong(g, frac);
       }
       const p = _map.latLngToContainerPoint(ll);

@@ -170,12 +170,24 @@ uniform `randomTrips`:
     with a gravity deterrence.
   - **HOME mass** = real 2023 population per DeSO zone (`fetch_deso.py`:
     SCB open WFS for DeSO-2025 boundaries + PXWeb API for population,
-    both live, no key needed), spread over each zone's residential-street
-    length. 116 of 129 inner-city DeSO zones have data (13 are brand-new
-    2025-boundary splits not yet back-filled by SCB — disclosed, not
-    silently dropped).
+    both live, no key needed), spatialised to anonymous residential-building
+    footprints and their nearest usable road access. Building footprint area
+    and levels are only a within-zone capacity proxy; the SCB zone total stays
+    fixed for every DeSO with routable access. An official
+    `data_in/deso/buildings.geojson` takes precedence (WGS84/EPSG:4326
+    GeoJSON, longitude/latitude order); cached OSM footprints are the open
+    fallback. A DeSO with no edge in the inner-city graph is
+    explicitly reported and is not fabricated as an interior home. 116 of
+    129 inner-city DeSO zones have data (13 are brand-new 2025-boundary splits
+    not yet back-filled by SCB — disclosed, not silently dropped). Primary
+    sources: [SCB DeSO open geodata](https://www.scb.se/vara-tjanster/oppna-data/oppna-geodata/demografiska-statistikomraden-deso/)
+    and [Lantmäteriet Byggnad](https://www.lantmateriet.se/sv/nationella-geodataplattformen/datamangder/byggnad/),
+    whose schema supplies building geometry, purpose and area when a complete
+    official delivery is available.
   - **ACTIVITY mass** = OSM POIs in 3 categories matching RVU's purpose
-    categories (arbete/service/fritid). DOCUMENTED PROXY: true workplace-
+    categories (arbete/service/fritid), each mapped once to its nearest
+    usable road access rather than diffused across a broad road halo.
+    DOCUMENTED PROXY: true workplace-
     location microdata (RAMS) was checked and confirmed NOT free below
     kommun level (SCB's day-population-by-workplace tables stop at 312
     kommun codes) — POI density is the honest substitute, same spirit as

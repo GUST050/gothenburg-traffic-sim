@@ -19,6 +19,74 @@ import numpy as np
 
 GEO_PATH = Path("web/data/network.geojson")
 
+# Keep PFE's structural validation independent of build_candidates.py.  That
+# module imports OSMnx/Shapely and costs several seconds to import; the PFE
+# only needs this small, deterministic city-scale distance calculation.
+KLAT_M = 110_540.0
+KLON_M = 111_320.0 * np.cos(np.radians(57.7))
+NEAR_SENSOR_RADIUS_M = 200.0
+RVU_SHORT_BIN_EDGES_KM = (1.0, 5.0, 10.0)
+_RVU_SHORT_RAW = (0.09, 0.31, 0.19)
+RVU_SHORT_BIN_SHARES = tuple(v / sum(_RVU_SHORT_RAW) for v in _RVU_SHORT_RAW)
+
+
+def gravity_distance_km(lats: np.ndarray, lons: np.ndarray,
+                        lat0: float, lon0: float) -> np.ndarray:
+    """Cos-corrected flat-earth distance at Gothenburg city scale."""
+    return np.sqrt(((lats - lat0) * KLAT_M / 1000.0) ** 2
+                   + ((lons - lon0) * KLON_M / 1000.0) ** 2)
+
+
+def trip_length_fit(lengths_km: list[float]) -> dict:
+    """RVU short-distance-bin fit; identical contract to candidate reporting."""
+    n = len(lengths_km)
+    if n == 0:
+        return {"shares": [0.0, 0.0, 0.0], "l1_distance": float("inf"), "n": 0}
+    counts = [0, 0, 0]
+    over_10km = 0
+    for distance in lengths_km:
+        if distance <= RVU_SHORT_BIN_EDGES_KM[0]:
+            counts[0] += 1
+        elif distance <= RVU_SHORT_BIN_EDGES_KM[1]:
+            counts[1] += 1
+        elif distance <= RVU_SHORT_BIN_EDGES_KM[2]:
+            counts[2] += 1
+        else:
+            over_10km += 1
+    n_short = n - over_10km
+    shares = [count / n_short for count in counts] if n_short else [0.0, 0.0, 0.0]
+    return {"shares": [round(value, 4) for value in shares],
+            "l1_distance": round(sum(abs(value - target)
+                                     for value, target in zip(shares, RVU_SHORT_BIN_SHARES)), 4),
+            "n": n, "over_10km_pct": round(100 * over_10km / n, 1)}
+
+
+def destination_sensor_proximity(dest_edge_ids: list[str],
+                                 edge_latlon: dict[str, tuple[float, float]],
+                                 sensor_edge_ids: list[str],
+                                 radius_m: float = NEAR_SENSOR_RADIUS_M) -> dict:
+    """Destination-near-sensor diagnostic shared by pool/output reports."""
+    sensor_pts = [edge_latlon[edge_id] for edge_id in sensor_edge_ids
+                  if edge_id in edge_latlon]
+    if not sensor_pts:
+        return {"radius_m": radius_m, "pct_within": None,
+                "baseline_pct_within": None, "n": len(dest_edge_ids)}
+    s_lats = np.array([point[0] for point in sensor_pts])
+    s_lons = np.array([point[1] for point in sensor_pts])
+
+    def near(lat: float, lon: float) -> bool:
+        return bool((gravity_distance_km(s_lats, s_lons, lat, lon) * 1000.0).min()
+                    <= radius_m)
+
+    n_near = sum(1 for edge_id in dest_edge_ids
+                 if edge_id in edge_latlon and near(*edge_latlon[edge_id]))
+    n_known = sum(1 for edge_id in dest_edge_ids if edge_id in edge_latlon)
+    all_near = sum(1 for point in edge_latlon.values() if near(*point))
+    return {"radius_m": radius_m,
+            "pct_within": round(100 * n_near / n_known, 1) if n_known else None,
+            "baseline_pct_within": round(100 * all_near / len(edge_latlon), 1),
+            "n": n_known}
+
 def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
     """Summarise the individual demand agents emitted beside a PFE route file.
 
@@ -32,17 +100,30 @@ def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
         agents = json.load(f).get("agents", [])
     purposes = Counter(agent.get("purpose", "unknown") for agent in agents)
     by_quarter = [Counter() for _ in range(n_intervals)]
+    origin_locations = Counter(
+        agent.get("origin_location_id") for agent in agents
+        if agent.get("origin_location_id") is not None)
+    origin_edges = Counter(agent.get("origin_edge") for agent in agents
+                          if agent.get("origin_edge") is not None)
     for agent in agents:
         quarter = int(float(agent.get("departure_s", 0)) // 900)
         if 0 <= quarter < n_intervals:
             by_quarter[quarter][agent.get("purpose", "unknown")] += 1
-    return {
+    result = {
         "agent_file": agent_path.name,
         "n_agents": len(agents),
         "purpose_counts": dict(sorted(purposes.items())),
         "purpose_counts_by_quarter": [dict(sorted(counts.items()))
                                       for counts in by_quarter],
     }
+    if origin_locations:
+        result["origin_location_distribution"] = {
+            "agents_with_physical_origin": sum(origin_locations.values()),
+            "unique_locations": len(origin_locations),
+            "max_vehicles_at_one_location": max(origin_locations.values()),
+            "max_vehicles_on_one_origin_edge": max(origin_edges.values()) if origin_edges else 0,
+        }
+    return result
 
 
 _EDGE_GEOMETRY_CACHE: tuple | None = None
@@ -60,7 +141,6 @@ def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
     (mtime, size), not unconditionally: serve.py-driven recalibrations can
     rewrite network.geojson while a process lives."""
     global _EDGE_GEOMETRY_CACHE
-    from build_candidates import gravity_distance_km
     st = GEO_PATH.stat()
     key = (st.st_mtime_ns, st.st_size)
     if _EDGE_GEOMETRY_CACHE is not None and _EDGE_GEOMETRY_CACHE[0] == key:
@@ -102,10 +182,8 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
       DIFFERENT sensor the route never crossed.
     - sensor_passages: how many measured edges each route crosses.
 
-    Reuses build_candidates' metric implementations — imported lazily so
-    build_sumo_demand's import time doesn't pay for osmnx/shapely."""
-    from build_candidates import (destination_sensor_proximity,
-                                  gravity_distance_km, trip_length_fit)
+    Uses this module's lightweight metric helpers so a post-calibration
+    report never has to import OSMnx/Shapely."""
     if not route_path.exists() or not GEO_PATH.exists():
         return None
     edge_latlon, sensor_edge_ids, edge_len_m = load_edge_geometry()
@@ -167,7 +245,6 @@ def purpose_lengths_km(route_path: Path) -> dict | None:
         route_path.name.replace(".rou.xml", ".agents.json"))
     if not agent_path.exists() or not GEO_PATH.exists():
         return None
-    from build_candidates import gravity_distance_km
     edge_latlon, _sensor_ids, _len_m = load_edge_geometry()
     with open(agent_path) as f:
         agents = json.load(f).get("agents", [])
@@ -197,6 +274,13 @@ PURPOSE_LENGTH_MIN_N = 50
 # solver genuine freedom (activity near sensors is real — Korsvägen etc.)
 # while blocking the measured 5-10x amplification.
 DEST_GROUP_CAP_MULT = 2.0
+# The candidate pool is a sample from the DeSO/building/POI endpoint field.
+# A count-only calibration must not amplify a single sampled access edge by
+# orders of magnitude merely because it happens to close one sensor band.
+# This is deliberately looser than the 2x destination guard: origin mass is
+# more sensitive to directed network reachability, and the guard may never
+# cost a real sensor count (the common relaxation ladder still wins).
+ORIGIN_EDGE_CAP_MULT = 3.0
 # Straight-line O→D length bins whose calibrated share is likewise capped
 # relative to the pool — RVU's own bin edges, matching trip_length_fit.
 LENGTH_BIN_EDGES_KM = (1.0, 5.0, 10.0)
@@ -301,6 +385,11 @@ def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
        already in place: the calibrated 0-1 km share was still inflated
        1.2% → 7.5% (6×) relative to the pool. The consolidated plan requires
        explicit length-bin bands.
+    3. origin_edge:* — each physical endpoint access edge's selected share
+       may be at most 3x its source-pool share. This is a distributional
+       guard, not an arbitrary spatial exclusion: a real building beside a
+       sensor remains eligible, but one sampled route cannot become hundreds
+       of cars just because PFE has no other count constraint on its origin.
 
     Caps are ceilings only (lo=0 — a group must never force flow), applied
     per quarter with an absolute value derived from that quarter's total,
@@ -309,19 +398,18 @@ def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
     fallback in _run_pfe_interval_job, and the integer-stage repair in
     write_calibration_report. Groups whose cap would be >= 100% are
     omitted (no-ops)."""
-    from build_candidates import NEAR_SENSOR_RADIUS_M, gravity_distance_km
-    if not GEO_PATH.exists():
-        return []
-    edge_latlon, sensor_edge_ids, _edge_len_m = load_edge_geometry()
-    sensor_pts = [edge_latlon[e] for e in sorted(sensor_edge_ids)]
-    if not sensor_pts:
-        return []
+    edge_latlon: dict[str, tuple[float, float]] = {}
+    sensor_pts: list[tuple[float, float]] = []
+    if GEO_PATH.exists():
+        edge_latlon, sensor_edge_ids, _edge_len_m = load_edge_geometry()
+        sensor_pts = [edge_latlon[e] for e in sorted(sensor_edge_ids)
+                      if e in edge_latlon]
     s_lats_a = np.array([p[0] for p in sensor_pts])
     s_lons_a = np.array([p[1] for p in sensor_pts])
 
     def near(eid: str) -> bool:
         ll = edge_latlon.get(eid)
-        if ll is None:
+        if ll is None or not sensor_pts:
             return False
         return bool((gravity_distance_km(s_lats_a, s_lons_a, ll[0], ll[1])
                      * 1000.0).min() <= NEAR_SENSOR_RADIUS_M)
@@ -340,20 +428,30 @@ def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
                 return b
         return len(LENGTH_BIN_EDGES_KM)
 
-    candidate_groups: dict[str, list[int]] = {"near_sensor_dest": []}
+    candidate_groups: dict[str, list[int]] = {}
+    if sensor_pts:
+        candidate_groups["near_sensor_dest"] = []
     bin_names = [f"length_bin_{lo}-{hi}km" for lo, hi in
                  zip((0,) + LENGTH_BIN_EDGES_KM, LENGTH_BIN_EDGES_KM + ("inf",))]
-    for name in bin_names:
-        candidate_groups[name] = []
+    if sensor_pts:
+        for name in bin_names:
+            candidate_groups[name] = []
     for i, shape in enumerate(shapes):
-        if near(shape.edges[-1]):
-            candidate_groups["near_sensor_dest"].append(i)
-        km = od_length_km(shape)
-        if km is not None:
-            candidate_groups[bin_names[length_bin(km)]].append(i)
+        if sensor_pts and shape.edges:
+            if near(shape.edges[-1]):
+                candidate_groups["near_sensor_dest"].append(i)
+            km = od_length_km(shape)
+            if km is not None:
+                candidate_groups[bin_names[length_bin(km)]].append(i)
+        # Exact route shapes have one first edge even when their provenance
+        # contains multiple purpose/time candidates. It is therefore the
+        # stable physical origin-access group for every source of this shape.
+        if shape.edges:
+            candidate_groups.setdefault(f"origin_edge:{shape.edges[0]}", []).append(i)
 
     n_total = sum(len(s.source_candidates) for s in shapes)
     groups: list[tuple[str, list[int], float]] = []
+    origin_groups = 0
     for name, members in candidate_groups.items():
         if not members:
             continue
@@ -361,11 +459,20 @@ def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
         # Pool share weighted by how many source candidates each shape
         # carries — the seed structure the calibration must preserve.
         pool_share = n_members / max(1, n_total)
-        cap_share = DEST_GROUP_CAP_MULT * pool_share
+        multiplier = (ORIGIN_EDGE_CAP_MULT if name.startswith("origin_edge:")
+                      else DEST_GROUP_CAP_MULT)
+        cap_share = multiplier * pool_share
         if cap_share >= 1.0:
             continue   # cap can never bind — omit the no-op
         groups.append((name, members, cap_share))
-        print(f"  PFE structure guard [{name}]: {len(members)} shapes, "
-              f"{100 * pool_share:.1f}% of pool candidates — assigned share "
-              f"capped at {100 * cap_share:.1f}%")
+        if name.startswith("origin_edge:"):
+            origin_groups += 1
+        else:
+            print(f"  PFE structure guard [{name}]: {len(members)} shapes, "
+                  f"{100 * pool_share:.1f}% of pool candidates — assigned share "
+                  f"capped at {100 * cap_share:.1f}%")
+    if origin_groups:
+        print(f"  PFE origin-distribution guard: {origin_groups} access-edge "
+              f"groups, each capped at {ORIGIN_EDGE_CAP_MULT:.0f}x its "
+              "candidate-pool share when it would otherwise be amplified")
     return groups

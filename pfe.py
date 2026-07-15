@@ -46,6 +46,7 @@ from __future__ import annotations
 import os
 import hashlib
 import json
+import math
 import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import dataclass, field
@@ -66,15 +67,27 @@ class Candidate:
     edges: list[str]
     source_id: str = ""
     intent: dict = field(default_factory=dict)
+    # Shared, top-level candidate-meta pool document.  Every Candidate holds
+    # the same reference, not a copy: a location field can contain thousands
+    # of anonymous building/POI access points and must not be duplicated per
+    # route in memory.
+    location_pools: dict[str, list[dict]] = field(default_factory=dict, repr=False)
     source_candidates: list["Candidate"] = field(default_factory=list, repr=False)
 
 
 def load_candidates(path: Path) -> list[Candidate]:
     meta_path = path.with_name(path.name.replace(".rou.xml", ".meta.json"))
     metadata: dict[str, dict] = {}
+    location_pools: dict[str, list[dict]] = {}
     if meta_path.exists():
         with open(meta_path) as f:
-            metadata = json.load(f).get("candidates", {})
+            document = json.load(f)
+        metadata = document.get("candidates", {})
+        raw_pools = document.get("location_pools", {})
+        if isinstance(raw_pools, dict):
+            location_pools = raw_pools
+        if not isinstance(metadata, dict):
+            metadata = {}
     out = []
     for veh in ET.parse(path).getroot().iter("vehicle"):
         route = veh.find("route")
@@ -82,7 +95,8 @@ def load_candidates(path: Path) -> list[Candidate]:
         out.append(Candidate(depart=float(veh.get("depart")),
                              edges=route.get("edges").split(),
                              source_id=source_id,
-                             intent=dict(metadata.get(source_id, {}))))
+                             intent=dict(metadata.get(source_id, {})),
+                             location_pools=location_pools))
     return out
 
 
@@ -787,13 +801,14 @@ def solve_interval_with_structure_guard(
 ) -> tuple[np.ndarray | None, int]:
     """Two-pass structure preservation around the relaxation ladder.
 
-    Pass 1 solves with counts/bounds/priors only; if ANY structure group
-    (near-sensor destinations, length bins — (name, member_indices,
-    cap_share) tuples) exceeds its cap share of the interval's total,
-    pass 2 re-solves with every group capped at cap_share × pass-1 total
-    (the bands need ABSOLUTE ceilings, which only exist once a total is
-    known). If pass 2 is infeasible, the pass-1 solution is kept — the
-    structure caps must never cost an interval its real sensor counts.
+    Pass 1 solves with counts/bounds/priors only. Any structure group
+    (near-sensor destinations, length bins, endpoint-origin distribution —
+    ``(name, member_indices, cap_share)`` tuples) exceeding its cap is added
+    to a small active set and re-solved with an absolute ``cap_share ×
+    pass-1-total`` ceiling. A cap may shift flow into a second group, so the
+    active set is checked again for a bounded number of passes. If a capped
+    solve is infeasible, the last count-feasible solution is kept — structure
+    caps must never cost an interval its real sensor counts.
 
     This is the ONE shared guard policy: build_sumo_demand's deployed
     pipeline and validate_sim's LOSO folds both delegate here, so LOSO can
@@ -804,16 +819,33 @@ def solve_interval_with_structure_guard(
         shapes, targets, bounds, priors, route_cost=route_cost)
     if sol is not None and structure_groups:
         total = float(sol.sum())
-        violated = total > 0 and any(
-            float(sol[members].sum()) > cap_share * total
-            for _name, members, cap_share in structure_groups)
-        if violated:
+        # Most origin-access groups are already below their cap. Passing all
+        # of them into every 15-minute IPF solve would add hundreds of
+        # needless tiny reductions and make a realism guard a calibration
+        # bottleneck. Activate only groups the current solution violates.
+        # A capped group can shift flow into a second group, so repeat the
+        # small active-set solve until no new cap is exceeded. The reference
+        # total stays the first count-feasible solution, matching the original
+        # two-pass cap definition and avoiding a moving target.
+        active: dict[str, tuple[list[int], float]] = {}
+        for _pass in range(4):
+            newly_violated = [
+                (name, members, cap_share)
+                for name, members, cap_share in structure_groups
+                if (total > 0 and name not in active
+                    and float(sol[members].sum()) > cap_share * total)
+            ]
+            if not newly_violated:
+                break
+            active.update({name: (members, cap_share)
+                           for name, members, cap_share in newly_violated})
             capped_sol, capped_rung = solve_interval_with_relaxation(
                 shapes, targets, bounds, priors, route_cost=route_cost,
                 groups=[(members, 0.0, cap_share * total)
-                        for _name, members, cap_share in structure_groups])
-            if capped_sol is not None:
-                sol, rung = capped_sol, capped_rung
+                        for members, cap_share in active.values()])
+            if capped_sol is None:
+                break       # counts-first fallback: retain last valid solution
+            sol, rung = capped_sol, capped_rung
     return sol, rung
 
 
@@ -1024,6 +1056,55 @@ def solve_calibration_intervals(
     return solutions, rungs
 
 
+def _draw_endpoint_location(source: Candidate, side: str, ordinal: int) -> dict | None:
+    """Draw a deterministic, low-discrepancy anonymous endpoint location.
+
+    PFE may use one candidate shape many times.  Reusing the exact sampled
+    building/POI in every copy would turn a legitimate aggregate flow into a
+    visible convoy at one junction.  The candidate sidecar instead supplies a
+    weighted pool on the same physical access edge; a golden-ratio sequence
+    spreads repeated copies over that pool in proportion to capacity, without
+    touching route choice, counts, or simulation speed.
+    """
+    pool_key = source.intent.get(f"{side}_location_pool")
+    if not isinstance(pool_key, str):
+        return None
+    raw_pool = source.location_pools.get(pool_key, [])
+    if not isinstance(raw_pool, list):
+        return None
+    pool = []
+    for item in raw_pool:
+        try:
+            position = float(item.get("p"))
+            weight = float(item.get("w", 1.0))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if math.isfinite(position) and math.isfinite(weight) and weight > 0:
+            pool.append((item, position, weight))
+    if not pool:
+        return None
+    total = sum(weight for _item, _position, weight in pool)
+    # Candidate ID chooses a reproducible phase.  The ordinal then advances
+    # by an irrational stride, which covers a small pool evenly instead of
+    # hash-with-replacement repeatedly landing on the same building.
+    source_key = source.source_id or " ".join(source.edges)
+    digest = hashlib.sha1(f"{source_key}:{side}".encode()).digest()
+    phase = int.from_bytes(digest[:8], "big") / 2**64
+    unit = (phase + ordinal * 0.6180339887498949) % 1.0
+    target = unit * total
+    cumulative = 0.0
+    for item, position, weight in pool:
+        cumulative += weight
+        if target <= cumulative:
+            return {"id": str(item.get("id", pool_key)),
+                    "kind": str(item.get("kind", side)),
+                    "position_m": round(position, 2), "pool": pool_key}
+    item, position, _weight = pool[-1]
+    return {"id": str(item.get("id", pool_key)),
+            "kind": str(item.get("kind", side)),
+            "position_m": round(position, 2), "pool": pool_key}
+
+
 RUNG_NAMES = {
     RUNG_CLEAN: "clean", RUNG_RELAX_TOL2X: "relax_tol2x",
     RUNG_RELAX_TOL4X: "relax_tol4x", RUNG_RELAX_NOBND: "relax_no_bounds",
@@ -1085,6 +1166,10 @@ def write_calibration_report(
     purpose_allocation: list[dict] = []
     vid = 0
     agents: list[dict] = []
+    # Counts are deliberately shared across every quarter: a candidate used
+    # repeatedly at 08:00 and again at 17:00 should keep traversing its
+    # weighted endpoint pool instead of restarting the same sequence.
+    location_draw_ordinals: Counter = Counter()
     write_path = (out_path.with_suffix(out_path.suffix + ".tmp")
                   if enforce_integer_bounds else out_path)
     with open(write_path, "w") as f:
@@ -1106,18 +1191,38 @@ def write_calibration_report(
             # reconcile the caps with the measured counts, the unrepaired
             # counts stand (the counts always win; the calibrated_structure
             # guard in demand_meta.json reports whatever the residual is).
-            quarter_groups = None
-            if structure_groups:
-                q_total = float(counts.sum())
-                quarter_groups = [
+            def overflowing_groups(current: np.ndarray) -> list[tuple[list[int], float, float]]:
+                if not structure_groups:
+                    return []
+                q_total = float(current.sum())
+                # Exactly mirrors the solver's absolute cap/floor, but only
+                # forwards groups which need an integer repair. Origin-edge
+                # groups can number in the hundreds; adding every satisfied
+                # one to the MILP would make publication slower for no gain.
+                return [
                     (members, 0.0, max(2.0, cap_share * q_total))
-                    for members, cap_share in structure_groups]
-            if repair_bounds or quarter_groups:
+                    for members, cap_share in structure_groups
+                    if float(current[members].sum()) > max(2.0, cap_share * q_total)
+                ]
+
+            quarter_groups = overflowing_groups(counts)
+            need_bound_repair = bool(repair_bounds)
+            # Integer repair has the same active-set behaviour as the
+            # continuous solver: only groups that overflow are handed to the
+            # MILP, but a repaired group can push flow into another group.
+            # Three bounded passes are enough for the local one-vehicle
+            # adjustments here and retain the count-first fallback on failure.
+            for _repair_pass in range(3):
+                if not need_bound_repair and not quarter_groups:
+                    break
                 repaired = repair_integer_bounds(
                     counts, shapes, targets_per_q[i], repair_bounds,
                     groups=quarter_groups)
-                if repaired is not None:
-                    counts = repaired
+                if repaired is None:
+                    break
+                counts = repaired
+                need_bound_repair = False
+                quarter_groups = overflowing_groups(counts)
             # Spread ALL vehicles in this quarter across its full 15-minute
             # interval. The old per-route schedule put every one-vehicle
             # route at exactly :07:30, so thousands of independent routes
@@ -1156,9 +1261,23 @@ def write_calibration_report(
                 depart = i * 900 + (pos + 0.5) * 900 / max(1, n_departures)
                 vehicle_id = f"pfe{vid}"
                 edges_str = " ".join(cand.edges)
-                f.write(f'  <vehicle id="{vehicle_id}" depart="{depart:.1f}">'
+                source_key = source.source_id or edges_str
+                origin_stream = (source_key, "origin")
+                destination_stream = (source_key, "destination")
+                origin_location = _draw_endpoint_location(
+                    source, "origin", location_draw_ordinals[origin_stream])
+                destination_location = _draw_endpoint_location(
+                    source, "destination", location_draw_ordinals[destination_stream])
+                location_draw_ordinals[origin_stream] += 1
+                location_draw_ordinals[destination_stream] += 1
+                endpoint_attrs = ""
+                if origin_location is not None:
+                    endpoint_attrs += f' departPos="{origin_location["position_m"]:.2f}"'
+                if destination_location is not None:
+                    endpoint_attrs += f' arrivalPos="{destination_location["position_m"]:.2f}"'
+                f.write(f'  <vehicle id="{vehicle_id}" depart="{depart:.1f}"{endpoint_attrs}>'
                         f'<route edges="{edges_str}"/></vehicle>\n')
-                agents.append({
+                agent = {
                     "vehicle_id": vehicle_id,
                     "candidate_id": source.source_id or None,
                     "purpose": purpose,
@@ -1168,7 +1287,20 @@ def write_calibration_report(
                     "origin_edge": source.intent.get("origin_edge", source.edges[0]),
                     "destination_edge": source.intent.get("destination_edge", source.edges[-1]),
                     "departure_s": round(depart, 1),
-                })
+                }
+                if origin_location is not None:
+                    agent.update({
+                        "origin_location_id": origin_location["id"],
+                        "origin_location_kind": origin_location["kind"],
+                        "origin_position_m": origin_location["position_m"],
+                    })
+                if destination_location is not None:
+                    agent.update({
+                        "destination_location_id": destination_location["id"],
+                        "destination_location_kind": destination_location["kind"],
+                        "destination_position_m": destination_location["position_m"],
+                    })
+                agents.append(agent)
                 vid += 1
         f.write("</routes>\n")
 

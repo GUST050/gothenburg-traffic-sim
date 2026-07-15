@@ -617,6 +617,58 @@ class TestCalibratedAgentProvenance:
             f"identical route occupies {longest_run} consecutive departure "
             f"slots — duplicates are platooning instead of interleaving")
 
+    def test_repeated_candidate_draws_distinct_anonymous_endpoint_positions(self, tmp_path):
+        """A PFE-repeated route must not visually restart at one junction.
+
+        The route shape stays identical (so counts and routing are unchanged),
+        but each emitted vehicle is assigned a low-discrepancy draw from the
+        candidate's physical home access pool.
+        """
+        pools = {
+            "home:O": [
+                {"id": "h1", "p": 12.0, "w": 1.0, "kind": "home"},
+                {"id": "h2", "p": 46.0, "w": 1.0, "kind": "home"},
+            ]
+        }
+        source = Candidate(
+            depart=0.0, edges=["O", "M", "D"], source_id="source-1",
+            intent={"purpose": "arbete", "origin_edge": "O",
+                    "destination_edge": "D", "origin_location_pool": "home:O"},
+            location_pools=pools)
+        shape = Candidate(depart=0.0, edges=["O", "M", "D"],
+                          source_candidates=[source])
+        out = tmp_path / "calibrated.rou.xml"
+
+        write_calibration_report([shape], out, [{"M": 4.0}], [np.array([4.0])])
+
+        positions = re.findall(r'departPos="([0-9.]+)"', out.read_text())
+        assert len(positions) == 4
+        assert set(positions) == {"12.00", "46.00"}
+        agents = json.loads((tmp_path / "calibrated.agents.json").read_text())["agents"]
+        assert {agent["origin_location_id"] for agent in agents} == {"h1", "h2"}
+
+
+class TestOriginDistributionGuard:
+    def test_origin_groups_do_not_depend_on_map_geometry(self, monkeypatch, tmp_path):
+        """A missing reporting GeoJSON must not disable endpoint protection."""
+        from demand import structure
+        monkeypatch.setattr(structure, "GEO_PATH", tmp_path / "missing.geojson")
+        monkeypatch.setattr(structure, "_EDGE_GEOMETRY_CACHE", None)
+        shapes = []
+        for origin in ("O", "P", "Q", "R"):
+            source = Candidate(0.0, [origin, "M"], source_id=f"source-{origin}",
+                               intent={"origin_edge": origin})
+            shapes.append(Candidate(0.0, [origin, "M"], source_candidates=[source]))
+
+        groups = structure.structure_groups_for_shapes(shapes)
+
+        assert groups == [
+            ("origin_edge:O", [0], 0.75),
+            ("origin_edge:P", [1], 0.75),
+            ("origin_edge:Q", [2], 0.75),
+            ("origin_edge:R", [3], 0.75),
+        ]
+
 
 class TestProvenanceAllocation:
     def test_scarce_purpose_keeps_a_compatible_route_instance(self):

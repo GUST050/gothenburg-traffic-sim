@@ -32,6 +32,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -890,7 +891,42 @@ def final_route(veh: ET.Element) -> ET.Element | None:
     return veh.find("route")
 
 
-def parse_vehroute_file(vr_file: Path, web_edges: set[str]
+def load_agent_endpoint_positions(route_path: Path) -> dict[str, dict]:
+    """Load optional calibrated endpoint positions keyed by vehicle id.
+
+    SUMO's vehroute output normally records edges and times but not the
+    ``departPos``/``arrivalPos`` assigned in the calibrated route file.  The
+    adjacent agent provenance is the authoritative compact sidecar, so use it
+    to keep the browser animation spatially consistent with the simulation.
+    Older route products simply return an empty mapping.
+    """
+    agent_path = route_path.with_name(
+        route_path.name.replace(".rou.xml", ".agents.json"))
+    try:
+        doc = json.loads(agent_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    positions: dict[str, dict] = {}
+    for agent in doc.get("agents", []):
+        vehicle_id = agent.get("vehicle_id")
+        if not isinstance(vehicle_id, str):
+            continue
+        record = {}
+        for source, target in (("origin_position_m", "p"),
+                               ("destination_position_m", "a")):
+            try:
+                value = float(agent[source])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if math.isfinite(value) and value >= 0:
+                record[target] = round(value, 2)
+        if record:
+            positions[vehicle_id] = record
+    return positions
+
+
+def parse_vehroute_file(vr_file: Path, web_edges: set[str],
+                        endpoint_positions: dict[str, dict] | None = None
                         ) -> tuple[dict[str, int], list[dict], int, int]:
     """vehroute XML → compact vehicle timelines for the web animation.
 
@@ -935,6 +971,11 @@ def parse_vehroute_file(vr_file: Path, web_edges: set[str]
         if not idxs:
             continue
         rec = {"d": int(float(veh.get("depart"))), "e": idxs, "x": exits}
+        endpoint = (endpoint_positions or {}).get(veh.get("id", ""), {})
+        if "p" in endpoint:
+            rec["p"] = endpoint["p"]
+        if "a" in endpoint:
+            rec["a"] = endpoint["a"]
         if unfinished:
             rec["u"] = 1
         vehicles.append(rec)
@@ -955,8 +996,9 @@ def publish_trajectories_from_vehroute(
         print(f"  trajectories: missing vehroute output {vr_file}")
         return None
 
+    endpoint_positions = load_agent_endpoint_positions(route_path)
     edge_index, vehicles, n_in_file, n_unfinished = parse_vehroute_file(
-        vr_file, web_edges)
+        vr_file, web_edges, endpoint_positions=endpoint_positions)
     vehicles.sort(key=lambda v: v["d"])
     inv = [None] * len(edge_index)
     for e, i in edge_index.items():
