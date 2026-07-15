@@ -18,6 +18,7 @@ from demand import intake as dintake
 from demand import publication as dpub
 from demand import priors as dpriors
 from demand import structure as dstructure
+from traffic_sim.demand import cache as candidate_cache
 
 
 class TestB1DateRangeContract:
@@ -438,6 +439,28 @@ class TestWriteWeightFile:
         assert float(intervals[0].find("edge").get("traveltime")) == pytest.approx(10.0)
         assert float(intervals[1].find("edge").get("traveltime")) == pytest.approx(20.0)
         assert intervals[1].get("begin") == "3600.00"
+
+    def test_feedback_weights_change_candidate_cache_identity(self, tmp_path, monkeypatch):
+        """A feedback iteration must not reuse the initial free-flow pool."""
+        monkeypatch.setattr(bsd, "SUMO_DIR", tmp_path)
+        weights = tmp_path / "feedback.xml"
+        weights.write_text('<meandata><interval><edge id="e" traveltime="10"/>'
+                           '</interval></meandata>')
+
+        free_key = candidate_cache.cache_key(
+            {"routing_cost_mode": "free_flow"},
+            {"routing_weights": bsd.candidate_routing_weight_cache_input(None)}, {})
+        weighted_key = candidate_cache.cache_key(
+            {"routing_cost_mode": "feedback"},
+            {"routing_weights": bsd.candidate_routing_weight_cache_input(weights)}, {})
+        weights.write_text('<meandata><interval><edge id="e" traveltime="20"/>'
+                           '</interval></meandata>')
+        changed_weight_key = candidate_cache.cache_key(
+            {"routing_cost_mode": "feedback"},
+            {"routing_weights": bsd.candidate_routing_weight_cache_input(weights)}, {})
+
+        assert free_key != weighted_key
+        assert weighted_key != changed_weight_key
 
 
 class TestFeedbackSimulationTimeout:

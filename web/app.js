@@ -490,6 +490,60 @@
         function updateDayRunLabel() {
           btnDayRun.textContent = `Räkna om (~${estimatedMinutes(Number(daysInput.value))} min)`;
         }
+        function selectedDemandDate(source) {
+          const range = DATE_RANGES[source];
+          let date = String(dateInput.value || '').trim();
+          const valid = /^\d{4}-\d{2}-\d{2}$/.test(date);
+          if (!valid) {
+            // Safari and restored form state can expose an empty value even
+            // though the date control is visible. Never send an empty legacy
+            // query/body value; use the active scenario date or the source's
+            // documented fallback and make the value visible to the user.
+            date = (currentSimSource === source &&
+                    /^\d{4}-\d{2}-\d{2}$/.test(currentSimDate))
+              ? currentSimDate : range.fallback;
+            dateInput.value = date;
+          }
+          if (date < range.min || date > range.max) {
+            date = range.fallback;
+            dateInput.value = date;
+          }
+          return date;
+        }
+        async function requestRecalibration(date, source, days, demand_spec) {
+          // New servers receive one versioned JSON contract. During local
+          // development a stale serve.py can still be running and only know
+          // the legacy query form; retry that form only for its specific date
+          // validation response so other API errors remain visible.
+          const parseResponse = async response => {
+            const body = await response.text();
+            let data;
+            try {
+              data = body ? JSON.parse(body) : {};
+            } catch (_) {
+              throw new Error('servern gav ett ofullständigt startsvar');
+            }
+            return { response, data };
+          };
+          let result = await parseResponse(await fetch('/api/recalibrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ demand_spec })
+          }));
+          const errorText = String(result.data.error || '');
+          if (!result.response.ok && result.response.status === 400 &&
+              /datum(?: saknas)? .*YYYY-MM-DD/i.test(errorText)) {
+            const query = new URLSearchParams({
+              date, source, days: String(days)
+            });
+            result = await parseResponse(await fetch(
+              `/api/recalibrate?${query.toString()}`, { method: 'POST' }));
+          }
+          if (!result.response.ok) {
+            throw new Error(result.data.error || `HTTP ${result.response.status}`);
+          }
+          return result.data;
+        }
         daysInput.addEventListener('input', () => {
           const v = Math.max(1, Math.min(7, Math.round(Number(daysInput.value)) || 1));
           daysInput.value = v;
@@ -1321,8 +1375,8 @@
           btnDayCancel.disabled = false;
           btnDayCancel.textContent = 'Avbryt';
           const days = Number(daysInput.value) || 1;
-          const date = dateInput.value;
           const source = currentSource;
+          const date = selectedDemandDate(source);
           btnDayRun.textContent = 'Startar…';
           showRecalibrationProgress(0);
           rememberPendingRecal(date, source, days);
@@ -1338,19 +1392,7 @@
               end: '24:00',
               structural_reference_date: '2025-09-16'
             };
-            const res  = await fetch('/api/recalibrate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ demand_spec })
-            });
-            const body = await res.text();
-            let data;
-            try {
-              data = body ? JSON.parse(body) : {};
-            } catch (_) {
-              throw new Error('servern gav ett ofullständigt startsvar');
-            }
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            const data = await requestRecalibration(date, source, days, demand_spec);
             dayPickMode = false;
             refreshCloseUI();
             btnDayRun.textContent = 'Kalibrerar om… (0s)';

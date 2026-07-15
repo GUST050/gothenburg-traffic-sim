@@ -1052,8 +1052,9 @@ class Handler(SimpleHTTPRequestHandler):
             date = qs.get("date", [""])[0]
             source = qs.get("source", ["historical"])[0]
             days_raw = qs.get("days", ["1"])[0]
-            if not DATE_RE.match(date):
-                return self._json(400, {"error": "datum måste vara YYYY-MM-DD"})
+            if not DATE_RE.fullmatch(date):
+                return self._json(400, {"error":
+                                        "datum saknas eller måste vara YYYY-MM-DD"})
             try:
                 days = int(days_raw)
             except ValueError:

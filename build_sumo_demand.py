@@ -72,6 +72,17 @@ STRUCTURAL_REFERENCE_DATE = "2025-09-16"
 CANDIDATE_PERIOD_S = 2.0
 
 
+def candidate_routing_weight_cache_input(weight_file: Path | None) -> Path:
+    """Return the exact artifact that determines candidate routing costs.
+
+    Congestion-feedback iterations must never restore a free-flow candidate
+    pool just because the behavioural parameters match. The cache fingerprints
+    file contents, so a stable missing sentinel cleanly distinguishes the
+    initial free-flow pass from every real feedback-weight file.
+    """
+    return weight_file if weight_file is not None else SUMO_DIR / ".no-routing-weights"
+
+
 def fit_summary(report: dict) -> dict:
     """Keep publication-relevant calibration gates for one variant."""
     purpose = report.get("purpose_allocation_summary", {})
@@ -433,6 +444,7 @@ def main() -> None:
                     "sumo/.missing-real-day-shape"),
                 "day_blocks": day_blocks_path or Path(
                     "sumo/.missing-day-blocks"),
+                "routing_weights": candidate_routing_weight_cache_input(weight_file),
             }
             cache_config = {
                 "n_total": n_total,
@@ -444,7 +456,10 @@ def main() -> None:
                 "min_per_sensor": 50,
                 "route_diversity": 2.0,
                 "seed": args.seed,
-                "weight_file": None,
+                # The content fingerprint above is the identity. Keep this
+                # label stable so moving a byte-identical weight file does
+                # not create a needless second cache entry.
+                "routing_cost_mode": "feedback" if weight_file is not None else "free_flow",
             }
             cache_key = candidate_cache.cache_key(
                 cache_config, cache_inputs,

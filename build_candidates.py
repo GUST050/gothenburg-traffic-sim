@@ -378,6 +378,10 @@ def trip_length_fit(lengths_km: list[float]) -> dict:
 # and the drift metric below MUST use the same radius, or the enforced cap
 # and the measured flag silently decohere.
 NEAR_SENSOR_RADIUS_M = 200.0
+# A routed pool that loses most of its requested trips is not a safe supply
+# for PFE: it would force the solver to reuse a handful of shapes and recreate
+# the same artificial sensor cluster through a different mechanism.
+MIN_ROUTED_CANDIDATE_FRACTION = 0.75
 
 
 def destination_sensor_proximity(dest_edge_ids: list[str],
@@ -438,16 +442,161 @@ def load_deso_population() -> dict[str, int]:
         return json.load(f)["population"]
 
 
-def load_graph_edges(G):
+def load_sumo_routing_data(
+    path: Path = NET_PATH,
+) -> tuple[set[str], dict[str, float]]:
+    """Return SUMO's routable edge IDs and free-flow travel-time costs.
+
+    The GraphML snapshot intentionally contains a few OSM artefacts that
+    ``build_sumo_net.py`` cannot emit (most notably self-loops).  Candidate
+    origins and destinations must be drawn from the same edge universe as
+    duarouter; otherwise SUMO's ``--repair`` can silently replace an invalid
+    endpoint with a nearby valid edge, which changes the intended OD pair.
+    Internal junction edges are excluded because they are implementation
+    details, not routable demand edges.
+
+    The cost is the minimum lane-level ``length / speed`` time for each
+    edge.  It is intentionally parsed from the published SUMO network, not
+    reconstructed from GraphML tags: this makes candidate naturalness and
+    detour checks use the same free-flow metric as duarouter.
+    """
+    if not path.exists():
+        raise FileNotFoundError(
+            f"SUMO network not found at {path}; run build_sumo_net.py first")
+    root = ET.parse(path).getroot()
+    edge_ids: set[str] = set()
+    travel_times: dict[str, float] = {}
+    for edge in root.findall("edge"):
+        edge_id = edge.get("id")
+        if (edge_id and not edge_id.startswith(":")
+                and edge.get("function") != "internal"):
+            lane_times = []
+            for lane in edge.findall("lane"):
+                try:
+                    length = float(lane.get("length", ""))
+                    speed = float(lane.get("speed", ""))
+                except ValueError:
+                    continue
+                if math.isfinite(length) and math.isfinite(speed) and length > 0 and speed > 0:
+                    lane_times.append(length / speed)
+            if not lane_times:
+                raise ValueError(
+                    f"SUMO edge {edge_id} has no valid lane travel time")
+            edge_ids.add(edge_id)
+            travel_times[edge_id] = min(lane_times)
+    if not edge_ids:
+        raise ValueError(f"SUMO network {path} contains no routable edges")
+    return edge_ids, travel_times
+
+
+def load_sumo_edge_ids(path: Path = NET_PATH) -> set[str]:
+    """Backward-compatible edge-ID view of :func:`load_sumo_routing_data`."""
+    return load_sumo_routing_data(path)[0]
+
+
+def load_graph_edges(G, routable_edge_ids: set[str] | None = None):
+    """Build candidate edge records, restricted to SUMO-routable edges.
+
+    ``build_sumo_net.py`` deliberately skips ``u == v`` self-loops.  Skip
+    them here even when a caller does not provide the parsed SUMO edge set so
+    no synthetic endpoint can ever be a graph artefact.  When the set is
+    supplied, it is the final authority and also removes any other GraphML
+    edge that netconvert did not publish.
+    """
     edges = []
     for u, v, k, d in G.edges(keys=True, data=True):
+        edge_id = f"{u}_{v}_{k}"
+        if u == v or (routable_edge_ids is not None
+                      and edge_id not in routable_edge_ids):
+            continue
         lat = (G.nodes[u]["y"] + G.nodes[v]["y"]) / 2
         lon = (G.nodes[u]["x"] + G.nodes[v]["x"]) / 2
         hw = str(scalar(d.get("highway", "")) or "")
-        edges.append({"id": f"{u}_{v}_{k}", "u": u, "v": v,
+        edges.append({"id": edge_id, "u": u, "v": v,
                       "lat": lat, "lon": lon, "hw": hw,
                       "len": float(d.get("length", 0))})
     return edges
+
+
+def routable_graph(G, routable_edge_ids: set[str]):
+    """Return a copy containing exactly the edges published in SUMO.
+
+    Filtering only the endpoint arrays is insufficient: shortest-path masks,
+    gate pairing and detour checks also read the graph.  Keeping one canonical
+    graph for all of those operations prevents a GraphML-only shortcut from
+    influencing demand that SUMO cannot actually route.
+    """
+    H = G.copy()
+    remove = [
+        (u, v, k) for u, v, k in H.edges(keys=True)
+        if u == v or f"{u}_{v}_{k}" not in routable_edge_ids
+    ]
+    H.remove_edges_from(remove)
+    if H.number_of_edges() == 0:
+        raise ValueError("SUMO edge filter removed every graph edge")
+    return H
+
+
+def routing_cost(edge_id: str, edge_data: dict,
+                 edge_costs: dict[str, float] | None = None) -> float:
+    """Return one additive routing cost, failing closed on bad SUMO data.
+
+    ``None`` retains the length-based behaviour used by small synthetic unit
+    graphs and compatibility callers.  Production candidate generation passes
+    SUMO's published free-flow travel-time table, so no GraphML-only speed
+    assumption can make a route look natural when duarouter considers it a
+    detour (or the reverse).
+    """
+    raw = edge_data.get("length", 1.0) if edge_costs is None else edge_costs.get(edge_id)
+    if raw is None:
+        raise ValueError(f"missing SUMO routing cost for edge {edge_id}")
+    try:
+        cost = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid routing cost for edge {edge_id}: {raw!r}") from exc
+    if not math.isfinite(cost) or cost <= 0:
+        raise ValueError(f"non-positive routing cost for edge {edge_id}: {cost!r}")
+    return cost
+
+
+def routing_cost_for_edge_id(G, edge_id: str,
+                             edge_costs: dict[str, float] | None = None) -> float:
+    """Resolve one stable ``u_v_key`` edge ID to its routing cost."""
+    try:
+        u, v, k = (int(part) for part in edge_id.split("_"))
+        edge_data = G[u][v][k]
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"edge {edge_id!r} is absent from routing graph") from exc
+    return routing_cost(edge_id, edge_data, edge_costs)
+
+
+def exclude_sensor_endpoint_mass(
+    edges: list[dict], hmass: np.ndarray,
+    amass: dict[str, np.ndarray], measured: list[str],
+) -> int:
+    """Remove measured edges from synthetic origin/destination mass.
+
+    A sensor is an observation constraint, not a population residence or an
+    activity destination.  Keeping its mass non-zero lets the PFE reuse a
+    malformed/short route that starts at the sensor to satisfy a hard count,
+    producing the visible vehicle cluster at the roundabout.  Sensor edges
+    remain in ``edges`` for geometry, routing and calibration; only endpoint
+    probability mass is removed.
+    """
+    sensor_ids = set(measured)
+    mask = np.fromiter((edge["id"] in sensor_ids for edge in edges),
+                       dtype=bool, count=len(edges))
+    if not mask.any():
+        return 0
+    if hmass.shape != (len(edges),):
+        raise ValueError("home mass shape does not match candidate edges")
+    hmass[mask] = 0.0
+    for category, mass in amass.items():
+        if mass.shape != (len(edges),):
+            raise ValueError(
+                f"activity mass '{category}' shape does not match candidate edges")
+        mass[mask] = 0.0
+    return int(mask.sum())
 
 
 def ensure_deso() -> tuple[list[dict], dict[str, int]]:
@@ -587,13 +736,31 @@ def activity_mass(G, edges: list[dict]) -> dict[str, np.ndarray]:
     return out
 
 
-def find_gates(G):
+def find_gates(G, routable_edge_ids: set[str] | None = None):
     entries, exits = [], []
+    if routable_edge_ids is None:
+        in_degree = {node: G.in_degree(node) for node in G.nodes}
+        out_degree = {node: G.out_degree(node) for node in G.nodes}
+    else:
+        # Degree must be computed in the same published SUMO edge universe.
+        # A skipped self-loop otherwise makes a true boundary node look
+        # connected and removes its only valid entry/exit gate.
+        in_degree = {node: 0 for node in G.nodes}
+        out_degree = {node: 0 for node in G.nodes}
+        for u, v, k in G.edges(keys=True):
+            edge_id = f"{u}_{v}_{k}"
+            if u != v and edge_id in routable_edge_ids:
+                out_degree[u] += 1
+                in_degree[v] += 1
     for u, v, k in G.edges(keys=True):
-        if G.in_degree(u) == 0:
-            entries.append((f"{u}_{v}_{k}", u))
-        if G.out_degree(v) == 0:
-            exits.append((f"{u}_{v}_{k}", v))
+        edge_id = f"{u}_{v}_{k}"
+        if u == v or (routable_edge_ids is not None
+                      and edge_id not in routable_edge_ids):
+            continue
+        if in_degree[u] == 0:
+            entries.append((edge_id, u))
+        if out_degree[v] == 0:
+            exits.append((edge_id, v))
     return entries, exits
 
 
@@ -635,6 +802,255 @@ def route_visits_a_node_twice(edges: list[str]) -> bool:
         return False
     nodes = [edges[0].split("_")[0]] + [e.split("_")[1] for e in edges]
     return len(nodes) != len(set(nodes))
+
+
+def load_trip_intents(path: Path) -> dict[str, dict[str, str | None]]:
+    """Load the original candidate requests, which are routing authority."""
+    if not path.exists():
+        raise FileNotFoundError(path)
+    intents: dict[str, dict[str, str | None]] = {}
+    for trip in ET.parse(path).getroot().findall("trip"):
+        trip_id = trip.get("id")
+        if not trip_id or trip_id in intents:
+            raise ValueError(f"invalid or duplicate trip id in {path}: {trip_id!r}")
+        intents[trip_id] = {
+            "origin_edge": trip.get("from"),
+            "destination_edge": trip.get("to"),
+            "via_edge": trip.get("via") or None,
+        }
+    return intents
+
+
+def via_edges(via: str | None) -> tuple[str, ...]:
+    """Normalise SUMO's whitespace-separated optional ``via`` edge list."""
+    return tuple(via.split()) if via else ()
+
+
+def route_visits_vias_in_order(route_edges: list[str], vias: tuple[str, ...]) -> bool:
+    """Whether a concrete route contains every requested via edge in order."""
+    pos = 0
+    for edge_id in route_edges:
+        if pos < len(vias) and edge_id == vias[pos]:
+            pos += 1
+    return pos == len(vias)
+
+
+def validate_trip_intents(
+    intents: dict[str, dict[str, str | None]], sumo_edge_ids: set[str],
+    measured: list[str] | tuple[str, ...] = (),
+) -> None:
+    """Reject malformed candidate requests before duarouter can repair them.
+
+    A generated candidate must have valid, distinct non-sensor endpoints.
+    This is intentionally stricter than duarouter: its repair behaviour is
+    useful for diagnostics but must never substitute a new OD pair for PFE.
+    ``via`` may contain multiple edges, but it cannot duplicate or overlap an
+    endpoint because that would encode a loop by construction.
+    """
+    sensors = set(measured)
+    errors: list[str] = []
+    for trip_id, intent in intents.items():
+        origin = intent.get("origin_edge")
+        destination = intent.get("destination_edge")
+        vias = via_edges(intent.get("via_edge"))
+        reasons = []
+        if not origin:
+            reasons.append("missing_origin")
+        if not destination:
+            reasons.append("missing_destination")
+        if origin and origin not in sumo_edge_ids:
+            reasons.append("origin_not_sumo")
+        if destination and destination not in sumo_edge_ids:
+            reasons.append("destination_not_sumo")
+        unknown_vias = [edge for edge in vias if edge not in sumo_edge_ids]
+        if unknown_vias:
+            reasons.append("via_not_sumo")
+        if origin and destination and origin == destination:
+            reasons.append("same_origin_destination")
+        if origin in sensors or destination in sensors:
+            reasons.append("sensor_endpoint")
+        if ((origin and origin in vias)
+                or (destination and destination in vias)):
+            reasons.append("via_overlaps_endpoint")
+        if len(set(vias)) != len(vias):
+            reasons.append("duplicate_via")
+        if reasons:
+            errors.append(f"{trip_id}: {'/'.join(reasons)}")
+    if errors:
+        preview = "; ".join(errors[:5])
+        more = f" (+{len(errors) - 5} more)" if len(errors) > 5 else ""
+        raise ValueError(f"invalid candidate trip intents: {preview}{more}")
+
+
+def validate_routed_candidates(
+    routed_path: Path,
+    metadata_path: Path | None = None,
+    measured: list[str] | tuple[str, ...] = (),
+    sumo_edge_ids: set[str] | None = None,
+    intents_path: Path | None = None,
+) -> dict:
+    """Reject routes whose realised endpoints differ from their intent.
+
+    ``duarouter --repair`` is useful for recovering minor connectivity
+    issues, but it is not allowed to mutate an OD candidate silently.  The
+    original ``<trip>`` file is the authoritative request; compare its
+    origin, destination and via edge to the route SUMO actually wrote before
+    PFE can amplify the pool.  The metadata sidecar is only an audit/fallback
+    for legacy callers.  The same pass rejects sensor endpoints and edges
+    absent from the published SUMO network.
+
+    Legacy random pools have no trip-intent file or sidecar metadata.  They
+    still receive the SUMO-edge and sensor-endpoint checks.  The sidecar is
+    pruned to the routes that survived so later reports describe the exact
+    candidate population rather than stale trip intents.
+    """
+    if not routed_path.exists():
+        raise FileNotFoundError(routed_path)
+
+    metadata: dict[str, dict] = {}
+    metadata_doc: dict | None = None
+    if metadata_path is not None and metadata_path.exists():
+        with open(metadata_path) as f:
+            metadata_doc = json.load(f)
+        raw = metadata_doc.get("candidates", {})
+        if isinstance(raw, dict):
+            metadata = raw
+
+    # Prefer the actual trip XML over derived metadata.  This makes endpoint
+    # validation fail closed if a sidecar is stale, truncated or accidentally
+    # omitted a candidate record.
+    intents: dict[str, dict[str, str | None]] = {}
+    if intents_path is not None:
+        intents = load_trip_intents(intents_path)
+    elif metadata_doc is not None and isinstance(metadata_doc.get("candidates"), dict):
+        intents = {
+            str(vehicle_id): {
+                "origin_edge": intent.get("origin_edge"),
+                "destination_edge": intent.get("destination_edge"),
+                "via_edge": intent.get("via_edge"),
+            }
+            for vehicle_id, intent in metadata.items()
+            if isinstance(intent, dict)
+        }
+
+    sensor_ids = set(measured)
+    root = ET.parse(routed_path).getroot()
+    kept_ids: set[str] = set()
+    seen_vehicle_ids: set[str] = set()
+    reasons: dict[str, int] = {}
+    dropped = 0
+
+    def add_reason(name: str) -> None:
+        reasons[name] = reasons.get(name, 0) + 1
+
+    for vehicle in list(root.findall("vehicle")):
+        vehicle_id = vehicle.get("id", "")
+        route = vehicle.find("route")
+        route_edges = (route.get("edges", "").split()
+                       if route is not None else [])
+        route_reasons: list[str] = []
+
+        if vehicle_id in seen_vehicle_ids:
+            # Keep at most one realisation of an input trip. A duplicated
+            # vehicle would otherwise become a second PFE candidate with the
+            # same provenance and silently double its available shape.
+            route_reasons.append("duplicate_candidate_id")
+        seen_vehicle_ids.add(vehicle_id)
+
+        if not route_edges:
+            route_reasons.append("missing_route")
+        if sumo_edge_ids is not None:
+            unknown = [edge for edge in route_edges
+                       if edge not in sumo_edge_ids]
+            if unknown:
+                route_reasons.append("unknown_sumo_edge")
+
+        intent = intents.get(vehicle_id)
+        if intents_path is not None and intent is None:
+            route_reasons.append("unknown_candidate_id")
+        if intent is not None:
+            expected = {
+                "origin_edge": intent.get("origin_edge"),
+                "destination_edge": intent.get("destination_edge"),
+                "via_edge": intent.get("via_edge"),
+            }
+            for key in ("origin_edge", "destination_edge", "via_edge"):
+                edge_id = expected[key]
+                if (sumo_edge_ids is not None and edge_id
+                        and edge_id not in sumo_edge_ids):
+                    route_reasons.append(f"declared_{key}_not_sumo")
+            if route_edges and expected["origin_edge"] != route_edges[0]:
+                route_reasons.append("origin_mismatch")
+            if route_edges and expected["destination_edge"] != route_edges[-1]:
+                route_reasons.append("destination_mismatch")
+            if not route_visits_vias_in_order(
+                    route_edges, via_edges(expected["via_edge"])):
+                route_reasons.append("via_missing")
+
+        if route_edges and (route_edges[0] in sensor_ids
+                            or route_edges[-1] in sensor_ids):
+            route_reasons.append("sensor_endpoint")
+
+        if route_reasons:
+            dropped += 1
+            for reason in set(route_reasons):
+                add_reason(reason)
+            root.remove(vehicle)
+        else:
+            kept_ids.add(vehicle_id)
+
+    if dropped:
+        ET.ElementTree(root).write(routed_path)
+
+    # Keep the audit sidecar aligned with the actual XML after duarouter has
+    # dropped/repair-filtered trips.  This is deliberately best-effort for
+    # legacy pools, which do not have a metadata file at all.
+    if metadata_doc is not None and metadata_path is not None:
+        canonical_metadata: dict[str, dict] = {}
+        for vehicle_id in sorted(kept_ids):
+            stored = metadata.get(vehicle_id, {})
+            record = dict(stored) if isinstance(stored, dict) else {}
+            # The XML request is the authority for OD/via. PFE propagates
+            # this sidecar into calibrated agent provenance, so retaining a
+            # stale sidecar here would make later reporting contradict the
+            # concrete route even when endpoint validation passed.
+            if vehicle_id in intents:
+                record.update(intents[vehicle_id])
+            canonical_metadata[vehicle_id] = record
+        metadata_doc["candidates"] = canonical_metadata
+        with open(metadata_path, "w") as f:
+            json.dump(metadata_doc, f, separators=(",", ":"))
+
+    missing_requested = (len(set(intents) - seen_vehicle_ids)
+                         if intents_path is not None else 0)
+    return {
+        "requested": len(intents) if intents_path is not None else None,
+        "checked": len(kept_ids) + dropped,
+        "kept": len(kept_ids),
+        "dropped": dropped,
+        "missing_requested": missing_requested,
+        "reasons": reasons,
+    }
+
+
+def prune_candidate_metadata(metadata_path: Path | None, routed_path: Path) -> None:
+    """Keep the candidate sidecar aligned after later loop/detour filters."""
+    if metadata_path is None or not metadata_path.exists():
+        return
+    with open(metadata_path) as f:
+        document = json.load(f)
+    candidates = document.get("candidates")
+    if not isinstance(candidates, dict):
+        return
+    route_ids = {
+        vehicle.get("id") for vehicle in ET.parse(routed_path).getroot().findall("vehicle")
+    }
+    document["candidates"] = {
+        vehicle_id: intent for vehicle_id, intent in candidates.items()
+        if vehicle_id in route_ids
+    }
+    with open(metadata_path, "w") as f:
+        json.dump(document, f, separators=(",", ":"))
 
 
 def drop_uturn_routes(path: Path) -> None:
@@ -680,7 +1096,8 @@ def drop_uturn_routes(path: Path) -> None:
           f"twice (a literal U-turn is the special case one step back)")
 
 
-def drop_excessive_detours(path: Path, G, max_stretch: float) -> None:
+def drop_excessive_detours(path: Path, G, max_stretch: float,
+                           edge_costs: dict[str, float] | None = None) -> None:
     """Drop candidates whose OWN realized path costs more than max_stretch
     times the TRUE shortest path between their OWN entry and exit nodes —
     "enforce the actual invariant directly" (this file's own established
@@ -717,15 +1134,15 @@ def drop_excessive_detours(path: Path, G, max_stretch: float) -> None:
     (16.2s -> 0.58s for the same 4232 distinct pairs) with ZERO
     discrepancies against the networkx version — but only after fixing a
     real bug found while building this: naively building the sparse
-    matrix from every (u, v, length) edge triple lets scipy's csr_matrix
+    matrix from every (u, v, routing-cost) edge triple lets scipy's csr_matrix
     SUM duplicate (u, v) entries for the graph's 52 parallel-edge node
     pairs, corrupting distances for any path touching one. Fixed by
-    keeping the MINIMUM length per (u, v) pair before building the
-    matrix — the same "shortest path routing should use the faster/
-    shorter physical link, not an arbitrary or summed one" principle as
-    assignment_priors.py's fastest_parallel_edge_times (a different
-    weight metric — raw length here, travel time there — so kept as a
-    separate local helper rather than shared)."""
+    keeping the MINIMUM travel-time cost per (u, v) pair before building
+    the matrix — the same "shortest path routing should use the faster
+    link, not an arbitrary or summed one" principle as
+    assignment_priors.py's fastest_parallel_edge_times. The local helper
+    remains separate because this module reads the published SUMO network,
+    which is the route generator's authoritative cost source."""
     from scipy.sparse import csr_matrix
     from scipy.sparse.csgraph import dijkstra as sp_dijkstra
 
@@ -742,17 +1159,18 @@ def drop_excessive_detours(path: Path, G, max_stretch: float) -> None:
         edges = route.get("edges").split()
         entry = int(edges[0].split("_")[0])
         exit_ = int(edges[-1].split("_")[1])
-        realized = sum(G[int(u)][int(v)][int(k)]["length"]
-                       for u, v, k in (e.split("_") for e in edges))
+        realized = sum(
+            routing_cost_for_edge_id(G, edge_id, edge_costs)
+            for edge_id in edges)
         info.append((veh, entry, exit_, realized))
         entries_needed.add(entry)
 
     nodes = list(G.nodes())
     node_idx = {n: i for i, n in enumerate(nodes)}
     min_len: dict[tuple[int, int], float] = {}
-    for u, v, d in G.edges(data=True):
+    for u, v, k, d in G.edges(keys=True, data=True):
         key = (node_idx[u], node_idx[v])
-        w = d.get("length", 1.0)
+        w = routing_cost(f"{u}_{v}_{k}", d, edge_costs)
         if key not in min_len or w < min_len[key]:
             min_len[key] = w
     rows = [k[0] for k in min_len]
@@ -853,21 +1271,54 @@ def upstream_downstream_gates(
     return (ins or [eid for eid, _ in entries]), (outs or [eid for eid, _ in exits])
 
 
-def via_naturally_on_path(G, entry_v: int, exit_u: int, m_u: int, m_v: int) -> bool:
-    """True if the via edge (m_u -> m_v) lies consecutively on the shortest
-    (by length) path from entry_v to exit_u — i.e. forcing the trip through
-    it as a via constraint doesn't require a detour, since it's already on
-    the way there."""
-    import networkx as nx
+def via_is_natural_in_cost_matrix(
+    D: np.ndarray, node_idx: dict[int, int], entry_v: int, exit_u: int,
+    m_u: int, m_v: int, via_cost: float, tol_abs: float = 0.5,
+    tol_rel: float = 1e-6,
+) -> bool:
+    """Whether a forced via edge lies on a shortest path in one cost matrix."""
     try:
-        path = nx.shortest_path(G, entry_v, exit_u, weight="length")
-    except nx.NetworkXNoPath:
+        direct = D[node_idx[entry_v], node_idx[exit_u]]
+        via = (D[node_idx[entry_v], node_idx[m_u]] + via_cost
+               + D[node_idx[m_v], node_idx[exit_u]])
+    except KeyError:
         return False
-    return any(path[i] == m_u and path[i + 1] == m_v for i in range(len(path) - 1))
+    if not math.isfinite(direct) or not math.isfinite(via):
+        return False
+    tolerance = max(tol_abs, tol_rel * direct)
+    return abs(via - direct) <= tolerance
 
 
-def build_shortest_distance_matrix(G) -> tuple[np.ndarray, dict[int, int]]:
-    """All-pairs shortest (by length) distance, computed ONCE per run via
+def via_naturally_on_path(
+    G, entry_v: int, exit_u: int, m_u: int, m_v: int,
+    m_edge_id: str | None = None,
+    edge_costs: dict[str, float] | None = None,
+) -> bool:
+    """True when forcing a via edge leaves the fastest route unchanged.
+
+    Production callers provide SUMO free-flow edge costs, so this agrees with
+    duarouter's initial routing metric. The optional default remains graph
+    length for compact synthetic tests and compatibility callers.
+    """
+    if m_edge_id is None:
+        candidates = [
+            routing_cost(f"{m_u}_{m_v}_{k}", d, edge_costs)
+            for k, d in G.get_edge_data(m_u, m_v, default={}).items()
+        ]
+        if not candidates:
+            return False
+        via_cost = min(candidates)
+    else:
+        via_cost = routing_cost_for_edge_id(G, m_edge_id, edge_costs)
+    D, node_idx = build_shortest_distance_matrix(G, edge_costs)
+    return via_is_natural_in_cost_matrix(
+        D, node_idx, entry_v, exit_u, m_u, m_v, via_cost)
+
+
+def build_shortest_distance_matrix(
+    G, edge_costs: dict[str, float] | None = None,
+) -> tuple[np.ndarray, dict[int, int]]:
+    """All-pairs shortest routing cost, computed ONCE per run via
     scipy.sparse.csgraph.dijkstra (scipy is already a project dependency —
     pfe.py, observability.py) — measured 1.39s / 92.6MB on the real
     3402-node production graph. This is what makes
@@ -878,7 +1329,7 @@ def build_shortest_distance_matrix(G) -> tuple[np.ndarray, dict[int, int]]:
     once with the (reverted) duarouter-retry approach to via-trip
     coverage.
 
-    Parallel edges (MultiDiGraph) are collapsed to their MINIMUM length —
+    Parallel edges (MultiDiGraph) are collapsed to their MINIMUM routing cost —
     for shortest-path purposes only the cheapest of several parallel
     edges between the same two nodes ever matters; scipy's sparse matrix
     constructor SUMS duplicate (row, col) entries by default, which would
@@ -889,15 +1340,39 @@ def build_shortest_distance_matrix(G) -> tuple[np.ndarray, dict[int, int]]:
     nodes = list(G.nodes())
     node_idx = {n: i for i, n in enumerate(nodes)}
     best: dict[tuple[int, int], float] = {}
-    for u, v, d in G.edges(data=True):
+    for u, v, k, d in G.edges(keys=True, data=True):
         key = (node_idx[u], node_idx[v])
-        length = d.get("length", 1.0)
-        if key not in best or length < best[key]:
-            best[key] = length
+        edge_id = f"{u}_{v}_{k}"
+        cost = routing_cost(edge_id, d, edge_costs)
+        if key not in best or cost < best[key]:
+            best[key] = cost
     rows, cols, weights = zip(*((r, c, w) for (r, c), w in best.items()))
     adj = csr_matrix((weights, (rows, cols)), shape=(len(nodes), len(nodes)))
     D = dijkstra(adj, directed=True)
     return D, node_idx
+
+
+def shortest_paths_use_node(
+    D: np.ndarray, start_idx: np.ndarray | int, through_idx: int,
+    end_idx: np.ndarray | int, tol_abs: float = 0.5,
+    tol_rel: float = 1e-6,
+) -> np.ndarray:
+    """Conservative mask for shortest paths that can pass through a node.
+
+    Equality is intentional: if a node lies on *any* shortest path, it is
+    unsafe as a forbidden turn-around point when demand must preserve an
+    already-traversed endpoint edge.  Excluding ties is preferable to letting
+    SUMO's route randomisation choose a path that immediately reverses that
+    edge and is later repaired away.
+    """
+    starts = np.asarray(start_idx, dtype=int)
+    ends = np.asarray(end_idx, dtype=int)
+    direct = D[starts, ends]
+    via = D[starts, through_idx] + D[through_idx, ends]
+    finite = np.isfinite(direct) & np.isfinite(via)
+    tol = np.maximum(tol_abs, tol_rel * np.where(finite, direct, 0.0))
+    with np.errstate(invalid="ignore"):
+        return finite & (np.abs(via - direct) <= tol)
 
 
 def natural_far_end_weights(
@@ -905,6 +1380,8 @@ def natural_far_end_weights(
     anchor_v: int, m_u: int, m_v: int, m_length: float,
     candidate_u_idx: np.ndarray, base_weights: np.ndarray,
     tol_abs: float = 0.5, tol_rel: float = 1e-6,
+    anchor_u: int | None = None,
+    candidate_v_idx: np.ndarray | None = None,
 ) -> np.ndarray:
     """Vectorized generalization of via_naturally_on_path — same
     semantics (is routing anchor->m_u->m_v->candidate the true shortest
@@ -940,6 +1417,23 @@ def natural_far_end_weights(
     # the resulting (harmless) RuntimeWarning.
     with np.errstate(invalid="ignore"):
         natural = finite & (np.abs(via_dist - d_direct) <= tol)
+    if anchor_u is not None:
+        # The fixed origin edge has already been traversed.  If a shortest
+        # anchor->via or via->destination leg can revisit its start node, the
+        # concatenated route would need to reverse that edge.
+        avoid = shortest_paths_use_node(
+            D, a, node_idx[anchor_u], np.array([node_idx[m_u]])
+        )[0]
+        if avoid:
+            natural[:] = False
+        else:
+            natural &= ~shortest_paths_use_node(
+                D, node_idx[m_v], node_idx[anchor_u], candidate_u_idx)
+    if candidate_v_idx is not None:
+        # Symmetric guard for a destination edge: the path to its entry node
+        # must not already reach its exit node and then come back.
+        natural &= ~shortest_paths_use_node(
+            D, node_idx[m_v], candidate_v_idx, candidate_u_idx)
     return np.where(natural, base_weights, 0.0)
 
 
@@ -948,6 +1442,8 @@ def natural_sensor_masks(
     m_info: dict[str, tuple[int, int, float]],
     dest_u_idx: np.ndarray,
     tol_abs: float = 0.5, tol_rel: float = 1e-6,
+    anchor_u: int | None = None,
+    dest_v_idx: np.ndarray | None = None,
 ) -> dict[str, np.ndarray]:
     """For ONE anchor: per-sensor boolean masks over the destination pool —
     natural_m(dest) = "routing anchor→sensor m→dest is the true shortest
@@ -976,6 +1472,18 @@ def natural_sensor_masks(
         finite = finite_direct & np.isfinite(via)
         with np.errstate(invalid="ignore"):
             masks[m_edge] = finite & (np.abs(via - d_direct) <= tol)
+        if anchor_u is not None:
+            pre_uses_anchor = shortest_paths_use_node(
+                D, a, node_idx[anchor_u], np.array([node_idx[m_u]])
+            )[0]
+            if pre_uses_anchor:
+                masks[m_edge][:] = False
+            else:
+                masks[m_edge] &= ~shortest_paths_use_node(
+                    D, node_idx[m_v], node_idx[anchor_u], dest_u_idx)
+        if dest_v_idx is not None:
+            masks[m_edge] &= ~shortest_paths_use_node(
+                D, node_idx[m_v], dest_v_idx, dest_u_idx)
     return masks
 
 
@@ -984,6 +1492,8 @@ def natural_origin_weights(
     candidate_v_idx: np.ndarray, m_u: int, m_v: int, m_length: float,
     dest_u: int, base_weights: np.ndarray,
     tol_abs: float = 0.5, tol_rel: float = 1e-6,
+    candidate_u_idx: np.ndarray | None = None,
+    dest_v: int | None = None,
 ) -> np.ndarray:
     """Mirror of natural_far_end_weights — there the ORIGIN was fixed and
     many DESTINATION candidates were masked; here the DESTINATION
@@ -1022,11 +1532,27 @@ def natural_origin_weights(
     tol = np.maximum(tol_abs, tol_rel * np.where(finite, d_direct, 0.0))
     with np.errstate(invalid="ignore"):
         natural = finite & (np.abs(via_dist - d_direct) <= tol)
+    if candidate_u_idx is not None:
+        # Each candidate origin edge has already been traversed before its
+        # v-node.  Reject a shortest leg that returns to that edge's u-node.
+        natural &= ~shortest_paths_use_node(
+            D, candidate_v_idx, candidate_u_idx, np.full(len(candidate_v_idx), mu)
+        )
+    if dest_v is not None:
+        # The fixed destination edge must be the final edge, not a return
+        # from its v-node back to its u-node.
+        natural &= ~shortest_paths_use_node(
+            D, np.full(len(candidate_v_idx), mv), node_idx[dest_v],
+            np.full(len(candidate_v_idx), du)
+        )
     return np.where(natural, base_weights, 0.0)
 
 
-def verified_via_gate_pairs(G, m_edge: str, in_ids: list[str], out_ids: list[str]
-                            ) -> list[tuple[str, str]]:
+def verified_via_gate_pairs(
+    G, m_edge: str, in_ids: list[str], out_ids: list[str],
+    *, D: np.ndarray | None = None, node_idx: dict[int, int] | None = None,
+    edge_costs: dict[str, float] | None = None,
+) -> list[tuple[str, str]]:
     """Of all (entry, exit) gate pairs for a via-forced trip through
     m_edge, keep only those where m_edge genuinely lies on the shortest
     entry->exit path — so the SOURCE of a via-trip is a real, natural
@@ -1052,19 +1578,29 @@ def verified_via_gate_pairs(G, m_edge: str, in_ids: list[str], out_ids: list[str
     proxy, so a bad via-trip is never GENERATED in the first place rather
     than generated and then discarded (which just shrinks that sensor's
     effective coverage pool by however many looped).
-    Falls back to ALL candidate pairs if none verify (extremely rare, all
-    gates on a genuinely awkward via edge) — drop_uturn_routes' node-repeat
-    check remains the safety net either way."""
+    A sensor with no natural entry/exit pair returns an empty set. It is a
+    real observability limitation, not permission to fabricate a forced
+    detour: the normal quota machinery lets better-connected sensors absorb
+    the supply, and the final coverage gate fails clearly if any measured
+    edge is left without a candidate.
+
+    ``D``/``node_idx`` are optionally supplied from the generator's single
+    all-pairs solve. Reusing them is both exact and much faster than running
+    a separate NetworkX shortest-path search for every gate pair."""
     u_m, v_m, _ = m_edge.split("_")
     u_m, v_m = int(u_m), int(v_m)
+    if D is None or node_idx is None:
+        D, node_idx = build_shortest_distance_matrix(G, edge_costs)
+    via_cost = routing_cost_for_edge_id(G, m_edge, edge_costs)
     good = []
     for e_in in in_ids:
         v_in = int(e_in.split("_")[1])
         for e_out in out_ids:
             u_out = int(e_out.split("_")[0])
-            if via_naturally_on_path(G, v_in, u_out, u_m, v_m):
+            if via_is_natural_in_cost_matrix(
+                    D, node_idx, v_in, u_out, u_m, v_m, via_cost):
                 good.append((e_in, e_out))
-    return good or [(e_in, e_out) for e_in in in_ids for e_out in out_ids]
+    return good
 
 
 def daily_shape(is_weekend: bool = False) -> np.ndarray:
@@ -1121,7 +1657,8 @@ def blend_day_shape(real: np.ndarray, fallback: np.ndarray,
 
 def _natural_sensor_for_leg(D, node_idx, anchor_v: int, candidate_u: int,
                             m_info: dict[str, tuple[int, int, float]],
-                            quota: dict[str, int]) -> str | None:
+                            quota: dict[str, int], anchor_u: int | None = None,
+                            candidate_v: int | None = None) -> str | None:
     """Which measured edge (if any) the anchor->candidate path naturally
     passes through — checked against ALL sensors (7 cheap O(1) lookups),
     preferring whichever is furthest behind its own quota if more than one
@@ -1145,7 +1682,11 @@ def _natural_sensor_for_leg(D, node_idx, anchor_v: int, candidate_u: int,
     for m_edge in sorted(m_info, key=lambda m: -quota[m]):
         m_u, m_v, m_length = m_info[m_edge]
         w = natural_far_end_weights(D, node_idx, anchor_v, m_u, m_v, m_length,
-                                    candidate_idx, np.array([1.0]))
+                                    candidate_idx, np.array([1.0]),
+                                    anchor_u=anchor_u,
+                                    candidate_v_idx=(
+                                        np.array([node_idx[candidate_v]])
+                                        if candidate_v is not None else None))
         if w[0] > 0:
             return m_edge
     return None
@@ -1162,6 +1703,7 @@ def generate_sensor_anchored_trips(
     gravity_km: float, is_weekend: bool,
     min_per_sensor: int = 50, max_anchor_redraws: int = 25,
     gravity_alpha: float = 0.0,
+    routing_costs: dict[str, float] | None = None,
 ) -> tuple[list[tuple], list[float], dict[str, int]]:
     """Replaces the old E-E/I-I/E-I/I-E blocks + separate via-trip
     coverage block with ONE principle: every generated trip must be
@@ -1221,21 +1763,25 @@ def generate_sensor_anchored_trips(
     reusing near-duplicate routes, exactly what pfe.py's Path-Size
     weighting already penalises). min_per_sensor is a safety-net floor
     only, not a target."""
-    D, node_idx = build_shortest_distance_matrix(G)
+    D, node_idx = build_shortest_distance_matrix(G, routing_costs)
 
     edge_ids  = [e["id"] for e in edges]
     edge_u_nodes = [e["u"] for e in edges]
     edge_v_nodes = [e["v"] for e in edges]
     edge_u_idx = np.array([node_idx[u] for u in edge_u_nodes])
+    edge_v_idx = np.array([node_idx[v] for v in edge_v_nodes])
     edge_lats  = np.array([e["lat"] for e in edges])
     edge_lons  = np.array([e["lon"] for e in edges])
 
+    entry_u_nodes = [int(eid.split("_")[0]) for eid in entry_ids]
     entry_v_nodes = [int(eid.split("_")[1]) for eid in entry_ids]
+    entry_u_idx = np.array([node_idx[u] for u in entry_u_nodes])
     entry_v_idx = np.array([node_idx[v] for v in entry_v_nodes])
     entry_lats, entry_lons = gate_latlon(G, entries)
     exit_u_nodes = [int(eid.split("_")[0]) for eid in exit_ids]
     exit_v_nodes = [int(eid.split("_")[1]) for eid in exit_ids]
     exit_u_idx = np.array([node_idx[u] for u in exit_u_nodes])
+    exit_v_idx = np.array([node_idx[v] for v in exit_v_nodes])
     exit_lats, exit_lons = gate_latlon(G, exits)
 
     m_info: dict[str, tuple[int, int, float]] = {}
@@ -1243,9 +1789,12 @@ def generate_sensor_anchored_trips(
     for m_edge in measured:
         u_s, v_s, k_s = m_edge.split("_")
         m_u, m_v = int(u_s), int(v_s)
-        m_info[m_edge] = (m_u, m_v, G[m_u][m_v][int(k_s)]["length"])
+        m_info[m_edge] = (
+            m_u, m_v, routing_cost_for_edge_id(G, m_edge, routing_costs))
         in_ids, out_ids = upstream_downstream_gates(G, m_edge, entries, exits)
-        good_pairs_ee[m_edge] = verified_via_gate_pairs(G, m_edge, in_ids, out_ids)
+        good_pairs_ee[m_edge] = verified_via_gate_pairs(
+            G, m_edge, in_ids, out_ids, D=D, node_idx=node_idx,
+            edge_costs=routing_costs)
 
     n_sensors = len(measured)
     initial_quota = {m: n_total // n_sensors + (1 if i < n_total % n_sensors else 0)
@@ -1365,9 +1914,10 @@ def generate_sensor_anchored_trips(
         passed = [m for m in measured if masks[m][pos]]
         return max(passed, key=lambda m: quota[m])
 
-    def draw_conditioned_outbound(anchor_p, anchor_v_nodes, anchor_lats,
+    def draw_conditioned_outbound(anchor_p, anchor_u_nodes, anchor_v_nodes,
+                                  anchor_lats,
                                   anchor_lons, dest_lats, dest_lons,
-                                  dest_u_idx_a, base_w, beta_km):
+                                  dest_u_idx_a, dest_v_idx_a, base_w, beta_km):
         """ONE rejection-sampling try of the conditioned outbound leg — the
         statistical core of the destination-bias fix, shared by the I-I,
         E-I and I-E loops so the three tour categories can never drift onto
@@ -1384,7 +1934,9 @@ def generate_sensor_anchored_trips(
         total_w = far_w.sum()
         if total_w <= 0:
             return None
-        masks = natural_sensor_masks(D, node_idx, anchor_v, m_info, dest_u_idx_a)
+        masks = natural_sensor_masks(
+            D, node_idx, anchor_v, m_info, dest_u_idx_a,
+            anchor_u=anchor_u_nodes[a_pos], dest_v_idx=dest_v_idx_a)
         masked = np.where(np.logical_or.reduce([masks[m] for m in measured]),
                           far_w, 0.0)
         z = masked.sum()
@@ -1402,15 +1954,16 @@ def generate_sensor_anchored_trips(
         succeeded = False
         for _ in range(n_accept_tries):
             drawn = draw_conditioned_outbound(
-                home_anchor_p, edge_v_nodes, edge_lats, edge_lons,
-                edge_lats, edge_lons, edge_u_idx, far_base,
+                home_anchor_p, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons,
+                edge_lats, edge_lons, edge_u_idx, edge_v_idx, far_base,
                 gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0))
             if drawn is None:
                 continue   # anchor rejected — this IS the conditioning
             a_pos, f_pos, d_km_f, masks = drawn
             return_sensor = _natural_sensor_for_leg(
                 D, node_idx, edge_v_nodes[f_pos], edge_u_nodes[a_pos],
-                m_info, quota)
+                m_info, quota, anchor_u=edge_u_nodes[f_pos],
+                candidate_v=edge_v_nodes[a_pos])
             if return_sensor is None:
                 continue
             m_edge = attribute_sensor(masks, f_pos)
@@ -1436,16 +1989,17 @@ def generate_sensor_anchored_trips(
         succeeded = False
         for _ in range(n_accept_tries):
             drawn = draw_conditioned_outbound(
-                entry_anchor_p, entry_v_nodes, entry_lats, entry_lons,
-                edge_lats, edge_lons, edge_u_idx, far_base,
+                entry_anchor_p, entry_u_nodes, entry_v_nodes, entry_lats,
+                entry_lons, edge_lats, edge_lons, edge_u_idx, edge_v_idx, far_base,
                 gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0))
             if drawn is None:
                 continue
             a_pos, f_pos, d_km_f, masks = drawn
             # Return leg: fixed activity origin -> fresh exit gate, union
             # over sensors (no per-sensor pre-commitment here either).
-            ret_masks = natural_sensor_masks(D, node_idx, edge_v_nodes[f_pos],
-                                             m_info, exit_u_idx)
+            ret_masks = natural_sensor_masks(
+                D, node_idx, edge_v_nodes[f_pos], m_info, exit_u_idx,
+                anchor_u=edge_u_nodes[f_pos], dest_v_idx=exit_v_idx)
             ret_w = np.where(np.logical_or.reduce([ret_masks[m] for m in measured]),
                              w_exit, 0.0)
             rz = ret_w.sum()
@@ -1475,8 +2029,8 @@ def generate_sensor_anchored_trips(
         succeeded = False
         for _ in range(n_accept_tries):
             drawn = draw_conditioned_outbound(
-                home_anchor_p, edge_v_nodes, edge_lats, edge_lons,
-                exit_lats, exit_lons, exit_u_idx, w_exit,
+                home_anchor_p, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons,
+                exit_lats, exit_lons, exit_u_idx, exit_v_idx, w_exit,
                 gravity_km * PURPOSE_LENGTH_SCALE.get("external", 1.0))
             if drawn is None:
                 continue
@@ -1486,7 +2040,9 @@ def generate_sensor_anchored_trips(
             # (elementwise max is the union: same base weights, 0/w each).
             ret_w_by_m = {m: natural_origin_weights(
                 D, node_idx, entry_v_idx, *m_info[m],
-                edge_u_nodes[a_pos], w_entry) for m in measured}
+                edge_u_nodes[a_pos], w_entry,
+                candidate_u_idx=entry_u_idx,
+                dest_v=edge_v_nodes[a_pos]) for m in measured}
             ret_w = np.maximum.reduce(list(ret_w_by_m.values()))
             rz = ret_w.sum()
             if rz <= 0:
@@ -1536,6 +2092,7 @@ class CandidateStructure:
     w_entry: np.ndarray
     w_exit: np.ndarray
     measured: list[str]
+    routing_costs: dict[str, float] | None = None
 
 
 def generate_day_block(
@@ -1559,7 +2116,8 @@ def generate_day_block(
             structure.entries, structure.exits, structure.entry_ids, structure.exit_ids,
             structure.w_entry, structure.w_exit, profile, structure.measured,
             n_total, through_fraction, cross_fraction, gravity_km, is_weekend,
-            min_per_sensor, gravity_alpha=gravity_alpha)
+            min_per_sensor, gravity_alpha=gravity_alpha,
+            routing_costs=structure.routing_costs)
         template_trips = [
             (t[1], t[2], t[3],
              t[4] if len(t) > 4 else "unknown",
@@ -1755,16 +2313,36 @@ def main() -> None:
     rng = np.random.default_rng(args.seed)
 
     G = ox.load_graphml(GRAPH_PATH)
-    edges = load_graph_edges(G)
-    print(f"{len(edges)} edges")
+    try:
+        sumo_edge_ids, routing_costs = load_sumo_routing_data(NET_PATH)
+    except (FileNotFoundError, ET.ParseError, ValueError) as exc:
+        sys.exit(str(exc))
+    with open("web/data/flows.json") as f:
+        measured = list(json.load(f)["flows"])
+    missing_sensor_edges = sorted(set(measured) - sumo_edge_ids)
+    if missing_sensor_edges:
+        sys.exit("measured sensor edges missing from SUMO net: "
+                 + ", ".join(missing_sensor_edges))
+
+    routing_G = routable_graph(G, sumo_edge_ids)
+    edges = load_graph_edges(routing_G)
+    print(f"{len(edges)} SUMO-routable edges")
+    graph_edge_ids = {edge["id"] for edge in edges}
+    missing_graph_sensor_edges = sorted(set(measured) - graph_edge_ids)
+    if missing_graph_sensor_edges:
+        sys.exit("measured sensor edges missing from GraphML/SUMO graph: "
+                 + ", ".join(missing_graph_sensor_edges))
 
     hmass = home_mass(edges)
-    amass = activity_mass(G, edges)
-    entries, exits = find_gates(G)
+    amass = activity_mass(routing_G, edges)
+    n_sensor_mass = exclude_sensor_endpoint_mass(edges, hmass, amass, measured)
+    print(f"  excluded {n_sensor_mass} measured sensor edges from synthetic "
+          "origin/destination mass")
+    entries, exits = find_gates(routing_G)
     entry_ids = [e for e, _ in entries]
     exit_ids  = [e for e, _ in exits]
-    w_entry = gate_weights(G, entries)
-    w_exit  = gate_weights(G, exits)
+    w_entry = gate_weights(routing_G, entries)
+    w_exit  = gate_weights(routing_G, exits)
     shape_hourly = daily_shape(args.is_weekend)
     if args.real_day_shape_file:
         with open(args.real_day_shape_file) as f:
@@ -1774,19 +2352,19 @@ def main() -> None:
 
     if hmass.sum() == 0:
         sys.exit("home_mass is all-zero — check data_in/deso/ (run fetch_deso.py)")
-    with open("web/data/flows.json") as f:
-        measured = list(json.load(f)["flows"])
-
     multi_day_trips = None
+    n_day_blocks = 1
     if args.day_blocks_file:
         with open(args.day_blocks_file) as f:
             blocks = json.load(f)
         if not blocks:
             sys.exit("--day-blocks-file must contain at least one block")
+        n_day_blocks = len(blocks)
         structure = CandidateStructure(
-            G=G, edges=edges, hmass=hmass, amass=amass, entries=entries,
+            G=routing_G, edges=edges, hmass=hmass, amass=amass, entries=entries,
             exits=exits, entry_ids=entry_ids, exit_ids=exit_ids,
-            w_entry=w_entry, w_exit=w_exit, measured=measured)
+            w_entry=w_entry, w_exit=w_exit, measured=measured,
+            routing_costs=routing_costs)
         templates: dict[str, list[tuple]] = {}
         multi_day_trips, tour_lengths_km, short_quota = [], [], {}
         for day_index, block_spec in enumerate(blocks):
@@ -1812,11 +2390,11 @@ def main() -> None:
         trips = []
     else:
         trips, tour_lengths_km, short_quota = generate_sensor_anchored_trips(
-            rng, G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
+            rng, routing_G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
             w_entry, w_exit, shape_hourly, measured,
             args.n_total, args.through_fraction, args.cross_fraction,
             args.gravity_km, args.is_weekend, args.min_per_sensor,
-            gravity_alpha=args.gravity_alpha)
+            gravity_alpha=args.gravity_alpha, routing_costs=routing_costs)
 
     n_through     = int(args.n_total * args.through_fraction)
     n_tours_total = (args.n_total - n_through) // 2
@@ -1824,6 +2402,8 @@ def main() -> None:
     n_internal = n_tours_total - n_cross
     n_ei = n_cross // 2
     n_ie = n_cross - n_ei
+    target_per_day = n_through + 2 * n_tours_total
+    target_candidate_count = target_per_day * n_day_blocks
 
     trips.sort(key=lambda t: t[0])
     if multi_day_trips is not None:
@@ -1860,6 +2440,19 @@ def main() -> None:
           f"was {n_through} E-E through + {n_internal} I-I / {n_ei} E-I / "
           f"{n_ie} I-E paired tours (actual counts vary since some tour "
           f"attempts are dropped when no sensor naturally fits either leg)")
+    if target_candidate_count:
+        generated_fraction = n_written / target_candidate_count
+        print(f"  generated candidate supply: {generated_fraction:.1%} "
+              f"({n_written}/{target_candidate_count})")
+        if generated_fraction < MIN_ROUTED_CANDIDATE_FRACTION:
+            sys.exit(
+                f"generated candidate supply {generated_fraction:.1%} is below the "
+                f"{MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor; refusing to "
+                "route a collapsed demand pool")
+    try:
+        validate_trip_intents(load_trip_intents(trips_path), sumo_edge_ids, measured)
+    except ValueError as exc:
+        sys.exit(str(exc))
 
     fit = trip_length_fit(tour_lengths_km)
     fit["through_fraction"] = args.through_fraction
@@ -1910,16 +2503,60 @@ def main() -> None:
          # reach without turning back.
          "--weights.turnaround-penalty", "300",
          "--seed", str(args.seed),
+         # SUMO may remove an internal loop for performance and route
+         # validity.  The original trip XML is checked immediately after
+         # routing, so any such repair that changes origin, destination or
+         # via is rejected instead of being silently accepted.
          "--ignore-errors", "--no-warnings", "--repair", "--remove-loops"],
         capture_output=True, text=True, timeout=300)
     if res.returncode != 0:
         print(res.stderr[-1500:])
         sys.exit("duarouter failed")
+    integrity = validate_routed_candidates(
+        out, meta_out, measured=measured, sumo_edge_ids=sumo_edge_ids,
+        intents_path=trips_path)
+    print(f"  route integrity: checked {integrity['checked']}, kept "
+        f"{integrity['kept']}, dropped {integrity['dropped']} "
+          f"{integrity['reasons']}, missing requested "
+          f"{integrity['missing_requested']}")
+    if integrity["kept"] == 0:
+        sys.exit("duarouter produced no valid candidates after endpoint "
+                 "integrity checks")
+    requested = integrity.get("requested")
+    if requested:
+        retention = integrity["kept"] / requested
+        print(f"  candidate retention: {retention:.1%} ({integrity['kept']}/"
+              f"{requested})")
+        if retention < MIN_ROUTED_CANDIDATE_FRACTION:
+            sys.exit(
+                f"candidate retention {retention:.1%} is below the "
+                f"{MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor; "
+                "refusing to calibrate a collapsed route pool")
     drop_uturn_routes(out)
-    drop_excessive_detours(out, G, args.route_diversity)
+    drop_excessive_detours(out, routing_G, args.route_diversity, routing_costs)
+    prune_candidate_metadata(meta_out, out)
+    final_count = sum(1 for _ in ET.parse(out).getroot().iter("vehicle"))
+    if requested:
+        final_retention = final_count / requested
+        if final_retention < MIN_ROUTED_CANDIDATE_FRACTION:
+            sys.exit(
+                f"final candidate retention {final_retention:.1%} is below "
+                f"the {MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor after "
+                "loop/detour filtering")
+    if target_candidate_count:
+        final_pool_fraction = final_count / target_candidate_count
+        if final_pool_fraction < MIN_ROUTED_CANDIDATE_FRACTION:
+            sys.exit(
+                f"final candidate supply {final_pool_fraction:.1%} is below the "
+                f"{MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor relative to "
+                "the requested pool")
     cross_report = report_sensor_cross_hits(out, measured)
-    n = sum(1 for line in open(out) if "<vehicle" in line)
-    print(f"Wrote {out}  ({n} routed candidates)")
+    uncovered = sorted(m for m, report in cross_report.items()
+                       if report["total"] == 0)
+    if uncovered:
+        sys.exit("candidate pool has no valid route through measured edge(s): "
+                 + ", ".join(uncovered))
+    print(f"Wrote {out}  ({final_count} routed candidates)")
     print(f"  sensor cross-hit diagnostic (sumo/sensor_coverage_report.json): "
           f"{ {m: r['total'] for m, r in cross_report.items()} }")
     if short_quota:

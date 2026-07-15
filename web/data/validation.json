@@ -1,69 +1,71 @@
 {
  "schema_version": 1,
- "generated_at": "2026-07-15T13:10:55Z",
- "demand_window": "2025-09-16",
- "demand_source": "historical",
+ "generated_at": "2026-07-15T18:34:29Z",
+ "demand_window": "2027-07-15",
+ "demand_source": "forecast",
  "overall": "warn",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 21600,
+   "vehicles": 18757,
    "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
   },
   "structure": {
-   "status": "pass",
-   "flags": [],
+   "status": "warn",
+   "flags": [
+    "purpose_length_ordering: fritid median 2.38 km < arbete median 2.65 km \u2014 RVU (Trafikanalys Tabell 3) orders fritid longest; P(length|purpose) decohered in calibration"
+   ],
    "dest_within_200m_pct": 7.5,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0206,
-    0.727,
-    0.2525
+    0.0217,
+    0.7555,
+    0.2229
    ],
-   "trip_length_l1_vs_rvu": 0.4031,
+   "trip_length_l1_vs_rvu": 0.4601,
    "onward_after_sensor_median_m": 2901.9,
-   "onward_under_200m_pct": 5.9,
+   "onward_under_200m_pct": 6.1,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
   },
   "purposes": {
    "status": "warn",
    "purpose_counts": {
-    "arbete": 5410,
-    "external": 1777,
-    "fritid": 1597,
-    "service": 3010,
-    "through": 9806
+    "arbete": 4620,
+    "external": 1568,
+    "fritid": 1557,
+    "service": 2640,
+    "through": 8372
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 5410,
-     "mean_km": 2.81,
-     "median_km": 2.69
+     "n": 4620,
+     "mean_km": 2.77,
+     "median_km": 2.65
     },
     "external": {
-     "n": 1777,
-     "mean_km": 3.64,
-     "median_km": 3.72
+     "n": 1568,
+     "mean_km": 3.65,
+     "median_km": 4.19
     },
     "fritid": {
-     "n": 1597,
-     "mean_km": 2.63,
-     "median_km": 2.8
+     "n": 1557,
+     "mean_km": 2.5,
+     "median_km": 2.38
     },
     "service": {
-     "n": 3010,
-     "mean_km": 2.6,
-     "median_km": 2.46
+     "n": 2640,
+     "mean_km": 2.46,
+     "median_km": 2.15
     },
     "through": {
-     "n": 9806,
-     "mean_km": 4.73,
-     "median_km": 4.99
+     "n": 8372,
+     "mean_km": 4.55,
+     "median_km": 4.96
     }
    },
-   "ordering_violated": false,
+   "ordering_violated": true,
    "purpose_incompatible_quarters_by_variant": {
     "edge_shares": 96,
     "edge_shares_q10": 96,
@@ -78,22 +80,22 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 21600,
-     "loaded": 21600,
+     "inserted": 18757,
+     "loaded": 18757,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 20823,
-     "loaded": 20823,
+     "inserted": 17824,
+     "loaded": 17824,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 22428,
-     "loaded": 22428,
+     "inserted": 19596,
+     "loaded": 19596,
      "unfinished": 0,
      "teleports": 0
     }

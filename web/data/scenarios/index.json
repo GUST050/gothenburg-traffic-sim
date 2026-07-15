@@ -1,5 +1,5 @@
 {
-  "demand_signature": "a730f350ae979a1d71fa",
+  "demand_signature": "e6dbd24a645fbd924b31",
   "scenarios": [
     {
       "name": "baseline",
@@ -7,27 +7,33 @@
       "file": "baseline.json",
       "closed_edges": [],
       "closures": [],
-      "demand_signature": "a730f350ae979a1d71fa",
-      "build_id": "a730f350ae979a1d71fa",
-      "window": "2025-09-16 00:00\u201324:00"
-    },
-    {
-      "name": "close_26842525_26355153_0",
-      "label": "Avst\u00e4ngning: L\u00e4raregatan",
-      "file": "close_26842525_26355153_0.json",
-      "closed_edges": [
-        "26842525_26355153_0"
-      ],
-      "closures": [
-        {
-          "edge_id": "26842525_26355153_0",
-          "begin_s": 0,
-          "end_s": 90000
-        }
-      ],
-      "demand_signature": "a730f350ae979a1d71fa",
-      "build_id": "a730f350ae979a1d71fa",
-      "window": "2025-09-16 00:00\u201324:00"
+      "scenario_spec": {
+        "scenario_id": "baseline",
+        "demand_build_id": "e6dbd24a645fbd924b31",
+        "network_build_id": "a53ce64829fdfb868e2b2cb043d8c31ab7f7e2ce9c3bedd70b304c3519a591aa",
+        "start_time": "2027-07-15T00:00:00",
+        "end_time": "2027-07-16T00:00:00",
+        "closures": [],
+        "simulation_mode": "meso",
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q10",
+          "1002": "q90"
+        },
+        "objective_profile": "default",
+        "signal_plan_id": null,
+        "analysis_window": null,
+        "schema_version": 1
+      },
+      "demand_signature": "e6dbd24a645fbd924b31",
+      "build_id": "e6dbd24a645fbd924b31",
+      "demand_build_key": "394b8a7a551599e3",
+      "window": "2027-07-15 00:00\u201324:00 \u00b7 Prognos"
     }
   ]
 }

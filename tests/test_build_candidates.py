@@ -6,6 +6,7 @@ drop_uturn_routes() are the two mechanisms that eliminated the literal
 edge-then-its-reverse pattern verified in sumo/candidates.rou.xml (see
 git history) — these tests pin that behaviour so it can't silently regress."""
 
+import json
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -83,6 +84,214 @@ class TestReverseEdgeId:
     def test_double_reverse_is_identity(self):
         eid = "12345_6789_1"
         assert bc.reverse_edge_id(bc.reverse_edge_id(eid)) == eid
+
+
+class TestCandidateEndpointIntegrity:
+    def test_load_sumo_routing_data_uses_lane_travel_time(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        net.write_text(
+            '<net><edge id="1_2_0"><lane id="1_2_0_0" length="100" '
+            'speed="10"/></edge><edge id=":internal" function="internal">'
+            '<lane id=":internal_0" length="1" speed="1"/></edge></net>')
+
+        edge_ids, costs = bc.load_sumo_routing_data(net)
+
+        assert edge_ids == {"1_2_0"}
+        assert costs == {"1_2_0": pytest.approx(10.0)}
+
+    def test_load_graph_edges_skips_self_loops_and_non_sumo_edges(self):
+        G = nx.MultiDiGraph()
+        G.add_node(1, x=11.0, y=57.0)
+        G.add_node(2, x=11.001, y=57.001)
+        G.add_edge(1, 1, key=0, highway="residential", length=0.0)
+        G.add_edge(1, 2, key=0, highway="residential", length=100.0)
+        G.add_edge(2, 1, key=1, highway="tertiary", length=110.0)
+
+        edges = bc.load_graph_edges(G, {"1_2_0"})
+
+        assert [edge["id"] for edge in edges] == ["1_2_0"]
+
+    def test_routable_graph_is_the_same_edge_universe_as_sumo(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=10.0)
+        G.add_edge(2, 3, key=0, length=10.0)
+        G.add_edge(3, 3, key=0, length=0.0)
+
+        filtered = bc.routable_graph(G, {"1_2_0"})
+
+        assert list(filtered.edges(keys=True)) == [(1, 2, 0)]
+
+    def test_sensor_edges_are_not_endpoint_mass(self):
+        edges = [
+            {"id": "1_2_0"},
+            {"id": "2_3_0"},
+            {"id": "3_4_0"},
+        ]
+        hmass = np.array([2.0, 3.0, 4.0])
+        amass = {
+            "arbete": np.array([5.0, 6.0, 7.0]),
+            "service": np.array([8.0, 9.0, 10.0]),
+        }
+
+        removed = bc.exclude_sensor_endpoint_mass(
+            edges, hmass, amass, ["2_3_0"])
+
+        assert removed == 1
+        assert hmass.tolist() == [2.0, 0.0, 4.0]
+        assert amass["arbete"].tolist() == [5.0, 0.0, 7.0]
+        assert amass["service"].tolist() == [8.0, 0.0, 10.0]
+
+    def test_repaired_routes_are_dropped_and_metadata_is_pruned(self, tmp_path):
+        route_path = tmp_path / "candidates.rou.xml"
+        write_routes(route_path, [
+            ("good", ["1_2_0", "2_3_0", "3_4_0"]),
+            # SUMO's repair can produce this shortened route when the
+            # requested origin is a missing/self-loop edge.
+            ("origin_changed", ["1_2_0", "2_3_0", "3_4_0"]),
+            # A via edge removed by repair must not be accepted either.
+            ("via_changed", ["1_2_0", "2_4_0"]),
+            # A route ending at a measured edge is an observation endpoint,
+            # never a synthetic destination.
+            ("sensor_end", ["1_2_0", "2_3_0"]),
+        ])
+        meta_path = tmp_path / "candidates.meta.json"
+        meta_path.write_text(json.dumps({
+            "schema_version": 1,
+            "candidates": {
+                "good": {"origin_edge": "1_2_0",
+                         "destination_edge": "3_4_0",
+                         "via_edge": "2_3_0"},
+                "origin_changed": {"origin_edge": "9_9_0",
+                                    "destination_edge": "3_4_0",
+                                    "via_edge": None},
+                "via_changed": {"origin_edge": "1_2_0",
+                                 "destination_edge": "2_4_0",
+                                 "via_edge": "2_3_0"},
+                "sensor_end": {"origin_edge": "1_2_0",
+                                "destination_edge": "2_3_0",
+                                "via_edge": None},
+            },
+        }))
+
+        report = bc.validate_routed_candidates(
+            route_path, meta_path, measured=["2_3_0"],
+            sumo_edge_ids={"1_2_0", "2_3_0", "2_4_0", "3_4_0"})
+
+        assert report["checked"] == 4
+        assert report["kept"] == 1
+        assert report["dropped"] == 3
+        assert report["reasons"]["origin_mismatch"] == 1
+        assert report["reasons"]["via_missing"] == 1
+        assert report["reasons"]["sensor_endpoint"] == 1
+        assert read_vehicle_ids(route_path) == ["good"]
+        assert list(json.loads(meta_path.read_text())["candidates"]) == ["good"]
+
+    def test_legacy_pool_without_metadata_still_rejects_sensor_endpoints(self, tmp_path):
+        route_path = tmp_path / "legacy.rou.xml"
+        write_routes(route_path, [
+            ("sensor_start", ["2_3_0", "3_4_0"]),
+            ("clean", ["1_2_0", "2_4_0"]),
+        ])
+
+        report = bc.validate_routed_candidates(
+            route_path, measured=["2_3_0"],
+            sumo_edge_ids={"1_2_0", "2_3_0", "2_4_0", "3_4_0"})
+
+        assert report["kept"] == 1
+        assert read_vehicle_ids(route_path) == ["clean"]
+
+    def test_trip_xml_is_authoritative_even_when_sidecar_is_stale(self, tmp_path):
+        route_path = tmp_path / "candidates.rou.xml"
+        write_routes(route_path, [("t0", ["2_3_0", "3_4_0"])])
+        trips_path = tmp_path / "tours.trips.xml"
+        trips_path.write_text(
+            '<routes><trip id="t0" depart="0" from="1_2_0" '
+            'to="3_4_0"/></routes>')
+        meta_path = tmp_path / "candidates.meta.json"
+        meta_path.write_text(json.dumps({
+            "candidates": {"t0": {"origin_edge": "2_3_0",
+                                    "destination_edge": "3_4_0",
+                                    "via_edge": None}}
+        }))
+
+        report = bc.validate_routed_candidates(
+            route_path, meta_path, measured=[],
+            sumo_edge_ids={"1_2_0", "2_3_0", "3_4_0"},
+            intents_path=trips_path)
+
+        assert report["kept"] == 0
+        assert report["reasons"]["origin_mismatch"] == 1
+
+    def test_kept_trip_rewrites_stale_sidecar_od_from_trip_xml(self, tmp_path):
+        route_path = tmp_path / "candidates.rou.xml"
+        write_routes(route_path, [("t0", ["1_2_0", "2_3_0", "3_4_0"])])
+        trips_path = tmp_path / "tours.trips.xml"
+        trips_path.write_text(
+            '<routes><trip id="t0" depart="0" from="1_2_0" '
+            'to="3_4_0" via="2_3_0"/></routes>')
+        meta_path = tmp_path / "candidates.meta.json"
+        meta_path.write_text(json.dumps({
+            "candidates": {"t0": {"purpose": "arbete",
+                                    "origin_edge": "stale",
+                                    "destination_edge": "stale",
+                                    "via_edge": None}}
+        }))
+
+        report = bc.validate_routed_candidates(
+            route_path, meta_path, measured=[],
+            sumo_edge_ids={"1_2_0", "2_3_0", "3_4_0"},
+            intents_path=trips_path)
+
+        assert report["kept"] == 1
+        meta = json.loads(meta_path.read_text())["candidates"]["t0"]
+        assert meta == {"purpose": "arbete", "origin_edge": "1_2_0",
+                        "destination_edge": "3_4_0", "via_edge": "2_3_0"}
+
+    def test_duplicate_output_and_missing_intent_are_reported(self, tmp_path):
+        route_path = tmp_path / "candidates.rou.xml"
+        write_routes(route_path, [
+            ("t0", ["1_2_0", "2_3_0"]),
+            ("t0", ["1_2_0", "2_3_0"]),
+        ])
+        trips_path = tmp_path / "tours.trips.xml"
+        trips_path.write_text(
+            '<routes><trip id="t0" depart="0" from="1_2_0" to="2_3_0"/>'
+            '<trip id="t1" depart="1" from="1_2_0" to="2_3_0"/></routes>')
+
+        report = bc.validate_routed_candidates(
+            route_path, measured=[], sumo_edge_ids={"1_2_0", "2_3_0"},
+            intents_path=trips_path)
+
+        assert report["kept"] == 1
+        assert report["missing_requested"] == 1
+        assert report["reasons"]["duplicate_candidate_id"] == 1
+        assert read_vehicle_ids(route_path) == ["t0"]
+
+    def test_multiple_vias_must_appear_in_requested_order(self, tmp_path):
+        route_path = tmp_path / "candidates.rou.xml"
+        write_routes(route_path, [
+            ("t0", ["1_2_0", "3_4_0", "2_3_0", "4_5_0"]),
+        ])
+        trips_path = tmp_path / "tours.trips.xml"
+        trips_path.write_text(
+            '<routes><trip id="t0" depart="0" from="1_2_0" to="4_5_0" '
+            'via="2_3_0 3_4_0"/></routes>')
+
+        report = bc.validate_routed_candidates(
+            route_path, measured=[],
+            sumo_edge_ids={"1_2_0", "2_3_0", "3_4_0", "4_5_0"},
+            intents_path=trips_path)
+
+        assert report["kept"] == 0
+        assert report["reasons"]["via_missing"] == 1
+
+    def test_preflight_rejects_invalid_or_sensor_trip_endpoints(self):
+        intents = {
+            "bad": {"origin_edge": "sensor", "destination_edge": "sensor",
+                    "via_edge": "sensor"},
+        }
+        with pytest.raises(ValueError, match="sensor_endpoint"):
+            bc.validate_trip_intents(intents, {"sensor"}, measured=["sensor"])
 
 
 class TestDropUturnRoutes:
@@ -428,6 +637,32 @@ class TestBuildShortestDistanceMatrix:
         assert D[node_idx[1], node_idx[2]] == pytest.approx(10.0)
         assert D[node_idx[2], node_idx[1]] == np.inf
 
+    def test_explicit_sumo_costs_override_physical_length(self):
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=100.0)
+        G.add_edge(2, 3, key=0, length=100.0)
+        costs = {"1_2_0": 2.0, "2_3_0": 3.0}
+
+        D, node_idx = bc.build_shortest_distance_matrix(G, costs)
+
+        assert D[node_idx[1], node_idx[3]] == pytest.approx(5.0)
+
+
+class TestSumoCostNaturalness:
+    def test_via_naturalness_uses_sumo_travel_time_when_supplied(self):
+        G = nx.MultiDiGraph()
+        # The via road is physically long but fast; the bypass is physically
+        # short but slow. SUMO chooses the former, while a length-only mask
+        # would incorrectly exclude it.
+        G.add_edge(2, 3, key=0, length=100.0)
+        G.add_edge(2, 4, key=0, length=1.0)
+        G.add_edge(4, 3, key=0, length=1.0)
+        costs = {"2_3_0": 1.0, "2_4_0": 10.0, "4_3_0": 10.0}
+
+        assert not bc.via_naturally_on_path(G, 2, 3, 2, 3, "2_3_0")
+        assert bc.via_naturally_on_path(
+            G, 2, 3, 2, 3, "2_3_0", edge_costs=costs)
+
 
 class TestNaturalFarEndWeights:
     """Cross-checked against via_naturally_on_path's own reference graphs
@@ -499,6 +734,32 @@ class TestNaturalFarEndWeights:
             D, node_idx, anchor_v=10, m_u=10, m_v=11, m_length=10.0,
             candidate_u_idx=np.array([node_idx[11]]), base_weights=np.array([0.0]))
         assert w[0] == pytest.approx(0.0)
+
+    def test_rejects_a_natural_mask_that_requires_reversing_the_origin_edge(self):
+        """The base distance equality can be true while the shortest leg
+        starts by returning to the origin edge's u-node.  That is exactly
+        the route SUMO later removes, changing the visible spawn edge; the
+        endpoint-aware guard must reject it before routing."""
+        G = nx.MultiDiGraph()
+        G.add_edge(0, 1, key=0, length=1.0)   # already-traversed origin
+        G.add_edge(1, 0, key=0, length=1.0)   # reverse trap
+        G.add_edge(0, 2, key=0, length=1.0)
+        G.add_edge(2, 3, key=0, length=1.0)   # via edge
+        G.add_edge(3, 4, key=0, length=1.0)   # destination
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+
+        unguarded = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=1, m_u=2, m_v=3, m_length=1.0,
+            candidate_u_idx=np.array([node_idx[3]]),
+            base_weights=np.array([3.0]))
+        guarded = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=1, m_u=2, m_v=3, m_length=1.0,
+            candidate_u_idx=np.array([node_idx[3]]),
+            base_weights=np.array([3.0]), anchor_u=0,
+            candidate_v_idx=np.array([node_idx[4]]))
+
+        assert unguarded[0] == pytest.approx(3.0)
+        assert guarded[0] == pytest.approx(0.0)
 
 
 class TestNaturalOriginWeights:
@@ -706,10 +967,9 @@ class TestVerifiedViaGatePairs:
         pairs = bc.verified_via_gate_pairs(G, "10_11_0", ["1_10_0", "2_30_0"], ["11_20_0"])
         assert pairs == [("1_10_0", "11_20_0")]
 
-    def test_falls_back_to_all_pairs_when_none_verify(self):
-        """Better to occasionally rely on drop_uturn_routes' safety net
-        than generate zero via-trips for a sensor whose gates are all
-        genuinely awkward."""
+    def test_returns_no_pairs_when_none_are_natural(self):
+        """A measured edge with no natural gate movement is an explicit
+        observability limitation, never a reason to manufacture a detour."""
         G = nx.MultiDiGraph()
         G.add_edge(1, 10, key=0, length=10.0)
         G.add_edge(10, 11, key=0, length=1000.0)
@@ -718,7 +978,7 @@ class TestVerifiedViaGatePairs:
         G.add_edge(99, 11, key=0, length=1.0)
 
         pairs = bc.verified_via_gate_pairs(G, "10_11_0", ["1_10_0"], ["11_20_0"])
-        assert pairs == [("1_10_0", "11_20_0")]   # fallback: the one candidate pair anyway
+        assert pairs == []
 
 
 class TestFindGates:
