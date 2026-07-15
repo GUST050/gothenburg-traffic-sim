@@ -27,6 +27,12 @@ does not preserve obsolete intermediate proposals as separate instructions.
 
 - Immutable run manifests, staged publication, per-seed health gates and
   durable job records prevent incomplete work from replacing active results.
+- Run archiving is now scoped to the producing process: demand runs no longer
+  glob stale closure routes from the shared `sumo/` directory, and scenario
+  runs archive the exact scenario/trajectory they wrote instead of guessing
+  from filesystem modification time. Run output records now include SHA-256
+  content hashes. Golden releases live under `runs/releases/`, extending the
+  existing run registry.
 - Trajectory parsing includes SUMO reroutes in `routeDistribution`; unfinished
   vehicles and displayed-share integrity are explicit rather than silently
   omitted.

@@ -42,6 +42,14 @@ RUNS_DIR = Path("runs")
 _SCHEMA_VERSION = 1
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _atomic_write_json(path: Path, payload: dict) -> None:
     tmp = path.with_name(path.name + ".tmp")
     with open(tmp, "w") as f:
@@ -96,6 +104,7 @@ class Run:
             "name": dest.name,
             "source_path": str(source),
             "bytes": dest.stat().st_size,
+            "sha256": _sha256_file(dest),
         })
         self._flush()
         return dest

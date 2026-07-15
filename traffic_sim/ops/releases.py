@@ -24,7 +24,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-RELEASES_DIR = Path("releases")
+# Releases extend the immutable run registry instead of creating a second
+# top-level artifact tree.  Callers may still pass an explicit root in tests
+# or for an isolated staging area.
+RELEASES_DIR = Path("runs") / "releases"
 SCHEMA_VERSION = 1
 
 

@@ -853,15 +853,12 @@ def _tracked_main() -> None:
         run.finish("failed", error=f"{type(exc).__name__}: {exc}")
         raise
     meta_path = SUMO_DIR / "demand_meta.json"
-    # Archive the outputs that actually exist (2026-07-14 accuracy review
-    # §P1-7: the uncertainty variants are named calibrated_v1/_v2, not
-    # calibrated_q10/_q90 — every earlier manifest recorded the two
-    # phantom names as missing_outputs).
-    products = [meta_path, SUMO_DIR / "calibrated.rou.xml",
-                SUMO_DIR / "calibrated.agents.json"]
-    products += sorted(SUMO_DIR.glob("calibrated_v*.rou.xml"))
-    products += sorted(SUMO_DIR.glob("calibrated_v*.agents.json"))
-    for product in products:
+    # Archive only the files this build can produce.  A glob here is unsafe:
+    # SUMO keeps old closure-specific routes in the shared legacy directory,
+    # so earlier runs accidentally archived unrelated files as if they were
+    # part of the new demand build. Missing optional q10/q90 variants are
+    # omitted rather than recorded as phantom outputs.
+    for product in demand_run_products(SUMO_DIR):
         run.add_output(product)
     if meta_path.exists():
         with open(meta_path) as f:
@@ -880,6 +877,27 @@ def _tracked_main() -> None:
     except Exception as exc:
         print(f"validation report: {type(exc).__name__}: {exc}")
     run.finish("succeeded")
+
+
+def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
+    """Return only demand artifacts produced by one calibration run.
+
+    The legacy ``sumo/`` directory is shared with closure experiments, so
+    callers must never use a broad glob when constructing an immutable run
+    manifest. Optional direction variants are included only when present.
+    """
+    sumo_dir = Path(sumo_dir)
+    candidates = [
+        sumo_dir / "demand_meta.json",
+        sumo_dir / "demand_build_spec.json",
+        sumo_dir / "calibrated.rou.xml",
+        sumo_dir / "calibrated.agents.json",
+        sumo_dir / "calibrated_v1.rou.xml",
+        sumo_dir / "calibrated_v1.agents.json",
+        sumo_dir / "calibrated_v2.rou.xml",
+        sumo_dir / "calibrated_v2.agents.json",
+    ]
+    return [path for path in candidates if path.is_file()]
 
 
 if __name__ == "__main__":

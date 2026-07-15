@@ -94,6 +94,11 @@ only when its `build_id` and `demand_build_key` match `demand_meta.json`; a
 failed replacement therefore leaves the previous demand/scenario release
 coherent and serving.
 
+Golden releases extend that same registry under `runs/releases/`; they copy
+only explicitly named case artifacts and activate through one atomic pointer.
+Neither demand nor scenario runs may discover release inputs by globbing the
+shared `sumo/` or `web/data/scenarios/` directories.
+
 The domain packages `demand/` and `dirsplit/` remain separate because they are
 model-specific pipelines with their own data contracts. `web/` is the browser
 runtime, `tools/` contains bounded experiments, `tests/` contains contract and

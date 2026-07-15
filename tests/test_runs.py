@@ -1,5 +1,6 @@
 """Run registry (IMPROVEMENT_PLAN.md E1) contract tests."""
 import json
+import hashlib
 import sys
 from pathlib import Path
 
@@ -51,6 +52,8 @@ class TestRunRegistry:
         m = mod.load_manifest(r.run_id)
         assert m["outputs"][0]["name"] == "calibrated.rou.xml"
         assert m["outputs"][0]["bytes"] == len("<routes/>")
+        assert m["outputs"][0]["sha256"] == hashlib.sha256(
+            b"<routes/>").hexdigest()
 
     def test_missing_output_is_disclosed_not_fatal(self, monkeypatch, tmp_path):
         mod = self._patched(monkeypatch, tmp_path)

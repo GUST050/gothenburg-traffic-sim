@@ -21,6 +21,18 @@ from demand import structure as dstructure
 
 
 class TestB1DateRangeContract:
+    def test_run_products_ignore_stale_closure_routes(self, tmp_path):
+        for name in (
+            "demand_meta.json", "demand_build_spec.json",
+            "calibrated.rou.xml", "calibrated.agents.json",
+            "calibrated_v1.rou.xml", "calibrated_v1.agents.json",
+        ):
+            (tmp_path / name).write_text(name)
+        (tmp_path / "calibrated_v1.rou_close_old_edge.rou.xml").write_text("stale")
+        products = {path.name for path in bsd.demand_run_products(tmp_path)}
+        assert "calibrated_v1.rou_close_old_edge.rou.xml" not in products
+        assert "calibrated_v1.rou.xml" in products
+
     def test_date_is_a_backward_compatible_single_day_alias(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py", "--date", "2025-09-17"])
         args = bsd.parse_args()

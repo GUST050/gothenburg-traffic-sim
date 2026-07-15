@@ -573,6 +573,17 @@ class TestScenarioWorkspace:
         run_scenario.cleanup_scenario_workspace(workspace)
         assert not workspace.exists()
 
+    def test_run_products_do_not_guess_from_other_scenario_files(self, tmp_path):
+        produced = tmp_path / "baseline.json"
+        trajectory = tmp_path / "baseline_traj.json"
+        stale = tmp_path / "old_closure.json"
+        produced.write_text("{}")
+        trajectory.write_text("{}")
+        stale.write_text("{}")
+        products = run_scenario.scenario_run_products(produced, trajectory)
+        assert products == [produced, trajectory]
+        assert stale not in products
+
 
 class TestTrajectoryPublication:
     """The normal scenario must publish from the already-completed seed-1000

@@ -61,6 +61,8 @@ OUT_DIR   = Path("web/data/scenarios")
 _ACTIVE_RUN_DIR: Path | None = None
 _LAST_SCRATCH_DIR: Path | None = None
 _LAST_SCRATCH_KEPT = False
+_LAST_SCENARIO_OUTPUT: Path | None = None
+_LAST_TRAJECTORY_OUTPUT: Path | None = None
 
 # A whole-day meso run normally takes ~10-15 s (measured: 3-seed whole-day
 # closure ~35 s total). This is a safety net, not a normal-path limit: without
@@ -1151,7 +1153,9 @@ def run_seed_job(job: dict) -> dict:
 
 
 def main() -> None:
-    global OUT_DIR
+    global OUT_DIR, _LAST_SCENARIO_OUTPUT, _LAST_TRAJECTORY_OUTPUT
+    _LAST_SCENARIO_OUTPUT = None
+    _LAST_TRAJECTORY_OUTPUT = None
     args = parse_args()
     if args.out_dir:
         OUT_DIR = Path(args.out_dir)
@@ -1413,6 +1417,7 @@ def main() -> None:
             scratch_dir / f"seed-{trajectory_seed}" / f"vehroutes_{name}.xml",
             trajectory_stats_file,
             web_edges, seed=trajectory_seed)
+        _LAST_TRAJECTORY_OUTPUT = OUT_DIR / traj_name
 
     payload = {
         "epoch":            meta["epoch_sim"],
@@ -1457,6 +1462,7 @@ def main() -> None:
     }
     out_path = OUT_DIR / f"{name}.json"
     atomic_write_json(out_path, payload, separators=(",", ":"))
+    _LAST_SCENARIO_OUTPUT = out_path
     print(f"Wrote {out_path}  ({len(flows_out)} edges)")
 
     # ── Manifest ───────────────────────────────────────────────────────────────
@@ -1525,11 +1531,13 @@ def _tracked_main() -> None:
             index = json.load(f)
         run.record("scenarios", [s.get("file") for s in
                                  index.get("scenarios", [])])
-        newest = max((p for p in OUT_DIR.glob("*.json")
-                      if p.name != "index.json"),
-                     key=lambda p: p.stat().st_mtime, default=None)
-        if newest is not None:
-            run.add_output(newest)
+    # Archive the exact scenario produced by this process.  Choosing the
+    # newest JSON from the shared output directory is racy and can select an
+    # unrelated closure when two files have the same timestamp or when an
+    # older run is copied into the directory after this one.
+    for product in scenario_run_products(_LAST_SCENARIO_OUTPUT,
+                                         _LAST_TRAJECTORY_OUTPUT):
+        run.add_output(product)
     # G3: the baseline's seed health feeds the assembled validation
     # report — refresh it after every LIVE scenario rebuild (a staged E2
     # build refreshes on publish instead: the report must describe what
@@ -1541,6 +1549,13 @@ def _tracked_main() -> None:
         except Exception as exc:
             print(f"validation report: {type(exc).__name__}: {exc}")
     run.finish("succeeded")
+
+
+def scenario_run_products(scenario_output: Path | None,
+                          trajectory_output: Path | None) -> list[Path]:
+    """Return the exact scenario artifacts produced by one process."""
+    return [path for path in (scenario_output, trajectory_output)
+            if path is not None and Path(path).is_file()]
 
 
 if __name__ == "__main__":
