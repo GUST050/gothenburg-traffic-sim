@@ -44,6 +44,8 @@ import pandas as pd
 
 from traffic_sim.simulation.runtime import sumo_home
 from traffic_sim.core.fingerprint import make_fingerprint
+from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
+                                         write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
 from train_agent1 import HOLIDAY_DATES_2025
 from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
@@ -105,6 +107,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--begin", default="06:00", help="Window start HH:MM (default 06:00)")
     p.add_argument("--end",   default="10:00",
                    help="Window end HH:MM; '24:00' = whole day (default 10:00)")
+    p.add_argument("--demand-spec", type=Path, default=None,
+                   help="Validated DemandBuildSpec JSON. When supplied it is "
+                        "the authoritative date/source/window contract; "
+                        "legacy flags may be repeated only with matching values.")
     p.add_argument("--seed",  type=int, default=42)
     p.add_argument("--keep-scenarios", action="store_true",
                    help="Do NOT delete the existing web scenario JSONs after "
@@ -206,13 +212,57 @@ def parse_args() -> argparse.Namespace:
                         "per iteration (more accurate per step, far slower — "
                         "use for a final accuracy check, not routine runs).")
     args = p.parse_args()
-    if args.days < 1:
-        p.error("--days must be at least 1")
+
+    def provided(flag: str) -> bool:
+        return any(value == flag or value.startswith(flag + "=")
+                   for value in sys.argv[1:])
+
     if args.date is not None and args.start_date is not None:
         p.error("use either --date or --start-date, not both")
     if args.date is not None and args.days != 1:
         p.error("--date is an alias for --start-date DATE --days 1")
-    args.start_date = args.start_date or args.date or "2025-09-16"
+
+    if args.demand_spec is not None:
+        try:
+            spec = load_demand_build_spec(args.demand_spec)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            p.error(f"invalid --demand-spec: {exc}")
+        # Explicit legacy flags are checked, not silently ignored.  This lets
+        # old integrations migrate incrementally without allowing two sources
+        # of truth to produce a build with an ambiguous identity.
+        checks = (
+            ("--source", args.source, spec.source),
+            ("--days", args.days, spec.days),
+            ("--begin", args.begin, spec.begin),
+            ("--end", args.end, spec.end),
+        )
+        for flag, actual, expected in checks:
+            if provided(flag) and actual != expected:
+                p.error(f"{flag} conflicts with --demand-spec ({actual!r} != {expected!r})")
+        if provided("--date") and args.date != spec.start_date:
+            p.error("--date conflicts with --demand-spec")
+        if provided("--start-date") and args.start_date not in (None, spec.start_date):
+            p.error("--start-date conflicts with --demand-spec")
+        args.date = None
+        args.start_date = spec.start_date
+        args.source = spec.source
+        args.days = spec.days
+        args.begin = spec.begin
+        args.end = spec.end
+        args.demand_contract = spec
+    else:
+        if args.days < 1:
+            p.error("--days must be at least 1")
+        args.start_date = args.start_date or args.date or "2025-09-16"
+        if args.days > 1:
+            args.begin, args.end = "00:00", "24:00"
+        try:
+            args.demand_contract = DemandBuildSpec(
+                start_date=args.start_date, source=args.source, days=args.days,
+                begin=args.begin, end=args.end,
+                structural_reference_date=STRUCTURAL_REFERENCE_DATE)
+        except ValueError as exc:
+            p.error(str(exc))
     return args
 
 
@@ -263,6 +313,14 @@ from demand.calibration import (run_pfe_variants_flat_parallel,
 
 def main() -> None:
     args = parse_args()
+    demand_spec: DemandBuildSpec = args.demand_contract
+    if demand_spec.structural_reference_date != STRUCTURAL_REFERENCE_DATE:
+        sys.exit("demand spec structural_reference_date does not match "
+                 f"the pipeline reference {STRUCTURAL_REFERENCE_DATE}")
+    # Keep the path stable, but do not overwrite the previous contract until
+    # calibration has succeeded.  A failed build must leave the old demand and
+    # its provenance coherent for the live scenario set.
+    demand_spec_path = SUMO_DIR / "demand_build_spec.json"
     timings_s: dict[str, float] = {}
 
     def timed(name: str, fn):
@@ -658,7 +716,19 @@ def main() -> None:
         begin=args.begin, end=args.end, qi_start=qi_start,
         n_intervals=n_intervals, epoch_sim=t0,
         direction_split="estimated" if load_direction_split() else "even",
-        n_variants=len(variants),
+        n_variants=len(variants), demand_spec=demand_spec.to_dict(),
+        build_options={
+            "engine": args.engine,
+            "seed": args.seed,
+            "legacy_random_pool": args.legacy_random_pool,
+            "through_fraction": args.through_fraction,
+            "gravity_km": args.gravity_km,
+            "gravity_alpha": args.gravity_alpha,
+            "cross_fraction": args.cross_fraction,
+            "no_assignment_prior": args.no_assignment_prior,
+            "congestion_iterations": args.congestion_iterations,
+            "congestion_method": args.congestion_method,
+        },
     )
     meta["timings_s"] = {name: round(seconds, 3)
                          for name, seconds in timings_s.items()}
@@ -709,6 +779,7 @@ def main() -> None:
         "priors": SUMO_DIR / "prior_flows.json",
         "assignment_priors": SUMO_DIR / "assignment_priors.json",
         "calibrated_q50": SUMO_DIR / "calibrated.rou.xml",
+        "demand_spec": demand_spec_path,
     }
     for suffix, _key in variants:
         if suffix:
@@ -730,6 +801,10 @@ def main() -> None:
     }
     for module_path in sorted(Path("demand").glob("*.py")):
         source_files[f"demand/{module_path.name}"] = module_path
+    # The exact contract is written only after all expensive calibration and
+    # structure gates have completed, immediately before the matching metadata
+    # fingerprint is created.
+    write_demand_build_spec(demand_spec_path, demand_spec)
     meta["build_fingerprint"] = make_fingerprint(
         contract={k: v for k, v in meta.items()
                   if k not in {"timings_s", "pfe_timing_s",
@@ -739,8 +814,14 @@ def main() -> None:
         sumo_home=home,
     )
     meta["build_id"] = meta["build_fingerprint"]["build_id"]
-    with open(SUMO_DIR / "demand_meta.json", "w") as f:
+    meta_path = SUMO_DIR / "demand_meta.json"
+    meta_tmp = meta_path.with_name(meta_path.name + ".tmp")
+    with open(meta_tmp, "w") as f:
         json.dump(meta, f, indent=2)
+        f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(meta_tmp, meta_path)
     print(f"\nWrote {calib_path} + demand_meta.json")
 
     if args.keep_scenarios:

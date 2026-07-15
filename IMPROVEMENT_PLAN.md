@@ -44,6 +44,19 @@ does not preserve obsolete intermediate proposals as separate instructions.
   base/closure ScenarioSpec; `serve.py` archives it and invokes the runner
   with `--scenario-spec`. Legacy query requests remain only as a compatibility
   path during migration.
+- Signal optimization now uses the same contract end to end: the browser
+  sends the active scenario's full `ScenarioSpec`, the API archives and
+  forwards it, and both plain and closure signal runners honor its exact seed
+  set and demand-variant mapping. Legacy query requests remain supported for
+  CLI/backward compatibility, but new UI jobs no longer reconstruct identity
+  from loose edge/window parameters.
+- Demand recalibration now uses a validated `DemandBuildSpec`: the browser/API
+  archives the exact date, source, day range, effective window and structural
+  reference; `build_sumo_demand.py` validates repeated legacy flags against it,
+  writes `sumo/demand_build_spec.json`, and includes the contract plus all
+  demand-affecting options in the content fingerprint. A matching
+  `demand_build_key` is returned in job status and carried into `demand_meta`,
+  so stale scenario sets cannot be mistaken for the requested calibration.
 - Shared runtime code has been reorganized under `traffic_sim/` without
   breaking stable root CLI paths. Contracts, fingerprints, sensor intake,
   demand caching, SUMO metadata/runtime, disruption metrics, and run/release
@@ -1070,9 +1083,10 @@ unlocks:
                                                                             completes: freeze the migrated state,
                                                                             not a mid-migration snapshot
 1. SensorRegistry + content-aware invalidation                (size M)  ◐ registry and package migration complete;
-                                                                          finish recalibration/signal job invalidation and prove stale-artifact rejection
-2. ScenarioSpec/ClosureSpec + API migration                   (size L)  ◐ study_contracts.py live; closure and closure-time API/browser
-                                                                          migrated; recalibration and signal API migration remain
+                                                                          DemandBuildSpec and recalibration identity are now in;
+                                                                          finish stale-artifact rejection proof across every publication path
+2. ScenarioSpec/ClosureSpec + API migration                   (size L)  ◐ closure, closure-time, signal and recalibration API/browser paths migrated;
+                                                                          legacy query forms remain compatibility shims only
 3. Normal demand realism and validation repairs               (size M–L)
 4. Closure decision engine, paired feasible evaluation        (size L)  ◐ --exhaustive window evaluation exists
 5. SignalPlan import/audit and synthetic-plan containment     (size M; import blocked on city data)
@@ -1085,11 +1099,11 @@ unlocks:
 ◐ = partially done as of 2026-07-15; the markers are status, not a licence
 to skip the phase's remaining items or its acceptance gate.)
 
-The immediate next implementation block is therefore: **finish the remaining
-Phase 1/2 migration** (recalibration and signal jobs onto ScenarioSpec;
-complete the fingerprint/cache invalidation), then **Phase 0's
-freeze** on top of the migrated state, then **Phase 3's purpose-compatibility
-work** — the largest remaining honesty gap in the demand model. Send the
+The immediate next implementation block is therefore: **prove stale-artifact
+rejection end to end** (including a deliberately mismatched archived
+`DemandBuildSpec`/scenario set), then **Phase 0's freeze** on top of the
+migrated state, then **Phase 3's purpose-compatibility work** — the largest
+remaining honesty gap in the demand model. Send the
 external data request package (see above) at the START of the block — the
 city's response time, not our implementation time, is the critical path for
 Phase 5's top rung.

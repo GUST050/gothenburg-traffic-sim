@@ -81,6 +81,19 @@ only when an existing public command or import still requires it. Fingerprint
 maps hash the canonical package files, so changing an implementation invalidates
 the relevant cache or published build.
 
+### Demand build identity
+
+`DemandBuildSpec` is the boundary contract for recalibration. It carries the
+start date, historical/forecast source, consecutive-day range, effective
+window, and fixed structural-reference date. The API archives it before the
+background job; `build_sumo_demand.py` validates any legacy flags against the
+same object and writes the canonical copy to `sumo/demand_build_spec.json` only
+after calibration succeeds. Its content key and all demand-affecting solver
+options participate in the demand fingerprint. A scenario may be published
+only when its `build_id` and `demand_build_key` match `demand_meta.json`; a
+failed replacement therefore leaves the previous demand/scenario release
+coherent and serving.
+
 The domain packages `demand/` and `dirsplit/` remain separate because they are
 model-specific pipelines with their own data contracts. `web/` is the browser
 runtime, `tools/` contains bounded experiments, `tests/` contains contract and

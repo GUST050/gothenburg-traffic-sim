@@ -513,10 +513,9 @@
         const btnSuggestResultsClose = document.getElementById('suggest-results-close');
         let suggestMode = false;
 
-        // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — no picking mode: acts on
-        // whichever scenario is CURRENTLY loaded (scen-select), same way
-        // "Byt dag" acts on the currently loaded day rather than needing a
-        // map selection first.
+        // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — no picking mode:
+        // acts on the currently loaded scenario and sends its full
+        // ScenarioSpec, including the exact closure/window/seed identity.
         const btnOptimize            = document.getElementById('optimize-signals-btn');
         const optimizeResults        = document.getElementById('optimize-results');
         const optimizeResultsTitle   = document.getElementById('optimize-results-title');
@@ -647,15 +646,9 @@
         });
 
         // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — same async start/poll
-        // pattern as pollClose/pollSuggest above. Acts on the CURRENTLY
-        // loaded scenario's own closed_edges (from the scenario manifest,
-        // already fetched by loadScenIndex before sim-panel is ever shown):
-        // empty means the loaded scenario has no closure, so the server
-        // dispatches to D2's plain signal_optimize.py; non-empty means an
-        // active closure, so it dispatches to D4's signal_closure_combine.py
-        // (adapts signals to the ACTUAL post-closure routes) instead — the
-        // web app never needs to know which script ran, only the uniform
-        // summary shape serve.py's summarize_signal_optimization returns.
+        // pattern as pollClose/pollSuggest above. The active scenario's full
+        // ScenarioSpec tells the server whether D2 or D4 applies; the web app
+        // only consumes the uniform summary shape.
         async function pollOptimize(onProgress) {
           for (;;) {
             await new Promise(r => setTimeout(r, 2000));
@@ -797,7 +790,6 @@
 
         btnOptimize.addEventListener('click', async () => {
           const active = scenIndex?.scenarios.find(s => s.file === scenSelect.value);
-          const edges = active?.closed_edges ?? [];
           const activeClosure = active?.closures?.[0];
           const hhmm = seconds => {
             if (!Number.isFinite(seconds)) return null;
@@ -805,7 +797,6 @@
             return String(Math.floor(minute / 60)).padStart(2, '0') + ':' +
               String(minute % 60).padStart(2, '0');
           };
-          const params = new URLSearchParams({ edges: edges.join(',') });
           // A time-windowed closure carries begin_s/end_s in the scenario
           // manifest. Pass that exact window through to signal optimization;
           // the server's 07:00–09:00 default is only for whole-run studies.
@@ -813,14 +804,18 @@
           const endS = Number(activeClosure?.end_s);
           const begin = hhmm(beginS);
           const end = hhmm(endS);
-          if (begin && end && endS > beginS && endS - beginS < 86400) {
-            params.set('window_start', begin);
-            params.set('window_end', end);
-          }
           btnOptimize.disabled = true;
           btnOptimize.textContent = 'Startar…';
           try {
-            const res  = await fetch('/api/optimize_signals?' + params.toString(), { method: 'POST' });
+            const inClosureWindow = begin && end && endS > beginS &&
+              endS - beginS < 86400;
+            const scenario_spec = await signalScenarioSpec(
+              active, inClosureWindow ? begin : null, inClosureWindow ? end : null);
+            const res  = await fetch('/api/optimize_signals', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ scenario_spec }),
+            });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
             btnOptimize.textContent = 'Optimerar… (0s)';
@@ -961,6 +956,39 @@
             permitted_access_exceptions: [],
           }));
           spec.objective_profile = begin ? 'closure-window' : 'closure';
+          return spec;
+        }
+
+        async function signalScenarioSpec(active, begin, end) {
+          // Signal tools need the exact loaded scenario, not just its edge
+          // list. Older manifests may not have embedded the spec, so retain a
+          // deterministic compatibility fallback while new scenarios use the
+          // canonical manifest copy.
+          const spec = active?.scenario_spec
+            ? JSON.parse(JSON.stringify(active.scenario_spec))
+            : await baseScenarioSpec();
+          const day = spec.start_time.slice(0, 10);
+          const start = begin || '07:00';
+          const finish = end || '09:00';
+          if ((!spec.closures || spec.closures.length === 0) &&
+              active?.closed_edges?.length) {
+            spec.closures = active.closed_edges.map(edge_id => ({
+              edge_id,
+              start_time: begin ? `${day}T${start}:00` : spec.start_time,
+              end_time: end ? `${day}T${finish}:00` : spec.end_time,
+              closure_type: 'full',
+              permitted_access_exceptions: [],
+            }));
+          }
+          spec.simulation_mode = 'micro';
+          spec.objective_profile = spec.closures?.length
+            ? 'closure-signal-optimization' : 'signal-optimization';
+          spec.analysis_window = {
+            warmup_s: 0,
+            measure_start: `${day}T${start}:00`,
+            measure_end: `${day}T${finish}:00`,
+            drain_s: 0,
+          };
           return spec;
         }
 
@@ -1299,9 +1327,22 @@
           showRecalibrationProgress(0);
           rememberPendingRecal(date, source, days);
           try {
-            const res  = await fetch('/api/recalibrate?date=' + date
-                                     + '&source=' + source
-                                     + '&days=' + days, { method: 'POST' });
+            // Send one explicit demand contract. The server still accepts the
+            // legacy query form, but the structured body is the authoritative
+            // identity archived and fingerprinted by the build pipeline.
+            const demand_spec = {
+              start_date: date,
+              source,
+              days,
+              begin: '00:00',
+              end: '24:00',
+              structural_reference_date: '2025-09-16'
+            };
+            const res  = await fetch('/api/recalibrate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ demand_spec })
+            });
             const body = await res.text();
             let data;
             try {

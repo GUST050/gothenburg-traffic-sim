@@ -10,6 +10,7 @@ before loading SUMO or the demand/model stack.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 from dataclasses import asdict, dataclass, field
@@ -21,6 +22,30 @@ SCHEMA_VERSION = 1
 _EDGE_ID = re.compile(r"^[^\s/\\]+$")
 _MODES = frozenset({"meso", "micro"})
 _VARIANTS = frozenset({"q10", "q50", "q90", "edge_shares"})
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_CLOCK = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$|^24:00$")
+_SAFE_KEY = re.compile(r"^[A-Za-z0-9_.+-]+$")
+
+
+def _date(value: str, label: str) -> str:
+    if not isinstance(value, str) or not _DATE.fullmatch(value):
+        raise ValueError(f"{label} must be YYYY-MM-DD")
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError(f"{label} must be a real calendar date") from exc
+    return value
+
+
+def _clock(value: str, label: str) -> str:
+    if not isinstance(value, str) or not _CLOCK.fullmatch(value):
+        raise ValueError(f"{label} must be HH:MM (24:00 is allowed only as an end)")
+    return value
+
+
+def _clock_minutes(value: str) -> int:
+    hour, minute = (int(part) for part in value.split(":"))
+    return hour * 60 + minute
 
 
 def _parse_time(value: str, label: str) -> datetime:
@@ -95,6 +120,98 @@ class AnalysisWindow:
             measure_end=str(raw["measure_end"]),
             drain_s=int(raw["drain_s"]),
         )
+
+
+@dataclass(frozen=True)
+class DemandBuildSpec:
+    """Validated identity of one calibrated demand build.
+
+    A demand build is an input to every later SUMO scenario.  Keeping its
+    calendar range, source and effective calibration window in one contract
+    prevents the API, CLI and metadata from silently describing different
+    datasets.  ``build_key`` is content-addressed and deliberately excludes
+    itself, so it is stable across machines and archive filenames.
+    """
+
+    start_date: str
+    source: str = "historical"
+    days: int = 1
+    begin: str = "00:00"
+    end: str = "24:00"
+    structural_reference_date: str = "2025-09-16"
+
+    def __post_init__(self) -> None:
+        _date(self.start_date, "demand.start_date")
+        _date(self.structural_reference_date,
+              "demand.structural_reference_date")
+        if self.source not in {"historical", "forecast"}:
+            raise ValueError("demand.source must be historical or forecast")
+        if isinstance(self.days, bool) or not isinstance(self.days, int) or not (1 <= self.days <= 7):
+            raise ValueError("demand.days must be an integer from 1 through 7")
+        _clock(self.begin, "demand.begin")
+        _clock(self.end, "demand.end")
+        if _clock_minutes(self.end) <= _clock_minutes(self.begin):
+            raise ValueError("demand.end must be after demand.begin")
+        # Multi-day builds are always continuous full calendar days in the
+        # pipeline.  Requiring the effective window here prevents a caller
+        # from recording 06:00-10:00 while the builder actually uses 00:00-24:00.
+        if self.days > 1 and (self.begin != "00:00" or self.end != "24:00"):
+            raise ValueError("multi-day demand builds must use begin=00:00 and end=24:00")
+
+    @property
+    def build_key(self) -> str:
+        payload = {
+            "start_date": self.start_date,
+            "source": self.source,
+            "days": self.days,
+            "begin": self.begin,
+            "end": self.end,
+            "structural_reference_date": self.structural_reference_date,
+        }
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:16]
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "DemandBuildSpec":
+        if not isinstance(raw, Mapping):
+            raise ValueError("demand_build_spec must be a JSON object")
+        # ``date`` is accepted only as a migration alias for old API clients.
+        start_date = raw.get("start_date", raw.get("date"))
+        if start_date is None:
+            raise ValueError("demand.start_date is required")
+        raw_days = raw.get("days", 1)
+        if isinstance(raw_days, bool):
+            raise ValueError("demand.days must be an integer from 1 through 7")
+        try:
+            parsed_days = int(raw_days)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("demand.days must be an integer from 1 through 7") from exc
+        spec = cls(
+            start_date=str(start_date),
+            source=str(raw.get("source", "historical")),
+            days=parsed_days,
+            begin=str(raw.get("begin", "00:00")),
+            end=str(raw.get("end", "24:00")),
+            structural_reference_date=str(
+                raw.get("structural_reference_date", "2025-09-16")),
+        )
+        supplied_key = raw.get("build_key")
+        if supplied_key is not None and str(supplied_key) != spec.build_key:
+            raise ValueError("demand.build_key does not match the spec contents")
+        return spec
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "demand_build",
+            "start_date": self.start_date,
+            "source": self.source,
+            "days": self.days,
+            "begin": self.begin,
+            "end": self.end,
+            "structural_reference_date": self.structural_reference_date,
+            "build_key": self.build_key,
+        }
 
 
 @dataclass(frozen=True)
@@ -280,6 +397,31 @@ def load_scenario_spec(path: Path) -> ScenarioSpec:
 def write_scenario_spec(path: Path, spec: ScenarioSpec) -> None:
     """Write a validated spec atomically so readers never see partial JSON."""
     spec = ScenarioSpec.from_dict(spec.to_dict())
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(spec.to_dict(), handle, indent=2, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+
+
+def load_demand_build_spec(path: Path) -> DemandBuildSpec:
+    """Load and validate a demand contract before expensive calibration starts."""
+    with Path(path).open(encoding="utf-8") as handle:
+        raw = json.load(handle)
+    if raw.get("schema_version", SCHEMA_VERSION) != SCHEMA_VERSION:
+        raise ValueError("unsupported DemandBuildSpec schema_version")
+    if raw.get("kind", "demand_build") != "demand_build":
+        raise ValueError("spec is not a demand_build contract")
+    return DemandBuildSpec.from_dict(raw)
+
+
+def write_demand_build_spec(path: Path, spec: DemandBuildSpec) -> None:
+    """Write a validated demand contract atomically."""
+    spec = DemandBuildSpec.from_dict(spec.to_dict())
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")

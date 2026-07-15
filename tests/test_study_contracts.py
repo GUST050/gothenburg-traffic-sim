@@ -5,8 +5,11 @@ import pytest
 from study_contracts import (
     AnalysisWindow,
     ClosureSpec,
+    DemandBuildSpec,
     ScenarioSpec,
+    load_demand_build_spec,
     load_scenario_spec,
+    write_demand_build_spec,
     write_scenario_spec,
 )
 
@@ -42,6 +45,31 @@ def test_scenario_round_trip_and_legacy_closure_names(tmp_path):
     loaded = load_scenario_spec(path)
     assert loaded == spec
     assert json.loads(path.read_text())["schema_version"] == 1
+
+
+def test_demand_build_spec_is_content_addressed_and_round_trips(tmp_path):
+    spec = DemandBuildSpec(
+        start_date="2027-09-16", source="forecast", days=1,
+        begin="00:00", end="24:00")
+    path = tmp_path / "demand.json"
+    write_demand_build_spec(path, spec)
+    loaded = load_demand_build_spec(path)
+    assert loaded == spec
+    payload = json.loads(path.read_text())
+    assert payload["kind"] == "demand_build"
+    assert payload["build_key"] == spec.build_key
+
+
+def test_demand_build_spec_rejects_tampered_identity():
+    spec = DemandBuildSpec(start_date="2025-09-16")
+    with pytest.raises(ValueError, match="build_key"):
+        DemandBuildSpec.from_dict({**spec.to_dict(), "source": "forecast"})
+
+
+def test_multi_day_demand_build_requires_effective_full_day_window():
+    with pytest.raises(ValueError, match="multi-day"):
+        DemandBuildSpec(start_date="2025-09-16", days=2,
+                        begin="06:00", end="10:00")
 
 
 def test_closure_must_fit_scenario_window():

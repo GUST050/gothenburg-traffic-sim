@@ -43,7 +43,8 @@ def validate_date_range(start_date: str, days: int, source_year: int) -> tuple[p
 def demand_metadata(*, start_date: str, days: int, source: str, begin: str,
                     end: str, qi_start: int, n_intervals: int,
                     epoch_sim: pd.Timestamp, direction_split: str,
-                    n_variants: int) -> dict:
+                    n_variants: int, demand_spec: dict | None = None,
+                    build_options: dict | None = None) -> dict:
     """Demand metadata contract; B2 will make multi-day calibration consume it."""
     start, end_exclusive = validate_date_range(start_date, days, epoch_sim.year)
     meta = {
@@ -64,6 +65,11 @@ def demand_metadata(*, start_date: str, days: int, source: str, begin: str,
                 "the estimated time-of-day split (estimate_directions.py); "
                 "direction is not measured in the delivered data.",
     }
+    if demand_spec is not None:
+        meta["demand_spec"] = dict(demand_spec)
+        meta["demand_build_key"] = demand_spec.get("build_key")
+    if build_options is not None:
+        meta["build_options"] = dict(build_options)
     # Legacy consumers deliberately retain their exact single-day fields.
     if days == 1:
         meta.update({"date": start_date, "begin": begin, "end": end})

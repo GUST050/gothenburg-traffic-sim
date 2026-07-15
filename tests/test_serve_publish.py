@@ -13,7 +13,7 @@ import serve
 
 
 def _staged(tmp_path, geh=100.0, infeasible=0, with_baseline=True,
-            flows=True, build_id=None, variant_fit=None):
+            flows=True, build_id=None, variant_fit=None, demand_key=None):
     staging = tmp_path / "staging"
     staging.mkdir(exist_ok=True)
     scen = {"name": "baseline", "file": "baseline.json"}
@@ -23,6 +23,8 @@ def _staged(tmp_path, geh=100.0, infeasible=0, with_baseline=True,
         payload = {"flows": {"e1": [1, 2]} if flows else {}}
         if build_id:
             payload["scenario"] = {"build_id": build_id}
+            if demand_key:
+                payload["scenario"]["demand_build_key"] = demand_key
         (staging / "baseline.json").write_text(json.dumps(payload))
         (staging / "baseline_traj.json").write_text(json.dumps(
             {"vehicles": []}))
@@ -32,6 +34,9 @@ def _staged(tmp_path, geh=100.0, infeasible=0, with_baseline=True,
         "vehicles": 20000}}
     if build_id:
         meta_payload["build_id"] = build_id
+    if demand_key:
+        meta_payload["demand_build_key"] = demand_key
+        meta_payload["demand_spec"] = {"build_key": demand_key}
     if variant_fit is not None:
         meta_payload["pfe_fit_variants"] = variant_fit
     meta.write_text(json.dumps(meta_payload))
@@ -84,6 +89,17 @@ class TestValidateStagedScenarios:
         }))
         ok, reason = serve.validate_staged_scenarios(staging, meta)
         assert not ok and "build-ID" in reason
+
+    def test_demand_build_key_mismatch_is_refused(self, tmp_path):
+        staging, meta = _staged(tmp_path, build_id="new-build",
+                                demand_key="new-demand")
+        (staging / "baseline.json").write_text(json.dumps({
+            "flows": {"e1": [1, 2]},
+            "scenario": {"build_id": "new-build",
+                          "demand_build_key": "old-demand"},
+        }))
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert not ok and "demand-build" in reason
 
     def test_each_uncertainty_variant_is_gated(self, tmp_path):
         staging, meta = _staged(

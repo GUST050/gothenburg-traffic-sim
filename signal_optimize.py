@@ -244,13 +244,23 @@ def non_tls_network_fingerprint(net_path: Path) -> str:
     return hashlib.sha256(encoded).hexdigest()[:16]
 
 
+def scenario_spec_key(spec) -> str:
+    """Short deterministic key for a structured signal-study identity."""
+    if spec is None:
+        return "legacy"
+    payload = json.dumps(spec.to_dict(), sort_keys=True,
+                         separators=(",", ":"), ensure_ascii=True).encode()
+    return hashlib.sha1(payload).hexdigest()[:12]
+
+
 def signal_artifact_label(window_start: str, window_end: str, demand_sig: str,
-                          net_fp: str) -> str:
+                          net_fp: str, study_key: str | None = None) -> str:
     """Content-addressed label for cached signal-timing artifacts
     (tls_adapted, tls_coordinated, alternate-type networks) — folds in
-    demand_signature and net_fingerprint so a stale artifact built from a
-    DIFFERENT demand or network can never be silently reused just because
-    the window happens to match. Found in external review 2026-07-11
+    demand_signature, net_fingerprint and (for structured jobs) the complete
+    study key so a stale artifact built from a DIFFERENT demand, network or
+    seed/variant plan can never be silently reused just because the window
+    happens to match. Found in external review 2026-07-11
     (NEW_CHANGES_REVIEW_2026-07-11.md section 6.1): the label used to be
     the window alone, so recalibrating demand or rebuilding the network
     without changing --window-start/--window-end left a stale
@@ -258,7 +268,8 @@ def signal_artifact_label(window_start: str, window_end: str, demand_sig: str,
     reuse, evaluated against demand/geometry it was never actually built
     from."""
     window = f"{window_start.replace(':', '')}_{window_end.replace(':', '')}"
-    return f"{window}_{demand_sig}_{net_fp}"
+    suffix = f"_{study_key}" if study_key else ""
+    return f"{window}_{demand_sig}_{net_fp}{suffix}"
 
 
 def build_signal_conditions(home: Path, variants: list[Path], begin_s: int,
@@ -390,6 +401,7 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
                   micro: bool = True,
                   vehroute_output: Path | None = None,
                   vehroute_outputs: list[Path] | None = None,
+                  seed_plan: list[tuple[int, Path]] | None = None,
                   run_label: str = "signal",
                   closed_edges: list[str] | None = None,
                   work_dir: Path | None = None,
@@ -420,14 +432,16 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
         raise ValueError("vehroute_outputs must contain exactly one path per seed")
     if seed_workers < 1:
         raise ValueError("seed_workers must be >= 1")
+    if seed_plan is None:
+        seed_plan = rs.seed_variant_plan(variants, seeds=seeds)
+    if len(seed_plan) != seeds:
+        raise ValueError("seed_plan must contain exactly one route per seed")
     base_dir = Path(work_dir) if work_dir is not None else rs.SUMO_DIR
     if work_dir is not None:
         base_dir.mkdir(parents=True, exist_ok=False)
     scratch: list[Path] = []
     jobs = []
-    for s in range(seeds):
-        seed = 1000 + s
-        route_path = variants[s % len(variants)]
+    for s, (seed, route_path) in enumerate(seed_plan):
         seed_dir = base_dir / f"seed-{seed}" if work_dir is not None else base_dir
         if work_dir is not None:
             seed_dir.mkdir(parents=True, exist_ok=False)
@@ -580,10 +594,16 @@ def main() -> None:
                  f"the calibrated demand period (0-{total_duration_s / 3600:.1f}h)")
 
     variants = rs.demand_variants(meta)
+    try:
+        seed_plan = rs.seed_variant_plan(variants, spec=spec, seeds=args.seeds)
+    except ValueError as exc:
+        sys.exit(f"invalid ScenarioSpec demand mapping: {exc}")
+    args.seeds = len(seed_plan)
     demand_sig = rs.demand_signature(meta)
     baseline_net_fp = net_fingerprint(rs.NET_PATH)
     label = signal_artifact_label(args.window_start, args.window_end,
-                                  demand_sig, baseline_net_fp)
+                                  demand_sig, baseline_net_fp,
+                                  scenario_spec_key(spec) if spec is not None else None)
     print(f"Signal optimize: {args.window_start}-{args.window_end} window, "
          f"{args.seeds} seed(s), MICRO — {SIGNAL_CONDITION_COUNT} conditions "
          "vs synthetic baseline")
@@ -604,6 +624,7 @@ def main() -> None:
             metrics, per_seed_runs = run_condition(
                 net_path=cfg["net_path"], add_paths=cfg["add_paths"], variants=variants,
                 seeds=args.seeds, begin_s=begin_s, end_s=end_s, home=home,
+                seed_plan=seed_plan,
                 run_label=f"d2_{name}",
                 work_dir=batch_workspace / name,
                 seed_workers=args.seed_workers)

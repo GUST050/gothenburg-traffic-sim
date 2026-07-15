@@ -33,6 +33,35 @@ class FakeCompletedProcess:
         self.stderr = stderr
 
 
+def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
+                          analysis_window=True):
+    spec = {
+        "scenario_id": "signal-api-spec",
+        "demand_build_id": "demand-a",
+        "network_build_id": "network-b",
+        "start_time": "2025-09-16T00:00:00",
+        "end_time": "2025-09-17T00:00:00",
+        "simulation_mode": simulation_mode,
+        "seed_set": [1000, 1001],
+        "demand_variant_mapping": {"1000": "q50", "1001": "q10"},
+    }
+    if closure:
+        spec["scenario_id"] = "signal-close-api-spec"
+        spec["closures"] = [{
+            "edge_id": "a_b_0",
+            "start_time": "2025-09-16T07:00:00",
+            "end_time": "2025-09-16T09:00:00",
+        }]
+    if analysis_window:
+        spec["analysis_window"] = {
+            "warmup_s": 0,
+            "measure_start": "2025-09-16T07:00:00",
+            "measure_end": "2025-09-16T09:00:00",
+            "drain_s": 0,
+        }
+    return spec
+
+
 def get_json(url, timeout=5):
     with urllib.request.urlopen(url, timeout=timeout) as r:
         return r.status, json.loads(r.read())
@@ -71,6 +100,7 @@ def base_url(tmp_path, monkeypatch):
     staging_dir = tmp_path / "scenarios_staging"
     monkeypatch.setattr(serve, "SCEN_STAGING_DIR", staging_dir)
     monkeypatch.setattr(serve, "SPEC_DIR", tmp_path / "scenario_specs")
+    monkeypatch.setattr(serve, "DEMAND_SPEC_DIR", tmp_path / "demand_specs")
     sumo_dir = tmp_path / "sumo"
     sumo_dir.mkdir()
     # A healthy demand_meta so E2's publish gate passes in success-path
@@ -471,6 +501,43 @@ class TestRunInNewSession:
 
 
 class TestRecalibrateValidation:
+    def test_structured_demand_spec_is_archived_and_forwarded(self, base_url, monkeypatch):
+        seen = {}
+        payload = {
+            "demand_spec": {
+                "start_date": "2027-09-16",
+                "source": "forecast",
+                "days": 1,
+                "begin": "00:00",
+                "end": "24:00",
+                "structural_reference_date": "2025-09-16",
+            }
+        }
+
+        def fake_run(cmd, **kw):
+            if "build_sumo_demand.py" in cmd[1]:
+                seen["cmd"] = cmd
+            return FakeCompletedProcess(returncode=1, stderr="stop after capture")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        status, response = post_json(base_url + "/api/recalibrate", payload=payload)
+        assert status == 202
+        assert response["demand_build_key"]
+        wait_until(lambda: "cmd" in seen)
+        cmd = seen["cmd"]
+        assert "--demand-spec" in cmd
+        spec_path = Path(cmd[cmd.index("--demand-spec") + 1])
+        assert spec_path.exists()
+        archived = json.loads(spec_path.read_text())
+        assert archived["source"] == "forecast"
+        assert archived["build_key"] == response["demand_build_key"]
+
+    def test_structured_demand_spec_cannot_mix_query_parameters(self, base_url):
+        status, _ = post_json_or_error(
+            base_url + "/api/recalibrate?date=2025-09-16",
+            payload={"demand_spec": {"start_date": "2025-09-16"}})
+        assert status == 400
+
     def test_bad_date_format_is_400(self, base_url):
         status, _ = post_json_or_error(f"{base_url}/api/recalibrate?date=2025-9-16")
         assert status == 400
@@ -1186,6 +1253,68 @@ class TestOptimizeSignals:
         status, body = post_json_or_error(f"{base_url}/api/optimize_signals?edges=nope_0")
         assert status == 400
         assert "nope_0" in body["error"]
+
+    def test_structured_plain_signal_spec_is_archived_and_forwarded(
+            self, base_url, monkeypatch):
+        spec = _signal_scenario_spec()
+        captured = {}
+
+        def fake_run(cmd, **kw):
+            captured["cmd"] = cmd
+            spec_path = Path(cmd[cmd.index("--scenario-spec") + 1])
+            captured["spec"] = json.loads(spec_path.read_text())
+            serve.OPTIMIZE_OUT.write_text(json.dumps(_fake_signal_optimize_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        status, body = post_json(base_url + "/api/optimize_signals",
+                                 payload={"scenario_spec": spec})
+        assert status == 202
+        assert body["scenario_id"] == "signal-api-spec"
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
+        assert "signal_optimize.py" in captured["cmd"][1]
+        assert "--scenario-spec" in captured["cmd"]
+        assert "--window-start" not in captured["cmd"]
+        assert captured["spec"]["demand_variant_mapping"] == {
+            "1000": "q50", "1001": "q10"}
+
+    def test_structured_closure_signal_spec_dispatches_without_loose_edges(
+            self, base_url, monkeypatch):
+        spec = _signal_scenario_spec(closure=True)
+        captured = {}
+
+        def fake_run(cmd, **kw):
+            captured["cmd"] = cmd
+            spec_path = Path(cmd[cmd.index("--scenario-spec") + 1])
+            captured["spec"] = json.loads(spec_path.read_text())
+            serve.OPTIMIZE_CLOSURE_OUT.write_text(
+                json.dumps(_fake_signal_closure_combine_result()))
+            return FakeCompletedProcess(returncode=0)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        status, body = post_json(base_url + "/api/optimize_signals",
+                                 payload={"scenario_spec": spec})
+        assert status == 202
+        assert body["scenario_id"] == "signal-close-api-spec"
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
+        assert "signal_closure_combine.py" in captured["cmd"][1]
+        assert "--scenario-spec" in captured["cmd"]
+        assert "--close" not in captured["cmd"]
+        assert captured["spec"]["closures"][0]["edge_id"] == "a_b_0"
+
+    @pytest.mark.parametrize("kwargs,needle", [
+        ({"analysis_window": False}, "analysis_window"),
+        ({"simulation_mode": "meso"}, "simulation_mode=micro"),
+    ])
+    def test_structured_signal_spec_rejects_missing_or_incompatible_contract(
+            self, base_url, kwargs, needle):
+        status, body = post_json_or_error(
+            base_url + "/api/optimize_signals",
+            payload={"scenario_spec": _signal_scenario_spec(**kwargs)})
+        assert status == 400
+        assert needle in body["error"]
 
     def test_no_edges_dispatches_to_signal_optimize(self, base_url, monkeypatch):
         # edges omitted entirely means "optimize against the currently

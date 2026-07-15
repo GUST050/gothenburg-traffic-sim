@@ -64,7 +64,8 @@ from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
                         sumo_version, tls_plan_diff, tls_timing_schedule,
                         window_offsets_s)
 from signal_optimize import (CAVEAT, paired_comparison, relative_pct, run_condition,
-                             run_tls_coordinator, run_tls_cycle_adaptation)
+                             run_tls_coordinator, run_tls_cycle_adaptation,
+                             scenario_spec_key)
 from signal_regulation import enforce_timing_minimums
 from traffic_sim.core.contracts import load_scenario_spec
 
@@ -241,11 +242,17 @@ def main() -> None:
             sys.exit(f"--close {e}: not an edge in network.geojson")
 
     variants = rs.demand_variants(meta)
+    try:
+        seed_plan = rs.seed_variant_plan(variants, spec=spec, seeds=args.seeds)
+    except ValueError as exc:
+        sys.exit(f"invalid ScenarioSpec demand mapping: {exc}")
+    args.seeds = len(seed_plan)
     demand_sig = rs.demand_signature(meta)
     net_fp = net_fingerprint(rs.NET_PATH)
     window_key = f"{args.window_start.replace(':', '')}_{args.window_end.replace(':', '')}"
     close_key = "+".join(args.edge)[:60]
-    label = f"{close_key}_{window_key}_{demand_sig}_{net_fp}"
+    spec_suffix = f"_{scenario_spec_key(spec)}" if spec is not None else ""
+    label = f"{close_key}_{window_key}_{demand_sig}_{net_fp}{spec_suffix}"
     streets = sorted({names.get(e, e) for e in args.edge})
 
     print(f"Signal-closure combine: closing {', '.join(streets)}, "
@@ -275,13 +282,18 @@ def main() -> None:
             n_drop_total += d
             truncated_variants.append(fp)
             scratch.append(fp)
+        truncated_by_source = dict(zip(variants, truncated_variants))
+        truncated_seed_plan = [
+            (seed, truncated_by_source[route_path])
+            for seed, route_path in seed_plan
+        ]
         if n_trunc_total or n_drop_total:
             print(f"  {n_trunc_total} truncated, {n_drop_total} dropped "
                  "(no detour around this closure at all)")
 
         print("  Pass 1: closure + BASELINE synthetic signals …")
-        vr1_paths = [rs.SUMO_DIR / f"d4_vehroute1_{label}_seed{1000 + s}.xml"
-                     for s in range(args.seeds)]
+        vr1_paths = [rs.SUMO_DIR / f"d4_vehroute1_{label}_seed{seed}.xml"
+                     for seed, _ in seed_plan]
         vr1_merged = rs.SUMO_DIR / f"d4_vehroute1_{label}_all.xml"
         scratch += vr1_paths + [vr1_merged]
         t0 = time.time()
@@ -289,6 +301,7 @@ def main() -> None:
             net_path=rs.NET_PATH, add_paths=[closure_add_path],
             variants=truncated_variants, seeds=args.seeds,
             begin_s=begin_s, end_s=end_s, home=home, micro=True,
+            seed_plan=truncated_seed_plan,
             vehroute_outputs=vr1_paths, run_label=f"d4_pass1_{label}",
             closed_edges=args.edge)
         print(f"    {time.time() - t0:.0f}s: timeLoss={pass1_metrics.total_time_loss_s:.0f}s, "
@@ -314,8 +327,8 @@ def main() -> None:
         scratch += [adapted_raw_path, adapted_path, coordinated_path]
 
         print("  Pass 2: closure + OPTIMIZED signals …")
-        vr2_paths = [rs.SUMO_DIR / f"d4_vehroute2_{label}_seed{1000 + s}.xml"
-                     for s in range(args.seeds)]
+        vr2_paths = [rs.SUMO_DIR / f"d4_vehroute2_{label}_seed{seed}.xml"
+                     for seed, _ in seed_plan]
         vr2_merged = rs.SUMO_DIR / f"d4_vehroute2_{label}_all.xml"
         scratch += vr2_paths + [vr2_merged]
         t0 = time.time()
@@ -324,6 +337,7 @@ def main() -> None:
             add_paths=[closure_add_path, adapted_path, coordinated_path],
             variants=truncated_variants, seeds=args.seeds,
             begin_s=begin_s, end_s=end_s, home=home, micro=True,
+            seed_plan=truncated_seed_plan,
             vehroute_outputs=vr2_paths, run_label=f"d4_pass2_{label}",
             closed_edges=args.edge)
         print(f"    {time.time() - t0:.0f}s: timeLoss={pass2_metrics.total_time_loss_s:.0f}s, "

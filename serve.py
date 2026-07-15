@@ -8,10 +8,12 @@ Endpoints:
   GET /...                    — static files from web/
   GET /api/ping               — {"ok": true}; the web app uses this to decide
                                 whether to show the "Stäng väg" feature
-  GET /api/close?edges=a,b,c  — starts run_scenario.py --close a b c (Monte
+  POST /api/close?edges=a,b,c — legacy loose-parameter form; starts
+                                run_scenario.py --close a b c (Monte
                                 Carlo, ~30–90 s) in a BACKGROUND THREAD and
                                 returns immediately ({"status": "started"}).
                                 One simulation at a time (409 while busy).
+                                New callers POST {"scenario_spec": {...}}.
   GET /api/close/status       — {"status": "idle"|"running"|"done"|"error", ...};
                                 on "done" the scenario manifest fields
                                 (file, label, closed_edges, ...) are included
@@ -19,7 +21,9 @@ Endpoints:
                                 /api/recalibrate below (2026-07-10 — found in
                                 review, matches an already-fixed real
                                 incident for that other endpoint).
-  GET /api/recalibrate?date=YYYY-MM-DD&source=historical|forecast&days=N
+  POST /api/recalibrate with {"demand_spec": {...}} (legacy query form
+                              ?date=YYYY-MM-DD&source=historical|forecast&days=N
+                              remains supported)
                               — starts the whole-day PFE demand recalibration
                                 for a NEW date/source (~6 min for one day)
                                 in a BACKGROUND THREAD and returns immediately
@@ -36,11 +40,11 @@ Endpoints:
                                 job started from one tab/session is visible
                                 from any other and survives a dropped
                                 connection, laptop sleep, or closed tab.
-  GET /api/cancel?kind=close|recalibrate
+  POST /api/cancel?kind=close|recalibrate
                               — stops the active process group for the
                                 selected job and reports status="cancelled"
                                 once cleanup has completed.
-  GET /api/suggest_closure?edges=a,b&duration_hours=6&slide_hours=1
+  POST /api/suggest_closure?edges=a,b&duration_hours=6&slide_hours=1
                             &top_k=15&extra_bad=2&seeds=3
                               — IMPROVEMENT_PLAN.md Phase C5: runs suggest_closure_time.py
                                 (Phase C4) against the CURRENTLY calibrated
@@ -59,7 +63,8 @@ Endpoints:
                                 ...&end=... (the SAME endpoint used for
                                 whole-run closures, extended 2026-07-11 to
                                 accept an optional time window).
-  GET /api/optimize_signals?edges=a,b (edges optional)
+  POST /api/optimize_signals (new callers send a full ScenarioSpec; loose
+                                edges/window parameters remain supported)
                               — IMPROVEMENT_PLAN.md Phase D5: runs signal_optimize.py
                                 (D2, edges omitted/empty — no active
                                 closure) or signal_closure_combine.py (D4,
@@ -111,12 +116,15 @@ import sys
 import threading
 import time
 import urllib.parse
+from datetime import datetime
 from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from signal_optimize import SIGNAL_CONDITION_COUNT
-from traffic_sim.core.contracts import ScenarioSpec, write_scenario_spec
+from traffic_sim.core.contracts import (DemandBuildSpec, ScenarioSpec,
+                                         write_demand_build_spec,
+                                         write_scenario_spec)
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -133,6 +141,7 @@ SCEN_DIR = WEB_DIR / "data" / "scenarios"
 SCEN_STAGING_DIR = WEB_DIR / "data" / "scenarios_staging"
 SUMO_DIR = ROOT / "sumo"
 SPEC_DIR = ROOT / "runs" / "scenario_specs"
+DEMAND_SPEC_DIR = ROOT / "runs" / "demand_specs"
 SUGGEST_OUT = SUMO_DIR / "suggest_closure_web.json"
 OPTIMIZE_OUT = SUMO_DIR / "signal_optimize_web.json"
 OPTIMIZE_CLOSURE_OUT = SUMO_DIR / "signal_closure_combine_web.json"
@@ -146,6 +155,25 @@ OPTIMIZE_SEEDS = 3
 # cannot silently leave the HTTP job timeout stale.
 OPTIMIZE_SIGNAL_CONDITIONS = SIGNAL_CONDITION_COUNT
 PORT     = 8000
+
+
+def _signal_window_from_spec(spec: ScenarioSpec) -> tuple[str, str]:
+    """Return a single-day HH:MM signal window from a validated spec."""
+    if spec.analysis_window is None:
+        raise ValueError("signal ScenarioSpec requires analysis_window")
+    try:
+        measure_start = datetime.fromisoformat(
+            spec.analysis_window.measure_start.replace("Z", "+00:00"))
+        measure_end = datetime.fromisoformat(
+            spec.analysis_window.measure_end.replace("Z", "+00:00"))
+        scenario_start = datetime.fromisoformat(
+            spec.start_time.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("analysis_window must contain valid ISO datetimes") from exc
+    if measure_start.date() != scenario_start.date() or \
+            measure_end.date() != scenario_start.date():
+        raise ValueError("signal analysis_window must stay within the scenario's first day")
+    return measure_start.strftime("%H:%M"), measure_end.strftime("%H:%M")
 
 _sim_lock   = threading.Lock()     # one simulation (close OR recalibrate OR
                                     # suggest_closure OR optimize_signals) at
@@ -464,12 +492,22 @@ def validate_staged_scenarios(staging_dir: Path,
     except (OSError, json.JSONDecodeError):
         return False, "demand_meta.json är ogiltig JSON"
     expected_build_id = meta.get("build_id")
-    if expected_build_id:
+    expected_demand_key = meta.get("demand_build_key")
+    demand_spec = meta.get("demand_spec") or {}
+    if expected_demand_key and demand_spec.get("build_key") != expected_demand_key:
+        return False, "demand_meta har en inkonsekvent DemandBuildSpec-identitet"
+    if expected_build_id or expected_demand_key:
         for fname, payload in staged_payloads:
-            actual = (payload.get("scenario") or {}).get("build_id")
-            if actual != expected_build_id:
-                return False, (f"{fname}: build-ID {actual!r} matchar inte "
-                               f"demandens {expected_build_id!r}")
+            if expected_build_id:
+                actual = (payload.get("scenario") or {}).get("build_id")
+                if actual != expected_build_id:
+                    return False, (f"{fname}: build-ID {actual!r} matchar inte "
+                                   f"demandens {expected_build_id!r}")
+            if expected_demand_key:
+                actual_key = (payload.get("scenario") or {}).get("demand_build_key")
+                if actual_key != expected_demand_key:
+                    return False, (f"{fname}: demand-build-nyckel {actual_key!r} "
+                                   f"matchar inte demandens {expected_demand_key!r}")
     fit = meta.get("pfe_fit") or {}
     geh = fit.get("geh_pct")
     # The deployed pipeline has measured 100.0 on every healthy build; the
@@ -996,20 +1034,43 @@ class Handler(SimpleHTTPRequestHandler):
         return self._json(200, state)
 
     def _recalibrate(self) -> None:
-        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        date   = qs.get("date", [""])[0]
-        source = qs.get("source", ["historical"])[0]
-        days_raw = qs.get("days", ["1"])[0]
-        if not DATE_RE.match(date):
-            return self._json(400, {"error": "datum måste vara YYYY-MM-DD"})
-        if source not in ("historical", "forecast"):
-            return self._json(400, {"error": "source måste vara historical eller forecast"})
         try:
-            days = int(days_raw)
-        except ValueError:
-            return self._json(400, {"error": "days måste vara ett heltal"})
-        if not (1 <= days <= 7):
-            return self._json(400, {"error": "days måste vara 1-7 (en vecka i taget)"})
+            body = self._json_body()
+        except ValueError as exc:
+            return self._json(400, {"error": str(exc)})
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        structured = body.get("demand_spec")
+        if structured is not None:
+            if qs:
+                return self._json(400, {"error":
+                                        "DemandBuildSpec och query-parametrar får inte blandas"})
+            try:
+                demand_spec = DemandBuildSpec.from_dict(structured)
+            except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                return self._json(400, {"error": f"ogiltig DemandBuildSpec: {exc}"})
+        else:
+            date = qs.get("date", [""])[0]
+            source = qs.get("source", ["historical"])[0]
+            days_raw = qs.get("days", ["1"])[0]
+            if not DATE_RE.match(date):
+                return self._json(400, {"error": "datum måste vara YYYY-MM-DD"})
+            try:
+                days = int(days_raw)
+            except ValueError:
+                return self._json(400, {"error": "days måste vara ett heltal"})
+            try:
+                demand_spec = DemandBuildSpec(
+                    start_date=date, source=source, days=days,
+                    begin="00:00", end="24:00",
+                    structural_reference_date="2025-09-16")
+            except ValueError as exc:
+                return self._json(400, {"error": str(exc)})
+        if demand_spec.structural_reference_date != "2025-09-16":
+            return self._json(400, {"error":
+                                    "structural_reference_date måste vara 2025-09-16"})
+        date = demand_spec.start_date
+        source = demand_spec.source
+        days = demand_spec.days
 
         blocked = simulation_recovery_block()
         if blocked:
@@ -1022,20 +1083,24 @@ class Handler(SimpleHTTPRequestHandler):
         with _recal_lock:
             _recal_state.clear()
             _recal_state.update(status="running", date=date, source=source,
-                                days=days, started_at=time.time())
+                                days=days, demand_spec=demand_spec.to_dict(),
+                                demand_build_key=demand_spec.build_key,
+                                started_at=time.time())
         begin_active_job("recalibrate", {"date": date, "source": source,
-                                 "days": days})
-        threading.Thread(target=self._run_recalibrate, args=(date, source, days),
+                                 "days": days,
+                                 "demand_spec": demand_spec.to_dict()})
+        threading.Thread(target=self._run_recalibrate, args=(demand_spec,),
                          daemon=True).start()
         return self._json(202, {"status": "started", "date": date, "source": source,
-                                "days": days})
+                                "days": days, "demand_build_key": demand_spec.build_key})
 
     @staticmethod
     def _set_recal(**kw) -> None:
         with _recal_lock:
             _recal_state.update(**kw)
 
-    def _run_recalibrate(self, date: str, source: str, days: int = 1) -> None:
+    def _run_recalibrate(self, demand_spec: DemandBuildSpec | str,
+                         source: str | None = None, days: int = 1) -> None:
         # NOTE: every exit path calls _set_recal BEFORE the finally block
         # releases _sim_lock. Doing it the other way around (release, then
         # update state) leaves a race window where a second recalibration
@@ -1058,7 +1123,24 @@ class Handler(SimpleHTTPRequestHandler):
         # the UI with nothing. Now: keep the old coherent set serving, build
         # the new set into staging, gate it, then switch atomically. On any
         # failure the previous set is untouched (the error message says so).
-        build_cmd = [sys.executable, "build_sumo_demand.py", "--source", source,
+        # Accept the old positional form for in-process callers during the
+        # migration, but immediately convert it to the same validated contract
+        # used by the HTTP endpoint.
+        if not isinstance(demand_spec, DemandBuildSpec):
+            demand_spec = DemandBuildSpec(
+                start_date=str(demand_spec), source=source or "historical",
+                days=days, begin="00:00", end="24:00",
+                structural_reference_date="2025-09-16")
+        date, source, days = (demand_spec.start_date, demand_spec.source,
+                              demand_spec.days)
+        DEMAND_SPEC_DIR.mkdir(parents=True, exist_ok=True)
+        spec_path = DEMAND_SPEC_DIR / f"{demand_spec.build_key}.json"
+        write_demand_build_spec(spec_path, demand_spec)
+        # Keep the legacy flags during migration. build_sumo_demand validates
+        # every repeated value against --demand-spec, so these flags are
+        # compatibility evidence rather than a second source of truth.
+        build_cmd = [sys.executable, "build_sumo_demand.py", "--demand-spec",
+                     str(spec_path.resolve()), "--source", source,
                      "--keep-scenarios"]
         if days > 1:
             build_cmd += ["--start-date", date, "--days", str(days)]
@@ -1321,10 +1403,32 @@ class Handler(SimpleHTTPRequestHandler):
         # pattern and same shared _sim_lock as /api/close, /api/recalibrate,
         # /api/suggest_closure — this is the same batch-of-real-SUMO-runs
         # resource class as all three.
+        try:
+            body = self._json_body()
+        except ValueError as exc:
+            return self._json(400, {"error": str(exc)})
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
-        window_start = qs.get("window_start", [OPTIMIZE_WINDOW_START])[0]
-        window_end = qs.get("window_end", [OPTIMIZE_WINDOW_END])[0]
+        structured = body.get("scenario_spec")
+        spec: ScenarioSpec | None = None
+        if structured is not None:
+            if qs or set(body) != {"scenario_spec"}:
+                return self._json(400, {"error":
+                                        "ScenarioSpec och query-parametrar får inte blandas"})
+            try:
+                spec = ScenarioSpec.from_dict(structured)
+                if spec.simulation_mode != "micro":
+                    raise ValueError("signaloptimering kräver simulation_mode=micro")
+                window_start, window_end = _signal_window_from_spec(spec)
+            except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                return self._json(400, {"error": f"ogiltig signal-ScenarioSpec: {exc}"})
+            edges = [closure.edge_id for closure in spec.closures]
+            if len(edges) != len(set(edges)):
+                return self._json(400, {"error":
+                                        "ScenarioSpec får inte upprepa samma stängda kant"})
+        else:
+            edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
+            window_start = qs.get("window_start", [OPTIMIZE_WINDOW_START])[0]
+            window_end = qs.get("window_end", [OPTIMIZE_WINDOW_END])[0]
         if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", window_start) or \
                 not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", window_end):
             return self._json(400, {"error": "window_start/window_end måste vara HH:MM"})
@@ -1342,16 +1446,19 @@ class Handler(SimpleHTTPRequestHandler):
             _optimize_state.update(status="running", edges=edges,
                                    window_start=window_start,
                                    window_end=window_end,
+                                   scenario_spec=(spec.to_dict() if spec else None),
                                    started_at=time.time())
         begin_active_job("optimize", {"edges": edges,
                                        "window_start": window_start,
-                                       "window_end": window_end})
+                                       "window_end": window_end,
+                                       "scenario_spec": spec.to_dict() if spec else None})
         threading.Thread(target=self._run_optimize_signals,
-                         args=(edges, window_start, window_end),
+                         args=(edges, window_start, window_end, spec),
                          daemon=True).start()
         return self._json(202, {"status": "started", "edges": edges,
                                 "window_start": window_start,
-                                "window_end": window_end})
+                                "window_end": window_end,
+                                "scenario_id": spec.scenario_id if spec else None})
 
     @staticmethod
     def _set_optimize(**kw) -> None:
@@ -1360,30 +1467,37 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _run_optimize_signals(self, edges: list[str],
                               window_start: str = OPTIMIZE_WINDOW_START,
-                              window_end: str = OPTIMIZE_WINDOW_END) -> None:
+                              window_end: str = OPTIMIZE_WINDOW_END,
+                              spec: ScenarioSpec | None = None) -> None:
         try:
             closure = bool(edges)
+            spec_path = None
+            if spec is not None:
+                SPEC_DIR.mkdir(parents=True, exist_ok=True)
+                spec_path = SPEC_DIR / (
+                    f"{spec.scenario_id}-signals-{time.strftime('%Y%m%d-%H%M%S')}-"
+                    f"{os.urandom(2).hex()}.json")
+                write_scenario_spec(spec_path, spec)
+            seed_count = len(spec.seed_set) if spec is not None else OPTIMIZE_SEEDS
             if closure:
                 out_path = OPTIMIZE_CLOSURE_OUT
                 cmd = [sys.executable, "signal_closure_combine.py",
-                      "--close", *edges,
-                      "--window-start", window_start,
-                      "--window-end", window_end,
-                      "--seeds", str(OPTIMIZE_SEEDS),
-                      "--out", str(out_path)]
+                      "--seeds", str(seed_count), "--out", str(out_path)]
                 n_sumo_runs = 2   # D4: exactly two passes, each OPTIMIZE_SEEDS seeds
             else:
                 out_path = OPTIMIZE_OUT
                 cmd = [sys.executable, "signal_optimize.py",
-                      "--window-start", window_start,
-                      "--window-end", window_end,
-                      "--seeds", str(OPTIMIZE_SEEDS),
-                      "--out", str(out_path)]
+                      "--seeds", str(seed_count), "--out", str(out_path)]
                 n_sumo_runs = OPTIMIZE_SIGNAL_CONDITIONS
+            if spec_path is not None:
+                cmd += ["--scenario-spec", str(spec_path.resolve())]
+            else:
+                cmd[2:2] = ["--close", *edges] if closure else [
+                    "--window-start", window_start, "--window-end", window_end]
             # Budget: generous per-seed margin for MICRO (much slower than
             # meso) plus the tlsCycleAdaptation/tlsCoordinator/netconvert
             # setup steps, same reasoning as /api/suggest_closure's timeout.
-            timeout = 180 + n_sumo_runs * OPTIMIZE_SEEDS * 90
+            timeout = 180 + n_sumo_runs * seed_count * 90
             res = run_in_new_session(cmd, cwd=str(ROOT), timeout=timeout)
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])

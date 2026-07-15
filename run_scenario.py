@@ -110,6 +110,27 @@ def variant_path(variants: list[Path], variant: str) -> Path:
     return variants[index]
 
 
+def seed_variant_plan(variants: list[Path], *, spec: ScenarioSpec | None = None,
+                      seeds: int = 3) -> list[tuple[int, Path]]:
+    """Return the exact seed-to-demand-variant plan for a study.
+
+    Signal studies used to derive ``1000 + index`` and cycle through the
+    available route files locally. That was harmless for the default three
+    seeds, but it silently ignored a ScenarioSpec's explicit seed/variant
+    mapping. Keep the legacy plan for callers without a spec and centralise
+    the structured path so every study uses the same assignment contract.
+    """
+    if spec is not None:
+        return [(seed, variant_path(variants, variant))
+                for seed, variant in spec.demand_variant_mapping]
+    if isinstance(seeds, bool) or not isinstance(seeds, int) or seeds < 1:
+        raise ValueError("seeds must be a positive integer")
+    if not variants:
+        raise ValueError("at least one demand variant is required")
+    return [(1000 + index, variants[index % len(variants)])
+            for index in range(seeds)]
+
+
 def validate_scenario_spec(spec: ScenarioSpec, *, meta: dict,
                            duration_s: int, network_path: Path) -> None:
     """Reject a spec that does not describe the loaded demand/network."""
@@ -1427,6 +1448,7 @@ def main() -> None:
             "network_build_id": spec.network_build_id,
             "demand_signature": sig,
             "build_id": meta.get("build_id"),
+            "demand_build_key": meta.get("demand_build_key"),
         },
         "seed_health":       seed_health,
         "seed_health_flags": health_flags,
@@ -1447,8 +1469,10 @@ def main() -> None:
         "name": name, "label": label, "file": f"{name}.json",
         "closed_edges": close_edges,
         "closures": closures,
+        "scenario_spec": spec.to_dict(),
         "demand_signature": sig,
         "build_id": meta.get("build_id"),
+        "demand_build_key": meta.get("demand_build_key"),
         "window": f"{window_label}{src_tag}",
     })
     index["scenarios"].sort(key=lambda s: s["name"])

@@ -309,6 +309,22 @@ class TestSignalArtifactLabel:
         b = so.signal_artifact_label("07:00", "09:00", "sig1", "net2")
         assert a != b
 
+    def test_structured_study_key_separates_seed_variant_plans(self):
+        class Spec:
+            def __init__(self, mapping):
+                self.mapping = mapping
+
+            def to_dict(self):
+                return {"demand_variant_mapping": self.mapping}
+
+        a = so.signal_artifact_label(
+            "07:00", "09:00", "sig1", "net1",
+            so.scenario_spec_key(Spec({"1000": "q50"})))
+        b = so.signal_artifact_label(
+            "07:00", "09:00", "sig1", "net1",
+            so.scenario_spec_key(Spec({"1000": "q10"})))
+        assert a != b
+
     def test_same_window_different_demand_would_have_collided_under_the_old_label(self):
         # The bug this guards against directly: the OLD label was just the
         # window, so these two would have been IDENTICAL filenames despite

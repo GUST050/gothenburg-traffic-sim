@@ -134,6 +134,27 @@ class TestScenarioSpecIntegration:
         with pytest.raises(ValueError, match="unavailable"):
             run_scenario.variant_path([tmp_path / "q50.rou.xml"], "q90")
 
+    def test_seed_variant_plan_honours_structured_mapping(self, tmp_path):
+        paths = [tmp_path / "q50.rou.xml", tmp_path / "q10.rou.xml",
+                 tmp_path / "q90.rou.xml"]
+        spec = ScenarioSpec.from_dict({
+            "scenario_id": "signal-study",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "simulation_mode": "micro",
+            "seed_set": [1010, 2020],
+            "demand_variant_mapping": {"1010": "q90", "2020": "q10"},
+        })
+        assert run_scenario.seed_variant_plan(paths, spec=spec) == [
+            (1010, paths[2]), (2020, paths[1])]
+
+    def test_legacy_seed_variant_plan_keeps_round_robin_behaviour(self, tmp_path):
+        paths = [tmp_path / "q50.rou.xml"]
+        assert run_scenario.seed_variant_plan(paths, seeds=3) == [
+            (1000, paths[0]), (1001, paths[0]), (1002, paths[0])]
+
     def test_spec_validation_checks_demand_network_and_window(self, tmp_path):
         net = tmp_path / "net.net.xml"
         net.write_text("<net/>")
