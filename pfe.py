@@ -1187,10 +1187,11 @@ def write_calibration_report(
             # once the quarter's integer total exists. Floor of 2 vehicles
             # keeps tiny (night) quarters integer-feasible — a 20-vehicle
             # quarter at a 7% cap cannot meaningfully hold "1.4 vehicles".
-            # The repair is best-effort by design: if the MILP can't
-            # reconcile the caps with the measured counts, the unrepaired
-            # counts stand (the counts always win; the calibrated_structure
-            # guard in demand_meta.json reports whatever the residual is).
+            # The repair is best-effort by design: a structure cap must never
+            # block a repair that is needed for a sensor count or a level-2
+            # bound.  Keep the last vector that satisfies those stronger
+            # constraints if a later optional-cap repair cannot coexist with
+            # them; calibrated_structure_report exposes the residual.
             def overflowing_groups(current: np.ndarray) -> list[tuple[list[int], float, float]]:
                 if not structure_groups:
                     return []
@@ -1205,24 +1206,37 @@ def write_calibration_report(
                     if float(current[members].sum()) > max(2.0, cap_share * q_total)
                 ]
 
-            quarter_groups = overflowing_groups(counts)
-            need_bound_repair = bool(repair_bounds)
-            # Integer repair has the same active-set behaviour as the
-            # continuous solver: only groups that overflow are handed to the
-            # MILP, but a repaired group can push flow into another group.
-            # Three bounded passes are enough for the local one-vehicle
-            # adjustments here and retain the count-first fallback on failure.
-            for _repair_pass in range(3):
-                if not need_bound_repair and not quarter_groups:
-                    break
+            # First repair the non-negotiable constraints on their own.  An
+            # earlier implementation mixed optional structure groups into
+            # this MILP.  If a cap could not coexist with a valid hard-bound
+            # repair, the combined problem reported infeasible and left the
+            # actual bound violation in place.  That is backwards: groups
+            # are explicitly counts-first best-effort constraints.
+            hard_repair_ok = True
+            if repair_bounds:
                 repaired = repair_integer_bounds(
-                    counts, shapes, targets_per_q[i], repair_bounds,
-                    groups=quarter_groups)
+                    counts, shapes, targets_per_q[i], repair_bounds)
                 if repaired is None:
-                    break
-                counts = repaired
-                need_bound_repair = False
-                quarter_groups = overflowing_groups(counts)
+                    hard_repair_ok = False
+                else:
+                    counts = repaired
+
+            # Then improve only overflowing groups.  Keep repair_bounds in
+            # the optional pass so moving a vehicle to satisfy a cap cannot
+            # re-break a hard edge, but retain the already hard-valid vector
+            # when the optional cap is infeasible.  A repaired group may push
+            # another group over its cap, hence the bounded active-set loop.
+            if hard_repair_ok:
+                for _repair_pass in range(3):
+                    quarter_groups = overflowing_groups(counts)
+                    if not quarter_groups:
+                        break
+                    repaired = repair_integer_bounds(
+                        counts, shapes, targets_per_q[i], repair_bounds,
+                        groups=quarter_groups)
+                    if repaired is None:
+                        break
+                    counts = repaired
             # Spread ALL vehicles in this quarter across its full 15-minute
             # interval. The old per-route schedule put every one-vehicle
             # route at exactly :07:30, so thousands of independent routes

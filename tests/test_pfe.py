@@ -429,6 +429,25 @@ class TestBoundViolationsFromRounding:
         assert report["achieved"]["U"] == [3.0]
         assert report["bound_violations"] == []
 
+    def test_optional_structure_cap_never_blocks_hard_bound_repair(self, tmp_path):
+        # This is the production failure mode from 2027-02-26 q94 in small
+        # form.  The rounded sensor count M is exact, but it puts seven
+        # vehicles on U (cap six).  Shifting one vehicle to the M-only route
+        # repairs U.  The optional group caps that M-only route at two, so
+        # the combined group+bound MILP is impossible.  The group must not
+        # prevent publication of the valid sensor+hard-bound solution.
+        shapes = [Candidate(depart=0.0, edges=["M", "U"]),
+                  Candidate(depart=0.0, edges=["M"])]
+        report = write_calibration_report(
+            shapes, tmp_path / "out.rou.xml", [{"M": 10.0}],
+            [np.array([7.0, 3.0])], [{"U": (0.0, 6.0)}],
+            enforce_integer_bounds=True,
+            structure_groups=[([1], 0.1)])
+
+        assert report["achieved"]["M"] == [10.0]
+        assert report["achieved"]["U"] == [6.0]
+        assert report["bound_violations"] == []
+
     def test_diagnostic_only_bounds_are_reported_but_not_repaired(self, tmp_path):
         # Same violation as test_repairs_a_real_bound_violation_from_rounding
         # above, but enforce_integer_bounds=False (the default, and
