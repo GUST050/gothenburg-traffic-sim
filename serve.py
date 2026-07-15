@@ -116,6 +116,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from signal_optimize import SIGNAL_CONDITION_COUNT
+from study_contracts import ScenarioSpec, write_scenario_spec
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -131,6 +132,7 @@ SCEN_DIR = WEB_DIR / "data" / "scenarios"
 # is guaranteed atomic, not a copy.
 SCEN_STAGING_DIR = WEB_DIR / "data" / "scenarios_staging"
 SUMO_DIR = ROOT / "sumo"
+SPEC_DIR = ROOT / "runs" / "scenario_specs"
 SUGGEST_OUT = SUMO_DIR / "suggest_closure_web.json"
 OPTIMIZE_OUT = SUMO_DIR / "signal_optimize_web.json"
 OPTIMIZE_CLOSURE_OUT = SUMO_DIR / "signal_closure_combine_web.json"
@@ -717,6 +719,32 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _json_body(self) -> dict:
+        """Read one bounded JSON object from a POST body.
+
+        New callers send a ScenarioSpec body so the complete study identity
+        travels as one validated object. An empty body deliberately returns
+        ``{}`` for the compatibility path; malformed or oversized bodies are
+        rejected before a job can start.
+        """
+        raw_length = self.headers.get("Content-Length", "0")
+        try:
+            length = int(raw_length)
+        except ValueError as exc:
+            raise ValueError("Content-Length måste vara ett heltal") from exc
+        if length < 0 or length > 128 * 1024:
+            raise ValueError("JSON-förfrågan är för stor")
+        if length == 0:
+            return {}
+        raw = self.rfile.read(length)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("POST-kroppen måste vara giltig JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("POST-kroppen måste vara ett JSON-objekt")
+        return payload
+
     # J (IMPROVEMENT_PLAN.md; audit P0-3): read-only endpoints stay GET; every endpoint
     # that STARTS or CANCELS work is POST-only — GET must never mutate
     # (prefetchers, link previews and crawlers follow GETs), and the POST
@@ -812,8 +840,31 @@ class Handler(SimpleHTTPRequestHandler):
         # well before its up-to-600s timeout, while the server keeps
         # computing regardless. Polling decouples the job's lifetime from
         # any one connection's, exactly as already proven for recalibrate.
+        try:
+            body = self._json_body()
+        except ValueError as exc:
+            return self._json(400, {"error": str(exc)})
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
+        structured = body.get("scenario_spec")
+        spec: ScenarioSpec | None = None
+        if structured is not None:
+            if qs:
+                return self._json(400, {"error":
+                                        "ScenarioSpec och query-parametrar får inte blandas"})
+            try:
+                spec = ScenarioSpec.from_dict(structured)
+            except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                return self._json(400, {"error": f"ogiltig ScenarioSpec: {exc}"})
+            edges = [closure.edge_id for closure in spec.closures]
+            if not edges:
+                return self._json(400, {"error":
+                                        "ScenarioSpec måste innehålla minst en stängning"})
+            if len(edges) != len(set(edges)):
+                return self._json(400, {"error":
+                                        "ScenarioSpec får inte upprepa samma stängda kant"})
+            begin = end = ""
+        else:
+            edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
         if not edges:
             return self._json(400, {"error": "inga kanter angivna"})
         unknown = [e for e in edges if e not in known_edges()]
@@ -825,8 +876,9 @@ class Handler(SimpleHTTPRequestHandler):
         # run_scenario.py --closure (time-windowed) instead of --close
         # (whole-run). Both share the same async/poll machinery below —
         # the ONLY difference is which CLI form _run_close shells out to.
-        begin = qs.get("begin", [""])[0]
-        end   = qs.get("end", [""])[0]
+        if spec is None:
+            begin = qs.get("begin", [""])[0]
+            end   = qs.get("end", [""])[0]
         if bool(begin) != bool(end):
             return self._json(400, {"error": "begin och end måste anges tillsammans"})
         if begin and not (DATETIME_RE.match(begin) and DATETIME_RE.match(end)):
@@ -844,12 +896,16 @@ class Handler(SimpleHTTPRequestHandler):
             _close_state.clear()
             _close_state.update(status="running", edges=edges,
                                 begin=begin or None, end=end or None,
+                                scenario_spec=(spec.to_dict() if spec else None),
                                 started_at=time.time())
         begin_active_job("close", {"edges": edges, "begin": begin or None,
-                           "end": end or None})
-        threading.Thread(target=self._run_close, args=(edges, begin or None, end or None),
+                           "end": end or None,
+                           "scenario_spec": spec.to_dict() if spec else None})
+        threading.Thread(target=self._run_close,
+                         args=(edges, begin or None, end or None, spec),
                          daemon=True).start()
-        return self._json(202, {"status": "started", "edges": edges})
+        return self._json(202, {"status": "started", "edges": edges,
+                                "scenario_id": spec.scenario_id if spec else None})
 
     @staticmethod
     def _set_close(**kw) -> None:
@@ -857,7 +913,8 @@ class Handler(SimpleHTTPRequestHandler):
             _close_state.update(**kw)
 
     def _run_close(self, edges: list[str], begin: str | None = None,
-                   end: str | None = None) -> None:
+                   end: str | None = None,
+                   spec: ScenarioSpec | None = None) -> None:
         # Same lock-then-state-then-release ordering as _run_recalibrate,
         # for the same reason: writing state AFTER releasing the lock
         # leaves a race window where a second /api/close can acquire the
@@ -865,7 +922,15 @@ class Handler(SimpleHTTPRequestHandler):
         # write lands, which would stomp the SECOND job's running state
         # with the FIRST job's result.
         try:
-            if begin and end:
+            if spec is not None:
+                SPEC_DIR.mkdir(parents=True, exist_ok=True)
+                spec_path = SPEC_DIR / (
+                    f"{spec.scenario_id}-{time.strftime('%Y%m%d-%H%M%S')}-"
+                    f"{os.urandom(2).hex()}.json")
+                write_scenario_spec(spec_path, spec)
+                cmd = [sys.executable, "run_scenario.py",
+                       "--scenario-spec", str(spec_path.resolve())]
+            elif begin and end:
                 cmd = [sys.executable, "run_scenario.py"]
                 for e in edges:
                     cmd += ["--closure",

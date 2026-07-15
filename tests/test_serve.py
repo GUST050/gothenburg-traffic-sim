@@ -47,16 +47,18 @@ def get_json_or_error(url, timeout=5):
         return e.code, json.loads(e.read())
 
 
-def post_json(url, timeout=5):
+def post_json(url, timeout=5, payload=None):
     """J (2026-07-14): mutating endpoints are POST-only now."""
-    req = urllib.request.Request(url, method="POST")
+    data = None if payload is None else json.dumps(payload).encode()
+    headers = {} if data is None else {"Content-Type": "application/json"}
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.status, json.loads(r.read())
 
 
-def post_json_or_error(url, timeout=5):
+def post_json_or_error(url, timeout=5, payload=None):
     try:
-        return post_json(url, timeout)
+        return post_json(url, timeout, payload)
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read())
 
@@ -68,6 +70,7 @@ def base_url(tmp_path, monkeypatch):
     monkeypatch.setattr(serve, "SCEN_DIR", scen_dir)
     staging_dir = tmp_path / "scenarios_staging"
     monkeypatch.setattr(serve, "SCEN_STAGING_DIR", staging_dir)
+    monkeypatch.setattr(serve, "SPEC_DIR", tmp_path / "scenario_specs")
     sumo_dir = tmp_path / "sumo"
     sumo_dir.mkdir()
     # A healthy demand_meta so E2's publish gate passes in success-path
@@ -216,6 +219,45 @@ class TestClose:
         assert final["name"] == "close_a_b_0"
         assert final["file"] == "close_a_b_0.json"
 
+    def test_structured_scenario_spec_is_archived_and_passed_to_runner(
+            self, base_url, monkeypatch):
+        spec = {
+            "scenario_id": "close-api-spec",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        }
+        captured = {}
+
+        def fake_run(cmd, **kw):
+            captured["cmd"] = cmd
+            spec_path = Path(cmd[cmd.index("--scenario-spec") + 1])
+            captured["spec"] = json.loads(spec_path.read_text())
+            (serve.SCEN_DIR / "index.json").write_text(json.dumps({
+                "scenarios": [{"closed_edges": ["a_b_0"],
+                                "name": "close-api-spec",
+                                "file": "close-api-spec.json"}],
+            }))
+            return FakeCompletedProcess(returncode=0,
+                                        stdout="Scenario 'close-api-spec' (...)")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        status, body = post_json(base_url + "/api/close",
+                                 payload={"scenario_spec": spec})
+        assert status == 202
+        assert body["scenario_id"] == "close-api-spec"
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "done")
+        assert "--scenario-spec" in captured["cmd"]
+        assert captured["spec"]["scenario_id"] == "close-api-spec"
+        assert captured["spec"]["closures"][0]["edge_id"] == "a_b_0"
+
     def test_failed_simulation_reports_error_status_and_releases_the_lock(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="boom"))
@@ -246,7 +288,7 @@ class TestClose:
         post_json(f"{base_url}/api/close?edges=a_b_0")
         assert wait_until(
             lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
-        assert not serve._sim_lock.locked()
+        assert wait_until(lambda: not serve._sim_lock.locked())
 
 
 class TestCancel:

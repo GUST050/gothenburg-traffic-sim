@@ -928,6 +928,50 @@
           await activateScenario(status.file, { fresh: true });
         }
 
+        let baselineSpecCache = null;
+
+        async function closureScenarioSpec(edges, begin = null, end = null) {
+          if (!baselineSpecCache) {
+            const res = await fetch('data/scenarios/baseline.json?t=' + Date.now(),
+                                    { cache: 'no-store' });
+            if (!res.ok) throw new Error(`baslinje-ScenarioSpec saknas (HTTP ${res.status})`);
+            const payload = await res.json();
+            if (!payload.scenario_spec) {
+              throw new Error('baslinjen saknar ScenarioSpec — bygg om scenarierna först');
+            }
+            baselineSpecCache = payload.scenario_spec;
+          }
+          const spec = JSON.parse(JSON.stringify(baselineSpecCache));
+          const start = begin || spec.start_time;
+          const finish = end || spec.end_time;
+          const suffix = begin
+            ? `_${start.replace(/[^0-9]/g, '')}_${finish.replace(/[^0-9]/g, '')}`
+            : '';
+          spec.scenario_id = `close_${edges.join('_')}${suffix}`
+            .replace(/[^A-Za-z0-9_+-]/g, '_').slice(0, 80);
+          spec.closures = edges.map(edge_id => ({
+            edge_id,
+            start_time: start,
+            end_time: finish,
+            closure_type: 'full',
+            permitted_access_exceptions: [],
+          }));
+          spec.objective_profile = begin ? 'closure-window' : 'closure';
+          return spec;
+        }
+
+        async function startCloseJob(edges, begin = null, end = null) {
+          const scenario_spec = await closureScenarioSpec(edges, begin, end);
+          const res = await fetch('/api/close', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scenario_spec }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+          return data;
+        }
+
         btnRun.addEventListener('click', async () => {
           closureJobRunning = true;
           btnRun.disabled = true;
@@ -935,9 +979,7 @@
           btnRun.textContent = 'Startar…';
           showJobProgress('Startar simulering', 0, 90);
           try {
-            const res  = await fetch('/api/close?edges=' + [...selected].join(','), { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            await startCloseJob([...selected]);
             btnRun.textContent = 'Simulerar… (0s)';
             const status = await pollClose(s => {
               btnRun.textContent = `Simulerar… (${s}s)`;
@@ -1106,10 +1148,7 @@
           try {
             const begin = isoFromOffset(lastSuggestResult.epoch_sim, candidate.begin_s);
             const end   = isoFromOffset(lastSuggestResult.epoch_sim, candidate.end_s);
-            const edges = lastSuggestResult.edges.join(',');
-            const res  = await fetch(`/api/close?edges=${edges}&begin=${begin}&end=${end}`, { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            await startCloseJob(lastSuggestResult.edges, begin, end);
             btn.textContent = 'Simulerar… (0s)';
             const status = await pollClose(s => btn.textContent = `Simulerar… (${s}s)`);
             if (status.status === 'error') throw new Error(status.error);
@@ -1160,6 +1199,7 @@
         // idle.
         async function applyFinishedRecalibration(data) {
           forgetPendingRecal();
+          baselineSpecCache = null;
           currentSimDate = data.date;
           currentSimSource = data.source;
           const srcLabel = data.source === 'forecast' ? 'Prognos' : 'Historik';
