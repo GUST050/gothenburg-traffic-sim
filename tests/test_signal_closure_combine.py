@@ -1,5 +1,5 @@
 """
-Unit tests for signal_closure_combine.py (PLAN.md Phase D4).
+Unit tests for signal_closure_combine.py (IMPROVEMENT_PLAN.md Phase D4).
 
 The heavy end (actually closing a road, running micro SUMO twice, and
 optimizing signals against the extracted routes) is exercised manually

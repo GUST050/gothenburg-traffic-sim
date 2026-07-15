@@ -47,6 +47,8 @@ import pandas as pd
 import closure_metrics as cm
 from sumo_runtime import sumo_home
 from sumo_network_metadata import load_metadata
+from pipeline_fingerprint import sha256_file
+from study_contracts import ScenarioSpec, load_scenario_spec
 
 SUMO_DIR  = Path("sumo")
 NET_PATH  = SUMO_DIR / "net.net.xml"
@@ -79,6 +81,13 @@ def demand_signature(meta: dict) -> str:
     from different routes. The signature keeps the manifest scoped to one
     demand build.
     """
+    # New demand builds carry a content-addressed build ID.  It supersedes
+    # the legacy date/window signature and invalidates scenarios when routes,
+    # network, priors, code, or SUMO changes while the calendar window stays
+    # the same.  Fixtures and older artifacts keep the backwards-compatible
+    # metadata-only signature below.
+    if meta.get("build_id"):
+        return str(meta["build_id"])
     keys = ("date", "source", "begin", "end", "n_intervals", "epoch_sim", "n_variants")
     payload = {k: meta.get(k) for k in keys}
     # B1 metadata is additive for one-day demand. Preserve that established
@@ -89,6 +98,46 @@ def demand_signature(meta: dict) -> str:
                     "day_boundaries_s", "day_kinds"):
             payload[key] = meta.get(key)
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
+
+
+def variant_path(variants: list[Path], variant: str) -> Path:
+    """Resolve a contract variant to the demand route artifact."""
+    index = {"q50": 0, "edge_shares": 0, "q10": 1, "q90": 2}.get(variant)
+    if index is None or index >= len(variants):
+        raise ValueError(
+            f"demand variant {variant!r} is unavailable in this build "
+            f"({len(variants)} route variant(s))")
+    return variants[index]
+
+
+def validate_scenario_spec(spec: ScenarioSpec, *, meta: dict,
+                           duration_s: int, network_path: Path) -> None:
+    """Reject a spec that does not describe the loaded demand/network."""
+    demand_id = str(meta.get("build_id") or demand_signature(meta))
+    if spec.demand_build_id != demand_id:
+        raise ValueError(
+            f"ScenarioSpec demand_build_id {spec.demand_build_id!r} does not "
+            f"match loaded demand build {demand_id!r}")
+    network_id = sha256_file(network_path)
+    if network_id is None or spec.network_build_id != network_id:
+        raise ValueError(
+            f"ScenarioSpec network_build_id does not match {network_path}")
+    expected_start = pd.Timestamp(meta["epoch_sim"])
+    expected_end = expected_start + pd.Timedelta(seconds=duration_s)
+    if pd.Timestamp(spec.start_time) != expected_start or \
+            pd.Timestamp(spec.end_time) != expected_end:
+        raise ValueError(
+            "ScenarioSpec start/end must exactly match the loaded demand window")
+    if spec.simulation_mode not in {"meso", "micro"}:
+        raise ValueError(f"unsupported ScenarioSpec simulation_mode: {spec.simulation_mode}")
+    for closure in spec.closures:
+        if closure.closure_type != "full":
+            raise ValueError(
+                "run_scenario currently supports only full closures from ScenarioSpec")
+        if closure.permitted_access_exceptions:
+            raise ValueError(
+                "permitted access exceptions require a network-permission audit "
+                "before they can be simulated")
 
 
 def want_trajectories(args: argparse.Namespace, n_intervals: int) -> bool:
@@ -164,6 +213,9 @@ def parse_args() -> argparse.Namespace:
                         "--close remains the backwards-compatible whole-run form.")
     p.add_argument("--name",  default=None,
                    help="Scenario name (default: 'baseline' or 'close_<edge…>')")
+    p.add_argument("--scenario-spec", default=None, metavar="PATH",
+                   help="Load and validate a versioned ScenarioSpec JSON. "
+                        "Legacy CLI flags remain supported when omitted.")
     p.add_argument("--seeds", type=int, default=3,
                    help="Monte Carlo runs (default 3)")
     p.add_argument("--seed-workers", type=int, default=1,
@@ -186,7 +238,7 @@ def parse_args() -> argparse.Namespace:
                    help="Write scenario JSON + trajectories + index to DIR "
                         "instead of web/data/scenarios — the STAGING half "
                         "of serve.py's publish-after-validate recalibration "
-                        "(PLAN.md E2): build the complete new set aside, "
+                        "(IMPROVEMENT_PLAN.md E2): build the complete new set aside, "
                         "validate it, then atomically switch. Default: the "
                         "live directory, unchanged behaviour.")
     p.add_argument("--keep-scratch", action="store_true",
@@ -608,7 +660,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
                             "--meso-junction-control", "true",
                             "--meso-junction-control.limited", "true"]),
         # net_path (default None -> the deployed NET_PATH, every existing
-        # caller's behaviour is unchanged): signal_optimize.py (PLAN.md D2)
+        # caller's behaviour is unchanged): signal_optimize.py (IMPROVEMENT_PLAN.md D2)
         # needs to compare against ALTERNATE networks whose ONLY difference
         # is TLS type ("actuated"/"delay_based" are baked in at netconvert
         # time, not a sumo runtime flag — verified: `sumo --tls.default-
@@ -616,7 +668,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         "-n", str((net_path or NET_PATH).resolve()),
         "-r", str(route_path.resolve()),
         # Every existing caller always has at least an edgeData additional,
-        # but signal_lab.py (PLAN.md D1) genuinely has none — metrics=True
+        # but signal_lab.py (IMPROVEMENT_PLAN.md D1) genuinely has none — metrics=True
         # adds tripinfo/statistics/summary flags directly, independent of
         # -a. An empty "-a ''" is untested SUMO territory; omit the flag
         # entirely instead of risking it.
@@ -625,7 +677,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         # begin_s shifts the simulation START (default 0, every existing
         # caller's behaviour is unchanged) — a vehicle with depart < begin_s
         # simply never departs, which is exactly what a BOUNDED time-of-day
-        # window (signal_lab.py, PLAN.md D1) wants: only vehicles active in
+        # window (signal_lab.py, IMPROVEMENT_PLAN.md D1) wants: only vehicles active in
         # the window are simulated at all, not the whole day filtered after
         # the fact. duration_s stays the far-end offset from t=0 regardless
         # of begin_s, matching every existing caller's mental model.
@@ -634,7 +686,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         # behaviour is unchanged): generous flush for MESO's insertion-
         # queue delay (measured ~170 s avg backlog); a short flush silently
         # drops the tail. CRITICAL for a BOUNDED time-of-day window
-        # (signal_lab.py/signal_optimize.py/signal_meso_screen.py, PLAN.md
+        # (signal_lab.py/signal_optimize.py/signal_meso_screen.py, IMPROVEMENT_PLAN.md
         # D1-D3): --end does not just cap the simulation clock, it also
         # caps INSERTION — reusing the meso flush margin here let vehicles
         # scheduled to depart up to an hour AFTER the requested window
@@ -685,7 +737,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
             "--summary-output.period", "900",
         ])
     if stats_path is not None and "statistics" not in metric_paths:
-        # E3 (PLAN.md): one tiny end-of-run XML with loaded/inserted/
+        # E3 (IMPROVEMENT_PLAN.md): one tiny end-of-run XML with loaded/inserted/
         # running/waiting/teleports — the per-seed health record. Separate
         # from `metrics` because tripinfo is large and this must be cheap
         # enough for every interactive closure seed. metrics=True already
@@ -693,7 +745,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         metric_paths["statistics"] = stats_path
         cmd.extend(["--statistic-output", str(stats_path.resolve())])
     if vehroute_output is not None:
-        # PLAN.md D4: extracting the ACTUALLY-driven post-closure routes
+        # IMPROVEMENT_PLAN.md D4: extracting the ACTUALLY-driven post-closure routes
         # (not the original pre-reroute demand) needs the runtime
         # rerouter's real decisions, only available from vehroute-output —
         # independent of `metrics` since D4 wants both from the SAME run
@@ -721,7 +773,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
     return metric_paths or None
 
 
-# E3 health thresholds (PLAN.md; improvement plan 1.3-1.4: "thresholds from
+# E3 health thresholds (IMPROVEMENT_PLAN.md; improvement plan 1.3-1.4: "thresholds from
 # baselines, not visual taste"). Basis: SUMO's own vehicle accounting
 # (loaded = read from route file; inserted = entered the network; waiting =
 # still in the insertion queue at end; running = still driving at end;
@@ -801,8 +853,8 @@ def final_route(veh: ET.Element) -> ET.Element | None:
     """The route the vehicle ACTUALLY drove.
 
     SUMO wraps a vehicle whose route was changed at runtime (the closure
-    rerouter) in <routeDistribution>, last <route> = final. FOUND by the
-    2026-07-14 accuracy review (SIMULATION_ACCURACY_..._PLAN §P0-1) and
+    rerouter) in <routeDistribution>, last <route> = final. Found in the
+    2026-07-14 accuracy review and
     verified on the real closure artifact: 3182/21594 vehicles sat in
     routeDistribution and were silently DROPPED from the animation —
     exactly the rerouted vehicles that matter most after a closure. F1's
@@ -868,11 +920,11 @@ def parse_vehroute_file(vr_file: Path, web_edges: set[str]
 
 def publish_trajectories_from_vehroute(
         name: str, route_path: Path, vr_file: Path, stats_path: Path,
-        web_edges: set[str]) -> str | None:
+        web_edges: set[str], seed: int = 1000) -> str | None:
     """Publish trajectories from an already-completed SUMO run.
 
-    The normal scenario path requests vehroute output during its seed-1000
-    flow run and calls this function afterward. Keeping parsing and
+    The normal scenario path requests vehroute output during its representative
+    seed's flow run and calls this function afterward. Keeping parsing and
     publication separate from process launch prevents a second simulation
     with the same seed from being mistaken for the representative run.
     """
@@ -889,7 +941,7 @@ def publish_trajectories_from_vehroute(
 
     # Keep parse integrity separate from the deliberate off-map display
     # filter. A short vehroute file is withheld; an off-map route is disclosed.
-    health = parse_seed_health(stats_path, seed=1000,
+    health = parse_seed_health(stats_path, seed=seed,
                                variant=route_path.name)
     inserted = health.get("inserted") if health else None
     if inserted:
@@ -902,7 +954,7 @@ def publish_trajectories_from_vehroute(
 
     traj_name = f"{name}_traj.json"
     atomic_write_json(OUT_DIR / traj_name,
-                      {"seed": 1000, "variant": route_path.name,
+                      {"seed": seed, "variant": route_path.name,
                        "n_vehicles": len(vehicles),
                        "n_unfinished": n_unfinished,
                        "inserted_in_run": inserted,
@@ -912,7 +964,7 @@ def publish_trajectories_from_vehroute(
                       separators=(",", ":"))
     size_mb = (OUT_DIR / traj_name).stat().st_size / 1e6
     print(f"  trajectories: {len(vehicles)} of {inserted or '?'} vehicles "
-          f"drawable → {traj_name} ({size_mb:.1f} MB; seed 1000, "
+          f"drawable → {traj_name} ({size_mb:.1f} MB; seed {seed}, "
           f"{route_path.name})")
     return traj_name
 
@@ -945,13 +997,13 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
           if closure_add else ()),
         "--vehroute-output", vr_file.name,
         "--vehroute-output.exit-times", "true",
-        # F2 (PLAN.md): vehicles still driving/queued when the run ends
+        # F2 (IMPROVEMENT_PLAN.md): vehicles still driving/queued when the run ends
         # must appear in the artifact (drawn parked at their last known
         # position) instead of silently vanishing — the same honesty rule
         # as closure truncation. Without this flag sumo omits them from
         # vehroute-output entirely.
         "--vehroute-output.write-unfinished", "true",
-        # F1 (PLAN.md): the trajectory run writes its own health record so
+        # F1 (IMPROVEMENT_PLAN.md): the trajectory run writes its own health record so
         # the artifact's vehicle count can be reconciled against what the
         # run actually loaded/inserted — a truncated vehroute parse must
         # not silently animate a subset as if it were everyone.
@@ -972,7 +1024,7 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
         return None
     return publish_trajectories_from_vehroute(
         name, route_path, vr_file, SUMO_DIR / f"stats_traj_{name}.xml",
-        web_edges)
+        web_edges, seed=1000)
 
 
 def parse_edgedata(path: Path, n_intervals: int) -> dict[str, np.ndarray]:
@@ -1091,12 +1143,36 @@ def main() -> None:
     duration_s  = n_intervals * 900
     sig = demand_signature(meta)
 
+    spec: ScenarioSpec | None = None
+    if args.scenario_spec:
+        try:
+            spec = load_scenario_spec(Path(args.scenario_spec))
+            validate_scenario_spec(spec, meta=meta, duration_s=duration_s,
+                                   network_path=NET_PATH)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            sys.exit(f"invalid ScenarioSpec: {exc}")
+        if args.close or args.closure:
+            sys.exit("--scenario-spec cannot be combined with --close/--closure")
+        # The spec is authoritative for the simulation level. Legacy callers
+        # continue to use --micro when no spec is supplied.
+        args.micro = spec.simulation_mode == "micro"
+
     try:
-        closures = structured_closures(args.closure, args.close,
-                                       meta["epoch_sim"], duration_s)
+        if spec is not None:
+            raw_closures = [json.dumps({
+                "edge_id": closure.edge_id,
+                "begin": closure.start_time,
+                "end": closure.end_time,
+            }) for closure in spec.closures]
+            closures = structured_closures(raw_closures, [],
+                                           meta["epoch_sim"], duration_s)
+        else:
+            closures = structured_closures(args.closure, args.close,
+                                           meta["epoch_sim"], duration_s)
     except ValueError as exc:
         sys.exit(str(exc))
     close_edges = list(dict.fromkeys(c["edge_id"] for c in closures))
+    windowed_closure = bool(args.closure or spec is not None)
 
     prior, names = load_geojson_meta()
     for ce in close_edges:
@@ -1107,10 +1183,16 @@ def main() -> None:
         if not valid_scenario_name(args.name):
             sys.exit(f"--name {args.name!r}: use only letters, digits, "
                      "_ + - (max 80 chars)")
+        if spec is not None and args.name != spec.scenario_id:
+            sys.exit("--name must match ScenarioSpec.scenario_id")
         name = args.name
+    elif spec is not None:
+        name = spec.scenario_id
+        if not valid_scenario_name(name):
+            sys.exit(f"ScenarioSpec.scenario_id {name!r} is not a valid scenario name")
     elif close_edges:
         name = "close_" + "+".join(close_edges)
-        if args.closure:
+        if windowed_closure:
             # Two windows on the same edge are distinct scenarios; unlike the
             # legacy whole-run name, include their structured identity.
             window_hash = hashlib.sha1(
@@ -1130,9 +1212,38 @@ def main() -> None:
 
     scratch_dir = create_scenario_workspace(name)
 
-    print(f"Scenario '{name}'  ({label})  —  {args.seeds} seeds × {n_intervals} × 15 min")
-
     variants = demand_variants(meta)
+    if spec is not None:
+        seed_values = list(spec.seed_set)
+        variant_by_seed = dict(spec.demand_variant_mapping)
+    else:
+        seed_values = [1000 + s for s in range(args.seeds)]
+        default_variants = ("q50", "q10", "q90")
+        variant_by_seed = {
+            seed: default_variants[i % min(len(variants), len(default_variants))]
+            for i, seed in enumerate(seed_values)
+        }
+    seed_count = len(seed_values)
+    if spec is None:
+        # Legacy CLI runs still emit a validated contract in their result so
+        # downstream tools can migrate without two different payload shapes.
+        network_id = sha256_file(NET_PATH)
+        if network_id is None:
+            sys.exit(f"network artifact missing: {NET_PATH}")
+        spec = ScenarioSpec.from_dict({
+            "scenario_id": name,
+            "demand_build_id": str(meta.get("build_id") or sig),
+            "network_build_id": network_id,
+            "start_time": meta["epoch_sim"],
+            "end_time": (pd.Timestamp(meta["epoch_sim"])
+                          + pd.Timedelta(seconds=duration_s)).isoformat(),
+            "closures": closures,
+            "simulation_mode": "micro" if args.micro else "meso",
+            "seed_set": seed_values,
+            "demand_variant_mapping": variant_by_seed,
+        })
+    print(f"Scenario '{name}'  ({label})  —  {seed_count} seeds × {n_intervals} × 15 min")
+
     if len(variants) > 1:
         print(f"  {len(variants)} demand variants (q50 + direction-split bounds)")
 
@@ -1159,7 +1270,7 @@ def main() -> None:
             t, d = truncate_stranded_vehicles(
                 vp, close_edges, fp, adj,
                 # Preserve the exact tested function path for legacy --close.
-                closures=closures if args.closure else None,
+                closures=closures if windowed_closure else None,
                 edge_travel_s=freeflow)
             n_truncated += t
             n_dropped += d
@@ -1176,11 +1287,12 @@ def main() -> None:
 
     trajectory_enabled = want_trajectories(args, n_intervals)
     trajectory_stats_file = None
+    trajectory_seed = seed_values[0]
+    trajectory_route_path = None
 
     jobs = []
-    for s in range(args.seeds):
-        seed = 1000 + s
-        route_path = variants[s % len(variants)]
+    for seed in seed_values:
+        route_path = variant_path(variants, variant_by_seed[seed])
         # SUMO is an external process and writes relative edgeData files from
         # its cwd. Give every seed a private directory, even when the parent
         # schedules seeds concurrently. This makes the isolation contract
@@ -1191,9 +1303,10 @@ def main() -> None:
         add_path = seed_dir / f"additional_{name}_{seed}.add.xml"
         stats_file = seed_dir / f"stats_{name}_{seed}.xml"
         trajectory_vr_file = (seed_dir / f"vehroutes_{name}.xml"
-                              if seed == 1000 and trajectory_enabled else None)
-        if seed == 1000 and trajectory_enabled:
+                              if seed == trajectory_seed and trajectory_enabled else None)
+        if seed == trajectory_seed and trajectory_enabled:
             trajectory_stats_file = stats_file
+            trajectory_route_path = route_path
         write_edgedata_additional(add_path, ed_file, duration_s)
         jobs.append({
             "seed": seed,
@@ -1206,7 +1319,7 @@ def main() -> None:
             "edge_file": ed_file,
             "n_intervals": n_intervals,
             "vehroute_output": trajectory_vr_file,
-            "vehroute_write_unfinished": (seed == 1000 and trajectory_enabled),
+            "vehroute_write_unfinished": (seed == trajectory_seed and trajectory_enabled),
             "work_dir": seed_dir,
         })
 
@@ -1250,10 +1363,10 @@ def main() -> None:
     # previously produced no record, no flag, and published as clean.
     # Missing telemetry now flags exactly like a failed gate (E2's
     # publisher refuses any flagged baseline).
-    if len(seed_health) < args.seeds:
+    if len(seed_health) < seed_count:
         health_flags.append(
-            f"hälsotelemetri saknas för {args.seeds - len(seed_health)} av "
-            f"{args.seeds} frön — omätt är inte friskt")
+            f"hälsotelemetri saknas för {seed_count - len(seed_health)} av "
+            f"{seed_count} frön — omätt är inte friskt")
     for flag in health_flags:
         print(f"  WARNING seed health: {flag}")
 
@@ -1273,20 +1386,22 @@ def main() -> None:
     window_label = demand_window_label(meta)
 
     traj_name = None
-    if trajectory_enabled and trajectory_stats_file is not None:
+    if trajectory_enabled and trajectory_stats_file is not None and trajectory_route_path is not None:
         traj_name = publish_trajectories_from_vehroute(
-            name, variants[0], scratch_dir / "seed-1000" / f"vehroutes_{name}.xml",
+            name, trajectory_route_path,
+            scratch_dir / f"seed-{trajectory_seed}" / f"vehroutes_{name}.xml",
             trajectory_stats_file,
-            web_edges)
+            web_edges, seed=trajectory_seed)
 
     payload = {
         "epoch":            meta["epoch_sim"],
         "interval_minutes": 15,
         "n_quarters":       n_intervals,
         "generated_at":     pd.Timestamp.now().isoformat(timespec="seconds"),
+        "scenario_spec":    spec.to_dict(),
         "trajectories":     traj_name,
         "scenario": {
-            "name": name, "label": label,
+            "name": name, "scenario_id": spec.scenario_id, "label": label,
             "closed_edges": close_edges,
             "closures": closures,
             "window": window_label,
@@ -1306,8 +1421,12 @@ def main() -> None:
                {"start_date": meta["start_date"],
                 "end_date_exclusive": meta["end_date_exclusive"],
                 "days": meta["days"]}),
-            "seeds": args.seeds,
+            "seeds": seed_count,
+            "seed_set": seed_values,
+            "simulation_mode": spec.simulation_mode,
+            "network_build_id": spec.network_build_id,
             "demand_signature": sig,
+            "build_id": meta.get("build_id"),
         },
         "seed_health":       seed_health,
         "seed_health_flags": health_flags,
@@ -1329,6 +1448,7 @@ def main() -> None:
         "closed_edges": close_edges,
         "closures": closures,
         "demand_signature": sig,
+        "build_id": meta.get("build_id"),
         "window": f"{window_label}{src_tag}",
     })
     index["scenarios"].sort(key=lambda s: s["name"])

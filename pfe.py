@@ -393,7 +393,8 @@ def solve_interval_entropy(
     measured_items = [(touch[e], target) for e, target in measured.items()]
     bounds_items = [(touch.get(e, []), lo, hi) for e, (lo, hi) in bounds.items()
                     if touch.get(e)]
-    # groups (2026-07-12, DESTINATION_BIAS_RESEARCH §4A step 3): a band over
+    # groups (2026-07-12; see IMPROVEMENT_PLAN.md's destination-integrity
+    # rules): a band over
     # an arbitrary ROUTE-INDEX set instead of an edge's touching set —
     # structurally identical to a bound, enforced by the exact same
     # rescale-into-band correction below. Used for structure preservation:

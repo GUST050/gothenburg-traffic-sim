@@ -645,7 +645,7 @@ def _fake_suggest_result(**overrides) -> dict:
     file, matching its real schema exactly (see suggest_closure_time.py's
     own `result = {...}` in main())."""
     base = {
-        "method": "PLAN.md Phase C4", "edges": ["a_b_0"], "streets": ["Testgatan"],
+        "method": "IMPROVEMENT_PLAN.md Phase C4", "edges": ["a_b_0"], "streets": ["Testgatan"],
         "duration_hours": 6.0, "slide_hours": 1.0, "total_duration_s": 86400,
         "n_candidate_windows": 19, "top_k": 2, "extra_bad": 1, "seeds": 3,
         "micro": False, "demand_signature": "abc123", "epoch_sim": "2025-09-16T00:00:00",
@@ -707,7 +707,7 @@ def _fake_suggest_result(**overrides) -> dict:
 
 class TestSummarizeSuggestion:
     """Pure function — no server needed. Verifies the honest-presentation
-    rules PLAN.md's C5 spec asks for explicitly."""
+    rules IMPROVEMENT_PLAN.md's C5 spec asks for explicitly."""
 
     def test_shows_median_and_interval_not_a_single_number(self):
         summary = serve.summarize_suggestion(_fake_suggest_result())
@@ -914,10 +914,10 @@ _FAKE_PLAN_DIFF = [
 def _fake_signal_optimize_result(**overrides) -> dict:
     """A structurally accurate (if minimal) signal_optimize.py result file,
     matching its real schema (see signal_optimize.py's own `result = {...}`
-    in main(), extended for PLAN.md D5's tls_plan_diff field)."""
+    in main(), extended for IMPROVEMENT_PLAN.md D5's tls_plan_diff field)."""
     adapted_coord_metrics = _fake_metrics(total_time_loss_s=8000.0, teleport_total=1)
     base = {
-        "method": "PLAN.md Phase D2", "window_start": "07:00", "window_end": "09:00",
+        "method": "IMPROVEMENT_PLAN.md Phase D2", "window_start": "07:00", "window_end": "09:00",
         "begin_s": 25200, "end_s": 32400, "seeds": 3,
         "tls_provenance": "synthetic", "caveat": "synthetic baseline caveat",
         "recommendation_allowed": False,
@@ -958,7 +958,7 @@ def _fake_signal_closure_combine_result(**overrides) -> dict:
     pass1_metrics = _fake_metrics(total_time_loss_s=300000.0, teleport_total=5)
     pass2_metrics = _fake_metrics(total_time_loss_s=260000.0, teleport_total=5)
     base = {
-        "method": "PLAN.md Phase D4",
+        "method": "IMPROVEMENT_PLAN.md Phase D4",
         "closed_edges": ["a_b_0"], "streets": ["Testgatan"],
         "window_start": "07:00", "window_end": "08:00",
         "begin_s": 25200, "end_s": 28800, "seeds": 1,
@@ -995,7 +995,7 @@ def _fake_signal_closure_combine_result(**overrides) -> dict:
 
 class TestSummarizeSignalOptimization:
     """Pure function — no server needed. Verifies the uniform-shape and
-    honest-provenance rules PLAN.md's D5 spec asks for: one shape for the
+    honest-provenance rules IMPROVEMENT_PLAN.md's D5 spec asks for: one shape for the
     UI regardless of which script (D2 or D4) actually ran."""
 
     def test_no_closure_uses_baseline_vs_adapted_coordinated(self):
@@ -1240,7 +1240,7 @@ class TestOptimizeSignals:
 
 
 class TestSecurityHardening:
-    """J (PLAN.md; audit P0-3/P1-12): GET must never mutate; cross-origin
+    """J (IMPROVEMENT_PLAN.md; audit P0-3/P1-12): GET must never mutate; cross-origin
     POSTs are refused; every response carries the CSP."""
 
     def test_get_on_mutating_endpoint_is_405(self, base_url):

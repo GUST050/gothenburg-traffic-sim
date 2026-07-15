@@ -1,5 +1,5 @@
 """Date/window intake and measured-data loading — split from
-build_sumo_demand.py 2026-07-14 (PLAN.md H1).
+build_sumo_demand.py 2026-07-14 (IMPROVEMENT_PLAN.md H1).
 
 Owns: date-range validation, demand metadata, day-type classification
 (2025 holiday calendar + 2027 mapping), real-day departure shapes,
@@ -124,14 +124,29 @@ def real_day_shape(flows: dict[str, list], sensor_edges: dict[str, list[str]],
     hourly = np.zeros(24)
     valid_hours = np.zeros(24, dtype=bool)
     for edges in sensor_edges.values():
-        for e in edges:
-            arr = flows.get(e, [])
-            for h in range(24):
-                qis = range(day_qi_start + h * 4, day_qi_start + h * 4 + 4)
-                vals = [arr[qi] for qi in qis if qi < len(arr) and arr[qi] is not None]
-                if vals:
-                    hourly[h] += sum(vals) / len(vals)
-                    valid_hours[h] = True
+        # A two-way Total sensor is exported onto both directed edges with
+        # the same summed count. Count that physical station once. If a future
+        # directional delivery contains genuinely different edge values, sum
+        # the directions instead of silently discarding one of them.
+        arrays = [flows.get(edge, []) for edge in edges]
+        duplicate_total = len(arrays) > 1 and all(
+            np.array_equal(arrays[index], arrays[0])
+            for index in range(1, len(arrays))
+        )
+        for h in range(24):
+            quarter_values: list[float] = []
+            for qi in range(day_qi_start + h * 4, day_qi_start + h * 4 + 4):
+                values = [arr[qi] for arr in arrays
+                          if qi < len(arr) and arr[qi] is not None]
+                if not values:
+                    continue
+                if duplicate_total:
+                    quarter_values.append(float(values[0]))
+                else:
+                    quarter_values.append(float(sum(values)))
+            if quarter_values:
+                hourly[h] += sum(quarter_values) / len(quarter_values)
+                valid_hours[h] = True
     if valid_hours.sum() < REAL_DAY_SHAPE_MIN_VALID_HOURS or hourly.sum() <= 0:
         return None
     return hourly / hourly.sum()

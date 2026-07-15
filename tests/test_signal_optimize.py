@@ -1,5 +1,5 @@
 """
-Unit tests for signal_optimize.py (PLAN.md Phase D2).
+Unit tests for signal_optimize.py (IMPROVEMENT_PLAN.md Phase D2).
 
 The heavy end (actually running tlsCycleAdaptation.py/tlsCoordinator.py/
 netconvert/sumo) is exercised manually against real demand, not here —

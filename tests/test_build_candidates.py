@@ -1105,7 +1105,7 @@ class TestPurposeLengthScale:
 
 
 class TestDeterrenceWeights:
-    """Tanner/gamma kernel (2026-07-12, DESTINATION_BIAS_RESEARCH doc): the
+    """Tanner/gamma kernel (2026-07-12; see IMPROVEMENT_PLAN.md): the
     pure negative exponential's mode at d=0, combined with the naturalness
     mask only admitting destinations beyond the sensor, made 'the edge
     immediately past the sensor' the modal trip destination."""

@@ -12,9 +12,9 @@ Chalmers (supervisor: Prof. Miroslaw Staron).
 3. **Simulate** traffic after incidents / road closures with SUMO (done —
    calibrated demand, closure rerouting incl. time-windowed closures, Monte
    Carlo confidence, multi-day/week scenarios, scenario mode in the web app)
-4. **Suggest** the least-disruptive time to close a road (in progress —
-   the disruption-metrics scorecard and closure engine it needs are done;
-   the search/ranking tool itself is not built yet)
+4. **Suggest** the least-disruptive time to close a road (implemented — the
+   default proxy-ranked search is fast; `--exhaustive` evaluates every
+   feasible window before making a global-best claim)
 
 ![Web app](plots/daily_profile.png)
 
@@ -84,13 +84,13 @@ YYYY-MM-DD --days N` (N up to 7) builds one continuous multi-day demand
 instead of a single day; `/api/recalibrate?date=&days=N` does the same from
 the web UI's "Byt dag" panel. Candidate route geometry is pooled by weekday/
 weekend, not regenerated per day, so a week costs roughly proportionally
-more than one day, not N times more — see `PLAN.md` for measured timings.
+more than one day, not N times more — see `IMPROVEMENT_PLAN.md` for measured timings.
 Per-scenario trajectory (individual-vehicle) export defaults off above one
 day (file size); pass `--trajectories` to force it on.
 
 **Feeding it new data:** drop new quarterly sensor CSVs in `data_in/`
-(see `data_in/README.md`), check the station's measured direction in the
-city's traffic catalogue, add it to `SENSOR_MEASURED_DIRECTION`, and run
+(see `data_in/README.md`), verify the station's measured direction in the
+city's traffic catalogue, add its metadata to `data_in/sensors.json`, and run
 `make refresh` — the new sensor gets an edge on the map, a coverage check,
 its own direction model and a place in the demand calibration automatically.
 
@@ -127,6 +127,13 @@ for a closure (`closure_metrics.py`) is scored primarily by Δ total
 `timeLoss` against a same-demand baseline, with teleports and stranded
 vehicles as hard disqualifying guards — GEH (sensor-fit) is deliberately
 **not** used here, since it's blind to waiting time.
+
+Every SUMO network build also writes `sumo/network_audit.json`, a provenance
+sidecar showing imported versus defaulted speed/lane values, movement and
+restriction tags, roundabouts, and the TLS membership produced by netconvert.
+Golden artifacts can be staged and activated through `release_registry.py`;
+activation requires an explicit validation record and can be rolled back by a
+single pointer flip.
 
 **Direction & OD estimation.** The calibrated routes are aggregated into an
 origin–destination matrix over zones (inner-city sub-areas + eight compass
@@ -219,7 +226,7 @@ tests/                  contract + pipeline tests (python3 -m pytest tests/)
 web/                    static Leaflet app (index.html, provider/state/render/clock/controls)
 web/data/               generated artifacts incl. graph.graphml (exact OSM snapshot —
                         SUMO work must start from this graph, not a fresh download)
-PLAN.md                 detailed, dated execution log for the multi-day/closure-timing/
-                        signal-optimization work — what's done, what's measured, what's next
+IMPROVEMENT_PLAN.md  canonical improvement plan: status, evidence gates,
+                      development order and external-data requirements
 CLAUDE.md               full project rules, contracts and decisions
 ```

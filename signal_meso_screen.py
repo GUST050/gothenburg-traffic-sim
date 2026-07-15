@@ -1,5 +1,5 @@
 """
-signal_meso_screen.py — PLAN.md Phase D3: is meso screening feasible?
+signal_meso_screen.py — IMPROVEMENT_PLAN.md Phase D3: is meso screening feasible?
 
 Meso is ~20x faster than micro (measured elsewhere in this project) but
 does not execute signal programs in its default (junction-control-off)
@@ -14,16 +14,16 @@ survivors? Or is meso's TLS approximation too different from micro's to
 trust for that purpose, meaning any real signal-timing search has to pay
 micro's cost for every candidate?
 
-METHOD: reuses PLAN.md D2's shared condition setup (signal_optimize.py) —
+METHOD: reuses IMPROVEMENT_PLAN.md D2's shared condition setup (signal_optimize.py) —
 baseline / adapted / adapted_coordinated / actuated / delay_based — and runs
 each condition BOTH in micro (real ground truth) and meso (the cheap
 screen), over the SAME window and seeds. Spearman correlation between the
 two condition rankings (by delta time loss vs baseline) answers the
 question directly; both directions are a valid, complete D3 outcome
-(PLAN.md's own words: "record either way").
+(IMPROVEMENT_PLAN.md's own words: "record either way").
 
 An UNDOCUMENTED per-TLS `<param key="meso.tls.control" value="true"/>`
-escape hatch was also investigated (see PLAN.md's D3 findings) — SUMO
+escape hatch was also investigated (see IMPROVEMENT_PLAN.md's D3 findings) — SUMO
 1.27.1 accepts it silently (no warning either way), but no independent
 confirmation of its real effect could be found in the locally available
 SUMO installation (no bundled source/docs reference it), so this script
@@ -32,7 +32,7 @@ mechanism this project already deploys is used instead, since its
 behaviour IS independently verified (CLAUDE.md, measured 2026-07-06).
 
 Also reports the network's own short-approach-edge geometry near TLS
-junctions (PLAN.md: "SUMO warns about short (<15 m) approach edges in
+junctions (IMPROVEMENT_PLAN.md: "SUMO warns about short (<15 m) approach edges in
 meso TLS — check ours") as a plain measurement, since SUMO did not
 actually emit that specific warning text under this project's real
 invocation despite the underlying short-edge condition being present.
@@ -223,7 +223,7 @@ def main() -> None:
         print("  degenerate ranking (too few distinct values) — cannot compute correlation")
 
     result = {
-        "method": "PLAN.md Phase D3: meso screening feasibility vs D1/D2 micro ground truth",
+        "method": "IMPROVEMENT_PLAN.md Phase D3: meso screening feasibility vs D1/D2 micro ground truth",
         "window_start": args.window_start, "window_end": args.window_end,
         "begin_s": begin_s, "end_s": end_s, "seeds": args.seeds,
         "short_tls_approach_edges": approach_report,

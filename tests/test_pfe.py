@@ -275,7 +275,7 @@ class TestRounding:
 
 
 class TestRouteIndexGroups:
-    """`groups` (2026-07-12, DESTINATION_BIAS_RESEARCH §4A step 3): a band
+    """`groups` (2026-07-12; see IMPROVEMENT_PLAN.md): a band
     over an explicit ROUTE-INDEX set, used to stop count-matching from
     loading near-sensor-ending routes far beyond their pool share (measured:
     19.4% of calibrated vehicles vs a ~2-4% pool/field share; the routes

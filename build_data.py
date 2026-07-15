@@ -29,6 +29,8 @@ import osmnx as ox
 import pandas as pd
 from pyproj import Transformer
 
+from sensor_registry import load_registry
+
 warnings.filterwarnings("ignore", message=".*OpenSSL.*", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -68,15 +70,6 @@ CONF_SIGMA_CLIP       = (0.02, 0.98)
 # residential, living_street etc. included (network_type="drive" already
 # excludes footways and parking aisles). The area is small enough (two
 # clusters × clip_radius) that edge count stays manageable.
-
-# ── Manual edge overrides ──────────────────────────────────────────────────────
-# Add an entry here ONLY when the auto-snapper picks the wrong road entirely.
-# Format: "sensor_id": "u_v_k"
-#
-# Do NOT add entries just because a Total sensor is on a one-way OSM road.
-# snap_sensors handles that automatically: it finds the opposite carriageway
-# within CARRIAGEWAY_M metres, because Total = two-way traffic exists here.
-MANUAL_SNAPS: dict[str, str] = {}
 
 # ── Required CSV columns (after name normalisation) ────────────────────────────
 
@@ -193,27 +186,18 @@ def empirical_conf_sigma_m(out_dir: Path) -> tuple[float, str]:
         )
 
 
-# ── Measured directions — SOURCE OF TRUTH ─────────────────────────────────────
-# Verified 2026-07-03 against Göteborgs Stad's trafikmängder catalogue
-# (Power BI): the delivered CSV's "level" column is UNRELIABLE — it shows the
-# catalogue's Total row, which for single-direction stations simply equals
-# the one measured direction. Per station the catalogue shows:
-#   107  Skånegatan      N + S + Total  → genuinely two-way (D-factor 48–52%)
-#   1074 Valhallagatan   V = Total      → westbound only
-#   1076 Skånegatan      S = Total      → southbound only
-#   133  Läraregatan     V = Total      → westbound only
-#   134  Gibraltargatan  SO = Total     → southeastbound only
-#   2276 Läraregatan     V = Total      → westbound only
-# Daily means in our data match the catalogue's ÅMVD per station (±3%).
-# New sensors: add them here after checking the catalogue.
+# ── Sensor registry ───────────────────────────────────────────────────────────
+# Direction semantics are maintained in data_in/sensors.json.  Keep these
+# compatibility names for callers/tests that import build_data, but derive
+# them from the validated registry so adding a station never requires a
+# source-code edit.
+SENSOR_REGISTRY_PATH = Path("data_in/sensors.json")
+_SENSOR_REGISTRY = load_registry(SENSOR_REGISTRY_PATH)
 SENSOR_MEASURED_DIRECTION: dict[str, str] = {
-    "107":  "Total",
-    "1074": "V",
-    "1076": "S",
-    "133":  "V",
-    "134":  "SO",
-    "2276": "V",
+    sensor_id: record.level
+    for sensor_id, record in _SENSOR_REGISTRY.records.items()
 }
+MANUAL_SNAPS: dict[str, str] = _SENSOR_REGISTRY.manual_snaps()
 
 # Compass letter → travel bearing. The snapped directed edge MUST point this
 # way, or the counts end up on the opposite direction of travel.
@@ -372,8 +356,8 @@ def load_raw(data_dir: Path, coords_path: Path | None = None) -> pd.DataFrame:
     rows join in with those fields null; the REQUIRED_COLS check only
     verifies column presence across the whole concatenated frame, not
     per-row completeness, so this silently corrupted sensor_level for any
-    sensor not already covered by SENSOR_MEASURED_DIRECTION's hardcoded
-    overrides. Found in a bug review 2026-07-10, independently verified."""
+    sensor not already covered by the validated registry. Found in a bug
+    review 2026-07-10, independently verified."""
     frames = []
     coords_resolved = coords_path.expanduser().resolve() if coords_path else None
     for path in sorted(data_dir.glob("*.csv")):
@@ -642,6 +626,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--coords",      default=None,
                    help="Sensor coordinates CSV, SWEREF99 12 00 / EPSG:3007 "
                         "(default: *koordinat*.csv in data_in/, else the original)")
+    p.add_argument("--registry",    default=str(SENSOR_REGISTRY_PATH),
+                   help="Validated sensor registry JSON (default: data_in/sensors.json)")
     p.add_argument("--out_dir",     default="web/data",
                    help="Output directory (default: web/data)")
     p.add_argument("--clip_radius", type=float, default=0,
@@ -655,6 +641,7 @@ def parse_args() -> argparse.Namespace:
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    global MANUAL_SNAPS
     args        = parse_args()
     data_dir    = Path(args.data_dir or discover_data_dir()).expanduser()
     coords_path = Path(args.coords or discover_coords()).expanduser()
@@ -673,35 +660,23 @@ def main() -> None:
     raw = load_raw(data_dir, coords_path)
     print(f"  {len(raw):,} rows  |  sensors: {sorted(raw['matplats'].unique())}")
 
+    print("Loading coordinates …")
+    coords = load_coords(coords_path)
+    sensor_ids = sorted(str(sensor_id) for sensor_id in raw["matplats"].unique())
+    registry = load_registry(Path(args.registry), coordinates=coords)
+    registry.validate_data_sensors(sensor_ids, require_coordinates=True)
+    MANUAL_SNAPS = registry.manual_snaps()
+    sensors = [sensor_id for sensor_id in sensor_ids if sensor_id in coords]
+    if not sensors:
+        raise ValueError("No sensors found in both data and coordinates files.")
+    sensor_level = registry.levels_for(sensors)
+    print(f"  {len(sensors)} matched: {sensors}")
+
     level_inconsistent = raw.groupby("matplats")["level"].nunique()
     level_inconsistent = level_inconsistent[level_inconsistent > 1]
     if not level_inconsistent.empty:
         print(f"  ⚠  Inconsistent level values: {level_inconsistent.to_dict()}")
 
-    sensor_level: dict[str, str] = (
-        raw.drop_duplicates("matplats")
-           .set_index("matplats")["level"]
-           .to_dict()
-    )
-
-    # Override the delivered level with the verified measured direction —
-    # the delivery calls single-direction stations "Total" (see table above).
-    for sid, true_level in SENSOR_MEASURED_DIRECTION.items():
-        delivered = sensor_level.get(sid)
-        if delivered is not None and delivered != true_level:
-            print(f"  level override: sensor {sid} delivered '{delivered}' "
-                  f"→ measured direction '{true_level}' (city catalogue)")
-            sensor_level[sid] = true_level
-    unknown = set(sensor_level) - set(SENSOR_MEASURED_DIRECTION)
-    if unknown:
-        print(f"  ⚠  sensors not in SENSOR_MEASURED_DIRECTION (check the city "
-              f"catalogue and add them): {sorted(unknown)}")
-
-    print("Loading coordinates …")
-    coords = load_coords(coords_path)
-    sensors = [s for s in sorted(raw["matplats"].unique()) if s in coords]
-    if not sensors:
-        raise ValueError("No sensors found in both data and coordinates files.")
     lats = [coords[s][0] for s in sensors]
     lons = [coords[s][1] for s in sensors]
     print(f"  {len(sensors)} matched: {sensors}")

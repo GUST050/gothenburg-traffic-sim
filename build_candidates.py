@@ -231,9 +231,9 @@ PURPOSE_HOURLY_WEEKEND: list[tuple[float, float, float]] = [
 ]
 PURPOSE_CATEGORIES = ("arbete", "service", "fritid")
 
-# Per-purpose trip-length SCALE on the deterrence kernel's β (2026-07-13,
-# DESTINATION_BIAS_RESEARCH §4A step 1's "length priors by purpose and day
-# type"). SOURCE: Trafikanalys "Resvanor i Sverige 2023" (official national
+# Per-purpose trip-length SCALE on the deterrence kernel's β (2026-07-13;
+# see IMPROVEMENT_PLAN.md's demand/destination integrity section).
+# SOURCE: Trafikanalys "Resvanor i Sverige 2023" (official national
 # RVU statistics, published Excel at trafa.se/globalassets/statistik/
 # resvanor/2023/resvanor-i-sverige-2023.xlsx), Tabell 3 "Färdlängd
 # (kilometer) per huvudresa ... efter huvudsakligt ärende och huvudsakligt
@@ -257,7 +257,7 @@ PURPOSE_CATEGORIES = ("arbete", "service", "fritid")
 # (avstånd till arbete/skola). Under the WEEKEND mix the mean scale comes
 # out ~1.11 — deliberately NOT normalized away: leisure dominates weekends
 # and leisure trips are the long ones, so slightly longer weekend trips is
-# the survey-implied day-type signal §4A step 1 asks for, arriving through
+# the survey-implied day-type signal, arriving through
 # the joint P(length | purpose) × P(purpose | hour, day type).
 # "external" (I-E exit-gate trips) has no survey purpose row — scale 1.0.
 _PURPOSE_RAW_RATIO = {"arbete": 24 / 37, "service": 30 / 37, "fritid": 56 / 37}
@@ -310,7 +310,7 @@ def deterrence_weights(d_km: np.ndarray, gravity_km: float,
     (x^0 = 1). alpha>0 makes the kernel rise from zero to a mode at
     α·β km before decaying — the standard "combined" deterrence function
     of the gravity-model literature (Tanner; Wilson-family models; see
-    DESTINATION_BIAS_RESEARCH_2026-07-12.md for sources and the measured
+    IMPROVEMENT_PLAN.md for sources and the measured
     failure that motivated this).
 
     WHY (found 2026-07-12, Gustav watching the simulation: "many cars end
@@ -955,8 +955,8 @@ def natural_sensor_masks(
     returned per sensor so the caller can take both the UNION (does any
     sensor lie naturally on the way?) and the attribution (which ones?).
 
-    Built for the 2026-07-12 destination-clustering fix (see
-    DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 2): instead of
+    Built for the 2026-07-12 destination-clustering fix (see the
+    demand/destination integrity section of IMPROVEMENT_PLAN.md): instead of
     forcing every anchor draw through one pre-chosen sensor and
     renormalizing within whatever that sensor's mask happens to admit
     (which lets an anchor whose only admissible destinations are next to
@@ -1328,8 +1328,8 @@ def generate_sensor_anchored_trips(
     home_anchor_p = hmass / hmass.sum()
     entry_anchor_p = w_entry / w_entry.sum()
 
-    # ── Conditional joint sampling (REDESIGNED 2026-07-12, see
-    # DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 2 and
+    # ── Conditional joint sampling (REDESIGNED 2026-07-12; see the
+    # demand/destination integrity section of IMPROVEMENT_PLAN.md and
     # natural_sensor_masks' docstring). Each tour's outbound leg now:
     #   1. draws its anchor from the UNCONDITIONED anchor field,
     #   2. computes city-wide destination weights (activity mass ×
@@ -1655,7 +1655,7 @@ def main() -> None:
                         "past the sensor' the modal destination — 36.5%% of "
                         "simulated vehicles ended within 200 m of a sensor "
                         "vs a 2.1%% random-edge baseline. See "
-                        "DESTINATION_BIAS_RESEARCH_2026-07-12.md and "
+                        "IMPROVEMENT_PLAN.md and "
                         "deterrence_weights().")
     ap.add_argument("--fit-only", action="store_true",
                     help="Stop after generating trips and writing "

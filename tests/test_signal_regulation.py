@@ -1,5 +1,5 @@
 """
-Unit tests for signal_regulation.py (PLAN.md Phase D6, partial).
+Unit tests for signal_regulation.py (IMPROVEMENT_PLAN.md Phase D6, partial).
 
 Real end-to-end SUMO execution of the "reg" program is verified manually
 against real demand (matching D1-D5's established style); these tests

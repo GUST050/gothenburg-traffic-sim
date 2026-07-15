@@ -1,5 +1,5 @@
 """
-signal_lab.py — PLAN.md Phase D1: reproducible signal-timing experiment
+signal_lab.py — IMPROVEMENT_PLAN.md Phase D1: reproducible signal-timing experiment
 harness + baseline.
 
 Runs the CURRENTLY calibrated demand through MICROSCOPIC simulation over a
@@ -7,7 +7,7 @@ bounded time-of-day window, with a fixed set of seeds, and records
 closure_metrics.py's disruption scorecard per run into a results JSON with
 enough provenance (CLI args, network fingerprint, demand signature, SUMO
 version) to reproduce or compare runs later — this is exactly what the
-deleted ad hoc sumo/*tls_verify* artifacts (PLAN.md Phase A3) lacked.
+deleted ad hoc sumo/*tls_verify* artifacts (IMPROVEMENT_PLAN.md Phase A3) lacked.
 
 MICRO, not meso: mesoscopic simulation does not execute signal programs at
 all (CLAUDE.md, measured 2026-07-06 — meso delivery is identical whether
@@ -20,8 +20,8 @@ synthetic 90 s-cycle default (CLAUDE.md, measured 2026-07-09), not a real
 Gothenburg signal plan. Every result this script writes carries
 tls_provenance="synthetic" explicitly, so nothing downstream can misread
 "optimized against the model's default" as "better than Gothenburg's real
-signals today" (PLAN.md Phase D's own stated honesty requirement). This
-becomes "city-configured" only once PLAN.md D6 imports real plans.
+signals today" (IMPROVEMENT_PLAN.md Phase D's own stated honesty requirement). This
+becomes "city-configured" only once IMPROVEMENT_PLAN.md D6 imports real plans.
 
 Usage:
   python3 signal_lab.py [--window-start 07:00] [--window-end 09:00]
@@ -355,14 +355,14 @@ def main() -> None:
         [cm.DisruptionMetrics(**p["metrics"]) for p in per_seed])
 
     result = {
-        "method": "PLAN.md Phase D1: micro signal-timing experiment harness",
+        "method": "IMPROVEMENT_PLAN.md Phase D1: micro signal-timing experiment harness",
         "window_start": args.window_start, "window_end": args.window_end,
         "begin_s": begin_s, "end_s": end_s,
         "seeds": [p["seed"] for p in per_seed],
         "tls_provenance": TLS_PROVENANCE,
         # Structural (not just prose) enforcement of the module docstring's
         # own honesty rule: as long as TLS_PROVENANCE is "synthetic" (the
-        # only value that exists until PLAN.md D6 imports real plans), no
+        # only value that exists until IMPROVEMENT_PLAN.md D6 imports real plans), no
         # caller may present this as an operational recommendation. Added
         # 2026-07-11 per external review section 5.1's suggestion to make
         # this a checkable field, not just a caveat string a UI could

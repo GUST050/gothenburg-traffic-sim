@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import re
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
@@ -48,6 +49,70 @@ DEFAULT_LANES = {
     "secondary": 1, "tertiary": 1,
 }
 
+_SPEED_RE = re.compile(
+    r"(?<!\d)(?P<value>\d+(?:[.,]\d+)?)\s*"
+    r"(?P<unit>km/?h|kph|kmh|mph|m/s|knots?)?",
+    re.IGNORECASE,
+)
+_SPEED_UNIT_TO_KMH = {
+    "km/h": 1.0, "kmh": 1.0, "kph": 1.0,
+    "mph": 1.609344, "m/s": 3.6,
+    "knot": 1.852, "knots": 1.852,
+}
+_MIN_SPEED_KMH = 5.0
+_MAX_SPEED_KMH = 130.0
+
+
+def _tag_values(value: object) -> list[object]:
+    """Return OSMnx scalar/list tags as a deterministic list."""
+    if isinstance(value, list):
+        return value
+    return [] if value is None else [value]
+
+
+def _parse_numeric_tag(value: object) -> int | None:
+    """Parse the first positive integer in an OSM numeric tag."""
+    for item in _tag_values(value):
+        match = re.search(r"(?<!\d)(\d+)", str(item))
+        if match:
+            parsed = int(match.group(1))
+            if parsed > 0:
+                return parsed
+    return None
+
+
+def _is_oneway(value: object) -> bool:
+    """Recognise the OSM yes/no forms, including list-valued OSMnx tags."""
+    values = {str(item).strip().lower() for item in _tag_values(value)}
+    return bool(values & {"yes", "true", "1", "-1"})
+
+
+def _speed_kmh(value: object) -> float | None:
+    """Parse one OSM maxspeed value without accepting implausible speeds.
+
+    OSM permits semicolon-separated and conditional values.  A directed SUMO
+    edge cannot safely represent every conditional lane value, so the first
+    explicit value is used and the condition is deliberately ignored.  The
+    old implementation concatenated digits (``30;50`` -> 3050), which could
+    create effectively teleporting vehicles after a network rebuild.
+    """
+    for item in _tag_values(value):
+        text = str(item).strip()
+        if not text:
+            continue
+        match = _SPEED_RE.search(text.replace(",", "."))
+        if not match:
+            continue
+        number = float(match.group("value"))
+        unit = (match.group("unit") or "km/h").lower().replace(" ", "")
+        factor = _SPEED_UNIT_TO_KMH.get(unit)
+        if factor is None:
+            continue
+        kmh = number * factor
+        if _MIN_SPEED_KMH <= kmh <= _MAX_SPEED_KMH:
+            return kmh
+    return None
+
 
 def scalar(val: object) -> object:
     return val[0] if isinstance(val, list) else val
@@ -55,32 +120,33 @@ def scalar(val: object) -> object:
 
 def parse_speed_ms(data: dict) -> float:
     """maxspeed tag (km/h) → m/s, falling back on highway-type defaults."""
-    raw = scalar(data.get("maxspeed"))
-    if raw is not None:
-        digits = "".join(ch for ch in str(raw) if ch.isdigit())
-        if digits:
-            return int(digits) / 3.6
+    parsed = _speed_kmh(data.get("maxspeed"))
+    if parsed is not None:
+        return parsed / 3.6
     hw = str(scalar(data.get("highway", "")) or "")
     return DEFAULT_SPEED_KMH.get(hw, 50) / 3.6
 
 
 def parse_lanes(data: dict) -> int:
     """Per-direction lane count. OSM 'lanes' counts BOTH directions on
-    two-way ways, so halve it unless the way is one-way."""
-    raw = scalar(data.get("lanes"))
+    two-way ways, so halve it unless the way is one-way.  Explicit directed
+    lane tags are preferred when a total is absent; when both directions are
+    present and the edge orientation is unavailable, the aggregate `lanes`
+    tag remains the conservative source instead of copying one direction to
+    both SUMO edges."""
+    raw = data.get("lanes")
     hw  = str(scalar(data.get("highway", "")) or "")
-    if raw is not None:
-        digits = "".join(ch for ch in str(raw).split(";")[0] if ch.isdigit())
-        if digits:
-            total  = int(digits)
-            # scalar(): osmnx graph simplification can merge several original
-            # OSM ways into one edge, leaving a list-valued tag when they
-            # disagree — maxspeed/highway above already guard against this,
-            # oneway didn't, which would silently halve a real one-way
-            # street's lane count (list != any of the string/bool checks).
-            oneway = scalar(data.get("oneway")) in (True, "True", "true", "yes")
-            lanes  = total if oneway else max(1, total // 2)
-            return min(lanes, 4)
+    total = _parse_numeric_tag(raw)
+    oneway = _is_oneway(data.get("oneway"))
+    if total is None:
+        directed = _parse_numeric_tag(data.get("lanes:forward"))
+        if directed is None:
+            directed = _parse_numeric_tag(data.get("lanes:backward"))
+        if directed is not None:
+            return min(directed, 4)
+    if total is not None:
+        lanes = total if oneway else max(1, total // 2)
+        return min(lanes, 4)
     return DEFAULT_LANES.get(hw, 1)
 
 
@@ -89,6 +155,7 @@ def main() -> None:
     # dependencies.  Keep them out of scenario/demand import paths.
     import osmnx as ox
     from pyproj import Transformer
+    from network_audit import write_audit
 
     SUMO_DIR.mkdir(exist_ok=True)
 
@@ -162,6 +229,9 @@ def main() -> None:
     metadata_path = SUMO_DIR / "network_metadata.json"
     metadata = write_metadata(net_path, metadata_path)
     print(f"Wrote {metadata_path}  ({len(metadata['edges'])} indexed edges)")
+    audit_path = SUMO_DIR / "network_audit.json"
+    audit = write_audit(G, net_path, audit_path)
+    print(f"Wrote {audit_path}  ({len(audit['edges'])} audited edges)")
     print("SUMO edge IDs are identical to network.geojson/flows.json edge IDs.")
 
 

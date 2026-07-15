@@ -14,9 +14,12 @@ traffic estimate".
 2. **Check the measured direction** in Göteborgs Stad's trafikmängder
    catalogue (Power BI — link in CLAUDE.md): does the station show ONE
    compass letter = Total (single direction) or two letters + Total
-   (genuine two-way)? Add the station to `SENSOR_MEASURED_DIRECTION` in
-   `build_data.py`. **Do not skip this** — the delivered "Total" label is
-   unreliable (4 of our 5 original "Total" sensors were single-direction).
+   (genuine two-way)? Add or update the station record in
+   `data_in/sensors.json`, including catalogue verification metadata.
+   **Do not skip this** — the delivered "Total" label is unreliable (4 of
+   our 5 original "Total" sensors were single-direction). The coordinate
+   file remains the authoritative source for the station position; the build
+   validates that every data sensor has a matching coordinate.
 3. **Run `make refresh`** — rebuilds the network (direction-aware snapping),
    features, forecasts, direction-split predictions, SUMO demand calibration
    and the baseline scenario. New sensors automatically get: an edge on the

@@ -1,4 +1,4 @@
-"""Run registry — PLAN.md Phase E1 (2026-07-13).
+"""Run registry — IMPROVEMENT_PLAN.md Phase E1 (2026-07-13).
 
 Every demand build and scenario run gets an immutable directory under
 `runs/<run_id>/` with a manifest written BEFORE the work starts, so a

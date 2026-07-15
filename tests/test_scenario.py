@@ -18,6 +18,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import run_scenario
+from study_contracts import ScenarioSpec
 
 SCEN_DIR   = Path(__file__).parent.parent / "web" / "data" / "scenarios"
 INDEX_PATH = SCEN_DIR / "index.json"
@@ -119,6 +120,37 @@ class TestDemandVariants:
         with pytest.raises(FileNotFoundError, match="calibrated_v2"):
             run_scenario.demand_variants({"n_variants": 3})
         assert run_scenario.valid_scenario_name("x" * 80)
+
+
+class TestScenarioSpecIntegration:
+    def test_variant_path_uses_explicit_quantile_mapping(self, tmp_path):
+        paths = [tmp_path / "q50.rou.xml", tmp_path / "q10.rou.xml",
+                 tmp_path / "q90.rou.xml"]
+        assert run_scenario.variant_path(paths, "q50") == paths[0]
+        assert run_scenario.variant_path(paths, "q10") == paths[1]
+        assert run_scenario.variant_path(paths, "q90") == paths[2]
+
+    def test_variant_path_rejects_unavailable_variant(self, tmp_path):
+        with pytest.raises(ValueError, match="unavailable"):
+            run_scenario.variant_path([tmp_path / "q50.rou.xml"], "q90")
+
+    def test_spec_validation_checks_demand_network_and_window(self, tmp_path):
+        net = tmp_path / "net.net.xml"
+        net.write_text("<net/>")
+        from pipeline_fingerprint import sha256_file
+        spec = ScenarioSpec.from_dict({
+            "scenario_id": "baseline",
+            "demand_build_id": "demand-a",
+            "network_build_id": sha256_file(net),
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-16T00:15:00",
+        })
+        run_scenario.validate_scenario_spec(
+            spec,
+            meta={"build_id": "demand-a", "epoch_sim": "2025-09-16T00:00:00"},
+            duration_s=900,
+            network_path=net,
+        )
 
 
 class TestClosureIntegrityStatus:
@@ -352,7 +384,7 @@ class TestRunSumoFlushOffset:
 
 
 class TestRunSumoBeginOffset:
-    """begin_s (added for signal_lab.py, PLAN.md D1): a bounded time-of-day
+    """begin_s (added for signal_lab.py, IMPROVEMENT_PLAN.md D1): a bounded time-of-day
     window must shift SUMO's own --begin, not just filter results after the
     fact, so vehicles outside the window are never even inserted."""
 
@@ -387,7 +419,7 @@ class TestRunSumoBeginOffset:
 
 
 class TestRunSumoNetPath:
-    """net_path (added for signal_optimize.py, PLAN.md D2): comparing TLS
+    """net_path (added for signal_optimize.py, IMPROVEMENT_PLAN.md D2): comparing TLS
     types (actuated/delay_based) needs an ALTERNATE net.net.xml, since
     those types are baked in at netconvert time, not a sumo runtime flag."""
 
@@ -421,7 +453,7 @@ class TestRunSumoNetPath:
 
 
 class TestRunSumoVehrouteOutput:
-    """vehroute_output (added for signal_closure_combine.py, PLAN.md D4):
+    """vehroute_output (added for signal_closure_combine.py, IMPROVEMENT_PLAN.md D4):
     extracting the ACTUALLY-driven post-closure routes needs the runtime
     rerouter's real decisions, only available from --vehroute-output,
     requested from the SAME run as the disruption metrics."""
@@ -941,7 +973,7 @@ class TestTimeWindowedClosures:
 
 
 class TestParseVehrouteFile:
-    """F2 (PLAN.md): unfinished vehicles (still driving at end of run) keep
+    """F2 (IMPROVEMENT_PLAN.md): unfinished vehicles (still driving at end of run) keep
     their driven prefix and get marked "u": 1, so playback can park them at
     their last known position instead of erasing the trip."""
 

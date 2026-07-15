@@ -2,7 +2,7 @@
 # Individual steps: make data / features / agent1 / forecast / test / serve
 #
 # New sensor data? Drop it in data_in/ (see data_in/README.md), add the
-# station to SENSOR_MEASURED_DIRECTION in build_data.py, then `make refresh`.
+# validated station record to data_in/sensors.json, then `make refresh`.
 # Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
 .PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso benchmark-speed

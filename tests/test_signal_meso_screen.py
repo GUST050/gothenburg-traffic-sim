@@ -1,11 +1,11 @@
 """
-Unit tests for signal_meso_screen.py (PLAN.md Phase D3).
+Unit tests for signal_meso_screen.py (IMPROVEMENT_PLAN.md Phase D3).
 
 The heavy end (running micro AND meso for six conditions) is exercised
 manually against real demand, not here — mirrors the established test
 style for every other SUMO-invoking script in this project. This covers
 the one pure, independently-testable piece: measuring short TLS-approach
-edges from a net.net.xml, which PLAN.md explicitly asked to "check ours"
+edges from a net.net.xml, which IMPROVEMENT_PLAN.md explicitly asked to "check ours"
 for.
 """
 

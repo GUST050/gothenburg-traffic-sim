@@ -1,4 +1,4 @@
-"""E4 durable job records (PLAN.md; audit P0-4).
+"""E4 durable job records (IMPROVEMENT_PLAN.md; audit P0-4).
 
 The four in-memory state dicts vanish with the server process; every job
 now also writes runs/jobs/<id>.json at start and terminal transition, and
@@ -69,6 +69,10 @@ class TestJobRecords:
 
 
 class TestReconcileOnStartup:
+    def setup_method(self):
+        serve._RECOVERY_BLOCKED = False
+        serve._ORPHANED_JOB_IDS.clear()
+
     def test_running_record_with_dead_pgid_becomes_orphaned(self, monkeypatch, tmp_path):
         monkeypatch.setattr(serve, "JOBS_DIR", tmp_path / "jobs")
         # A pid from a long-dead process: fork one and reap it.
@@ -105,3 +109,15 @@ class TestReconcileOnStartup:
                          started_at=time.time())
         serve.reconcile_jobs_on_startup()
         assert serve.job_read("early-death")["status"] == "orphaned"
+
+    def test_startup_gate_requires_explicit_orphan_acknowledgement(
+            self, monkeypatch, tmp_path):
+        monkeypatch.setattr(serve, "JOBS_DIR", tmp_path / "jobs")
+        serve.job_record("stranded", kind="close", status="running",
+                         started_at=time.time())
+        serve.reconcile_jobs_on_startup(block_new_jobs=True)
+        assert serve.simulation_recovery_block()["orphaned_jobs"] == ["stranded"]
+        ok, reason = serve._acknowledge_orphan("stranded")
+        assert ok and reason == ""
+        assert serve.simulation_recovery_block() is None
+        assert serve.job_read("stranded")["status"] == "cancelled"

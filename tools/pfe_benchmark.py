@@ -1,4 +1,4 @@
-"""Deterministic PFE benchmark fixture — PLAN.md H2 (audit P1-3).
+"""Deterministic PFE benchmark fixture — IMPROVEMENT_PLAN.md H2 (audit P1-3).
 
 Builds a fully seeded, realistic-shaped calibration problem (no network
 files, no I/O), runs the exact deployed solve path

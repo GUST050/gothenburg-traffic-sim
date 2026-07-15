@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "sensors": [
+    {
+      "sensor_id": "107",
+      "active_from": "2025-01-01",
+      "active_to": null,
+      "measurement_semantics": "two_way_total",
+      "measured_bearing": null,
+      "permitted_bearings": ["N", "S"],
+      "coordinates": null,
+      "coordinate_reference_system": "EPSG:3007",
+      "source": "Goteborgs Stad trafikmangder catalogue",
+      "source_file": "Mätpunkter_koordinater.csv",
+      "snap_status": "pending",
+      "approved_edge_ids": [],
+      "snap_distance_m": null,
+      "catalogue_verification": {
+        "status": "verified",
+        "date": "2026-07-03",
+        "verifier": "Gustav"
+      },
+      "quality_status": "accepted",
+      "notes": "Genuinely two-way; split is estimated per time slot.",
+      "manual_snap": null
+    },
+    {
+      "sensor_id": "1074",
+      "active_from": "2025-01-01",
+      "active_to": null,
+      "measurement_semantics": "directional",
+      "measured_bearing": "V",
+      "permitted_bearings": ["V"],
+      "coordinates": null,
+      "coordinate_reference_system": "EPSG:3007",
+      "source": "Goteborgs Stad trafikmangder catalogue",
+      "source_file": "Mätpunkter_koordinater.csv",
+      "snap_status": "pending",
+      "approved_edge_ids": [],
+      "snap_distance_m": null,
+      "catalogue_verification": {
+        "status": "verified",
+        "date": "2026-07-03",
+        "verifier": "Gustav"
+      },
+      "quality_status": "accepted",
+      "notes": "Single measured direction.",
+      "manual_snap": null
+    },
+    {
+      "sensor_id": "1076",
+      "active_from": "2025-01-01",
+      "active_to": null,
+      "measurement_semantics": "directional",
+      "measured_bearing": "S",
+      "permitted_bearings": ["S"],
+      "coordinates": null,
+      "coordinate_reference_system": "EPSG:3007",
+      "source": "Goteborgs Stad trafikmangder catalogue",
+      "source_file": "Mätpunkter_koordinater.csv",
+      "snap_status": "pending",
+      "approved_edge_ids": [],
+      "snap_distance_m": null,
+      "catalogue_verification": {
+        "status": "verified",
+        "date": "2026-07-03",
+        "verifier": "Gustav"
+      },
+      "quality_status": "accepted",
+      "notes": "Single measured direction.",
+      "manual_snap": null
+    },
+    {
+      "sensor_id": "133",
+      "active_from": "2025-01-01",
+      "active_to": null,
+      "measurement_semantics": "directional",
+      "measured_bearing": "V",
+      "permitted_bearings": ["V"],
+      "coordinates": null,
+      "coordinate_reference_system": "EPSG:3007",
+      "source": "Goteborgs Stad trafikmangder catalogue",
+      "source_file": "Mätpunkter_koordinater.csv",
+      "snap_status": "pending",
+      "approved_edge_ids": [],
+      "snap_distance_m": null,
+      "catalogue_verification": {
+        "status": "verified",
+        "date": "2026-07-03",
+        "verifier": "Gustav"
+      },
+      "quality_status": "accepted",
+      "notes": "Single measured direction.",
+      "manual_snap": null
+    },
+    {
+      "sensor_id": "134",
+      "active_from": "2025-01-01",
+      "active_to": null,
+      "measurement_semantics": "directional",
+      "measured_bearing": "SO",
+      "permitted_bearings": ["SO"],
+      "coordinates": null,
+      "coordinate_reference_system": "EPSG:3007",
+      "source": "Goteborgs Stad trafikmangder catalogue",
+      "source_file": "Mätpunkter_koordinater.csv",
+      "snap_status": "pending",
+      "approved_edge_ids": [],
+      "snap_distance_m": null,
+      "catalogue_verification": {
+        "status": "verified",
+        "date": "2026-07-03",
+        "verifier": "Gustav"
+      },
+      "quality_status": "accepted",
+      "notes": "Single measured direction.",
+      "manual_snap": null
+    },
+    {
+      "sensor_id": "2276",
+      "active_from": "2025-01-01",
+      "active_to": null,
+      "measurement_semantics": "directional",
+      "measured_bearing": "V",
+      "permitted_bearings": ["V"],
+      "coordinates": null,
+      "coordinate_reference_system": "EPSG:3007",
+      "source": "Goteborgs Stad trafikmangder catalogue",
+      "source_file": "Mätpunkter_koordinater.csv",
+      "snap_status": "pending",
+      "approved_edge_ids": [],
+      "snap_distance_m": null,
+      "catalogue_verification": {
+        "status": "verified",
+        "date": "2026-07-03",
+        "verifier": "Gustav"
+      },
+      "quality_status": "accepted",
+      "notes": "Single measured direction.",
+      "manual_snap": null
+    }
+  ]
+}

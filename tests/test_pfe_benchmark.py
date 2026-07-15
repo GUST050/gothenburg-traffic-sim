@@ -1,4 +1,4 @@
-"""H2 (PLAN.md; audit P1-3): the PFE benchmark fingerprint must not drift.
+"""H2 (IMPROVEMENT_PLAN.md; audit P1-3): the PFE benchmark fingerprint must not drift.
 
 Re-runs the seeded fixture through the deployed solve path and compares
 against the checked-in baseline. A failure here means a solver/report

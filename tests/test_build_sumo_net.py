@@ -19,6 +19,22 @@ class TestParseSpeedMs:
         # OSMnx sometimes stores tag values as single-element lists.
         assert parse_speed_ms({"maxspeed": ["70"]}) == pytest.approx(70 / 3.6)
 
+    def test_semicolon_speed_uses_one_value_not_concatenated_digits(self):
+        assert parse_speed_ms({"maxspeed": "30;50",
+                               "highway": "residential"}) \
+            == pytest.approx(30 / 3.6)
+
+    def test_speed_units_are_converted(self):
+        assert parse_speed_ms({"maxspeed": "30 mph"}) \
+            == pytest.approx(30 * 1.609344 / 3.6)
+        assert parse_speed_ms({"maxspeed": "10 m/s"}) \
+            == pytest.approx(10.0)
+
+    def test_implausible_speed_falls_back(self):
+        assert parse_speed_ms({"maxspeed": "3050",
+                               "highway": "residential"}) \
+            == pytest.approx(30 / 3.6)
+
     def test_non_numeric_maxspeed_falls_back_to_highway_type(self):
         # e.g. "DE:zone30" or "signals" — no digits to parse.
         assert parse_speed_ms({"maxspeed": "signals", "highway": "residential"}) \
@@ -60,6 +76,15 @@ class TestParseLanes:
 
     def test_lanes_as_scalar_list(self):
         assert parse_lanes({"lanes": ["4"], "highway": "primary"}) == 2
+
+    def test_directional_lane_tag_is_used_when_total_is_missing(self):
+        assert parse_lanes({"lanes:forward": "2",
+                            "highway": "residential"}) == 2
+
+    def test_directional_lane_tags_do_not_copy_one_side_over_total(self):
+        assert parse_lanes({"lanes": "3", "lanes:forward": "2",
+                            "lanes:backward": "1",
+                            "highway": "primary"}) == 1
 
     def test_missing_lanes_uses_highway_default(self):
         assert parse_lanes({"highway": "secondary"}) == 1

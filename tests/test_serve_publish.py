@@ -1,4 +1,4 @@
-"""E2 publish-after-validate tests (PLAN.md; audit P0-2).
+"""E2 publish-after-validate tests (IMPROVEMENT_PLAN.md; audit P0-2).
 
 A recalibration must never destroy the live scenario set before a
 validated replacement exists. These test the two pure helpers; the HTTP
@@ -13,21 +13,28 @@ import serve
 
 
 def _staged(tmp_path, geh=100.0, infeasible=0, with_baseline=True,
-            flows=True):
+            flows=True, build_id=None, variant_fit=None):
     staging = tmp_path / "staging"
     staging.mkdir(exist_ok=True)
     scen = {"name": "baseline", "file": "baseline.json"}
     index = {"scenarios": [scen] if with_baseline else []}
     (staging / "index.json").write_text(json.dumps(index))
     if with_baseline:
-        (staging / "baseline.json").write_text(json.dumps(
-            {"flows": {"e1": [1, 2]} if flows else {}}))
+        payload = {"flows": {"e1": [1, 2]} if flows else {}}
+        if build_id:
+            payload["scenario"] = {"build_id": build_id}
+        (staging / "baseline.json").write_text(json.dumps(payload))
         (staging / "baseline_traj.json").write_text(json.dumps(
             {"vehicles": []}))
     meta = tmp_path / "demand_meta.json"
-    meta.write_text(json.dumps({"pfe_fit": {
+    meta_payload = {"pfe_fit": {
         "geh_pct": geh, "infeasible_intervals": infeasible,
-        "vehicles": 20000}}))
+        "vehicles": 20000}}
+    if build_id:
+        meta_payload["build_id"] = build_id
+    if variant_fit is not None:
+        meta_payload["pfe_fit_variants"] = variant_fit
+    meta.write_text(json.dumps(meta_payload))
     return staging, meta
 
 
@@ -68,6 +75,25 @@ class TestValidateStagedScenarios:
         meta.write_text(json.dumps({"date": "2025-09-16"}))
         ok, reason = serve.validate_staged_scenarios(staging, meta)
         assert ok, reason
+
+    def test_build_id_mismatch_is_refused(self, tmp_path):
+        staging, meta = _staged(tmp_path, build_id="new-build")
+        (staging / "baseline.json").write_text(json.dumps({
+            "flows": {"e1": [1, 2]},
+            "scenario": {"build_id": "old-build"},
+        }))
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert not ok and "build-ID" in reason
+
+    def test_each_uncertainty_variant_is_gated(self, tmp_path):
+        staging, meta = _staged(
+            tmp_path,
+            variant_fit={
+                "edge_shares": {"geh_pct": 100, "infeasible_intervals": 0},
+                "edge_shares_q10": {"geh_pct": 98.0, "infeasible_intervals": 0},
+            })
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert not ok and "edge_shares_q10" in reason
 
 
 class TestPublishStagedScenarios:

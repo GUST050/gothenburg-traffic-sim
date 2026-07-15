@@ -42,7 +42,7 @@ Endpoints:
                                 once cleanup has completed.
   GET /api/suggest_closure?edges=a,b&duration_hours=6&slide_hours=1
                             &top_k=15&extra_bad=2&seeds=3
-                              — PLAN.md Phase C5: runs suggest_closure_time.py
+                              — IMPROVEMENT_PLAN.md Phase C5: runs suggest_closure_time.py
                                 (Phase C4) against the CURRENTLY calibrated
                                 demand and the matching baseline scenario
                                 already in web/data/scenarios/baseline.json.
@@ -60,13 +60,14 @@ Endpoints:
                                 whole-run closures, extended 2026-07-11 to
                                 accept an optional time window).
   GET /api/optimize_signals?edges=a,b (edges optional)
-                              — PLAN.md Phase D5: runs signal_optimize.py
+                              — IMPROVEMENT_PLAN.md Phase D5: runs signal_optimize.py
                                 (D2, edges omitted/empty — no active
                                 closure) or signal_closure_combine.py (D4,
                                 edges given — adapts signals to the ACTUAL
                                 post-closure routes) against the currently
-                                calibrated demand, fixed 07:00-09:00/3-seed
-                                MICRO window (not exposed in the UI, same
+                                calibrated demand, using optional
+                                window_start/window_end parameters (defaults
+                                07:00-09:00; not exposed in the UI, same
                                 scope-narrowing reasoning as C5's top_k/
                                 extra_bad/seeds). Same async/poll pattern,
                                 shares _sim_lock with the other three.
@@ -77,7 +78,7 @@ Endpoints:
                                 card, a per-junction cycle/split/offset
                                 plan diff, and the tls_provenance="synthetic"
                                 label/caveat every signal result must carry
-                                until PLAN.md D6 imports real city plans.
+                                until IMPROVEMENT_PLAN.md D6 imports real city plans.
 
 WHY ASYNC (found from a real failure): a multi-minute job tied to a single
 blocking HTTP GET is fragile — a browser's own request timeout, a closed
@@ -122,7 +123,7 @@ DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
 ROOT     = Path(__file__).parent
 WEB_DIR  = ROOT / "web"
 SCEN_DIR = WEB_DIR / "data" / "scenarios"
-# E2 staging area (PLAN.md, audit P0-2): a recalibration builds its complete
+# E2 staging area (IMPROVEMENT_PLAN.md, audit P0-2): a recalibration builds its complete
 # new scenario set HERE, validates it, and only then replaces the live set —
 # the standard build-aside/atomic-switch publication pattern (blue-green
 # deployment, Humble & Farley "Continuous Delivery"; per-file atomicity from
@@ -133,7 +134,7 @@ SUMO_DIR = ROOT / "sumo"
 SUGGEST_OUT = SUMO_DIR / "suggest_closure_web.json"
 OPTIMIZE_OUT = SUMO_DIR / "signal_optimize_web.json"
 OPTIMIZE_CLOSURE_OUT = SUMO_DIR / "signal_closure_combine_web.json"
-# PLAN.md D5: not exposed in the UI, same scope-narrowing reasoning C5 used
+# IMPROVEMENT_PLAN.md D5: not exposed in the UI, same scope-narrowing reasoning C5 used
 # for top_k/extra_bad/seeds — sane fixed defaults matching every signal_*.py
 # CLI tool's own default, rather than a cluttered advanced-options form.
 OPTIMIZE_WINDOW_START = "07:00"
@@ -171,8 +172,10 @@ _STATE_BY_KIND: dict = {
 _active_job_lock = threading.Lock()
 _active_job: dict = {"kind": None, "process": None, "cancel_requested": False,
                      "job_id": None}
+_RECOVERY_BLOCKED = False
+_ORPHANED_JOB_IDS: set[str] = set()
 
-# ── E4: durable job records (PLAN.md; audit P0-4) ──────────────────────────
+# ── E4: durable job records (IMPROVEMENT_PLAN.md; audit P0-4) ──────────────────────────
 # The four in-memory state dicts vanish with the process: a server restart
 # (or crash) mid-job left the UI polling an "idle" server while the
 # detached subprocess tree kept running and writing — invisible,
@@ -223,7 +226,7 @@ def job_list(limit: int = 20) -> list[dict]:
     return records[:limit]
 
 
-def reconcile_jobs_on_startup() -> int:
+def reconcile_jobs_on_startup(*, block_new_jobs: bool = False) -> int:
     """Resolve records stranded in 'running' by a dead server.
 
     A subprocess started via start_new_session survives its parent, so a
@@ -231,7 +234,9 @@ def reconcile_jobs_on_startup() -> int:
     'orphaned_running' (visible, cancellable by pgid) rather than guessing
     an outcome. A dead pgid is marked 'orphaned' — the job's real outcome
     is unknown and saying so beats claiming failure or success."""
+    global _RECOVERY_BLOCKED
     n = 0
+    stranded: set[str] = set()
     for record in job_list(limit=1000):
         if record.get("status") != "running":
             continue
@@ -246,10 +251,48 @@ def reconcile_jobs_on_startup() -> int:
         job_record(record["id"],
                    status="orphaned_running" if alive else "orphaned",
                    reconciled_at=time.time())
+        stranded.add(record["id"])
         n += 1
+    _ORPHANED_JOB_IDS.update(stranded)
+    if block_new_jobs and stranded:
+        _RECOVERY_BLOCKED = True
     if n:
         print(f"jobs: reconciled {n} stranded record(s) from a previous server")
     return n
+
+
+def simulation_recovery_block() -> dict | None:
+    """Return an admission error until stranded jobs are acknowledged."""
+    if not _RECOVERY_BLOCKED:
+        return None
+    live = sorted(_ORPHANED_JOB_IDS)
+    return {
+        "error": "simulering blockerad: ett tidigare jobb måste återställas "
+                 "eller avbrytas",
+        "orphaned_jobs": live,
+        "recovery": "/api/cancel?job_id=<id>",
+    }
+
+
+def _acknowledge_orphan(job_id: str) -> tuple[bool, str]:
+    """Stop or acknowledge one persisted orphan and release the gate."""
+    global _RECOVERY_BLOCKED
+    record = job_read(job_id)
+    if record is None or record.get("status") not in {
+            "orphaned", "orphaned_running"}:
+        return False, "okänt eller redan hanterat orphan-jobb"
+    pgid = record.get("pgid")
+    if pgid:
+        try:
+            os.killpg(int(pgid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, ValueError):
+            pass
+    job_record(job_id, status="cancelled", finished_at=time.time(),
+               recovery_action="operator_cancelled")
+    _ORPHANED_JOB_IDS.discard(job_id)
+    if not _ORPHANED_JOB_IDS:
+        _RECOVERY_BLOCKED = False
+    return True, ""
 
 
 def begin_active_job(kind: str, args: dict | None = None) -> None:
@@ -391,6 +434,7 @@ def validate_staged_scenarios(staging_dir: Path,
     files = [s.get("file") for s in index.get("scenarios", [])]
     if "baseline.json" not in files:
         return False, "den nya baslinjen saknas i staging-manifestet"
+    staged_payloads = []
     for fname in files:
         p = staging_dir / str(fname)
         if not p.exists():
@@ -409,6 +453,7 @@ def validate_staged_scenarios(staging_dir: Path,
         if payload.get("seed_health_flags"):
             first = payload["seed_health_flags"][0]
             return False, f"{fname}: simuleringshälsa underkänd ({first})"
+        staged_payloads.append((fname, payload))
     if not demand_meta_path.exists():
         return False, "demand_meta.json saknas efter ombyggnad"
     try:
@@ -416,6 +461,13 @@ def validate_staged_scenarios(staging_dir: Path,
             meta = json.load(f)
     except (OSError, json.JSONDecodeError):
         return False, "demand_meta.json är ogiltig JSON"
+    expected_build_id = meta.get("build_id")
+    if expected_build_id:
+        for fname, payload in staged_payloads:
+            actual = (payload.get("scenario") or {}).get("build_id")
+            if actual != expected_build_id:
+                return False, (f"{fname}: build-ID {actual!r} matchar inte "
+                               f"demandens {expected_build_id!r}")
     fit = meta.get("pfe_fit") or {}
     geh = fit.get("geh_pct")
     # The deployed pipeline has measured 100.0 on every healthy build; the
@@ -427,6 +479,21 @@ def validate_staged_scenarios(staging_dir: Path,
     if fit.get("infeasible_intervals"):
         return False, (f"{fit['infeasible_intervals']} kvartar var olösliga — "
                        "publiceras inte")
+    # q10/q50/q90 are separate demand hypotheses.  A passing q50 cannot hide
+    # an infeasible uncertainty variant that contributes to the Monte Carlo
+    # ensemble.  Older metadata has no per-variant section and remains
+    # backwards compatible.
+    for label, variant in (meta.get("pfe_fit_variants") or {}).items():
+        geh = variant.get("geh_pct")
+        if geh is not None and geh < 99.0:
+            return False, (f"varianten {label} nådde bara GEH<5 {geh}% — "
+                           "publiceras inte")
+        if variant.get("infeasible_intervals"):
+            return False, f"varianten {label} har olösliga intervall"
+        if variant.get("bound_violations"):
+            return False, f"varianten {label} bryter mot hårda bounds"
+        if variant.get("unserviceable_edges"):
+            return False, f"varianten {label} saknar rutter för mätta kanter"
     return True, ""
 
 
@@ -468,7 +535,7 @@ def summarize_suggestion(result: dict) -> dict:
     """Curated table for the UI from suggest_closure_time.py's full result
     file — NOT the raw file itself, which carries every candidate window's
     full per-seed metrics (large for a week-scale search). Honest
-    presentation rules (PLAN.md C5): a median + [min, max] interval over
+    presentation rules (IMPROVEMENT_PLAN.md C5): a median + [min, max] interval over
     seeds, never a single fabricated number; the baseline totals included
     explicitly so 'better than what?' always has an answer on screen;
     proxy-only fields keep the word 'rank', never 'minutes'; and N
@@ -513,7 +580,7 @@ def summarize_suggestion(result: dict) -> dict:
 
 def summarize_signal_optimization(result: dict, closure: bool) -> dict:
     """One uniform shape for the UI regardless of which script produced
-    `result` — PLAN.md D5's "Optimera signaler" runs D2's signal_optimize.py
+    `result` — IMPROVEMENT_PLAN.md D5's "Optimera signaler" runs D2's signal_optimize.py
     (no active closure) or D4's signal_closure_combine.py (active closure),
     whose result JSONs have genuinely different internal layouts (5 named
     conditions vs a fixed 2-pass before/after), but the same "before/after
@@ -609,7 +676,7 @@ class Handler(SimpleHTTPRequestHandler):
         # this only forces a revalidation round-trip, not a real refetch,
         # so it costs nothing at this app's scale.
         self.send_header("Cache-Control", "no-cache")
-        # J (PLAN.md; audit P0-3/P1-12): Content-Security-Policy. script-src
+        # J (IMPROVEMENT_PLAN.md; audit P0-3/P1-12): Content-Security-Policy. script-src
         # 'self' works because the app's JS lives in files (the 1300-line
         # inline block moved to app.js for exactly this); unpkg.com serves
         # Leaflet; CARTO serves the basemap tiles; style-src needs
@@ -650,7 +717,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    # J (PLAN.md; audit P0-3): read-only endpoints stay GET; every endpoint
+    # J (IMPROVEMENT_PLAN.md; audit P0-3): read-only endpoints stay GET; every endpoint
     # that STARTS or CANCELS work is POST-only — GET must never mutate
     # (prefetchers, link previews and crawlers follow GETs), and the POST
     # path carries the same-origin CSRF guard above.
@@ -712,6 +779,13 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _cancel(self) -> None:
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        orphan_id = qs.get("job_id", [""])[0]
+        if orphan_id:
+            ok, reason = _acknowledge_orphan(orphan_id)
+            if not ok:
+                return self._json(404, {"error": reason})
+            return self._json(202, {"status": "cancelled",
+                                    "job_id": orphan_id})
         kind = qs.get("kind", [""])[0]
         states = {
             "close": (_close_lock, _close_state),
@@ -759,6 +833,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(400, {"error": "begin/end måste vara ISO-datetime "
                                     "(YYYY-MM-DDTHH:MM[:SS])"})
 
+        blocked = simulation_recovery_block()
+        if blocked:
+            return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
             return self._json(409, {"error": "en simulering kör redan — vänta"})
         # Lock stays held for the whole job — released by the background
@@ -869,6 +946,9 @@ class Handler(SimpleHTTPRequestHandler):
         if not (1 <= days <= 7):
             return self._json(400, {"error": "days måste vara 1-7 (en vecka i taget)"})
 
+        blocked = simulation_recovery_block()
+        if blocked:
+            return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
             return self._json(409, {"error": "en simulering kör redan — vänta"})
         # Lock stays held for the WHOLE job — released by the background
@@ -907,7 +987,7 @@ class Handler(SimpleHTTPRequestHandler):
         # over the ~45 min a week is documented to cost in the UI, matching
         # the safety margin the single-day timeout already had relative to
         # its own measured ~6-19 min runtime.
-        # E2 publish-after-validate (PLAN.md; audit P0-2): the old flow
+        # E2 publish-after-validate (IMPROVEMENT_PLAN.md; audit P0-2): the old flow
         # deleted every live scenario BETWEEN the demand build and the
         # baseline rebuild, so a failure/timeout/cancel in that window left
         # the UI with nothing. Now: keep the old coherent set serving, build
@@ -996,12 +1076,12 @@ class Handler(SimpleHTTPRequestHandler):
         return self._json(200, state)
 
     def _suggest_closure(self) -> None:
-        # PLAN.md Phase C5. Same async/poll pattern as _close/_recalibrate;
+        # IMPROVEMENT_PLAN.md Phase C5. Same async/poll pattern as _close/_recalibrate;
         # shares _sim_lock with them (this is genuinely a batch of SUMO
         # simulations, same resource class as a closure or recalibration —
         # running it concurrently with either would just starve both), but
         # keeps its OWN _suggest_lock/_suggest_state so its status polling
-        # can never be confused with a recalibration's (PLAN.md: "separate
+        # can never be confused with a recalibration's (IMPROVEMENT_PLAN.md: "separate
         # lock from demand-rebuild lock, understandable status").
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
@@ -1052,6 +1132,9 @@ class Handler(SimpleHTTPRequestHandler):
         if seeds is None:
             return self._json(400, {"error": "seeds måste vara ett heltal 1-5"})
 
+        blocked = simulation_recovery_block()
+        if blocked:
+            return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
             return self._json(409, {"error": "en simulering kör redan — vänta"})
         with _suggest_lock:
@@ -1129,7 +1212,7 @@ class Handler(SimpleHTTPRequestHandler):
         return self._json(200, state)
 
     def _optimize_signals(self) -> None:
-        # PLAN.md Phase D5. "Optimera signaler" runs against the CURRENTLY
+        # IMPROVEMENT_PLAN.md Phase D5. "Optimera signaler" runs against the CURRENTLY
         # loaded scenario's own closed edges — `edges` empty/absent means
         # the active scenario has no closure, so this dispatches to D2's
         # plain signal_optimize.py; edges present means an active closure,
@@ -1141,42 +1224,60 @@ class Handler(SimpleHTTPRequestHandler):
         # resource class as all three.
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
+        window_start = qs.get("window_start", [OPTIMIZE_WINDOW_START])[0]
+        window_end = qs.get("window_end", [OPTIMIZE_WINDOW_END])[0]
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", window_start) or \
+                not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", window_end):
+            return self._json(400, {"error": "window_start/window_end måste vara HH:MM"})
         unknown = [e for e in edges if e not in known_edges()]
         if unknown:
             return self._json(400, {"error": f"okända kanter: {unknown}"})
 
+        blocked = simulation_recovery_block()
+        if blocked:
+            return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
             return self._json(409, {"error": "en simulering kör redan — vänta"})
         with _optimize_lock:
             _optimize_state.clear()
-            _optimize_state.update(status="running", edges=edges, started_at=time.time())
-        begin_active_job("optimize", {"edges": edges})
-        threading.Thread(target=self._run_optimize_signals, args=(edges,),
+            _optimize_state.update(status="running", edges=edges,
+                                   window_start=window_start,
+                                   window_end=window_end,
+                                   started_at=time.time())
+        begin_active_job("optimize", {"edges": edges,
+                                       "window_start": window_start,
+                                       "window_end": window_end})
+        threading.Thread(target=self._run_optimize_signals,
+                         args=(edges, window_start, window_end),
                          daemon=True).start()
-        return self._json(202, {"status": "started", "edges": edges})
+        return self._json(202, {"status": "started", "edges": edges,
+                                "window_start": window_start,
+                                "window_end": window_end})
 
     @staticmethod
     def _set_optimize(**kw) -> None:
         with _optimize_lock:
             _optimize_state.update(**kw)
 
-    def _run_optimize_signals(self, edges: list[str]) -> None:
+    def _run_optimize_signals(self, edges: list[str],
+                              window_start: str = OPTIMIZE_WINDOW_START,
+                              window_end: str = OPTIMIZE_WINDOW_END) -> None:
         try:
             closure = bool(edges)
             if closure:
                 out_path = OPTIMIZE_CLOSURE_OUT
                 cmd = [sys.executable, "signal_closure_combine.py",
                       "--close", *edges,
-                      "--window-start", OPTIMIZE_WINDOW_START,
-                      "--window-end", OPTIMIZE_WINDOW_END,
+                      "--window-start", window_start,
+                      "--window-end", window_end,
                       "--seeds", str(OPTIMIZE_SEEDS),
                       "--out", str(out_path)]
                 n_sumo_runs = 2   # D4: exactly two passes, each OPTIMIZE_SEEDS seeds
             else:
                 out_path = OPTIMIZE_OUT
                 cmd = [sys.executable, "signal_optimize.py",
-                      "--window-start", OPTIMIZE_WINDOW_START,
-                      "--window-end", OPTIMIZE_WINDOW_END,
+                      "--window-start", window_start,
+                      "--window-end", window_end,
                       "--seeds", str(OPTIMIZE_SEEDS),
                       "--out", str(out_path)]
                 n_sumo_runs = OPTIMIZE_SIGNAL_CONDITIONS
@@ -1224,7 +1325,11 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main() -> None:
     known_edges()   # fail fast if data is missing
-    reconcile_jobs_on_startup()   # E4: resolve records a dead server left "running"
+    # E4/P0: a restarted server must not start another writer while a prior
+    # process group may still be producing artifacts.  The operator can
+    # acknowledge each stranded job through /api/cancel?job_id=... after
+    # inspecting its durable record.
+    reconcile_jobs_on_startup(block_new_jobs=True)
     # Mutating API endpoints have no authentication, so do not expose them
     # to the LAN by default. Explicit LAN support, if ever needed, should be
     # an intentional opt-in rather than the server's implicit bind address.

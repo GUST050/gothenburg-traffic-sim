@@ -1,5 +1,5 @@
 """Flat-parallel PFE calibration orchestration — split from
-build_sumo_demand.py 2026-07-14 (PLAN.md H1).
+build_sumo_demand.py 2026-07-14 (IMPROVEMENT_PLAN.md H1).
 
 Owns the fork-pool worker (_run_pfe_interval_job), the shared pool
 globals the workers inherit (_PFE_PAR_*), the flat (variant × quarter)

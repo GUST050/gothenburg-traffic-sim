@@ -1,4 +1,4 @@
-"""Run registry (PLAN.md E1) contract tests."""
+"""Run registry (IMPROVEMENT_PLAN.md E1) contract tests."""
 import json
 import sys
 from pathlib import Path

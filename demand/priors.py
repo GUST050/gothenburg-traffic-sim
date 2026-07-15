@@ -1,5 +1,5 @@
 """Bounds/priors intake for calibration — split from
-build_sumo_demand.py 2026-07-14 (PLAN.md H1).
+build_sumo_demand.py 2026-07-14 (IMPROVEMENT_PLAN.md H1).
 
 Owns the ensure_* functions that (re)build level-2 observability bounds,
 corridor priors, the gravity-assignment prior, and learned per-edge

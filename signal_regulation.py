@@ -1,5 +1,5 @@
 """
-signal_regulation.py — PLAN.md Phase D6 (partial): a synthetic
+signal_regulation.py — IMPROVEMENT_PLAN.md Phase D6 (partial): a synthetic
 signal-timing baseline informed by Sweden's binding national regulation
 for traffic signals — Transportstyrelsens föreskrifter TSFS 2014:30,
 "Transportstyrelsens föreskrifter och allmänna råd om trafiksignaler" —

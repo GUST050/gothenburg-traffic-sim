@@ -1,5 +1,5 @@
 """
-Unit tests for suggest_closure_time.py (PLAN.md Phase C4).
+Unit tests for suggest_closure_time.py (IMPROVEMENT_PLAN.md Phase C4).
 
 The heavy end (an actual SUMO simulate stage) is exercised manually against
 real demand, not here — these tests cover the parts that must be correct
@@ -21,7 +21,7 @@ import suggest_closure_time as sct
 
 
 class TestGenerateWindows:
-    """PLAN.md's own C4 spec quotes '163 candidates for 6h over a week' as
+    """IMPROVEMENT_PLAN.md's own C4 spec quotes '163 candidates for 6h over a week' as
     its worked example — reproduced exactly here as the primary regression
     guard, plus the ARCHITECTURE's other quoted case (19 windows/1 day)."""
 
@@ -307,17 +307,17 @@ class TestRecommendationStatus:
 
 
 class TestDeltaTimeLossInterval:
-    """PLAN.md C5 explicitly wants 'median ΔtimeLoss + seed interval' in the
+    """IMPROVEMENT_PLAN.md C5 explicitly wants 'median ΔtimeLoss + seed interval' in the
     UI, which the mean-only closure_metrics.MetricComparison throws away —
     this fills that gap without changing the frozen DisruptionMetrics shape."""
 
-    def test_median_and_interval_relative_to_baseline_mean(self):
-        # baseline mean = 100; candidate seeds 90, 110, 130 -> deltas -10,10,30
+    def test_median_and_interval_uses_paired_baseline_seeds(self):
+        # Paired deltas are 0, 10, 20.
         result = sct.delta_time_loss_interval([90.0, 110.0, 130.0],
                                               [90.0, 100.0, 110.0])
         assert result["median_s"] == 10.0
-        assert result["min_s"] == -10.0
-        assert result["max_s"] == 30.0
+        assert result["min_s"] == 0.0
+        assert result["max_s"] == 20.0
         assert result["n_seeds"] == 3
 
     def test_single_seed_all_three_equal(self):
@@ -326,9 +326,13 @@ class TestDeltaTimeLossInterval:
 
     def test_even_seed_count_averages_the_two_middle_values(self):
         result = sct.delta_time_loss_interval([80.0, 100.0, 120.0, 140.0],
-                                               [100.0, 100.0])
+                                               [100.0, 100.0, 100.0, 100.0])
         # deltas: -20, 0, 20, 40 -> median of the two middle (0, 20) = 10
         assert result["median_s"] == 10.0
+
+    def test_unpaired_seed_counts_are_rejected(self):
+        with pytest.raises(ValueError, match="equal non-zero length"):
+            sct.delta_time_loss_interval([80.0], [100.0, 110.0])
 
 
 def _write_tiny_metrics_fixtures(sumo_dir, stem):

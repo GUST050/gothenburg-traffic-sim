@@ -1,5 +1,5 @@
 """
-Unit tests for signal_lab.py (PLAN.md Phase D1).
+Unit tests for signal_lab.py (IMPROVEMENT_PLAN.md Phase D1).
 
 The heavy end (an actual micro SUMO run) is exercised manually against real
 demand, not here — these tests cover the parts that must be correct
@@ -139,7 +139,7 @@ def write_net(path: Path, tl_logics_xml: str) -> None:
 
 
 class TestTlsPlanDiff:
-    """PLAN.md D5: per-junction cycle/split/offset diff, baseline
+    """IMPROVEMENT_PLAN.md D5: per-junction cycle/split/offset diff, baseline
     net.net.xml vs the tlsCycleAdaptation/tlsCoordinator additional
     files — pure XML parsing/diffing, no SUMO invocation."""
 

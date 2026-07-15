@@ -1,4 +1,4 @@
-"""One validation report per build — PLAN.md G3 (improvement plan 3.2).
+"""One validation report per build — IMPROVEMENT_PLAN.md G3 (improvement plan 3.2).
 
 Assembles every gate the pipeline already computes into a single
 machine-readable + UI-displayable file, so "is this build trustworthy?"
@@ -91,13 +91,28 @@ def _purpose_section(meta: dict | None) -> dict:
     lengths = cs.get("purpose_length_km", {})
     ordering_flag = any("purpose_length_ordering" in f
                         for f in cs.get("structure_flags", []))
+    variant_fit = (meta or {}).get("pfe_fit_variants", {})
+    compatibility = {
+        name: report.get("purpose_incompatible_quarters")
+        for name, report in variant_fit.items()
+        if isinstance(report, dict)
+        and "purpose_incompatible_quarters" in report
+    }
+    incompatible = max((value for value in compatibility.values()
+                        if isinstance(value, (int, float))), default=0)
     return {
-        "status": "warn" if ordering_flag else "pass",
+        # Purpose labels are diagnostic only while any selected route lacks
+        # matching source provenance. Do not let a perfect GEH fit imply
+        # that purpose-specific behaviour is validated.
+        "status": "warn" if ordering_flag or incompatible else "pass",
         "purpose_counts": agents.get("purpose_counts"),
         "purpose_length_km": lengths,
         "ordering_violated": ordering_flag,
+        "purpose_incompatible_quarters_by_variant": compatibility,
+        "purpose_claims_allowed": incompatible == 0,
         "gate": "fritid ska ha längst medianresa (Trafikanalys RVU Tabell 3); "
-                "exakt ärende×tid-mix per kvart",
+                "exakt ärende×tid-mix per kvart; varje tilldelad rutt "
+                "måste ha kompatibel proveniens",
     }
 
 
@@ -137,8 +152,8 @@ def _held_out_section(loso: dict | None) -> dict:
     return {
         # LOSO is characterization, not a pass/fail gate: with 6 stations
         # in 2 clusters some folds are informationally isolated by
-        # geometry (documented: 1076's 0.05 is honest parsimony, §8 in
-        # DESTINATION_BIAS_RESEARCH). Displayed, never blocking.
+        # geometry (documented in IMPROVEMENT_PLAN.md: 1076's 0.05 is honest
+        # parsimony). Displayed, never blocking.
         "status": "info",
         "window": loso.get("window"),
         "ratios": ratios,

@@ -1,9 +1,9 @@
 """Structural realism of the calibrated demand — split from
-build_sumo_demand.py 2026-07-14 (PLAN.md H1).
+build_sumo_demand.py 2026-07-14 (see IMPROVEMENT_PLAN.md).
 
 Owns: the shared edge-geometry loader, the calibrated-structure metrics
-and drift flags (the permanent destination-bias validation gate,
-DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 4), per-purpose length
+and drift flags (the permanent destination-bias validation gate described in
+IMPROVEMENT_PLAN.md), per-purpose length
 reporting, and the PFE structure-preservation groups. Patchable module
 globals (GEO_PATH, the geometry cache) live HERE — tests that monkeypatch
 them must target this module.
@@ -89,8 +89,8 @@ def load_edge_geometry() -> tuple[dict[str, tuple[float, float]],
 
 def _route_structure_metrics(route_path: Path) -> dict | None:
     """Per-vehicle structure metrics for one SUMO route file — the shared
-    machinery behind calibrated_structure_report (below). Emits, per
-    DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 4:
+    machinery behind calibrated_structure_report (below). Emits the
+    destination-integrity guards described in IMPROVEMENT_PLAN.md:
 
     - trip_length_fit (straight-line O→D, RVU bins)
     - dest_sensor_proximity (share ending within 200 m of a sensor)
@@ -211,8 +211,8 @@ def calibrated_structure_report(route_path: Path,
                                 pool_path: Path | None = None) -> dict | None:
     """Structure metrics of the CALIBRATED output + drift FLAGS vs the
     candidate pool it was calibrated from — the permanent validation gate
-    for the 2026-07-12 destination-clustering bug (DESTINATION_BIAS_
-    RESEARCH_2026-07-12.md §4A step 4: "Publish validation gates with
+    for the 2026-07-12 destination-clustering bug (the consolidated plan's
+    requirement to publish validation gates with
     every demand build ... Reject or flag a build when it has good GEH but
     fails those structural checks").
 
@@ -280,7 +280,7 @@ def calibrated_structure_report(route_path: Path,
 
 def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
     """PFE structure-preservation groups (name, member shape indices, capped
-    assigned share) — DESTINATION_BIAS_RESEARCH_2026-07-12.md §4A step 3:
+    assigned share) — see IMPROVEMENT_PLAN.md's destination-integrity rules:
     "PFE may adjust route use to satisfy sensor counts, but it may not turn
     a realistic candidate distribution into mostly sensor-adjacent
     destinations." Two families, both capped at DEST_GROUP_CAP_MULT × the
@@ -299,8 +299,8 @@ def structure_groups_for_shapes(shapes) -> list[tuple[str, list[int], float]]:
     2. length_bin_* — straight-line O→D length bins (RVU's edges). Same
        under-determination family, measured after the near-sensor cap was
        already in place: the calibrated 0-1 km share was still inflated
-       1.2% → 7.5% (6×) relative to the pool. §4A step 3 prescribes
-       length-bin bands explicitly.
+       1.2% → 7.5% (6×) relative to the pool. The consolidated plan requires
+       explicit length-bin bands.
 
     Caps are ceilings only (lo=0 — a group must never force flow), applied
     per quarter with an absolute value derived from that quarter's total,

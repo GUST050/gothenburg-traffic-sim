@@ -1,5 +1,5 @@
 // Main application wiring — moved out of index.html 2026-07-14
-// (PLAN.md J: a real Content-Security-Policy needs script-src 'self',
+// (IMPROVEMENT_PLAN.md J: a real Content-Security-Policy needs script-src 'self',
 // which an inline <script> block violates). Same code, same load order
 // (after state/provider/render/controls/clock).
     (async () => {
@@ -466,7 +466,7 @@
         }
 
         // Linear interpolation between the two measured/documented anchor
-        // points (B3, PLAN.md): 1 day ~6 min, a full week ~45 min.
+        // points (B3, IMPROVEMENT_PLAN.md): 1 day ~6 min, a full week ~45 min.
         function estimatedMinutes(days) {
           return Math.round(6 + (45 - 6) / 6 * (Math.max(1, days) - 1));
         }
@@ -496,7 +496,7 @@
           updateDayRunLabel();
         });
 
-        // ── Föreslå stängningstid (PLAN.md Phase C5) — reuses the SAME
+        // ── Föreslå stängningstid (IMPROVEMENT_PLAN.md Phase C5) — reuses the SAME
         // edge click-picking as the plain closure flow above (`selected`),
         // just with a different meaning: which road(s) to search AROUND,
         // not close outright.
@@ -513,7 +513,7 @@
         const btnSuggestResultsClose = document.getElementById('suggest-results-close');
         let suggestMode = false;
 
-        // ── Optimera signaler (PLAN.md Phase D5) — no picking mode: acts on
+        // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — no picking mode: acts on
         // whichever scenario is CURRENTLY loaded (scen-select), same way
         // "Byt dag" acts on the currently loaded day rather than needing a
         // map selection first.
@@ -646,7 +646,7 @@
           button.addEventListener('click', () => openWorkspace(button.dataset.task));
         });
 
-        // ── Optimera signaler (PLAN.md Phase D5) — same async start/poll
+        // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — same async start/poll
         // pattern as pollClose/pollSuggest above. Acts on the CURRENTLY
         // loaded scenario's own closed_edges (from the scenario manifest,
         // already fetched by loadScenIndex before sim-panel is ever shown):
@@ -690,7 +690,7 @@
             `Signaloptimering · ${closureLabel} · ${summary.window_start}–` +
             `${summary.window_end} · ${summary.n_junctions} korsningar`;
 
-          // Rendered ALWAYS, not just on a bad result — PLAN.md D5's own
+          // Rendered ALWAYS, not just on a bad result — IMPROVEMENT_PLAN.md D5's own
           // requirement: a signal-provenance label wherever signal results
           // are shown, so nobody reads a percentage without the caveat that
           // produced it.
@@ -798,10 +798,29 @@
         btnOptimize.addEventListener('click', async () => {
           const active = scenIndex?.scenarios.find(s => s.file === scenSelect.value);
           const edges = active?.closed_edges ?? [];
+          const activeClosure = active?.closures?.[0];
+          const hhmm = seconds => {
+            if (!Number.isFinite(seconds)) return null;
+            const minute = Math.floor(seconds / 60) % (24 * 60);
+            return String(Math.floor(minute / 60)).padStart(2, '0') + ':' +
+              String(minute % 60).padStart(2, '0');
+          };
+          const params = new URLSearchParams({ edges: edges.join(',') });
+          // A time-windowed closure carries begin_s/end_s in the scenario
+          // manifest. Pass that exact window through to signal optimization;
+          // the server's 07:00–09:00 default is only for whole-run studies.
+          const beginS = Number(activeClosure?.begin_s);
+          const endS = Number(activeClosure?.end_s);
+          const begin = hhmm(beginS);
+          const end = hhmm(endS);
+          if (begin && end && endS > beginS && endS - beginS < 86400) {
+            params.set('window_start', begin);
+            params.set('window_end', end);
+          }
           btnOptimize.disabled = true;
           btnOptimize.textContent = 'Startar…';
           try {
-            const res  = await fetch('/api/optimize_signals?edges=' + edges.join(','), { method: 'POST' });
+            const res  = await fetch('/api/optimize_signals?' + params.toString(), { method: 'POST' });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
             btnOptimize.textContent = 'Optimerar… (0s)';

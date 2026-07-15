@@ -1,5 +1,5 @@
 """
-signal_optimize.py — PLAN.md Phase D2: off-the-shelf signal-timing
+signal_optimize.py — IMPROVEMENT_PLAN.md Phase D2: off-the-shelf signal-timing
 optimizers, evaluated via the D1 harness (signal_lab.py's machinery).
 
 Runs SUMO's own tools against the currently calibrated demand for one time
@@ -17,7 +17,7 @@ against the SAME baseline:
   delay_based            — SUMO's built-in delay-based actuated TLS type,
                           same reference-point role.
   regulation_compliant  — a TSFS 2014:30-informed conservative rebuild of
-                          the baseline phase structure (PLAN.md D6, partial).
+                          the baseline phase structure (IMPROVEMENT_PLAN.md D6, partial).
                           It is not Gothenburg's real plan and does not prove
                           regulatory compliance for a physical junction;
                           see signal_regulation.py's assumptions.
@@ -28,9 +28,9 @@ does), so each needs its own network file — built from the SAME plain
 nod/edg XML build_sumo_net.py uses, verified to produce byte-identical
 edge IDs to the deployed network.
 
-HONESTY (PLAN.md's own instruction for this step): every relative
+HONESTY (IMPROVEMENT_PLAN.md's own instruction for this step): every relative
 improvement here is measured against a SYNTHETIC 90 s-cycle GUESS
-(netconvert --tls.guess), not Gothenburg's real signal plans (PLAN.md D6,
+(netconvert --tls.guess), not Gothenburg's real signal plans (IMPROVEMENT_PLAN.md D6,
 not done). Expect possibly LARGE relative wins for exactly that reason —
 absolute numbers are always reported alongside relative ones, and every
 result row carries tls_provenance="synthetic" with an explicit caveat
@@ -60,6 +60,7 @@ import tempfile
 import time
 from pathlib import Path
 import xml.etree.ElementTree as ET
+from datetime import datetime
 
 import closure_metrics as cm
 import run_scenario as rs
@@ -70,9 +71,10 @@ from signal_regulation import (build_demand_weighted_tls,
                                build_regulation_compliant_tls,
                                enforce_timing_minimums)
 from suggest_closure_time import aggregate_seed_metrics
+from study_contracts import load_scenario_spec
 
 CAVEAT = ("Measured against a SYNTHETIC netconvert --tls.guess baseline "
-         "(90 s uniform cycle), not Gothenburg's real signal plans (PLAN.md "
+         "(90 s uniform cycle), not Gothenburg's real signal plans (IMPROVEMENT_PLAN.md "
          "D6, not yet imported). A large relative improvement here reflects "
          "how naive the baseline is, not necessarily real-world quality — "
          "read the absolute numbers, not just the percentages.")
@@ -273,7 +275,7 @@ def build_signal_conditions(home: Path, variants: list[Path], begin_s: int,
     actual bug fixed here). A single shared, correctly-fingerprinted
     implementation fixes both problems at once.
 
-    regulation_compliant (PLAN.md D6, partial) is cached under
+    regulation_compliant (IMPROVEMENT_PLAN.md D6, partial) is cached under
     net_fingerprint ALONE, not `label` — unlike adapted/coordinated/alt-
     nets, it depends only on network geometry (TSFS 2014:30's minimums and
     the separering-i-tid clearance formula, never on demand or window), so
@@ -395,9 +397,9 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
                   ) -> tuple[cm.DisruptionMetrics, list[SignalRun]]:
     """micro=True (default, every existing caller's behaviour unchanged) for
     D2's own ground-truth comparisons; micro=False reruns the SAME five
-    conditions in meso for D3's screening-feasibility question (PLAN.md).
+    conditions in meso for D3's screening-feasibility question (IMPROVEMENT_PLAN.md).
 
-    ``vehroute_outputs`` (PLAN.md D4) requests one vehroute artifact per
+    ``vehroute_outputs`` (IMPROVEMENT_PLAN.md D4) requests one vehroute artifact per
     seed, so a downstream optimizer can see every evaluated demand variant.
     ``vehroute_output`` is retained for callers that genuinely need only the
     first seed. The two forms are mutually exclusive.
@@ -519,6 +521,9 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--window-start", default="07:00", metavar="HH:MM")
     p.add_argument("--window-end", default="09:00", metavar="HH:MM")
+    p.add_argument("--scenario-spec", default=None, metavar="PATH",
+                   help="Load a validated ScenarioSpec; its analysis_window "
+                        "supplies the study period.")
     p.add_argument("--seeds", type=int, default=3,
                    help="Fixed Monte Carlo seeds, 1000..1000+seeds-1 (default 3).")
     p.add_argument("--seed-workers", type=int, default=1,
@@ -542,6 +547,29 @@ def main() -> None:
     with open(rs.SUMO_DIR / "demand_meta.json") as f:
         meta = json.load(f)
     total_duration_s = meta["n_intervals"] * 900
+    spec = None
+    if args.scenario_spec:
+        try:
+            spec = load_scenario_spec(Path(args.scenario_spec))
+            rs.validate_scenario_spec(
+                spec, meta=meta, duration_s=total_duration_s,
+                network_path=rs.NET_PATH)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            sys.exit(f"invalid ScenarioSpec: {exc}")
+        if spec.closures:
+            sys.exit("signal_optimize cannot evaluate closures; use "
+                     "signal_closure_combine for a closure ScenarioSpec")
+        if spec.analysis_window is None:
+            sys.exit("signal ScenarioSpec requires analysis_window")
+        try:
+            measure_start = datetime.fromisoformat(
+                spec.analysis_window.measure_start.replace("Z", "+00:00"))
+            measure_end = datetime.fromisoformat(
+                spec.analysis_window.measure_end.replace("Z", "+00:00"))
+        except ValueError as exc:
+            sys.exit(f"invalid ScenarioSpec analysis_window: {exc}")
+        args.window_start = measure_start.strftime("%H:%M")
+        args.window_end = measure_end.strftime("%H:%M")
     try:
         begin_s, end_s = window_offsets_s(meta["epoch_sim"], args.window_start,
                                           args.window_end)
@@ -636,7 +664,7 @@ def main() -> None:
              f"stddev={paired['stddev_time_loss_delta_s']:.0f}s over "
              f"{paired['n_pairs']} pairs]{warn}")
 
-    # PLAN.md D5: per-junction cycle/split/offset diff, adapted_coordinated
+    # IMPROVEMENT_PLAN.md D5: per-junction cycle/split/offset diff, adapted_coordinated
     # (the full pipeline: cycle adaptation + green-wave offsets) against the
     # deployed baseline net — reuses the exact add_paths build_signal_
     # conditions() already produced for that condition rather than
@@ -646,12 +674,12 @@ def main() -> None:
     timing_schedule = tls_timing_schedule(adapted_path, coordinated_path, rs.NET_PATH)
 
     result = {
-        "method": "PLAN.md Phase D2: off-the-shelf signal-timing optimizers vs D1 baseline",
+        "method": "IMPROVEMENT_PLAN.md Phase D2: off-the-shelf signal-timing optimizers vs D1 baseline",
         "window_start": args.window_start, "window_end": args.window_end,
         "begin_s": begin_s, "end_s": end_s, "seeds": args.seeds,
         # Imported from signal_lab.py (D1) rather than a second hardcoded
         # "synthetic" literal — found in self-review 2026-07-11: the two
-        # copies would silently stop matching the moment PLAN.md D6 flips
+        # copies would silently stop matching the moment IMPROVEMENT_PLAN.md D6 flips
         # D1's TLS_PROVENANCE to "city-configured" but this file's literal
         # string was never updated alongside it.
         "tls_provenance": TLS_PROVENANCE, "caveat": CAVEAT,
@@ -663,6 +691,7 @@ def main() -> None:
         "net_fingerprints_by_condition": net_fps,
         "non_tls_network_fingerprints_by_condition": non_tls_net_fps,
         "demand_signature": demand_sig,
+        "scenario_spec": spec.to_dict() if spec is not None else None,
         "sumo_version": sumo_version(home),
         "command": sys.argv,
         "conditions": results,

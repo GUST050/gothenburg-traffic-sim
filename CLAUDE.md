@@ -151,13 +151,14 @@ Goal arc, in order:
     `web/data/loso_report.json`.
     SUPERSEDED 2026-07-13: after the destination-bias fix (sensor-
     conditioned OD, structure-preservation caps, purpose×time priors —
-    commits 51ad47f/6632bfc/62a1584, DESTINATION_BIAS_RESEARCH_2026-07-12.md
-    §7), the honest LOSO baseline is min 0.05 / median 0.78 / max 1.95.
+    commits 51ad47f/6632bfc/62a1584; see the destination-integrity section
+    of IMPROVEMENT_PLAN.md), the honest LOSO baseline is min 0.05 / median
+    0.78 / max 1.95.
     The ratios above (0.830/0.896/2.410) were partly ARTIFACT-POWERED:
     36.5% of calibrated vehicles then terminated within 200 m of a sensor,
     and those near-sensor-ending routes inflated held-out recovery. The
     worst new fold (1076 at 0.05) was PROVEN artifact-powered (G1, closed
-    2026-07-13, DESTINATION_BIAS_RESEARCH §8): a pre-fix rerun replicated
+    2026-07-13; summarized in IMPROVEMENT_PLAN.md): a pre-fix rerun replicated
     its old ratio 1.516 exactly, and 99.6% of that crossing flow served no
     other sensor's band and evaporated within 500 m of the sensor. The fix
     lost no real corridor continuation; 0.05 measures 1076's informational
@@ -239,11 +240,11 @@ Goal arc, in order:
   - Götaplatsen area (physically ~400 m SW of the square, near Viktor Rydbergsgatan/Vasaparken): 133, 134, 2276
   - Scandinavium area: 107, 1074, 1076
 - Raw inputs (what build_data.py actually reads): quarterly CSVs in `~/Downloads/Data till Chalmers_20260618/` + `~/Downloads/Mätpunkter_koordinater.csv`. (`clean.csv` was an exploration intermediate and is not part of the pipeline.)
-- `level` / measured directions — VERIFIED 2026-07-03 by Gustav against Göteborgs Stad's trafikmängder catalogue (Power BI). THE DELIVERED "Total" LABEL WAS WRONG for 4 of 5 sensors — it is the catalogue's Total row, which for single-direction stations equals the one measured direction. Source of truth = SENSOR_MEASURED_DIRECTION in build_data.py:
+- `level` / measured directions — VERIFIED 2026-07-03 by Gustav against Göteborgs Stad's trafikmängder catalogue (Power BI). THE DELIVERED "Total" LABEL WAS WRONG for 4 of 5 sensors — it is the catalogue's Total row, which for single-direction stations equals the one measured direction. Source of truth = the validated `data_in/sensors.json` registry (the `SENSOR_MEASURED_DIRECTION` name in `build_data.py` is compatibility-only):
   - 107 Skånegatan: genuinely two-way (N+S+Total). City's own D-factor: N 3400/S 3100 of 6500 (2025) = 52/48; 2023–24 exactly 50/50 — LOCAL VALIDATION of the mild-split finding and the dirsplit model (predicted 0.47–0.52).
   - 1074 Valhallagatan V, 1076 Skånegatan S, 133 Läraregatan V, 134 Gibraltargatan SO, 2276 Läraregatan V — single-direction only. Their daily means match the catalogue's ÅMVD ±3%.
   - build_data.py snaps compass-labelled sensors direction-aware (edge bearing must match the letter, else opposite carriageway within 80 m). Only 7 measured directed edges now (107's pair + 5 singles). The opposite direction at single-direction stations is UNMEASURED — never constrain or display it as known.
-  - New sensors: check the city catalogue FIRST and add to SENSOR_MEASURED_DIRECTION.
+  - New sensors: check the city catalogue FIRST and add a verified record to `data_in/sensors.json`.
 - Coordinates: source file was mislabelled "SWEREF99TM" but is actually SWEREF99 12 00 (EPSG:3007). build_data.py converts to WGS84. DO NOT reconvert as TM.
 - Direction is NOT recoverable from the delivered two-way totals (geometry + conservation is underdetermined). DECIDED: Felicia will NOT deliver a directional re-export — treat all "Total" values as two-way sums permanently; both directed edges of a Total sensor carry the same summed count.
   - REPORTING TRAP (found 2026-07-06 while investigating an apparent ~0.4 delivery ratio at sensor 107): because both directed edges carry the SAME raw two-way total, any ad-hoc script that reads `flows.json` directly and treats that value as the "true" per-direction measured count will show ~50% delivery on a perfectly-calibrated two-way sensor — the value must first be split by the estimated direction share (`build_sumo_demand.build_targets`/`write_counts`, which already do this correctly for both PFE targets and `validate_sim.py`'s LOSO comparison). This is a comparison-methodology gotcha, not a pipeline bug — confirmed the actual demand/validation code already applies the split; regression-tested in `tests/test_build_sumo_demand.py`.
@@ -350,7 +351,14 @@ Goal arc, in order:
      Two independent Codex review passes (codex:codex-rescue), both fresh
      threads: first found the two origin-vs-position bugs above, second
      confirmed both resolved with no new blocking issues.
-   REMAINING: see PLAN.md (written 2026-07-09) — the detailed, step-by-step execution plan for multi-day simulation, closure-timing suggestions ("when is it least disruptive to close road X?"), and traffic-signal optimization, written so any AI/human can execute it independently. It supersedes the old loose REMAINING list here: "more scenarios" is folded into it; "per-vehicle trajectory playback (FCD → TrajectoryProvider)" was stale (vehroute-based per-vehicle trajectories already exist and play in the web app — what remains is selective FCD for micro/signal windows, covered in PLAN.md Phase D); ML surrogate stays deferred. The LOSO-derived confidence distance-decay is DONE as of 2026-07-09 (`build_data.py` now consumes `web/data/loso_report.json` and writes the fitted 144.0 m sigma into `network.geojson` confidence values, with the near-field extrapolation caveat documented above).
+   REMAINING: see IMPROVEMENT_PLAN.md — the canonical development plan for
+   multi-day simulation, closure timing, signal optimization, sensors and
+   evidence gates. Vehroute-based individual trajectories already play in the
+   web app; only selective FCD for micro/signal windows remains deferred. The
+   LOSO-derived confidence distance-decay is DONE as of 2026-07-09
+   (`build_data.py` consumes `web/data/loso_report.json` and writes the fitted
+   144.0 m sigma into `network.geojson`, with the near-field extrapolation
+   caveat documented above).
 5. IN PROGRESS — Trained direction-split model (`dirsplit/` package), replacing the AM/PM-Gaussian guess in estimate_directions.py:
    - Training data: OPEN hourly directional counts from Statens vegvesen's trafikkdata GraphQL API (no key) — 394 stations in Oslo/Bergen/Trondheim/Stavanger bboxes; volumes fetched per station for 4 ISO weeks (36,37,20,45) of its newest available year. UK DfT raw counts identified as secondary source (hourly 07–19 by direction, bulk CSV) — not yet integrated.
    - Heading→bearing: station directions are PLACE NAMES; resolved by geocoding both names (Nominatim, cached, 1 req/s) and matching against the OSM edge's two axis bearings, with a consistency requirement (opposite candidates, ≤75° each) — ambiguous stations are EXCLUDED, all decisions stored for audit in stations_matched.json.

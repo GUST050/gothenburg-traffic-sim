@@ -43,6 +43,8 @@ import numpy as np
 import pandas as pd
 
 from sumo_runtime import sumo_home
+from pipeline_fingerprint import make_fingerprint
+import candidate_cache
 from train_agent1 import HOLIDAY_DATES_2025
 from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
 
@@ -66,6 +68,21 @@ STRUCTURAL_REFERENCE_DATE = "2025-09-16"
 # Candidate-pool density: one random trip every N seconds of the window.
 # The pool needs route DIVERSITY, not volume — routeSampler repeats routes.
 CANDIDATE_PERIOD_S = 2.0
+
+
+def fit_summary(report: dict) -> dict:
+    """Keep publication-relevant calibration gates for one variant."""
+    purpose = report.get("purpose_allocation_summary", {})
+    return {
+        "geh_pct": report.get("geh_pct"),
+        "infeasible_intervals": report.get("infeasible_intervals", 0),
+        "vehicles": report.get("vehicles"),
+        "unserviceable_edges": list(report.get("unserviceable_edges", [])),
+        "bound_violations": list(report.get("bound_violations", [])),
+        "purpose_incompatible_quarters": purpose.get(
+            "quarters_with_incompatible_routes", 0),
+        "relaxation_summary": report.get("relaxation_summary", {}),
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,7 +109,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--keep-scenarios", action="store_true",
                    help="Do NOT delete the existing web scenario JSONs after "
                         "this build. serve.py's publish-after-validate "
-                        "recalibration (PLAN.md E2) passes this so the live, "
+                        "recalibration (IMPROVEMENT_PLAN.md E2) passes this so the live, "
                         "coherent old scenario set keeps serving until the "
                         "NEW baseline has been built and validated in "
                         "staging — the old set is then replaced atomically. "
@@ -134,8 +151,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gravity-alpha", type=float, default=1.5,
                    help="θ passed to build_candidates.py: Tanner/gamma "
                         "deterrence shape α — see build_candidates."
-                        "deterrence_weights and DESTINATION_BIAS_RESEARCH_"
-                        "2026-07-12.md. Default 1.5 chosen from a real "
+                        "deterrence_weights and IMPROVEMENT_PLAN.md. "
+                        "Default 1.5 chosen from a real "
                         "9-combo sweep on the real graph (tools/"
                         "fit_deterrence_kernel.py, 2026-07-12) under the "
                         "conditional-sampling redesign: with β=1.8 the "
@@ -337,6 +354,54 @@ def main() -> None:
             # 12k route geometries per day. build_candidates reuses one pool
             # per behavioural day type and only re-samples day departures.
             n_total = 12000 if args.days > 1 else max(6000, int(12000 * duration_s / 86400))
+            cache_outputs = {
+                "candidates.rou.xml": cand_path,
+                "candidates.meta.json": cand_path.with_name("candidates.meta.json"),
+                "tours.trips.xml": SUMO_DIR / "tours.trips.xml",
+                "trip_length_fit.json": SUMO_DIR / "trip_length_fit.json",
+                "sensor_coverage_report.json": SUMO_DIR / "sensor_coverage_report.json",
+            }
+            cache_inputs = {
+                "network": NET_PATH,
+                "graph": Path("web/data/graph.graphml"),
+                "map_network": GEO_PATH,
+                "source_flows": flows_path,
+                "normal_profile": Path("web/data/normal_profile.json"),
+                "direction_split": SUMO_DIR / "direction_split.json",
+                "population": Path("data_in/deso/population_2023.json"),
+                "deso": Path("data_in/deso/deso_goteborg.geojson"),
+                "poi": Path("data_in/deso/osm_pois.geojson"),
+                "real_day_shape": day_shape_path or Path(
+                    "sumo/.missing-real-day-shape"),
+                "day_blocks": day_blocks_path or Path(
+                    "sumo/.missing-day-blocks"),
+            }
+            cache_config = {
+                "n_total": n_total,
+                "through_fraction": args.through_fraction,
+                "gravity_km": args.gravity_km,
+                "gravity_alpha": args.gravity_alpha,
+                "cross_fraction": args.cross_fraction,
+                "is_weekend": use_weekend_shape,
+                "min_per_sensor": 50,
+                "route_diversity": 2.0,
+                "seed": args.seed,
+                "weight_file": None,
+            }
+            cache_key = candidate_cache.cache_key(
+                cache_config, cache_inputs,
+                {"build_candidates": Path("build_candidates.py"),
+                 "build_sumo_demand": Path(__file__),
+                 "build_data": Path("build_data.py"),
+                 "dirsplit_geo": Path("dirsplit/geo.py"),
+                 "candidate_cache": Path("candidate_cache.py")})
+            if candidate_cache.restore(candidate_cache.DEFAULT_ROOT,
+                                       cache_key, cache_outputs):
+                elapsed = time.perf_counter() - started
+                timings_s["candidate_generation"] = (
+                    timings_s.get("candidate_generation", 0.0) + elapsed)
+                print(f"  candidate cache hit {cache_key} ({elapsed:.2f}s)")
+                return
             cmd = [sys.executable, "build_candidates.py",
                   "--through-fraction", str(args.through_fraction),
                   "--gravity-km", str(args.gravity_km),
@@ -357,6 +422,14 @@ def main() -> None:
             if res.returncode != 0:
                 print(res.stderr[-1500:])
                 sys.exit("build_candidates.py failed")
+            try:
+                candidate_cache.store(candidate_cache.DEFAULT_ROOT,
+                                      cache_key, cache_outputs)
+                print(f"  candidate cache stored {cache_key}")
+            except (FileNotFoundError, OSError) as exc:
+                # Cache failure must never invalidate an otherwise valid
+                # demand build; the cache is an optimization, not an input.
+                print(f"  WARNING candidate cache not stored: {exc}")
         elapsed = time.perf_counter() - started
         timings_s["candidate_generation"] = (
             timings_s.get("candidate_generation", 0.0) + elapsed)
@@ -372,6 +445,8 @@ def main() -> None:
         variants += [("_v1", "edge_shares_q10"), ("_v2", "edge_shares_q90")]
 
     calib_path = SUMO_DIR / "calibrated.rou.xml"
+    variant_fit_reports: dict[str, dict] = {}
+    report = None
 
     if args.engine == "pfe":
         # ── The full hierarchy: hard counts + conservation bounds + priors ────
@@ -467,7 +542,6 @@ def main() -> None:
         prev_geh = None
         prev_tt_raw = None    # last iteration's un-damped BPR estimate
         damped_tt = None      # MSA running average actually written out
-        report = None
         for iteration in range(n_iter):
             generate_candidates(weight_file)
             if iteration == n_iter - 1:
@@ -495,6 +569,7 @@ def main() -> None:
                         max_workers=os.cpu_count() or 1))
                 for suffix, key in variants:
                     variant_report = reports[suffix]
+                    variant_fit_reports[key] = fit_summary(variant_report)
                     label = "PFE" if suffix == "" and n_iter == 1 else (
                         f"[congestion-feedback {iteration+1}/{n_iter}]"
                         if suffix == "" else "PFE"
@@ -595,6 +670,8 @@ def main() -> None:
             "infeasible_intervals": report.get("infeasible_intervals"),
             "vehicles": report.get("vehicles"),
         }
+    if variant_fit_reports:
+        meta["pfe_fit_variants"] = variant_fit_reports
     agent_summary = calibrated_agent_summary(calib_path, n_intervals)
     if agent_summary is not None:
         meta["agent_demand"] = agent_summary
@@ -614,6 +691,52 @@ def main() -> None:
               f"{structure['sensor_passages']}"
               + (f"; {len(structure.get('structure_flags', []))} drift flag(s)"
                  if structure.get('structure_flags') else "; no drift flags"))
+    # Every scenario must identify the exact demand/network/toolchain that
+    # produced its route files. Paths are labels only; the fingerprint uses
+    # content hashes so an uncommitted local edit cannot masquerade as the
+    # previous build.
+    fingerprint_artifacts = {
+        "network": NET_PATH,
+        "source_flows": flows_path,
+        "candidate_routes": cand_path,
+        "candidate_metadata": cand_path.with_name(
+            cand_path.name.replace(".rou.xml", ".meta.json")),
+        "direction_split": SUMO_DIR / "direction_split.json",
+        "observability": Path("web/data/observability.json"),
+        "bounds": Path("web/data/observability_bounds.json"),
+        "priors": SUMO_DIR / "prior_flows.json",
+        "assignment_priors": SUMO_DIR / "assignment_priors.json",
+        "calibrated_q50": SUMO_DIR / "calibrated.rou.xml",
+    }
+    for suffix, _key in variants:
+        if suffix:
+            fingerprint_artifacts[f"calibrated{suffix}"] = (
+                SUMO_DIR / f"calibrated{suffix}.rou.xml")
+    source_files = {
+        "build_sumo_demand": Path(__file__),
+        "build_data": Path("build_data.py"),
+        "sensor_registry": Path("sensor_registry.py"),
+        "sensor_registry_data": Path("data_in/sensors.json"),
+        "build_candidates": Path("build_candidates.py"),
+        "build_sumo_net": Path("build_sumo_net.py"),
+        "pfe": Path("pfe.py"),
+        "candidate_cache": Path("candidate_cache.py"),
+        "pipeline_fingerprint": Path("pipeline_fingerprint.py"),
+        "assignment_priors": Path("assignment_priors.py"),
+        "prior_flows": Path("prior_flows.py"),
+        "observability": Path("observability.py"),
+    }
+    for module_path in sorted(Path("demand").glob("*.py")):
+        source_files[f"demand/{module_path.name}"] = module_path
+    meta["build_fingerprint"] = make_fingerprint(
+        contract={k: v for k, v in meta.items()
+                  if k not in {"timings_s", "pfe_timing_s",
+                               "build_fingerprint"}},
+        artifacts=fingerprint_artifacts,
+        source_files=source_files,
+        sumo_home=home,
+    )
+    meta["build_id"] = meta["build_fingerprint"]["build_id"]
     with open(SUMO_DIR / "demand_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nWrote {calib_path} + demand_meta.json")
@@ -632,7 +755,7 @@ def main() -> None:
 def _tracked_main() -> None:
     """Run main() under the E1 run registry (runs.py).
 
-    Slice 1 of PLAN.md E1: products keep their legacy shared paths, but
+    Slice 1 of IMPROVEMENT_PLAN.md E1: products keep their legacy shared paths, but
     every build additionally gets an immutable runs/<id>/ directory with a
     manifest written BEFORE work starts, archived copies of the key
     products, and a latest_demand pointer flipped only on success — so a

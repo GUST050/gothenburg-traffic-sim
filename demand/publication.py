@@ -1,5 +1,5 @@
 """Publication stage — split from build_sumo_demand.py 2026-07-14
-(PLAN.md H1).
+(IMPROVEMENT_PLAN.md H1).
 
 Owns: stale-scenario clearing (with the empty-manifest guarantee),
 routeSampler count-file writing (direction-share split of two-way

@@ -1,5 +1,5 @@
 """
-signal_closure_combine.py — PLAN.md Phase D4: closure + signals combined.
+signal_closure_combine.py — IMPROVEMENT_PLAN.md Phase D4: closure + signals combined.
 
 Gustav's own framing of the deliverable: "when a road closes, how should the
 lights adapt". Two passes, MICRO throughout (see below for why not meso):
@@ -25,13 +25,13 @@ lights adapt". Two passes, MICRO throughout (see below for why not meso):
           optimized signal-timing additional files applied — collect
           metrics + vehroute again.
   compare Pass 1 vs Pass 2 disruption metrics (closure_metrics.compare_metrics)
-          AND route-choice stability between the two passes (PLAN.md's own
+          AND route-choice stability between the two passes (IMPROVEMENT_PLAN.md's own
           instruction: "measure, decide" whether one iteration already
           settles route choice — this script always runs exactly two passes
           and reports the stability number; it does not loop until
           convergence).
 
-MICRO, not meso, for both passes: PLAN.md literally says "run closure
+MICRO, not meso, for both passes: IMPROVEMENT_PLAN.md literally says "run closure
 (meso)", but D3 already established (measured, not assumed) that meso does
 not execute signal programs meaningfully — and this entire phase's point is
 signal-timing quality, so extracting routes from a meso run and then judging
@@ -39,7 +39,7 @@ signal quality on them would mix two regimes D3 showed disagree.
 
 HONESTY: tls_provenance="synthetic" and D2's CAVEAT apply unchanged — every
 number here is against a SYNTHETIC 90s-cycle guess, not Gothenburg's real
-signal plans (PLAN.md D6, not done).
+signal plans (IMPROVEMENT_PLAN.md D6, not done).
 
 Usage:
   python3 signal_closure_combine.py --close EDGE_ID [EDGE_ID ...]
@@ -55,6 +55,7 @@ import json
 import sys
 import time
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 
 import closure_metrics as cm
@@ -65,6 +66,7 @@ from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
 from signal_optimize import (CAVEAT, paired_comparison, relative_pct, run_condition,
                              run_tls_coordinator, run_tls_cycle_adaptation)
 from signal_regulation import enforce_timing_minimums
+from study_contracts import load_scenario_spec
 
 
 def merge_vehroute_outputs(paths: list[Path], out_path: Path) -> int:
@@ -120,7 +122,7 @@ def route_stability(vr1_path: Path, vr2_path: Path) -> dict:
     additional files differ between them — so vehicle IDs are expected to
     line up almost completely; a route differs only where the changed
     signal timing itself altered a live rerouting decision. This is
-    PLAN.md's "measure, decide" check: a high fraction_identical means one
+    IMPROVEMENT_PLAN.md's "measure, decide" check: a high fraction_identical means one
     optimization pass already settled route choice; a low one means the
     optimized signals shifted routing enough that a second
     closure->extract->optimize iteration could see a materially different
@@ -150,8 +152,11 @@ def route_stability(vr1_path: Path, vr2_path: Path) -> dict:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--close", dest="edge", nargs="+", required=True,
+    p.add_argument("--close", dest="edge", nargs="+", default=None,
                    metavar="EDGE_ID", help="One or more edge IDs to close.")
+    p.add_argument("--scenario-spec", default=None, metavar="PATH",
+                   help="Load a closure ScenarioSpec; its edges and analysis "
+                        "window replace --close/--window-*.")
     p.add_argument("--window-start", default="07:00", metavar="HH:MM")
     p.add_argument("--window-end", default="09:00", metavar="HH:MM")
     p.add_argument("--seeds", type=int, default=3,
@@ -175,6 +180,37 @@ def main() -> None:
     with open(rs.SUMO_DIR / "demand_meta.json") as f:
         meta = json.load(f)
     total_duration_s = meta["n_intervals"] * 900
+    spec = None
+    if args.scenario_spec:
+        try:
+            spec = load_scenario_spec(Path(args.scenario_spec))
+            rs.validate_scenario_spec(
+                spec, meta=meta, duration_s=total_duration_s,
+                network_path=rs.NET_PATH)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            sys.exit(f"invalid ScenarioSpec: {exc}")
+        if not spec.closures:
+            sys.exit("closure signal study requires at least one closure")
+        if args.edge:
+            sys.exit("--scenario-spec cannot be combined with --close")
+        intervals = {(closure.start_time, closure.end_time)
+                     for closure in spec.closures}
+        if len(intervals) != 1:
+            sys.exit("all closures in a signal ScenarioSpec must share one interval")
+        args.edge = [closure.edge_id for closure in spec.closures]
+        if spec.analysis_window is None:
+            sys.exit("closure signal ScenarioSpec requires analysis_window")
+        try:
+            measure_start = datetime.fromisoformat(
+                spec.analysis_window.measure_start.replace("Z", "+00:00"))
+            measure_end = datetime.fromisoformat(
+                spec.analysis_window.measure_end.replace("Z", "+00:00"))
+        except ValueError as exc:
+            sys.exit(f"invalid ScenarioSpec analysis_window: {exc}")
+        args.window_start = measure_start.strftime("%H:%M")
+        args.window_end = measure_end.strftime("%H:%M")
+    elif not args.edge:
+        sys.exit("provide --close or --scenario-spec")
     try:
         begin_s, end_s = window_offsets_s(meta["epoch_sim"], args.window_start,
                                           args.window_end)
@@ -183,6 +219,21 @@ def main() -> None:
     if not (0 <= begin_s < end_s <= total_duration_s):
         sys.exit(f"window {args.window_start}-{args.window_end} falls outside "
                  f"the calibrated demand period (0-{total_duration_s / 3600:.1f}h)")
+
+    closure_intervals = [(begin_s, end_s)] * len(args.edge)
+    if spec is not None:
+        epoch = datetime.fromisoformat(meta["epoch_sim"].replace("Z", "+00:00"))
+        closure_intervals = []
+        for closure in spec.closures:
+            start = datetime.fromisoformat(closure.start_time.replace("Z", "+00:00"))
+            finish = datetime.fromisoformat(closure.end_time.replace("Z", "+00:00"))
+            closure_intervals.append((
+                int((start - epoch).total_seconds()),
+                int((finish - epoch).total_seconds()),
+            ))
+        if any(start < 0 or finish > total_duration_s or start >= finish
+               for start, finish in closure_intervals):
+            sys.exit("ScenarioSpec closure interval falls outside demand")
 
     prior, names = rs.load_geojson_meta()
     for e in args.edge:
@@ -200,7 +251,10 @@ def main() -> None:
     print(f"Signal-closure combine: closing {', '.join(streets)}, "
          f"{args.window_start}-{args.window_end}, {args.seeds} seed(s), MICRO")
 
-    closures = [{"edge_id": e, "begin_s": begin_s, "end_s": end_s} for e in args.edge]
+    closures = [
+        {"edge_id": edge, "begin_s": interval[0], "end_s": interval[1]}
+        for edge, interval in zip(args.edge, closure_intervals)
+    ]
     adj = rs.build_edge_graph(set(args.edge))
     freeflow = rs.edge_freeflow_times()
     rerouter_edges = rs.edges_near(args.edge, rs.REROUTER_RADIUS_M)
@@ -302,19 +356,20 @@ def main() -> None:
                  "identical route in both passes")
 
         result = {
-            "method": "PLAN.md Phase D4: closure + signal-timing adaptation, "
+            "method": "IMPROVEMENT_PLAN.md Phase D4: closure + signal-timing adaptation, "
                      "two-pass (baseline signals -> extract actually-driven "
                      "post-closure routes from every evaluated --vehroute-output -> optimize "
                      "tlsCycleAdaptation/tlsCoordinator against those routes "
                      "-> re-evaluate under the same closure). Always exactly "
                      "two passes; route_stability is reported so a reader can "
                      "decide whether a further iteration would matter, per "
-                     "PLAN.md's 'measure, decide' instruction — this script "
+                     "IMPROVEMENT_PLAN.md's 'measure, decide' instruction — this script "
                      "does not loop.",
             "closed_edges": args.edge, "streets": streets,
             "window_start": args.window_start, "window_end": args.window_end,
             "begin_s": begin_s, "end_s": end_s, "seeds": args.seeds,
             "demand_signature": demand_sig, "net_fingerprint": net_fp,
+            "scenario_spec": spec.to_dict() if spec is not None else None,
             "sumo_version": sumo_version(home), "tls_provenance": TLS_PROVENANCE,
             "caveat": CAVEAT,
             "truncated_vehicles": n_trunc_total, "dropped_vehicles": n_drop_total,

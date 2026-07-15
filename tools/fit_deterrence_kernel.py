@@ -3,7 +3,7 @@ Fit the Tanner/gamma deterrence kernel (build_candidates.deterrence_weights)
 against RVU's trip-length bins + the destination-near-sensor guard metric.
 
 Part of the 2026-07-12 destination-clustering fix (see
-DESTINATION_BIAS_RESEARCH_2026-07-12.md): the old pure-exponential kernel's
+IMPROVEMENT_PLAN.md): the old pure-exponential kernel's
 mode sits at d=0, which — combined with the sensor-anchoring mask only
 admitting destinations path-wise beyond the sensor — made "the edge
 immediately past the sensor" the modal trip destination. This sweep runs

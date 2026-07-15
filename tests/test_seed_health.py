@@ -1,4 +1,4 @@
-"""E3 per-seed health gate tests (PLAN.md; improvement plan Phase 1.3-1.4).
+"""E3 per-seed health gate tests (IMPROVEMENT_PLAN.md; improvement plan Phase 1.3-1.4).
 
 parse_seed_health reads SUMO's --statistic-output; seed_health_flags
 evaluates the gates; serve.validate_staged_scenarios refuses a staged

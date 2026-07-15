@@ -1,5 +1,5 @@
 """Congestion-feedback stage of the demand pipeline — split from
-build_sumo_demand.py 2026-07-14 (PLAN.md H1). One meso measurement pass +
+build_sumo_demand.py 2026-07-14 (IMPROVEMENT_PLAN.md H1). One meso measurement pass +
 BPR travel-time updates feeding duarouter's next candidate generation.
 
 Import via `from demand import feedback` (or the re-exports kept on

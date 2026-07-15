@@ -1,7 +1,7 @@
 """
 suggest_closure_time.py — "when is it least disruptive to close road X?"
 
-PLAN.md Phase C4. Offline/batch two-stage search over the CURRENTLY
+IMPROVEMENT_PLAN.md Phase C4. Offline/batch two-stage search over the CURRENTLY
 CALIBRATED demand period (whatever build_sumo_demand.py + run_scenario.py's
 sumo/demand_meta.json already covers — a day or a week; this tool does not
 build new demand). Standalone: does not touch web/data/scenarios or serve.py.
@@ -11,7 +11,7 @@ Method:
      window of the requested duration is scored from ONE baseline SUMO run's
      edgeData — closed-edge flow and nearby-corridor flow during the window,
      both LOWER is better. The proxy is a RANKING ONLY (Borda-combined rank
-     positions, no fabricated "predicted delay" number) — see PLAN.md C4.
+     positions, no fabricated "predicted delay" number) — see IMPROVEMENT_PLAN.md C4.
   2. SIMULATE stage: the proxy top-k, one "most obviously low-traffic"
      control, and the proxy's worst window(s) are each simulated as a real
      time-windowed closure (reusing run_scenario.py's own truncation/
@@ -100,7 +100,7 @@ def generate_windows(duration_s: int, total_duration_s: int,
                      slide_s: int) -> list[tuple[int, int]]:
     """Every window of length duration_s, sliding by slide_s, fully inside
     [0, total_duration_s]. E.g. duration_s=6h, total=7d, slide=1h gives 163
-    windows — the exact number PLAN.md's C4 spec quotes as its example."""
+    windows — the exact number IMPROVEMENT_PLAN.md's C4 spec quotes as its example."""
     if duration_s <= 0:
         raise ValueError("duration_s must be positive")
     if duration_s > total_duration_s:
@@ -245,7 +245,7 @@ def rank_candidates(scored: list[dict]) -> list[dict]:
     """Borda-style combined rank: average of the two ascending rank
     positions (closed-edge flow, corridor flow), lower average = better.
     Deliberately NOT a weighted sum of flows — that would look like a
-    physical quantity (PLAN.md: 'never show it as predicted delay
+    physical quantity (IMPROVEMENT_PLAN.md: 'never show it as predicted delay
     minutes'); a rank position carries no such implication.
 
     Uses scipy's 'average' tie-handling (fractional ranks for equal
@@ -317,7 +317,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     metrics. Mirrors run_scenario.main()'s truncate-once-per-variant,
     reuse-across-seeds pattern exactly, but WITHOUT writing anything into
     web/data/scenarios — this tool only ever produces a results JSON
-    (PLAN.md C4: 'reproducible without the web'); promoting a chosen window
+    (IMPROVEMENT_PLAN.md C4: 'reproducible without the web'); promoting a chosen window
     into a real scenario is a separate, later run_scenario.py invocation.
 
     Every intermediate file this call writes into sumo/ is appended to
@@ -328,7 +328,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
 
     Returns the RAW per-seed total_time_loss_s values alongside the
     aggregated metrics — C5's UI wants to show a median + seed interval
-    (PLAN.md's own words), which the mean alone throws away."""
+    (IMPROVEMENT_PLAN.md's own words), which the mean alone throws away."""
     run_variants = variants
     # Per-VARIANT truncated/dropped counts — truncation is deterministic
     # given (variant, closure), independent of a seed's random number, so
@@ -459,17 +459,17 @@ def recommendation_status(correlation: dict | None) -> str:
 
 def delta_time_loss_interval(candidate_per_seed: list[float],
                              baseline_per_seed: list[float]) -> dict:
-    """Median + [min, max] of Δ time loss across seeds, for the UI's
-    'median ΔtimeLoss + seed interval' requirement (PLAN.md C5) — the mean-
-    only comparison in closure_metrics.MetricComparison collapses exactly
-    the spread-over-seeds information the product's honesty promise wants
-    shown. Each candidate seed is compared against the SAME baseline mean
-    (not seed-paired — variants cycle across seeds independently on each
-    side, so there is no natural 1:1 pairing to begin with; treating both
-    sides as independent-seed ensembles matches how q10/q50/q90 spread is
-    already treated everywhere else in this project)."""
-    baseline_mean = sum(baseline_per_seed) / len(baseline_per_seed)
-    deltas = sorted(c - baseline_mean for c in candidate_per_seed)
+    """Median + [min, max] of paired per-seed Δ time loss.
+
+    Baseline and candidate simulations use the same deterministic seed-to-
+    variant mapping, so comparing each candidate seed with the corresponding
+    baseline seed removes Monte Carlo noise instead of treating the baseline
+    mean as if it were observed for every candidate.
+    """
+    if not candidate_per_seed or len(candidate_per_seed) != len(baseline_per_seed):
+        raise ValueError(
+            "paired candidate and baseline seed results must have equal non-zero length")
+    deltas = sorted(c - b for c, b in zip(candidate_per_seed, baseline_per_seed))
     n = len(deltas)
     median = deltas[n // 2] if n % 2 else (deltas[n // 2 - 1] + deltas[n // 2]) / 2
     return {"median_s": median, "min_s": deltas[0], "max_s": deltas[-1], "n_seeds": n}
@@ -548,6 +548,9 @@ def parse_args() -> argparse.Namespace:
                    help="Candidate windows slide by this many hours (default 1).")
     p.add_argument("--top-k", type=int, default=15,
                    help="How many proxy-best windows to actually simulate (default 15).")
+    p.add_argument("--exhaustive", action="store_true",
+                   help="Simulate every feasible window. This is the only mode that "
+                        "can support a global best-window claim; it may be much slower.")
     p.add_argument("--extra-bad", type=int, default=2,
                    help="How many proxy-worst windows to simulate as negative "
                         "controls (default 2).")
@@ -651,7 +654,8 @@ def main() -> None:
              f"{baseline_metrics.trip_count} trips")
 
         # ── Simulate stage ───────────────────────────────────────────────
-        to_simulate = select_candidates(ranked, args.top_k, args.extra_bad)
+        to_simulate = (ranked if args.exhaustive else
+                       select_candidates(ranked, args.top_k, args.extra_bad))
         print(f"  simulating {len(to_simulate)} of {len(windows)} candidates …")
         simulated = []
         for i, w in enumerate(to_simulate):
@@ -714,13 +718,17 @@ def main() -> None:
                  f"ΔtimeLoss={best['comparison']['delta_time_loss_s']:+.0f}s{flag}")
 
         result = {
-            "method": "PLAN.md Phase C4: proxy-ranked hourly windows, "
-                     "top-k + controls simulated, Spearman-validated",
+            "method": ("IMPROVEMENT_PLAN.md Phase C4: exhaustive feasible windows, "
+                       "Spearman-validated"
+                       if args.exhaustive else
+                       "IMPROVEMENT_PLAN.md Phase C4: proxy-ranked hourly windows, "
+                       "top-k + controls simulated, Spearman-validated"),
             "edges": args.edge, "streets": streets,
             "duration_hours": args.duration_hours, "slide_hours": args.slide_hours,
             "total_duration_s": total_duration_s, "n_candidate_windows": len(windows),
             "n_windows_excluded_missing_data": n_excluded,
             "top_k": args.top_k, "extra_bad": args.extra_bad, "seeds": args.seeds,
+            "evaluation_mode": "exhaustive" if args.exhaustive else "proxy_subset",
             "micro": args.micro,
             "demand_signature": rs.demand_signature(meta),
             "epoch_sim": meta["epoch_sim"],
