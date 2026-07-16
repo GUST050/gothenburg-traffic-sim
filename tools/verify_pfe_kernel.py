@@ -33,6 +33,34 @@ def flow_path_for_metadata(meta: dict) -> Path:
     return ROOT / "web" / "data" / name
 
 
+VERIFY_INPUTS = [
+    ROOT / "sumo" / "demand_meta.json",
+    ROOT / "web" / "data" / "observability_bounds.json",
+    ROOT / "web" / "data" / "observability.json",
+    ROOT / "sumo" / "prior_flows.json",
+    ROOT / "sumo" / "assignment_priors.json",
+]
+SNAPSHOT = ROOT / "sumo" / "_verify_candidates.rou.xml"
+
+
+def inputs_digest() -> str:
+    """Fingerprint of every input both phases must agree on.
+
+    The two phases run minutes apart; a parallel build rewriting
+    candidates/priors between them makes the comparison meaningless (seen
+    live 2026-07-16: a mid-verification candidate rebuild produced a
+    4200-vs-4066 shape-pool mismatch that surfaced as a numpy broadcast
+    crash). The candidate pool is SNAPSHOTTED so both phases read one
+    frozen copy; everything else is hash-checked, and a drift aborts with
+    a clear message instead of a false verdict either way."""
+    import hashlib
+    h = hashlib.sha256()
+    for path in [SNAPSHOT, *VERIFY_INPUTS]:
+        h.update(path.name.encode())
+        h.update(path.read_bytes() if path.exists() else b"<absent>")
+    return h.hexdigest()
+
+
 def build_real_problem():
     import pfe
     from demand.intake import build_targets, load_sensor_edges
@@ -41,8 +69,7 @@ def build_real_problem():
                                ensure_assignment_priors, ensure_observability,
                                structural_bounds_and_priors)
 
-    shapes, route_cost = pfe.prepare_calibration(
-        ROOT / "sumo" / "candidates.rou.xml")
+    shapes, route_cost = pfe.prepare_calibration(SNAPSHOT)
     meta = json.load(open(ROOT / "sumo" / "demand_meta.json"))
     qi_start, n_intervals = meta["qi_start"], meta["n_intervals"]
     with open(flow_path_for_metadata(meta)) as f:
@@ -86,6 +113,10 @@ def main() -> None:
     # The pure reference runs in a SUBPROCESS so module state can't leak
     # between paths; results cross the boundary via .npy files.
     if len(sys.argv) > 1 and sys.argv[1] == "--pure-worker":
+        expected = sys.argv[2]
+        if inputs_digest() != expected:
+            sys.exit("verify: inputs changed before the pure phase — "
+                     "another build is running; retry when the repo is quiet")
         sols, elapsed = solve_all(pure=True)
         payload = {"rungs": [r for _s, r in sols], "elapsed": elapsed}
         np.savez(ROOT / "sumo" / "_verify_pure.npz",
@@ -94,11 +125,18 @@ def main() -> None:
         (ROOT / "sumo" / "_verify_pure.json").write_text(json.dumps(payload))
         return
 
+    import shutil
+    shutil.copy2(ROOT / "sumo" / "candidates.rou.xml", SNAPSHOT)
+    digest = inputs_digest()
     print("Pure-Python reference (subprocess, PFE_PURE=1) …")
     pure_npz = ROOT / "sumo" / "_verify_pure.npz"
     pure_json = ROOT / "sumo" / "_verify_pure.json"
     try:
-        subprocess.run([sys.executable, __file__, "--pure-worker"], check=True)
+        subprocess.run([sys.executable, __file__, "--pure-worker", digest],
+                       check=True)
+        if inputs_digest() != digest:
+            sys.exit("verify: inputs changed between phases — another build "
+                     "is running; retry when the repo is quiet")
         ref = np.load(pure_npz)
         ref_meta = json.loads(pure_json.read_text())
 
@@ -128,6 +166,7 @@ def main() -> None:
     finally:
         pure_npz.unlink(missing_ok=True)
         pure_json.unlink(missing_ok=True)
+        SNAPSHOT.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
