@@ -1,68 +1,68 @@
 {
  "schema_version": 1,
- "generated_at": "2026-07-15T21:49:12Z",
- "demand_window": "2027-02-26",
- "demand_source": "forecast",
+ "generated_at": "2026-07-16T13:37:05Z",
+ "demand_window": "2025-09-16",
+ "demand_source": "historical",
  "overall": "warn",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 17137,
+   "vehicles": 17199,
    "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
   },
   "structure": {
    "status": "warn",
    "flags": [
-    "trips_under_1km_pct: calibrated 2.16 vs pool 0.52 (over 2.50x)"
+    "trips_under_1km_pct: calibrated 1.31 vs pool 0.49 (over 2.50x)"
    ],
-   "dest_within_200m_pct": 10.0,
+   "dest_within_200m_pct": 9.9,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0216,
-    0.833,
-    0.1454
+    0.0131,
+    0.8171,
+    0.1698
    ],
-   "trip_length_l1_vs_rvu": 0.6151,
-   "onward_after_sensor_median_m": 1621.1,
-   "onward_under_200m_pct": 3.5,
+   "trip_length_l1_vs_rvu": 0.5834,
+   "onward_after_sensor_median_m": 1670.6,
+   "onward_under_200m_pct": 3.4,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
   },
   "purposes": {
    "status": "warn",
    "purpose_counts": {
-    "arbete": 3370,
-    "external": 1245,
-    "fritid": 927,
-    "service": 1674,
-    "through": 9921
+    "arbete": 3386,
+    "external": 1246,
+    "fritid": 935,
+    "service": 1620,
+    "through": 10012
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 3370,
-     "mean_km": 3.3,
-     "median_km": 3.22
+     "n": 3386,
+     "mean_km": 3.33,
+     "median_km": 3.29
     },
     "external": {
-     "n": 1245,
-     "mean_km": 3.34,
-     "median_km": 3.37
+     "n": 1246,
+     "mean_km": 3.43,
+     "median_km": 3.42
     },
     "fritid": {
-     "n": 927,
-     "mean_km": 3.6,
-     "median_km": 3.41
-    },
-    "service": {
-     "n": 1674,
-     "mean_km": 3.27,
+     "n": 935,
+     "mean_km": 3.56,
      "median_km": 3.34
     },
+    "service": {
+     "n": 1620,
+     "mean_km": 3.42,
+     "median_km": 3.66
+    },
     "through": {
-     "n": 9921,
-     "mean_km": 3.15,
-     "median_km": 2.44
+     "n": 10012,
+     "mean_km": 3.39,
+     "median_km": 2.69
     }
    },
    "ordering_violated": false,
@@ -80,22 +80,22 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 17137,
-     "loaded": 17137,
+     "inserted": 17199,
+     "loaded": 17199,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 16545,
-     "loaded": 16545,
+     "inserted": 16596,
+     "loaded": 16596,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 18006,
-     "loaded": 18006,
+     "inserted": 18134,
+     "loaded": 18134,
      "unfinished": 0,
      "teleports": 0
     }
