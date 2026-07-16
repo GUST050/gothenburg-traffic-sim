@@ -95,6 +95,74 @@ def ensure_priors(date: str) -> dict:
         return json.load(f)
 
 
+def build_interval_constraints(
+    n_intervals: int,
+    qi_start: int,
+    bounds_data: dict,
+    priors_data: dict,
+    corridor_priors: dict,
+    assignment_data: dict,
+    prior_key: str = "prior",
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Build the exact per-quarter PFE constraint hierarchy used in production.
+
+    Level-2 structural bounds always take precedence over the broad
+    assignment ceilings; level-3 learned/corridor priors take precedence over
+    assignment ceilings too.  Keeping this construction here gives the
+    demand builder and the bit-identity verifier one implementation, so a
+    verification run cannot silently solve a different mathematical problem.
+    """
+    bounds_per_q: list[dict] = []
+    priors_per_q: list[dict] = []
+    hard_bounds_per_q: list[dict] = []
+    assignment_weight = assignment_data.get("weight", 0.0)
+    assignment_flows = assignment_data.get("flows", {})
+
+    for i in range(n_intervals):
+        hard_bounds = {}
+        for edge_id, series in bounds_data.get("bounds", {}).items():
+            # Bounds are structural reference-day relationships; repeat their
+            # time-of-day slots for every target day in a multi-day build.
+            slot_i = i % 96
+            if slot_i < len(series) and series[slot_i]:
+                hard_bounds[edge_id] = (series[slot_i][0], series[slot_i][1])
+
+        bounds = dict(hard_bounds)
+        priors = {}
+        slot = (qi_start + i) % 96
+        for edge_id, data in priors_data.get("edges", {}).items():
+            value = data[prior_key][slot]
+            if value is None:
+                continue
+            low = data["prior_low"][slot] or 0.0
+            high = data["prior_high"][slot] or value
+            priors[edge_id] = (float(value), 1.0 / max(1.0, high - low))
+
+        for edge_id, data in corridor_priors.items():
+            qi = qi_start + i
+            if qi >= len(data["prior"]) or data["prior"][qi] is None:
+                continue
+            band = data["band"][qi] or 8.0
+            priors[edge_id] = (float(data["prior"][qi]),
+                               1.0 / max(1.0, band))
+
+        if assignment_weight > 0:
+            for edge_id, series in assignment_flows.items():
+                # Assignment is a wide plausibility ceiling only.  It must
+                # never replace a hard structural bound or a stronger prior.
+                if edge_id in bounds or edge_id in priors or slot >= len(series):
+                    continue
+                value = series[slot]
+                if value is not None:
+                    bounds[edge_id] = (0.0, max(5.0, 5.0 * value))
+
+        bounds_per_q.append(bounds)
+        priors_per_q.append(priors)
+        hard_bounds_per_q.append(hard_bounds)
+
+    return bounds_per_q, priors_per_q, hard_bounds_per_q
+
+
 def structural_bounds_and_priors(begin: str, end: str) -> tuple[dict, dict]:
     """Load date-invariant structural inputs, never target-date inputs."""
     return (ensure_bounds(STRUCTURAL_REFERENCE_DATE, begin, end),

@@ -64,6 +64,11 @@ import pfe_kernel
 _KERNEL_ENABLED = (pfe_kernel.NUMBA_AVAILABLE
                    and os.environ.get("PFE_PURE") != "1")
 
+
+def entropy_solver_backend() -> str:
+    """Report the active IPF implementation for build telemetry and support."""
+    return "numba" if _KERNEL_ENABLED else "python"
+
 EPS_PARSIMONY = 1e-3
 MEAS_TOL_FRAC = 0.05      # hard band around measured counts
 MEAS_TOL_MIN  = 2.0
@@ -1075,6 +1080,10 @@ def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndar
     # first-run cost).
     if _KERNEL_ENABLED:
         pfe_kernel.warmup()
+        print("  PFE IPF backend: numba (compiled)")
+    else:
+        print("  WARNING: PFE IPF backend: pure Python "
+              "(install requirements or unset PFE_PURE=1 for normal speed)")
     return shapes, path_size_weights(shapes)
 
 

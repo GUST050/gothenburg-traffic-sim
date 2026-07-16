@@ -295,7 +295,8 @@ from demand.structure import (DEST_GROUP_CAP_MULT, LENGTH_BIN_EDGES_KM,
 
 # Bounds/priors intake — demand/priors.py (H1). Patch subprocess/GEO_PATH
 # on demand.priors for these.
-from demand.priors import (ensure_assignment_priors, ensure_bounds,
+from demand.priors import (build_interval_constraints,
+                           ensure_assignment_priors, ensure_bounds,
                            ensure_observability, ensure_priors,
                            structural_bounds_and_priors)
 
@@ -563,60 +564,9 @@ def main() -> None:
         prior_variant = {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
 
         def build_bounds_priors(suffix: str) -> tuple[list[dict], list[dict], list[dict]]:
-            bounds_pq, priors_pq, hard_bounds_pq = [], [], []
-            for i in range(n_intervals):
-                hard_bq = {}
-                for e, arr in bounds_data["bounds"].items():
-                    # Bounds are structural reference-day relationships;
-                    # repeat their 96 time-of-day slots for each target day.
-                    slot_i = i % 96
-                    if slot_i < len(arr) and arr[slot_i]:
-                        hard_bq[e] = (arr[slot_i][0], arr[slot_i][1])
-                # The solver uses mathematical constraints plus wide
-                # behavioral assignment ranges below. Only this first set is
-                # a true post-rounding publication gate.
-                bq = dict(hard_bq)
-                pq = {}
-                slot = (qi_start + i) % 96
-                pkey = prior_variant.get(suffix, "prior")
-                for e, d in priors_data.get("edges", {}).items():
-                    val = d[pkey][slot]
-                    if val is None:
-                        continue
-                    lo = d["prior_low"][slot] or 0.0
-                    hi = d["prior_high"][slot] or val
-                    pq[e] = (float(val), 1.0 / max(1.0, hi - lo))
-                # Sensors helping each other: corridor blends between sensor
-                # pairs — data-derived, so their (narrow) band gives them
-                # naturally higher weight than the learned priors
-                for e, d in corridor.items():
-                    qi = qi_start + i
-                    if qi >= len(d["prior"]) or d["prior"][qi] is None:
-                        continue
-                    band = d["band"][qi] or 8.0
-                    pq[e] = (float(d["prior"][qi]), 1.0 / max(1.0, band))
-                # Gravity-assignment field: a WIDE INTERVAL BOUND (not a
-                # soft L1 prior) on edges no stronger source covers. A prior
-                # costs 2 extra LP variables + a row EACH — at ~6 500 edges
-                # that made the per-quarter LP intractable (a whole-day
-                # solve stalled >35 min with 0 progress, killed). A bound is
-                # 1-2 inequality rows with NO new variables — the same
-                # mechanism level-2 bounds already use — and is arguably
-                # more honest anyway: this field is a rough plausibility
-                # range, not a confident target.
-                if assign_w > 0:
-                    slot = (qi_start + i) % 96
-                    for e, series in assign_flows.items():
-                        if e in bq or e in pq or slot >= len(series):
-                            continue
-                        v = series[slot]
-                        if v is None:
-                            continue
-                        bq[e] = (0.0, max(5.0, 5.0 * v))
-                bounds_pq.append(bq)
-                priors_pq.append(pq)
-                hard_bounds_pq.append(hard_bq)
-            return bounds_pq, priors_pq, hard_bounds_pq
+            return build_interval_constraints(
+                n_intervals, qi_start, bounds_data, priors_data, corridor,
+                assign_data, prior_variant.get(suffix, "prior"))
 
         # ── Congestion-feedback loop (primary "" / q50 variant only) ──────────
         # PFE picks route USE COUNTS to match sensor totals, but the candidate

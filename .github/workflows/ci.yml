@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pandas numpy osmnx pyproj shapely geopandas \
-                      lightgbm scikit-learn pytest
+                      lightgbm scikit-learn numba==0.60.0 pytest
 
       - name: Run tests
         run: python3 -m pytest tests/ -q

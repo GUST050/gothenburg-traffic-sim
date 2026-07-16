@@ -107,6 +107,36 @@ class TestB1DateRangeContract:
             ("priors", bsd.STRUCTURAL_REFERENCE_DATE),
         ]
 
+    def test_interval_constraints_keep_hard_bounds_above_assignment_ceiling(self):
+        bounds_data = {"bounds": {"hard": [[0.0, 100.0], [0.0, 200.0]]}}
+        priors_data = {"edges": {
+            "soft": {
+                "prior": [12.0, 13.0],
+                "prior_low": [8.0, 9.0],
+                "prior_high": [16.0, 17.0],
+            },
+        }}
+        corridor = {"corridor": {
+            "prior": [20.0, 21.0], "band": [4.0, 5.0],
+        }}
+        assignment = {"weight": 0.1, "flows": {
+            "hard": [4.0, 5.0],
+            "soft": [6.0, 7.0],
+            "corridor": [8.0, 9.0],
+            "free": [3.0, 4.0],
+        }}
+
+        bounds, priors, hard = dpriors.build_interval_constraints(
+            2, 0, bounds_data, priors_data, corridor, assignment)
+
+        assert hard == [{"hard": (0.0, 100.0)}, {"hard": (0.0, 200.0)}]
+        assert bounds == [
+            {"hard": (0.0, 100.0), "free": (0.0, 15.0)},
+            {"hard": (0.0, 200.0), "free": (0.0, 20.0)},
+        ]
+        assert priors[0]["soft"][0] == 12.0
+        assert priors[1]["corridor"][0] == 21.0
+
 
 def write_direction_split(tmp_path, shares: dict[str, list[float]]) -> None:
     (tmp_path / "direction_split.json").write_text(json.dumps({

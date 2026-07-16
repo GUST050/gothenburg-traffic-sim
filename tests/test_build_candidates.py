@@ -955,6 +955,51 @@ class TestGenerateSensorAnchoredTripsEIandIE:
         # n_total=40 -> n_tours_total=20, n_cross=20, n_ei=10, n_ie=10 -> 20 legs each way = 40 legs total
         assert len(trips) == 40
 
+    def test_conditioned_cache_is_result_neutral(self):
+        args = self._setup()
+
+        uncached = bc.generate_sensor_anchored_trips(
+            np.random.default_rng(4), *args,
+            n_total=40, through_fraction=0.0, cross_fraction=1.0,
+            gravity_km=5.0, is_weekend=False, min_per_sensor=0,
+            cache_conditioned_fields=False)
+        cached = bc.generate_sensor_anchored_trips(
+            np.random.default_rng(4), *args,
+            n_total=40, through_fraction=0.0, cross_fraction=1.0,
+            gravity_km=5.0, is_weekend=False, min_per_sensor=0,
+            cache_conditioned_fields=True)
+
+        assert cached == uncached
+
+
+class TestConditionedMaskCache:
+    def test_packed_membership_preserves_sensor_attribution(self):
+        measured = [f"s{i}" for i in range(9)]
+        masks = {
+            edge_id: np.array([i == 0, i == 8, True])
+            for i, edge_id in enumerate(measured)
+        }
+
+        membership, union = bc.pack_sensor_membership(masks, measured)
+
+        assert membership.shape == (2, 3)
+        assert union.tolist() == [True, True, True]
+        assert bc.sensors_at_membership(membership, measured, 0) == ["s0"]
+        assert bc.sensors_at_membership(membership, measured, 1) == ["s8"]
+        assert bc.sensors_at_membership(membership, measured, 2) == measured
+
+    def test_lru_cache_stays_inside_its_byte_budget(self):
+        cache = bc.ConditionedMaskCache(max_bytes=4)
+        membership = np.zeros((1, 2), dtype=np.uint8)
+        union = np.zeros(2, dtype=bool)
+
+        cache.put(1, membership, union)
+        cache.put(2, membership.copy(), union.copy())
+
+        assert cache.bytes_used == 4
+        assert cache.get(1) is None
+        assert cache.get(2) is not None
+
 
 class TestVerifiedViaGatePairs:
     def test_keeps_only_pairs_where_via_is_naturally_on_the_path(self):

@@ -6,6 +6,7 @@ adversarial synthetic problems and require np.array_equal (no tolerance).
 The full-network proof lives in tools/verify_pfe_kernel.py; the H2
 benchmark fingerprint provides the third, independent net.
 """
+import os
 import sys
 from pathlib import Path
 
@@ -16,21 +17,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pfe
 import pfe_kernel
 from pfe import Candidate
+from tools.verify_pfe_kernel import flow_path_for_metadata
 
-pytestmark = pytest.mark.skipif(not pfe_kernel.NUMBA_AVAILABLE,
-                                reason="numba not installed")
+pytestmark = pytest.mark.skipif(os.environ.get("PFE_PURE") == "1",
+                                reason="PFE_PURE explicitly disables the kernel")
 
 
 def _both_paths(cands, measured, bounds, priors, **kw):
-    if not pfe._KERNEL_ENABLED:
-        pytest.skip("kernel disabled in this environment")
+    assert pfe_kernel.NUMBA_AVAILABLE, (
+        "numba is a required dependency: the compiled PFE path must be tested")
+    assert pfe._KERNEL_ENABLED, "kernel unexpectedly disabled in the default test environment"
     fast = pfe.solve_interval_entropy(cands, measured, bounds, priors, **kw)
+    previous = pfe._KERNEL_ENABLED
     try:
         pfe._KERNEL_ENABLED = False
         pure = pfe.solve_interval_entropy(cands, measured, bounds, priors,
                                           **kw)
     finally:
-        pfe._KERNEL_ENABLED = True
+        pfe._KERNEL_ENABLED = previous
     return fast, pure
 
 
@@ -48,6 +52,12 @@ def cand(*edges):
 
 
 class TestKernelBitIdentity:
+    def test_verifier_uses_the_demand_build_source(self):
+        assert flow_path_for_metadata({"source": "historical"}).name == "flows.json"
+        assert flow_path_for_metadata({"source": "forecast"}).name == "flows_forecast.json"
+        with pytest.raises(RuntimeError, match="invalid source"):
+            flow_path_for_metadata({"source": "unknown"})
+
     def test_measured_only(self):
         cands = [cand("a", "b"), cand("a"), cand("c")]
         _assert_identical(*_both_paths(cands, {"a": 100.0}, {}, {}))

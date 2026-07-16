@@ -98,6 +98,7 @@ output — pfe.py is untouched).
 from __future__ import annotations
 
 import argparse
+from collections import OrderedDict
 import json
 import math
 import subprocess
@@ -128,6 +129,39 @@ GATE_WEIGHT = {          # proxy: approach-road class → relative through-flow
     "primary": 4, "primary_link": 4, "secondary": 2, "secondary_link": 2,
     "tertiary": 1, "tertiary_link": 1,
 }
+
+# Keep the conditioned-destination acceleration bounded: cache pressure must
+# not become OS swapping on a smaller computer or as sensors are added.
+CONDITIONED_MASK_CACHE_MAX_BYTES = 96 * 1024 * 1024
+
+
+class ConditionedMaskCache:
+    """Bounded LRU cache for compact per-anchor sensor membership fields."""
+
+    def __init__(self, max_bytes: int = CONDITIONED_MASK_CACHE_MAX_BYTES):
+        self.max_bytes = max_bytes
+        self.bytes_used = 0
+        self._entries: OrderedDict[int, tuple[np.ndarray, np.ndarray]] = OrderedDict()
+
+    def get(self, anchor_pos: int) -> tuple[np.ndarray, np.ndarray] | None:
+        entry = self._entries.get(anchor_pos)
+        if entry is not None:
+            self._entries.move_to_end(anchor_pos)
+        return entry
+
+    def put(self, anchor_pos: int, membership: np.ndarray,
+            union: np.ndarray) -> None:
+        size = int(membership.nbytes + union.nbytes)
+        if size > self.max_bytes:
+            return
+        previous = self._entries.pop(anchor_pos, None)
+        if previous is not None:
+            self.bytes_used -= previous[0].nbytes + previous[1].nbytes
+        while self._entries and self.bytes_used + size > self.max_bytes:
+            _, evicted = self._entries.popitem(last=False)
+            self.bytes_used -= evicted[0].nbytes + evicted[1].nbytes
+        self._entries[anchor_pos] = (membership, union)
+        self.bytes_used += size
 
 # RVU Västra Götaland 2022-2023, fig. 11 (p.21), home leg excluded — the
 # WEEKLY AVERAGE (43/33/24), not a weekday-specific figure (Fig.11's own
@@ -1538,6 +1572,26 @@ def natural_sensor_masks(
     return masks
 
 
+def pack_sensor_membership(masks: dict[str, np.ndarray], measured: list[str]
+                           ) -> tuple[np.ndarray, np.ndarray]:
+    """Losslessly pack per-sensor masks for the conditioned-anchor cache.
+
+    The acceptance test needs the union only, while attribution after a
+    successful draw needs the individual sensor membership.  Packing preserves
+    every bit but avoids retaining one full bool vector per sensor and anchor.
+    """
+    matrix = np.stack([masks[edge_id] for edge_id in measured], axis=0)
+    membership = np.packbits(matrix, axis=0, bitorder="little")
+    return membership, np.any(membership, axis=0)
+
+
+def sensors_at_membership(membership: np.ndarray, measured: list[str],
+                          pos: int) -> list[str]:
+    """Return the measured edges whose packed naturalness bit is set at pos."""
+    return [edge_id for i, edge_id in enumerate(measured)
+            if int(membership[i // 8, pos]) & (1 << (i % 8))]
+
+
 def natural_origin_weights(
     D: np.ndarray, node_idx: dict[int, int],
     candidate_v_idx: np.ndarray, m_u: int, m_v: int, m_length: float,
@@ -1755,6 +1809,7 @@ def generate_sensor_anchored_trips(
     min_per_sensor: int = 50, max_anchor_redraws: int = 25,
     gravity_alpha: float = 0.0,
     routing_costs: dict[str, float] | None = None,
+    cache_conditioned_fields: bool = True,
 ) -> tuple[list[tuple], list[float], dict[str, int]]:
     """Replaces the old E-E/I-I/E-I/I-E blocks + separate via-trip
     coverage block with ONE principle: every generated trip must be
@@ -1961,8 +2016,11 @@ def generate_sensor_anchored_trips(
                                               # P(pass any sensor) is handled
                                               # by retrying, not by biasing
 
-    def attribute_sensor(masks: dict[str, np.ndarray], pos: int) -> str:
-        passed = [m for m in measured if masks[m][pos]]
+    def attribute_sensor(masks_or_membership, pos: int) -> str:
+        if isinstance(masks_or_membership, dict):
+            passed = [m for m in measured if masks_or_membership[m][pos]]
+        else:
+            passed = sensors_at_membership(masks_or_membership, measured, pos)
         return max(passed, key=lambda m: quota[m])
 
     # PER-TRY CACHES (2026-07-16, result-neutral speedup): profiling the
@@ -1975,9 +2033,9 @@ def generate_sensor_anchored_trips(
     # rng calls — the random stream, and therefore every drawn trip, is
     # byte-identical (proven: same-seed tours.trips.xml md5-equal
     # before/after). Caches are created fresh per category call site so
-    # pool identity can never be confused. The union mask is stored with
-    # the masks — the per-try logical_or.reduce over 7 sensor masks was
-    # itself real work.
+    # pool identity can never be confused. Each entry stores a packed sensor
+    # membership field and union, not seven full bool arrays, and is bounded
+    # by ConditionedMaskCache's LRU memory budget.
     def draw_conditioned_outbound(anchor_p, anchor_u_nodes, anchor_v_nodes,
                                   anchor_lats,
                                   anchor_lons, dest_lats, dest_lons,
@@ -1994,15 +2052,16 @@ def generate_sensor_anchored_trips(
         if anchor_v not in node_idx:
             return None
 
-        cached = mask_cache.get(a_pos)
+        cached = mask_cache.get(a_pos) if cache_conditioned_fields else None
         if cached is None:
             masks = natural_sensor_masks(
                 D, node_idx, anchor_v, m_info, dest_u_idx_a,
                 anchor_u=anchor_u_nodes[a_pos], dest_v_idx=dest_v_idx_a)
-            union = np.logical_or.reduce([masks[m] for m in measured])
-            cached = (masks, union)
-            mask_cache[a_pos] = cached
-        masks, union = cached
+            membership, union = pack_sensor_membership(masks, measured)
+            if cache_conditioned_fields:
+                mask_cache.put(a_pos, membership, union)
+        else:
+            membership, union = cached
 
         # The ACCEPT test needs only two scalars, both fully determined by
         # (anchor, beta, base_w) — the full destination field is rebuilt
@@ -2012,7 +2071,7 @@ def generate_sensor_anchored_trips(
         # keying on beta alone would silently corrupt the cache if two
         # purposes ever shared a length scale.
         key = (a_pos, beta_km, id(base_w))
-        scalars = scalar_cache.get(key)
+        scalars = scalar_cache.get(key) if cache_conditioned_fields else None
         if scalars is None:
             d_km = gravity_distance_km(dest_lats, dest_lons,
                                        anchor_lats[a_pos], anchor_lons[a_pos])
@@ -2020,7 +2079,8 @@ def generate_sensor_anchored_trips(
             total_w = far_w.sum()
             masked = np.where(union, far_w, 0.0)
             z = masked.sum()
-            scalar_cache[key] = (total_w, z)
+            if cache_conditioned_fields:
+                scalar_cache[key] = (total_w, z)
         else:
             total_w, z = scalars
             d_km = masked = None
@@ -2035,12 +2095,12 @@ def generate_sensor_anchored_trips(
             far_w = base_w * deterrence_weights(d_km, beta_km, gravity_alpha)
             masked = np.where(union, far_w, 0.0)
         f_pos = int(rng.choice(len(dest_u_idx_a), p=masked / z))
-        return a_pos, f_pos, float(d_km[f_pos]), masks
+        return a_pos, f_pos, float(d_km[f_pos]), membership
 
     # I-I: home -> activity -> home. Both ends are ordinary internal
     # edges, so the return leg simply reuses both fixed edges — only
     # needs to verify SOME sensor naturally connects them (no new draw).
-    ii_masks, ii_scalars = {}, {}
+    ii_masks, ii_scalars = ConditionedMaskCache(), {}
     for tour_no in range(n_internal):
         h_out, h_ret = am_pm_hours()
         purpose, far_base = draw_purpose_weights(h_out)
@@ -2053,14 +2113,14 @@ def generate_sensor_anchored_trips(
                 ii_masks, ii_scalars)
             if drawn is None:
                 continue   # anchor rejected — this IS the conditioning
-            a_pos, f_pos, d_km_f, masks = drawn
+            a_pos, f_pos, d_km_f, membership = drawn
             return_sensor = _natural_sensor_for_leg(
                 D, node_idx, edge_v_nodes[f_pos], edge_u_nodes[a_pos],
                 m_info, quota, anchor_u=edge_u_nodes[f_pos],
                 candidate_v=edge_v_nodes[a_pos])
             if return_sensor is None:
                 continue
-            m_edge = attribute_sensor(masks, f_pos)
+            m_edge = attribute_sensor(membership, f_pos)
             quota[m_edge] -= 1
             quota[return_sensor] -= 1
             tour_lengths_km.append(d_km_f)
@@ -2077,7 +2137,7 @@ def generate_sensor_anchored_trips(
 
     # E-I: entry gate -> activity, return leg to an INDEPENDENTLY-drawn
     # exit gate (never back through the entry gate — see note above).
-    ei_masks, ei_scalars = {}, {}
+    ei_masks, ei_scalars = ConditionedMaskCache(), {}
     for tour_no in range(n_ei):
         h_out, h_ret = am_pm_hours()
         purpose, far_base = draw_purpose_weights(h_out)
@@ -2090,7 +2150,7 @@ def generate_sensor_anchored_trips(
                 ei_masks, ei_scalars)
             if drawn is None:
                 continue
-            a_pos, f_pos, d_km_f, masks = drawn
+            a_pos, f_pos, d_km_f, membership = drawn
             # Return leg: fixed activity origin -> fresh exit gate, union
             # over sensors (no per-sensor pre-commitment here either).
             ret_masks = natural_sensor_masks(
@@ -2102,7 +2162,7 @@ def generate_sensor_anchored_trips(
             if rz <= 0:
                 continue   # no sensor-passing way out from this activity — retry
             g_pos = int(rng.choice(len(exit_u_idx), p=ret_w / rz))
-            m_edge = attribute_sensor(masks, f_pos)
+            m_edge = attribute_sensor(membership, f_pos)
             return_m_edge = attribute_sensor(ret_masks, g_pos)
             quota[m_edge] -= 1
             quota[return_m_edge] -= 1
@@ -2120,7 +2180,7 @@ def generate_sensor_anchored_trips(
 
     # I-E: internal home -> exit gate, return leg FROM an INDEPENDENTLY-
     # drawn entry gate (never from the same exit gate — see note above).
-    ie_masks, ie_scalars = {}, {}
+    ie_masks, ie_scalars = ConditionedMaskCache(), {}
     for tour_no in range(n_ie):
         h_out, h_ret = am_pm_hours()
         succeeded = False
@@ -2132,7 +2192,7 @@ def generate_sensor_anchored_trips(
                 ie_masks, ie_scalars)
             if drawn is None:
                 continue
-            a_pos, f_pos, d_km_f, masks = drawn
+            a_pos, f_pos, d_km_f, membership = drawn
             # Return leg: fresh entry gate -> fixed home destination —
             # union of the per-sensor natural_origin_weights maskings
             # (elementwise max is the union: same base weights, 0/w each).
@@ -2149,7 +2209,7 @@ def generate_sensor_anchored_trips(
             # Positive weight == the natural route passes that sensor, so
             # the weight dict doubles as attribute_sensor's masks.
             return_m_edge = attribute_sensor(ret_w_by_m, g_pos)
-            m_edge = attribute_sensor(masks, f_pos)
+            m_edge = attribute_sensor(membership, f_pos)
             quota[m_edge] -= 1
             quota[return_m_edge] -= 1
             tour_lengths_km.append(d_km_f)
