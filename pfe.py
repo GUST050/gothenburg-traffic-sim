@@ -56,6 +56,14 @@ import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, linprog, milp
 from scipy.sparse import hstack, identity, lil_matrix, vstack
 
+import pfe_kernel
+
+# Compiled IPF fast path (see pfe_kernel.py's bit-identity contract).
+# PFE_PURE=1 forces the pure-Python reference loop; a numba-less install
+# falls back automatically.
+_KERNEL_ENABLED = (pfe_kernel.NUMBA_AVAILABLE
+                   and os.environ.get("PFE_PURE") != "1")
+
 EPS_PARSIMONY = 1e-3
 MEAS_TOL_FRAC = 0.05      # hard band around measured counts
 MEAS_TOL_MIN  = 2.0
@@ -425,6 +433,29 @@ def solve_interval_entropy(
                     for e, (target, weight) in priors.items()
                     if touch.get(e) and target > 0 and weight > 0]
 
+    # COMPILED FAST PATH (2026-07-16, pfe_kernel.py): the loop below was
+    # measured at 91-96% of the whole demand build (Phase I). The numba
+    # kernel executes the IDENTICAL operations in the IDENTICAL order —
+    # bitwise-equal output, proven on the real network across all 96
+    # quarters by tools/verify_pfe_kernel.py and pinned by
+    # tests/test_pfe_kernel.py + the H2 benchmark fingerprint. PFE_PURE=1
+    # forces this pure-Python reference path (verification, debugging,
+    # or a numba-less install). ANY edit to the loop below must be
+    # mirrored in pfe_kernel.ipf_iterations and re-verified bitwise.
+    if _KERNEL_ENABLED:
+        m_indptr, m_idx, m_target = pfe_kernel.csr_items(measured_items, 1)
+        b_indptr, b_idx, b_lo, b_hi = pfe_kernel.csr_items(bounds_items, 2)
+        p_indptr, p_idx, p_target, p_weight = pfe_kernel.csr_items(
+            priors_items, 2)
+        x = pfe_kernel.ipf_iterations(
+            x.astype(np.float64, copy=True),
+            m_indptr, m_idx, m_target,
+            b_indptr, b_idx, b_lo, b_hi,
+            p_indptr, p_idx, p_target, p_weight,
+            burn_in, max_iterations)
+        return _check_entropy_solution(x, touch, measured, bounds, groups,
+                                       tol_mult)
+
     for it in range(max_iterations):
         x_list = x.tolist()
 
@@ -498,9 +529,16 @@ def solve_interval_entropy(
     if n_samples > 0:
         x = x_sum / n_samples
 
-    # Confirm convergence rather than assume it — an empty level-1/level-2
-    # intersection for some edge would otherwise silently return a vector
-    # that doesn't actually satisfy the hard constraints.
+    return _check_entropy_solution(x, touch, measured, bounds, groups,
+                                   tol_mult)
+
+
+def _check_entropy_solution(x, touch, measured, bounds, groups, tol_mult):
+    """Confirm convergence rather than assume it — an empty level-1/level-2
+    intersection for some edge would otherwise silently return a vector
+    that doesn't actually satisfy the hard constraints. Shared verbatim by
+    the pure-Python and compiled paths (it runs on the FINAL x, so path
+    equality upstream makes its verdicts identical)."""
     for e, target in measured.items():
         js = touch[e]
         tol = max(MEAS_TOL_MIN, MEAS_TOL_FRAC * target) * tol_mult
@@ -1030,6 +1068,13 @@ def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndar
     shapes = list(seen.values())
     print(f"  shape pool: {len(shapes)} distinct routes "
           f"(from {len(cands)} candidates)")
+    # Warm the compiled IPF kernel in THIS (parent) process: the flat
+    # worker pools fork after prepare_calibration, so a warmed kernel is
+    # inherited by every worker instead of being JIT-compiled once per
+    # worker (numba's cache=True softens but does not fully remove that
+    # first-run cost).
+    if _KERNEL_ENABLED:
+        pfe_kernel.warmup()
     return shapes, path_size_weights(shapes)
 
 
