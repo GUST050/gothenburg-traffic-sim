@@ -1965,10 +1965,24 @@ def generate_sensor_anchored_trips(
         passed = [m for m in measured if masks[m][pos]]
         return max(passed, key=lambda m: quota[m])
 
+    # PER-TRY CACHES (2026-07-16, result-neutral speedup): profiling the
+    # 305 s generation stage showed 96% of it inside the rejection loop —
+    # 265 576 tries recomputing natural_sensor_masks (235 s) and the
+    # deterrence field (19 s) for anchors drawn from a FIXED weighted pool
+    # (~40 repeats per anchor on average; the H0 reuse review predicted
+    # this exact cache as "the lever if it grows"). Every cached value is
+    # a DETERMINISTIC function of its key, and the cache adds/removes NO
+    # rng calls — the random stream, and therefore every drawn trip, is
+    # byte-identical (proven: same-seed tours.trips.xml md5-equal
+    # before/after). Caches are created fresh per category call site so
+    # pool identity can never be confused. The union mask is stored with
+    # the masks — the per-try logical_or.reduce over 7 sensor masks was
+    # itself real work.
     def draw_conditioned_outbound(anchor_p, anchor_u_nodes, anchor_v_nodes,
                                   anchor_lats,
                                   anchor_lons, dest_lats, dest_lons,
-                                  dest_u_idx_a, dest_v_idx_a, base_w, beta_km):
+                                  dest_u_idx_a, dest_v_idx_a, base_w, beta_km,
+                                  mask_cache, scalar_cache):
         """ONE rejection-sampling try of the conditioned outbound leg — the
         statistical core of the destination-bias fix, shared by the I-I,
         E-I and I-E loops so the three tour categories can never drift onto
@@ -1979,26 +1993,54 @@ def generate_sensor_anchored_trips(
         anchor_v = anchor_v_nodes[a_pos]
         if anchor_v not in node_idx:
             return None
-        d_km = gravity_distance_km(dest_lats, dest_lons,
-                                   anchor_lats[a_pos], anchor_lons[a_pos])
-        far_w = base_w * deterrence_weights(d_km, beta_km, gravity_alpha)
-        total_w = far_w.sum()
+
+        cached = mask_cache.get(a_pos)
+        if cached is None:
+            masks = natural_sensor_masks(
+                D, node_idx, anchor_v, m_info, dest_u_idx_a,
+                anchor_u=anchor_u_nodes[a_pos], dest_v_idx=dest_v_idx_a)
+            union = np.logical_or.reduce([masks[m] for m in measured])
+            cached = (masks, union)
+            mask_cache[a_pos] = cached
+        masks, union = cached
+
+        # The ACCEPT test needs only two scalars, both fully determined by
+        # (anchor, beta, base_w) — the full destination field is rebuilt
+        # only for the ~2% of tries that are accepted. id(base_w) is in the
+        # key because base_w is the per-purpose activity-mass array
+        # (draw_purpose_weights returns the same object per purpose):
+        # keying on beta alone would silently corrupt the cache if two
+        # purposes ever shared a length scale.
+        key = (a_pos, beta_km, id(base_w))
+        scalars = scalar_cache.get(key)
+        if scalars is None:
+            d_km = gravity_distance_km(dest_lats, dest_lons,
+                                       anchor_lats[a_pos], anchor_lons[a_pos])
+            far_w = base_w * deterrence_weights(d_km, beta_km, gravity_alpha)
+            total_w = far_w.sum()
+            masked = np.where(union, far_w, 0.0)
+            z = masked.sum()
+            scalar_cache[key] = (total_w, z)
+        else:
+            total_w, z = scalars
+            d_km = masked = None
+
         if total_w <= 0:
             return None
-        masks = natural_sensor_masks(
-            D, node_idx, anchor_v, m_info, dest_u_idx_a,
-            anchor_u=anchor_u_nodes[a_pos], dest_v_idx=dest_v_idx_a)
-        masked = np.where(np.logical_or.reduce([masks[m] for m in measured]),
-                          far_w, 0.0)
-        z = masked.sum()
         if z <= 0 or rng.random() >= z / total_w:
             return None
+        if masked is None:   # accepted on a cache hit — build the field now
+            d_km = gravity_distance_km(dest_lats, dest_lons,
+                                       anchor_lats[a_pos], anchor_lons[a_pos])
+            far_w = base_w * deterrence_weights(d_km, beta_km, gravity_alpha)
+            masked = np.where(union, far_w, 0.0)
         f_pos = int(rng.choice(len(dest_u_idx_a), p=masked / z))
         return a_pos, f_pos, float(d_km[f_pos]), masks
 
     # I-I: home -> activity -> home. Both ends are ordinary internal
     # edges, so the return leg simply reuses both fixed edges — only
     # needs to verify SOME sensor naturally connects them (no new draw).
+    ii_masks, ii_scalars = {}, {}
     for tour_no in range(n_internal):
         h_out, h_ret = am_pm_hours()
         purpose, far_base = draw_purpose_weights(h_out)
@@ -2007,7 +2049,8 @@ def generate_sensor_anchored_trips(
             drawn = draw_conditioned_outbound(
                 home_anchor_p, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons,
                 edge_lats, edge_lons, edge_u_idx, edge_v_idx, far_base,
-                gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0))
+                gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0),
+                ii_masks, ii_scalars)
             if drawn is None:
                 continue   # anchor rejected — this IS the conditioning
             a_pos, f_pos, d_km_f, masks = drawn
@@ -2034,6 +2077,7 @@ def generate_sensor_anchored_trips(
 
     # E-I: entry gate -> activity, return leg to an INDEPENDENTLY-drawn
     # exit gate (never back through the entry gate — see note above).
+    ei_masks, ei_scalars = {}, {}
     for tour_no in range(n_ei):
         h_out, h_ret = am_pm_hours()
         purpose, far_base = draw_purpose_weights(h_out)
@@ -2042,7 +2086,8 @@ def generate_sensor_anchored_trips(
             drawn = draw_conditioned_outbound(
                 entry_anchor_p, entry_u_nodes, entry_v_nodes, entry_lats,
                 entry_lons, edge_lats, edge_lons, edge_u_idx, edge_v_idx, far_base,
-                gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0))
+                gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0),
+                ei_masks, ei_scalars)
             if drawn is None:
                 continue
             a_pos, f_pos, d_km_f, masks = drawn
@@ -2075,6 +2120,7 @@ def generate_sensor_anchored_trips(
 
     # I-E: internal home -> exit gate, return leg FROM an INDEPENDENTLY-
     # drawn entry gate (never from the same exit gate — see note above).
+    ie_masks, ie_scalars = {}, {}
     for tour_no in range(n_ie):
         h_out, h_ret = am_pm_hours()
         succeeded = False
@@ -2082,7 +2128,8 @@ def generate_sensor_anchored_trips(
             drawn = draw_conditioned_outbound(
                 home_anchor_p, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons,
                 exit_lats, exit_lons, exit_u_idx, exit_v_idx, w_exit,
-                gravity_km * PURPOSE_LENGTH_SCALE.get("external", 1.0))
+                gravity_km * PURPOSE_LENGTH_SCALE.get("external", 1.0),
+                ie_masks, ie_scalars)
             if drawn is None:
                 continue
             a_pos, f_pos, d_km_f, masks = drawn
