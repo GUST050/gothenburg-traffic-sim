@@ -92,6 +92,7 @@ def fit_summary(report: dict) -> dict:
         "vehicles": report.get("vehicles"),
         "unserviceable_edges": list(report.get("unserviceable_edges", [])),
         "bound_violations": list(report.get("bound_violations", [])),
+        "relaxed_bound_violations": list(report.get("relaxed_bound_violations", [])),
         "purpose_incompatible_quarters": purpose.get(
             "quarters_with_incompatible_routes", 0),
         "relaxation_summary": report.get("relaxation_summary", {}),
@@ -319,6 +320,7 @@ from demand.feedback import (BPR_PERIOD_S, FEEDBACK_SIM_TIMEOUT_S,
 # 2026-07-14). The _PFE_PAR_* pool globals live there.
 from demand.calibration import (run_pfe_variants_flat_parallel,
                                 warn_bound_violations,
+                                warn_relaxed_bound_violations,
                                 warn_purpose_allocation_drift,
                                 warn_unserviceable_measured_edges)
 
@@ -621,6 +623,7 @@ def main() -> None:
                     warn_unserviceable_measured_edges(variant_report, key)
                     warn_purpose_allocation_drift(variant_report, key)
                     warn_bound_violations(variant_report, key)
+                    warn_relaxed_bound_violations(variant_report, key)
                     if variant_report["geh_pct"] < 100:
                         print("  ⚠ measured-edge fit below gate — inspect before use")
                 report = reports[""]
@@ -642,6 +645,7 @@ def main() -> None:
                   f"(infeasible intervals: {report['infeasible_intervals']})")
             warn_unserviceable_measured_edges(report, "edge_shares")
             warn_bound_violations(report, "edge_shares")
+            warn_relaxed_bound_violations(report, "edge_shares")
 
             if args.congestion_method == "simulate":
                 # Simple GEH-based early stop — this method is meant for an

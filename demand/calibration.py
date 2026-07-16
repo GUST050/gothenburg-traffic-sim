@@ -161,14 +161,12 @@ def warn_purpose_allocation_drift(report: dict, label: str) -> None:
 
 
 def warn_bound_violations(report: dict, label: str) -> None:
-    """Surface a structural gap found in a bug review 2026-07-10: the
-    integer-rounding step (round_preserving_measured, pfe.py) has no
-    visibility into level-2 bounds, so a route shared between a measured
-    edge and a separately-bounded edge can be nudged in a way that pushes
-    the bounded edge's rounded total outside its own bound. Diagnostic
-    only — reports the condition without blocking the run or attempting
-    a repair (that needs its own careful pass on a function with a
-    documented history of subtle failed designs)."""
+    """Surface an unexpected violation of a Level-2 bound retained by PFE.
+
+    Deployment repairs and gates these before publishing. The warning still
+    matters for diagnostic-only callers such as LOSO validation, which retain
+    their historical non-mutating behaviour.
+    """
     violations = report.get("bound_violations", [])
     if violations:
         sample = ", ".join(
@@ -178,6 +176,14 @@ def warn_bound_violations(report: dict, label: str) -> None:
         more = f" (+{len(violations) - 5} more)" if len(violations) > 5 else ""
         print(f"  ⚠ BOUND VIOLATIONS FROM INTEGER ROUNDING ({label}): "
               f"{len(violations)} edge-quarters exceed their level-2 bound "
-              f"after rounding — {sample}{more}. The continuous solution "
-              "respected these bounds; only the final integer rounding "
-              "does not currently check them (known gap, diagnostic only).")
+              f"after rounding — {sample}{more}.")
+
+
+def warn_relaxed_bound_violations(report: dict, label: str) -> None:
+    """Expose intentional counts-first structural relaxations honestly."""
+    violations = report.get("relaxed_bound_violations", [])
+    if violations:
+        quarters = sorted({int(v["quarter"]) for v in violations})
+        print(f"  ⚠ STRUCTURAL BOUNDS RELAXED ({label}): "
+              f"{len(violations)} edge-quarter value(s) in quarters {quarters} — "
+              "sensor constraints were retained; inspect confidence before use")

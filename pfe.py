@@ -54,7 +54,7 @@ from pathlib import Path
 
 import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, linprog, milp
-from scipy.sparse import hstack, identity, lil_matrix, vstack
+from scipy.sparse import csr_matrix, hstack, identity, lil_matrix, vstack
 
 import pfe_kernel
 
@@ -674,6 +674,7 @@ def repair_integer_bounds(
     measured: dict[str, float],
     bounds: dict[str, tuple[float, float]],
     groups: list[tuple[list[int], float, float]] | None = None,
+    measurement_tol_mult: float | None = None,
 ) -> np.ndarray | None:
     """Repair a rounded route vector without weakening its constraints.
 
@@ -681,8 +682,18 @@ def repair_integer_bounds(
     can, however, move a shared route by one vehicle while closing a measured
     count and thereby breach a separate structural edge bound.  Only in that
     case solve a small integer reconciliation problem: minimise the number of
-    changed route counts while keeping every measured count at its rounded
-    target and every supplied bound in its integer-feasible interval.
+    changed route counts while keeping every supplied bound in its
+    integer-feasible interval.
+
+    ``measurement_tol_mult`` makes the discrete stage obey the relaxation
+    rung that produced the continuous solution. ``None`` preserves the
+    historical exact-rounded-target behaviour. A numeric multiplier instead
+    uses the same Level-1 measurement band as the solver. The initial vector
+    still targets the exact sensor value, so this wider band is used only when
+    an exact integer target cannot coexist with the retained Level-2 bounds.
+    Reimposing an exact value after the continuous solver intentionally used a
+    wider valid band is internally inconsistent and can make a feasible
+    calibration look impossible at publication time.
 
     ``groups`` (2026-07-12, structure preservation — see solve_interval_
     entropy's groups comment): the same band shape over an explicit
@@ -731,16 +742,26 @@ def repair_integer_bounds(
 
     # z are integer route counts. p/n are continuous absolute-deviation
     # auxiliaries so the solver preserves the fast round wherever possible.
+    # When the continuous solve used a measurement band, two more variables
+    # per sensor represent absolute deviation from the exact rounded target.
+    # Their large objective weight keeps exact sensor counts first whenever
+    # they coexist with the retained structural constraints; only a genuinely
+    # impossible exact integer target uses the solver-authorised band.
+    measurement_items = list(measured.items()) if measurement_tol_mult is not None else []
+    measurement_index = {edge: k for k, (edge, _target) in enumerate(measurement_items)}
+    n_measurement_deviations = 2 * len(measurement_items)
+    n_vars = 3 * n + n_measurement_deviations
     # A ±20 local window is deliberately wider than the single-vehicle
     # reconciliation nudges and avoids a route-count explosion in the repair.
     aeq = hstack((identity(n, format="csr"), -identity(n, format="csr"),
-                  identity(n, format="csr")), format="csr")
+                  identity(n, format="csr"),
+                  csr_matrix((n, n_measurement_deviations))), format="csr")
     rows = [aeq]
     lower = [float(counts[j]) for j in active]
     upper = [float(counts[j]) for j in active]
 
     def add_index_constraint(js: list[int], lo: float, hi: float) -> None:
-        row = lil_matrix((1, 3 * n), dtype=float)
+        row = lil_matrix((1, n_vars), dtype=float)
         for j in js:
             k = active_index.get(j)
             if k is not None:
@@ -753,10 +774,34 @@ def repair_integer_bounds(
         add_index_constraint(touch.get(edge, []), lo, hi)
 
     for edge, target in measured.items():
-        # The existing rounding contract is an integer measured total, not a
-        # fractional target band. Preserve that exact behaviour in repair.
+        if measurement_tol_mult is None:
+            # The historical contract for direct callers and optional
+            # structure-cap repair: preserve the rounded sensor total exactly.
+            target_i = float(int(round(target)))
+            add_edge_constraint(edge, target_i, target_i)
+            continue
+        tol = max(MEAS_TOL_MIN, MEAS_TOL_FRAC * target) * measurement_tol_mult
+        # An integer count represents a continuous value rounded to the
+        # nearest vehicle. Permit the same half-vehicle boundary treatment as
+        # Level-2 constraints below, while never allowing negative flow.
+        lo = float(max(0, int(np.ceil(target - tol - 0.5))))
+        hi = float(max(lo, int(np.floor(target + tol + 0.5))))
+        add_edge_constraint(edge, lo, hi)
+        # total - above_target + below_target = rounded target
+        # (both auxiliaries are non-negative), allowing the objective to
+        # prefer the exact target lexicographically over route-count changes.
+        row = lil_matrix((1, n_vars), dtype=float)
+        for j in touch.get(edge, []):
+            k = active_index.get(j)
+            if k is not None:
+                row[0, k] = 1.0
+        d = 3 * n + 2 * measurement_index[edge]
+        row[0, d] = -1.0
+        row[0, d + 1] = 1.0
         target_i = float(int(round(target)))
-        add_edge_constraint(edge, target_i, target_i)
+        rows.append(row.tocsr())
+        lower.append(target_i)
+        upper.append(target_i)
     for edge, (lo, hi) in bounds.items():
         add_edge_constraint(edge, float(np.ceil(lo - 0.5)),
                             float(np.floor(hi + 0.5)))
@@ -765,11 +810,18 @@ def repair_integer_bounds(
                              float(np.floor(hi + 0.5)))
 
     base = np.asarray([counts[j] for j in active], dtype=float)
+    # One unit of sensor miss must always lose to any practical number of
+    # local route-count nudges. This is still one linear MILP (not a slower
+    # two-pass solve) and has only two extra continuous variables per sensor.
+    sensor_miss_penalty = 1_000_000.0
     result = milp(
-        c=np.r_[np.zeros(n), np.ones(2 * n)],
-        integrality=np.r_[np.ones(n), np.zeros(2 * n)],
-        bounds=Bounds(np.r_[np.maximum(0.0, base - 20.0), np.zeros(2 * n)],
-                      np.r_[base + 20.0, np.full(2 * n, np.inf)]),
+        c=np.r_[np.zeros(n), np.ones(2 * n),
+                np.full(n_measurement_deviations, sensor_miss_penalty)],
+        integrality=np.r_[np.ones(n), np.zeros(2 * n + n_measurement_deviations)],
+        bounds=Bounds(np.r_[np.maximum(0.0, base - 20.0),
+                            np.zeros(2 * n + n_measurement_deviations)],
+                      np.r_[base + 20.0,
+                            np.full(2 * n + n_measurement_deviations, np.inf)]),
         constraints=LinearConstraint(vstack(rows, format="csr"), lower, upper),
         options={"time_limit": 20.0},
     )
@@ -801,6 +853,7 @@ def solve_interval_with_relaxation(
     priors: dict[str, tuple[float, float]],
     route_cost: np.ndarray | None = None,
     groups: list[tuple[list[int], float, float]] | None = None,
+    allow_structural_relaxation: bool = True,
 ) -> tuple[np.ndarray | None, int]:
     """Solve one interval using calibrate()'s exact relaxation ladder.
 
@@ -811,7 +864,13 @@ def solve_interval_with_relaxation(
     ``groups`` (structure preservation, 2026-07-12) are dropped at the same
     ladder stage as bounds (RUNG_RELAX_NOBND): both are plausibility
     constraints, strictly weaker than the measured counts — a group cap
-    must never be the reason an interval's real sensor counts go unserved."""
+    must never be the reason an interval's real sensor counts go unserved.
+
+    ``allow_structural_relaxation=False`` is used by the outer structure
+    guard after it already found a solution with stronger constraints. It
+    prevents an optional cap from winning only by discarding those existing
+    Level-2 bounds (or by taking the LP no-bounds fallback); the caller then
+    keeps its earlier, stronger solution instead."""
     sol = solve_interval_entropy(shapes, targets, bounds, priors,
                                  route_cost=route_cost, groups=groups)
     if sol is not None:
@@ -820,12 +879,16 @@ def solve_interval_with_relaxation(
         (RUNG_RELAX_TOL2X, RUNG_RELAX_TOL4X, RUNG_RELAX_NOBND),
         ((2.0, True), (4.0, True), (4.0, False)),
     ):
+        if not use_bounds and not allow_structural_relaxation:
+            break
         sol = solve_interval_entropy(
             shapes, targets, bounds if use_bounds else {}, priors,
             tol_mult=tol_mult, route_cost=route_cost,
             groups=groups if use_bounds else None)
         if sol is not None:
             return sol, rung
+    if not allow_structural_relaxation:
+        return None, RUNG_INFEASIBLE
     # Bounds and structural caps have already been deliberately dropped at
     # RUNG_RELAX_NOBND. The LP backstop must preserve that counts-first
     # contract rather than making an otherwise feasible interval fail.
@@ -850,8 +913,9 @@ def solve_interval_with_structure_guard(
     to a small active set and re-solved with an absolute ``cap_share ×
     pass-1-total`` ceiling. A cap may shift flow into a second group, so the
     active set is checked again for a bounded number of passes. If a capped
-    solve is infeasible, the last count-feasible solution is kept — structure
-    caps must never cost an interval its real sensor counts.
+    solve is infeasible, or would require a weaker relaxation rung than the
+    existing solution, the latter is kept — an optional structure cap must
+    never cost an interval its sensor fit or retained Level-2 bounds.
 
     This is the ONE shared guard policy: build_sumo_demand's deployed
     pipeline and validate_sim's LOSO folds both delegate here, so LOSO can
@@ -882,11 +946,18 @@ def solve_interval_with_structure_guard(
                 break
             active.update({name: (members, cap_share)
                            for name, members, cap_share in newly_violated})
+            # If the unguarded solution still retained Level-2 bounds, do not
+            # allow this optional cap to get accepted by dropping them. The
+            # old path did exactly that: a cap could force RUNG_RELAX_NOBND,
+            # then the writer quite correctly rejected the resulting bound
+            # breach many minutes after the actual decision was made.
+            allow_structural_relaxation = rung >= RUNG_RELAX_NOBND
             capped_sol, capped_rung = solve_interval_with_relaxation(
                 shapes, targets, bounds, priors, route_cost=route_cost,
                 groups=[(members, 0.0, cap_share * total)
-                        for members, cap_share in active.values()])
-            if capped_sol is None:
+                        for members, cap_share in active.values()],
+                allow_structural_relaxation=allow_structural_relaxation)
+            if capped_sol is None or capped_rung > rung:
                 break       # counts-first fallback: retain last valid solution
             sol, rung = capped_sol, capped_rung
     return sol, rung
@@ -1166,6 +1237,24 @@ RUNG_NAMES = {
 }
 
 
+def _rung_measurement_tol_mult(rung: int | None) -> float:
+    """Return the Level-1 tolerance multiplier used by a solved interval."""
+    return {
+        RUNG_CLEAN: 1.0,
+        RUNG_RELAX_TOL2X: 2.0,
+        RUNG_RELAX_TOL4X: 4.0,
+        RUNG_RELAX_NOBND: 4.0,
+        # solve_interval() is invoked with its default tolerance on the LP
+        # backstop, after Level-2 bounds have already been dropped.
+        RUNG_LP_FALLBACK: 1.0,
+    }.get(rung, 1.0)
+
+
+def _rung_keeps_structural_bounds(rung: int | None) -> bool:
+    """Whether this rung still solved with its supplied Level-2 bounds."""
+    return rung not in (RUNG_RELAX_NOBND, RUNG_LP_FALLBACK, RUNG_INFEASIBLE)
+
+
 def write_calibration_report(
     shapes: list[Candidate],
     out_path: Path,
@@ -1192,7 +1281,7 @@ def write_calibration_report(
     reporting only (enforce_integer_bounds=False — validate_sim.py's LOSO
     fold calibration, which explicitly opts out of enforcement because
     those bounds are wide assignment-prior bounds, not the narrow
-    structural hard_bounds_pq build_sumo_demand.py enforces) must get back
+    structural bounds build_sumo_demand.py enforces) must get back
     exactly the pre-repair counts it always has, not silently-repaired
     ones — found in review 2026-07-12: the repair used to fire whenever
     bounds were merely supplied, which would have altered LOSO's published
@@ -1200,9 +1289,12 @@ def write_calibration_report(
     validate_sim.py ever asking for that. When enforce_integer_bounds=True
     (build_sumo_demand.py's real deployment calls), the writer DOES run a
     small constrained integer repair before reporting a violation, and
-    remains a publication gate: route XML is written to a sibling
-    temporary path and atomically published only when the repaired
-    integer counts respect every supplied bound."""
+    remains a publication gate: route XML is written to a sibling temporary
+    path and atomically published only when the repaired integer counts
+    respect every bound retained by that interval's solver rung. Bounds
+    deliberately dropped by the counts-first relaxation ladder are reported
+    separately as structural-relaxation diagnostics, not mislabeled as a
+    rounding failure."""
     nq = len(targets_per_q)
     infeasible = sum(sol is None for sol in solutions)
     achieved: dict[str, list[float]] = {}
@@ -1233,9 +1325,13 @@ def write_calibration_report(
             if sol is None:
                 continue
             counts = round_preserving_measured(sol, shapes, targets_per_q[i])
-            repair_bounds = (bounds_per_q[i]
-                             if bounds_per_q is not None and enforce_integer_bounds
-                             else {})
+            rung = rungs[i] if rungs is not None and i < len(rungs) else None
+            repair_bounds = (
+                bounds_per_q[i]
+                if (bounds_per_q is not None and enforce_integer_bounds
+                    and _rung_keeps_structural_bounds(rung))
+                else {}
+            )
             # structure_groups (2026-07-12, structure preservation): each
             # group cap needs an ABSOLUTE per-quarter ceiling, only known
             # once the quarter's integer total exists. Floor of 2 vehicles
@@ -1269,7 +1365,8 @@ def write_calibration_report(
             hard_repair_ok = True
             if repair_bounds:
                 repaired = repair_integer_bounds(
-                    counts, shapes, targets_per_q[i], repair_bounds)
+                    counts, shapes, targets_per_q[i], repair_bounds,
+                    measurement_tol_mult=_rung_measurement_tol_mult(rung))
                 if repaired is None:
                     hard_repair_ok = False
                 else:
@@ -1382,15 +1479,21 @@ def write_calibration_report(
     })
 
     bound_violations: list[dict] = []
+    relaxed_bound_violations: list[dict] = []
     if bounds_per_q is not None:
         for i in range(nq):
+            rung = rungs[i] if rungs is not None and i < len(rungs) else None
             for e, (lo, hi) in bounds_per_q[i].items():
                 v = achieved.get(e, [0.0] * nq)[i]
                 if v < lo - 0.5 or v > hi + 0.5:   # tolerate rounding, not real breaches
-                    bound_violations.append({
+                    entry = {
                         "edge": e, "quarter": i, "achieved": v,
                         "bound_lo": lo, "bound_hi": hi,
-                    })
+                    }
+                    if _rung_keeps_structural_bounds(rung):
+                        bound_violations.append(entry)
+                    else:
+                        relaxed_bound_violations.append(entry)
     if enforce_integer_bounds and bound_violations:
         write_path.unlink(missing_ok=True)
         first = bound_violations[0]
@@ -1437,6 +1540,7 @@ def write_calibration_report(
               "achieved": achieved,
               "unserviceable_edges": unserviceable_edges,
               "bound_violations": bound_violations,
+              "relaxed_bound_violations": relaxed_bound_violations,
               "purpose_allocation": purpose_allocation,
               "purpose_allocation_summary": {
                   "quarters_with_incompatible_routes": sum(

@@ -12,10 +12,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import pfe
 from pfe import (Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
-                 RUNG_LP_FALLBACK, calibrate, largest_remainder_round,
-                 path_size_weights, solve_calibration_intervals,
-                 solve_interval, solve_interval_entropy,
-                 solve_interval_with_relaxation, write_calibration_report)
+                 RUNG_LP_FALLBACK, RUNG_RELAX_TOL4X, calibrate,
+                 largest_remainder_round, path_size_weights,
+                 solve_calibration_intervals, solve_interval,
+                 solve_interval_entropy, solve_interval_with_relaxation,
+                 solve_interval_with_structure_guard, write_calibration_report)
 
 
 def cand(*edges):
@@ -358,6 +359,20 @@ class TestRouteIndexGroups:
         assert sol is not None
         assert served(sol, cands, "m") == pytest.approx(100, rel=0.06)
 
+    def test_structure_guard_does_not_drop_bound_for_optional_cap(self):
+        # The unconstrained pass satisfies both M=100 and U<=50. Enforcing
+        # B's 20% group cap would need to drop U's bound; the guard must keep
+        # the stronger first solution rather than accept RUNG_RELAX_NOBND.
+        cands = [cand("m", "u"), cand("m")]
+        sol, rung = solve_interval_with_structure_guard(
+            cands, {"m": 100.0}, {"u": (0.0, 50.0)}, {},
+            structure_groups=[("optional_cap", [1], 0.2)])
+
+        assert sol is not None
+        assert rung == RUNG_CLEAN
+        assert served(sol, cands, "m") == pytest.approx(100, rel=0.06)
+        assert served(sol, cands, "u") <= 50.0 + 1e-6
+
     def test_structure_guard_without_groups_is_plain_relaxation(self):
         cands = [cand("m")]
         sol, rung = pfe.solve_interval_with_structure_guard(
@@ -427,6 +442,35 @@ class TestBoundViolationsFromRounding:
 
         assert report["achieved"]["M"] == [10.0]
         assert report["achieved"]["U"] == [3.0]
+        assert report["bound_violations"] == []
+
+    def test_repair_uses_the_solver_band_only_when_exact_is_infeasible(self):
+        # The continuous solution may legitimately use RUNG_RELAX_TOL4X.
+        # Reimposing M=10 exactly at the integer stage would conflict with
+        # U<=6, but M=6 lies within the same allowed measurement band.
+        from pfe import repair_integer_bounds
+        cands = [cand("M", "U")]
+        repaired = repair_integer_bounds(
+            np.array([10]), cands, {"M": 10.0}, {"U": (0.0, 6.0)},
+            measurement_tol_mult=4.0)
+
+        assert repaired is not None
+        assert repaired.tolist() == [6]
+
+    def test_writer_obeys_relaxed_measurement_band_at_integer_stage(self, tmp_path):
+        # Integration guard for the live failure class: the continuous value
+        # is valid under the solver's q4 tolerance and the post-rounding MILP
+        # must preserve the bound instead of rejecting publication.
+        shapes = [Candidate(depart=0.0, edges=["M", "U"])]
+        out = tmp_path / "out.rou.xml"
+        report = write_calibration_report(
+            shapes, out, [{"M": 10.0}], [np.array([6.0])],
+            [{"U": (0.0, 6.0)}], [RUNG_RELAX_TOL4X],
+            enforce_integer_bounds=True)
+
+        assert out.exists()
+        assert report["achieved"]["M"] == [6.0]
+        assert report["achieved"]["U"] == [6.0]
         assert report["bound_violations"] == []
 
     def test_optional_structure_cap_never_blocks_hard_bound_repair(self, tmp_path):
