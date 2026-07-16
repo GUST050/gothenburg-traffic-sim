@@ -306,6 +306,39 @@ class TestRecommendationStatus:
         assert status == "screening_only_weak_correlation"
 
 
+class TestClosureFeasibility:
+    def _metrics(self, *, queue=10, trunc=0, unfinished=0):
+        return cm.DisruptionMetrics(
+            total_time_loss_s=100.0, trip_count=100,
+            unfinished_trips=unfinished, unfinished_waiting_trips=0,
+            teleport_total=0, teleport_reasons={}, loaded=100, inserted=100,
+            running_at_end=0, waiting_at_end=0,
+            truncated_unreachable=trunc, dropped_unreachable=0,
+            max_queue_vehicles=queue)
+
+    def test_requires_complete_detour_and_queue_evidence(self):
+        result = sct.closure_feasibility(
+            self._metrics(), self._metrics(queue=5),
+            detour={"score": 1.0})
+        assert result["eligible"] is True
+        assert result["queue"]["delta"] == 5
+
+    def test_partial_detour_and_truncation_are_hard_failures(self):
+        result = sct.closure_feasibility(
+            self._metrics(trunc=1), self._metrics(),
+            detour={"score": 0.5})
+        assert result["eligible"] is False
+        assert "partial_detour_access" in result["hard_failures"]
+        assert "truncated_unreachable_vehicles" in result["hard_failures"]
+
+    def test_missing_queue_proxy_is_not_silently_ranked(self):
+        result = sct.closure_feasibility(
+            self._metrics(queue=None), self._metrics(queue=5),
+            detour={"score": 1.0})
+        assert result["eligible"] is False
+        assert "queue_proxy_unmeasured" in result["hard_failures"]
+
+
 class TestDeltaTimeLossInterval:
     """IMPROVEMENT_PLAN.md C5 explicitly wants 'median ΔtimeLoss + seed interval' in the
     UI, which the mean-only closure_metrics.MetricComparison throws away —

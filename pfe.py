@@ -1018,10 +1018,43 @@ def _integer_mix_targets(source_mix: Counter, n: int) -> Counter:
     return out
 
 
+def purpose_replacement_index(
+    shapes: list[Candidate], measured_edges: set[str],
+) -> dict[tuple[str, ...], dict[str, list[tuple[Candidate, Candidate]]]]:
+    """Index validated alternatives that preserve every measured edge.
+
+    PFE is purpose-blind by design, so a selected route shape can have no
+    source candidate for a purpose required in that departure quarter.  An
+    alternative with the same measured-edge signature has identical sensor
+    counts while allowing its unconstrained origin/destination leg to carry
+    the correct purpose provenance.  Only candidates already present in the
+    generated pool are eligible; this never invents a route.
+    """
+    index: dict[tuple[str, ...], dict[str, list[tuple[Candidate, Candidate]]]] = {}
+    if not measured_edges:
+        return index
+    for shape in shapes:
+        signature = tuple(sorted(edge for edge in shape.edges
+                                 if edge in measured_edges))
+        if not signature:
+            continue
+        sources = shape.source_candidates or [shape]
+        for source in sources:
+            purpose = _purpose(source)
+            choices = index.setdefault(signature, {}).setdefault(purpose, [])
+            if not any(existing[0].edges == shape.edges for existing in choices):
+                choices.append((shape, source))
+    return index
+
+
 def allocate_interval_provenance(
     route_instances: list[Candidate], source_mix: Counter,
     lengths_km: list[float] | None = None,
     category_length_km: dict[str, float] | None = None,
+    *,
+    purpose_replacements: dict[tuple[str, ...],
+                               dict[str, list[tuple[Candidate, Candidate]]]] | None = None,
+    measured_edges: set[str] | None = None,
 ) -> tuple[list[Candidate], list[str], dict]:
     """Allocate the exact quarter mix and retain compatible provenance where possible.
 
@@ -1042,7 +1075,8 @@ def allocate_interval_provenance(
     vehicles. Quarter purpose counts stay exact; routes are untouched.
     """
     if not route_instances:
-        return [], [], {"target": {}, "achieved": {}, "incompatible": {}}
+        return [], [], {"target": {}, "achieved": {}, "incompatible": {},
+                         "replaced_routes": 0}
     pools = [shape.source_candidates or [shape] for shape in route_instances]
     available = [{_purpose(source) for source in pool} for pool in pools]
     target = _integer_mix_targets(source_mix, len(route_instances))
@@ -1054,7 +1088,7 @@ def allocate_interval_provenance(
         categories = [_purpose(source) for source in selected]
         return selected, categories, {
             "target": {}, "achieved": dict(sorted(Counter(categories).items())),
-            "incompatible": {},
+            "incompatible": {}, "replaced_routes": 0,
         }
     assigned: list[str | None] = [None] * len(route_instances)
     pool_share = [
@@ -1111,20 +1145,40 @@ def allocate_interval_provenance(
     source_offsets = Counter()
     selected = []
     incompatible = Counter()
-    for pool, category in zip(pools, assigned):
+    replaced = 0
+    for i, (pool, category) in enumerate(zip(pools, assigned)):
         matching = [source for source in pool if _purpose(source) == category]
         if matching:
             selected.append(matching[source_offsets[category] % len(matching)])
         else:
-            selected.append(pool[source_offsets["fallback"] % len(pool)])
-            source_offsets["fallback"] += 1
-            incompatible[category] += 1
+            replacement = None
+            if purpose_replacements and measured_edges:
+                signature = tuple(sorted(edge for edge in route_instances[i].edges
+                                         if edge in measured_edges))
+                choices = purpose_replacements.get(signature, {}).get(category, [])
+                if choices:
+                    replacement = choices[source_offsets[("replacement", category)]
+                                          % len(choices)]
+            if replacement is not None:
+                replacement_shape, replacement_source = replacement
+                # The alternative has the same measured-edge signature, so
+                # changing this route cannot change any calibrated sensor
+                # count.  The output writer consumes the mutated instance.
+                route_instances[i] = replacement_shape
+                selected.append(replacement_source)
+                source_offsets[("replacement", category)] += 1
+                replaced += 1
+            else:
+                selected.append(pool[source_offsets["fallback"] % len(pool)])
+                source_offsets["fallback"] += 1
+                incompatible[category] += 1
         source_offsets[category] += 1
     achieved = Counter(assigned)
     return selected, [str(category) for category in assigned], {
         "target": dict(sorted(target.items())),
         "achieved": dict(sorted(achieved.items())),
         "incompatible": dict(sorted(incompatible.items())),
+        "replaced_routes": replaced,
     }
 
 
@@ -1309,6 +1363,8 @@ def write_calibration_report(
                     for s in shapes]
         category_length_km = purpose_length_means(shapes, shape_km)
         shape_km_by_id = {id(s): km for s, km in zip(shapes, shape_km)}
+    measured_edges = {edge for targets in targets_per_q for edge in targets}
+    replacement_index = purpose_replacement_index(shapes, measured_edges)
     purpose_allocation: list[dict] = []
     vid = 0
     agents: list[dict] = []
@@ -1418,7 +1474,9 @@ def write_calibration_report(
             sources, purposes, allocation = allocate_interval_provenance(
                 route_instances, purpose_targets[i],
                 lengths_km=instance_km,
-                category_length_km=category_length_km)
+                category_length_km=category_length_km,
+                purpose_replacements=replacement_index,
+                measured_edges=measured_edges)
             purpose_allocation.append({"quarter": i, **allocation})
             n_departures = len(route_instances)
             for pos, (cand, source, purpose) in enumerate(
@@ -1532,8 +1590,10 @@ def write_calibration_report(
                 geh_all += 1
                 geh_ok += geh < 5
     allocation_incompatible = Counter()
+    replaced_routes = 0
     for allocation in purpose_allocation:
         allocation_incompatible.update(allocation["incompatible"])
+        replaced_routes += int(allocation.get("replaced_routes", 0))
     report = {"vehicles": vid, "infeasible_intervals": infeasible,
               "geh_ok": geh_ok, "geh_total": geh_all,
               "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
@@ -1547,6 +1607,7 @@ def write_calibration_report(
                       bool(allocation["incompatible"]) for allocation in purpose_allocation),
                   "incompatible_routes_by_purpose": dict(
                       sorted(allocation_incompatible.items())),
+                  "replaced_routes": replaced_routes,
               }}
     if rungs is not None:
         # Which relaxation-ladder rung each interval actually converged at —

@@ -38,6 +38,32 @@ def test_release_integrity_and_publication_gates(tmp_path):
         rr.mark_validated("r1", {}, root=root)
 
 
+def test_golden_release_requires_all_cases_and_per_case_pass_status(tmp_path):
+    root = tmp_path / "releases"
+    paths = {}
+    for case in rr.GOLDEN_CASES:
+        path = tmp_path / f"{case}.json"
+        path.write_text(json.dumps({"case": case}))
+        paths[case] = path
+    rr.create_release("golden", paths, root=root)
+    assert any("per-case validation" in error
+               for error in rr.validate_golden_release("golden", root=root))
+    rr.mark_validated("golden", {
+        "cases": {case: {"status": "pass"} for case in rr.GOLDEN_CASES}
+    }, root=root)
+    assert rr.validate_golden_release("golden", root=root) == []
+
+
+def test_golden_activation_refuses_incomplete_release(tmp_path):
+    root = tmp_path / "releases"
+    source = tmp_path / "normal.json"
+    source.write_text("normal")
+    rr.create_release("r1", {"normal": source}, root=root)
+    rr.mark_validated("r1", {}, root=root)
+    with pytest.raises(ValueError, match="golden release validation"):
+        rr.activate_golden_release("r1", root=root)
+
+
 def test_release_rejects_duplicate_artifact_names_and_path_traversal(tmp_path):
     a = tmp_path / "a.json"
     b = tmp_path / "b.json"

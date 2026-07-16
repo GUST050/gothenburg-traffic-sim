@@ -19,6 +19,7 @@
       --sim-2:      #a78bfa;
       --danger:     #dc2626;
       --track:      #1c2740;
+      --line:       #d1d5db;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -69,6 +70,19 @@
     .task-card-icon { color: var(--accent-2); font-size: 1.05rem; }
     .task-card strong { display: block; margin-top: 14px; font-size: 0.86rem; }
     .task-card span { display: block; margin-top: 4px; color: var(--ink-2); font-size: 0.68rem; }
+    #history-panel {
+      margin-top: 22px; background: rgba(20, 27, 45, 0.96);
+      border: 1px solid var(--panel-line); border-radius: 8px;
+      padding: 14px; color: var(--ink); max-height: 52vh; overflow: auto;
+    }
+    #history-panel[hidden] { display: none; }
+    #history-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    #history-body { margin-top: 10px; font-size: 0.72rem; }
+    #history-body table { width: 100%; border-collapse: collapse; }
+    #history-body td { padding: 6px 8px; border-top: 1px solid var(--panel-line); color: var(--ink-2); }
+    #history-body .history-running { color: #f59e0b; font-weight: 700; }
+    #history-body .history-succeeded { color: #4ade80; font-weight: 700; }
+    #history-body .history-failed, #history-body .history-orphaned { color: #f87171; font-weight: 700; }
     @media (max-width: 700px) {
       #task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .task-card { min-height: 100px; }
@@ -144,7 +158,7 @@
     /* ── Simulation panel — one coherent area for everything scenario-related ── */
     #sim-panel {
       display: none;
-      align-items: center; gap: 12px;
+      align-items: center; gap: 12px; flex-wrap: wrap;
       background: var(--panel-2);
       border: 1px solid rgba(124, 58, 237, 0.28);
       border-left: 3px solid var(--sim);
@@ -433,6 +447,40 @@
     #validation-panel .v-missing { color: #9ca3af; font-weight: 700; }
     #validation-panel .v-info { color: #2563eb; font-weight: 700; }
     #validation-panel .v-detail { color: var(--ink-2); }
+    #sensor-audit-panel {
+      flex: 1 1 100%;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: #111827;
+      padding: 9px 10px;
+      font-size: 0.74rem;
+      line-height: 1.35;
+    }
+    #sensor-audit-heading { font-weight: 700; }
+    #sensor-audit-meta { color: #4b5563; font-size: 0.68rem; margin-top: 2px; }
+    #sensor-audit-scroll { max-height: 260px; overflow: auto; margin-top: 7px; }
+    #sensor-audit-table { border-collapse: collapse; width: 100%; min-width: 690px; }
+    #sensor-audit-table th {
+      position: sticky; top: 0; background: #f8fafc; color: #4b5563;
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0;
+      text-align: right; padding: 5px 7px; border-bottom: 1px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    #sensor-audit-table th:first-child,
+    #sensor-audit-table th:nth-child(2) { text-align: left; }
+    #sensor-audit-table td {
+      padding: 5px 7px; border-bottom: 1px solid #eef2f7;
+      text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    #sensor-audit-table td:first-child,
+    #sensor-audit-table td:nth-child(2) { text-align: left; }
+    #sensor-audit-table tbody tr:last-child td { border-bottom: 0; }
+    #sensor-audit-table .audit-source-kind { display: block; color: #6b7280; font-size: 0.62rem; }
+    #sensor-audit-table .audit-sim { font-weight: 700; }
+    #sensor-audit-table .audit-station td { background: #f8fafc; }
+    #sensor-audit-table .audit-child td:first-child { padding-left: 20px; color: #6b7280; }
+    #sensor-audit-table td.audit-source-kind { text-align: right; }
   </style>
 </head>
 <body data-task="home">
@@ -454,6 +502,11 @@
         <button class="task-card" data-task="closure"><span class="task-card-icon">×</span><strong>Stäng väg</strong><span>Skapa avstängning</span></button>
         <button class="task-card" data-task="suggest"><span class="task-card-icon">◷</span><strong>Välj stängningstid</strong><span>Analysera tidpunkt</span></button>
         <button class="task-card" data-task="signals"><span class="task-card-icon">≡</span><strong>Optimera signaler</strong><span>Grönt och rött</span></button>
+        <button class="task-card" data-task="history"><span class="task-card-icon">▤</span><strong>Körhistorik</strong><span>Studier och jobb</span></button>
+      </div>
+      <div id="history-panel" hidden>
+        <div id="history-head"><strong>Senaste körningar</strong><button id="history-back" class="action-btn">Tillbaka</button></div>
+        <div id="history-body">Läser körhistorik…</div>
       </div>
     </div>
   </section>
@@ -551,6 +604,8 @@
            every gate the pipeline runs, visible without reading logs. -->
       <button id="validation-btn" class="action-btn" hidden
               title="Alla valideringsgrindar för det aktiva bygget">🛡 Validering</button>
+      <button id="sensor-audit-btn" class="action-btn" hidden
+              title="Jämför sensorunderlag, kalibreringsmål och SUMO-passager per riktning">Sensorflöden</button>
 
       <div id="pick-banner">
         <span class="hint">Klicka på vägar i kartan att stänga</span>
@@ -589,6 +644,22 @@
 
       <div id="validation-panel" hidden>
         <div id="validation-body"></div>
+      </div>
+
+      <div id="sensor-audit-panel" hidden>
+        <div id="sensor-audit-heading"></div>
+        <div id="sensor-audit-meta"></div>
+        <div id="sensor-audit-scroll">
+          <table id="sensor-audit-table">
+            <thead>
+              <tr>
+                <th>Sensor</th><th>Mot</th><th id="sensor-audit-source-label">Underlag</th>
+                <th>Mål visad</th><th>SUMO visad</th><th>Mål medel</th><th>SUMO medel</th>
+              </tr>
+            </thead>
+            <tbody id="sensor-audit-body"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -655,10 +726,10 @@
        bump the number whenever the JS files change, or stale cached JS
        can run against new HTML and crash on missing elements -->
   <script src="state.js?v=11"></script>
-  <script src="provider.js?v=11"></script>
+  <script src="provider.js?v=12"></script>
   <script src="render.js?v=12"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

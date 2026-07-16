@@ -4,6 +4,7 @@ import itertools
 import json
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -840,6 +841,47 @@ class TestProvenanceAllocation:
             category_length_km={"arbete": 2.9, "fritid": 3.1})
         assert sorted(purposes) == ["arbete", "fritid"]
         assert report["incompatible"] == {"fritid": 1}
+
+    def test_same_measured_signature_can_replace_uncompatible_leg(self):
+        work_route = ["O", "M", "D_work"]
+        leisure_route = ["O", "M", "D_leisure"]
+        work = Candidate(0.0, work_route, source_id="work",
+                         intent={"purpose": "arbete"})
+        leisure = Candidate(0.0, leisure_route, source_id="leisure",
+                            intent={"purpose": "fritid"})
+        shape_work = Candidate(0.0, work_route, source_candidates=[work])
+        shape_leisure = Candidate(0.0, leisure_route,
+                                  source_candidates=[leisure])
+        replacements = pfe.purpose_replacement_index(
+            [shape_work, shape_leisure], {"M"})
+        selected, purposes, report = pfe.allocate_interval_provenance(
+            [shape_work, shape_work], {"arbete": 1, "fritid": 1},
+            purpose_replacements=replacements, measured_edges={"M"})
+
+        assert purposes == ["arbete", "fritid"]
+        assert selected[1].edges == leisure_route
+        assert report["incompatible"] == {}
+        assert report["replaced_routes"] == 1
+
+    def test_report_replacement_preserves_measured_count(self, tmp_path):
+        work_route = ["O", "M", "D_work"]
+        leisure_route = ["O", "M", "D_leisure"]
+        work = Candidate(0.0, work_route, source_id="work",
+                         intent={"purpose": "arbete"})
+        leisure = Candidate(0.0, leisure_route, source_id="leisure",
+                            intent={"purpose": "fritid"})
+        shapes = [Candidate(0.0, work_route, source_candidates=[work]),
+                  Candidate(0.0, leisure_route, source_candidates=[leisure])]
+        out = tmp_path / "calibrated.rou.xml"
+        report = pfe.write_calibration_report(
+            shapes, out, [{"M": 2.0}], [np.array([2.0, 0.0])],
+            edge_length_m={"O": 10.0, "M": 10.0, "D_work": 10.0,
+                           "D_leisure": 10.0})
+        root = ET.parse(out).getroot()
+        routes = [v.find("route").get("edges") for v in root.findall("vehicle")]
+        assert sum("M" in route.split() for route in routes) == 2
+        assert any("D_leisure" in route for route in routes)
+        assert report["purpose_allocation_summary"]["replaced_routes"] == 1
 
     def test_lp_fallback_drops_groups_after_the_counts_first_rung(self, monkeypatch):
         # Force the final fallback. The measured count is feasible only after

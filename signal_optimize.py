@@ -69,7 +69,8 @@ from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
                         window_offsets_s)
 from signal_regulation import (build_demand_weighted_tls,
                                build_regulation_compliant_tls,
-                               enforce_timing_minimums)
+                               enforce_timing_minimums, timing_certificate,
+                               write_signal_plan_artifact)
 from suggest_closure_time import aggregate_seed_metrics
 from traffic_sim.core.contracts import load_scenario_spec
 
@@ -611,6 +612,26 @@ def main() -> None:
     conditions = build_signal_conditions(home, variants, begin_s, end_s, label)
     net_fps = condition_net_fingerprints(conditions)
     non_tls_net_fps = condition_non_tls_fingerprints(conditions)
+    # Validate every concrete phase-bearing artifact before it is used in a
+    # comparison.  Offset-only coordinator files are intentionally paired
+    # with their preceding phase file; the certificate checks the effective
+    # phase sequence rather than treating an offset fragment as a plan.
+    plan_certificates = {}
+    plan_artifacts = {}
+    for condition, cfg in conditions.items():
+        phase_path = cfg["add_paths"][0] if cfg["add_paths"] else cfg["net_path"]
+        artifact_path = rs.SUMO_DIR / f"signal_plan_{label}_{condition}.json"
+        write_signal_plan_artifact(
+            cfg["net_path"], phase_path, artifact_path,
+            provenance=condition_tls_provenance({condition: cfg})[condition])
+        plan_artifacts[condition] = str(artifact_path)
+        plan_certificates[condition] = timing_certificate(
+            cfg["net_path"], phase_path,
+            provenance=condition_tls_provenance({condition: cfg})[condition])
+        if plan_certificates[condition]["status"] != "pass":
+            raise RuntimeError(
+                f"signalplan {condition} klarade inte säkerhetscertifikatet: "
+                + "; ".join(plan_certificates[condition]["errors"][:3]))
 
     batch_workspace = Path(tempfile.mkdtemp(prefix=".signal_optimize_",
                                              dir=str(rs.SUMO_DIR)))
@@ -719,6 +740,8 @@ def main() -> None:
         "comparisons_vs_baseline": comparisons,
         "tls_plan_diff": plan_diff,
         "tls_timing_schedule": timing_schedule,
+        "signal_plan_certificates": plan_certificates,
+        "signal_plan_artifacts": plan_artifacts,
         "elapsed_s": round(total_elapsed, 1),
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }

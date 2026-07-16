@@ -258,6 +258,57 @@ class TestEnforceTimingMinimums:
         assert any(duration == sr.REDYELLOW_S and "u" in state for duration, state in phases)
 
 
+class TestTimingCertificate:
+    def test_certificate_passes_generated_regulation_plan(self, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <edge id="A" from="a" to="J"><lane id="A_0" speed="13.89" length="50"/></edge>
+  <edge id=":J" function="internal"><lane id=":J_0" speed="13.89" length="20"/></edge>
+  <connection from="A" to="B" via=":J_0" tl="J" linkIndex="0"/>
+  <tlLogic id="J" type="static" programID="0">
+    <phase duration="20" state="G"/><phase duration="3" state="y"/>
+  </tlLogic>
+</net>""")
+        plan = tmp_path / "plan.add.xml"
+        sr.build_regulation_compliant_tls(net_path, plan)
+        certificate = sr.timing_certificate(net_path, plan)
+        assert certificate["status"] == "pass"
+        assert certificate["signals_checked"] == 1
+
+    def test_certificate_fails_short_yellow_phase(self, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <edge id="A" from="a" to="J"><lane id="A_0" speed="13.89" length="50"/></edge>
+  <tlLogic id="J" type="static" programID="0">
+    <phase duration="20" state="G"/><phase duration="3" state="y"/>
+  </tlLogic>
+</net>""")
+        plan = tmp_path / "plan.add.xml"
+        plan.write_text("""<additional><tlLogic id="J" type="static" programID="x">
+          <phase duration="20" state="G"/><phase duration="3" state="y"/>
+        </tlLogic></additional>""")
+        certificate = sr.timing_certificate(net_path, plan)
+        assert certificate["status"] == "fail"
+        assert any("gul fas" in error for error in certificate["errors"])
+
+    def test_signal_plan_artifact_contains_mapping_and_phase_states(self, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <edge id="A" from="a" to="J"><lane id="A_0" speed="13.89" length="50"/></edge>
+  <edge id=":J" function="internal"><lane id=":J_0" speed="13.89" length="20"/></edge>
+  <connection from="A" to="B" via=":J_0" tl="J" linkIndex="0"/>
+  <tlLogic id="J" type="static" programID="0">
+    <phase duration="20" state="G"/><phase duration="4" state="y"/>
+  </tlLogic>
+</net>""")
+        out = tmp_path / "plan.json"
+        payload = sr.write_signal_plan_artifact(net_path, net_path, out)
+        assert payload["kind"] == "SignalPlan"
+        assert payload["controllers"][0]["links"]["0"]["from_edge"] == "A"
+        assert payload["controllers"][0]["phases"][0]["green_links"] == [0]
+        assert out.exists()
+
+
 class TestJunctionGreenAllocation:
     def test_joint_budget_moves_green_from_low_to_high_demand_phase(self):
         phases = [(10.0, "Grr"), (4.0, "yrr"),

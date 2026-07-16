@@ -1,6 +1,7 @@
 # Gothenburg Traffic Simulation Improvement Plan
 
-**Date:** 2026-07-15 (consolidated)
+**Date:** 2026-07-16 (consolidated 2026-07-15; status re-verified against the
+working tree 2026-07-16)
 **Status:** Canonical improvement plan — active implementation is in progress.
 **Structural authority:** `ARCHITECTURE.md` remains the source of truth for
 the six-stage pipeline and fixed contracts. This is the only improvement,
@@ -20,6 +21,10 @@ does not preserve obsolete intermediate proposals as separate instructions.
    measurement pass. A code change or green sensor GEH by itself is not enough.
 4. Keep historical evidence in immutable run artifacts, tests, validation
    reports and Git history rather than duplicating it across planning files.
+5. When resuming work, start from "Current verified status and concrete
+   entry points" at the end of "Recommended Implementation Order" — it
+   records what was last verified as done and the concrete entry point for
+   each next step. The rest of this document explains why that order holds.
 
 ## Consolidated Status
 
@@ -31,8 +36,9 @@ does not preserve obsolete intermediate proposals as separate instructions.
   glob stale closure routes from the shared `sumo/` directory, and scenario
   runs archive the exact scenario/trajectory they wrote instead of guessing
   from filesystem modification time. Run output records now include SHA-256
-  content hashes. Golden releases live under `runs/releases/`, extending the
-  existing run registry.
+  content hashes. The golden-release mechanism extends the existing run
+  registry under `runs/releases/`; its first frozen release remains a Phase 0
+  deliverable, not a completed fact.
 - Trajectory parsing includes SUMO reroutes in `routeDistribution`; unfinished
   vehicles and displayed-share integrity are explicit rather than silently
   omitted.
@@ -72,24 +78,55 @@ does not preserve obsolete intermediate proposals as separate instructions.
 - The browser supports focused normal, closure, closure-timing and synthetic
   signal-study workflows. Signal output already shows numeric timing changes
   with provenance.
+- Scenario playback publishes a per-direction sensor audit (2026-07-16):
+  every scenario JSON carries `sensor_audit` with the frozen source
+  observation, the directional calibration target, the Monte Carlo ensemble
+  mean and the displayed representative seed, plus GEH summaries — count
+  delivery is read from a table, never inferred from dot density. Demand
+  builds persist the exact `sensor_targets`/`sensor_observations` they
+  calibrated against in `demand_meta`; scenarios built from older demand
+  builds reconstruct them from current inputs and are labelled
+  `reconstructed_current_inputs` until the next recalibration freezes them.
+  Two-way Total stations stay labelled as physical-station totals, never as
+  directional measurements, and missing values remain `null`, never zero.
 
 ### Active improvements, ordered by value and dependency
 
-1. Finish purpose-compatible route allocation and revalidate normal demand.
-2. Freeze and exercise a golden normal, closure and bounded micro-signal
+This list ranks the remaining work by value; the execution queue — which
+interleaves these items with their gate dependencies — is "Recommended
+Implementation Order" at the end of this document.
+
+1. **Implemented:** enforce SensorRegistry validity, approved snaps and active
+   dates before a sensor can constrain a build.
+2. **Implemented:** make final SUMO sensor output auditable and calibrate
+   normal runs against the frozen target at the correct physical-station
+   aggregation. A fresh staged set fails closed when this evidence is absent.
+3. Finish purpose-compatible route allocation and revalidate normal demand.
+   Same-signature replacement is implemented; uncovered through/service
+   signatures still require a larger compatible candidate pool.
+4. Freeze and exercise a golden normal, closure and bounded micro-signal
    release, including rollback.
-3. Complete SensorRegistry adoption through every API/UI entry point and add
-   contribution/placement reports for each new station.
-4. Formalize the generated synthetic SignalPlan and its phase/link safety
-   certificate; then optimize closure-driven arrivals under that certificate.
-5. Improve closure decision support with full feasibility, access, paired
-   uncertainty and explicit queue/spillback gates.
-6. Prove continuous multi-day demand and simulation semantics before exposing
-   a multi-day result as one study.
-7. Integrate reviewed NVDB structure data and retain provenance for every
-   imported network value.
-8. Build a unified study/job history view and later import one city-provided
-   signal corridor with independent travel-time and turning evidence.
+5. **Contribution slice implemented:** `sensor_contribution.py` now emits
+   evidence-bound before/after holdout, confidence, coverage and isolation
+   reports plus a placement screen. A new station still needs a real before/
+   after artifact before it can be called an improvement.
+6. **Certificate implemented:** every signal-optimization condition now gets
+   a machine-readable TSFS-informed phase/link timing certificate. Remaining:
+   optimize closure-driven arrivals under that certificate; this stays
+   synthetic until a city controller plan is imported.
+7. **Feasibility slice implemented:** closure-time ranking now rejects missing
+   queue evidence, partial/no detours, truncation and unhealthy candidates;
+   paired uncertainty and queue deltas are published with every candidate.
+8. **Implementation slice complete:** continuous multi-day runs now emit cheap
+   periodic SUMO summary evidence, per-day boundary accounting and a
+   fail-closed staging gate. Remaining: run and freeze the two-day golden
+   acceptance artifact before calling multi-day output trusted.
+9. **Network provenance implemented:** the existing network audit records
+   OSM/defaulted values and SUMO TLS membership. Actual NVDB import remains
+   evidence-bound until a reviewed download is supplied.
+10. **Study/job history implemented:** the start workspace now exposes the
+   durable `/api/jobs` records; importing a city signal corridor remains
+   evidence-bound and is intentionally not fabricated.
 
 ### Evidence-bound work that must not be faked
 
@@ -139,6 +176,314 @@ before ranking, evaluate all feasible windows when the candidate set is
 bounded, reject low-delay results caused by lost traffic, and expose the
 uncertainty/gate state rather than a single score.
 
+### Sensor-value contract and final output calibration (P0)
+
+The program has four different numbers at a sensor.  They must never be
+silently substituted for one another:
+
+1. **Source observation** is the delivered historical count, or the forecast
+   value when a forecast day is selected.  A forecast value is an input
+   estimate, not an observation.
+2. **Frozen calibration target** is the exact target given to the demand
+   build.  A directed station has one target on its measured directed edge.
+   Station 107 is different: the delivery is one physical two-way Total; its
+   directional q10/q50/q90 split is a model assumption, not two measured
+   values.
+3. **Final SUMO output** is the count from the final `edgeData` result after
+   vehicles have actually entered the edge during that 15-minute interval.
+   This is the number the road colour represents.
+4. **Animated representative** is one seed/variant's vehicles.  It is useful
+   for visual inspection, but it is not the ensemble mean and cannot be used
+   to count all simulated traffic by eye.
+
+The new `sensor_audit` payload correctly exposes all four concepts.  It is
+not yet a proof that the final simulation delivers the sensor target.  On the
+currently published 2027-10-20 forecast baseline, its PFE fit is 100% GEH<5
+and all 53,311 variant vehicles were inserted without teleports, but the
+displayed final SUMO values can still differ from their q50 targets.  This is
+expected evidence of a missing final-output gate, not a reason to overwrite
+the map with input values.  The current audit is additionally labelled
+`reconstructed_current_inputs`; it must be rebuilt from a demand build that
+persists its frozen inputs before it can be frozen as release evidence.
+
+#### Confirmed defects and semantic risks
+
+1. **P0 — publication validates the wrong stage.** `serve.py`'s
+   `validate_staged_scenarios` validates demand/PFE fit and seed health, but
+   does not validate `sensor_audit` or compare final SUMO `edgeData` output
+   with a frozen target.  `validation_report.py` similarly reports
+   `demand_meta.pfe_fit`, not final sensor output.  A normal baseline can
+   therefore publish with an excellent PFE GEH result while its final SUMO
+   entries at sensors are different.  No normal scenario may be described as
+   having *exact sensor delivery* until this is fixed.
+2. **P1 — closures lose audit variant identity.** The audit infers q50/q10/q90
+   from the literal route filename.  `run_scenario.py` renames closure route
+   files to forms such as `calibrated_v1_close_*.rou.xml`, while
+   `target_key_for_route_path` recognises only the three original filenames.
+   The resulting closure audit cannot recover a target for any seed, so its
+   target and fit fields become empty even though the demand variant is known
+   earlier in the job.  This is a confirmed code defect, not a modelling
+   limitation.
+3. **P1 — the two-way station can look double-counted in the table.** The raw
+   Total for station 107 is intentionally repeated beside both directed rows
+   and labelled `tvåvägs-total`.  A user can nevertheless read or sum it as
+   two independent observations.  The calculation is not double-counting it,
+   but the presentation is too easy to misread and does not meet the required
+   physical-station contract.
+4. **P2 — provenance is recoverable but not frozen for legacy runs.** The
+   fallback reconstruction keeps old scenarios inspectable, but it reads
+   current input files.  It is unsuitable for a historical release claim if
+   those inputs later change.  New demand builds persist the data correctly;
+   an end-to-end test and the next fresh baseline must prove that the exact
+   stored arrays survive into the published audit unchanged.
+
+#### Required implementation sequence
+
+1. **Carry semantic variant identity, never infer it from a filename.** Put
+   `demand_variant: q50|q10|q90` and the corresponding frozen target key in
+   each seed job.  Return them from `run_seed_job` and use them in the audit,
+   trajectory provenance and any paired comparison.  Filename parsing may
+   remain only as a compatibility fallback.  Add unit coverage for each
+   closure-renamed route and an end-to-end closure-audit test.
+2. **Publish a versioned final-output fit artifact.** For every normal seed
+   and every 15-minute interval, compare its final SUMO `edgeData` entry with
+   that seed's frozen target.  Publish per-direction residuals, absolute
+   error, GEH and missing-data state, plus an ensemble section.  Aggregate by
+   physical station before declaring a measured fit:
+   - sensors 133, 134, 2276, 1074 and 1076: compare their one measured
+     directed edge directly;
+   - sensor 107: compare `north + south` against the one delivered Total;
+     show the q10/q50/q90 directional split separately as an assumption, not
+     as two observations.
+   The artifact must contain the frozen demand build ID, source fingerprint,
+   target provenance and target arrays/hash.  It belongs in the scenario
+   payload and in `validation.json`, with a schema version that makes absent
+   output-fit data fail visibly rather than look healthy.
+3. **Measure the residual mechanism before changing the solver.** PFE selects
+   route/departure instances while SUMO counts actual edge entries.  Travel
+   time from departure to a sensor, congestion and rerouting can move a
+   vehicle into a neighbouring 15-minute `edgeData` bucket.  This is the
+   leading hypothesis for part of the current mismatch, not an established
+   root cause.  Instrument one frozen normal day to retain, per constrained
+   edge and quarter: selected PFE route count, planned departure quarter,
+   actual SUMO entry quarter and any reroute/truncation outcome.  Classify
+   residuals into timing shift, missing route coverage, integer/bound effect,
+   or unexplained.  Do not loosen an error threshold or change raw sensor
+   values to make this diagnostic green.
+4. **Correct output calibration with bounded feedback only after the
+   diagnosis.** If timing is the cause, build the PFE incidence against the
+   expected sensor-entry quarter (initially from recorded lag), then make at
+   most one or two output-feedback corrections from actual `edgeData`
+   residuals.  Reuse the same immutable candidate pool, route alternatives,
+   seed/variant plan and hard feasibility bounds.  If a residual cannot be
+   corrected within those constraints, report it as infeasible rather than
+   fabricating a match.  Benchmark the correction against the golden normal
+   day; it may add a bounded meso pass but must not increase PFE work or lower
+   seed/variant fidelity.
+5. **Make the gate stage-aware.** A normal baseline must require a present,
+   frozen final-output-fit artifact and fail publication when a measured
+   station's agreed output contract is not met.  The exact contract is zero
+   residual after integer aggregation for a historical directed count, and
+   zero residual for the station-total at 107; forecast runs apply the same
+   check to their frozen forecast target, while remaining labelled forecast.
+   Do not adopt a convenient GEH tolerance as a substitute for this exact
+   count-delivery check.  A closure must not be forced to retain normal
+   sensor counts: it must instead display the matched normal target/output,
+   closure output and scenario effect, while retaining its health, access and
+   closure-integrity gates.
+6. **Make the UI physically unambiguous.** Keep the map value as final SUMO
+   output.  On a sensor edge, show `source | target | SUMO output` with the
+   active interval and seed/ensemble label.  Render station 107 as one
+   physical Total row with two indented modelled-direction rows; never repeat
+   the raw Total as though it were two directional observations.  The sensor
+   audit table remains the full numerical source of truth; animation stays a
+   representative visualisation.
+
+#### Acceptance gate
+
+- A newly recalibrated historical normal baseline stores (not reconstructs)
+  all audit inputs and reproduces them byte-for-byte or by recorded content
+  hash in the published scenario.
+- Every directed measured station has an explicit final SUMO residual for
+  every available quarter; sensor 107 additionally has one station-total
+  residual.  `null` remains missing, never zero.
+- The normal release cannot publish with a missing, stale or failed
+  final-output fit.  A closure is correctly labelled as a changed scenario,
+  not as a failed normal calibration.
+- The output correction has a recorded before/after result on the frozen
+  normal day, no new health/structure regression and no reduction in seeds,
+  variants or simulation fidelity.
+
+### Whole-program audit: confirmed gaps (2026-07-16)
+
+#### Implementation status (2026-07-16)
+
+The first P0/P1 implementation slice is now in the codebase:
+
+- `SensorRegistry` is fail-closed for accepted quality, approved snaps,
+  reviewed edge IDs, snap distance and active study dates. `build_data.py`
+  validates the current graph resolution against the registry before writing
+  flows. The six existing stations were migrated to their reviewed directed
+  edges using true point-to-polyline distances.
+- Demand metadata now records registry/network hashes and the exact sensor
+  edge contract. Staged publication rejects a new build whose contract is
+  missing or stale.
+- SUMO scenario audits carry explicit q50/q10/q90 provenance, preserve the
+  unrounded ensemble mean for fit calculations, and add a physical-station
+  aggregation for two-way totals. The map still receives rounded integer
+  flows only for display.
+- The staged publication gate requires the new raw final-output-fit artifact,
+  frozen demand provenance, complete sensor series and all three declared
+  variants for a normal three-variant release. Legacy artifacts remain
+  readable but are not treated as proof of the new contract.
+- Verification on 2026-07-16: `python3 -m pytest -q tests` reports
+  **942 passed, 21 skipped, 2 warnings** (loopback-enabled run; 963 tests
+  collected). The warnings are the existing LibreSSL and pandas date-parser
+  warnings, not failures.
+- The same verification includes the multi-day summary parser/publication
+  gate and the synthetic signal-plan timing certificate. Ordinary one-day
+  scenario runs do not request summary output, so this evidence path does not
+  slow the normal simulation.
+- Purpose allocation now has a conservative replacement path: if a selected
+  shape lacks the requested purpose but an already generated route has the
+  identical measured-edge signature, its unconstrained leg is replaced and
+  the count-preserving replacement is recorded. This reduces avoidable
+  incompatibility without fabricating routes; remaining categories without a
+  same-signature candidate stay explicitly flagged for candidate-generation
+  work.
+
+Still deliberately open: completing the purpose-compatible route allocation
+(candidate coverage is still insufficient for every through signature),
+the two-day golden release, closure feasibility and closure-driven signal
+optimization. The signal certificate and multi-day publication gate are now
+implemented, but their final golden artifacts still require an actual run.
+
+This review covers the active intake, demand, normal simulation, closure,
+signal, multi-day, publication, UI and release paths against the current code,
+tests and generated artifacts.  The items below are **confirmed** by a code
+path or an active artifact.  They are not speculative modelling ideas.  They
+are deliberately separated from evidence limits such as unavailable real
+signal plans or travel-time data, which remain limitations rather than bugs.
+
+1. **P0 — SensorRegistry enforcement (resolved in the current slice).**
+   This was a confirmed intake gap: `validate_data_sensors` used to check only
+   unknown IDs, catalogue verification and coordinates, while automatic snaps
+   could enter calibration.  It now enforces active dates, accepted quality,
+   approved snaps, reviewed edge IDs and a true snap-distance limit; `build_data.py`
+   also validates the current graph resolution before writing flows.
+
+   **Implemented fix:** bootstrap-review and record the current six resolved directed
+   edges, then require an active, accepted record and a resolved snap that
+   matches the approved directed edges, bearing and distance threshold for the
+   build's network fingerprint.  A changed OSM snap must stop the build and
+   produce a review artifact; it must never silently move a measurement to a
+   new road.  Date-range validation must exclude a sensor outside the study
+   interval.  Store the resolved-snap artifact and registry hash in the
+   demand build and add fail-closed tests for every field.
+
+2. **P0 — Normal PFE fit is not final SUMO output fit (artifact/gate now
+   implemented; correction threshold remains open).** This was the
+   publication and audit issue described in the preceding sensor-value
+   section.  The scenario now records raw edgeData fit, station aggregation,
+   provenance and registry/network identity, and new staged releases fail
+   closed when that artifact is absent or stale.  The remaining work is to
+   calibrate the SUMO output itself until the frozen golden case meets the
+   chosen residual threshold; GEH is not being used as a substitute for that
+   decision.
+
+3. **P0 — Current normal demand still has known realism gates in warning
+   state.** The active `validation.json` records
+   `purpose_incompatible_quarters_by_variant = 96` for q50/q10/q90, so
+   purpose labels are correctly blocked from being evidence.  The new
+   count-preserving same-signature replacement reduces avoidable provenance
+   mismatches, but it cannot create a missing through-route signature.  It also reports
+   two calibrated-versus-pool structure drifts above the 2.5x limit:
+   `onward_under_200m_pct` 3.6 vs 1.4 and `trips_under_1km_pct` 1.43 vs 0.5.
+   The simulation can still run, but it must not be presented as a validated
+   purpose/route-distribution result until the allocation is repaired and
+   temporal/LOSO checks are rerun.
+
+4. **P1 — Uncertainty coverage can be silently collapsed by a valid
+   ScenarioSpec.** `ScenarioSpec` requires every seed to have a q10/q50/q90
+   label, and `run_scenario.py` resolves that mapping, but neither contract
+   validation nor the publication gate requires a three-variant normal build
+   to actually run all three variants.  A syntactically valid spec can map all
+   seeds to q50 and still publish.  This violates the stated Monte Carlo
+   uncertainty contract without changing a build ID.
+
+   **Implemented fix:** derive the required variant set from `demand_meta.n_variants`.
+   For a normal three-variant release, require q50, q10 and q90 at least once
+   and require the published seed mapping to match the declared plan.  Permit
+   a deliberately reduced mapping only for an explicitly labelled diagnostic
+   study that cannot replace the normal baseline.  Test both rejection and
+   the standard 1000/q50, 1001/q10, 1002/q90 path.
+
+5. **P1 — The sensor audit calculates fit from display-rounded ensemble
+   flows.** `aggregate_flows` rounds the three-seed mean to an integer for the
+   map, then `build_sensor_audit` reuses that rounded value for
+   `simulated_mean` and its reported ensemble GEH.  Rounding is appropriate
+   for a road-colour label, but not for an accuracy calculation: it can change
+   an ensemble residual by up to half a vehicle per directed edge/quarter.
+
+   **Implemented fix:** retain per-seed integer output and an unrounded numerical mean in
+   the audit/output-fit artifact.  Use the unrounded value only for ensemble
+   statistics; retain the rounded value exclusively as `map_display_flow`.
+   The q50 representative remains an exact integer count.  This change is
+   computationally negligible and must be covered by a fractional-mean test.
+
+6. **P1 — The UI offers 1–7 day normal studies before their release gate is
+   complete.** The date panel exposes `days=1..7`, and the builder can create
+   a continuous route list, but the plan still requires a frozen two-day
+   golden run with per-day output fit, health, midnight carry-over accounting,
+   cancellation/disk-budget tests and range-level publication validation.
+   The current publish gate checks the build as one aggregate; it does not
+   prove every day independently.  This is a product-claim gap, not evidence
+   that every multi-day run is wrong.
+
+   **Fix:** either temporarily mark the control `experimental` and prevent it
+   from replacing the normal release, or complete the stated two-day gate
+   before presenting multi-day output as a trusted study.  The better long-
+   term option is the latter: produce per-day target/output/health sections
+   plus one range manifest, while keeping one monotonically running SUMO
+   process and explicit vehicles crossing midnight.
+
+7. **P1 — Closure sensor audits lose target data after route filtering
+   (resolved).** The runner now carries the semantic variant in each seed
+   result and retains a filename fallback for legacy callers, so closure route
+   copies cannot erase q10/q50/q90 audit identity.
+
+8. **P2 — Documentation and release status contain stale assertions.**
+   `IMPROVEMENT_PLAN.md` previously claimed a completed golden release even
+   though `runs/releases/` is absent, and stated a full-suite result without
+   naming its runner or environment (a 2026-07-16 dev-machine run records
+   the actual result: 942 passed, 21 skipped, 963 collected — the count was
+   real, but a claim without provenance cannot be told apart from a stale
+   one, which is the defect).  `ARCHITECTURE.md` also contains
+   dated PFE/LOSO figures that it explicitly marks pending revalidation, while
+   its product wording says every added sensor *must* improve all outputs.
+   The latter is stronger than the statistically honest `improved | neutral |
+   insufficient evidence` rule already adopted here.
+
+   **Fix:** record executable results only in immutable run/release artifacts,
+   update static documentation with dates and provenance, and change the
+   sensor promise to: every validated added station is incorporated without
+   code changes and its contribution is measured, not guaranteed positive.
+   Do not declare a full-suite count unless the exact runner and result are
+   retained; localhost API tests require a runner permitted to bind loopback.
+
+9. **P2 — Browser regression coverage is weaker than the backend contract
+   coverage.** The Python suite contains 963 collected tests and strong
+   contract tests, but there is no repeatable browser-level regression suite
+   for the critical UI states: recovered background job, cancel transition,
+   sensor-table station aggregation, stale scenario selection and 1/7-day
+   control state.  Manual CDP testing has caught real defects in these paths
+   before.
+
+   **Fix:** add a small headless-browser smoke suite against `serve.py` with
+   fixture scenario data and deterministic job status stubs.  It should check
+   DOM state and console errors, not run a full SUMO demand build.  Keep the
+   existing API/unit tests; this is the missing end-to-end seam.
+
 ### Performance and architecture
 
 Measured performance work found the PFE's deliberately sequential
@@ -154,15 +499,21 @@ before/after measurement.
 
 | Priority | Improvement | Completion evidence |
 | --- | --- | --- |
-| P0 | Freeze a normal, closure and micro-signal golden release | Complete health/provenance records, semantic hashes and tested rollback |
+| P0 | Enforce SensorRegistry validity and approved snap identity | Active/accepted station, reviewed directed snap, bearing/distance check and registry/network hashes in every demand build |
+| P0 | Verify final SUMO sensor output, not only PFE input fit | Frozen output-fit artifact with correct station aggregation; normal publication fails closed on missing/stale/failed fit |
 | P0 | Eliminate purpose-route incompatibility | Zero diagnostic across q10/q50/q90 plus no worse held-out/temporal result |
-| P0 | Make synthetic signal phases explicit and mechanically safe | Versioned SignalPlan, reconciled link map and phase/clearance certificate |
-| P1 | Prove the value of every new sensor | Validated intake plus before/after contribution and isolation report |
-| P1 | Make closure advice robust | Access, integrity, paired uncertainty and no-viable-closure gates |
-| P1 | Make multi-day studies continuous and calendar-correct | Two-day golden study with monotonic time, boundary vehicle accounting and per-day fit/health |
+| P0 | Freeze a normal, closure and micro-signal golden release | Complete health/provenance records, semantic hashes, final-output fit and tested rollback |
+| P0 | Make synthetic signal phases explicit and mechanically safe | Versioned `SignalPlan` JSON plus TSFS-informed phase/clearance certificate is emitted per signal condition; city configuration remains evidence-bound |
+| P1 | Preserve semantic q10/q50/q90 identity in every scenario | No filename-derived provenance; normal releases cover every declared variant and closure audits retain targets |
+| P1 | Separate numerical audit values from map-display rounding | Per-seed integers and raw ensemble mean used for fit; rounded flow only for rendering |
+| P1 | Prove the value of every new sensor | `sensor_contribution.py` emits coverage/confidence/LOSO/placement evidence; real before/after artifacts remain required |
+| P1 | Make closure advice robust | Access/detour, integrity, paired uncertainty, queue-proxy and no-viable-closure gates are evaluated before ranking |
+| P1 | Make multi-day studies continuous and calendar-correct | Periodic summary/per-day boundary artifact and staging gate implemented; two-day golden study still required before trusted UI release |
 | P1 | Complete study identity across API and UI | Active study exposes exact build, ScenarioSpec, job and validation artifact |
 | P1 | Import reviewed road structure | NVDB/OSM mapping audit with provenance and no stable-ID drift |
 | P2 | City-configure one signal corridor | Imported plan plus independent turn/travel-time validation |
+| P2 | Add browser regression coverage for job and audit states | Deterministic headless smoke suite covers start/recover/cancel, scenario switch and sensor presentation |
+| P2 | Keep documentation and release claims executable | Dated artifacts back every stated metric; no stale release/test-status assertion |
 | P2 | Improve speed only with proof | Repeated benchmark improvement with unchanged semantic digest |
 
 ## Consolidation Coverage and Legacy Labels
@@ -248,7 +599,10 @@ heuristics:
   `data_in/sensors.json` registry. The hard-won verification workflow (check
   the city's trafikmängder catalogue FIRST; the delivered "Total" label was
   wrong for 4 of 5 sensors) is now represented by explicit registry fields,
-  not only by prose.
+  not only by prose. The 2026-07-16 audit found that several of those fields
+  are not yet enforced at build time: active dates, quality status and
+  approved directed snap identity must become a fail-closed gate before the
+  registry can be called fully adopted.
 - Structural products can be stale after a sensor change if cache identity
   does not include the sensor registry and all relevant inputs.
 - The closure-time feature defaults to a proxy-selected subset of windows for
@@ -266,7 +620,8 @@ heuristics:
   the real purpose of every simulated vehicle.
 
 Already in place — do NOT rebuild these, extend them (verified against the
-working tree 2026-07-15):
+working tree 2026-07-15; spot re-verified 2026-07-16 — publish gates, run
+registry and benchmark harness confirmed present):
 
 - Trajectory reconciliation is complete: `final_route()` reads rerouted
   vehicles from `<routeDistribution>`, unfinished vehicles park visibly,
@@ -311,8 +666,11 @@ work from two angles — read them this way, or their numbering will mislead:
 - **Stages (this section)** are the product narrative: what the user can
   trust, in which order, and why.
 - **Phases 0-7 (below)** are the engineering work-packages with acceptance
-  gates. The **canonical execution order is the phase order** in
-  "Recommended Implementation Order" at the end.
+  gates. The **canonical execution order is the numbered task list** in
+  "Recommended Implementation Order" at the end. Since 2026-07-16 that list
+  interleaves the phases (registry, variant-identity and output-fit gates
+  run before the Phase 0 freeze), so it is no longer simply the phase
+  order; each task there names the phase whose acceptance gate governs it.
 
 Mapping, so no executor has to reconstruct it:
 
@@ -331,19 +689,23 @@ has passed its stated gate.
 
 ### Stage 1: Make normal traffic the trusted baseline
 
-**Do now, without new external data.** Finish purpose-compatible route
+**Do now, without new external data.** Enforce the SensorRegistry and reviewed
+directed snaps, then verify final SUMO output against frozen sensor targets at
+the correct physical-station aggregation. Finish purpose-compatible route
 allocation, retain exact time-of-day and day-type demand, and rerun temporal
 holdout plus leave-one-sensor-out validation. Keep the existing structural
 checks for route length, route diversity, onward distance after a sensor, and
 near-sensor destinations. Freeze one normal golden day only after all q10/
-q50/q90 variants pass their own fit and health gates.
+q50/q90 variants pass their own input-fit, final-output-fit, structure and
+health gates.
 
 **Why first:** a closure or signal optimizer can only be as credible as the
 normal traffic it compares against.
 
-**Exit condition:** the baseline has a content-addressed build ID, a validated
-normal scenario, a reproducible validation report, and no purpose-level claim
-when purpose compatibility fails.
+**Exit condition:** the baseline has a content-addressed build ID, an approved
+sensor-snap manifest, a validated normal scenario, a reproducible validation
+report with final sensor output fit, and no purpose-level claim when purpose
+compatibility fails.
 
 ### Stage 2: Make road-closure simulation a proper incident study
 
@@ -406,8 +768,10 @@ coordinate CRS, bearing, snap distance, counterpart direction and active
 period before calibration. A sensor must overlap the study date; future-only
 data cannot validate a historical 2025 simulation.
 
-After each addition rebuild features, direction splits, observability, bounds,
-priors, forecast inputs, demand and validation. Publish a contribution report:
+After each addition validate its active period, quality status, approved snap,
+bearing and network-specific snap distance; then rebuild features, direction
+splits, observability, bounds, priors, forecast inputs, demand and validation.
+Publish a contribution report:
 the new measured edges, coverage, confidence change, holdout recovery,
 affected closure corridors, and `improved`, `neutral`, or `insufficient
 evidence`. Prefer new directional counters on signal approaches and detour
@@ -498,8 +862,9 @@ rerouter coverage or solver work.
      rerouting, truncation, and leak behaviour is already documented);
    - one bounded microscopic signal smoke case.
 3. Record semantic hashes, run time, peak memory, build ID, network hash,
-   route artifacts, variant fit, seed health, closure integrity, and
-   trajectory reconciliation.
+   route artifacts, input and final-output sensor fit, approved-snap manifest,
+   variant coverage, seed health, closure integrity, and trajectory
+   reconciliation.
 4. Keep the golden artifacts and their manifest separate from normal pytest
    timing tests. Build the release directory as an extension of the
    EXISTING `runs/` registry (same manifest conventions, same atomic
@@ -514,6 +879,9 @@ rerouter coverage or solver work.
 - The full test suite passes.
 - Each golden case has a complete health record and no publication gate
   failure.
+- The normal golden case has frozen sensor inputs, approved sensor snaps and
+  a passing final SUMO output-fit artifact; it is not a legacy reconstructed
+  audit.
 - A refactor intended to preserve results matches the semantic baseline.
 
 ## Phase 1: Shared Versioned Contracts
@@ -548,6 +916,15 @@ hardest-won intake lesson as a field instead of folklore: the delivered
 "Total" label was wrong for 4 of 5 sensors and was only caught by checking
 the city's own trafikmängder catalogue — a sensor whose semantics have not
 been verified against the catalogue must not reach calibration.
+
+The registry is not valid merely because its JSON parses.  For the exact
+study interval and network fingerprint, intake must require: an active period
+covering the data, `quality_status: accepted`, a reviewed snap status, one or
+two explicitly approved directed edge IDs consistent with the measurement
+semantics, matching bearing, and a recorded snap distance within the agreed
+limit.  The network build writes a resolved-snap artifact; demand consumes
+that artifact instead of silently trusting a fresh automatic snap.  This lets
+OSM evolve without silently moving a real counter.
 
 #### `ScenarioSpec`
 
@@ -611,7 +988,11 @@ provenance, and a machine-readable recommendation status.
    entry/snap approval where sensor calibration is used, a route artifact where
    routes are consumed, a SignalPlan for a signal study, or a matching build ID
    whenever artifacts are combined.
-4. Keep backward-compatible CLI shims while migrating callers one by one.
+4. When `n_variants=3`, derive the required q50/q10/q90 coverage from demand
+   metadata and reject a normal ScenarioSpec that maps every seed to one
+   variant.  A reduced mapping is diagnostic-only and cannot publish a normal
+   release.
+5. Keep backward-compatible CLI shims while migrating callers one by one.
 
 ### Acceptance gate
 
@@ -621,6 +1002,10 @@ provenance, and a machine-readable recommendation status.
   signal study.
 - A stale observability, bounds, prior, or signal artifact is rejected rather
   than reused.
+- A pending, inactive, unapproved or changed sensor snap is rejected before
+  it can affect a calibration target.
+- A normal uncertainty build cannot publish unless it includes every declared
+  demand variant and records the exact seed-to-variant mapping.
 
 ## Phase 2: Sensor Growth That Proves Its Value
 
@@ -684,6 +1069,8 @@ Rank prospective locations by expected information gain, combining:
 - A new station can be added through data and registry metadata only.
 - Its addition forces a new fingerprinted build.
 - The map shows both the added measurement and its actual confidence impact.
+- The generated `network.geojson` and demand manifest name the same reviewed
+  directed snap, bearing, active period and registry hash.
 
 ## Phase 3: Improve Normal Citywide Realism
 
@@ -692,9 +1079,18 @@ decisions from it.
 
 ### Demand and validation work
 
-1. Aggregate the exact-day departure shape per physical station, not per
-   directed edge, so a two-direction station does not receive double weight.
-2. Make purpose compatible with the selected route instance. The proper fix is
+1. DONE and guarded (verified 2026-07-16): the exact-day departure shape is
+   aggregated per physical station, not per directed edge — `real_day_shape`
+   counts a duplicated two-way Total once, and would sum genuinely different
+   directional arrays instead of discarding one (regression test
+   `test_genuinely_directional_values_are_summed_once_per_station`).
+2. Calibrate and validate the final SUMO edge-entry output against the frozen
+   target before interpreting a normal run as sensor-delivering.  Preserve
+   per-seed integers and raw ensemble values separately from map rounding;
+   compare station 107 only at its physical two-way total.  Diagnose entry-
+   time residuals before introducing the bounded output-feedback correction
+   described above.
+3. Make purpose compatible with the selected route instance. The proper fix is
    a purpose-aware route allocation or a purpose-stratified PFE formulation,
    benchmarked against the current solver. Do not simply relabel incompatible
    routes after solving. (The current length-aware post-solve allocation
@@ -705,14 +1101,14 @@ decisions from it.
    incompatibility diagnostic to zero. The H2 benchmark fixture exists
    precisely so a solver-formulation change here cannot silently alter
    results.)
-3. Surface purpose compatibility in the validation report and block claims
+4. Surface purpose compatibility in the validation report and block claims
    about purpose-specific behavior when the diagnostic fails.
-4. Rerun leave-one-sensor-out validation and temporal holdouts after each
+5. Rerun leave-one-sensor-out validation and temporal holdouts after each
    substantive demand change, and update the recorded honest baseline
    (currently min 0.05 / median 0.78 / max 1.95, measured 2026-07-13 —
    quoting any older number is a documentation bug). Sensor GEH is
    calibration fit, not independent validation.
-5. Keep structure gates for trip length, near-sensor destinations, onward
+6. Keep structure gates for trip length, near-sensor destinations, onward
    distance after the last sensor, route diversity, and unserviceable counts.
 
 ### Multi-day simulation
@@ -721,6 +1117,11 @@ The current trusted unit is one complete local calendar day. A multi-day study
 must not be implemented by concatenating independent daily outputs or by
 silently resetting the network at midnight. Build it only after a two-day
 continuous prototype proves the following contract:
+
+Until that gate passes, the existing 1–7-day control is an **experimental
+build request**, not a normal release selector.  It may produce a continuous
+route list, but it must show that status and must not silently replace a
+trusted one-day baseline.
 
 1. `ScenarioSpec` and demand metadata carry an explicit local-date range,
    time zone, ordered analysis windows and the exact source selected for each
@@ -744,10 +1145,11 @@ continuous prototype proves the following contract:
    or overwrite its artifacts.
 
 **Acceptance gate:** a frozen two-continuous-day normal case has monotonic
-time, correct local calendar labels, per-day q10/q50/q90 fit and health,
-explicit midnight carry-over accounting, no missing interval silently read as
-zero, and a result-equivalence comparison against the two single-day
-reference studies except for the explicitly measured boundary carry-over.
+time, correct local calendar labels, per-day q10/q50/q90 input and final-
+output fit plus health, explicit midnight carry-over accounting, no missing
+interval silently read as zero, and a result-equivalence comparison against
+the two single-day reference studies except for the explicitly measured
+boundary carry-over.
 
 ### Network realism work
 
@@ -771,7 +1173,8 @@ to inspect why an edge is uncertain.
 
 ### Acceptance gate
 
-- All q10/q50/q90 variants pass their own fit, structural, and health gates.
+- All q10/q50/q90 variants pass their own input-fit, final-output-fit,
+  structural, and health gates.
 - Purpose incompatibility is zero or explicitly blocks purpose-level claims.
 - The new release is no worse on frozen temporal and held-out validation.
 
@@ -1010,7 +1413,10 @@ landing page. Instead, make every task open a shared study context.
 5. Signal optimization consumes the selected ScenarioSpec and its exact time
    window.
 6. The validation panel follows the active build and scenario.
-7. A job page shows progress, cancellation, logs, artifacts, confidence, and
+7. A normal scenario exposes its source, frozen target, final SUMO output and
+   final-output fit at each physical sensor; a two-way Total is presented as
+   one station with modelled directional children.
+8. A job page shows progress, cancellation, logs, artifacts, confidence, and
    final gates for each study.
 
 Every result page must make three things immediately visible: what was run,
@@ -1023,6 +1429,8 @@ whether it completed healthily, and what the result is allowed to claim.
   reading server logs.
 - The 🛡 validation panel reflects the ACTIVE study's build, not merely
   the latest demand build.
+- The sensor table never makes a source observation, a split assumption, a
+  rounded map value and a final SUMO count look like the same number.
 - A cancelled or failed study leaves the previous published study visible
   and clearly labelled as the one still in force.
 
@@ -1085,34 +1493,91 @@ unlocks:
 ## Recommended Implementation Order
 
 ```text
-0. Freeze reference release                                   (size S–M)  — executes AFTER the 1/2 migration
-                                                                            completes: freeze the migrated state,
-                                                                            not a mid-migration snapshot
-1. SensorRegistry + content-aware invalidation                (size M)  ◐ registry and package migration complete;
-                                                                          DemandBuildSpec and recalibration identity are now in;
-                                                                          finish stale-artifact rejection proof across every publication path
-2. ScenarioSpec/ClosureSpec + API migration                   (size L)  ◐ closure, closure-time, signal and recalibration API/browser paths migrated;
-                                                                          legacy query forms remain compatibility shims only
-3. Normal demand realism and validation repairs               (size M–L)
-4. Closure decision engine, paired feasible evaluation        (size L)  ◐ --exhaustive window evaluation exists
-5. SignalPlan import/audit and synthetic-plan containment     (size M; import blocked on city data)
-6. Real or explicitly synthetic phase optimization            (size L)
-7. Unified study UI and job history                           (size M)
-8. Expand sensor coverage and signal scope only after each gate passes
+0. Enforce SensorRegistry active/quality/snap gate            (size M)  — bootstrap-review the six current snaps;
+                                                                          record resolved-snap and registry hashes
+1. Final normal SUMO sensor-output fit + publish gate         (size M–L) — input PFE GEH is not sufficient;
+                                                                          retain raw per-seed and ensemble values
+2. Variant identity/coverage and closure audit repair         (size S)  — semantic q10/q50/q90 IDs, no filename inference
+3. Stale-artifact proof across every publication path         (size S–M) — complete existing DemandBuildSpec migration
+4. Normal demand realism: purpose + structure repairs         (size M–L) — rerun temporal/LOSO validation afterward
+5. Freeze reference release                                   (size S–M) — only after 0–4; freeze the proved state,
+                                                                          not a mid-migration snapshot
+6. Multi-day golden gate, then full UI release                (size M–L) — keep 1–7 days experimental until proved
+7. Closure decision engine, paired feasible evaluation        (size L)  ◐ exhaustive CLI mode exists
+8. SignalPlan audit and explicitly synthetic optimization     (size M–L; city-configured import blocked on data)
+9. Browser study UI/history and regression smoke suite        (size M)
+10. Expand sensor coverage and signal scope only after each gate passes
 ```
 
 (Sizes: S ≤ half a day, M ≈ a day, L = multi-day.
-◐ = partially done as of 2026-07-15; the markers are status, not a licence
-to skip the phase's remaining items or its acceptance gate.)
+◐ = partially done as of 2026-07-16; the markers are status, not a licence
+to skip the item's remaining work or its owning phase's acceptance gate.)
 
-The immediate next implementation block is therefore: **prove stale-artifact
-rejection end to end** (including a deliberately mismatched archived
-`DemandBuildSpec`/scenario set), then **Phase 0's freeze** on top of the
-migrated state, then **Phase 3's purpose-compatibility work** — the largest
-remaining honesty gap in the demand model. Send the
-external data request package (see above) at the START of the block — the
-city's response time, not our implementation time, is the critical path for
-Phase 5's top rung.
+Phase ownership, so each item inherits the right acceptance gate: item 0 →
+Phases 1-2 (registry artifact and intake rules); item 1 → the sensor-value
+contract section plus Phase 3's output-fit work and the publication gate;
+items 2-3 → Phase 1; items 4 and 6 → Phase 3; item 5 → Phase 0; item 7 →
+Phase 4; item 8 → Phase 5; item 9 → Phase 6; item 10 → Phases 2 and 7.
+
+The immediate next implementation block is therefore: **make input identity
+real** (approved SensorRegistry snap plus variant identity), then **prove
+final normal SUMO sensor output**, then **complete stale-artifact proof**.
+Only then repair purpose/structure allocation and freeze the resulting normal
+release.  This order prevents a golden release from preserving an unreviewed
+sensor mapping, an incomplete uncertainty set or a PFE-only notion of sensor
+fit.  Send the external-data request package (see above) at the START of this
+block — the city's response time, not implementation time, is the critical
+path for the city-configured signal rung.
+
+### Current verified status and concrete entry points
+
+Verified end to end on the dev machine 2026-07-16 evening, after the
+2027-10-20 forecast demand was REBUILT with the new code and the baseline
+scenario rerun (this section describes the working tree about to be
+committed as one unit):
+
+- The active 2027-10-20 forecast baseline now carries FROZEN audit inputs
+  (`provenance: demand_metadata` — the reconstructed-inputs caveat is gone),
+  the raw-edgeData `output_fit` (100% GEH<5, mean abs error 2.07 veh,
+  station-aggregated for 107) and per-station rows.  `validation.json`:
+  counts_fit/structure/simulation/sensor_output/multi_day **pass** —
+  the two long-standing structure drift flags cleared with this rebuild —
+  and only `purposes` still warns (see next bullet).
+- Purpose compatibility remains the open P0: signature-preserving
+  replacement repaired ~2 500-2 650 routes per variant at identical sensor
+  counts and 100% GEH<5, but ~5 300-5 900 mostly `through` routes per
+  variant still lack same-purpose provenance in all 96 quarters, so
+  `purpose_claims_allowed` stays false.  The remaining fix is
+  purpose-stratified calibration and/or the cordon count (external data
+  request 2).
+- `data_in/sensors.json` has six catalogue-verified records with approved
+  directed snaps; intake fails closed on pending/expired/unapproved/changed
+  records and build_data revalidates resolved snaps against the registry.
+- `runs/releases/` is still empty — the golden freeze (2025-09-16
+  historical + Skånegatan closure + signal smoke) is the next block.
+- Full suite on the dev machine 2026-07-16: **944 passed, 21 skipped**
+  (~47 s).  Tests no longer rewrite the live `web/data/validation.json`
+  (test_serve.py redirects the report path; found when suite runs churned
+  the tracked artifact's generated_at).  A frozen release must still record
+  its own exact runner and result in the release artifact.
+
+Status of the previously listed concrete changes:
+
+1. DONE — `validate_data_sensors` enforces quality/snap/active-date,
+   `validate_resolved_edges` guards OSM drift, six-station bootstrap
+   approved, negative tests in place.
+2. DONE — semantic `demand_variant`/`target_key` on every seed job/result,
+   `validate_variant_coverage` + publish-gate coverage check, tests for
+   closure-renamed files and an all-q50 mapping.
+3. DONE — `sensor_audit.output_fit` from raw pre-rounding edgeData in
+   scenario JSON, `validation_report.py` (`sensor_output` section) and
+   `serve.validate_staged_scenarios` (fails closed for new builds).
+4. OPEN — residual classification (timing shift vs coverage vs integer
+   effect) and any bounded output correction; current measured residual is
+   mean 2.07 / max ~10.7 veh per station-quarter at 100% GEH<5.  Then rerun
+   temporal + LOSO on 2025-09-16 historical.
+5. OPEN — freeze the normal, closure and signal golden cases, including an
+   exact browser/API smoke result and a loopback-capable full-test result.
 
 ## Definition of Success
 

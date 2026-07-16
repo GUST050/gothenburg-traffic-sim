@@ -62,7 +62,7 @@ class TestAssemble:
         r = vr.assemble()
         assert r["overall"] == "pass"
         assert {s["status"] for n, s in r["sections"].items()
-                if n != "held_out"} == {"pass"}
+                if n not in {"held_out", "sensor_output"}} == {"pass"}
         assert r["sections"]["held_out"]["status"] == "info"
         assert r["sections"]["held_out"]["median_ratio"] == 0.78
 

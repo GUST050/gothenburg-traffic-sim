@@ -43,7 +43,7 @@ import numpy as np
 import pandas as pd
 
 from traffic_sim.simulation.runtime import sumo_home
-from traffic_sim.core.fingerprint import make_fingerprint
+from traffic_sim.core.fingerprint import make_fingerprint, sha256_file
 from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
                                          write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
@@ -95,6 +95,7 @@ def fit_summary(report: dict) -> dict:
         "relaxed_bound_violations": list(report.get("relaxed_bound_violations", [])),
         "purpose_incompatible_quarters": purpose.get(
             "quarters_with_incompatible_routes", 0),
+        "purpose_replaced_routes": purpose.get("replaced_routes", 0),
         "relaxation_summary": report.get("relaxation_summary", {}),
     }
 
@@ -283,7 +284,8 @@ def parse_args() -> argparse.Namespace:
 from demand.intake import (build_targets, classify_day, demand_metadata,
                            has_split_quantiles, load_direction_split,
                            load_sensor_edges, multi_day_blocks,
-                           real_day_shape, validate_date_range)
+                           observed_sensor_series, real_day_shape,
+                           target_series, validate_date_range)
 
 # Structure metrics/gates — demand/structure.py (H1). GEO_PATH and the
 # geometry cache live there — monkeypatch THERE.
@@ -540,6 +542,11 @@ def main() -> None:
 
     calib_path = SUMO_DIR / "calibrated.rou.xml"
     variant_fit_reports: dict[str, dict] = {}
+    # Preserve the exact directional Level-1 targets that this demand build
+    # used.  Scenario playback must be able to distinguish its displayed
+    # representative seed from the ensemble mean and from the calibration
+    # target, without reconstructing a potentially newer split model later.
+    targets_by_variant: dict[str, list[dict[str, float]]] = {}
     report = None
 
     if args.engine == "pfe":
@@ -595,6 +602,7 @@ def main() -> None:
                 for suffix, key in variants:
                     targets = build_targets(flows, sensor_edges, qi_start,
                                             n_intervals, split_key=key)
+                    targets_by_variant[key] = targets
                     bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors(suffix)
                     out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
                     variant_inputs[suffix] = {
@@ -631,6 +639,7 @@ def main() -> None:
 
             targets = build_targets(flows, sensor_edges, qi_start,
                                     n_intervals, split_key="edge_shares")
+            targets_by_variant["edge_shares"] = targets
             bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors("")
             report = timed(
                 "pfe_and_rounding",
@@ -683,6 +692,8 @@ def main() -> None:
     else:
         generate_candidates()
         for suffix, key in variants:
+            targets_by_variant[key] = build_targets(
+                flows, sensor_edges, qi_start, n_intervals, split_key=key)
             counts_path = SUMO_DIR / f"counts{suffix}.xml"
             n = write_counts(flows, sensor_edges, qi_start, n_intervals,
                              counts_path, split_key=key)
@@ -729,6 +740,32 @@ def main() -> None:
         }
     if variant_fit_reports:
         meta["pfe_fit_variants"] = variant_fit_reports
+    if targets_by_variant:
+        meta["sensor_targets"] = {
+            "schema_version": 1,
+            "variants": {
+                key: target_series(targets)
+                for key, targets in targets_by_variant.items()
+            },
+        }
+        # The source value is distinct from a directional target for a
+        # two-way Total station.  Persist both so the UI can state exactly
+        # what was measured/forecast and exactly what was derived from it.
+        meta["sensor_observations"] = observed_sensor_series(
+            flows, sensor_edges, qi_start, n_intervals)
+        # Make the reviewed sensor/network pairing explicit in the demand
+        # artifact.  The build fingerprint also hashes these files, but this
+        # compact contract lets a publisher and UI explain exactly which
+        # registry and graph produced the constraints without recomputing it.
+        meta["sensor_contract"] = {
+            "schema_version": 1,
+            "registry_sha256": sha256_file(Path("data_in/sensors.json")),
+            "network_sha256": sha256_file(NET_PATH),
+            "sensor_edges": {
+                str(sensor_id): sorted(str(edge_id) for edge_id in edges)
+                for sensor_id, edges in sorted(sensor_edges.items())
+            },
+        }
     agent_summary = calibrated_agent_summary(calib_path, n_intervals)
     if agent_summary is not None:
         meta["agent_demand"] = agent_summary

@@ -122,6 +122,164 @@ class TestDemandVariants:
         assert run_scenario.valid_scenario_name("x" * 80)
 
 
+class TestSensorAudit:
+    def test_keeps_source_target_ensemble_and_visible_seed_separate(
+            self, tmp_path, monkeypatch):
+        """The road colour is an ensemble mean; the moving vehicles are one
+        seed.  An audit payload must preserve both rather than visually
+        implying they are the same integer count."""
+        geo = {"type": "FeatureCollection", "features": [
+            {"type": "Feature", "geometry": {"type": "LineString",
+             "coordinates": [[0, 0], [0, 1]]},
+             "properties": {"id": "north", "sensor_id": "total",
+                            "name": "Testgatan", "level": "Total"}},
+            {"type": "Feature", "geometry": {"type": "LineString",
+             "coordinates": [[0, 1], [0, 0]]},
+             "properties": {"id": "south", "sensor_id": "total",
+                            "name": "Testgatan", "level": "Total"}},
+            {"type": "Feature", "geometry": {"type": "LineString",
+             "coordinates": [[1, 0], [1, -1]]},
+             "properties": {"id": "directed", "sensor_id": "single",
+                            "name": "Enkelgatan", "level": "S"}},
+        ]}
+        geo_path = tmp_path / "network.geojson"
+        geo_path.write_text(json.dumps(geo))
+        monkeypatch.setattr(run_scenario, "GEO_PATH", geo_path)
+
+        targets = {
+            "edge_shares": {
+                "north": [10.0, 20.0], "south": [8.0, 18.0],
+                "directed": [6.0, 7.0],
+            },
+            "edge_shares_q10": {
+                "north": [9.0, 19.0], "south": [9.0, 19.0],
+                "directed": [6.0, 7.0],
+            },
+            "edge_shares_q90": {
+                "north": [11.0, 21.0], "south": [7.0, 17.0],
+                "directed": [6.0, 7.0],
+            },
+        }
+        meta = {
+            "source": "historical",
+            "sensor_targets": {"variants": targets},
+            "sensor_observations": {
+                "north": [18, 38], "south": [18, 38],
+                "directed": [6, 7],
+            },
+        }
+        results = [
+            {"seed": 1000, "route_path": Path("calibrated.rou.xml"),
+             "flows": {"north": np.array([9, 21]), "south": np.array([7, 17]),
+                       "directed": np.array([6, 7])}},
+            {"seed": 1001, "route_path": Path("calibrated_v1.rou.xml"),
+             "flows": {"north": np.array([9, 19]), "south": np.array([9, 19]),
+                       "directed": np.array([6, 7])}},
+            {"seed": 1002, "route_path": Path("calibrated_v2.rou.xml"),
+             "flows": {"north": np.array([12, 20]), "south": np.array([6, 18]),
+                       "directed": np.array([6, 7])}},
+        ]
+        displayed_mean = {
+            "north": [10, 20], "south": [7, 18], "directed": [6, 7],
+        }
+
+        audit = run_scenario.build_sensor_audit(
+            meta, results, displayed_mean, n_intervals=2,
+            calibration_comparison=True)
+
+        north = next(row for row in audit["directions"] if row["edge_id"] == "north")
+        assert north["measurement"] == "two_way_total"
+        assert north["direction"] == "N"
+        assert north["source_value"] == [18.0, 38.0]
+        assert north["target_representative"] == [10.0, 20.0]
+        assert north["simulated_representative"] == [9, 21]
+        assert north["target_mean"] == [10.0, 20.0]
+        assert north["simulated_mean"] == [10, 20]
+        assert audit["fit"]["representative"]["edge_quarters"] == 6
+        assert audit["fit"]["ensemble"]["geh_lt_5_pct"] == 100.0
+        assert audit["comparison"] == "calibration"
+
+    def test_sensor_audit_uses_raw_mean_and_closure_variant_identity(
+            self, tmp_path, monkeypatch):
+        geo = {"type": "FeatureCollection", "features": [{
+            "type": "Feature", "geometry": {"type": "LineString",
+             "coordinates": [[0, 0], [0, 1]]},
+            "properties": {"id": "e", "sensor_id": "s", "level": "S"},
+        }]}
+        geo_path = tmp_path / "network.geojson"
+        geo_path.write_text(json.dumps(geo))
+        monkeypatch.setattr(run_scenario, "GEO_PATH", geo_path)
+        targets = {
+            "edge_shares": {"e": [10.0]},
+            "edge_shares_q10": {"e": [8.0]},
+            "edge_shares_q90": {"e": [12.0]},
+        }
+        meta = {
+            "sensor_targets": {"variants": targets},
+            "sensor_observations": {"e": [10]},
+        }
+        results = [
+            {"seed": 1000, "route_path": Path("calibrated_close_x.rou.xml"),
+             "demand_variant": "q50", "target_key": "edge_shares",
+             "flows": {"e": np.array([10.49])}},
+            {"seed": 1001, "route_path": Path("calibrated_v1_close_x.rou.xml"),
+             "demand_variant": "q10", "target_key": "edge_shares_q10",
+             "flows": {"e": np.array([8.49])}},
+            {"seed": 1002, "route_path": Path("calibrated_v2_close_x.rou.xml"),
+             "demand_variant": "q90", "target_key": "edge_shares_q90",
+             "flows": {"e": np.array([12.49])}},
+        ]
+        audit = run_scenario.build_sensor_audit(
+            meta, results, {"e": [10]}, n_intervals=1,
+            raw_mean_flows={"e": [10.49]}, calibration_comparison=True)
+        row = next(item for item in audit["directions"]
+                   if item["edge_id"] == "e")
+        assert row["target_mean"] == [10.0]
+        assert row["simulated_mean"] == [10]
+        assert row["simulated_mean_raw"] == [10.49]
+        assert audit["output_fit"]["uses_raw_ensemble_mean"] is True
+        assert audit["fit"]["ensemble"]["mean_abs_error"] == 0.49
+
+    def test_representative_follows_the_animated_trajectory_seed(
+            self, tmp_path, monkeypatch):
+        """A ScenarioSpec seed_set is not required to be ascending: the
+        audit's "representative" must be the trajectory seed whose vehicles
+        the browser animates, not whichever result sorts first."""
+        geo = {"type": "FeatureCollection", "features": [{
+            "type": "Feature", "geometry": {"type": "LineString",
+             "coordinates": [[0, 0], [0, 1]]},
+            "properties": {"id": "e", "sensor_id": "s", "level": "S"},
+        }]}
+        geo_path = tmp_path / "network.geojson"
+        geo_path.write_text(json.dumps(geo))
+        monkeypatch.setattr(run_scenario, "GEO_PATH", geo_path)
+        meta = {
+            "sensor_targets": {"variants": {
+                "edge_shares": {"e": [10.0]},
+                "edge_shares_q10": {"e": [8.0]},
+            }},
+            "sensor_observations": {"e": [10]},
+        }
+        results = [
+            {"seed": 1000, "route_path": Path("calibrated_v1.rou.xml"),
+             "demand_variant": "q10", "target_key": "edge_shares_q10",
+             "flows": {"e": np.array([8])}},
+            {"seed": 1002, "route_path": Path("calibrated.rou.xml"),
+             "demand_variant": "q50", "target_key": "edge_shares",
+             "flows": {"e": np.array([10])}},
+        ]
+
+        audit = run_scenario.build_sensor_audit(
+            meta, results, {"e": [9]}, n_intervals=1,
+            calibration_comparison=True, representative_seed=1002)
+
+        assert audit["representative"] == {"seed": 1002,
+                                           "variant": "edge_shares"}
+        row = audit["directions"][0]
+        assert row["target_representative"] == [10.0]
+        assert row["simulated_representative"] == [10]
+
+
 class TestScenarioSpecIntegration:
     def test_variant_path_uses_explicit_quantile_mapping(self, tmp_path):
         paths = [tmp_path / "q50.rou.xml", tmp_path / "q10.rou.xml",

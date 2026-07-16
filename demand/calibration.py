@@ -153,11 +153,13 @@ def warn_purpose_allocation_drift(report: dict, label: str) -> None:
     """Expose selected routes lacking same-purpose candidate provenance."""
     summary = report.get("purpose_allocation_summary", {})
     n = summary.get("quarters_with_incompatible_routes", 0)
+    replaced = summary.get("replaced_routes", 0)
     if n:
         print(f"  ⚠ PURPOSE-ROUTE COMPATIBILITY DRIFT ({label}): {n} quarter(s), "
               f"routes {summary.get('incompatible_routes_by_purpose', {})} — "
-              "the purpose-time mix is exact, but those selected route shapes "
-              "lack same-purpose candidate provenance")
+              f"{replaced} route(s) were safely replaced where measured-edge "
+              "signatures allowed; remaining routes lack same-purpose "
+              "candidate provenance")
 
 
 def warn_bound_violations(report: dict, label: str) -> None:

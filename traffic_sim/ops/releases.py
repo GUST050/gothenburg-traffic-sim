@@ -29,6 +29,7 @@ from pathlib import Path
 # or for an isolated staging area.
 RELEASES_DIR = Path("runs") / "releases"
 SCHEMA_VERSION = 1
+GOLDEN_CASES = ("normal", "closure", "signal")
 
 
 def _now() -> str:
@@ -151,6 +152,36 @@ def validate_release(release_id: str, *, root: Path = RELEASES_DIR) -> list[str]
     return errors
 
 
+def validate_golden_release(release_id: str, *, root: Path = RELEASES_DIR,
+                            required_cases: tuple[str, ...] = GOLDEN_CASES,
+                            require_case_pass: bool = True) -> list[str]:
+    """Validate the complete reference-release contract.
+
+    ``validate_release`` proves only file integrity.  A golden release also
+    needs all three benchmark cases and a per-case validation record.  This
+    helper is intentionally separate so ordinary ad-hoc releases remain
+    supported while the named reference pointer cannot silently omit a
+    closure or signal case.
+    """
+    manifest = load_release(release_id, root=root)
+    errors = validate_release(release_id, root=root)
+    cases = manifest.get("cases") or {}
+    missing = [case for case in required_cases if case not in cases]
+    errors.extend(f"missing golden case: {case}" for case in missing)
+    validation = manifest.get("validation") or {}
+    case_validation = validation.get("cases") if isinstance(validation, dict) else None
+    if require_case_pass:
+        if not isinstance(case_validation, dict):
+            errors.append("golden release lacks per-case validation records")
+        else:
+            for case in required_cases:
+                if case not in case_validation:
+                    errors.append(f"golden case lacks validation: {case}")
+                elif case_validation[case].get("status") != "pass":
+                    errors.append(f"golden case is not passing: {case}")
+    return errors
+
+
 def activate_release(release_id: str, *, root: Path = RELEASES_DIR) -> dict:
     """Activate a validated release, retaining the previous pointer for rollback."""
     manifest = load_release(release_id, root=root)
@@ -167,6 +198,14 @@ def activate_release(release_id: str, *, root: Path = RELEASES_DIR) -> dict:
     _atomic_json(pointer, {"release_id": release_id, "previous_release_id": previous,
                            "activated_at": _now()})
     return manifest
+
+
+def activate_golden_release(release_id: str, *, root: Path = RELEASES_DIR) -> dict:
+    """Activate only a complete normal/closure/signal golden release."""
+    errors = validate_golden_release(release_id, root=root)
+    if errors:
+        raise ValueError("golden release validation failed: " + "; ".join(errors))
+    return activate_release(release_id, root=root)
 
 
 def mark_validated(release_id: str, validation: dict, *,

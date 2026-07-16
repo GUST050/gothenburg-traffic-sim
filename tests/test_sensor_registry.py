@@ -40,3 +40,28 @@ def test_duplicate_registry_ids_are_rejected(tmp_path):
     path.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="duplicate sensor_id"):
         load_registry(path)
+
+
+def test_pending_snap_cannot_constrain_calibration(tmp_path):
+    payload = json.loads(open(REGISTRY).read())
+    payload["sensors"][0]["snap_status"] = "pending"
+    path = tmp_path / "pending.json"
+    path.write_text(json.dumps(payload))
+    registry = load_registry(path)
+    with pytest.raises(ValueError, match="snaps must be approved"):
+        registry.validate_data_sensors(["107"], require_coordinates=False)
+
+
+def test_resolved_edges_must_match_reviewed_registry(tmp_path):
+    registry = load_registry(REGISTRY)
+    with pytest.raises(ValueError, match="resolved"):
+        registry.validate_resolved_edges(
+            {"107": ["wrong_edge"]}, sensor_ids=["107"])
+
+
+def test_resolved_snap_distance_drift_is_rejected():
+    registry = load_registry(REGISTRY)
+    with pytest.raises(ValueError, match="distance drift"):
+        registry.validate_resolved_edges(
+            {"1074": ["60790252_60790253_0"]},
+            resolved_distances_m={"1074": [40.0]}, sensor_ids=["1074"])

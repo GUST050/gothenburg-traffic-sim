@@ -249,6 +249,44 @@ def build_targets(
     return out
 
 
+def target_series(targets_per_q: list[dict[str, float]]) -> dict[str, list[float | None]]:
+    """Transpose per-quarter Level-1 targets into per-edge audit series.
+
+    Missing measurements stay ``None``.  They must never become zero in an
+    audit artifact, because zero means an observed zero-flow interval while
+    ``None`` means the source did not constrain that edge-quarter at all.
+    """
+    edges = sorted({edge for targets in targets_per_q for edge in targets})
+    return {
+        edge: [targets.get(edge) for targets in targets_per_q]
+        for edge in edges
+    }
+
+
+def observed_sensor_series(
+    flows: dict[str, list], sensor_edges: dict[str, list[str]],
+    qi_start: int, n_intervals: int,
+) -> dict[str, list[float | None]]:
+    """Freeze the source value used for each directed sensor edge.
+
+    For a station delivered as a two-way ``Total``, the same physical-station
+    value deliberately appears under both directed edges.  Consumers must use
+    the network metadata to label it as a total, rather than misrepresenting
+    it as a measured directional count.  Keeping this alongside the derived
+    direction targets makes the distinction auditable after inputs change.
+    """
+    result: dict[str, list[float | None]] = {}
+    for edges in sensor_edges.values():
+        for edge_id in edges:
+            values = flows.get(edge_id, [])
+            result[edge_id] = [
+                values[qi_start + offset] if qi_start + offset < len(values)
+                else None
+                for offset in range(n_intervals)
+            ]
+    return result
+
+
 # Bounds/priors intake — moved to demand/priors.py (H1, 2026-07-14).
 # Patch subprocess/GEO_PATH on demand.priors for these functions.
 from demand.priors import (ensure_assignment_priors, ensure_bounds,

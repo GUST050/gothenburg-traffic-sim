@@ -50,11 +50,14 @@ from traffic_sim.simulation.runtime import sumo_home
 from traffic_sim.simulation.metadata import load_metadata
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.core.contracts import ScenarioSpec, load_scenario_spec
+from traffic_sim.simulation.multiday import parse_summary
 
 SUMO_DIR  = Path("sumo")
 NET_PATH  = SUMO_DIR / "net.net.xml"
 GEO_PATH  = Path("web/data/network.geojson")
 OUT_DIR   = Path("web/data/scenarios")
+FLOWS_PATH = Path("web/data/flows.json")
+FLOWS_FORECAST_PATH = Path("web/data/flows_forecast.json")
 
 # _tracked_main assigns the immutable run directory before main() starts.
 # Direct library callers get a disposable fallback workspace.  New scenario
@@ -162,6 +165,20 @@ def validate_scenario_spec(spec: ScenarioSpec, *, meta: dict,
             raise ValueError(
                 "permitted access exceptions require a network-permission audit "
                 "before they can be simulated")
+
+
+def validate_variant_coverage(meta: dict, mapping: dict[int, str], *,
+                              require_all: bool) -> None:
+    """Require q50/q10/q90 participation when a release has three variants."""
+    if not require_all or int(meta.get("n_variants", 1)) < 3:
+        return
+    present = {target_key_for_variant(str(variant)) for variant in mapping.values()}
+    required = {"edge_shares", "edge_shares_q10", "edge_shares_q90"}
+    missing = sorted(required - present)
+    if missing:
+        raise ValueError(
+            "three-variant demand release must run q50, q10 and q90; "
+            f"missing {', '.join(missing)}")
 
 
 def want_trajectories(args: argparse.Namespace, n_intervals: int) -> bool:
@@ -383,6 +400,336 @@ def load_geojson_meta() -> tuple[dict[str, float], dict[str, str]]:
         prior[p["id"]] = 0.5 if conf is None else float(conf)
         names[p["id"]] = p.get("name") or p["id"]
     return prior, names
+
+
+def sensor_audit_edges() -> list[dict]:
+    """Return the directed sensor edges that the UI must make auditable.
+
+    A physical counter can contain one or two directed map edges.  Keep those
+    edges separate: collapsing them back into a station total would hide the
+    direction split the demand build explicitly models.
+    """
+    with open(GEO_PATH) as f:
+        geo = json.load(f)
+    out = []
+    for feature in geo["features"]:
+        props = feature.get("properties", {})
+        if not props.get("sensor_id") or feature.get("geometry", {}).get("type") != "LineString":
+            continue
+        coords = feature["geometry"].get("coordinates", [])
+        out.append({
+            "sensor_id": str(props["sensor_id"]),
+            "edge_id": props["id"],
+            "name": props.get("name") or props["id"],
+            "direction": compass_direction(coords),
+            # A two-way Total is a physical-station count, not a directional
+            # observation.  The browser needs this fact beside the number.
+            "measurement": ("two_way_total" if props.get("level") == "Total"
+                            else "directed"),
+        })
+    return sorted(out, key=lambda item: (item["sensor_id"], item["edge_id"]))
+
+
+def compass_direction(coords: list[list[float]]) -> str | None:
+    """Return the approximate compass direction of a WGS84 edge's travel.
+
+    It is deliberately derived from the directed geometry rather than a
+    station label.  New sensors therefore get a direction without a UI
+    registry change, and the label means exactly the direction the simulated
+    vehicle travels along that edge.
+    """
+    if len(coords) < 2:
+        return None
+    lon0, lat0 = coords[0]
+    lon1, lat1 = coords[-1]
+    dx = (lon1 - lon0) * math.cos(math.radians((lat0 + lat1) / 2))
+    dy = lat1 - lat0
+    if math.isclose(dx, 0.0, abs_tol=1e-12) and math.isclose(dy, 0.0, abs_tol=1e-12):
+        return None
+    bearing = (math.degrees(math.atan2(dx, dy)) + 360.0) % 360.0
+    labels = ("N", "NO", "O", "SO", "S", "SV", "V", "NV")
+    return labels[int((bearing + 22.5) // 45) % len(labels)]
+
+
+def target_key_for_route_path(route_path: Path) -> str | None:
+    """Map a calibrated route artifact to its persisted target variant.
+
+    Closure runs copy routes to a private filename before SUMO starts.  The
+    old exact-name lookup therefore lost q10/q90 provenance and compared all
+    closure seeds against q50.  Keep this filename fallback for legacy callers,
+    but prefer the explicit semantic variant carried by each seed result.
+    """
+    name = Path(route_path).name
+    if name == "calibrated.rou.xml" or name.startswith("calibrated_close_"):
+        return "edge_shares"
+    if name == "calibrated_v1.rou.xml" or name.startswith("calibrated_v1_close_"):
+        return "edge_shares_q10"
+    if name == "calibrated_v2.rou.xml" or name.startswith("calibrated_v2_close_"):
+        return "edge_shares_q90"
+    return None
+
+
+def target_key_for_variant(variant: str | None) -> str | None:
+    """Translate the stable q50/q10/q90 contract to metadata keys."""
+    return {
+        "q50": "edge_shares",
+        "edge_shares": "edge_shares",
+        "q10": "edge_shares_q10",
+        "edge_shares_q10": "edge_shares_q10",
+        "q90": "edge_shares_q90",
+        "edge_shares_q90": "edge_shares_q90",
+    }.get(variant)
+
+
+def sensor_audit_inputs(
+    meta: dict,
+) -> tuple[dict[str, dict[str, list]], dict[str, list], dict[str, str]]:
+    """Load frozen demand audit inputs, with explicit legacy reconstruction.
+
+    New demand metadata persists the exact arrays used by PFE.  Old demand
+    builds lack that compact audit record; reconstructing from their current
+    immutable source inputs keeps existing scenarios inspectable, but marks
+    the provenance so it cannot silently masquerade as frozen build evidence.
+    """
+    stored = meta.get("sensor_targets")
+    variants = stored.get("variants") if isinstance(stored, dict) else None
+    observations = meta.get("sensor_observations")
+    have_targets = isinstance(variants, dict) and bool(variants)
+    have_observations = isinstance(observations, dict) and bool(observations)
+    if have_targets and have_observations:
+        return variants, observations, {
+            "targets": "demand_metadata",
+            "observations": "demand_metadata",
+        }
+
+    source_path = FLOWS_FORECAST_PATH if meta.get("source") == "forecast" else FLOWS_PATH
+    try:
+        from demand.intake import (build_targets, load_sensor_edges,
+                                   observed_sensor_series, target_series)
+
+        with open(source_path) as f:
+            flows = json.load(f)["flows"]
+        sensor_edges = load_sensor_edges()
+        keys = ["edge_shares"]
+        if int(meta.get("n_variants", 1)) >= 3:
+            keys += ["edge_shares_q10", "edge_shares_q90"]
+        rebuilt_targets = {
+            key: target_series(build_targets(
+                flows, sensor_edges, int(meta["qi_start"]),
+                int(meta["n_intervals"]), split_key=key))
+            for key in keys
+        }
+        rebuilt_observations = observed_sensor_series(
+            flows, sensor_edges, int(meta["qi_start"]), int(meta["n_intervals"]))
+        return (variants if have_targets else rebuilt_targets,
+                observations if have_observations else rebuilt_observations,
+                {
+                    "targets": ("demand_metadata" if have_targets
+                                else "reconstructed_current_inputs"),
+                    "observations": ("demand_metadata" if have_observations
+                                     else "reconstructed_current_inputs"),
+                })
+    except (FileNotFoundError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        print(f"  WARNING sensor audit targets unavailable: {exc}")
+        return (variants if have_targets else {},
+                observations if have_observations else {},
+                {
+                    "targets": "demand_metadata" if have_targets else "unavailable",
+                    "observations": ("demand_metadata" if have_observations
+                                     else "unavailable"),
+                })
+
+
+def _series_value(series: dict[str, list], edge_id: str, qi: int) -> float | None:
+    values = series.get(edge_id)
+    if not isinstance(values, list) or qi >= len(values):
+        return None
+    value = values[qi]
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _series_or_missing(series: dict[str, list], edge_id: str,
+                       n_intervals: int) -> list[float | None]:
+    """Return a fixed-width source series without turning missing into zero."""
+    return [_series_value(series, edge_id, qi) for qi in range(n_intervals)]
+
+
+def _flow_series(flows: dict[str, np.ndarray], edge_id: str,
+                 n_intervals: int) -> list[int]:
+    values = flows.get(edge_id)
+    if values is None:
+        return [0] * n_intervals
+    return [int(round(float(values[qi]))) if qi < len(values) else 0
+            for qi in range(n_intervals)]
+
+
+def _raw_mean_series(results: list[dict], edge_id: str,
+                     n_intervals: int) -> list[float]:
+    """Return the unrounded ensemble mean used for fit calculations."""
+    if not results:
+        return [0.0] * n_intervals
+    values = []
+    for qi in range(n_intervals):
+        total = 0.0
+        for result in results:
+            series = result["flows"].get(edge_id)
+            if series is not None and qi < len(series):
+                total += float(series[qi])
+        values.append(total / len(results))
+    return values
+
+
+def _geh(simulated: float, target: float) -> float:
+    return math.sqrt(2.0 * (simulated - target) ** 2 / max(simulated + target, 1e-12))
+
+
+def _fit_summary(pairs: list[tuple[float, float]]) -> dict:
+    """Return an exact, compact GEH summary for already-aligned values."""
+    geh_values = [_geh(simulated, target) for simulated, target in pairs]
+    summary = {"available": bool(geh_values), "edge_quarters": len(geh_values)}
+    if geh_values:
+        errors = [abs(simulated - target) for simulated, target in pairs]
+        summary.update({
+            "geh_lt_5_pct": round(
+                100.0 * sum(value < 5.0 for value in geh_values) / len(geh_values), 1),
+            "max_geh": round(max(geh_values), 3),
+            "mean_abs_error": round(sum(errors) / len(errors), 6),
+            "max_abs_error": round(max(errors), 6),
+        })
+    return summary
+
+
+def build_sensor_audit(meta: dict, results: list[dict],
+                       flows_out: dict[str, list[int]], n_intervals: int,
+                       *, calibration_comparison: bool,
+                       raw_mean_flows: dict[str, list[float]] | None = None,
+                       representative_seed: int | None = None) -> dict:
+    """Build a compact, per-direction comparison for the scenario UI.
+
+    ``flows_out`` is the displayed Monte Carlo mean, while the vehicle
+    animation is only one representative seed — ``representative_seed`` when
+    given (the trajectory seed), else the first result.  Publishing both
+    values from the same SUMO edgeData files prevents the UI from inviting a
+    false visual comparison between unlike quantities.
+    """
+    target_variants, observations, provenance = sensor_audit_inputs(meta)
+    representative = results[0] if results else None
+    if representative_seed is not None:
+        representative = next(
+            (result for result in results
+             if result.get("seed") == representative_seed), representative)
+    representative_key = (representative.get("target_key")
+                          if representative else None)
+    representative_key = (representative_key or
+                          (target_key_for_route_path(representative["route_path"])
+                           if representative else None))
+    directions = []
+    ensemble_pairs: list[tuple[float, float]] = []
+    representative_pairs: list[tuple[float, float]] = []
+    station_ensemble_pairs: list[tuple[float, float]] = []
+    station_rows: dict[str, dict] = {}
+
+    for info in sensor_audit_edges():
+        edge_id = info["edge_id"]
+        mean_targets: list[float | None] = []
+        for qi in range(n_intervals):
+            values = []
+            for result in results:
+                key = result.get("target_key") or target_key_for_route_path(result["route_path"])
+                series = target_variants.get(key or "", {})
+                value = _series_value(series, edge_id, qi)
+                if value is not None:
+                    values.append(value)
+            mean_targets.append(sum(values) / len(values) if values else None)
+
+        representative_targets = [
+            _series_value(target_variants.get(representative_key or "", {}), edge_id, qi)
+            for qi in range(n_intervals)
+        ]
+        representative_counts = (_flow_series(representative["flows"], edge_id, n_intervals)
+                                 if representative else [0] * n_intervals)
+        mean_counts = _flow_series(flows_out, edge_id, n_intervals)
+        source_values = _series_or_missing(observations, edge_id, n_intervals)
+        raw_counts = ((raw_mean_flows or {}).get(edge_id)
+                      or [float(value) for value in mean_counts])
+        for qi, target in enumerate(mean_targets):
+            if target is not None:
+                ensemble_pairs.append((raw_counts[qi], target))
+        for qi, target in enumerate(representative_targets):
+            if target is not None:
+                representative_pairs.append((representative_counts[qi], target))
+        directions.append({
+            **info,
+            "source_value": source_values,
+            "target_mean": mean_targets,
+            "target_representative": representative_targets,
+            "simulated_mean": mean_counts,
+            "simulated_mean_raw": raw_counts,
+            "simulated_representative": representative_counts,
+        })
+        station = station_rows.setdefault(info["sensor_id"], {
+            "sensor_id": info["sensor_id"],
+            "measurement": info["measurement"],
+            "edge_ids": [],
+            "target_mean": [0.0] * n_intervals,
+            "target_seen": [False] * n_intervals,
+            "simulated_mean_raw": [0.0] * n_intervals,
+        })
+        station["edge_ids"].append(edge_id)
+        for qi in range(n_intervals):
+            if mean_targets[qi] is not None:
+                station["target_mean"][qi] += mean_targets[qi]
+                station["target_seen"][qi] = True
+            station["simulated_mean_raw"][qi] += raw_counts[qi]
+
+    # Two-way counters are one physical observation.  The directed rows are
+    # retained above for transparency, but the station-level fit sums them
+    # before comparison so a repeated total is never treated as two readings.
+    stations_public = []
+    for station in station_rows.values():
+        station["target_mean"] = [round(value, 6) if seen else None
+                                   for value, seen in zip(
+                                       station["target_mean"],
+                                       station["target_seen"])]
+        station["simulated_mean_raw"] = [round(value, 6)
+                                          for value in station["simulated_mean_raw"]]
+        stations_public.append({key: value for key, value in station.items()
+                                if key != "target_seen"})
+        for qi, target in enumerate(station["target_mean"]):
+            if target is not None:
+                station_ensemble_pairs.append(
+                    (station["simulated_mean_raw"][qi], target))
+
+    fit = {
+        "ensemble": _fit_summary(ensemble_pairs),
+        "representative": _fit_summary(representative_pairs),
+    }
+    return {
+        "schema_version": 1,
+        "source": meta.get("source", "historical"),
+        "provenance": provenance,
+        "comparison": "calibration" if calibration_comparison else "scenario_effect",
+        "representative": {
+            "seed": representative.get("seed") if representative else None,
+            "variant": representative_key,
+        },
+        "fit": fit,
+        "output_fit": {
+            "contract": "raw_edgeData_ensemble_vs_frozen_targets",
+            "uses_raw_ensemble_mean": raw_mean_flows is not None,
+            "ensemble": fit["ensemble"],
+            "station_ensemble": _fit_summary(station_ensemble_pairs),
+        },
+        "stations": sorted(stations_public,
+                            key=lambda item: item["sensor_id"]),
+        "directions": directions,
+    }
 
 
 def write_edgedata_additional(path: Path, edgedata_file: Path,
@@ -652,6 +999,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              vehroute_write_unfinished: bool = False,
              run_label: str | None = None,
              stats_path: Path | None = None,
+             summary_output: Path | None = None,
              work_dir: Path | None = None) -> dict[str, Path] | None:
     # EdgeData's file attribute is relative to the SUMO cwd. A private
     # work_dir therefore isolates every generated XML while all input paths
@@ -760,6 +1108,13 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
             "--summary-output", str(metric_paths["summary"].resolve()),
             "--summary-output.period", "900",
         ])
+    elif summary_output is not None:
+        # Multi-day continuity evidence without the expensive per-vehicle
+        # tripinfo/vehroute products.  End-of-run statistics remain separate
+        # so the ordinary one-day path keeps its established fast command.
+        metric_paths["summary"] = summary_output
+        cmd.extend(["--summary-output", str(summary_output.resolve()),
+                    "--summary-output.period", "900"])
     if stats_path is not None and "statistics" not in metric_paths:
         # E3 (IMPROVEMENT_PLAN.md): one tiny end-of-run XML with loaded/inserted/
         # running/waiting/teleports — the per-seed health record. Separate
@@ -1182,15 +1537,28 @@ def run_seed_job(job: dict) -> dict:
         job["home"], micro=job["micro"], stats_path=job["stats_file"],
         vehroute_output=job.get("vehroute_output"),
         vehroute_write_unfinished=job.get("vehroute_write_unfinished", False),
+        summary_output=job.get("summary_file"),
         work_dir=job["work_dir"])
     flows = parse_edgedata(job["edge_file"], job["n_intervals"])
     health = parse_seed_health(job["stats_file"], job["seed"],
                                job["route_path"].name)
+    daily = None
+    if job.get("summary_file") is not None:
+        daily = parse_summary(
+            job["summary_file"],
+            day_boundaries_s=job["day_boundaries_s"],
+            days=job["days"],
+        )
+        if health is not None:
+            health["multi_day"] = daily
     return {
         "seed": job["seed"],
         "route_path": job["route_path"],
+        "demand_variant": job.get("demand_variant"),
+        "target_key": target_key_for_variant(job.get("demand_variant")),
         "flows": flows,
         "health": health,
+        "multi_day": daily,
     }
 
 
@@ -1208,6 +1576,10 @@ def main() -> None:
         meta = json.load(f)
     n_intervals = meta["n_intervals"]
     duration_s  = n_intervals * 900
+    days = int(meta.get("days", 1))
+    day_boundaries_s = [int(value) for value in
+                        (meta.get("day_boundaries_s") or
+                         [day * 86400 for day in range(days + 1)])]
     sig = demand_signature(meta)
 
     spec: ScenarioSpec | None = None
@@ -1291,6 +1663,11 @@ def main() -> None:
             for i, seed in enumerate(seed_values)
         }
     seed_count = len(seed_values)
+    try:
+        validate_variant_coverage(meta, variant_by_seed,
+                                  require_all=seed_count >= 3)
+    except ValueError as exc:
+        sys.exit(str(exc))
     if spec is None:
         # Legacy CLI runs still emit a validated contract in their result so
         # downstream tools can migrate without two different payload shapes.
@@ -1359,7 +1736,8 @@ def main() -> None:
 
     jobs = []
     for seed in seed_values:
-        route_path = variant_path(variants, variant_by_seed[seed])
+        demand_variant = variant_by_seed[seed]
+        route_path = variant_path(variants, demand_variant)
         # SUMO is an external process and writes relative edgeData files from
         # its cwd. Give every seed a private directory, even when the parent
         # schedules seeds concurrently. This makes the isolation contract
@@ -1369,6 +1747,8 @@ def main() -> None:
         ed_file  = seed_dir / f"edgedata_{name}_{seed}.xml"
         add_path = seed_dir / f"additional_{name}_{seed}.add.xml"
         stats_file = seed_dir / f"stats_{name}_{seed}.xml"
+        summary_file = (seed_dir / f"summary_{name}_{seed}.xml"
+                        if days > 1 else None)
         trajectory_vr_file = (seed_dir / f"vehroutes_{name}.xml"
                               if seed == trajectory_seed and trajectory_enabled else None)
         if seed == trajectory_seed and trajectory_enabled:
@@ -1378,11 +1758,15 @@ def main() -> None:
         jobs.append({
             "seed": seed,
             "route_path": route_path,
+            "demand_variant": demand_variant,
             "add_paths": [add_path] + closure_add,
             "duration_s": duration_s,
             "home": home,
             "micro": args.micro,
             "stats_file": stats_file,
+            "summary_file": summary_file,
+            "days": days,
+            "day_boundaries_s": day_boundaries_s,
             "edge_file": ed_file,
             "n_intervals": n_intervals,
             "vehroute_output": trajectory_vr_file,
@@ -1437,9 +1821,42 @@ def main() -> None:
     for flag in health_flags:
         print(f"  WARNING seed health: {flag}")
 
+    multi_day_validation = None
+    if days > 1:
+        from traffic_sim.simulation.multiday import aggregate as aggregate_multiday
+        multi_day_validation = aggregate_multiday(
+            [result.get("multi_day") for result in results],
+            days=days, day_boundaries_s=day_boundaries_s)
+        for reason in multi_day_validation.get("reasons", []):
+            print(f"  WARNING multi-day continuity: {reason}")
+
     # ── Aggregate: mean flows + Monte Carlo confidence ─────────────────────────
     web_edges = set(prior)   # only edges the map can draw
     flows_out, conf_out = aggregate_flows(per_seed, web_edges, prior, n_intervals)
+    # Only the audited sensor edges need the pre-rounding ensemble mean; the
+    # map keeps its rounded display value.  Computing it citywide would be
+    # ~7 000 edges × quarters × seeds of pure-Python work for values nothing
+    # reads.
+    raw_mean_flows = {
+        info["edge_id"]: _raw_mean_series(results, info["edge_id"], n_intervals)
+        for info in sensor_audit_edges()
+    }
+    # Sensor verification is a first-class scenario product, not a manual
+    # visual inference from moving dots.  It keeps the three distinct values
+    # together for every directed counter edge: PFE target, ensemble mean,
+    # and the single q50 seed whose vehicles the browser animates.
+    sensor_audit = build_sensor_audit(
+        meta, results, flows_out, n_intervals,
+        raw_mean_flows=raw_mean_flows,
+        # The audit's "representative" must be the seed whose vehicles the
+        # browser animates (the trajectory seed), not whichever seed sorts
+        # first — a ScenarioSpec seed_set is not required to be ascending.
+        representative_seed=trajectory_seed,
+        # A closure is meant to differ from its baseline calibration target.
+        # Keep values visible, but do not present that difference as a failed
+        # demand-calibration gate.
+        calibration_comparison=not bool(closures),
+    )
     # Integrity is evaluated on each raw seed before the display mean is
     # rounded. A single seed with prohibited active-closure flow must not be
     # hidden by averaging it with zero-flow seeds.
@@ -1499,6 +1916,9 @@ def main() -> None:
         },
         "seed_health":       seed_health,
         "seed_health_flags": health_flags,
+        **({"multi_day_validation": multi_day_validation}
+           if multi_day_validation is not None else {}),
+        "sensor_audit":      sensor_audit,
         "flows":      flows_out,
         "confidence": conf_out,
     }

@@ -24,6 +24,20 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import serve
 import signal_optimize as so
+import validation_report
+
+
+@pytest.fixture(autouse=True)
+def _validation_report_writes_to_tmp(monkeypatch, tmp_path):
+    """serve's recalibrate success path refreshes the live validation report.
+
+    Redirect its output for every test in this module: a test run must never
+    rewrite the real tracked web/data/validation.json (found 2026-07-16 —
+    each full-suite run silently churned the artifact's generated_at). The
+    real write path stays exercised; only the destination is isolated.
+    """
+    monkeypatch.setattr(validation_report, "OUT_PATH",
+                        tmp_path / "validation.json")
 
 
 class FakeCompletedProcess:

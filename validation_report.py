@@ -100,6 +100,12 @@ def _purpose_section(meta: dict | None) -> dict:
     }
     incompatible = max((value for value in compatibility.values()
                         if isinstance(value, (int, float))), default=0)
+    replacements = {
+        name: report.get("purpose_replaced_routes")
+        for name, report in variant_fit.items()
+        if isinstance(report, dict)
+        and "purpose_replaced_routes" in report
+    }
     return {
         # Purpose labels are diagnostic only while any selected route lacks
         # matching source provenance. Do not let a perfect GEH fit imply
@@ -109,6 +115,7 @@ def _purpose_section(meta: dict | None) -> dict:
         "purpose_length_km": lengths,
         "ordering_violated": ordering_flag,
         "purpose_incompatible_quarters_by_variant": compatibility,
+        "purpose_replaced_routes_by_variant": replacements,
         "purpose_claims_allowed": incompatible == 0,
         "gate": "fritid ska ha längst medianresa (Trafikanalys RVU Tabell 3); "
                 "exakt ärende×tid-mix per kvart; varje tilldelad rutt "
@@ -137,6 +144,70 @@ def _simulation_section(baseline: dict | None) -> dict:
         } for h in health],
         "gate": "alla fordon insatta, <2% ofullbordade, "
                 "teleporteringar under tröskel, per frö",
+    }
+
+
+def _sensor_output_section(baseline: dict | None) -> dict:
+    """Report fit against SUMO edgeData, not only PFE's pre-SUMO targets."""
+    audit = (baseline or {}).get("sensor_audit") if baseline else None
+    output_fit = audit.get("output_fit") if isinstance(audit, dict) else None
+    if not isinstance(output_fit, dict):
+        return {"status": "missing",
+                "reason": "baseline saknar slutlig SUMO sensor-output-fit"}
+    ensemble = output_fit.get("ensemble") or {}
+    station = output_fit.get("station_ensemble") or {}
+    raw = output_fit.get("uses_raw_ensemble_mean") is True
+    status = ("pass" if raw and ensemble.get("available")
+              and station.get("available") else "warn")
+    if not raw:
+        reason = "audit bygger på avrundade kartvärden"
+    elif not ensemble.get("available"):
+        reason = "inga mätbara sensorintervall i edgeData-audit"
+    elif not station.get("available"):
+        reason = "ingen fysisk stationsaggregering i edgeData-audit"
+    else:
+        reason = None
+    result = {
+        "status": status,
+        "contract": output_fit.get("contract"),
+        "uses_raw_ensemble_mean": raw,
+        "edge_quarters": ensemble.get("edge_quarters"),
+        "geh_lt_5_pct": ensemble.get("geh_lt_5_pct"),
+        "mean_abs_error": ensemble.get("mean_abs_error"),
+        "max_abs_error": ensemble.get("max_abs_error"),
+        "station_edge_quarters": station.get("edge_quarters"),
+        "station_max_abs_error": station.get("max_abs_error"),
+        "gate": "SUMO edgeData före avrundning jämförs mot frysta sensor-targets",
+    }
+    if reason:
+        result["reason"] = reason
+    return result
+
+
+def _multi_day_section(meta: dict | None, baseline: dict | None) -> dict:
+    """Expose continuity evidence without treating a one-day run as proof."""
+    days = int((meta or {}).get("days", 1) or 1)
+    if days <= 1:
+        return {"status": "pass", "days": 1, "not_applicable": True,
+                "gate": "flerdagsgrind gäller endast kontinuerliga dagar"}
+    evidence = (baseline or {}).get("multi_day_validation") if baseline else None
+    if not isinstance(evidence, dict):
+        return {"status": "missing", "days": days,
+                "reason": "baseline saknar periodisk SUMO-sammanfattning för flera dagar"}
+    from traffic_sim.simulation.multiday import validate as validate_multiday
+    boundaries = meta.get("day_boundaries_s") or [day * 86400
+                                                   for day in range(days + 1)]
+    errors = validate_multiday(evidence, days=days,
+                               day_boundaries_s=boundaries)
+    per_day = evidence.get("per_day") or []
+    return {
+        "status": "pass" if not errors else "warn",
+        "days": days,
+        "complete": evidence.get("complete") is True,
+        "errors": errors,
+        "per_day": per_day,
+        "gate": "varje kalenderdag måste ha komplett summary-bevis; "
+                "aggregat räcker inte för flerdagspublicering",
     }
 
 
@@ -174,6 +245,8 @@ def assemble() -> dict:
         "structure": _structure_section(meta),
         "purposes": _purpose_section(meta),
         "simulation": _simulation_section(baseline),
+        "sensor_output": _sensor_output_section(baseline),
+        "multi_day": _multi_day_section(meta, baseline),
         "held_out": _held_out_section(loso),
     }
     gated = [s for s in sections.values() if s["status"] in ("pass", "warn")]

@@ -111,6 +111,84 @@ class TestValidateStagedScenarios:
         ok, reason = serve.validate_staged_scenarios(staging, meta)
         assert not ok and "edge_shares_q10" in reason
 
+    def test_new_sensor_contract_requires_raw_final_output_fit(self, tmp_path):
+        staging, meta = _staged(tmp_path)
+        demand = json.loads(meta.read_text())
+        demand["sensor_targets"] = {"variants": {"edge_shares": {"e1": [1]}}}
+        demand["n_variants"] = 1
+        meta.write_text(json.dumps(demand))
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert not ok and "sensor-/nätverkskontrakt" in reason
+
+    def test_new_sensor_contract_accepts_raw_fit_and_variant_provenance(self, tmp_path):
+        staging, meta = _staged(tmp_path)
+        payload = json.loads((staging / "baseline.json").read_text())
+        payload["scenario_spec"] = {
+            "demand_variant_mapping": {"1000": "q50"}}
+        payload["sensor_audit"] = {
+            "provenance": {"targets": "demand_metadata",
+                            "observations": "demand_metadata"},
+            "directions": [{"simulated_mean_raw": [1, 2]}],
+            "output_fit": {"uses_raw_ensemble_mean": True,
+                           "ensemble": {"available": True},
+                           "station_ensemble": {"available": True}},
+        }
+        (staging / "baseline.json").write_text(json.dumps(payload))
+        demand = json.loads(meta.read_text())
+        demand["sensor_targets"] = {"variants": {"edge_shares": {"e1": [1]}}}
+        demand["sensor_contract"] = {
+            "registry_sha256": serve.sha256_file(
+                serve.ROOT / "data_in" / "sensors.json"),
+            "network_sha256": serve.sha256_file(
+                serve.ROOT / "sumo" / "net.net.xml"),
+            "sensor_edges": {"s": ["e1"]},
+        }
+        demand["n_variants"] = 1
+        meta.write_text(json.dumps(demand))
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert ok, reason
+
+    def test_three_variant_release_requires_full_variant_coverage(self, tmp_path):
+        """An all-q50 mapping must not publish as a three-variant release:
+        it would silently collapse the Monte Carlo uncertainty coverage."""
+        staging, meta = _staged(tmp_path)
+        payload = json.loads((staging / "baseline.json").read_text())
+        payload["scenario_spec"] = {"demand_variant_mapping": {
+            "1000": "q50", "1001": "q50", "1002": "q50"}}
+        (staging / "baseline.json").write_text(json.dumps(payload))
+        demand = json.loads(meta.read_text())
+        demand["n_variants"] = 3
+        meta.write_text(json.dumps(demand))
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert not ok and "varianttäckning" in reason
+
+    def test_multi_day_staging_requires_boundary_evidence(self, tmp_path):
+        staging, meta = _staged(tmp_path)
+        demand = json.loads(meta.read_text())
+        demand.update({"days": 2, "day_boundaries_s": [0, 86400, 172800]})
+        meta.write_text(json.dumps(demand))
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert not ok and "flerdagsvalidering" in reason
+
+        payload = json.loads((staging / "baseline.json").read_text())
+        payload["multi_day_validation"] = {
+            "schema_version": 1,
+            "days": 2,
+            "day_boundaries_s": [0, 86400, 172800],
+            "complete": True,
+            "seed_count": 1,
+            "seeds": [{"complete": True}],
+            "per_day": [
+                {"day": 1, "seed_count": 1, "loaded_delta_min": 10,
+                 "inserted_delta_min": 10, "teleports_delta_max": 0},
+                {"day": 2, "seed_count": 1, "loaded_delta_min": 11,
+                 "inserted_delta_min": 11, "teleports_delta_max": 0},
+            ],
+        }
+        (staging / "baseline.json").write_text(json.dumps(payload))
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert ok, reason
+
 
 class TestPublishStagedScenarios:
     def test_publish_replaces_live_set_and_prunes_stale(self, tmp_path):

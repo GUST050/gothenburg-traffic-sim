@@ -47,8 +47,47 @@
           traffic: 'Historisk trafik', forecast: 'Prognos', scenario: 'Scenario',
           demand: 'Simulera datum', closure: 'Stäng väg',
           suggest: 'Välj stängningstid', signals: 'Optimera signaler',
+          history: 'Körhistorik',
         };
         let workspaceTask = 'home';
+        const historyPanel = document.getElementById('history-panel');
+        const historyBody = document.getElementById('history-body');
+
+        async function loadHistory() {
+          historyBody.textContent = 'Läser körhistorik…';
+          try {
+            const response = await fetch('/api/jobs?t=' + Date.now());
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const records = (await response.json()).jobs || [];
+            if (!records.length) {
+              historyBody.textContent = 'Inga körningar är registrerade ännu.';
+              return;
+            }
+            const table = document.createElement('table');
+            for (const record of records) {
+              const row = document.createElement('tr');
+              const status = document.createElement('td');
+              status.textContent = record.status || 'okänd';
+              status.className = `history-${record.status || 'unknown'}`;
+              row.append(status);
+              const kind = document.createElement('td');
+              kind.textContent = record.kind || '–';
+              row.append(kind);
+              const time = document.createElement('td');
+              time.textContent = record.started_at
+                ? new Date(record.started_at * 1000).toLocaleString('sv-SE') : '–';
+              row.append(time);
+              const id = document.createElement('td');
+              id.textContent = record.id || '–';
+              id.title = record.error || '';
+              row.append(id);
+              table.append(row);
+            }
+            historyBody.replaceChildren(table);
+          } catch (error) {
+            historyBody.textContent = `Körhistorik kunde inte läsas: ${error.message}`;
+          }
+        }
 
         const trajCache = {};
 
@@ -186,6 +225,7 @@
           // Switching between Historisk <-> Prognos keeps the scrubbed
           // position instead — comparing the same day/time is useful.
           State.setQI(isSim ? 0 : State.qi);
+          setSensorAuditAvailability(isSim ? provider : null);
           // Read the ACTUAL calibrated date off the scenario's own epoch —
           // not a variable that only updated when "Byt dag" was clicked
           // (otherwise a page reload after a day-change showed the old
@@ -357,7 +397,10 @@
         }
 
         window.addEventListener('tick', event => {
-          if (currentProvider?.isScenario) renderAgentDemand(currentProvider, event.detail.qi);
+          if (currentProvider?.isScenario) {
+            renderAgentDemand(currentProvider, event.detail.qi);
+            renderSensorAudit(currentProvider, event.detail.qi);
+          }
         });
 
         // ── G3: assembled validation report (static file — works even
@@ -369,6 +412,7 @@
         const V_LABELS = {
           counts_fit: 'Sensorräkningar', structure: 'Strukturrealism',
           purposes: 'Ärenden & längder', simulation: 'Simuleringshälsa',
+          sensor_output: 'SUMO sensorutdata', multi_day: 'Flerdagskontinuitet',
           held_out: 'Utelämnad-station (LOSO)',
         };
         const V_MARK = { pass: ['✓', 'v-pass'], warn: ['⚠', 'v-warn'],
@@ -398,6 +442,14 @@
                 `frö ${x.seed}: ${x.inserted}/${x.loaded} insatta, `
                 + `${x.unfinished} ofullbordade, ${x.teleports} teleport`).join(' · ')
                 + (s.flags?.length ? ` · FLAGGOR: ${s.flags.join('; ')}` : '');
+            case 'sensor_output':
+              return `${s.edge_quarters ?? '–'} riktade intervall · `
+                + `GEH<5 ${s.geh_lt_5_pct ?? '–'}% · `
+                + (s.reason || 'rå SUMO edgeData och stationsaggregering');
+            case 'multi_day':
+              return s.not_applicable ? 'inte tillämpligt för en dag' :
+                `${s.days ?? '–'} dagar · `
+                + (s.errors?.length ? s.errors.join('; ') : 'komplett boundary-bevis');
             case 'held_out':
               return `medianåterskapande ${s.median_ratio} — ${s.note}`;
           }
@@ -433,6 +485,212 @@
           Render.invalidateSize?.();
         });
         loadValidation();
+
+        // ── Sensor audit ─────────────────────────────────────────────────────
+        // The map's road colour is an ensemble mean while the vehicle overlay
+        // is one seed.  Keep all source/target/result values in one compact
+        // table so users never have to infer count delivery from dot density.
+        const sensorAuditBtn = document.getElementById('sensor-audit-btn');
+        const sensorAuditPanel = document.getElementById('sensor-audit-panel');
+        const sensorAuditHeading = document.getElementById('sensor-audit-heading');
+        const sensorAuditMeta = document.getElementById('sensor-audit-meta');
+        const sensorAuditSourceLabel = document.getElementById('sensor-audit-source-label');
+        const sensorAuditBody = document.getElementById('sensor-audit-body');
+        const AUDIT_VARIANT_LABEL = {
+          edge_shares: 'q50', edge_shares_q10: 'q10', edge_shares_q90: 'q90',
+        };
+        let renderedSensorAuditProvider = null;
+        let renderedSensorAuditQI = null;
+
+        function auditValue(value) {
+          if (value === null || value === undefined || !Number.isFinite(Number(value))) return '–';
+          // Source counts and SUMO seed entries are integers. Targets and the
+          // raw (pre-rounding) ensemble mean may be fractional; display at
+          // millivehicle precision and keep the exact value in the title.
+          return String(Math.round(Number(value) * 1000) / 1000);
+        }
+
+        function auditSum(values) {
+          // Physical-station sum with null propagation: a missing directed
+          // value must make the station value unknown, never silently zero.
+          let total = 0;
+          for (const value of values) {
+            if (value === null || value === undefined ||
+                !Number.isFinite(Number(value))) return null;
+            total += Number(value);
+          }
+          return Math.round(total * 1000) / 1000;
+        }
+
+        function auditSimMean(entry, interval) {
+          // Prefer the pre-rounding ensemble mean; older payloads only have
+          // the map's rounded integer.
+          return entry.simulated_mean_raw?.[interval]
+            ?? entry.simulated_mean?.[interval];
+        }
+
+        function appendAuditValue(row, value, className = '') {
+          const cell = document.createElement('td');
+          cell.textContent = auditValue(value);
+          if (value !== null && value !== undefined) cell.title = String(value);
+          if (className) cell.className = className;
+          row.append(cell);
+        }
+
+        function sensorAuditInterval(provider, qi) {
+          const start = provider.dateFromQI(qi).toISOString().slice(11, 16);
+          const end = provider.dateFromQI(qi + 1).toISOString().slice(11, 16);
+          return `${start}–${end}`;
+        }
+
+        function renderSensorAudit(provider, qi, force = false) {
+          if (sensorAuditPanel.hidden) return;
+          const audit = provider?.sensorAudit;
+          if (!audit?.directions?.length) return;
+          const interval = Math.max(0, Math.min(
+            provider.numQuarters - 1, Math.floor(Number(qi) || 0)));
+          // Values only change per 15-minute interval. Avoid rebuilding a
+          // table on every animation frame during vehicle playback.
+          if (!force && renderedSensorAuditProvider === provider &&
+              renderedSensorAuditQI === interval) return;
+          renderedSensorAuditProvider = provider;
+          renderedSensorAuditQI = interval;
+
+          const variant = AUDIT_VARIANT_LABEL[audit.representative?.variant]
+            || audit.representative?.variant || 'okänd variant';
+          const seed = audit.representative?.seed;
+          sensorAuditHeading.textContent =
+            `Sensorflöden per riktning · ${sensorAuditInterval(provider, interval)} · `
+            + `visad körning ${variant}${seed == null ? '' : ` (frö ${seed})`}`;
+          sensorAuditSourceLabel.textContent = audit.source === 'forecast'
+            ? 'Prognosvärde' : 'Sensorvärde';
+
+          const sourceText = audit.source === 'forecast'
+            ? 'Prognosvärde är simuleringsunderlaget, inte en uppmätt räkning.'
+            : 'Sensorvärde är den levererade räkningen.';
+          const totalText = 'En tvåvägs-total visas en gång per fysisk station; riktningsraderna under är modellens fördelning av samma mätning.';
+          const ensembleFit = audit.fit?.ensemble;
+          const representativeFit = audit.fit?.representative;
+          const fitText = audit.comparison === 'calibration' && ensembleFit?.available
+            ? ` Medel: ${ensembleFit.geh_lt_5_pct}% GEH<5; visad ${variant}: `
+              + `${representativeFit?.geh_lt_5_pct ?? '–'}% GEH<5.`
+            : ' Scenarioflöden kan avvika från baslinjemålet när vägar är stängda.';
+          const targetWasRebuilt = audit.provenance?.targets === 'reconstructed_current_inputs';
+          sensorAuditMeta.textContent = sourceText + ' ' + totalText + fitText
+            + (targetWasRebuilt
+              ? ' Kontrollmålen är återbyggda från nuvarande indata; nästa omkalibrering låser dem i bygget.'
+              : '');
+
+          function sourceCell(value, kindText) {
+            const source = document.createElement('td');
+            const sourceNumber = document.createElement('strong');
+            sourceNumber.textContent = auditValue(value);
+            if (value != null) source.title = String(value);
+            const sourceKind = document.createElement('span');
+            sourceKind.className = 'audit-source-kind';
+            sourceKind.textContent = kindText;
+            source.append(sourceNumber, sourceKind);
+            return source;
+          }
+
+          function directedRow(entry) {
+            const row = document.createElement('tr');
+            const sensor = document.createElement('td');
+            sensor.textContent = `${entry.sensor_id} · ${entry.name}`;
+            row.append(sensor);
+            const direction = document.createElement('td');
+            direction.textContent = entry.direction || '–';
+            row.append(direction);
+            row.append(sourceCell(entry.source_value?.[interval], 'riktad'));
+            appendAuditValue(row, entry.target_representative?.[interval]);
+            appendAuditValue(row, entry.simulated_representative?.[interval], 'audit-sim');
+            appendAuditValue(row, entry.target_mean?.[interval]);
+            appendAuditValue(row, auditSimMean(entry, interval), 'audit-sim');
+            return row;
+          }
+
+          // A two-way Total station is ONE physical observation delivered as
+          // the same summed count on both directed edges. Render it as one
+          // station row plus indented modelled-direction rows, so the raw
+          // Total is never repeated as though it were two measurements.
+          function stationRows(entries) {
+            const rows = [];
+            const parent = document.createElement('tr');
+            parent.className = 'audit-station';
+            const sensor = document.createElement('td');
+            sensor.textContent = `${entries[0].sensor_id} · ${entries[0].name}`;
+            parent.append(sensor);
+            const direction = document.createElement('td');
+            direction.textContent = entries.map(e => e.direction || '?').join('+');
+            parent.append(direction);
+            parent.append(sourceCell(entries[0].source_value?.[interval],
+                                     'tvåvägs-total (en mätning)'));
+            appendAuditValue(parent,
+              auditSum(entries.map(e => e.target_representative?.[interval])));
+            appendAuditValue(parent,
+              auditSum(entries.map(e => e.simulated_representative?.[interval])),
+              'audit-sim');
+            appendAuditValue(parent,
+              auditSum(entries.map(e => e.target_mean?.[interval])));
+            appendAuditValue(parent,
+              auditSum(entries.map(e => auditSimMean(e, interval))), 'audit-sim');
+            rows.push(parent);
+            for (const entry of entries) {
+              const row = document.createElement('tr');
+              row.className = 'audit-child';
+              const child = document.createElement('td');
+              child.textContent = '↳ riktning';
+              row.append(child);
+              const childDirection = document.createElement('td');
+              childDirection.textContent = entry.direction || '–';
+              row.append(childDirection);
+              const childSource = document.createElement('td');
+              childSource.textContent = 'modellandel av total';
+              childSource.className = 'audit-source-kind';
+              row.append(childSource);
+              appendAuditValue(row, entry.target_representative?.[interval]);
+              appendAuditValue(row, entry.simulated_representative?.[interval], 'audit-sim');
+              appendAuditValue(row, entry.target_mean?.[interval]);
+              appendAuditValue(row, auditSimMean(entry, interval), 'audit-sim');
+              rows.push(row);
+            }
+            return rows;
+          }
+
+          const groups = new Map();
+          for (const entry of audit.directions) {
+            if (!groups.has(entry.sensor_id)) groups.set(entry.sensor_id, []);
+            groups.get(entry.sensor_id).push(entry);
+          }
+          const rows = [];
+          for (const entries of groups.values()) {
+            const isStationTotal = entries.length > 1 &&
+              entries.every(e => e.measurement === 'two_way_total');
+            if (isStationTotal) rows.push(...stationRows(entries));
+            else rows.push(...entries.map(directedRow));
+          }
+          sensorAuditBody.replaceChildren(...rows);
+        }
+
+        function setSensorAuditAvailability(provider) {
+          const available = Boolean(provider?.isScenario && provider.sensorAudit?.directions?.length);
+          sensorAuditBtn.hidden = !available;
+          if (!available) {
+            sensorAuditPanel.hidden = true;
+            sensorAuditBtn.classList.remove('active');
+            renderedSensorAuditProvider = null;
+            renderedSensorAuditQI = null;
+            return;
+          }
+          if (!sensorAuditPanel.hidden) renderSensorAudit(provider, State.qi, true);
+        }
+
+        sensorAuditBtn.addEventListener('click', () => {
+          sensorAuditPanel.hidden = !sensorAuditPanel.hidden;
+          sensorAuditBtn.classList.toggle('active', !sensorAuditPanel.hidden);
+          if (!sensorAuditPanel.hidden) renderSensorAudit(currentProvider, State.qi, true);
+          Render.invalidateSize?.();
+        });
 
         // Scopes the "recover a recalibration on page load" check (below)
         // to THIS tab's own session, not every future visitor forever.
@@ -605,13 +863,17 @@
         async function openWorkspace(task) {
           workspaceTask = task;
           document.body.dataset.task = task;
-          taskHome.hidden = true;
+          taskHome.hidden = task !== 'history';
+          historyPanel.hidden = task !== 'history';
           modeToggle.style.display = 'none';
           taskTitle.textContent = taskNames[task] || 'Göteborg Trafik';
           exitPicking();
           exitSuggestPicking();
           dayPickMode = false;
-          if (task === 'traffic') {
+          if (task === 'history') {
+            await loadHistory();
+            return;
+          } else if (task === 'traffic') {
             setMode(btnHist, histProvider);
           } else if (task === 'forecast') {
             await openForecast();
@@ -633,6 +895,7 @@
           workspaceTask = 'home';
           document.body.dataset.task = 'home';
           taskHome.hidden = false;
+          historyPanel.hidden = true;
           exitPicking();
           exitSuggestPicking();
           dayPickMode = false;
@@ -695,6 +958,7 @@
           suggestResults.classList.remove('show');
         });
         document.getElementById('workspace-menu-btn').addEventListener('click', showTaskHome);
+        document.getElementById('history-back').addEventListener('click', showTaskHome);
         document.querySelectorAll('#task-grid [data-task]').forEach(button => {
           button.addEventListener('click', () => openWorkspace(button.dataset.task));
         });

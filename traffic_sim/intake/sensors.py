@@ -10,11 +10,16 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import date
+import math
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 SEMANTICS = frozenset({"directional", "two_way_total"})
 VERIFIED = "verified"
+APPROVED_SNAP = "approved"
+ACCEPTED_QUALITY = "accepted"
+DEFAULT_MAX_SNAP_DISTANCE_M = 60.0
 
 
 @dataclass(frozen=True)
@@ -64,8 +69,20 @@ class SensorRegistry:
         return {sid: record.manual_snap for sid, record in self.records.items()
                 if record.manual_snap}
 
-    def validate_data_sensors(self, sensor_ids: list[str] | set[str],
-                              *, require_coordinates: bool = True) -> None:
+    def validate_data_sensors(
+            self, sensor_ids: list[str] | set[str], *,
+            require_coordinates: bool = True,
+            study_start: str | None = None,
+            study_end: str | None = None,
+            max_snap_distance_m: float = DEFAULT_MAX_SNAP_DISTANCE_M,
+    ) -> None:
+        """Fail closed before station data can constrain calibration.
+
+        Coordinates and catalogue semantics are necessary but not sufficient:
+        a station must be active for the requested period and its directed
+        network snap must have been reviewed.  The resolved edge IDs are
+        checked separately after the current network has been snapped.
+        """
         unknown = sorted({str(sid) for sid in sensor_ids} - self.records.keys())
         if unknown:
             raise ValueError(
@@ -79,6 +96,34 @@ class SensorRegistry:
             raise ValueError(
                 "sensor catalogue verification is required before calibration: "
                 + ", ".join(unverified))
+        invalid_quality = sorted(
+            str(sid) for sid in sensor_ids
+            if self[str(sid)].quality_status != ACCEPTED_QUALITY
+        )
+        if invalid_quality:
+            raise ValueError(
+                "sensor quality must be accepted before calibration: "
+                + ", ".join(invalid_quality))
+        pending_snap = sorted(
+            str(sid) for sid in sensor_ids
+            if self[str(sid)].snap_status != APPROVED_SNAP
+        )
+        if pending_snap:
+            raise ValueError(
+                "sensor network snaps must be approved before calibration: "
+                + ", ".join(pending_snap))
+        invalid_snap = sorted(
+            str(sid) for sid in sensor_ids
+            if not self[str(sid)].approved_edge_ids
+            or self[str(sid)].snap_distance_m is None
+            or not math.isfinite(self[str(sid)].snap_distance_m)
+            or self[str(sid)].snap_distance_m < 0
+            or self[str(sid)].snap_distance_m > max_snap_distance_m
+        )
+        if invalid_snap:
+            raise ValueError(
+                f"sensor snaps must have approved edges and distance <= "
+                f"{max_snap_distance_m:g} m: " + ", ".join(invalid_snap))
         if require_coordinates:
             missing = sorted(str(sid) for sid in sensor_ids
                              if self[str(sid)].coordinates is None)
@@ -86,6 +131,66 @@ class SensorRegistry:
                 raise ValueError(
                     "sensor coordinates are missing from the delivered coordinate "
                     "file: " + ", ".join(missing))
+        if study_start is not None or study_end is not None:
+            try:
+                start = date.fromisoformat(study_start) if study_start else None
+                end = date.fromisoformat(study_end) if study_end else start
+            except (TypeError, ValueError) as exc:
+                raise ValueError("study dates must be YYYY-MM-DD") from exc
+            if start and end and end < start:
+                raise ValueError("study_end must not precede study_start")
+            outside = []
+            for sid in sensor_ids:
+                record = self[str(sid)]
+                active_from = (date.fromisoformat(record.active_from)
+                               if record.active_from else None)
+                active_to = (date.fromisoformat(record.active_to)
+                             if record.active_to else None)
+                if start and active_from and start < active_from:
+                    outside.append(str(sid))
+                elif end and active_to and end > active_to:
+                    outside.append(str(sid))
+            if outside:
+                raise ValueError(
+                    "sensor is inactive during the requested study period: "
+                    + ", ".join(sorted(outside)))
+
+    def validate_resolved_edges(
+            self, resolved_edges: Mapping[str, Iterable[str]],
+            *, max_snap_distance_m: float = DEFAULT_MAX_SNAP_DISTANCE_M,
+            resolved_distances_m: Mapping[str, Iterable[float]] | None = None,
+            sensor_ids: Iterable[str] | None = None,
+    ) -> None:
+        """Ensure the current network resolves exactly to reviewed edges."""
+        errors = []
+        ids = (str(sid) for sid in sensor_ids) if sensor_ids is not None else self.records
+        for sid in ids:
+            if sid not in self.records:
+                errors.append(f"{sid}: not present in registry")
+                continue
+            record = self.records[sid]
+            expected = set(record.approved_edge_ids)
+            actual = {str(edge) for edge in resolved_edges.get(sid, ())}
+            if actual != expected:
+                errors.append(
+                    f"{sid}: resolved {sorted(actual)} != approved {sorted(expected)}")
+            if resolved_distances_m is not None:
+                distances = [float(value) for value in
+                             resolved_distances_m.get(sid, ())]
+                if (not distances or any(not math.isfinite(value)
+                                         or value > max_snap_distance_m
+                                         for value in distances)):
+                    errors.append(
+                        f"{sid}: current snap exceeds {max_snap_distance_m:g} m")
+                elif record.snap_distance_m is not None:
+                    allowed_delta = max(5.0, 0.25 * record.snap_distance_m)
+                    if any(abs(value - record.snap_distance_m) > allowed_delta
+                           for value in distances):
+                        errors.append(
+                            f"{sid}: current snap distance drift exceeds "
+                            f"{allowed_delta:g} m")
+        if errors:
+            raise ValueError("sensor network snap review failed: " + "; ".join(errors))
 
     def as_dict(self) -> dict[str, Any]:
         return {

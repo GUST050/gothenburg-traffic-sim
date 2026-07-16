@@ -35,6 +35,10 @@ class HistoricalProvider {
     this.label       = payload.scenario?.label ?? null;
     this.source      = payload.scenario?.source ?? 'historical';  // 'forecast' = simulated 2027
     this.agentDemand = payload.scenario?.agent_demand ?? null;
+    // Per directed sensor edge: frozen source value, calibration target,
+    // displayed ensemble mean, and the single vehicle seed.  This is kept
+    // outside flowAt() because it is audit metadata, not map flow data.
+    this.sensorAudit = payload.sensor_audit ?? null;
     this.confidence  = payload.confidence ?? null;  // per-edge, per-scenario
     // Length in quarters (96 for a one-day scenario, 35 040 for a full
     // year) — State.setMaxQI() uses this so playback loops within THIS

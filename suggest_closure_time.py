@@ -458,6 +458,56 @@ def recommendation_status(correlation: dict | None) -> str:
            else "screening_only_weak_correlation")
 
 
+def closure_feasibility(candidate: cm.DisruptionMetrics,
+                        baseline: cm.DisruptionMetrics,
+                        *, detour: dict | None = None) -> dict:
+    """Build the hard/diagnostic gates used by closure-time ranking.
+
+    A low delay is not a valid recommendation if it came from losing access,
+    truncating trips, or an unhealthy SUMO run.  Queue is deliberately a
+    *measured diagnostic* rather than an invented threshold: when either
+    summary lacks the queue proxy, the candidate cannot support a trusted
+    recommendation and is marked ``queue_unmeasured``.
+    """
+    hard_failures = list(cm.disqualification_reasons(candidate))
+    if candidate.truncated_unreachable:
+        hard_failures.append("truncated_unreachable_vehicles")
+    if candidate.loaded > 0:
+        unfinished = candidate.unfinished_trips / candidate.loaded
+        if unfinished > rs.HEALTH_UNFINISHED_MAX_SHARE:
+            hard_failures.append("unfinished_vehicle_share")
+    detour_status = "not_supplied"
+    if detour is not None:
+        score = detour.get("score")
+        if score is None or score <= 0:
+            hard_failures.append("no_viable_detour")
+            detour_status = "no_viable_detour"
+        elif score < 1.0:
+            hard_failures.append("partial_detour_access")
+            detour_status = "partial_detour_access"
+        else:
+            detour_status = "all_predecessor_successor_pairs_reachable"
+
+    queue_available = (candidate.max_queue_vehicles is not None and
+                       baseline.max_queue_vehicles is not None)
+    queue = {
+        "status": "measured" if queue_available else "unmeasured",
+        "candidate_max": candidate.max_queue_vehicles,
+        "baseline_max": baseline.max_queue_vehicles,
+        "delta": (candidate.max_queue_vehicles - baseline.max_queue_vehicles
+                   if queue_available else None),
+    }
+    if not queue_available:
+        hard_failures.append("queue_proxy_unmeasured")
+    return {
+        "eligible": not hard_failures,
+        "hard_failures": sorted(set(hard_failures)),
+        "detour": detour_status,
+        "queue": queue,
+        "paired_delta_time_loss": None,
+    }
+
+
 def delta_time_loss_interval(candidate_per_seed: list[float],
                              baseline_per_seed: list[float]) -> dict:
     """Median + [min, max] of paired per-seed Δ time loss.
@@ -692,21 +742,25 @@ def main() -> None:
                 seed_workers=args.seed_workers)
             comparison = cm.compare_metrics(baseline_metrics, metrics)
             interval = delta_time_loss_interval(candidate_per_seed, baseline_per_seed)
+            feasibility = closure_feasibility(
+                metrics, baseline_metrics, detour=diagnostic)
+            feasibility["paired_delta_time_loss"] = interval
             elapsed = time.time() - t0
             print(f"    [{i+1}/{len(to_simulate)}] proxy_rank={w['proxy_rank']} "
                  f"begin={w['begin_s']}s  ΔtimeLoss median={interval['median_s']:+.0f}s "
                  f"[{interval['min_s']:+.0f}, {interval['max_s']:+.0f}]"
-                 f"{'  DISQUALIFIED: ' + ','.join(comparison.disqualification_reasons) if comparison.candidate_disqualified else ''}"
+                 f"{'  DISQUALIFIED: ' + ','.join(feasibility['hard_failures']) if not feasibility['eligible'] else ''}"
                  f"  ({elapsed:.0f}s)")
             simulated.append({
                 "window": w, "metrics": dataclasses.asdict(metrics),
                 "comparison": dataclasses.asdict(comparison),
                 "delta_time_loss_interval": interval,
+                "feasibility": feasibility,
                 "truncated_vehicles": n_trunc, "dropped_vehicles": n_drop,
             })
 
         # ── Validate the proxy ───────────────────────────────────────────
-        eligible = [s for s in simulated if not s["comparison"]["candidate_disqualified"]]
+        eligible = [s for s in simulated if s["feasibility"]["eligible"]]
         correlation = None
         if len(eligible) >= 3:
             proxy_ranks = [s["window"]["proxy_rank"] for s in eligible]
@@ -762,6 +816,8 @@ def main() -> None:
                 "simulated_best_in_proxy_top_k": best_in_topk if best else None,
                 "simulated_best_begin_s": best["window"]["begin_s"] if best else None,
                 "recommendation_status": recommendation_status(correlation),
+                "eligible_candidates": len(eligible),
+                "disqualified_candidates": len(simulated) - len(eligible),
             },
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }

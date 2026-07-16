@@ -664,7 +664,12 @@ def main() -> None:
     coords = load_coords(coords_path)
     sensor_ids = sorted(str(sensor_id) for sensor_id in raw["matplats"].unique())
     registry = load_registry(Path(args.registry), coordinates=coords)
-    registry.validate_data_sensors(sensor_ids, require_coordinates=True)
+    registry.validate_data_sensors(
+        sensor_ids,
+        require_coordinates=True,
+        study_start=raw["ts"].min().date().isoformat(),
+        study_end=raw["ts"].max().date().isoformat(),
+    )
     MANUAL_SNAPS = registry.manual_snaps()
     sensors = [sensor_id for sensor_id in sensor_ids if sensor_id in coords]
     if not sensors:
@@ -709,6 +714,23 @@ def main() -> None:
     print("Snapping sensors …")
     edge_sensor = snap_sensors(G, sensors, lats, lons, sensor_level)
     bidir       = _bidir_edges(edge_sensor)
+
+    # The registry stores reviewed snaps from this exact graph snapshot.  Do
+    # not allow a changed OSM graph or a direction mistake to silently move a
+    # count constraint to another edge.
+    resolved_edges: dict[str, list[str]] = defaultdict(list)
+    resolved_distances: dict[str, list[float]] = defaultdict(list)
+    for edge_id, sensor_id in edge_sensor.items():
+        resolved_edges[sensor_id].append(edge_id)
+        u, v, k = _parse_eid(edge_id)
+        resolved_distances[sensor_id].append(
+            true_snap_dist_m(G, u, v, k, coords[sensor_id][0], coords[sensor_id][1])
+        )
+    registry.validate_resolved_edges(
+        resolved_edges,
+        resolved_distances_m=resolved_distances,
+        sensor_ids=sensors,
+    )
 
     print("Building flow arrays …")
     flows = build_flows(raw, edge_sensor)

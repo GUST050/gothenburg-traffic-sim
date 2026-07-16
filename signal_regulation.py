@@ -89,6 +89,10 @@ tlsCycleAdaptation output already does — no new activation machinery.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import math
+import os
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -282,6 +286,138 @@ def enforce_timing_minimums(net_path: Path, proposed_path: Path,
         count += 1
     ET.ElementTree(out_root).write(out_path, xml_declaration=True, encoding="UTF-8")
     return count
+
+
+def timing_certificate(net_path: Path, plan_path: Path, *,
+                       provenance: str = "synthetic_tsfs_informed") -> dict:
+    """Return a machine-checkable safety envelope for one signal plan.
+
+    This is deliberately a *synthetic timing* certificate, not an approval of
+    a physical controller: SUMO's conflict matrix, pedestrian phases and
+    municipal controller logic are outside the available inputs.  It proves
+    the invariants this module actually enforces and fails closed when a plan
+    is incomplete or contains malformed states.
+    """
+    baseline_root = ET.parse(net_path).getroot()
+    plan_root = ET.parse(plan_path).getroot()
+    baseline_ids = {tl.get("id") for tl in baseline_root.findall("tlLogic")}
+    plans = {tl.get("id"): tl for tl in plan_root.findall("tlLogic")}
+    errors: list[str] = []
+    if not baseline_ids:
+        errors.append("network saknar tlLogic")
+    missing = sorted(tl for tl in baseline_ids if tl not in plans)
+    if missing:
+        errors.append(f"signalplan saknar {len(missing)} signaler")
+    checked = 0
+    all_geometry = parse_tls_link_geometry(net_path)
+    for tls_id in sorted(baseline_ids & set(plans)):
+        phases = plans[tls_id].findall("phase")
+        if not phases:
+            errors.append(f"{tls_id}: faslista saknas")
+            continue
+        widths = {len(phase.get("state", "")) for phase in phases}
+        if not widths or 0 in widths or len(widths) != 1:
+            errors.append(f"{tls_id}: signalsträngarnas längd är inkonsekvent")
+            continue
+        geometry = all_geometry.get(tls_id, {})
+        for index, phase in enumerate(phases):
+            state = phase.get("state", "")
+            try:
+                duration = float(phase.get("duration", "nan"))
+            except (TypeError, ValueError):
+                duration = float("nan")
+            if not math.isfinite(duration) or duration <= 0:
+                errors.append(f"{tls_id}: fas {index} har ogiltig längd")
+                continue
+            if any(signal in "Gg" for signal in state) and "y" not in state:
+                if duration + 1e-9 < MIN_GREEN_S:
+                    errors.append(f"{tls_id}: grön fas {index} under {MIN_GREEN_S}s")
+            if "y" in state:
+                required = yellow_time_s(min(
+                    [geometry[j]["speed_kmh"] for j, signal in enumerate(state)
+                     if signal == "y" and j in geometry] or [50.0]))
+                if duration + 1e-9 < required:
+                    errors.append(f"{tls_id}: gul fas {index} under {required:g}s")
+            if "u" in state and duration + 1e-9 < REDYELLOW_S:
+                errors.append(f"{tls_id}: röd+gul fas {index} under {REDYELLOW_S:g}s")
+        checked += 1
+    return {
+        "schema_version": 1,
+        "status": "pass" if not errors else "fail",
+        "provenance": provenance,
+        "plan_file": str(plan_path),
+        "signals_expected": len(baseline_ids),
+        "signals_checked": checked,
+        "errors": errors,
+        "limitations": [
+            "syntetisk plan; fysisk konfliktmatris, gång/cykel och kommunal controller saknas",
+            "TSFS-informerade tidsminima är inte ett myndighetsgodkännande",
+        ],
+    }
+
+
+def write_signal_plan_artifact(net_path: Path, plan_path: Path,
+                               out_path: Path, *,
+                               provenance: str = "synthetic_tsfs_informed") -> dict:
+    """Export the effective phase/link structure as a versioned SignalPlan."""
+    network_sha = hashlib.sha256(net_path.read_bytes()).hexdigest()
+    plan_sha = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    root = ET.parse(net_path).getroot()
+    plan_root = ET.parse(plan_path).getroot()
+    links: dict[str, dict[int, dict]] = {}
+    for connection in root.findall("connection"):
+        tls_id, raw_index = connection.get("tl"), connection.get("linkIndex")
+        if not tls_id or raw_index is None:
+            continue
+        index = int(raw_index)
+        links.setdefault(tls_id, {})[index] = {
+            "from_edge": connection.get("from"),
+            "to_edge": connection.get("to"),
+            "via": connection.get("via"),
+        }
+    controllers = []
+    for tls in sorted(plan_root.findall("tlLogic"), key=lambda item: item.get("id", "")):
+        phases = []
+        for number, phase in enumerate(tls.findall("phase")):
+            state = phase.get("state", "")
+            duration = float(phase.get("duration", "nan"))
+            phases.append({
+                "index": number,
+                "duration_s": duration,
+                "state": state,
+                "green_links": [i for i, signal in enumerate(state) if signal in "Gg"],
+                "yellow_links": [i for i, signal in enumerate(state) if signal == "y"],
+                "redyellow_links": [i for i, signal in enumerate(state) if signal == "u"],
+            })
+        controllers.append({
+            "tls_id": tls.get("id"),
+            "program_id": tls.get("programID"),
+            "offset_s": float(tls.get("offset", 0)),
+            "cycle_s": round(sum(phase["duration_s"] for phase in phases), 3),
+            "links": {str(index): movement for index, movement
+                      in sorted(links.get(tls.get("id"), {}).items())},
+            "phases": phases,
+        })
+    payload = {
+        "schema_version": 1,
+        "kind": "SignalPlan",
+        "plan_id": hashlib.sha256((network_sha + plan_sha).encode()).hexdigest()[:16],
+        "provenance": provenance,
+        "network_sha256": network_sha,
+        "plan_sha256": plan_sha,
+        "controllers": controllers,
+        "limitations": [
+            "green_links reflect SUMO phase states, not a verified municipal conflict matrix",
+            "pedestrian/cycle, detector, transit-priority and plan-selection logic are absent",
+        ],
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = out_path.with_name(out_path.name + ".tmp")
+    with open(temporary, "w") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, out_path)
+    return payload
 
 
 def parse_tls_movements(net_path: Path) -> dict[str, dict[int, tuple[str, str]]]:

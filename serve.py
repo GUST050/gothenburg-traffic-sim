@@ -125,6 +125,7 @@ from signal_optimize import SIGNAL_CONDITION_COUNT
 from traffic_sim.core.contracts import (DemandBuildSpec, ScenarioSpec,
                                          write_demand_build_spec,
                                          write_scenario_spec)
+from traffic_sim.core.fingerprint import sha256_file
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -484,6 +485,8 @@ def validate_staged_scenarios(staging_dir: Path,
             first = payload["seed_health_flags"][0]
             return False, f"{fname}: simuleringshälsa underkänd ({first})"
         staged_payloads.append((fname, payload))
+    baseline = next((payload for fname, payload in staged_payloads
+                     if fname == "baseline.json"), None)
     if not demand_meta_path.exists():
         return False, "demand_meta.json saknas efter ombyggnad"
     try:
@@ -534,6 +537,75 @@ def validate_staged_scenarios(staging_dir: Path,
             return False, f"varianten {label} bryter mot hårda bounds"
         if variant.get("unserviceable_edges"):
             return False, f"varianten {label} saknar rutter för mätta kanter"
+
+    # P0 sensor contract: the PFE target fit is not the final SUMO output.
+    # New demand builds persist the frozen target/observation arrays, so a
+    # newly staged baseline must also carry the raw edgeData audit.  Legacy
+    # metadata has no way to prove this contract and remains readable until
+    # it is rebuilt; it must not be mistaken for a validated new release.
+    if meta.get("sensor_targets") or meta.get("sensor_output_fit_required"):
+        sensor_contract = meta.get("sensor_contract") or {}
+        if not sensor_contract.get("registry_sha256") or \
+                not sensor_contract.get("network_sha256") or \
+                not sensor_contract.get("sensor_edges"):
+            return False, "demand saknar sensor-/nätverkskontrakt"
+        current_registry_hash = sha256_file(ROOT / "data_in" / "sensors.json")
+        current_network_hash = sha256_file(ROOT / "sumo" / "net.net.xml")
+        if current_registry_hash and \
+                sensor_contract["registry_sha256"] != current_registry_hash:
+            return False, "sensorregistret har ändrats sedan demand byggdes"
+        if current_network_hash and \
+                sensor_contract["network_sha256"] != current_network_hash:
+            return False, "SUMO-nätet har ändrats sedan demand byggdes"
+        audit = baseline.get("sensor_audit") if baseline else None
+        output_fit = audit.get("output_fit") if isinstance(audit, dict) else None
+        if not isinstance(audit, dict) or not isinstance(output_fit, dict):
+            return False, "baseline saknar SUMO:s slutliga sensor-output-fit"
+        directions = audit.get("directions")
+        if not isinstance(directions, list) or not directions:
+            return False, "sensor-output-fit saknar riktade sensorserier"
+        expected_quarters = int(baseline.get("n_quarters", 0) or 0)
+        if expected_quarters and any(
+                not isinstance(row, dict)
+                or not isinstance(row.get("simulated_mean_raw"), list)
+                or len(row["simulated_mean_raw"]) != expected_quarters
+                for row in directions):
+            return False, "sensor-output-fit har fel tidsseriebredd"
+        if output_fit.get("uses_raw_ensemble_mean") is not True:
+            return False, "sensor-output-fit måste använda rå edgeData före avrundning"
+        station_fit = output_fit.get("station_ensemble") or {}
+        if not (output_fit.get("ensemble") or {}).get("available") or \
+                not station_fit.get("available"):
+            return False, "sensor-output-fit saknar mätbara sensorintervall"
+        provenance = audit.get("provenance") or {}
+        if provenance.get("targets") != "demand_metadata" or \
+                provenance.get("observations") != "demand_metadata":
+            return False, "sensor-output-fit saknar frysta demand-metadata"
+    if int(meta.get("n_variants", 1)) >= 3:
+        # A staged set without baseline.json must fail with this message, not
+        # crash: an AttributeError here would abort publication validation
+        # without telling the operator which contract was violated.
+        variant_mapping = ((baseline or {}).get("scenario_spec") or {}).get(
+            "demand_variant_mapping", {})
+        present = {
+            str(value) for value in variant_mapping.values()
+        } if isinstance(variant_mapping, dict) else set()
+        if not {"q50", "q10", "q90"}.issubset(present):
+            return False, "baseline saknar q50/q10/q90-varianttäckning"
+    # Continuous multi-day demand is a separate evidence contract.  An
+    # aggregate end-of-run health record cannot prove that a midnight
+    # boundary did not lose vehicles, so staged multi-day results must carry
+    # the periodic SUMO summary proof before they replace the live set.
+    days = int(meta.get("days", 1) or 1)
+    if days > 1:
+        from traffic_sim.simulation.multiday import validate as validate_multiday
+        multi_day = baseline.get("multi_day_validation") if baseline else None
+        boundaries = meta.get("day_boundaries_s") or [day * 86400
+                                                       for day in range(days + 1)]
+        errors = validate_multiday(multi_day or {}, days=days,
+                                   day_boundaries_s=boundaries)
+        if errors:
+            return False, "flerdagsvalidering underkänd: " + "; ".join(errors[:2])
     return True, ""
 
 
@@ -586,6 +658,7 @@ def summarize_suggestion(result: dict) -> dict:
     for s in result["simulated"]:
         w = s["window"]
         interval = s["delta_time_loss_interval"]
+        feasibility = s.get("feasibility")
         candidates.append({
             "begin_s": w["begin_s"], "end_s": w["end_s"],
             "proxy_rank": w["proxy_rank"],
@@ -594,11 +667,17 @@ def summarize_suggestion(result: dict) -> dict:
             "delta_time_loss_min_s": interval["min_s"],
             "delta_time_loss_max_s": interval["max_s"],
             "n_seeds": interval["n_seeds"],
-            "disqualified": s["comparison"]["candidate_disqualified"],
-            "disqualification_reasons": s["comparison"]["disqualification_reasons"],
+            "disqualified": (not feasibility.get("eligible", False)
+                             if isinstance(feasibility, dict)
+                             else s["comparison"]["candidate_disqualified"]),
+            "disqualification_reasons": (feasibility.get("hard_failures", [])
+                                          if isinstance(feasibility, dict)
+                                          else list(s["comparison"]["disqualification_reasons"])),
             "truncated_vehicles": s["truncated_vehicles"],
             "dropped_vehicles": s["dropped_vehicles"],
             "max_queue_vehicles": s["metrics"]["max_queue_vehicles"],
+            "queue_delta": ((feasibility.get("queue") or {}).get("delta")
+                            if isinstance(feasibility, dict) else None),
         })
     candidates.sort(key=lambda c: c["proxy_rank"])
     return {
