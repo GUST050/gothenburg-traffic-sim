@@ -1125,6 +1125,48 @@ def _integer_mix_targets(source_mix: Counter, n: int) -> Counter:
     return out
 
 
+def apply_category_margin(
+    source_mixes: list[Counter],
+    category_shares_by_quarter: list[dict[str, float]] | None,
+) -> list[Counter]:
+    """Replace one conditional category margin without changing other classes.
+
+    Candidate-route validity filters can reject categories at different rates.
+    A caller with an independently specified conditional category model can
+    restore that model here while retaining the surviving count of the chosen
+    categories and every other category in the source mix. The latter is
+    important when no external evidence justifies changing through/external
+    traffic or legacy categories.
+    """
+    if category_shares_by_quarter is None:
+        return [Counter(mix) for mix in source_mixes]
+    if len(category_shares_by_quarter) != len(source_mixes):
+        raise ValueError("category shares must cover every PFE quarter")
+
+    corrected: list[Counter] = []
+    for quarter, (source, raw_shares) in enumerate(
+            zip(source_mixes, category_shares_by_quarter)):
+        if not isinstance(raw_shares, dict) or not raw_shares:
+            raise ValueError(f"invalid category shares for quarter {quarter}")
+        shares = {str(category): float(value)
+                  for category, value in raw_shares.items()}
+        mass = sum(shares.values())
+        if (not math.isfinite(mass) or mass <= 0
+                or any(not math.isfinite(value) or value < 0
+                       for value in shares.values())):
+            raise ValueError(f"invalid category shares for quarter {quarter}")
+
+        category_total = sum(int(source.get(category, 0)) for category in shares)
+        if category_total <= 0:
+            corrected.append(Counter(source))
+            continue
+        out = Counter({category: count for category, count in source.items()
+                       if category not in shares})
+        out.update(_integer_mix_targets(Counter(shares), category_total))
+        corrected.append(out)
+    return corrected
+
+
 def purpose_replacement_index(
     shapes: list[Candidate], measured_edges: set[str],
 ) -> dict[tuple[str, ...], dict[str, list[tuple[Candidate, Candidate]]]]:
@@ -1889,6 +1931,7 @@ def calibrate(
     enforce_integer_bounds: bool = False,
     integer_bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
     purpose_departure_offset_s: float = 0.0,
+    activity_purpose_shares_by_quarter: list[dict[str, float]] | None = None,
 ) -> dict:
     """Solve all intervals; write a .rou.xml; return a fit report.
 
@@ -1906,8 +1949,10 @@ def calibrate(
     solver as backstop, in the rare case IPF's iteration budget doesn't
     converge for some edge-case constraint combination."""
     shapes, route_cost = prepare_calibration(candidates_path)
-    purpose_mixes = _purpose_targets_per_quarter(
+    source_purpose_mixes = _purpose_targets_per_quarter(
         shapes, len(targets_per_q), purpose_departure_offset_s)
+    purpose_mixes = apply_category_margin(
+        source_purpose_mixes, activity_purpose_shares_by_quarter)
     solutions, rungs = solve_calibration_intervals(
         shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q,
         purpose_mixes)

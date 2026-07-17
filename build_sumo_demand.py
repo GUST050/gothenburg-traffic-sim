@@ -285,9 +285,9 @@ def parse_args() -> argparse.Namespace:
 
 # Date/window intake — moved to demand/intake.py (H1, 2026-07-14).
 # Patch SUMO_DIR/GEO_PATH on demand.intake for these functions.
-from demand.intake import (build_targets, classify_day, demand_metadata,
-                           has_split_quantiles, load_direction_split,
-                           load_sensor_edges, multi_day_blocks,
+from demand.intake import (activity_purpose_shares_for_window, build_targets,
+                           classify_day, demand_metadata, has_split_quantiles,
+                           load_direction_split, load_sensor_edges, multi_day_blocks,
                            observed_sensor_series, real_day_shape,
                            target_series, validate_date_range)
 
@@ -382,6 +382,7 @@ def main() -> None:
     # offset explicit prevents a sub-day 06:00–10:00 run from inheriting the
     # candidate purpose mix for midnight–04:00.
     purpose_departure_offset_s = int((t0 - t0.normalize()).total_seconds())
+    activity_purpose_shares = activity_purpose_shares_for_window(t0, n_intervals)
     use_weekend_shape, day_kind = classify_day(args.start_date, t0.dayofweek)
     print(f"Window: {t0} → {t1}  ({n_intervals} × 15 min)  source={args.source}"
           f"  {day_kind}")
@@ -575,7 +576,14 @@ def main() -> None:
         if corridor:
             print(f"  corridor coupling: {len(corridor)} edges between "
                   f"sensor pairs get data-derived priors")
-        assign_data = (timed("assignment_priors", ensure_assignment_priors)
+        assign_data = (timed(
+                           "assignment_priors",
+                           lambda: ensure_assignment_priors(
+                               gravity_km=args.gravity_km,
+                               through_fraction=args.through_fraction,
+                               cross_fraction=args.cross_fraction,
+                               gravity_alpha=args.gravity_alpha,
+                               seed=args.seed))
                        if not args.no_assignment_prior
                        else {"weight": 0.0, "flows": {}})
         assign_w    = assign_data.get("weight", 0.0)
@@ -631,7 +639,8 @@ def main() -> None:
                     lambda: run_pfe_variants_flat_parallel(
                         cand_path, variants, variant_inputs,
                         max_workers=os.cpu_count() or 1,
-                        purpose_departure_offset_s=purpose_departure_offset_s))
+                        purpose_departure_offset_s=purpose_departure_offset_s,
+                        activity_purpose_shares_by_quarter=activity_purpose_shares))
                 for suffix, key in variants:
                     variant_report = reports[suffix]
                     variant_fit_reports[key] = fit_summary(variant_report)
@@ -662,7 +671,8 @@ def main() -> None:
                     bounds_pq, priors_pq,
                     enforce_integer_bounds=True,
                     integer_bounds_per_q=hard_bounds_pq,
-                    purpose_departure_offset_s=purpose_departure_offset_s))
+                    purpose_departure_offset_s=purpose_departure_offset_s,
+                    activity_purpose_shares_by_quarter=activity_purpose_shares))
             tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
             print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                   f"GEH<5: {report['geh_pct']}%  "

@@ -187,6 +187,30 @@ def multi_day_blocks(flows: dict[str, list], sensor_edges: dict[str, list[str]],
     return blocks
 
 
+def activity_purpose_shares_for_window(
+    start: pd.Timestamp, n_intervals: int,
+) -> list[dict[str, float]]:
+    """Expand the documented activity-purpose model over a PFE window.
+
+    Route repair/filtering can be purpose-selective. The PFE therefore takes
+    ``P(purpose | hour, day type)`` from the calendar window itself, rather
+    than inferring it from whichever valid routes happen to survive. The
+    candidate generator remains the single source of truth for those shares;
+    this helper only expands them over a continuous window, including a
+    weekend or holiday boundary.
+    """
+    if n_intervals < 0:
+        raise ValueError("number of purpose-share intervals must be non-negative")
+    from build_candidates import purpose_shares_for_hour
+
+    result: list[dict[str, float]] = []
+    for quarter in range(n_intervals):
+        at = start + quarter * INTERVAL
+        is_weekend, _kind = classify_day(at.strftime("%Y-%m-%d"), at.dayofweek)
+        result.append(dict(purpose_shares_for_hour(at.hour, is_weekend)))
+    return result
+
+
 def load_sensor_edges() -> dict[str, list[str]]:
     """{sensor_id: [edge_id, ...]} from network.geojson (1 or 2 edges)."""
     with open(GEO_PATH) as f:

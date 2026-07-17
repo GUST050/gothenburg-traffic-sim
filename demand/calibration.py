@@ -10,6 +10,7 @@ LOSO folds, both delegating to pfe.solve_interval_with_structure_guard
 """
 from __future__ import annotations
 
+from collections import Counter
 import multiprocessing as mp
 import os
 import time
@@ -29,6 +30,35 @@ _PFE_PAR_ROUTE_COST = None
 _PFE_PAR_STRUCTURE_GROUPS = None
 _PFE_PAR_VARIANT_INPUTS = None
 _PFE_PAR_PURPOSE_MIXES = None
+
+
+def apply_activity_purpose_margin(
+    source_mixes: list[Counter],
+    activity_shares_by_quarter: list[dict[str, float]] | None,
+) -> list[Counter]:
+    """Restore the behavioural activity mix after route-pool filtering.
+
+    ``duarouter`` endpoint repair and the subsequent loop/detour filters are
+    deliberately allowed to reject invalid routes. Those rejections are not
+    purpose-neutral, though: an activity category with longer or less direct
+    routes can lose more source candidates. Using the survivor histogram as
+    the PFE purpose target would therefore silently turn a routing-validity
+    filter into a behavioural-purpose model.
+
+    Preserve every non-activity category (through/external/legacy) exactly as
+    it survives in each quarter, because this project has no independent
+    evidence to replace those margins. Reallocate only the existing
+    activity-tour count across the supplied, date-aware ``P(purpose | hour)``
+    shares. This changes neither route geometry nor the available number of
+    activity candidates, and costs only a few integer allocations before the
+    existing parallel interval solve.
+    """
+    try:
+        return pfe.apply_category_margin(source_mixes, activity_shares_by_quarter)
+    except ValueError as exc:
+        # Keep the public error terminology behavioural at this seam, while
+        # PFE's generic helper remains usable for non-purpose categories.
+        raise ValueError(str(exc).replace("category shares", "activity purpose shares")) from exc
 
 
 def _agent_path_for(route_path: Path) -> Path:
@@ -82,14 +112,19 @@ def _run_pfe_interval_job(job: dict):
 def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, str]],
                                    variant_inputs: dict[str, dict],
                                    max_workers: int | None = None,
-                                   purpose_departure_offset_s: float = 0.0) -> dict[str, dict]:
+                                   purpose_departure_offset_s: float = 0.0,
+                                   activity_purpose_shares_by_quarter:
+                                   list[dict[str, float]] | None = None) -> dict[str, dict]:
     """Solve all final direction variants through one flat worker pool.
 
     This avoids nesting multiprocessing pools: the unit of parallel work is one
     15-minute interval, across all variants, and route files are written only
     after every solution has been collected in deterministic quarter order.
     ``purpose_departure_offset_s`` aligns absolute candidate departure times
-    with target-quarter zero for a sub-day demand window.
+    with target-quarter zero for a sub-day demand window. When supplied,
+    ``activity_purpose_shares_by_quarter`` restores the documented
+    activity-purpose margin after route validity filtering while retaining
+    the survivor mix for through/external categories.
     """
     import pfe
 
@@ -106,12 +141,13 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     # Set before fork.  Each task now carries only a small tuple instead of
     # repeatedly serializing the same per-quarter bounds/priors dictionaries.
     _PFE_PAR_VARIANT_INPUTS = variant_inputs
-    _PFE_PAR_PURPOSE_MIXES = {
-        suffix: pfe._purpose_targets_per_quarter(
+    _PFE_PAR_PURPOSE_MIXES = {}
+    for suffix, _key in variants:
+        source_mixes = pfe._purpose_targets_per_quarter(
             shapes, len(variant_inputs[suffix]["targets"]),
             purpose_departure_offset_s)
-        for suffix, _key in variants
-    }
+        _PFE_PAR_PURPOSE_MIXES[suffix] = apply_activity_purpose_margin(
+            source_mixes, activity_purpose_shares_by_quarter)
     staged_outputs = {
         suffix: _staged_route_path(Path(variant_inputs[suffix]["out_path"]))
         for suffix, _key in variants

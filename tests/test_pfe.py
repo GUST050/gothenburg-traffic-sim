@@ -5,6 +5,7 @@ import json
 import re
 import sys
 import xml.etree.ElementTree as ET
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -233,6 +234,41 @@ class TestCalibrateGEH:
 
         assert report["geh_total"] == 1
         assert report["geh_ok"] == 1
+
+    def test_activity_margin_survives_candidate_filtering(self, tmp_path):
+        """An independently supplied activity margin must override only the
+        activity split in the surviving candidate histogram. This is also the
+        path used by optional congestion-feedback iterations."""
+        cand_path = tmp_path / "candidates.rou.xml"
+        cand_path.write_text(
+            "<routes>"
+            '<vehicle id="t0" depart="0"><route edges="Ot M Dt"/></vehicle>'
+            '<vehicle id="t1" depart="0"><route edges="Ot M Dt"/></vehicle>'
+            '<vehicle id="w0" depart="0"><route edges="Ow M Dw"/></vehicle>'
+            '<vehicle id="w1" depart="0"><route edges="Ow M Dw"/></vehicle>'
+            '<vehicle id="w2" depart="0"><route edges="Ow M Dw"/></vehicle>'
+            '<vehicle id="w3" depart="0"><route edges="Ow M Dw"/></vehicle>'
+            '<vehicle id="f0" depart="0"><route edges="Of M Df"/></vehicle>'
+            "</routes>")
+        (tmp_path / "candidates.meta.json").write_text(json.dumps({
+            "candidates": {
+                "t0": {"purpose": "through"}, "t1": {"purpose": "through"},
+                "w0": {"purpose": "arbete"}, "w1": {"purpose": "arbete"},
+                "w2": {"purpose": "arbete"}, "w3": {"purpose": "arbete"},
+                "f0": {"purpose": "fritid"},
+            }
+        }))
+
+        out_path = tmp_path / "calibrated.rou.xml"
+        report = calibrate(
+            cand_path, out_path, [{"M": 70.0}], [{}], [{}],
+            activity_purpose_shares_by_quarter=[{"arbete": 0.2, "fritid": 0.8}])
+        agents = json.loads((tmp_path / "calibrated.agents.json").read_text())["agents"]
+
+        assert report["achieved"]["M"] == [70.0]
+        assert Counter(agent["purpose"] for agent in agents) == Counter({
+            "through": 20, "arbete": 10, "fritid": 40,
+        })
 
 
 class TestCalibrateDispersion:

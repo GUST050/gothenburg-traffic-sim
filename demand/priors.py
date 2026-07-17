@@ -58,22 +58,93 @@ def ensure_observability() -> dict:
         return json.load(f)
 
 
-def ensure_assignment_priors() -> dict:
+def _assignment_prior_cache_contract(**config) -> tuple[int, str]:
+    """Load the producer's cache contract without duplicating it here."""
+    # Import lazily: assignment_priors imports the candidate/end-point stack,
+    # while this module is imported by the demand orchestrator at startup.
+    from assignment_priors import (ASSIGNMENT_PRIOR_SCHEMA_VERSION,
+                                   assignment_prior_input_key)
+    return (ASSIGNMENT_PRIOR_SCHEMA_VERSION,
+            assignment_prior_input_key(**config))
+
+
+def ensure_assignment_priors(
+    *, gravity_km: float | None = None,
+    through_fraction: float | None = None,
+    cross_fraction: float | None = None,
+    gravity_alpha: float | None = None,
+    seed: int | None = None,
+) -> dict:
     """Weak gravity-assignment prior for every otherwise-unconstrained edge
     (assignment_priors.py) — replaces the PFE's implicit 'pull to zero'
     (parsimony term) with 'pull toward the gravity-implied realistic
     level' everywhere a real measurement, bound, direction prior or
     corridor coupling doesn't already apply."""
+    # The field is a structural approximation, but its OD class mix and
+    # gravity kernel must still be the SAME ones used to generate the
+    # candidate route population for this build.  Omit None values so direct
+    # callers retain assignment_priors.py's own documented defaults.
+    config = {
+        name: value for name, value in {
+            "gravity_km": gravity_km,
+            "through_fraction": through_fraction,
+            "cross_fraction": cross_fraction,
+            "gravity_alpha": gravity_alpha,
+            "seed": seed,
+        }.items() if value is not None
+    }
     path = Path("sumo/assignment_priors.json")
-    if not path.exists():
+    try:
+        expected_schema, expected_key = _assignment_prior_cache_contract(**config)
+    except (ImportError, OSError, ValueError) as exc:
+        # A structurally unverified upper-bound field is worse than no weak
+        # field at all: it also affects candidate gate draws. Fail closed.
+        print(f"WARNING assignment-prior contract unavailable: {exc}")
+        return {"weight": 0.0, "flows": {}}
+
+    existing = None
+    if path.exists():
+        try:
+            with open(path) as f:
+                existing = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            print("Assignment-prior artifact is unreadable; rebuilding …")
+        else:
+            if (existing.get("schema_version") == expected_schema
+                    and existing.get("input_key") == expected_key):
+                return existing
+            print("Assignment-prior inputs changed or artifact is legacy; rebuilding …")
+
+    if existing is None or (existing.get("schema_version") != expected_schema
+                            or existing.get("input_key") != expected_key):
         print("Computing assignment priors (assignment_priors.py) …")
-        res = subprocess.run([sys.executable, "assignment_priors.py"],
+        command = [sys.executable, "assignment_priors.py"]
+        cli_flags = {
+            "gravity_km": "--gravity-km",
+            "through_fraction": "--through-fraction",
+            "cross_fraction": "--cross-fraction",
+            "gravity_alpha": "--gravity-alpha",
+            "seed": "--seed",
+        }
+        for name, flag in cli_flags.items():
+            if name in config:
+                command += [flag, str(config[name])]
+        res = subprocess.run(command,
                              capture_output=True, text=True, timeout=1200)
         if res.returncode != 0:
             print(res.stderr[-800:])
             return {"weight": 0.0, "flows": {}}
-    with open(path) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            rebuilt = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        print("Assignment-prior rebuild did not publish a readable artifact")
+        return {"weight": 0.0, "flows": {}}
+    if (rebuilt.get("schema_version") != expected_schema
+            or rebuilt.get("input_key") != expected_key):
+        print("Assignment-prior rebuild published an unexpected input identity; ignoring it")
+        return {"weight": 0.0, "flows": {}}
+    return rebuilt
 
 
 def ensure_priors(date: str) -> dict:

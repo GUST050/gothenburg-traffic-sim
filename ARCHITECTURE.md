@@ -150,9 +150,11 @@ uniform `randomTrips`:
     (motorway/trunk draw more than a residential fringe street — the only
     local proxy available; no external cordon counts exist to calibrate
     gate weights better — disclosed limitation).
-  - **E-I / I-E / I-I** — PAIRED tours (the return leg is the same tour's
-    second half, not a fresh sample — this is what makes AM/PM directional
-    balance structural). CORRECTED 2026-07-09: this line described E-I/I-E
+  - **E-I / I-E / I-I** — PAIRED candidate-tour support (the return leg is
+    generated from the same tour's second half, not a fresh sample, providing
+    an AM/PM directional prior). PFE then calibrates aggregate 15-minute
+    trip uses independently, so the final vehicle animation does not claim
+    persistent individual return journeys. CORRECTED 2026-07-09: this line described E-I/I-E
     as already working from this doc's original 2026-07-05 lock — false;
     only I-I (both ends internal) was ever implemented until 2026-07-08/09,
     which structurally capped tour length at the canvas's own diameter (see

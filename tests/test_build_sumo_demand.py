@@ -8,6 +8,7 @@ import json
 import sys
 import subprocess
 import xml.etree.ElementTree as ET
+from collections import Counter
 from types import SimpleNamespace
 
 import numpy as np
@@ -21,6 +22,41 @@ from demand import priors as dpriors
 from demand import structure as dstructure
 from demand import calibration as dcal
 from traffic_sim.demand import cache as candidate_cache
+
+
+class TestPurposeMarginAfterRouteFiltering:
+    def test_restores_only_activity_categories(self):
+        source = Counter({
+            "through": 40, "external": 10,
+            "arbete": 11, "service": 4, "fritid": 5,
+        })
+
+        result = dcal.apply_activity_purpose_margin(
+            [source], [{"arbete": 0.2, "service": 0.3, "fritid": 0.5}])
+
+        assert result == [Counter({
+            "through": 40, "external": 10,
+            "arbete": 4, "service": 6, "fritid": 10,
+        })]
+
+    def test_keeps_sparse_non_activity_quarter_unchanged(self):
+        source = Counter({"through": 5, "external": 2})
+        assert dcal.apply_activity_purpose_margin(
+            [source], [{"arbete": 0.2, "service": 0.3, "fritid": 0.5}]) == [source]
+
+    def test_requires_one_valid_share_vector_per_quarter(self):
+        with pytest.raises(ValueError, match="cover every PFE quarter"):
+            dcal.apply_activity_purpose_margin([Counter({"arbete": 1})], [])
+        with pytest.raises(ValueError, match="invalid activity purpose shares"):
+            dcal.apply_activity_purpose_margin(
+                [Counter({"arbete": 1})], [{"arbete": -1.0}])
+
+    def test_window_share_source_crosses_weekend_boundary(self):
+        shares = dintake.activity_purpose_shares_for_window(
+            pd.Timestamp("2025-09-19 23:45"), 2)
+
+        assert shares[0]["arbete"] == pytest.approx(0.491)
+        assert shares[1]["arbete"] == pytest.approx(0.222)
 
 
 class TestB1DateRangeContract:
@@ -552,6 +588,100 @@ class TestGracefulDegradationOnSubprocessFailure:
         monkeypatch.setattr(dpriors.subprocess, "run", self._fake_run_returncode_1)
         result = bsd.ensure_assignment_priors()
         assert result == {"weight": 0.0, "flows": {}}
+
+    def test_matching_assignment_prior_identity_skips_rebuild(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "sumo" / "assignment_priors.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps({
+            "schema_version": 2, "input_key": "current-key",
+            "weight": 0.15, "flows": {"edge": [1.0]},
+        }))
+        monkeypatch.setattr(dpriors, "_assignment_prior_cache_contract",
+                            lambda **_config: (2, "current-key"))
+
+        def must_not_run(*_args, **_kwargs):
+            raise AssertionError("matching artifact should be reused")
+        monkeypatch.setattr(dpriors.subprocess, "run", must_not_run)
+
+        assert bsd.ensure_assignment_priors()["flows"] == {"edge": [1.0]}
+
+    def test_stale_assignment_prior_is_rebuilt_before_use(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "sumo" / "assignment_priors.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps({
+            "schema_version": 1, "input_key": "old-key",
+            "weight": 0.15, "flows": {"stale": [99.0]},
+        }))
+        monkeypatch.setattr(dpriors, "_assignment_prior_cache_contract",
+                            lambda **_config: (2, "current-key"))
+        calls = []
+
+        def rebuild(*args, **kwargs):
+            calls.append((args, kwargs))
+            path.write_text(json.dumps({
+                "schema_version": 2, "input_key": "current-key",
+                "weight": 0.15, "flows": {"fresh": [2.0]},
+            }))
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+        monkeypatch.setattr(dpriors.subprocess, "run", rebuild)
+
+        result = bsd.ensure_assignment_priors()
+        assert len(calls) == 1
+        assert result["flows"] == {"fresh": [2.0]}
+
+    def test_failed_stale_assignment_prior_rebuild_never_uses_old_field(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "sumo" / "assignment_priors.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps({
+            "schema_version": 1, "input_key": "old-key",
+            "weight": 0.15, "flows": {"stale": [99.0]},
+        }))
+        monkeypatch.setattr(dpriors, "_assignment_prior_cache_contract",
+                            lambda **_config: (2, "current-key"))
+        monkeypatch.setattr(dpriors.subprocess, "run", self._fake_run_returncode_1)
+
+        assert bsd.ensure_assignment_priors() == {"weight": 0.0, "flows": {}}
+
+    def test_assignment_prior_rebuild_uses_candidate_model_parameters(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "sumo" / "assignment_priors.json"
+        expected_config = {
+            "gravity_km": 2.1, "through_fraction": 0.4,
+            "cross_fraction": 0.25, "gravity_alpha": 1.2, "seed": 7,
+        }
+        seen = {}
+
+        def contract(**config):
+            seen["contract"] = config
+            return 2, "custom-key"
+        monkeypatch.setattr(dpriors, "_assignment_prior_cache_contract", contract)
+
+        def rebuild(command, **_kwargs):
+            seen["command"] = command
+            path.parent.mkdir()
+            path.write_text(json.dumps({
+                "schema_version": 2, "input_key": "custom-key",
+                "weight": 0.15, "flows": {},
+            }))
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        monkeypatch.setattr(dpriors.subprocess, "run", rebuild)
+
+        result = bsd.ensure_assignment_priors(**expected_config)
+        assert result["input_key"] == "custom-key"
+        assert seen["contract"] == expected_config
+        for name, value in expected_config.items():
+            flag = {
+                "gravity_km": "--gravity-km",
+                "through_fraction": "--through-fraction",
+                "cross_fraction": "--cross-fraction",
+                "gravity_alpha": "--gravity-alpha",
+                "seed": "--seed",
+            }[name]
+            index = seen["command"].index(flag)
+            assert seen["command"][index + 1] == str(value)
 
     def test_ensure_priors_degrades_gracefully_on_failure(self, monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)

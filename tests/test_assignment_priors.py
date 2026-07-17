@@ -7,6 +7,7 @@ build_perturbed_variants()/robust_scale() were extracted from main() during
 this test-writing pass with no logic change (verified: assignment_priors.py
 still runs end-to-end and produces the same class of output)."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -15,9 +16,10 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from assignment_priors import (build_perturbed_variants, daily_shape,
+from assignment_priors import (assignment_prior_input_key,
+                               build_perturbed_variants, daily_shape,
                                fastest_parallel_edge_times, robust_scale,
-                               add_path_load)
+                               add_path_load, calibrate_assignment_priors)
 
 
 class TestFastestParallelEdgeTimes:
@@ -55,6 +57,23 @@ class TestFastestParallelEdgeTimes:
 
         assert base_time_key[(1, 2)] == 0
         assert base_time[(1, 2)] == pytest.approx(200.0 / (40 / 3.6))
+
+    def test_sumo_costs_override_graphml_speeds(self):
+        """The published SUMO net is routing authority in production.
+
+        This reverses the GraphML speed ranking on purpose: if the
+        assignment field instead routes by old OSM tags, it can choose a
+        different parallel edge than duarouter/candidate generation.
+        """
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 2, key=0, length=100.0, maxspeed="80")
+        G.add_edge(1, 2, key=1, length=100.0, maxspeed="20")
+
+        base_time, base_time_key = fastest_parallel_edge_times(
+            G, {"1_2_0": 12.0, "1_2_1": 4.0})
+
+        assert base_time_key[(1, 2)] == 1
+        assert base_time[(1, 2)] == pytest.approx(4.0)
 
 
 class TestBuildPerturbedVariants:
@@ -169,3 +188,29 @@ class TestDailyShape:
         monkeypatch.chdir(tmp_path)
         shape = daily_shape()
         np.testing.assert_allclose(shape, np.full(96, 1 / 96))
+
+
+class TestAssignmentPriorInputKey:
+    def test_changes_when_a_structural_input_changes(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        before = assignment_prior_input_key()
+        network = tmp_path / "sumo" / "net.net.xml"
+        network.parent.mkdir()
+        network.write_text("<net/>")
+
+        assert assignment_prior_input_key() != before
+
+
+class TestAssignmentPriorPublication:
+    def test_no_measured_load_refuses_to_publish_nan_scale(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        data = tmp_path / "web" / "data"
+        data.mkdir(parents=True)
+        (data / "flows.json").write_text(json.dumps({"flows": {"edge": [10.0]}}))
+        (data / "network.geojson").write_text(json.dumps({"features": [{
+            "properties": {"id": "edge", "sensor_id": "S1", "level": "S"},
+        }]}))
+
+        with pytest.raises(RuntimeError, match="did not reach any measured edge"):
+            calibrate_assignment_priors({"edge": 0.0}, n_samples=10,
+                                        write_path=None)

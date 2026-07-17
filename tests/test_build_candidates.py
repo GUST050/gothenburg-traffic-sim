@@ -9,6 +9,7 @@ git history) — these tests pin that behaviour so it can't silently regress."""
 import json
 import sys
 import xml.etree.ElementTree as ET
+from collections import Counter
 from pathlib import Path
 
 import networkx as nx
@@ -41,7 +42,7 @@ def test_generate_day_block_reuses_geometry_but_resamples_each_days_departures(m
 
     def fake_generate(rng, *args, **kwargs):
         calls.append(1)
-        return [(100.0, "from", "to", "via")], [1.0], {},
+        return [(3 * 3600 + 100.0, "from", "to", "via")], [1.0], {},
 
     monkeypatch.setattr(bc, "generate_sensor_anchored_trips", fake_generate)
     structure = bc.CandidateStructure(
@@ -85,17 +86,125 @@ def test_reused_paired_tour_keeps_return_after_outbound():
     # activity->home return after the home->activity outbound leg.
     profile = np.zeros(24); profile[7] = profile[18] = 0.5
     templates = [
-        ("home", "activity", "via", "arbete", "ii-1", "outbound"),
-        ("activity", "home", "via", "arbete", "ii-1", "return"),
+        record
+        for purpose in bc.PURPOSE_CATEGORIES
+        for record in [
+            ("home", f"activity-{purpose}", "via", purpose,
+             f"ii-{purpose}", "outbound"),
+            (f"activity-{purpose}", "home", "via", purpose,
+             f"ii-{purpose}", "return"),
+        ]
     ]
 
     block, _, _, _ = bc.generate_day_block(
         structure, profile, 0, "d0_", 42, 0, len(templates), .5, .3, 2.6,
         False, 1, template_trips=templates)
-    by_leg = {trip[7]: int(trip[1] // 3600) for trip in block}
+    by_tour = {}
+    for trip in block:
+        by_tour.setdefault(trip[6], {})[trip[7]] = trip[1]
+    assert by_tour
+    assert all(legs["return"] > legs["outbound"] for legs in by_tour.values())
+    assert all(legs["return"] >= 12 * 3600 for legs in by_tour.values())
 
-    assert by_leg["return"] >= by_leg["outbound"]
-    assert by_leg["return"] >= 12
+
+def test_reused_template_pool_matches_new_days_purpose_margin():
+    structure = bc.CandidateStructure(
+        G=None, edges=[], hmass=np.array([]), amass={}, entries=[], exits=[],
+        entry_ids=[], exit_ids=[], w_entry=np.array([]), w_exit=np.array([]), measured=[])
+    # A deliberately balanced source pool is unlike the weekday purpose
+    # margin at 07:00/20:00. Reuse must reweight complete tours, not retain
+    # 100/100/100 merely because that happened to be the first day's mix.
+    templates = [
+        record
+        for purpose in bc.PURPOSE_CATEGORIES
+        for number in range(100)
+        for record in [
+            ("home", f"activity-{purpose}-{number}", "via", purpose,
+             f"ii-{purpose}-{number}", "outbound"),
+            (f"activity-{purpose}-{number}", "home", "via", purpose,
+             f"ii-{purpose}-{number}", "return"),
+        ]
+    ]
+    profile = np.zeros(24); profile[7] = profile[20] = 0.5
+
+    block, _, _, _ = bc.generate_day_block(
+        structure, profile, 0, "d1_", 42, 1, len(templates), .5, .3, 2.6,
+        False, 1, template_trips=templates)
+
+    outbound = [trip for trip in block if trip[7] == "outbound"]
+    achieved = {purpose: sum(trip[5] == purpose for trip in outbound)
+                for purpose in bc.PURPOSE_CATEGORIES}
+    expected = bc._largest_remainder_targets(
+        bc._activity_purpose_mix(profile, False), len(outbound))
+    assert achieved == expected
+
+
+def test_initial_sensor_accepted_pool_is_rebalanced_to_purpose_margin(monkeypatch):
+    """Natural sensor crossing acceptance must not become a hidden purpose prior.
+
+    The raw accepted support below is deliberately work-heavy.  The initial
+    day, not only reused days, must restore the profile-implied finite purpose
+    margin before PFE treats that pool as its behavioural target.
+    """
+    structure = bc.CandidateStructure(
+        G=None, edges=[], hmass=np.array([]), amass={}, entries=[], exits=[],
+        entry_ids=[], exit_ids=[], w_entry=np.array([]), w_exit=np.array([]), measured=[])
+    raw = [
+        trip
+        for purpose, count in (("arbete", 7), ("service", 1), ("fritid", 1))
+        for number in range(count)
+        for trip in [
+            (7 * 3600.0, "home", f"activity-{purpose}-{number}", "via",
+             purpose, f"ii-{purpose}-{number}", "outbound"),
+            (18 * 3600.0, f"activity-{purpose}-{number}", "home", "via",
+             purpose, f"ii-{purpose}-{number}", "return"),
+        ]
+    ]
+
+    monkeypatch.setattr(bc, "generate_sensor_anchored_trips",
+                        lambda *_args, **_kwargs: (raw, [], {}))
+    profile = np.zeros(24); profile[19] = 1.0
+    block, _, _, _ = bc.generate_day_block(
+        structure, profile, 0, "d0_", 42, 0, len(raw), .5, .3, 2.6,
+        False, 1)
+
+    outbound = [trip for trip in block if trip[7] == "outbound"]
+    achieved = Counter(trip[5] for trip in outbound)
+    expected = bc._largest_remainder_targets(
+        bc._activity_purpose_mix(profile, False), len(outbound))
+    assert achieved == expected
+
+
+def test_reused_late_paired_tour_returns_after_midnight_not_before_outbound():
+    structure = bc.CandidateStructure(
+        G=None, edges=[], hmass=np.array([]), amass={}, entries=[], exits=[],
+        entry_ids=[], exit_ids=[], w_entry=np.array([]), w_exit=np.array([]), measured=[])
+    templates = [
+        record
+        for purpose in bc.PURPOSE_CATEGORIES
+        for record in [
+            ("home", f"activity-{purpose}", "via", purpose,
+             f"ii-{purpose}", "outbound"),
+            (f"activity-{purpose}", "home", "via", purpose,
+             f"ii-{purpose}", "return"),
+        ]
+    ]
+    profile = np.zeros(24); profile[23] = 1.0
+
+    block, _, _, _ = bc.generate_day_block(
+        structure, profile, 0, "d1_", 42, 1, len(templates), .5, .3, 2.6,
+        False, 1, template_trips=templates)
+
+    by_tour = {}
+    for trip in block:
+        by_tour.setdefault(trip[6], {})[trip[7]] = trip[1]
+    assert all(legs["outbound"] < 86400 <= legs["return"]
+               for legs in by_tour.values())
+
+
+def test_late_outbound_return_hour_is_next_day():
+    pm_weights = np.zeros(24); pm_weights[23] = 1.0
+    assert bc._sample_return_hour(np.random.default_rng(42), 23, pm_weights) == 24
 
 
 class TestGateWeights:

@@ -18,10 +18,11 @@ the road graph:
                                              the only local proxy available;
                                              no external cordon counts exist
                                              to calibrate this better).
-  E-I / I-E  commute/errand tours (PAIRED — the leg back through the gate
-             is the return half of the SAME tour, not a fresh sample; this
-             is what makes AM/PM directional balance structural rather than
-             assumed).
+  E-I / I-E  commute/errand tour SUPPORT (PAIRED — the leg back through the
+             gate is generated from the same tour rather than as a fresh
+             sample, providing an AM/PM directional prior). PFE calibrates
+             aggregate 15-minute trip uses independently, so final vehicles
+             are not claimed to be persistent individual return journeys.
   I-I  short internal tours (also paired).
 
 HOME mass (per graph edge): real 2023 population from SCB, per DeSO zone
@@ -1857,6 +1858,180 @@ def blend_day_shape(real: np.ndarray, fallback: np.ndarray,
     return blended / blended.sum()
 
 
+def _largest_remainder_targets(weights: dict[str, float], total: int) -> dict[str, int]:
+    """Convert a categorical probability vector into deterministic counts.
+
+    The candidate pool is an aggregate support set, so a reused day needs an
+    integer number of whole tour templates for each purpose.  Largest
+    remainder keeps that total exact without a systematic category bias.
+    """
+    if total < 0:
+        raise ValueError("template target total must be non-negative")
+    if not weights:
+        return {}
+    mass = sum(float(value) for value in weights.values())
+    if not math.isfinite(mass) or mass <= 0:
+        raise ValueError("template purpose weights must have positive finite mass")
+    raw = {key: total * float(value) / mass for key, value in weights.items()}
+    result = {key: int(math.floor(value)) for key, value in raw.items()}
+    remaining = total - sum(result.values())
+    for key, _value in sorted(raw.items(), key=lambda item: (
+            -(item[1] - math.floor(item[1])), item[0]))[:remaining]:
+        result[key] += 1
+    return result
+
+
+def _activity_purpose_mix(profile: np.ndarray, is_weekend: bool) -> dict[str, float]:
+    """Return P(purpose) implied by one day's P(hour) and P(purpose | hour)."""
+    profile = np.asarray(profile, dtype=float)
+    if profile.shape != (24,) or not np.all(np.isfinite(profile)) or profile.sum() <= 0:
+        raise ValueError("day profile must contain 24 finite positive-mass hours")
+    profile = profile / profile.sum()
+    return {
+        purpose: float(sum(
+            profile[hour] * purpose_shares_for_hour(hour, is_weekend)[purpose]
+            for hour in range(24)))
+        for purpose in PURPOSE_CATEGORIES
+    }
+
+
+def _sample_return_hour(rng: np.random.Generator, outbound_hour: int,
+                        pm_weights: np.ndarray) -> int:
+    """Draw a paired return hour strictly after its outbound hour.
+
+    Hour 24 is intentional for a 23:xx outbound: the leg is overnight, not
+    an impossible earlier return randomly placed back in the 23:00 bucket.
+    """
+    return max(int(outbound_hour) + 1, int(rng.choice(24, p=pm_weights)))
+
+
+def _resample_reused_template_tours(
+    template_trips: list[tuple], profile: np.ndarray, is_weekend: bool,
+    rng: np.random.Generator,
+) -> list[tuple]:
+    """Reweight a reused geometry pool to the new day's purpose margin.
+
+    A route template has immutable purpose/endpoint provenance, but a later
+    weekday can have a different observed departure profile from the day that
+    first created the geometry.  Reusing every template exactly once keeps
+    the *old* P(purpose), while resampling only P(hour | purpose) does not
+    restore the intended joint P(hour, purpose).  That was a real multi-day
+    error: a quieter or peakier later day inherited the first day's purpose
+    margin before PFE ever saw it.
+
+    The fix is purpose-stratified resampling of complete I-I and E-I tour
+    templates.  It preserves route geometry, OD provenance, paired legs,
+    E-I/I-I composition, and pool size; only the number of times each
+    existing purpose-specific support route is offered changes.  Through and
+    I-E/external templates have no activity-purpose draw, so they remain
+    untouched.  Repeated source tours receive distinct IDs: they are separate
+    aggregate demand representatives, never one duplicated person.
+    """
+    grouped: OrderedDict[str, list[tuple]] = OrderedDict()
+    for record in template_trips:
+        if len(record) < 6:
+            raise ValueError("reused template is missing purpose/tour metadata")
+        grouped.setdefault(str(record[4]), []).append(record)
+
+    selected: list[tuple[str, list[tuple]]] = []
+    purpose_mix = _activity_purpose_mix(profile, is_weekend)
+    rebalanced_kinds = {"ii", "ei"}
+    for kind in ("ii", "ei"):
+        kind_groups = [(tour_id, records) for tour_id, records in grouped.items()
+                       if _tour_kind(tour_id) == kind]
+        if not kind_groups:
+            continue
+        by_purpose: dict[str, list[tuple[str, list[tuple]]]] = {
+            purpose: [] for purpose in PURPOSE_CATEGORIES
+        }
+        for tour_id, records in kind_groups:
+            purposes = {str(record[3]) for record in records}
+            if len(records) != 2 or len(purposes) != 1:
+                raise ValueError(
+                    f"reused {kind} template {tour_id!r} is not one complete, "
+                    "single-purpose paired tour")
+            purpose = next(iter(purposes))
+            if purpose not in by_purpose:
+                raise ValueError(
+                    f"reused {kind} template {tour_id!r} has unsupported "
+                    f"purpose {purpose!r}")
+            by_purpose[purpose].append((tour_id, records))
+        missing = [purpose for purpose in PURPOSE_CATEGORIES
+                   if not by_purpose[purpose]]
+        if missing:
+            raise ValueError(
+                f"reused {kind} geometry pool lacks purpose support for "
+                f"{', '.join(missing)}; cannot preserve the daily purpose distribution")
+        targets = _largest_remainder_targets(purpose_mix, len(kind_groups))
+        for purpose in PURPOSE_CATEGORIES:
+            source = by_purpose[purpose]
+            order = rng.permutation(len(source))
+            for draw in range(targets[purpose]):
+                # Cycle through every available geometry before repeating one;
+                # reshuffle each cycle so a small quota adjustment never
+                # creates a visible run of one route.
+                if draw and draw % len(source) == 0:
+                    order = rng.permutation(len(source))
+                selected.append(source[int(order[draw % len(source)])])
+
+    # E-E through, I-E/external, and legacy/unclassified templates keep their
+    # original composition. They do not participate in P(purpose | hour).
+    selected.extend((tour_id, records) for tour_id, records in grouped.items()
+                    if _tour_kind(tour_id) not in rebalanced_kinds)
+
+    copies: dict[str, int] = {}
+    day_templates: list[tuple] = []
+    for source_tour_id, records in selected:
+        copy = copies.get(source_tour_id, 0)
+        copies[source_tour_id] = copy + 1
+        tour_id = (source_tour_id if copy == 0
+                   else f"{source_tour_id}~{copy}")
+        for from_edge, to_edge, via, purpose, _old_tour_id, leg in (
+                record[:6] for record in records):
+            day_templates.append((from_edge, to_edge, via, purpose, tour_id, leg))
+    return day_templates
+
+
+def _template_tour_lengths_km(
+    template_trips: list[tuple], structure,
+) -> list[float]:
+    """Measure the active template set's direct tour lengths for diagnostics.
+
+    Purpose-margin rebalancing can duplicate one valid complete tour and omit
+    another.  The old diagnostic retained the pre-rebalance length list,
+    silently describing a different pool from the one sent to duarouter/PFE.
+    Recompute the same endpoint-midpoint distance used by the generator for
+    the actual selected tour templates instead.
+    """
+    edge_latlon = {
+        edge["id"]: (float(edge["lat"]), float(edge["lon"]))
+        for edge in structure.edges
+    }
+    by_tour: OrderedDict[str, list[tuple]] = OrderedDict()
+    for record in template_trips:
+        if len(record) < 6:
+            continue
+        by_tour.setdefault(str(record[4]), []).append(record)
+
+    first_leg = {"ii": "outbound", "ei": "inbound", "ie": "outbound"}
+    lengths: list[float] = []
+    for tour_id, records in by_tour.items():
+        expected_leg = first_leg.get(_tour_kind(tour_id))
+        if expected_leg is None:
+            continue
+        record = next((item for item in records if item[5] == expected_leg), None)
+        if record is None:
+            continue
+        origin = edge_latlon.get(record[0])
+        destination = edge_latlon.get(record[1])
+        if origin is None or destination is None:
+            continue
+        lengths.append(float(gravity_distance_km(
+            np.asarray([destination[0]]), np.asarray([destination[1]]),
+            origin[0], origin[1])[0]))
+    return lengths
+
+
 def _natural_sensor_for_leg(D, node_idx, anchor_v: int, candidate_u: int,
                             m_info: dict[str, tuple[int, int, float]],
                             quota: dict[str, int], anchor_u: int | None = None,
@@ -2028,8 +2203,13 @@ def generate_sensor_anchored_trips(
         h_out = rng.choice(24, p=shape_hourly)
         pm_shape = shape_hourly * (np.arange(24) >= 12)
         pm_shape = pm_shape / pm_shape.sum() if pm_shape.sum() > 0 else shape_hourly
-        h_ret = max(h_out + 1, rng.choice(24, p=pm_shape))
-        return h_out, min(h_ret, 23)
+        h_ret = _sample_return_hour(rng, h_out, pm_shape)
+        # Do not clamp a late outbound trip back into hour 23. That made a
+        # 23:xx outbound and its return draw independent seconds inside the
+        # same hour, so the return could precede its own outbound. A 24:xx
+        # return is an overnight leg: it falls in the next day when present,
+        # and outside a one-day calibration window otherwise.
+        return h_out, h_ret
 
     n_through     = int(n_total * through_fraction)
     n_tours_total = (n_total - n_through) // 2
@@ -2436,8 +2616,9 @@ def generate_day_block(
     every day's measured/forecast departure-time signal.
     """
     rng = np.random.default_rng(seed + day_index)
+    raw_lengths: list[float] = []
     if template_trips is None:
-        raw_trips, lengths, short = generate_sensor_anchored_trips(
+        raw_trips, raw_lengths, short = generate_sensor_anchored_trips(
             rng, structure.G, structure.edges, structure.hmass, structure.amass,
             structure.entries, structure.exits, structure.entry_ids, structure.exit_ids,
             structure.w_entry, structure.w_exit, profile, structure.measured,
@@ -2454,17 +2635,37 @@ def generate_day_block(
     else:
         # Reusing geometry is deliberate: diversity, not a linearly growing
         # number of near-duplicate routes, is what the calibration needs.
-        raw_trips = []
-        lengths = []
         short = {}
 
-    # Geometry reuse must not sever a route's purpose from its departure
-    # period. Draw h conditional on the template's already-sampled purpose:
-    # P(h | p, day) ∝ P(h | day) P(p | h, day). Critically, resample the
-    # TWO legs of a paired tour together. The old per-route loop could place
-    # its return before its own outbound leg on a reused multi-day template,
-    # destroying the AM/PM directional structure that the original generator
-    # deliberately created. Reuse still avoids any extra routing work.
+    canonical_templates = template_trips
+    active_purpose_tours = any(
+        _tour_kind(str(record[4])) in {"ii", "ei"}
+        for record in canonical_templates if len(record) >= 6)
+    if active_purpose_tours:
+        # Sensor-conditioned acceptance is not purpose-neutral: a longer
+        # leisure route, for example, can have a different probability of
+        # finding a natural measured crossing than a work route.  Retaining
+        # raw accepted draws therefore makes the candidate pool's P(purpose)
+        # drift away from the documented P(hour) × P(purpose|hour) before PFE
+        # sees it.  Rebalance complete valid tour templates for *every* day,
+        # including the first one.  This is result-neutral for endpoints and
+        # routing validity, costs no additional shortest-path work, and makes
+        # the behavioural purpose distribution an exact finite-pool contract.
+        day_templates = _resample_reused_template_tours(
+            canonical_templates, profile, is_weekend, rng)
+        lengths = _template_tour_lengths_km(day_templates, structure)
+    else:
+        # Legacy/minimal callers without a recognised activity-tour shape
+        # retain their original support instead of guessing purpose metadata.
+        day_templates = canonical_templates
+        lengths = raw_lengths
+
+    # Geometry must not sever a route's purpose from its departure period.
+    # Draw h conditional on the template's already-sampled purpose:
+    # P(h | p, day) ∝ P(h | day) P(p | h, day). Critically, sample the TWO
+    # legs of a paired tour together. The old per-route loop could place its
+    # return before its own outbound leg, destroying the AM/PM directional
+    # structure the generator deliberately creates.
     def departure_weights(purpose: str, *, pm_only: bool = False) -> np.ndarray:
         weights = np.asarray(profile, dtype=float).copy()
         if purpose in PURPOSE_CATEGORIES:
@@ -2486,14 +2687,14 @@ def generate_day_block(
                 or (kind == "ei" and leg == "outbound")
                 or (kind == "ie" and leg == "inbound"))
 
-    hours = np.empty(len(template_trips), dtype=int)
+    hours = np.empty(len(day_templates), dtype=int)
     by_tour: dict[str, list[int]] = {}
-    for i, template in enumerate(template_trips):
+    for i, template in enumerate(day_templates):
         by_tour.setdefault(str(template[4]), []).append(i)
     for tour_id, indices in by_tour.items():
-        purpose = str(template_trips[indices[0]][3])
+        purpose = str(day_templates[indices[0]][3])
         return_indices = [i for i in indices if is_return_leg(
-            str(template_trips[i][4]), str(template_trips[i][5]))]
+            str(day_templates[i][4]), str(day_templates[i][5]))]
         outbound_indices = [i for i in indices if i not in return_indices]
         if not return_indices or not outbound_indices:
             # E-E through trips have only one leg. A malformed legacy
@@ -2501,12 +2702,11 @@ def generate_day_block(
             # synthetic return relationship.
             for i in indices:
                 hours[i] = int(rng.choice(24, p=departure_weights(
-                    str(template_trips[i][3]))))
+                    str(day_templates[i][3]))))
             continue
         h_out = int(rng.choice(24, p=departure_weights(purpose)))
         pm_weights = departure_weights(purpose, pm_only=True)
-        h_ret = max(h_out + 1, int(rng.choice(24, p=pm_weights)))
-        h_ret = min(h_ret, 23)
+        h_ret = _sample_return_hour(rng, h_out, pm_weights)
         for i in outbound_indices:
             hours[i] = h_out
         for i in return_indices:
@@ -2515,10 +2715,10 @@ def generate_day_block(
         (f"{id_prefix}{i}", offset_s + (hour + rng.random()) * 3600,
          from_edge, to_edge, via, purpose, f"{id_prefix}{tour_id}", leg)
         for i, (template, hour)
-        in enumerate(zip(template_trips, hours))
+        in enumerate(zip(day_templates, hours))
         for from_edge, to_edge, via, purpose, tour_id, leg in [template[:6]]
     ]
-    return block, lengths, short, template_trips
+    return block, lengths, short, canonical_templates
 
 
 def main() -> None:
@@ -2675,8 +2875,6 @@ def main() -> None:
                         "duarouter so trips are routed against the "
                         "congestion of the period they actually depart in.")
     args = ap.parse_args()
-    rng = np.random.default_rng(args.seed)
-
     G = ox.load_graphml(GRAPH_PATH)
     try:
         sumo_edge_ids, routing_costs = load_sumo_routing_data(NET_PATH)
@@ -2747,17 +2945,17 @@ def main() -> None:
                  + ", ".join(empty_activity))
     multi_day_trips = None
     n_day_blocks = 1
+    structure = CandidateStructure(
+        G=routing_G, edges=edges, hmass=hmass, amass=amass, entries=entries,
+        exits=exits, entry_ids=entry_ids, exit_ids=exit_ids,
+        w_entry=w_entry, w_exit=w_exit, measured=measured,
+        routing_costs=routing_costs)
     if args.day_blocks_file:
         with open(args.day_blocks_file) as f:
             blocks = json.load(f)
         if not blocks:
             sys.exit("--day-blocks-file must contain at least one block")
         n_day_blocks = len(blocks)
-        structure = CandidateStructure(
-            G=routing_G, edges=edges, hmass=hmass, amass=amass, entries=entries,
-            exits=exits, entry_ids=entry_ids, exit_ids=exit_ids,
-            w_entry=w_entry, w_exit=w_exit, measured=measured,
-            routing_costs=routing_costs)
         templates: dict[str, list[tuple]] = {}
         multi_day_trips, tour_lengths_km, short_quota = [], [], {}
         for day_index, block_spec in enumerate(blocks):
@@ -2782,12 +2980,21 @@ def main() -> None:
                   f"({'reused geometry' if reused else 'new geometry'})")
         trips = []
     else:
-        trips, tour_lengths_km, short_quota = generate_sensor_anchored_trips(
-            rng, routing_G, edges, hmass, amass, entries, exits, entry_ids, exit_ids,
-            w_entry, w_exit, shape_hourly, measured,
-            args.n_total, args.through_fraction, args.cross_fraction,
-            args.gravity_km, args.is_weekend, args.min_per_sensor,
-            gravity_alpha=args.gravity_alpha, routing_costs=routing_costs)
+        # A one-day build must use the same purpose-margin reconciliation as
+        # a multi-day block.  Calling generate_sensor_anchored_trips directly
+        # here used to bypass that correction entirely, leaving the default
+        # UI path with the raw sensor-acceptance purpose bias while only
+        # --days > 1 behaved as documented.
+        block, tour_lengths_km, short_quota, _template = generate_day_block(
+            structure, shape_hourly, 0.0, "", args.seed, 0, args.n_total,
+            args.through_fraction, args.cross_fraction, args.gravity_km,
+            args.is_weekend, args.min_per_sensor,
+            gravity_alpha=args.gravity_alpha)
+        trips = [
+            (depart, from_edge, to_edge, via_edge, purpose, tour_id, leg)
+            for _trip_id, depart, from_edge, to_edge, via_edge,
+            purpose, tour_id, leg in block
+        ]
 
     n_through     = int(args.n_total * args.through_fraction)
     n_tours_total = (args.n_total - n_through) // 2
