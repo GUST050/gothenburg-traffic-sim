@@ -52,6 +52,7 @@ import pfe
 from build_sumo_demand import (GEO_PATH, build_targets, ensure_observability,
                                load_edge_geometry, load_sensor_edges,
                                structure_groups_for_shapes)
+from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.runtime import sumo_home
 
 SUMO_DIR = Path("sumo")
@@ -279,7 +280,22 @@ def main() -> None:
     # all_priors' d["sensor"] == held check below).
     edge_to_sensor = {e: sid for sid, edges in sensor_edges.items() for e in edges}
 
-    report = {"window": f"{demand_start.date()} → {demand_end.date()} (exclusive)",
+    report = {"schema_version": 2,
+              "comparison_contract": {
+                  # Sensor-contribution reports use this to reject an
+                  # accidental comparison of different dates, candidate
+                  # pools, networks or LOSO procedures as a sensor benefit.
+                  "protocol": "loso_pfe_meso_v2",
+                  "source": meta.get("source"),
+                  "window_start": demand_start.isoformat(),
+                  "window_end": demand_end.isoformat(),
+                  "n_intervals": nq,
+                  "simulation_mode": "meso",
+                  "candidate_pool_sha256": sha256_file(SUMO_DIR / "candidates.rou.xml"),
+                  "network_sha256": sha256_file(SUMO_DIR / "net.net.xml"),
+                  "assignment_prior_enabled": not args.no_assignment_prior,
+              },
+              "window": f"{demand_start.date()} → {demand_end.date()} (exclusive)",
               "note": "leave-one-station-out — simulated vs measured at the "
                       "held-out station; level-2 bounds, priors, corridor "
                       "priors, and the assignment-prior scale factor are all "

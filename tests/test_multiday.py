@@ -26,14 +26,21 @@ def test_parse_summary_uses_cumulative_deltas_and_boundary_snapshots(tmp_path):
     assert payload["days"][1]["loaded_delta"] == 15
     assert payload["days"][0]["teleports_delta"] == 1
     assert payload["days"][0]["waiting_at_boundary"] == 1
+    assert payload["days"][0]["loaded_at_boundary"] == 10
+    assert payload["days"][0]["inserted_at_boundary"] == 10
+    assert payload["days"][0]["boundary_lag_s"] == 0.0
 
 
 def test_aggregate_and_validate_require_every_seed_and_day():
     one = {"complete": True, "days": [
-        {"loaded_delta": 10, "inserted_delta": 10, "teleports_delta": 0,
-         "waiting_at_boundary": 2},
-        {"loaded_delta": 12, "inserted_delta": 12, "teleports_delta": 1,
-         "waiting_at_boundary": 0},
+        {"day": 1, "loaded_delta": 10, "inserted_delta": 10,
+         "teleports_delta": 0, "waiting_at_boundary": 2,
+         "loaded_at_boundary": 10, "inserted_at_boundary": 10,
+         "boundary_lag_s": 0},
+        {"day": 2, "loaded_delta": 12, "inserted_delta": 12,
+         "teleports_delta": 1, "waiting_at_boundary": 0,
+         "loaded_at_boundary": 22, "inserted_at_boundary": 22,
+         "boundary_lag_s": 0},
     ]}
     payload = aggregate([one, one], days=2,
                         day_boundaries_s=[0, 86400, 172800])
@@ -46,3 +53,46 @@ def test_aggregate_and_validate_require_every_seed_and_day():
     assert validate(payload, days=2,
                     day_boundaries_s=[0, 86400, 172800])
 
+
+def test_validate_rejects_empty_day_even_when_schema_is_complete():
+    seed = {"complete": True, "days": [
+        {"day": 1, "loaded_delta": 0, "inserted_delta": 0,
+         "teleports_delta": 0, "loaded_at_boundary": 0,
+         "inserted_at_boundary": 0, "boundary_lag_s": 0},
+    ]}
+    payload = aggregate([seed], days=1, day_boundaries_s=[0, 86400])
+
+    errors = validate(payload, days=1, day_boundaries_s=[0, 86400])
+
+    assert any("ingen laddad demand" in error for error in errors)
+
+
+def test_validate_recomputes_aggregate_from_each_seed_boundary_evidence():
+    seed = {"complete": True, "days": [
+        {"day": 1, "loaded_delta": 10, "inserted_delta": 10,
+         "teleports_delta": 0, "loaded_at_boundary": 10,
+         "inserted_at_boundary": 10, "boundary_lag_s": 0},
+    ]}
+    payload = aggregate([seed], days=1, day_boundaries_s=[0, 86400])
+    payload["per_day"][0]["loaded_delta_min"] = 999
+
+    errors = validate(payload, days=1, day_boundaries_s=[0, 86400])
+
+    assert any("inkonsekvent loaded_delta_min" in error for error in errors)
+
+
+def test_validate_allows_midnight_insertion_carryover():
+    """A queue at day one can drain after midnight without losing demand."""
+    seed = {"complete": True, "days": [
+        {"day": 1, "loaded_delta": 10, "inserted_delta": 8,
+         "teleports_delta": 0, "loaded_at_boundary": 10,
+         "inserted_at_boundary": 8, "boundary_lag_s": 0},
+        {"day": 2, "loaded_delta": 10, "inserted_delta": 12,
+         "teleports_delta": 0, "loaded_at_boundary": 20,
+         "inserted_at_boundary": 20, "boundary_lag_s": 0},
+    ]}
+    payload = aggregate([seed], days=2,
+                        day_boundaries_s=[0, 86400, 172800])
+
+    assert validate(payload, days=2,
+                    day_boundaries_s=[0, 86400, 172800]) == []

@@ -1,10 +1,19 @@
 from traffic_sim.intake.contribution import build_contribution, rank_placements
 
 
-def _loso(ratios):
-    return {"stations": {sid: {"edges": {
+def _loso(ratios, *, contract=True):
+    report = {"stations": {sid: {"edges": {
         edge: {"ratio": ratio} for edge, ratio in edges.items()
     }} for sid, edges in ratios.items()}}
+    if contract:
+        report["comparison_contract"] = {
+            "protocol": "loso_pfe_meso_v2", "source": "historical",
+            "window_start": "2025-09-16T00:00:00",
+            "window_end": "2025-09-17T00:00:00", "n_intervals": 96,
+            "simulation_mode": "meso", "candidate_pool_sha256": "pool",
+            "network_sha256": "network", "assignment_prior_enabled": True,
+        }
+    return report
 
 
 def test_contribution_reports_holdout_change_and_confidence_gain():
@@ -33,6 +42,37 @@ def test_missing_holdout_is_insufficient_not_neutral():
     assert report["outcome"] == "insufficient_evidence"
 
 
+def test_different_loso_contract_cannot_be_reported_as_sensor_improvement():
+    registry = {"sensors": [{"sensor_id": "new", "approved_edge_ids": ["e1"]}]}
+    before = _loso({"old": {"e": 0.5}})
+    after = _loso({"old": {"e": 0.9}})
+    after["comparison_contract"]["window_start"] = "2025-09-17T00:00:00"
+    network = {"features": [{"properties": {"id": "e1", "confidence": 0.2}}]}
+
+    report = build_contribution(
+        sensor_id="new", registry=registry, network_before=network,
+        network_after=network, loso_before=before, loso_after=after,
+        flows_after={"e1": [1]},
+    )
+
+    assert report["outcome"] == "insufficient_evidence"
+    assert report["comparability"]["comparable"] is False
+
+
+def test_negative_comparable_holdout_change_is_reported_as_worsened():
+    registry = {"sensors": [{"sensor_id": "new", "approved_edge_ids": ["e1"]}]}
+    network = {"features": [{"properties": {"id": "e1", "confidence": 0.2}}]}
+    report = build_contribution(
+        sensor_id="new", registry=registry, network_before=network,
+        network_after=network,
+        loso_before=_loso({"old": {"e": 1.0}}),
+        loso_after=_loso({"old": {"e": 0.5}}),
+        flows_after={"e1": [1]},
+    )
+
+    assert report["outcome"] == "worsened"
+
+
 def test_placement_screen_excludes_measured_edges_and_is_sorted():
     network = {"features": [
         {"properties": {"id": "measured", "sensor_id": "s", "confidence": 0.0,
@@ -42,4 +82,3 @@ def test_placement_screen_excludes_measured_edges_and_is_sorted():
     ]}
     rows = rank_placements(network, top_n=2)
     assert [row["edge_id"] for row in rows] == ["far", "near"]
-

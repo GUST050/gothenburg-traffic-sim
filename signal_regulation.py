@@ -125,13 +125,20 @@ def yellow_time_s(speed_kmh: float) -> float:
 
 
 def parse_tls_link_geometry(net_path: Path) -> dict[str, dict[int, dict]]:
-    """tls_id -> {linkIndex: {"speed_kmh": v, "clear_dist_m": d}}, built
-    from net.net.xml's real <connection tl=...> elements: v from the
-    approach edge's own lane speed (SUMO stores speed on <lane>, not
-    <edge>), d from the REAL internal-junction lane length SUMO already
-    computed for that specific connection's via-lane. Multiple connections
-    sharing one linkIndex (grouped lanes) collapse to the conservative
-    values: min speed, max distance."""
+    """tls_id -> link geometry keyed by SUMO linkIndex.
+
+    ``speed_kmh`` is the minimum speed among grouped connections and remains
+    the conservative clearance-speed input. ``yellow_speed_kmh`` is the
+    maximum: a shared yellow indication must be long enough for the fastest
+    approach it serves. ``clear_dist_m`` is the maximum internal-lane
+    distance. Keeping both speed extrema avoids incorrectly using the
+    clearance-safe minimum for the distinct statutory yellow minimum.
+
+    Values are built from net.net.xml's real <connection tl=...> elements:
+    speed comes from the approach edge's own lane and distance from SUMO's
+    internal-junction lane. Multiple connections sharing a linkIndex are
+    collapsed conservatively for their respective calculations.
+    """
     root = ET.parse(net_path).getroot()
 
     edge_speed_ms: dict[str, float] = {}
@@ -161,7 +168,9 @@ def parse_tls_link_geometry(net_path: Path) -> dict[str, dict[int, dict]]:
 
     for links in tls_links.values():
         for agg in links.values():
-            agg["speed_kmh"] = min(agg["speed_kmh"])
+            speeds = agg["speed_kmh"]
+            agg["speed_kmh"] = min(speeds)
+            agg["yellow_speed_kmh"] = max(speeds)
             agg["clear_dist_m"] = max(agg["clear_dist_m"])
     return tls_links
 
@@ -199,9 +208,13 @@ def rebuild_phases(phases: list[tuple[float, str]],
             continue
 
         clearing_idxs = [j for j, c in enumerate(state) if c == "y"]
-        kmh_values = [link_geo[j]["speed_kmh"] for j in clearing_idxs if j in link_geo]
-        worst_kmh = min(kmh_values) if kmh_values else 50.0
-        out.append((yellow_time_s(worst_kmh), state))
+        clearance_speeds = [link_geo[j]["speed_kmh"]
+                            for j in clearing_idxs if j in link_geo]
+        yellow_speeds = [link_geo[j].get("yellow_speed_kmh", link_geo[j]["speed_kmh"])
+                         for j in clearing_idxs if j in link_geo]
+        clearance_kmh = min(clearance_speeds) if clearance_speeds else 50.0
+        yellow_kmh = max(yellow_speeds) if yellow_speeds else 50.0
+        out.append((yellow_time_s(yellow_kmh), state))
 
         nxt_state = phases[(i + 1) % n][1]
         newly_green = [j for j, c in enumerate(nxt_state)
@@ -211,7 +224,7 @@ def rebuild_phases(phases: list[tuple[float, str]],
 
         dists = [link_geo[j]["clear_dist_m"] for j in clearing_idxs if j in link_geo]
         s_out = max(dists) if dists else 0.0
-        v_out = speed_bucket_ms(worst_kmh)
+        v_out = speed_bucket_ms(clearance_kmh)
         t_s = max(0.0, (s_out + DEFAULT_VEHICLE_LENGTH_M) / v_out)
         allred_s = round(max(0.0, t_s - REDYELLOW_S), 1)
 
@@ -288,7 +301,74 @@ def enforce_timing_minimums(net_path: Path, proposed_path: Path,
     return count
 
 
+def _effective_tls_programs(net_path: Path, plan_path: Path,
+                            overlay_paths: tuple[Path, ...] | list[Path] = ()) \
+        -> tuple[dict[str, ET.Element], dict[str, dict[str, str]]]:
+    """Resolve the active TLS program after ordered SUMO additional files.
+
+    ``tlsCoordinator.py`` emits offset-only ``tlLogic`` entries, while cycle
+    adaptation emits complete phase programs.  Treating either file by itself
+    as "the plan" loses the actual simulation input.  This small resolver
+    follows SUMO's load order at the program level: phase entries replace a
+    program, offset-only entries update that program, and the last loaded
+    program for a TLS becomes active.
+    """
+    programs: dict[tuple[str, str], ET.Element] = {}
+    sources: dict[tuple[str, str], dict[str, str]] = {}
+    active: dict[str, tuple[str, str]] = {}
+
+    def apply(path: Path) -> None:
+        root = ET.parse(path).getroot()
+        for tls in root.findall("tlLogic"):
+            tls_id = tls.get("id")
+            if not tls_id:
+                continue
+            program_id = tls.get("programID", "0")
+            key = (tls_id, program_id)
+            phases = tls.findall("phase")
+            current = programs.get(key)
+            if phases or current is None:
+                current = ET.fromstring(ET.tostring(tls, encoding="utf-8"))
+                programs[key] = current
+                sources.setdefault(key, {})["phase_source"] = str(path)
+            elif tls.get("offset") is not None:
+                # Coordinator outputs carry no phase children. Preserve the
+                # active phase program and apply only its offset attribute.
+                current.set("offset", tls.get("offset"))
+            if tls.get("offset") is not None:
+                sources.setdefault(key, {})["offset_source"] = str(path)
+            active[tls_id] = key
+
+    apply(net_path)
+    net_resolved = net_path.resolve()
+    seen = {net_resolved}
+    for raw_path in [plan_path, *overlay_paths]:
+        path = Path(raw_path)
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        apply(path)
+
+    return ({tls_id: programs[key] for tls_id, key in active.items()},
+            {tls_id: dict(sources.get(key, {})) for tls_id, key in active.items()})
+
+
+def _plan_file_records(plan_path: Path,
+                       overlay_paths: tuple[Path, ...] | list[Path]) -> tuple[list[dict], str]:
+    """Stable ordered file evidence for a composite SignalPlan."""
+    paths = [Path(plan_path), *(Path(path) for path in overlay_paths)]
+    records = [{"path": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+               for path in paths]
+    digest = hashlib.sha256(json.dumps(
+        [record["sha256"] for record in records], separators=(",", ":")
+    ).encode()).hexdigest()
+    return records, digest
+
+
 def timing_certificate(net_path: Path, plan_path: Path, *,
+                       overlay_paths: tuple[Path, ...] | list[Path] = (),
                        provenance: str = "synthetic_tsfs_informed") -> dict:
     """Return a machine-checkable safety envelope for one signal plan.
 
@@ -299,9 +379,8 @@ def timing_certificate(net_path: Path, plan_path: Path, *,
     is incomplete or contains malformed states.
     """
     baseline_root = ET.parse(net_path).getroot()
-    plan_root = ET.parse(plan_path).getroot()
     baseline_ids = {tl.get("id") for tl in baseline_root.findall("tlLogic")}
-    plans = {tl.get("id"): tl for tl in plan_root.findall("tlLogic")}
+    plans, _sources = _effective_tls_programs(net_path, plan_path, overlay_paths)
     errors: list[str] = []
     if not baseline_ids:
         errors.append("network saknar tlLogic")
@@ -333,8 +412,9 @@ def timing_certificate(net_path: Path, plan_path: Path, *,
                 if duration + 1e-9 < MIN_GREEN_S:
                     errors.append(f"{tls_id}: grön fas {index} under {MIN_GREEN_S}s")
             if "y" in state:
-                required = yellow_time_s(min(
-                    [geometry[j]["speed_kmh"] for j, signal in enumerate(state)
+                required = yellow_time_s(max(
+                    [geometry[j].get("yellow_speed_kmh", geometry[j]["speed_kmh"])
+                     for j, signal in enumerate(state)
                      if signal == "y" and j in geometry] or [50.0]))
                 if duration + 1e-9 < required:
                     errors.append(f"{tls_id}: gul fas {index} under {required:g}s")
@@ -346,6 +426,7 @@ def timing_certificate(net_path: Path, plan_path: Path, *,
         "status": "pass" if not errors else "fail",
         "provenance": provenance,
         "plan_file": str(plan_path),
+        "plan_files": _plan_file_records(plan_path, overlay_paths)[0],
         "signals_expected": len(baseline_ids),
         "signals_checked": checked,
         "errors": errors,
@@ -358,12 +439,14 @@ def timing_certificate(net_path: Path, plan_path: Path, *,
 
 def write_signal_plan_artifact(net_path: Path, plan_path: Path,
                                out_path: Path, *,
+                               overlay_paths: tuple[Path, ...] | list[Path] = (),
                                provenance: str = "synthetic_tsfs_informed") -> dict:
     """Export the effective phase/link structure as a versioned SignalPlan."""
     network_sha = hashlib.sha256(net_path.read_bytes()).hexdigest()
-    plan_sha = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    plan_files, plan_sha = _plan_file_records(plan_path, overlay_paths)
     root = ET.parse(net_path).getroot()
-    plan_root = ET.parse(plan_path).getroot()
+    effective_plans, plan_sources = _effective_tls_programs(
+        net_path, plan_path, overlay_paths)
     links: dict[str, dict[int, dict]] = {}
     for connection in root.findall("connection"):
         tls_id, raw_index = connection.get("tl"), connection.get("linkIndex")
@@ -376,7 +459,7 @@ def write_signal_plan_artifact(net_path: Path, plan_path: Path,
             "via": connection.get("via"),
         }
     controllers = []
-    for tls in sorted(plan_root.findall("tlLogic"), key=lambda item: item.get("id", "")):
+    for tls_id, tls in sorted(effective_plans.items()):
         phases = []
         for number, phase in enumerate(tls.findall("phase")):
             state = phase.get("state", "")
@@ -390,21 +473,23 @@ def write_signal_plan_artifact(net_path: Path, plan_path: Path,
                 "redyellow_links": [i for i, signal in enumerate(state) if signal == "u"],
             })
         controllers.append({
-            "tls_id": tls.get("id"),
+            "tls_id": tls_id,
             "program_id": tls.get("programID"),
             "offset_s": float(tls.get("offset", 0)),
             "cycle_s": round(sum(phase["duration_s"] for phase in phases), 3),
             "links": {str(index): movement for index, movement
                       in sorted(links.get(tls.get("id"), {}).items())},
             "phases": phases,
+            **plan_sources.get(tls_id, {}),
         })
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "SignalPlan",
         "plan_id": hashlib.sha256((network_sha + plan_sha).encode()).hexdigest()[:16],
         "provenance": provenance,
         "network_sha256": network_sha,
         "plan_sha256": plan_sha,
+        "plan_files": plan_files,
         "controllers": controllers,
         "limitations": [
             "green_links reflect SUMO phase states, not a verified municipal conflict matrix",

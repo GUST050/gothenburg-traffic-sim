@@ -126,6 +126,7 @@ from traffic_sim.core.contracts import (DemandBuildSpec, ScenarioSpec,
                                          write_demand_build_spec,
                                          write_scenario_spec)
 from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.simulation.sensor_fit import assess_output_fit
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -443,16 +444,33 @@ def known_edges() -> frozenset[str]:
     return frozenset(feat["properties"]["id"] for feat in geo["features"])
 
 
+def current_sensor_edges() -> dict[str, list[str]]:
+    """Return the live GeoJSON's exact reviewed sensor-to-edge mapping.
+
+    This intentionally reads the artifact afresh instead of sharing
+    ``known_edges``' process cache: recalibration publication must compare its
+    frozen contract against the file that is live at that instant.
+    """
+    with open(WEB_DIR / "data" / "network.geojson") as handle:
+        geo = json.load(handle)
+    mapping: dict[str, set[str]] = {}
+    for feature in geo.get("features", []):
+        props = feature.get("properties") or {}
+        sensor_id, edge_id = props.get("sensor_id"), props.get("id")
+        if sensor_id is not None and edge_id is not None:
+            mapping.setdefault(str(sensor_id), set()).add(str(edge_id))
+    return {sensor_id: sorted(edges) for sensor_id, edges in sorted(mapping.items())}
+
+
 def validate_staged_scenarios(staging_dir: Path,
                               demand_meta_path: Path) -> tuple[bool, str]:
     """E2 publish gate: may this freshly built scenario set replace the live one?
 
-    Checks are deliberately structural (does the set hold together?) rather
-    than statistical — the statistical gates (GEH, structure flags) already
-    ran inside the demand build and land in demand_meta; this function
-    refuses to publish when they failed or when the staged set is
-    incomplete/corrupt. Returns (ok, reason) — reason is user-displayable
-    Swedish on failure, "" on success.
+    Checks cover both release structure and final, raw SUMO evidence. PFE
+    fit alone is not enough: a scenario may publish only if its staged
+    baseline proves the same frozen targets against actual ``edgeData``.
+    Returns (ok, reason) — reason is user-displayable Swedish on failure,
+    "" on success.
     """
     index_path = staging_dir / "index.json"
     if not index_path.exists():
@@ -557,26 +575,24 @@ def validate_staged_scenarios(staging_dir: Path,
         if current_network_hash and \
                 sensor_contract["network_sha256"] != current_network_hash:
             return False, "SUMO-nätet har ändrats sedan demand byggdes"
+        try:
+            contract_edges = {
+                str(sensor_id): sorted(str(edge_id) for edge_id in edges)
+                for sensor_id, edges in sensor_contract["sensor_edges"].items()
+            }
+            live_edges = current_sensor_edges()
+        except (AttributeError, OSError, json.JSONDecodeError, TypeError):
+            return False, "kunde inte verifiera aktuella sensor-kanter i GeoJSON"
+        if contract_edges != live_edges:
+            return False, "sensor-kanterna i GeoJSON matchar inte fryst demand-kontrakt"
         audit = baseline.get("sensor_audit") if baseline else None
         output_fit = audit.get("output_fit") if isinstance(audit, dict) else None
         if not isinstance(audit, dict) or not isinstance(output_fit, dict):
             return False, "baseline saknar SUMO:s slutliga sensor-output-fit"
-        directions = audit.get("directions")
-        if not isinstance(directions, list) or not directions:
-            return False, "sensor-output-fit saknar riktade sensorserier"
         expected_quarters = int(baseline.get("n_quarters", 0) or 0)
-        if expected_quarters and any(
-                not isinstance(row, dict)
-                or not isinstance(row.get("simulated_mean_raw"), list)
-                or len(row["simulated_mean_raw"]) != expected_quarters
-                for row in directions):
-            return False, "sensor-output-fit har fel tidsseriebredd"
-        if output_fit.get("uses_raw_ensemble_mean") is not True:
-            return False, "sensor-output-fit måste använda rå edgeData före avrundning"
-        station_fit = output_fit.get("station_ensemble") or {}
-        if not (output_fit.get("ensemble") or {}).get("available") or \
-                not station_fit.get("available"):
-            return False, "sensor-output-fit saknar mätbara sensorintervall"
+        assessment = assess_output_fit(audit, n_intervals=expected_quarters)
+        if assessment["errors"]:
+            return False, assessment["errors"][0]
         provenance = audit.get("provenance") or {}
         if provenance.get("targets") != "demand_metadata" or \
                 provenance.get("observations") != "demand_metadata":
@@ -1060,6 +1076,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             if res.returncode != 0:
                 print(res.stdout[-1500:], res.stderr[-1500:])
+                detail = f"{res.stdout}\n{res.stderr}"
+                if "closure integrity is not verified" in detail:
+                    self._set_close(
+                        status="error",
+                        error=("avstängningen kunde inte verifieras: fordon använde "
+                               "den stängda vägen eller så saknas edgeData-bevis"))
+                    return
                 self._set_close(status="error",
                                 error="simuleringen misslyckades — se serverloggen")
                 return
@@ -1093,6 +1116,12 @@ class Handler(SimpleHTTPRequestHandler):
             if match is None:
                 self._set_close(status="error",
                                 error="scenariot skrevs inte — se serverloggen")
+                return
+            if match.get("closure_integrity") != "verified_clean":
+                self._set_close(
+                    status="error",
+                    error=("avstängningen saknar verifierat nollflöde på den "
+                           "stängda vägen och visas därför inte"))
                 return
             self._set_close(status="done", **match)
         except subprocess.TimeoutExpired:

@@ -67,6 +67,20 @@ class TestRebuildPhases:
         yellow_phase = next(p for p in out if p[1] == "yrr")
         assert yellow_phase[0] == 5.0   # 70 km/h -> TSFS >=60 -> 5s
 
+    def test_mixed_yellow_phase_uses_fastest_approach_for_legal_minimum(self):
+        # Clearance remains conservative at the slow approach speed, but a
+        # shared yellow indication must satisfy the 60 km/h movement too.
+        phases = [(20.0, "GG"), (3.0, "yy")]
+        link_geo = {
+            0: {"speed_kmh": 50.0, "yellow_speed_kmh": 50.0,
+                "clear_dist_m": 0.0},
+            1: {"speed_kmh": 60.0, "yellow_speed_kmh": 60.0,
+                "clear_dist_m": 0.0},
+        }
+        yellow = next(phase for phase in sr.rebuild_phases(phases, link_geo)
+                      if phase[1] == "yy")
+        assert yellow[0] == 5.0
+
     def test_default_yellow_when_no_geometry_known(self):
         phases = [(20.0, "Grr"), (3.0, "yrr"), (20.0, "rGG"), (3.0, "ryy")]
         out = sr.rebuild_phases(phases, {})
@@ -187,9 +201,10 @@ class TestParseTlsLinkGeometry:
   <connection from="B_in" to="X" via=":J_1_0" tl="J" linkIndex="0"/>
 </net>""")
         geo = sr.parse_tls_link_geometry(net_path)
-        # min speed (conservative: slower clears more slowly) and max
-        # distance (conservative: longer clearing distance) win
+        # The slowest speed is retained for conservative clearance, while
+        # the fastest remains available for the distinct yellow minimum.
         assert geo["J"][0]["speed_kmh"] == pytest.approx(10.0 * 3.6, abs=0.01)
+        assert geo["J"][0]["yellow_speed_kmh"] == pytest.approx(20.0 * 3.6, abs=0.01)
         assert geo["J"][0]["clear_dist_m"] == 30.0
 
 
@@ -291,6 +306,21 @@ class TestTimingCertificate:
         assert certificate["status"] == "fail"
         assert any("gul fas" in error for error in certificate["errors"])
 
+    def test_certificate_rejects_mixed_speed_yellow_that_is_short_for_one_link(self, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <edge id="A" from="a" to="J"><lane id="A_0" speed="13.89" length="50"/></edge>
+  <edge id="B" from="b" to="J"><lane id="B_0" speed="16.67" length="50"/></edge>
+  <connection from="A" to="X" tl="J" linkIndex="0"/>
+  <connection from="B" to="X" tl="J" linkIndex="1"/>
+  <tlLogic id="J" type="static" programID="0">
+    <phase duration="20" state="GG"/><phase duration="4" state="yy"/>
+  </tlLogic>
+</net>""")
+        certificate = sr.timing_certificate(net_path, net_path)
+        assert certificate["status"] == "fail"
+        assert any("under 5s" in error for error in certificate["errors"])
+
     def test_signal_plan_artifact_contains_mapping_and_phase_states(self, tmp_path):
         net_path = tmp_path / "net.net.xml"
         net_path.write_text("""<net>
@@ -307,6 +337,34 @@ class TestTimingCertificate:
         assert payload["controllers"][0]["links"]["0"]["from_edge"] == "A"
         assert payload["controllers"][0]["phases"][0]["green_links"] == [0]
         assert out.exists()
+
+    def test_signal_plan_artifact_merges_coordinator_offsets_and_hashes_every_input(self, tmp_path):
+        net_path = tmp_path / "net.net.xml"
+        net_path.write_text("""<net>
+  <edge id="A" from="a" to="J"><lane id="A_0" speed="13.89" length="50"/></edge>
+  <connection from="A" to="B" tl="J" linkIndex="0"/>
+  <tlLogic id="J" type="static" programID="0">
+    <phase duration="20" state="G"/><phase duration="4" state="y"/>
+  </tlLogic>
+</net>""")
+        phases = tmp_path / "phases.add.xml"
+        phases.write_text("""<additional><tlLogic id="J" type="static" programID="a" offset="0">
+  <phase duration="20" state="G"/><phase duration="4" state="y"/>
+</tlLogic></additional>""")
+        offsets = tmp_path / "offsets.add.xml"
+        offsets.write_text("<additional><tlLogic id=\"J\" programID=\"a\" offset=\"17\"/></additional>")
+        out = tmp_path / "plan.json"
+
+        payload = sr.write_signal_plan_artifact(
+            net_path, phases, out, overlay_paths=(offsets,))
+        certificate = sr.timing_certificate(
+            net_path, phases, overlay_paths=(offsets,))
+
+        assert payload["controllers"][0]["program_id"] == "a"
+        assert payload["controllers"][0]["offset_s"] == 17.0
+        assert len(payload["plan_files"]) == 2
+        assert payload["controllers"][0]["offset_source"] == str(offsets)
+        assert certificate["status"] == "pass"
 
 
 class TestJunctionGreenAllocation:

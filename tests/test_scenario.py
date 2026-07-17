@@ -355,6 +355,46 @@ class TestClosureIntegrityStatus:
     def test_none_entries_without_closures_is_none(self):
         assert run_scenario.closure_integrity_status(None, []) is None
 
+    def test_one_unmeasured_seed_cannot_be_aggregated_as_clean(self):
+        assert run_scenario.aggregate_active_closure_entries(
+            [0, None, 0], [{"edge_id": "a"}]) is None
+        assert run_scenario.aggregate_active_closure_entries(
+            [0, 0, 0], [{"edge_id": "a"}]) == 0
+
+
+class TestBaselineOutputFitGate:
+    @staticmethod
+    def _audit(*, target: float, raw: float) -> dict:
+        from traffic_sim.simulation.sensor_fit import summarize_pairs
+
+        summary = summarize_pairs([(raw, target)])
+        return {
+            "output_fit": {
+                "uses_raw_ensemble_mean": True,
+                "ensemble": summary,
+                "station_ensemble": summary,
+            },
+            "directions": [{"target_mean": [target],
+                            "simulated_mean_raw": [raw]}],
+            "stations": [{"target_mean": [target],
+                          "simulated_mean_raw": [raw]}],
+        }
+
+    def test_new_baseline_requires_raw_final_sumo_fit(self):
+        errors = run_scenario.baseline_output_fit_errors(
+            {"sensor_targets": {"variants": {"q50": {}}}},
+            self._audit(target=1.0, raw=30.0), n_intervals=1, closures=[])
+
+        assert any("GEH" in error for error in errors)
+
+    def test_closure_and_legacy_baseline_do_not_use_calibration_gate(self):
+        bad_audit = self._audit(target=1.0, raw=30.0)
+        assert run_scenario.baseline_output_fit_errors(
+            {"sensor_targets": {"variants": {"q50": {}}}}, bad_audit,
+            n_intervals=1, closures=[{"edge_id": "a"}]) == []
+        assert run_scenario.baseline_output_fit_errors(
+            {}, bad_audit, n_intervals=1, closures=[]) == []
+
 
 class TestAtomicWriteJson:
     """atomic_write_json (found in review 2026-07-10): a live browser polling

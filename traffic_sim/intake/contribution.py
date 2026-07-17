@@ -37,6 +37,63 @@ def _station(report: dict | None, sensor_id: str) -> dict | None:
     return stations.get(sensor_id) or stations.get(str(sensor_id))
 
 
+def _ratio_keys(report: dict | None, *, exclude: str) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    for station_id, station in (report or {}).get("stations", {}).items():
+        if str(station_id) == str(exclude):
+            continue
+        for edge_id, edge in (station or {}).get("edges", {}).items():
+            try:
+                ratio = float(edge.get("ratio"))
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if math.isfinite(ratio) and ratio > 0:
+                keys.add((str(station_id), str(edge_id)))
+    return keys
+
+
+def _network_edge_ids(network: dict | None) -> set[str]:
+    return {str(feature.get("properties", {}).get("id"))
+            for feature in (network or {}).get("features", [])
+            if feature.get("properties", {}).get("id") is not None}
+
+
+def _comparability(*, sensor_id: str, network_before: dict | None,
+                   network_after: dict | None, loso_before: dict | None,
+                   loso_after: dict | None) -> dict:
+    """Prove that a before/after contribution result is a controlled comparison."""
+    reasons: list[str] = []
+    before_contract = (loso_before or {}).get("comparison_contract")
+    after_contract = (loso_after or {}).get("comparison_contract")
+    required = ("protocol", "source", "window_start", "window_end",
+                "n_intervals", "simulation_mode", "candidate_pool_sha256",
+                "network_sha256", "assignment_prior_enabled")
+    if not isinstance(before_contract, dict) or not isinstance(after_contract, dict):
+        reasons.append("LOSO-artifakterna saknar jämförelsekontrakt")
+    else:
+        for key in required:
+            before_value, after_value = before_contract.get(key), after_contract.get(key)
+            if before_value is None or after_value is None:
+                reasons.append(f"LOSO-kontrakt saknar {key}")
+            elif before_value != after_value:
+                reasons.append(f"LOSO-kontrakt skiljer sig för {key}")
+
+    before_edges, after_edges = _network_edge_ids(network_before), _network_edge_ids(network_after)
+    if not before_edges or not after_edges:
+        reasons.append("nätverksartifakt saknas eller saknar kant-ID:n")
+    elif before_edges != after_edges:
+        reasons.append("nätverkstopologin skiljer sig mellan före och efter")
+
+    before_keys = _ratio_keys(loso_before, exclude=str(sensor_id))
+    after_keys = _ratio_keys(loso_after, exclude=str(sensor_id))
+    if not before_keys or not after_keys:
+        reasons.append("saknar jämförbara held-out-sensorer")
+    elif before_keys != after_keys:
+        reasons.append("olika held-out-kanter jämförs före och efter")
+    return {"comparable": not reasons, "reasons": reasons,
+            "holdout_edge_count": len(before_keys & after_keys)}
+
+
 def build_contribution(*, sensor_id: str, registry: dict,
                        network_before: dict | None,
                        network_after: dict | None,
@@ -49,16 +106,20 @@ def build_contribution(*, sensor_id: str, registry: dict,
     if entry is None:
         raise ValueError(f"sensor {sensor_id!r} is not in the registry")
 
+    comparability = _comparability(
+        sensor_id=str(sensor_id), network_before=network_before,
+        network_after=network_after, loso_before=loso_before,
+        loso_after=loso_after)
     before_ratios = _load_ratios(loso_before, exclude=sensor_id)
     after_ratios = _load_ratios(loso_after, exclude=sensor_id)
     before_error, after_error = _log_error(before_ratios), _log_error(after_ratios)
-    if before_error is None or after_error is None:
+    if not comparability["comparable"] or before_error is None or after_error is None:
         outcome = "insufficient_evidence"
     else:
         delta = before_error - after_error
         outcome = ("improved" if delta > 0.01 else
                    "neutral" if delta >= -0.01 else
-                   "insufficient_evidence")
+                   "worsened")
 
     before_edges = (network_before or {}).get("features", [])
     after_edges = (network_after or {}).get("features", [])
@@ -106,6 +167,7 @@ def build_contribution(*, sensor_id: str, registry: dict,
             "active_to": entry.get("active_to"),
         },
         "coverage": coverage,
+        "comparability": comparability,
         "confidence": {
             "edges_compared": len(confidence_deltas),
             "improved_edges": sum(delta > 1e-9 for delta in confidence_deltas),
@@ -122,9 +184,11 @@ def build_contribution(*, sensor_id: str, registry: dict,
             "isolation_context": (station_after or {}).get("edges", {}),
         },
         "outcome": outcome,
-        "claim": ("bidraget är mätt mot jämförbara holdout-artifakter"
-                   if outcome != "insufficient_evidence" else
-                   "ingen jämförbar före/efter-evidens; resultatet får inte beskrivas som förbättring"),
+        "claim": (
+            "bidraget är mätt mot jämförbara holdout-artifakter"
+            if outcome in {"improved", "neutral", "worsened"}
+            else "ingen jämförbar före/efter-evidens; resultatet får inte beskrivas som förbättring"
+        ),
     }
 
 
@@ -154,4 +218,3 @@ def rank_placements(network: dict, *, top_n: int = 20) -> list[dict]:
                      "reason": "low measured confidence / spatial gap"})
     rows.sort(key=lambda row: (-row["score"], row["edge_id"] or ""))
     return rows[:max(0, int(top_n))]
-

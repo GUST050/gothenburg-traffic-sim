@@ -20,7 +20,7 @@ def _staged(tmp_path, geh=100.0, infeasible=0, with_baseline=True,
     index = {"scenarios": [scen] if with_baseline else []}
     (staging / "index.json").write_text(json.dumps(index))
     if with_baseline:
-        payload = {"flows": {"e1": [1, 2]} if flows else {}}
+        payload = {"flows": {"e1": [1, 2]} if flows else {}, "n_quarters": 2}
         if build_id:
             payload["scenario"] = {"build_id": build_id}
             if demand_key:
@@ -125,13 +125,29 @@ class TestValidateStagedScenarios:
         payload = json.loads((staging / "baseline.json").read_text())
         payload["scenario_spec"] = {
             "demand_variant_mapping": {"1000": "q50"}}
+        sensor_edges = serve.current_sensor_edges()
+        direction_rows = [
+            {"target_mean": [1.0, 2.0], "simulated_mean_raw": [1.0, 2.0]}
+            for edges in sensor_edges.values() for _edge in edges
+        ]
+        station_rows = [
+            {"target_mean": [1.0, 2.0], "simulated_mean_raw": [1.0, 2.0]}
+            for _sensor_id in sensor_edges
+        ]
         payload["sensor_audit"] = {
             "provenance": {"targets": "demand_metadata",
                             "observations": "demand_metadata"},
-            "directions": [{"simulated_mean_raw": [1, 2]}],
+            "directions": direction_rows,
+            "stations": station_rows,
             "output_fit": {"uses_raw_ensemble_mean": True,
-                           "ensemble": {"available": True},
-                           "station_ensemble": {"available": True}},
+                           "ensemble": {"available": True,
+                                        "edge_quarters": len(direction_rows) * 2,
+                                        "geh_lt_5_pct": 100.0, "max_geh": 0.0,
+                                        "mean_abs_error": 0.0, "max_abs_error": 0.0},
+                           "station_ensemble": {"available": True,
+                                                "edge_quarters": len(station_rows) * 2,
+                                                "geh_lt_5_pct": 100.0, "max_geh": 0.0,
+                                                "mean_abs_error": 0.0, "max_abs_error": 0.0}},
         }
         (staging / "baseline.json").write_text(json.dumps(payload))
         demand = json.loads(meta.read_text())
@@ -141,12 +157,70 @@ class TestValidateStagedScenarios:
                 serve.ROOT / "data_in" / "sensors.json"),
             "network_sha256": serve.sha256_file(
                 serve.ROOT / "sumo" / "net.net.xml"),
-            "sensor_edges": {"s": ["e1"]},
+            "sensor_edges": sensor_edges,
         }
         demand["n_variants"] = 1
         meta.write_text(json.dumps(demand))
         ok, reason = serve.validate_staged_scenarios(staging, meta)
         assert ok, reason
+
+    def test_new_sensor_contract_refuses_bad_raw_sumo_fit(self, tmp_path):
+        staging, meta = _staged(tmp_path)
+        payload = json.loads((staging / "baseline.json").read_text())
+        sensor_edges = serve.current_sensor_edges()
+        directions = [
+            {"target_mean": [1.0, 1.0], "simulated_mean_raw": [30.0, 30.0]}
+            for edges in sensor_edges.values() for _edge in edges
+        ]
+        stations = [
+            {"target_mean": [1.0, 1.0], "simulated_mean_raw": [30.0, 30.0]}
+            for _sensor_id in sensor_edges
+        ]
+        payload["sensor_audit"] = {
+            "provenance": {"targets": "demand_metadata",
+                           "observations": "demand_metadata"},
+            "directions": directions, "stations": stations,
+            # Deliberately lies about the compact summary: publication must
+            # recompute from raw edgeData evidence rather than trust this.
+            "output_fit": {"uses_raw_ensemble_mean": True,
+                           "ensemble": {"available": True,
+                                        "edge_quarters": len(directions) * 2,
+                                        "geh_lt_5_pct": 100.0, "max_geh": 0.0,
+                                        "mean_abs_error": 0.0, "max_abs_error": 0.0},
+                           "station_ensemble": {"available": True,
+                                                "edge_quarters": len(stations) * 2,
+                                                "geh_lt_5_pct": 100.0, "max_geh": 0.0,
+                                                "mean_abs_error": 0.0, "max_abs_error": 0.0}},
+        }
+        (staging / "baseline.json").write_text(json.dumps(payload))
+        demand = json.loads(meta.read_text())
+        demand["sensor_targets"] = {"variants": {"edge_shares": {"e1": [1]}}}
+        demand["sensor_contract"] = {
+            "registry_sha256": serve.sha256_file(serve.ROOT / "data_in" / "sensors.json"),
+            "network_sha256": serve.sha256_file(serve.ROOT / "sumo" / "net.net.xml"),
+            "sensor_edges": sensor_edges,
+        }
+        meta.write_text(json.dumps(demand))
+
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+
+        assert not ok
+        assert "inkonsekvent" in reason or "GEH" in reason
+
+    def test_new_sensor_contract_refuses_geojson_sensor_edge_mismatch(self, tmp_path):
+        staging, meta = _staged(tmp_path)
+        demand = json.loads(meta.read_text())
+        demand["sensor_targets"] = {"variants": {"edge_shares": {"e1": [1]}}}
+        demand["sensor_contract"] = {
+            "registry_sha256": serve.sha256_file(serve.ROOT / "data_in" / "sensors.json"),
+            "network_sha256": serve.sha256_file(serve.ROOT / "sumo" / "net.net.xml"),
+            "sensor_edges": {"wrong": ["e1"]},
+        }
+        meta.write_text(json.dumps(demand))
+
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+
+        assert not ok and "GeoJSON" in reason
 
     def test_three_variant_release_requires_full_variant_coverage(self, tmp_path):
         """An all-q50 mapping must not publish as a three-variant release:
@@ -177,12 +251,26 @@ class TestValidateStagedScenarios:
             "day_boundaries_s": [0, 86400, 172800],
             "complete": True,
             "seed_count": 1,
-            "seeds": [{"complete": True}],
+            "seeds": [{
+                "complete": True,
+                "days": [
+                    {"day": 1, "loaded_delta": 10, "inserted_delta": 10,
+                     "teleports_delta": 0, "loaded_at_boundary": 10,
+                     "inserted_at_boundary": 10, "boundary_lag_s": 0},
+                    {"day": 2, "loaded_delta": 11, "inserted_delta": 11,
+                     "teleports_delta": 0, "loaded_at_boundary": 21,
+                     "inserted_at_boundary": 21, "boundary_lag_s": 0},
+                ],
+            }],
             "per_day": [
                 {"day": 1, "seed_count": 1, "loaded_delta_min": 10,
-                 "inserted_delta_min": 10, "teleports_delta_max": 0},
+                 "inserted_delta_min": 10, "teleports_delta_max": 0,
+                 "boundary_lag_s_max": 0,
+                 "pending_insertion_at_boundary_max": 0},
                 {"day": 2, "seed_count": 1, "loaded_delta_min": 11,
-                 "inserted_delta_min": 11, "teleports_delta_max": 0},
+                 "inserted_delta_min": 11, "teleports_delta_max": 0,
+                 "boundary_lag_s_max": 0,
+                 "pending_insertion_at_boundary_max": 0},
             ],
         }
         (staging / "baseline.json").write_text(json.dumps(payload))

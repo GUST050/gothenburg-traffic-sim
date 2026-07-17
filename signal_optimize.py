@@ -612,26 +612,41 @@ def main() -> None:
     conditions = build_signal_conditions(home, variants, begin_s, end_s, label)
     net_fps = condition_net_fingerprints(conditions)
     non_tls_net_fps = condition_non_tls_fingerprints(conditions)
-    # Validate every concrete phase-bearing artifact before it is used in a
-    # comparison.  Offset-only coordinator files are intentionally paired
-    # with their preceding phase file; the certificate checks the effective
-    # phase sequence rather than treating an offset fragment as a plan.
+    # Validate every TSFS-grounded phase plan before it is used in a
+    # comparison. Raw netconvert/built-in conditions remain explicitly
+    # uncertified references: forcing them through the regulation certificate
+    # makes the optimizer abort before it can compare anything, because the
+    # imported 3 s yellow phases are precisely what the regulated conditions
+    # were built to improve. Offset-only coordinator files stay paired with
+    # their phase file in both the certificate and the published artifact.
     plan_certificates = {}
     plan_artifacts = {}
     for condition, cfg in conditions.items():
         phase_path = cfg["add_paths"][0] if cfg["add_paths"] else cfg["net_path"]
+        overlay_paths = tuple(cfg["add_paths"][1:])
         artifact_path = rs.SUMO_DIR / f"signal_plan_{label}_{condition}.json"
         write_signal_plan_artifact(
             cfg["net_path"], phase_path, artifact_path,
+            overlay_paths=overlay_paths,
             provenance=condition_tls_provenance({condition: cfg})[condition])
         plan_artifacts[condition] = str(artifact_path)
-        plan_certificates[condition] = timing_certificate(
-            cfg["net_path"], phase_path,
-            provenance=condition_tls_provenance({condition: cfg})[condition])
-        if plan_certificates[condition]["status"] != "pass":
-            raise RuntimeError(
-                f"signalplan {condition} klarade inte säkerhetscertifikatet: "
-                + "; ".join(plan_certificates[condition]["errors"][:3]))
+        if condition in TSFS_INFORMED_CONDITIONS:
+            plan_certificates[condition] = timing_certificate(
+                cfg["net_path"], phase_path, overlay_paths=overlay_paths,
+                provenance=condition_tls_provenance({condition: cfg})[condition])
+            if plan_certificates[condition]["status"] != "pass":
+                raise RuntimeError(
+                    f"signalplan {condition} klarade inte säkerhetscertifikatet: "
+                    + "; ".join(plan_certificates[condition]["errors"][:3]))
+        else:
+            plan_certificates[condition] = {
+                "schema_version": 1,
+                "status": "not_applicable",
+                "provenance": condition_tls_provenance({condition: cfg})[condition],
+                "plan_file": str(phase_path),
+                "overlay_files": [str(path) for path in overlay_paths],
+                "reason": "oregelad referens används endast för jämförelse",
+            }
 
     batch_workspace = Path(tempfile.mkdtemp(prefix=".signal_optimize_",
                                              dir=str(rs.SUMO_DIR)))

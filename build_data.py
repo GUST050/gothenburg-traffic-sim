@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import statistics
 import warnings
 from collections import defaultdict
@@ -703,13 +704,6 @@ def main() -> None:
     )
     print(f"  {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
 
-    # Exact graph snapshot for Phase 3: the SUMO network and any demand-
-    # calibration code must start from THIS graph (same node/edge IDs as
-    # network.geojson), not a fresh OSM download that may have changed.
-    graphml_path = out_dir / "graph.graphml"
-    ox.save_graphml(G, graphml_path)
-    print(f"Wrote {graphml_path}  ({graphml_path.stat().st_size / 1024:.0f} KB)")
-
     # ── Snap and build flows ───────────────────────────────────────────────────
     print("Snapping sensors …")
     edge_sensor = snap_sensors(G, sensors, lats, lons, sensor_level)
@@ -741,21 +735,7 @@ def main() -> None:
         pct = 100 * sum(v is not None for v in arr) / N_QUARTERS
         print(f"    {edge_id:<40s}  sensor={edge_sensor[edge_id]}  {pct:.1f}%")
 
-    # ── Write flows.json ───────────────────────────────────────────────────────
-    flows_path = out_dir / "flows.json"
-    with open(flows_path, "w") as f:
-        json.dump(
-            {
-                "epoch":            "2025-01-01T00:00:00",
-                "interval_minutes": 15,
-                "generated_at":     pd.Timestamp.now().isoformat(timespec="seconds"),
-                "flows":            flows,
-            },
-            f, separators=(",", ":"),
-        )
-    print(f"Wrote {flows_path}  ({flows_path.stat().st_size / 1024:.0f} KB)")
-
-    # ── Write network.geojson ──────────────────────────────────────────────────
+    # ── Build network.geojson ──────────────────────────────────────────────────
     features: list[dict] = []
     clip_r = args.clip_radius
 
@@ -799,13 +779,52 @@ def main() -> None:
             },
         })
 
+    # Stage every linked artifact before replacing any live one. The graph
+    # snapshot must be identical to the GeoJSON's edge-ID space; writing it
+    # immediately after snapping still allowed a later flow/GeoJSON build
+    # failure to leave a new graph beside old web data. Individual replace()
+    # calls are atomic and all ordinary serialization failures now occur
+    # before publication starts.
+    graphml_path = out_dir / "graph.graphml"
+    flows_path = out_dir / "flows.json"
     geo_path = out_dir / "network.geojson"
-    with open(geo_path, "w") as f:
-        json.dump({"type": "FeatureCollection", "features": features},
-                  f, separators=(",", ":"))
+    nonce = f".{os.getpid()}.tmp"
+    graphml_tmp = graphml_path.with_name(
+        f".{graphml_path.stem}.{os.getpid()}.graphml")
+    flows_tmp = flows_path.with_name(flows_path.name + nonce)
+    geo_tmp = geo_path.with_name(geo_path.name + nonce)
+    try:
+        # Keep a .graphml suffix so OSMnx/NetworkX use their normal writer.
+        ox.save_graphml(G, graphml_tmp)
+        with open(flows_tmp, "w") as f:
+            json.dump(
+                {
+                    "epoch":            "2025-01-01T00:00:00",
+                    "interval_minutes": 15,
+                    "generated_at":     pd.Timestamp.now().isoformat(timespec="seconds"),
+                    "flows":            flows,
+                },
+                f, separators=(",", ":"),
+            )
+        with open(geo_tmp, "w") as f:
+            json.dump({"type": "FeatureCollection", "features": features},
+                      f, separators=(",", ":"))
 
+        # The web artifacts move first; the SUMO source graph is last, so a
+        # downstream Phase-3 build never sees a fresh graph while this
+        # process is still preparing its matching web contracts.
+        os.replace(flows_tmp, flows_path)
+        os.replace(geo_tmp, geo_path)
+        os.replace(graphml_tmp, graphml_path)
+    finally:
+        graphml_tmp.unlink(missing_ok=True)
+        flows_tmp.unlink(missing_ok=True)
+        geo_tmp.unlink(missing_ok=True)
+
+    print(f"Wrote {flows_path}  ({flows_path.stat().st_size / 1024:.0f} KB)")
     n_sensor = sum(1 for f in features if f["properties"]["sensor_id"])
     print(f"Wrote {geo_path}  ({len(features)} edges, {n_sensor} with sensors)")
+    print(f"Wrote {graphml_path}  ({graphml_path.stat().st_size / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":

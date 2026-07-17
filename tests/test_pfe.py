@@ -883,6 +883,33 @@ class TestProvenanceAllocation:
         assert any("D_leisure" in route for route in routes)
         assert report["purpose_allocation_summary"]["replaced_routes"] == 1
 
+    def test_purpose_replacement_cannot_bypass_an_unmeasured_hard_bound(self, tmp_path):
+        # The selected work shape and the leisure alternative both cross M,
+        # but only the latter enters D_leisure.  A provenance replacement used
+        # to happen AFTER ``achieved`` was counted, so D_leisure<=0 passed on
+        # paper while the published XML contained leisure routes.
+        work_route = ["O", "M", "D_work"]
+        leisure_route = ["O", "M", "D_leisure"]
+        work = Candidate(0.0, work_route, source_id="work",
+                         intent={"purpose": "arbete"})
+        leisure = Candidate(0.0, leisure_route, source_id="leisure",
+                            intent={"purpose": "fritid"})
+        shapes = [Candidate(0.0, work_route, source_candidates=[work]),
+                  Candidate(0.0, leisure_route, source_candidates=[leisure])]
+        out = tmp_path / "calibrated.rou.xml"
+
+        report = pfe.write_calibration_report(
+            shapes, out, [{"M": 2.0}], [np.array([2.0, 0.0])],
+            [{"D_leisure": (0.0, 0.0)}],
+            enforce_integer_bounds=True)
+
+        routes = [vehicle.find("route").get("edges")
+                  for vehicle in ET.parse(out).getroot().findall("vehicle")]
+        assert all("D_leisure" not in route.split() for route in routes)
+        assert report["achieved"].get("D_leisure", [0.0]) == [0.0]
+        assert report["bound_violations"] == []
+        assert report["purpose_allocation_summary"]["replaced_routes"] == 0
+
     def test_lp_fallback_drops_groups_after_the_counts_first_rung(self, monkeypatch):
         # Force the final fallback. The measured count is feasible only after
         # the impossible group cap has been discarded.

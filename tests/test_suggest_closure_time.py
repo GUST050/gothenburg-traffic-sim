@@ -323,13 +323,21 @@ class TestClosureFeasibility:
         assert result["eligible"] is True
         assert result["queue"]["delta"] == 5
 
-    def test_partial_detour_and_truncation_are_hard_failures(self):
+    def test_partial_topology_detour_is_diagnostic_but_real_truncation_fails(self):
         result = sct.closure_feasibility(
             self._metrics(trunc=1), self._metrics(),
             detour={"score": 0.5})
         assert result["eligible"] is False
-        assert "partial_detour_access" in result["hard_failures"]
+        assert result["detour"] == "topology_partial_detour"
+        assert "partial_detour_access" not in result["hard_failures"]
         assert "truncated_unreachable_vehicles" in result["hard_failures"]
+
+    def test_topology_only_missing_detour_does_not_hide_a_healthy_simulation(self):
+        result = sct.closure_feasibility(
+            self._metrics(queue=1), self._metrics(queue=1),
+            detour={"score": None})
+        assert result["eligible"] is True
+        assert result["detour"] == "topology_no_confirmed_detour"
 
     def test_missing_queue_proxy_is_not_silently_ranked(self):
         result = sct.closure_feasibility(

@@ -233,7 +233,10 @@ class TestClose:
         def fake_run(cmd, **kw):
             started.set()
             time.sleep(0.3)   # stands in for the real ~30-90s job
-            index = {"scenarios": [{"closed_edges": ["a_b_0"], "name": "close_a_b_0"}]}
+            index = {"scenarios": [{
+                "closed_edges": ["a_b_0"], "name": "close_a_b_0",
+                "closure_integrity": "verified_clean",
+            }]}
             (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
             return FakeCompletedProcess(returncode=0, stdout="Scenario 'close_a_b_0' (...)")
 
@@ -250,7 +253,8 @@ class TestClose:
         def fake_run(cmd, **kw):
             assert "run_scenario.py" in cmd[1]
             index = {"scenarios": [{"closed_edges": ["a_b_0"], "name": "close_a_b_0",
-                                    "file": "close_a_b_0.json"}]}
+                                    "file": "close_a_b_0.json",
+                                    "closure_integrity": "verified_clean"}]}
             (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
             return FakeCompletedProcess(returncode=0, stdout="Scenario 'close_a_b_0' (...)")
 
@@ -262,6 +266,30 @@ class TestClose:
         _, final = get_json(f"{base_url}/api/close/status")
         assert final["name"] == "close_a_b_0"
         assert final["file"] == "close_a_b_0.json"
+
+    def test_close_with_unverified_integrity_is_never_reported_done(
+            self, base_url, monkeypatch):
+        """A zero exit code is insufficient when the manifest lacks proof.
+
+        This defensive branch also protects the API if a future runner
+        regresses and writes an old-style manifest despite run_scenario's
+        own pre-publication integrity gate.
+        """
+        def fake_run(cmd, **kw):
+            index = {"scenarios": [{
+                "closed_edges": ["a_b_0"], "name": "close_a_b_0",
+                "file": "close_a_b_0.json", "closure_integrity": "not_measurable",
+            }]}
+            (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
+            return FakeCompletedProcess(returncode=0,
+                                        stdout="Scenario 'close_a_b_0' (...)")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(f"{base_url}/api/close?edges=a_b_0")[0] == 202
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "error")
+        _, final = get_json(f"{base_url}/api/close/status")
+        assert "verifierat nollflöde" in final["error"]
 
     def test_structured_scenario_spec_is_archived_and_passed_to_runner(
             self, base_url, monkeypatch):
@@ -286,7 +314,8 @@ class TestClose:
             (serve.SCEN_DIR / "index.json").write_text(json.dumps({
                 "scenarios": [{"closed_edges": ["a_b_0"],
                                 "name": "close-api-spec",
-                                "file": "close-api-spec.json"}],
+                                "file": "close-api-spec.json",
+                                "closure_integrity": "verified_clean"}],
             }))
             return FakeCompletedProcess(returncode=0,
                                         stdout="Scenario 'close-api-spec' (...)")
@@ -342,7 +371,8 @@ class TestCancel:
         def fake_run(cmd, **kw):
             release.wait(timeout=2)
             index = {"scenarios": [{"closed_edges": ["a_b_0"],
-                                    "name": "close_a_b_0", "file": "close_a_b_0.json"}]}
+                                    "name": "close_a_b_0", "file": "close_a_b_0.json",
+                                    "closure_integrity": "verified_clean"}]}
             (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
             return FakeCompletedProcess(returncode=0, stdout="Scenario 'close_a_b_0' (...)" )
 
@@ -402,7 +432,8 @@ class TestCloseWindowed:
         def fake_run(cmd, **kw):
             seen_cmd["cmd"] = cmd
             index = {"scenarios": [{"closed_edges": ["a_b_0"], "name": "close_a_b_0_deadbeef",
-                                    "file": "close_a_b_0_deadbeef.json"}]}
+                                    "file": "close_a_b_0_deadbeef.json",
+                                    "closure_integrity": "verified_clean"}]}
             (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
             return FakeCompletedProcess(returncode=0,
                                         stdout="Scenario 'close_a_b_0_deadbeef' (...)")
@@ -428,9 +459,11 @@ class TestCloseWindowed:
         def fake_run(cmd, **kw):
             index = {"scenarios": [
                 {"closed_edges": ["a_b_0"], "name": "close_a_b_0",
-                 "file": "close_a_b_0.json"},   # stale whole-run scenario
+                 "file": "close_a_b_0.json",
+                 "closure_integrity": "verified_clean"},   # stale whole-run scenario
                 {"closed_edges": ["a_b_0"], "name": "close_a_b_0_deadbeef",
-                 "file": "close_a_b_0_deadbeef.json"},   # the fresh windowed one
+                 "file": "close_a_b_0_deadbeef.json",
+                 "closure_integrity": "verified_clean"},   # the fresh windowed one
             ]}
             (serve.SCEN_DIR / "index.json").write_text(json.dumps(index))
             return FakeCompletedProcess(returncode=0,

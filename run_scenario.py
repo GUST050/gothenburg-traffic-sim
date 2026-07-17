@@ -46,6 +46,7 @@ import numpy as np
 import pandas as pd
 
 from traffic_sim.simulation import metrics as cm
+from traffic_sim.simulation.sensor_fit import assess_output_fit, summarize_pairs
 from traffic_sim.simulation.runtime import sumo_home
 from traffic_sim.simulation.metadata import load_metadata
 from traffic_sim.core.fingerprint import sha256_file
@@ -218,6 +219,39 @@ def closure_integrity_status(active_closure_entries: int | None,
     if closures:
         return "not_measurable"
     return None
+
+
+def aggregate_active_closure_entries(entries_by_seed: list[int | None],
+                                     closures: list[dict]) -> int | None:
+    """Return a closure-throughput total only when every seed was measured.
+
+    Summing the non-``None`` values would turn ``[0, None, 0]`` into a
+    supposedly verified zero-flow result. The Monte Carlo claim requires
+    evidence for every seed: one missing edgeData series makes the closure
+    unmeasured, regardless of the remaining seeds' clean values.
+    """
+    if not closures:
+        return None
+    if not entries_by_seed or any(value is None for value in entries_by_seed):
+        return None
+    return sum(int(value) for value in entries_by_seed)
+
+
+def baseline_output_fit_errors(meta: dict, audit: dict, *, n_intervals: int,
+                               closures: list[dict]) -> list[str]:
+    """Return final-output gate errors for a newly calibrated baseline.
+
+    A road closure is intentionally expected to change sensor flow, so its
+    audit remains explanatory rather than a calibration gate. A baseline
+    backed by frozen demand targets, however, must prove raw SUMO edgeData
+    fit before *any* publication path can write it. ``serve`` repeats this
+    check when it swaps staged files into the live directory, protecting
+    against stale/mixed artifacts.
+    """
+    if closures or not (meta.get("sensor_targets") or
+                        meta.get("sensor_output_fit_required")):
+        return []
+    return assess_output_fit(audit, n_intervals=n_intervals)["errors"]
 
 
 def demand_window_label(meta: dict) -> str:
@@ -585,26 +619,6 @@ def _raw_mean_series(results: list[dict], edge_id: str,
     return values
 
 
-def _geh(simulated: float, target: float) -> float:
-    return math.sqrt(2.0 * (simulated - target) ** 2 / max(simulated + target, 1e-12))
-
-
-def _fit_summary(pairs: list[tuple[float, float]]) -> dict:
-    """Return an exact, compact GEH summary for already-aligned values."""
-    geh_values = [_geh(simulated, target) for simulated, target in pairs]
-    summary = {"available": bool(geh_values), "edge_quarters": len(geh_values)}
-    if geh_values:
-        errors = [abs(simulated - target) for simulated, target in pairs]
-        summary.update({
-            "geh_lt_5_pct": round(
-                100.0 * sum(value < 5.0 for value in geh_values) / len(geh_values), 1),
-            "max_geh": round(max(geh_values), 3),
-            "mean_abs_error": round(sum(errors) / len(errors), 6),
-            "max_abs_error": round(max(errors), 6),
-        })
-    return summary
-
-
 def build_sensor_audit(meta: dict, results: list[dict],
                        flows_out: dict[str, list[int]], n_intervals: int,
                        *, calibration_comparison: bool,
@@ -707,8 +721,8 @@ def build_sensor_audit(meta: dict, results: list[dict],
                     (station["simulated_mean_raw"][qi], target))
 
     fit = {
-        "ensemble": _fit_summary(ensemble_pairs),
-        "representative": _fit_summary(representative_pairs),
+        "ensemble": summarize_pairs(ensemble_pairs),
+        "representative": summarize_pairs(representative_pairs),
     }
     return {
         "schema_version": 1,
@@ -724,7 +738,7 @@ def build_sensor_audit(meta: dict, results: list[dict],
             "contract": "raw_edgeData_ensemble_vs_frozen_targets",
             "uses_raw_ensemble_mean": raw_mean_flows is not None,
             "ensemble": fit["ensemble"],
-            "station_ensemble": _fit_summary(station_ensemble_pairs),
+            "station_ensemble": summarize_pairs(station_ensemble_pairs),
         },
         "stations": sorted(stations_public,
                             key=lambda item: item["sensor_id"]),
@@ -1857,15 +1871,31 @@ def main() -> None:
         # demand-calibration gate.
         calibration_comparison=not bool(closures),
     )
+    fit_errors = baseline_output_fit_errors(
+        meta, sensor_audit, n_intervals=n_intervals, closures=closures)
+    if fit_errors:
+        raise RuntimeError(
+            "baseline sensor output fit failed: " + "; ".join(fit_errors[:3])
+            + "; no scenario was published")
     # Integrity is evaluated on each raw seed before the display mean is
     # rounded. A single seed with prohibited active-closure flow must not be
     # hidden by averaging it with zero-flow seeds.
     active_entries_by_seed = ([cm.active_closure_throughput(seed_flows, closures)
                                for seed_flows in per_seed] if closures else [])
-    active_closure_entries = (sum(value for value in active_entries_by_seed
-                                  if value is not None)
-                              if any(value is not None for value in active_entries_by_seed)
-                              else None)
+    active_closure_entries = aggregate_active_closure_entries(
+        active_entries_by_seed, closures)
+    closure_integrity = closure_integrity_status(active_closure_entries, closures)
+    if closures and closure_integrity != "verified_clean":
+        # A scenario that either leaked vehicles through an active closure or
+        # never measured the closed edge cannot be presented as a successful
+        # closure. Fail before trajectory/scenario/manifest publication so a
+        # UI consumer has no selectable "done" artifact with false closure
+        # semantics; the preserved scratch/run registry remains the evidence
+        # for diagnosis.
+        raise RuntimeError(
+            "closure integrity is not verified: "
+            f"{closure_integrity} (active closure-edge entries: "
+            f"{active_closure_entries!r}); no scenario was published")
 
     window_label = demand_window_label(meta)
 
@@ -1900,7 +1930,7 @@ def main() -> None:
             "dropped_vehicles":   n_dropped,
             "active_closure_edge_entries": active_closure_entries,
             "active_closure_edge_entries_by_seed": active_entries_by_seed,
-            "closure_integrity": closure_integrity_status(active_closure_entries, closures),
+            "closure_integrity": closure_integrity,
             **({"date": meta["date"], "begin": meta["begin"], "end": meta["end"]}
                if "date" in meta else
                {"start_date": meta["start_date"],
@@ -1937,6 +1967,7 @@ def main() -> None:
         "name": name, "label": label, "file": f"{name}.json",
         "closed_edges": close_edges,
         "closures": closures,
+        "closure_integrity": closure_integrity,
         "scenario_spec": spec.to_dict(),
         "demand_signature": sig,
         "build_id": meta.get("build_id"),

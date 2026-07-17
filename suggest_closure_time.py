@@ -480,11 +480,14 @@ def closure_feasibility(candidate: cm.DisruptionMetrics,
     if detour is not None:
         score = detour.get("score")
         if score is None or score <= 0:
-            hard_failures.append("no_viable_detour")
-            detour_status = "no_viable_detour"
+            # The topology screen crosses every neighbouring predecessor and
+            # successor. It does not know which pairs any seeded trip uses,
+            # so it is useful evidence but cannot disqualify a scenario by
+            # itself. Actual affected-demand loss is already a hard gate via
+            # truncated_unreachable/dropped_unreachable metrics above.
+            detour_status = "topology_no_confirmed_detour"
         elif score < 1.0:
-            hard_failures.append("partial_detour_access")
-            detour_status = "partial_detour_access"
+            detour_status = "topology_partial_detour"
         else:
             detour_status = "all_predecessor_successor_pairs_reachable"
 

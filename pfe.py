@@ -1021,13 +1021,16 @@ def _integer_mix_targets(source_mix: Counter, n: int) -> Counter:
 def purpose_replacement_index(
     shapes: list[Candidate], measured_edges: set[str],
 ) -> dict[tuple[str, ...], dict[str, list[tuple[Candidate, Candidate]]]]:
-    """Index validated alternatives that preserve every measured edge.
+    """Index alternatives that preserve every constraint-protected edge.
 
     PFE is purpose-blind by design, so a selected route shape can have no
     source candidate for a purpose required in that departure quarter.  An
-    alternative with the same measured-edge signature has identical sensor
-    counts while allowing its unconstrained origin/destination leg to carry
-    the correct purpose provenance.  Only candidates already present in the
+    alternative with the same protected-edge signature keeps every count that
+    the final integer gate relies on unchanged while allowing its
+    unconstrained origin/destination leg to carry the correct purpose
+    provenance. ``measured_edges`` retains its historical parameter name for
+    callers, but receives the union of measured and hard-bounded edges from
+    ``write_calibration_report``. Only candidates already present in the
     generated pool are eligible; this never invents a route.
     """
     index: dict[tuple[str, ...], dict[str, list[tuple[Candidate, Candidate]]]] = {}
@@ -1364,7 +1367,16 @@ def write_calibration_report(
         category_length_km = purpose_length_means(shapes, shape_km)
         shape_km_by_id = {id(s): km for s, km in zip(shapes, shape_km)}
     measured_edges = {edge for targets in targets_per_q for edge in targets}
-    replacement_index = purpose_replacement_index(shapes, measured_edges)
+    # Purpose provenance may replace a selected route after integer repair.
+    # Preserve not only the measured signature but every edge subject to a
+    # hard bound; otherwise the pre-replacement ``achieved`` accounting can
+    # pass while the route XML written to SUMO violates an unmeasured bound.
+    protected_edges = set(measured_edges)
+    if bounds_per_q is not None:
+        protected_edges.update(
+            edge for bounds in bounds_per_q for edge in bounds
+        )
+    replacement_index = purpose_replacement_index(shapes, protected_edges)
     purpose_allocation: list[dict] = []
     vid = 0
     agents: list[dict] = []
@@ -1463,10 +1475,6 @@ def write_calibration_report(
                     (hashlib.sha1(f"{i}:{edges_str}:{dup}".encode()).digest(),
                      cand)
                     for dup in range(int(k)))
-                for e in set(cand.edges):
-                    achieved.setdefault(e, [0.0] * nq)
-                    if k:
-                        achieved[e][i] += float(k)
             keyed.sort(key=lambda item: item[0])
             route_instances: list[Candidate] = [c for _digest, c in keyed]
             instance_km = ([shape_km_by_id[id(c)] for c in route_instances]
@@ -1476,8 +1484,16 @@ def write_calibration_report(
                 lengths_km=instance_km,
                 category_length_km=category_length_km,
                 purpose_replacements=replacement_index,
-                measured_edges=measured_edges)
+                measured_edges=protected_edges)
             purpose_allocation.append({"quarter": i, **allocation})
+            # ``allocate_interval_provenance`` can substitute a compatible
+            # route shape. Count the FINAL route instances, not the shapes
+            # chosen by the integer solver, so every report/GEH/bound check
+            # proves the exact XML published below.
+            for cand in route_instances:
+                for edge in set(cand.edges):
+                    achieved.setdefault(edge, [0.0] * nq)
+                    achieved[edge][i] += 1.0
             n_departures = len(route_instances)
             for pos, (cand, source, purpose) in enumerate(
                     zip(route_instances, sources, purposes)):

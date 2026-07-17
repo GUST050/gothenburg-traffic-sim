@@ -29,6 +29,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from traffic_sim.simulation.sensor_fit import assess_output_fit
+
 SUMO_DIR = Path("sumo")
 WEB_DATA = Path("web/data")
 OUT_PATH = WEB_DATA / "validation.json"
@@ -154,21 +156,13 @@ def _sensor_output_section(baseline: dict | None) -> dict:
     if not isinstance(output_fit, dict):
         return {"status": "missing",
                 "reason": "baseline saknar slutlig SUMO sensor-output-fit"}
-    ensemble = output_fit.get("ensemble") or {}
-    station = output_fit.get("station_ensemble") or {}
+    assessment = assess_output_fit(
+        audit, n_intervals=int((baseline or {}).get("n_quarters", 0) or 0))
+    ensemble = assessment["directions"] or output_fit.get("ensemble") or {}
+    station = assessment["stations"] or output_fit.get("station_ensemble") or {}
     raw = output_fit.get("uses_raw_ensemble_mean") is True
-    status = ("pass" if raw and ensemble.get("available")
-              and station.get("available") else "warn")
-    if not raw:
-        reason = "audit bygger på avrundade kartvärden"
-    elif not ensemble.get("available"):
-        reason = "inga mätbara sensorintervall i edgeData-audit"
-    elif not station.get("available"):
-        reason = "ingen fysisk stationsaggregering i edgeData-audit"
-    else:
-        reason = None
     result = {
-        "status": status,
+        "status": "pass" if not assessment["errors"] else "warn",
         "contract": output_fit.get("contract"),
         "uses_raw_ensemble_mean": raw,
         "edge_quarters": ensemble.get("edge_quarters"),
@@ -177,10 +171,10 @@ def _sensor_output_section(baseline: dict | None) -> dict:
         "max_abs_error": ensemble.get("max_abs_error"),
         "station_edge_quarters": station.get("edge_quarters"),
         "station_max_abs_error": station.get("max_abs_error"),
-        "gate": "SUMO edgeData före avrundning jämförs mot frysta sensor-targets",
+        "gate": "rå SUMO edgeData måste täcka varje fryst sensor-target och ha GEH<5",
     }
-    if reason:
-        result["reason"] = reason
+    if assessment["errors"]:
+        result["reason"] = "; ".join(assessment["errors"][:3])
     return result
 
 
