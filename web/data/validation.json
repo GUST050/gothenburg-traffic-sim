@@ -1,66 +1,66 @@
 {
  "schema_version": 1,
- "generated_at": "2026-07-17T16:18:50Z",
- "demand_window": "2027-09-15",
- "demand_source": "forecast",
- "overall": "pass",
+ "generated_at": "2026-07-17T20:01:11Z",
+ "demand_window": "2025-09-16",
+ "demand_source": "historical",
+ "overall": "warn",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 22375,
+   "vehicles": 21664,
    "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
   },
   "structure": {
    "status": "pass",
    "flags": [],
-   "dest_within_200m_pct": 2.4,
+   "dest_within_200m_pct": 2.7,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0097,
-    0.5729,
-    0.4174
+    0.0076,
+    0.5681,
+    0.4243
    ],
-   "trip_length_l1_vs_rvu": 0.2857,
-   "onward_after_sensor_median_m": 3259.2,
-   "onward_under_200m_pct": 0.9,
+   "trip_length_l1_vs_rvu": 0.2899,
+   "onward_after_sensor_median_m": 3140.3,
+   "onward_under_200m_pct": 1.0,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
   },
   "purposes": {
-   "status": "pass",
+   "status": "warn",
    "purpose_counts": {
-    "arbete": 3977,
-    "external": 1288,
-    "fritid": 1401,
-    "service": 2272,
-    "through": 13437
+    "arbete": 3878,
+    "external": 1299,
+    "fritid": 1420,
+    "service": 2258,
+    "through": 12809
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 3977,
-     "mean_km": 2.61,
-     "median_km": 2.51
+     "n": 3878,
+     "mean_km": 2.76,
+     "median_km": 2.48
     },
     "external": {
-     "n": 1288,
-     "mean_km": 3.76,
-     "median_km": 3.81
+     "n": 1299,
+     "mean_km": 3.74,
+     "median_km": 3.76
     },
     "fritid": {
-     "n": 1401,
-     "mean_km": 2.97,
-     "median_km": 2.97
+     "n": 1420,
+     "mean_km": 2.89,
+     "median_km": 2.94
     },
     "service": {
-     "n": 2272,
-     "mean_km": 2.98,
-     "median_km": 2.78
+     "n": 2258,
+     "mean_km": 2.87,
+     "median_km": 2.66
     },
     "through": {
-     "n": 13437,
-     "mean_km": 5.43,
-     "median_km": 5.42
+     "n": 12809,
+     "mean_km": 5.48,
+     "median_km": 5.45
     }
    },
    "ordering_violated": false,
@@ -75,17 +75,17 @@
     "edge_shares_q90": 0
    },
    "purpose_mix_relaxed_quarters_by_variant": {
-    "edge_shares": 0,
-    "edge_shares_q10": 0,
+    "edge_shares": 1,
+    "edge_shares_q10": 2,
     "edge_shares_q90": 0
    },
    "purpose_mix_reallocation_vehicles_by_variant": {
-    "edge_shares": 0,
-    "edge_shares_q10": 0,
+    "edge_shares": 67,
+    "edge_shares_q10": 137,
     "edge_shares_q90": 0
    },
    "purpose_claims_allowed": true,
-   "purpose_mix_matches_generated_prior": true,
+   "purpose_mix_matches_generated_prior": false,
    "gate": "fritid ska ha l\u00e4ngst medianresa (Trafikanalys RVU Tabell 3); exakt \u00e4rende\u00d7tid-mix per kvart n\u00e4r den \u00e4r f\u00f6renlig med sensorerna; varje tilldelad rutt m\u00e5ste ha kompatibel proveniens"
   },
   "simulation": {
@@ -94,22 +94,22 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 22375,
-     "loaded": 22375,
+     "inserted": 21664,
+     "loaded": 21664,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 21707,
-     "loaded": 21707,
+     "inserted": 21055,
+     "loaded": 21055,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 23038,
-     "loaded": 23038,
+     "inserted": 22275,
+     "loaded": 22275,
      "unfinished": 0,
      "teleports": 0
     }
@@ -120,12 +120,12 @@
    "status": "pass",
    "contract": "raw_edgeData_ensemble_vs_frozen_targets",
    "uses_raw_ensemble_mean": true,
-   "edge_quarters": 672,
+   "edge_quarters": 671,
    "geh_lt_5_pct": 100.0,
-   "mean_abs_error": 2.631025,
-   "max_abs_error": 14.981333,
-   "station_edge_quarters": 576,
-   "station_max_abs_error": 21.333333,
+   "mean_abs_error": 2.974704,
+   "max_abs_error": 16.0,
+   "station_edge_quarters": 575,
+   "station_max_abs_error": 20.666667,
    "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "multi_day": {
@@ -138,15 +138,15 @@
    "status": "info",
    "window": "2025-09-16 \u2192 2025-09-17 (exclusive)",
    "ratios": {
-    "107:60786979_3575001205_0": 0.706,
-    "107:1455801464_18241874_0": 1.953,
-    "1074:60790252_60790253_0": 0.502,
-    "1076:30420757_30421744_0": 0.05,
-    "133:26842525_26355153_0": 1.298,
-    "134:26355153_96523321_0": 0.778,
-    "2276:26355153_91615277_0": 0.812
+    "107:60786979_3575001205_0": 1.71,
+    "107:1455801464_18241874_0": 2.727,
+    "1074:60790252_60790253_0": 0.706,
+    "1076:30420757_30421744_0": 0.55,
+    "133:26842525_26355153_0": 0.726,
+    "134:26355153_96523321_0": 1.788,
+    "2276:26355153_91615277_0": 2.23
    },
-   "median_ratio": 0.778,
+   "median_ratio": 1.71,
    "note": "utel\u00e4mnad-station-\u00e5terskapande; karakterisering, inte grind \u2014 extrema veck kan spegla sensorns informationsisolering, inte modellfel"
   }
  }

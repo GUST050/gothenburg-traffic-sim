@@ -380,7 +380,7 @@
       pointer-events: none; width: 205px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.45);
     }
-    #legend-title {
+    .legend-title {
       font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
       text-transform: uppercase; color: var(--ink);
     }
@@ -402,6 +402,13 @@
     .legend-bar-labels span:nth-child(2) { text-align: center; color: var(--ink-2); }
     .legend-bar-labels span:nth-child(3) { text-align: right; }
     .legend-divider { border-top: 1px solid rgba(255,255,255,0.07); margin: 10px 0; }
+    /* Simulering colours roads by CERTAINTY (proximity to a sensor), not
+       traffic level — swap the legend explanation with the mode. */
+    #legend-sim, #legend-dots-sim { display: none; }
+    body[data-viewmode="sim"] #legend-flow,
+    body[data-viewmode="sim"] #legend-dots-flow { display: none; }
+    body[data-viewmode="sim"] #legend-sim { display: block; }
+    body[data-viewmode="sim"] #legend-dots-sim { display: flex; }
     .legend-row {
       display: flex; align-items: center;
       gap: 10px; line-height: 2.0; font-size: 0.72rem; color: var(--ink-2);
@@ -520,25 +527,46 @@
   </div>
 
   <div id="legend">
-    <div id="legend-title">Trafikflöde</div>
-    <div class="legend-sub">jämfört med lugn dagtrafik (sensorer: septembersnitt; simulerade vägar: egen middagsnivå)</div>
+    <div id="legend-flow">
+      <div class="legend-title">Trafikflöde</div>
+      <div class="legend-sub">jämfört med lugn dagtrafik (sensorer: septembersnitt; simulerade vägar: egen middagsnivå)</div>
 
-    <div class="legend-bar"><div class="legend-bar-tick"></div></div>
-    <div class="legend-bar-labels">
-      <span>Under<br>normalt</span>
-      <span>Normalt</span>
-      <span>Dubbelt<br>normalt+</span>
+      <div class="legend-bar"><div class="legend-bar-tick"></div></div>
+      <div class="legend-bar-labels">
+        <span>Under<br>normalt</span>
+        <span>Normalt</span>
+        <span>Dubbelt<br>normalt+</span>
+      </div>
+    </div>
+
+    <div id="legend-sim">
+      <div class="legend-title">Säkerhet</div>
+      <div class="legend-sub">vägfärgen visar hur säker simuleringen är på varje väg (närhet till mätpunkt) — bilarna visar trafiken</div>
+
+      <div class="legend-bar"></div>
+      <div class="legend-bar-labels">
+        <span>Säker<br>nära sensor</span>
+        <span></span>
+        <span>Osäker<br>längre bort</span>
+      </div>
     </div>
 
     <div class="legend-divider"></div>
 
-    <div class="legend-row">
+    <div class="legend-row" id="legend-dots-flow">
       <div class="legend-swatch">
         <div class="legend-dot" style="background:#dc2626"></div>
         <div class="legend-dot" style="background:#dc2626"></div>
         <div class="legend-dot" style="background:#dc2626"></div>
       </div>
       <span>Fler prickar · snabbare = mer trafik</span>
+    </div>
+    <div class="legend-row" id="legend-dots-sim">
+      <div class="legend-swatch">
+        <div class="legend-dot" style="background:#1d4ed8"></div>
+        <div class="legend-dot" style="background:#1d4ed8"></div>
+      </div>
+      <span>Varje prick = en simulerad bil</span>
     </div>
     <div class="legend-row">
       <div class="legend-swatch"><div class="legend-line" style="background:#94a3b8"></div></div>
@@ -730,9 +758,9 @@
        can run against new HTML and crash on missing elements -->
   <script src="state.js?v=11"></script>
   <script src="provider.js?v=12"></script>
-  <script src="render.js?v=12"></script>
+  <script src="render.js?v=14"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

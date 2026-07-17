@@ -109,6 +109,36 @@ const Render = (() => {
       return;
     }
 
+    // Simulering: road colour shows CERTAINTY (proximity to a sensor), not
+    // traffic level — the animated vehicles ARE the traffic display there
+    // (Gustav 2026-07-17: one colour for used roads, shifting with
+    // uncertainty the further from the sensors). Green = measured/near a
+    // sensor, red = extrapolation far away — the SAME semantics the
+    // confidence tooltip has always used, so the two can never disagree.
+    // Because confidence = f(distance to nearest sensor), this renders as
+    // visible certainty zones around the sensor clusters. Per-scenario
+    // confidence (Monte Carlo spread) beats the static prior when present.
+    if (_provider.isScenario) {
+      const conf = (_provider.confidence && _provider.confidence[edgeId] != null)
+        ? _provider.confidence[edgeId] : (e.conf ?? 0);
+      // Display transform: the empirical sigma (127.5 m) makes raw
+      // confidence collapse within ~300 m, which paints the whole city one
+      // flat red and hides the very zone structure the colouring should
+      // show. conf^(1/8) is monotone in the SAME confidence value (order
+      // and endpoints preserved — equivalent to drawing the gradient with
+      // a ~2.8x wider visual sigma) so the transition stays visible for a
+      // few blocks. The tooltip keeps the exact untransformed percentage.
+      const confV = Math.pow(Math.max(conf, 0), 0.125);
+      e.t = null; e.activeCars = 0;
+      e.line.setStyle({
+        color: rampColor(1 - confV),
+        weight: e.isSensor ? 4 : 3,
+        opacity: 0.30 + 0.55 * confV,
+        dashArray: '',
+      });
+      return;
+    }
+
     // Colour: compare against the calm September average (rush hours excluded).
     // During rush hours the calm profile has no data → fall back to normal.
     // Day-of-week is derived from the ACTIVE provider's epoch (2025 starts on
@@ -490,6 +520,7 @@ const Render = (() => {
 
         _edges[id] = {
           line, isSensor, latlngs, lengthM, baseStyle,
+          conf: confidence ?? null,   // static prior for certainty colouring
           t: 0, count: 0, activeCars: 0, hadData: false,
           dots, phase: Math.random(), // random starting phase per edge
         };

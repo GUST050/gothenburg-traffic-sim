@@ -179,6 +179,9 @@
             b.classList.toggle('active', b === activeBtn);
           }
           const isSim = activeBtn === btnScen;
+          // The legend swaps meaning with the mode: Simulering colours roads
+          // by certainty (near-sensor zones), Historisk/Prognos by traffic.
+          document.body.dataset.viewmode = isSim ? 'sim' : 'flow';
           const panelWasShown = simPanel.classList.contains('show');
           simPanel.classList.toggle('show', isSim);
           // "Dag" only makes sense as a scrubber when there's more than one
