@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 
 import build_sumo_demand as bsd
+from demand import feedback as dfeedback
 from demand import intake as dintake
 from demand import publication as dpub
 from demand import priors as dpriors
@@ -539,6 +540,12 @@ class TestFeedbackSimulationTimeout:
     demand-build with no diagnostic."""
 
     def test_timeout_exits_cleanly(self, monkeypatch, tmp_path):
+        # run_feedback_simulation writes its edgeData .add.xml into SUMO_DIR
+        # before launching sumo. On a fresh clone the repo's gitignored sumo/
+        # directory does not exist, so without this redirect the open() fails
+        # first and the test both breaks and litters the working tree.
+        monkeypatch.setattr(dfeedback, "SUMO_DIR", tmp_path)
+
         def fake_run(*a, **kw):
             raise subprocess.TimeoutExpired(cmd="sumo", timeout=kw.get("timeout"))
         monkeypatch.setattr(bsd.subprocess, "run", fake_run)
