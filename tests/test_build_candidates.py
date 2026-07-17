@@ -77,6 +77,79 @@ def test_reused_purpose_templates_sample_hours_conditional_on_purpose():
     assert hours.count(7) > 2 * hours.count(20)
 
 
+def test_reused_paired_tour_keeps_return_after_outbound():
+    structure = bc.CandidateStructure(
+        G=None, edges=[], hmass=np.array([]), amass={}, entries=[], exits=[],
+        entry_ids=[], exit_ids=[], w_entry=np.array([]), w_exit=np.array([]), measured=[])
+    # Both hours are available. The paired sampler must still keep the
+    # activity->home return after the home->activity outbound leg.
+    profile = np.zeros(24); profile[7] = profile[18] = 0.5
+    templates = [
+        ("home", "activity", "via", "arbete", "ii-1", "outbound"),
+        ("activity", "home", "via", "arbete", "ii-1", "return"),
+    ]
+
+    block, _, _, _ = bc.generate_day_block(
+        structure, profile, 0, "d0_", 42, 0, len(templates), .5, .3, 2.6,
+        False, 1, template_trips=templates)
+    by_leg = {trip[7]: int(trip[1] // 3600) for trip in block}
+
+    assert by_leg["return"] >= by_leg["outbound"]
+    assert by_leg["return"] >= 12
+
+
+class TestGateWeights:
+    """Gate draws must follow expected approach flow (2026-07-17): the
+    road-class-only proxy gave the busiest gate 0.37% of draws while
+    calibration assigned it ~20% of quarter flow, leaving its main corridor
+    ONE pool shape that the PFE stacked 1 486 vehicles/day onto."""
+
+    def _graph(self):
+        G = nx.MultiDiGraph()
+        for n in (1, 2, 3, 4):
+            G.add_node(n, y=57.7, x=11.97 + n * 0.001)
+        G.add_edge(1, 2, key=0, highway="motorway")
+        G.add_edge(2, 3, key=0, highway="motorway")
+        G.add_edge(3, 4, key=0, highway="residential")
+        return G
+
+    GATES = [("1_2_0", 2), ("2_3_0", 3), ("3_4_0", 4)]
+
+    def test_structural_load_drives_the_weights(self):
+        # Two same-class motorway gates with very different structural
+        # loads must no longer draw equally.
+        w = bc.gate_weights(self._graph(), self.GATES,
+                            {"1_2_0": 9000.0, "2_3_0": 450.0, "3_4_0": 550.0})
+        assert w[0] > 5 * w[1]
+        assert w.sum() == pytest.approx(1.0)
+
+    def test_uncovered_gate_keeps_a_floor_share(self):
+        w = bc.gate_weights(self._graph(), self.GATES,
+                            {"1_2_0": 9000.0, "2_3_0": 1000.0})
+        assert w[2] > 0   # unmapped gate stays drawable
+
+    def test_sparse_field_falls_back_to_road_class(self):
+        # Only 1 of 3 gates covered — below the coverage threshold.
+        w = bc.gate_weights(self._graph(), self.GATES, {"1_2_0": 9000.0})
+        w_class = bc.gate_weights(self._graph(), self.GATES, None)
+        assert np.allclose(w, w_class)
+        # class prior: motorway 8, motorway 8, residential default 1
+        assert w_class[0] == pytest.approx(8 / 17)
+
+    def test_missing_artifact_returns_empty_loads(self, tmp_path):
+        assert bc.load_assignment_gate_loads(tmp_path / "absent.json") == {}
+        bad = tmp_path / "bad.json"
+        bad.write_text("{not json")
+        assert bc.load_assignment_gate_loads(bad) == {}
+
+    def test_loads_sum_quarter_series_and_skip_nonpositive(self, tmp_path):
+        p = tmp_path / "assignment_priors.json"
+        p.write_text(json.dumps({"flows": {
+            "a": [1.0, 2.0, 3.0], "b": 0.0, "c": [0, 0], "d": "junk"}}))
+        assert bc.load_assignment_gate_loads(p) == {"a": 6.0}
+
+
+
 class TestReverseEdgeId:
     def test_swaps_endpoints_keeps_key(self):
         assert bc.reverse_edge_id("100_200_0") == "200_100_0"
@@ -707,6 +780,73 @@ class TestNaturalFarEndWeights:
             candidate_u_idx=np.array([node_idx[11]]), base_weights=np.array([3.0]))
         assert w[0] == pytest.approx(0.0)
         assert not bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+
+class TestBoundedDetourNaturalness:
+    """2026-07-17 semantics change: naturalness = bounded detour, not exact
+    shortest path.  The exact rule (±0.5 s) left 6 of 7 real sensors with
+    ZERO verified through gate pairs — all through candidates entered the
+    city at 2 street cuts and exited at 1 — and confined tour destinations
+    to the shadow cone just behind each sensor.  A sensor must explain any
+    movement whose REALISTIC route (within max(45 s, 20% of direct)) passes
+    it, which is stochastic-multipath route choice, the same model this
+    project already validated for assignment priors."""
+
+    def _bypass_graph(self, via_cost, bypass_cost):
+        # 10 -> 11 directly via the sensor edge (via_cost), or around
+        # through 99 (bypass_cost total).  Direct shortest = min of the two.
+        G = nx.MultiDiGraph()
+        G.add_edge(1, 10, key=0, length=10.0)
+        G.add_edge(10, 11, key=0, length=via_cost)
+        G.add_edge(11, 20, key=0, length=10.0)
+        G.add_edge(10, 99, key=0, length=bypass_cost / 2)
+        G.add_edge(99, 11, key=0, length=bypass_cost / 2)
+        return G
+
+    def test_modest_detour_within_absolute_floor_is_natural(self):
+        # Sensor route costs 140, bypass 100: +40 detour <= 45 s floor.
+        # The old exact rule rejected this; a real driver would not.
+        G = self._bypass_graph(via_cost=140.0, bypass_cost=100.0)
+        assert bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+    def test_detour_beyond_both_tolerances_is_rejected(self):
+        # +100 detour on a 100-cost trip: over the 45 s floor and over 20%.
+        G = self._bypass_graph(via_cost=200.0, bypass_cost=100.0)
+        assert not bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+    def test_relative_tolerance_scales_with_trip_length(self):
+        # Long trip: direct 1000, via 1150 -> 15% < 20% relative: natural.
+        G = self._bypass_graph(via_cost=1150.0, bypass_cost=1000.0)
+        assert bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+        # via 1300 -> 30% > 20%: rejected.
+        G = self._bypass_graph(via_cost=1300.0, bypass_cost=1000.0)
+        assert not bc.via_naturally_on_path(G, entry_v=10, exit_u=11, m_u=10, m_v=11)
+
+    def test_far_end_weights_admit_bounded_detour_vectorized(self):
+        G = self._bypass_graph(via_cost=140.0, bypass_cost=100.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w = bc.natural_far_end_weights(
+            D, node_idx, anchor_v=10, m_u=10, m_v=11, m_length=140.0,
+            candidate_u_idx=np.array([node_idx[11]]),
+            base_weights=np.array([3.0]))
+        assert w[0] == pytest.approx(3.0)
+
+    def test_sensor_masks_admit_bounded_detour(self):
+        G = self._bypass_graph(via_cost=140.0, bypass_cost=100.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        masks = bc.natural_sensor_masks(
+            D, node_idx, anchor_v=10, m_info={"m": (10, 11, 140.0)},
+            dest_u_idx=np.array([node_idx[11]]))
+        assert masks["m"][0]
+
+    def test_origin_weights_admit_bounded_detour(self):
+        G = self._bypass_graph(via_cost=140.0, bypass_cost=100.0)
+        D, node_idx = bc.build_shortest_distance_matrix(G)
+        w = bc.natural_origin_weights(
+            D, node_idx, candidate_v_idx=np.array([node_idx[10]]),
+            m_u=10, m_v=11, m_length=140.0, dest_u=11,
+            base_weights=np.array([2.0]))
+        assert w[0] == pytest.approx(2.0)
 
     def test_vectorizes_over_multiple_candidates_independently(self):
         """One candidate naturally fits, another doesn't -- each must be

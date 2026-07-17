@@ -62,6 +62,7 @@ def _sumo_edge_values(net_path: Path) -> dict[str, dict]:
         lane = edge.find("lane")
         speed = edge.get("speed") or (lane.get("speed") if lane is not None else None)
         lanes = edge.get("numLanes") or (len(edge.findall("lane")) if edge is not None else None)
+        length = lane.get("length") if lane is not None else None
         try:
             speed_value = float(speed) if speed is not None else None
         except (TypeError, ValueError):
@@ -70,7 +71,12 @@ def _sumo_edge_values(net_path: Path) -> dict[str, dict]:
             lane_value = int(lanes) if lanes is not None else None
         except (TypeError, ValueError):
             lane_value = None
-        values[edge_id] = {"speed_m_s": speed_value, "lanes": lane_value}
+        try:
+            length_value = float(length) if length is not None else None
+        except (TypeError, ValueError):
+            length_value = None
+        values[edge_id] = {"speed_m_s": speed_value, "lanes": lane_value,
+                           "length_m": length_value}
     return values
 
 
@@ -89,10 +95,26 @@ def build_audit(graph, net_path: Path) -> dict:
         junction = str(scalar(data.get("junction", "")) or "").lower()
         source_tags = {tag: _values(data, tag) for tag in _AUDITED_TAGS
                        if data.get(tag) is not None}
+        try:
+            graph_length = float(scalar(data.get("length")))
+        except (TypeError, ValueError):
+            graph_length = None
+        sumo_length = sumo_values.get(edge_id, {}).get("length_m")
+        # Driven length must match the map: netconvert's junction cutting once
+        # shrank an 88 m street to a 0.20 m lane (found 2026-07-17), making
+        # meso traverse it instantly.  Flag any disagreement beyond rounding
+        # so a rebuild that reintroduces the distortion is visible in review.
+        length_ok = None
+        if graph_length is not None and sumo_length is not None:
+            length_ok = abs(sumo_length - graph_length) <= max(
+                2.0, 0.05 * graph_length)
         edges[edge_id] = {
             "highway": highway,
             "oneway": _is_oneway(data.get("oneway")),
             "roundabout": junction == "roundabout",
+            "graph_length_m": graph_length,
+            "sumo_length_m": sumo_length,
+            "length_ok": length_ok,
             "speed_m_s": parse_speed_ms(data),
             "sumo_speed_m_s": sumo_values.get(edge_id, {}).get("speed_m_s"),
             "speed_source": "imported" if speed_imported else "defaulted",

@@ -28,6 +28,27 @@ _PFE_PAR_SHAPES = None
 _PFE_PAR_ROUTE_COST = None
 _PFE_PAR_STRUCTURE_GROUPS = None
 _PFE_PAR_VARIANT_INPUTS = None
+_PFE_PAR_PURPOSE_MIXES = None
+
+
+def _agent_path_for(route_path: Path) -> Path:
+    """Return the provenance sidecar emitted beside one route XML file."""
+    return route_path.with_name(route_path.name.replace(".rou.xml", ".agents.json"))
+
+
+def _staged_route_path(route_path: Path) -> Path:
+    """A sibling staging name that retains the route/agent name convention."""
+    return route_path.with_name(route_path.name + ".staged")
+
+
+def _report_is_publishable(report: dict) -> bool:
+    """Demand variants are one contract: publish none unless all are valid."""
+    return (
+        report.get("infeasible_intervals", 0) == 0
+        and float(report.get("geh_pct") or 0.0) >= 100.0
+        and not report.get("bound_violations")
+        and not report.get("unserviceable_edges")
+    )
 
 def _run_pfe_interval_job(job: dict):
     """ProcessPool worker for one independent (variant, quarter) PFE solve.
@@ -42,7 +63,7 @@ def _run_pfe_interval_job(job: dict):
     import pfe
 
     if (_PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None or
-            _PFE_PAR_VARIANT_INPUTS is None):
+            _PFE_PAR_VARIANT_INPUTS is None or _PFE_PAR_PURPOSE_MIXES is None):
         raise RuntimeError("PFE interval worker was not initialized")
     suffix, key, quarter = job
     data = _PFE_PAR_VARIANT_INPUTS[suffix]
@@ -53,23 +74,27 @@ def _run_pfe_interval_job(job: dict):
         data["priors_pq"][quarter],
         route_cost=_PFE_PAR_ROUTE_COST,
         structure_groups=_PFE_PAR_STRUCTURE_GROUPS,
+        purpose_mix=_PFE_PAR_PURPOSE_MIXES[suffix][quarter],
     )
     return suffix, key, quarter, sol, rung
 
 
 def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, str]],
                                    variant_inputs: dict[str, dict],
-                                   max_workers: int | None = None) -> dict[str, dict]:
+                                   max_workers: int | None = None,
+                                   purpose_departure_offset_s: float = 0.0) -> dict[str, dict]:
     """Solve all final direction variants through one flat worker pool.
 
     This avoids nesting multiprocessing pools: the unit of parallel work is one
     15-minute interval, across all variants, and route files are written only
     after every solution has been collected in deterministic quarter order.
+    ``purpose_departure_offset_s`` aligns absolute candidate departure times
+    with target-quarter zero for a sub-day demand window.
     """
     import pfe
 
     global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
-    global _PFE_PAR_VARIANT_INPUTS
+    global _PFE_PAR_VARIANT_INPUTS, _PFE_PAR_PURPOSE_MIXES
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
@@ -81,6 +106,20 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     # Set before fork.  Each task now carries only a small tuple instead of
     # repeatedly serializing the same per-quarter bounds/priors dictionaries.
     _PFE_PAR_VARIANT_INPUTS = variant_inputs
+    _PFE_PAR_PURPOSE_MIXES = {
+        suffix: pfe._purpose_targets_per_quarter(
+            shapes, len(variant_inputs[suffix]["targets"]),
+            purpose_departure_offset_s)
+        for suffix, _key in variants
+    }
+    staged_outputs = {
+        suffix: _staged_route_path(Path(variant_inputs[suffix]["out_path"]))
+        for suffix, _key in variants
+    }
+    for staged in staged_outputs.values():
+        staged.unlink(missing_ok=True)
+        _agent_path_for(staged).unlink(missing_ok=True)
+        staged.with_suffix(staged.suffix + ".tmp").unlink(missing_ok=True)
     try:
         tasks = []
         solutions = {}
@@ -111,11 +150,12 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             data = variant_inputs[suffix]
             report_started = time.perf_counter()
             reports[suffix] = pfe.write_calibration_report(
-                shapes, data["out_path"], data["targets"], solutions[suffix],
+                shapes, staged_outputs[suffix], data["targets"], solutions[suffix],
                 data["hard_bounds_pq"], rungs[suffix], enforce_integer_bounds=True,
                 structure_groups=[(members, cap_share) for _n, members, cap_share
                                   in (_PFE_PAR_STRUCTURE_GROUPS or [])],
-                edge_length_m=load_edge_geometry()[2] if GEO_PATH.exists() else None)
+                edge_length_m=load_edge_geometry()[2] if GEO_PATH.exists() else None,
+                purpose_mixes_per_q=_PFE_PAR_PURPOSE_MIXES[suffix])
             publish_s = time.perf_counter() - report_started
             reports[suffix]["timings_s"] = {
                 "prepare_shared": round(prepare_s, 3),
@@ -123,16 +163,41 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
                 "route_publish": round(publish_s, 3),
             }
             print(f"  timing PFE route publish {key}: {publish_s:.1f}s")
+        rejected = [
+            key for suffix, key in variants
+            if not _report_is_publishable(reports[suffix])
+        ]
+        if rejected:
+            raise RuntimeError(
+                "PFE publication gate rejected variant(s) "
+                f"{', '.join(rejected)}; no route variants were published")
+        # The direction variants form one demand contract. Publishing q50
+        # immediately and failing q10/q90 later left a hybrid set whose
+        # metadata and scenario ensemble described different builds. Stage
+        # every XML/agent pair, validate all of them, then flip the complete
+        # set in deterministic order.
+        for suffix, _key in variants:
+            staged = staged_outputs[suffix]
+            final = Path(variant_inputs[suffix]["out_path"])
+            os.replace(staged, final)
+            os.replace(_agent_path_for(staged), _agent_path_for(final))
+        for suffix, _key in variants:
+            data = variant_inputs[suffix]
             if not data.get("keep_achieved", False):
                 reports[suffix] = {
                     k: v for k, v in reports[suffix].items() if k != "achieved"
                 }
         return reports
     finally:
+        for staged in staged_outputs.values():
+            staged.unlink(missing_ok=True)
+            _agent_path_for(staged).unlink(missing_ok=True)
+            staged.with_suffix(staged.suffix + ".tmp").unlink(missing_ok=True)
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
         _PFE_PAR_STRUCTURE_GROUPS = None
         _PFE_PAR_VARIANT_INPUTS = None
+        _PFE_PAR_PURPOSE_MIXES = None
 
 
 def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
@@ -150,7 +215,7 @@ def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
 
 
 def warn_purpose_allocation_drift(report: dict, label: str) -> None:
-    """Expose selected routes lacking same-purpose candidate provenance."""
+    """Expose provenance errors separately from an honest mix relaxation."""
     summary = report.get("purpose_allocation_summary", {})
     n = summary.get("quarters_with_incompatible_routes", 0)
     replaced = summary.get("replaced_routes", 0)
@@ -160,6 +225,13 @@ def warn_purpose_allocation_drift(report: dict, label: str) -> None:
               f"{replaced} route(s) were safely replaced where measured-edge "
               "signatures allowed; remaining routes lack same-purpose "
               "candidate provenance")
+    relaxed = summary.get("quarters_with_relaxed_mix", 0)
+    if relaxed:
+        print(f"  ⚠ PURPOSE MIX RELAXED ({label}): {relaxed} quarter(s), "
+              f"{summary.get('mix_reallocation_vehicles', 0)} vehicle(s) "
+              "differ from the generated purpose prior so measured sensor "
+              "counts can remain exact; every published route still retains "
+              "its own source provenance")
 
 
 def warn_bound_violations(report: dict, label: str) -> None:

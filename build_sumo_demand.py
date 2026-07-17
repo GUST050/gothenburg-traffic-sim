@@ -95,6 +95,10 @@ def fit_summary(report: dict) -> dict:
         "relaxed_bound_violations": list(report.get("relaxed_bound_violations", [])),
         "purpose_incompatible_quarters": purpose.get(
             "quarters_with_incompatible_routes", 0),
+        "purpose_mix_relaxed_quarters": purpose.get(
+            "quarters_with_relaxed_mix", 0),
+        "purpose_mix_reallocation_vehicles": purpose.get(
+            "mix_reallocation_vehicles", 0),
         "purpose_replaced_routes": purpose.get("replaced_routes", 0),
         "relaxation_summary": report.get("relaxation_summary", {}),
     }
@@ -373,6 +377,11 @@ def main() -> None:
     qi_start    = int((t0 - source_epoch) / INTERVAL)
     n_intervals = int((t1 - t0) / INTERVAL)
     duration_s  = n_intervals * 900
+    # Candidate departures are stored on the behavioural day's absolute
+    # clock; target quarter zero is this build window's clock. Keeping this
+    # offset explicit prevents a sub-day 06:00–10:00 run from inheriting the
+    # candidate purpose mix for midnight–04:00.
+    purpose_departure_offset_s = int((t0 - t0.normalize()).total_seconds())
     use_weekend_shape, day_kind = classify_day(args.start_date, t0.dayofweek)
     print(f"Window: {t0} → {t1}  ({n_intervals} × 15 min)  source={args.source}"
           f"  {day_kind}")
@@ -456,6 +465,9 @@ def main() -> None:
                 "day_blocks": day_blocks_path or Path(
                     "sumo/.missing-day-blocks"),
                 "routing_weights": candidate_routing_weight_cache_input(weight_file),
+                # Gate draws follow the structural assignment field (2026-07-17)
+                # — a changed field must invalidate the candidate pool.
+                "assignment_priors": SUMO_DIR / "assignment_priors.json",
             }
             cache_config = {
                 "n_total": n_total,
@@ -495,6 +507,7 @@ def main() -> None:
                   "--gravity-km", str(args.gravity_km),
                   "--gravity-alpha", str(args.gravity_alpha),
                   "--cross-fraction", str(args.cross_fraction),
+                  "--assignment-priors", str(SUMO_DIR / "assignment_priors.json"),
                   "--n-total", str(n_total), "--seed", str(args.seed)]
             if use_weekend_shape:
                 cmd += ["--is-weekend"]
@@ -617,7 +630,8 @@ def main() -> None:
                     "pfe_variants_and_rounding",
                     lambda: run_pfe_variants_flat_parallel(
                         cand_path, variants, variant_inputs,
-                        max_workers=os.cpu_count() or 1))
+                        max_workers=os.cpu_count() or 1,
+                        purpose_departure_offset_s=purpose_departure_offset_s))
                 for suffix, key in variants:
                     variant_report = reports[suffix]
                     variant_fit_reports[key] = fit_summary(variant_report)
@@ -647,7 +661,8 @@ def main() -> None:
                     cand_path, calib_path, targets,
                     bounds_pq, priors_pq,
                     enforce_integer_bounds=True,
-                    integer_bounds_per_q=hard_bounds_pq))
+                    integer_bounds_per_q=hard_bounds_pq,
+                    purpose_departure_offset_s=purpose_departure_offset_s))
             tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
             print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                   f"GEH<5: {report['geh_pct']}%  "

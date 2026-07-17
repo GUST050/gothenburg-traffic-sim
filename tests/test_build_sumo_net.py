@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from build_sumo_net import parse_lanes, parse_speed_ms
+from build_sumo_net import edge_length_m, parse_lanes, parse_speed_ms
 
 
 class TestParseSpeedMs:
@@ -92,3 +92,40 @@ class TestParseLanes:
 
     def test_missing_everything_defaults_to_one(self):
         assert parse_lanes({}) == 1
+
+
+class TestEdgeLengthM:
+    """The explicit plain-XML length keeps SUMO's driven distance identical
+    to the map even where netconvert's junction cutting would otherwise
+    shrink a street (an 88 m street was simulated as a 0.20 m lane before
+    this fix — vehicles crossed it instantly and the animation showed
+    426 km/h)."""
+
+    STRAIGHT_100M = [(0.0, 0.0), (100.0, 0.0)]
+
+    def test_osm_length_tag_wins_over_chord(self):
+        # A curved street: OSM arc length 118 m, straight chord 100 m.
+        assert edge_length_m({"length": 118.0}, self.STRAIGHT_100M) \
+            == pytest.approx(118.0)
+
+    def test_osm_length_as_scalar_list(self):
+        assert edge_length_m({"length": ["118.0"]}, self.STRAIGHT_100M) \
+            == pytest.approx(118.0)
+
+    def test_missing_length_uses_shape(self):
+        assert edge_length_m({}, self.STRAIGHT_100M) == pytest.approx(100.0)
+
+    def test_corrupt_length_falls_back_to_shape(self):
+        assert edge_length_m({"length": "abc"}, self.STRAIGHT_100M) \
+            == pytest.approx(100.0)
+
+    def test_implausible_length_falls_back_to_shape(self):
+        # A tag wildly off the geometry must not create a teleporting street.
+        assert edge_length_m({"length": 5.0}, self.STRAIGHT_100M) \
+            == pytest.approx(100.0)
+        assert edge_length_m({"length": 5000.0}, self.STRAIGHT_100M) \
+            == pytest.approx(100.0)
+
+    def test_zero_geometry_still_positive(self):
+        assert edge_length_m({}, [(3.0, 4.0), (3.0, 4.0)]) \
+            == pytest.approx(0.1)

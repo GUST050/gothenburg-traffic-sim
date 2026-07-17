@@ -8,6 +8,7 @@ import json
 import sys
 import subprocess
 import xml.etree.ElementTree as ET
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -18,6 +19,7 @@ from demand import intake as dintake
 from demand import publication as dpub
 from demand import priors as dpriors
 from demand import structure as dstructure
+from demand import calibration as dcal
 from traffic_sim.demand import cache as candidate_cache
 
 
@@ -624,3 +626,71 @@ class TestPurposeLengthOrdering:
         report = bsd.calibrated_structure_report(rou)
         assert report is not None
         assert "purpose_length_km" not in report
+
+
+class TestVariantPublication:
+    """All direction variants must publish atomically as one demand build."""
+
+    def test_rejected_variant_keeps_every_previous_output(self, monkeypatch, tmp_path):
+        import pfe
+
+        final_q50 = tmp_path / "calibrated.rou.xml"
+        final_q10 = tmp_path / "calibrated_v1.rou.xml"
+        for route in (final_q50, final_q10):
+            route.write_text(f"previous {route.name}")
+            dcal._agent_path_for(route).write_text(f"previous {route.name} agent")
+
+        monkeypatch.setattr(dcal.pfe, "prepare_calibration",
+                            lambda _path: ([object()], np.array([1.0])))
+        monkeypatch.setattr(dcal.pfe, "_purpose_targets_per_quarter",
+                            lambda _shapes, n, _offset=0.0: [{} for _ in range(n)])
+        monkeypatch.setattr(dcal, "structure_groups_for_shapes", lambda _shapes: [])
+        monkeypatch.setattr(dcal, "GEO_PATH", tmp_path / "absent.geojson")
+
+        class FakePool:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def imap_unordered(self, _worker, tasks):
+                for suffix, key, quarter in tasks:
+                    yield suffix, key, quarter, np.array([1.0]), pfe.RUNG_CLEAN
+
+        monkeypatch.setattr(dcal.mp, "get_context",
+                            lambda _method: SimpleNamespace(Pool=FakePool))
+
+        def fake_writer(_shapes, out_path, _targets, _solutions, *_args, **_kwargs):
+            out_path.write_text(f"staged {out_path.name}")
+            dcal._agent_path_for(out_path).write_text(f"staged {out_path.name} agent")
+            return {
+                "vehicles": 1,
+                "geh_pct": 100.0 if "_v1" not in out_path.name else 75.0,
+                "infeasible_intervals": 0,
+                "bound_violations": [],
+                "unserviceable_edges": [],
+                "purpose_allocation_summary": {},
+            }
+
+        monkeypatch.setattr(dcal.pfe, "write_calibration_report", fake_writer)
+        variants = [("", "edge_shares"), ("_v1", "edge_shares_q10")]
+        inputs = {
+            "": {"out_path": final_q50, "targets": [{}], "bounds_pq": [{}],
+                 "hard_bounds_pq": [{}], "priors_pq": [{}]},
+            "_v1": {"out_path": final_q10, "targets": [{}], "bounds_pq": [{}],
+                    "hard_bounds_pq": [{}], "priors_pq": [{}]},
+        }
+
+        with pytest.raises(RuntimeError, match="no route variants were published"):
+            dcal.run_pfe_variants_flat_parallel(tmp_path / "candidates.xml", variants,
+                                                inputs, max_workers=1)
+
+        for route in (final_q50, final_q10):
+            assert route.read_text() == f"previous {route.name}"
+            assert dcal._agent_path_for(route).read_text() == f"previous {route.name} agent"
+            assert not dcal._staged_route_path(route).exists()
+            assert not dcal._agent_path_for(dcal._staged_route_path(route)).exists()

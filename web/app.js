@@ -1716,8 +1716,12 @@
           } catch (e) { /* serve.py not running (static hosting) — ignore */ }
         })();
 
-        if (params.get('mode') === 'scenario') btnScen.click();
-        else if (params.get('mode') === 'forecast') btnFore.click();
+        // Deep links must dismiss the workspace landing page, not just
+        // switch the provider underneath it — openWorkspace() is what the
+        // task cards themselves run (regression found 2026-07-17:
+        // ?mode=scenario left "Välj en arbetsyta" covering the map).
+        if (params.get('mode') === 'scenario') await openWorkspace('scenario');
+        else if (params.get('mode') === 'forecast') await openWorkspace('forecast');
 
       } catch (err) {
         // Safe DOM, not innerHTML (J; audit P1-6): err.message can echo

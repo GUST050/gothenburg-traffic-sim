@@ -117,13 +117,24 @@ const Render = (() => {
     const dow    = (_provider.dateFromQI(qi).getUTCDay() + 6) % 7;  // 0 = Mon
     const calm   = _normalProfile ? _normalProfile.calmAt(edgeId, qi, dow)  : null;
     const normal = _normalProfile ? _normalProfile.flowAt(edgeId, qi, dow)  : null;
+    // Simulated background streets have no measured September profile; use
+    // the provider's own calm midday mean so the colour keeps the same
+    // meaning ("relative to calm daytime traffic") on every edge.  The old
+    // fallback — this edge's own maximum — made every street reach full
+    // red at its own peak by construction, so at rush hour the whole city
+    // lit up red regardless of how much traffic actually flowed.
+    const calmSim = _provider.calmFlow ? _provider.calmFlow(edgeId) : null;
     let t;
     if (calm !== null && calm > 0) {
       t = Math.min(count / (2 * calm), 1);
     } else if (normal !== null && normal > 0) {
       t = Math.min(count / (2 * normal), 1);
+    } else if (calmSim !== null && calmSim > 0) {
+      // Absolute floor: below ~20 veh/15 min a street is genuinely light —
+      // ratio noise on a near-empty street must not paint it alarm red.
+      t = Math.min(count / (2 * calmSim), count / 20, 1);
     } else {
-      t = Math.min(count / (_provider.maxFlow(edgeId) || 1), 1);
+      t = Math.min(count / (_provider.maxFlow(edgeId) || 1), count / 20, 1);
     }
     e.t = t;
     e.line.setStyle({

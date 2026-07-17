@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <title>Göteborg Trafikflöde</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Inline icon: silences the browser's automatic /favicon.ico request,
+       which otherwise logs a 404 on every load (no server file needed). -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%231f9d55'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%23dc2626'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     :root {
@@ -518,7 +521,7 @@
 
   <div id="legend">
     <div id="legend-title">Trafikflöde</div>
-    <div class="legend-sub">jämfört med lugnt septembersnitt (ej rusning)</div>
+    <div class="legend-sub">jämfört med lugn dagtrafik (sensorer: septembersnitt; simulerade vägar: egen middagsnivå)</div>
 
     <div class="legend-bar"><div class="legend-bar-tick"></div></div>
     <div class="legend-bar-labels">
@@ -730,6 +733,6 @@
   <script src="render.js?v=12"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

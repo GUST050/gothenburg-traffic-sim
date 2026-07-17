@@ -1,5 +1,5 @@
 {
-  "demand_signature": "dceb35afffdf040ca521",
+  "demand_signature": "096435aaadef607b3df7",
   "scenarios": [
     {
       "name": "baseline",
@@ -7,12 +7,13 @@
       "file": "baseline.json",
       "closed_edges": [],
       "closures": [],
+      "closure_integrity": null,
       "scenario_spec": {
         "scenario_id": "baseline",
-        "demand_build_id": "dceb35afffdf040ca521",
-        "network_build_id": "a53ce64829fdfb868e2b2cb043d8c31ab7f7e2ce9c3bedd70b304c3519a591aa",
-        "start_time": "2027-10-20T00:00:00",
-        "end_time": "2027-10-21T00:00:00",
+        "demand_build_id": "096435aaadef607b3df7",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "start_time": "2027-09-15T00:00:00",
+        "end_time": "2027-09-16T00:00:00",
         "closures": [],
         "simulation_mode": "meso",
         "seed_set": [
@@ -30,10 +31,10 @@
         "analysis_window": null,
         "schema_version": 1
       },
-      "demand_signature": "dceb35afffdf040ca521",
-      "build_id": "dceb35afffdf040ca521",
-      "demand_build_key": "eeeda78b308e19f8",
-      "window": "2027-10-20 00:00\u201324:00 \u00b7 Prognos"
+      "demand_signature": "096435aaadef607b3df7",
+      "build_id": "096435aaadef607b3df7",
+      "demand_build_key": "5699948becd95c03",
+      "window": "2027-09-15 00:00\u201324:00 \u00b7 Prognos"
     }
   ]
 }

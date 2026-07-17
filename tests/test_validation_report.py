@@ -9,7 +9,8 @@ import validation_report as vr
 
 def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
                   structure_flags=(), seed_flags=(), with_baseline=True,
-                  with_loso=True, purpose_incompatible=None):
+                  with_loso=True, purpose_incompatible=None,
+                  purpose_mix_relaxed=None):
     sumo = tmp_path / "sumo"
     sumo.mkdir()
     web = tmp_path / "web" / "data"
@@ -32,12 +33,16 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
                 "fritid": {"n": 1597, "mean_km": 2.75, "median_km": 2.8}},
         },
     }
-    if purpose_incompatible is not None:
+    if purpose_incompatible is not None or purpose_mix_relaxed is not None:
         meta["pfe_fit_variants"] = {
-            "edge_shares": {
-                "purpose_incompatible_quarters": purpose_incompatible,
-            }
+            "edge_shares": {}
         }
+        if purpose_incompatible is not None:
+            meta["pfe_fit_variants"]["edge_shares"][
+                "purpose_incompatible_quarters"] = purpose_incompatible
+        if purpose_mix_relaxed is not None:
+            meta["pfe_fit_variants"]["edge_shares"][
+                "purpose_mix_relaxed_quarters"] = purpose_mix_relaxed
     (sumo / "demand_meta.json").write_text(json.dumps(meta))
     if with_baseline:
         (web / "scenarios" / "baseline.json").write_text(json.dumps({
@@ -97,6 +102,16 @@ class TestAssemble:
         assert section["purpose_claims_allowed"] is False
         assert section["purpose_incompatible_quarters_by_variant"] == {
             "edge_shares": 4
+        }
+
+    def test_relaxed_mix_warns_without_blocking_route_purpose_claims(self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch, purpose_mix_relaxed=3)
+        section = vr.assemble()["sections"]["purposes"]
+        assert section["status"] == "warn"
+        assert section["purpose_claims_allowed"] is True
+        assert section["purpose_mix_matches_generated_prior"] is False
+        assert section["purpose_mix_relaxed_quarters_by_variant"] == {
+            "edge_shares": 3
         }
 
     def test_missing_artifacts_are_stated_not_skipped(self, tmp_path, monkeypatch):

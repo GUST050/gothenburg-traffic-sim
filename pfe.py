@@ -853,6 +853,7 @@ def solve_interval_with_relaxation(
     priors: dict[str, tuple[float, float]],
     route_cost: np.ndarray | None = None,
     groups: list[tuple[list[int], float, float]] | None = None,
+    required_groups: list[tuple[list[int], float, float]] | None = None,
     allow_structural_relaxation: bool = True,
 ) -> tuple[np.ndarray | None, int]:
     """Solve one interval using calibrate()'s exact relaxation ladder.
@@ -866,13 +867,26 @@ def solve_interval_with_relaxation(
     constraints, strictly weaker than the measured counts — a group cap
     must never be the reason an interval's real sensor counts go unserved.
 
+    ``required_groups`` are different: they encode a route's immutable
+    provenance class (for example ``arbete`` versus ``genomfart``), not an
+    optional spatial-shape preference.  They remain active at every rung so
+    the solver never reaches an apparently valid count fit by publishing a
+    route with a fabricated purpose label.
+
     ``allow_structural_relaxation=False`` is used by the outer structure
     guard after it already found a solution with stronger constraints. It
     prevents an optional cap from winning only by discarding those existing
     Level-2 bounds (or by taking the LP no-bounds fallback); the caller then
     keeps its earlier, stronger solution instead."""
+    required_groups = [group for group in (required_groups or []) if group[0]]
+    groups = [group for group in (groups or []) if group[0]]
+
+    def active_groups(include_structural: bool) -> list[tuple[list[int], float, float]]:
+        return required_groups + (groups if include_structural else [])
+
     sol = solve_interval_entropy(shapes, targets, bounds, priors,
-                                 route_cost=route_cost, groups=groups)
+                                 route_cost=route_cost,
+                                 groups=active_groups(True))
     if sol is not None:
         return sol, RUNG_CLEAN
     for rung, (tol_mult, use_bounds) in zip(
@@ -884,7 +898,7 @@ def solve_interval_with_relaxation(
         sol = solve_interval_entropy(
             shapes, targets, bounds if use_bounds else {}, priors,
             tol_mult=tol_mult, route_cost=route_cost,
-            groups=groups if use_bounds else None)
+            groups=active_groups(use_bounds))
         if sol is not None:
             return sol, rung
     if not allow_structural_relaxation:
@@ -893,8 +907,69 @@ def solve_interval_with_relaxation(
     # RUNG_RELAX_NOBND. The LP backstop must preserve that counts-first
     # contract rather than making an otherwise feasible interval fail.
     sol = solve_interval(shapes, targets, {}, priors,
-                         route_cost=route_cost, groups=None)
+                         route_cost=route_cost,
+                         groups=active_groups(False))
     return sol, (RUNG_LP_FALLBACK if sol is not None else RUNG_INFEASIBLE)
+
+
+def _shape_purposes(shape: Candidate) -> set[str]:
+    """Return the provenance classes represented by one route variable."""
+    sources = shape.source_candidates or [shape]
+    return {_purpose(source) for source in sources}
+
+
+def purpose_quota_groups(
+    shapes: list[Candidate], source_mix: Counter | dict[str, int], n_vehicles: int,
+) -> tuple[Counter, list[tuple[list[int], float, float]]]:
+    """Build exact per-purpose route-use groups for one interval.
+
+    Candidate routes are purpose-stratified in :func:`prepare_calibration`,
+    so every shape represents exactly one immutable OD/purpose provenance.
+    The five resulting groups partition the route variables.  Constraining
+    each group to its scaled candidate mix therefore gives the PFE a real
+    purpose margin without adding an artificial route or relabelling a
+    selected home/POI trip as through traffic after the solve.
+
+    A positive target with no compatible shape is an invalid candidate pool,
+    not an excuse to fabricate a label.  Raising here makes that defect
+    explicit before publication.
+    """
+    target = _integer_mix_targets(Counter(source_mix), n_vehicles)
+    categories = sorted(set(target) | {
+        purpose for shape in shapes for purpose in _shape_purposes(shape)
+    })
+    groups: list[tuple[list[int], float, float]] = []
+    for category in categories:
+        members = [i for i, shape in enumerate(shapes)
+                   if _shape_purposes(shape) == {category}]
+        quota = int(target.get(category, 0))
+        if quota > 0 and not members:
+            raise ValueError(
+                f"candidate pool has no route with purpose provenance {category!r}")
+        if members:
+            groups.append((members, float(quota), float(quota)))
+    return target, groups
+
+
+def purpose_mix_is_exact(
+    shapes: list[Candidate],
+    counts: np.ndarray,
+    source_mix: Counter | dict[str, int],
+) -> bool:
+    """Whether a route-use vector already has its requested purpose margin.
+
+    Purpose shares are a behavioural prior, whereas measured sensor counts
+    are the calibration contract.  The caller uses this predicate to tell a
+    successful exact-purpose solve apart from the counts-first fallback: the
+    latter must keep every selected route's real provenance, but must not be
+    forced through an impossible integer purpose reconciliation at publish
+    time.
+    """
+    _target, groups = purpose_quota_groups(
+        shapes, source_mix, int(round(float(counts.sum()))))
+    return all(abs(float(counts[members].sum()) - lo) <= 0.25
+               and abs(float(counts[members].sum()) - hi) <= 0.25
+               for members, lo, hi in groups)
 
 
 def solve_interval_with_structure_guard(
@@ -904,6 +979,7 @@ def solve_interval_with_structure_guard(
     priors: dict[str, tuple[float, float]],
     route_cost: np.ndarray | None = None,
     structure_groups: list[tuple[str, list[int], float]] | None = None,
+    purpose_mix: Counter | dict[str, int] | None = None,
 ) -> tuple[np.ndarray | None, int]:
     """Two-pass structure preservation around the relaxation ladder.
 
@@ -924,6 +1000,28 @@ def solve_interval_with_structure_guard(
     project has already had to fix twice)."""
     sol, rung = solve_interval_with_relaxation(
         shapes, targets, bounds, priors, route_cost=route_cost)
+    purpose_groups: list[tuple[list[int], float, float]] = []
+    if sol is not None and purpose_mix:
+        # The count-only solution reveals the interval's vehicle total.  Use
+        # that total only to scale the independently generated purpose mix;
+        # the second solve then enforces the exact integer margin while still
+        # fitting the same measured counts and bounds.  This is a small,
+        # fixed five-group re-solve, not a purpose-specific expansion of every
+        # sensor constraint.
+        _target, purpose_groups = purpose_quota_groups(
+            shapes, purpose_mix, int(round(float(sol.sum()))))
+        purpose_sol, purpose_rung = solve_interval_with_relaxation(
+            shapes, targets, bounds, priors, route_cost=route_cost,
+            required_groups=purpose_groups)
+        if purpose_sol is not None:
+            sol, rung = purpose_sol, purpose_rung
+        else:
+            # Counts are observed; the purpose mix is a generated behavioural
+            # prior.  Never throw away a valid sensor fit merely because an
+            # exact purpose margin conflicts with it.  The writer preserves
+            # the selected routes' immutable source provenance and records
+            # the resulting mix deviation instead of fabricating a label.
+            purpose_groups = []
     if sol is not None and structure_groups:
         total = float(sol.sum())
         # Most origin-access groups are already below their cap. Passing all
@@ -956,6 +1054,7 @@ def solve_interval_with_structure_guard(
                 shapes, targets, bounds, priors, route_cost=route_cost,
                 groups=[(members, 0.0, cap_share * total)
                         for members, cap_share in active.values()],
+                required_groups=purpose_groups,
                 allow_structural_relaxation=allow_structural_relaxation)
             if capped_sol is None or capped_rung > rung:
                 break       # counts-first fallback: retain last valid solution
@@ -968,19 +1067,27 @@ def _purpose(source: Candidate) -> str:
     return str(source.intent.get("purpose", "unknown"))
 
 
-def _purpose_targets_per_quarter(shapes: list[Candidate], nq: int) -> list[Counter]:
-    """Candidate purpose mix at each original departure quarter.
+def _purpose_targets_per_quarter(
+    shapes: list[Candidate],
+    nq: int,
+    departure_offset_s: float = 0.0,
+) -> list[Counter]:
+    """Candidate purpose mix at each calibrated departure quarter.
 
     PFE intentionally shares route geometry across time to keep the solve
     small. Its selected vehicles must still inherit a purpose distribution
     compatible with the candidate generator's purpose x time x day-type
-    demand. This captures that distribution before calibration, without
-    introducing purpose-specific PFE variables.
+    demand. Candidate XML departures are absolute seconds from the start of
+    the generated behavioural day, while a PFE target window may start later
+    (for example 06:00). ``departure_offset_s`` maps that absolute candidate
+    clock onto target quarter zero. Without it, a 06:00–10:00 build silently
+    used the 00:00–04:00 purpose mix, which produced implausible all-through
+    or all-work quarters despite an otherwise correct sensor fit.
     """
     targets = [Counter() for _ in range(nq)]
     for shape in shapes:
         for source in shape.source_candidates or [shape]:
-            qi = int(source.depart // 900)
+            qi = int((source.depart - departure_offset_s) // 900)
             if 0 <= qi < nq:
                 targets[qi][_purpose(source)] += 1
     return targets
@@ -1185,21 +1292,80 @@ def allocate_interval_provenance(
     }
 
 
+def allocate_strict_interval_provenance(
+    route_instances: list[Candidate], source_mix: Counter | dict[str, int],
+) -> tuple[list[Candidate], list[str], dict]:
+    """Retain immutable candidate provenance after purpose-stratified PFE.
+
+    The production path uses this after purpose-stratified calibration. It
+    never rewrites a route, never changes an OD endpoint, and never uses a
+    mismatching source merely to make a displayed label look balanced.  An
+    exact purpose margin is preferred but can be infeasible beside the hard
+    sensor counts; in that counts-first fallback, ``mix_deviation`` records
+    the honest difference from the generated prior while route compatibility
+    remains exact.
+    """
+    target = _integer_mix_targets(Counter(source_mix), len(route_instances))
+    offsets: Counter = Counter()
+    selected: list[Candidate] = []
+    purposes: list[str] = []
+    for shape in route_instances:
+        categories = _shape_purposes(shape)
+        if len(categories) != 1:
+            raise RuntimeError(
+                "strict provenance requires purpose-stratified route shapes")
+        category = next(iter(categories))
+        matching = [source for source in (shape.source_candidates or [shape])
+                    if _purpose(source) == category]
+        if not matching:
+            raise RuntimeError(
+                f"route shape has no source for its provenance {category!r}")
+        selected.append(matching[offsets[category] % len(matching)])
+        offsets[category] += 1
+        purposes.append(category)
+
+    achieved = Counter(purposes)
+    mismatch = {
+        category: int(target.get(category, 0) - achieved.get(category, 0))
+        for category in sorted(set(target) | set(achieved))
+        if target.get(category, 0) != achieved.get(category, 0)
+    }
+    return selected, purposes, {
+        "target": dict(sorted(target.items())),
+        "achieved": dict(sorted(achieved.items())),
+        # Kept separately: a mix deviation is not a route/provenance error.
+        # Every route above was selected from a matching-purpose source.
+        "incompatible": {},
+        "mix_deviation": mismatch,
+        "mix_exact": not mismatch,
+        "replaced_routes": 0,
+    }
+
+
 def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndarray]:
-    """Load candidate routes once and build the shared shape pool."""
+    """Load candidates once and build the shared purpose-stratified pool.
+
+    A route's geometry may legitimately occur in more than one generated
+    purpose class.  Geometry-only deduplication used to merge those sources
+    into one PFE variable, then a later allocation step could stamp that
+    variable with whichever category the quarter happened to need.  Keeping
+    one variable per ``(geometry, provenance purpose)`` is only a tiny pool
+    expansion on the real build (29 mixed geometries) but makes the selected
+    route's purpose an invariant rather than a post-hoc label.
+    """
     cands = load_candidates(candidates_path)
 
-    # Dedupe to distinct shapes — the LP/IPF variables.
-    seen: dict[str, Candidate] = {}
+    # Dedupe to distinct geometry × purpose shapes — the LP/IPF variables.
+    seen: dict[tuple[str, str], Candidate] = {}
     for cand in cands:
-        key = " ".join(cand.edges)
+        key = (" ".join(cand.edges), _purpose(cand))
         if key in seen:
             seen[key].source_candidates.append(cand)
         else:
             cand.source_candidates.append(cand)
             seen[key] = cand
     shapes = list(seen.values())
-    print(f"  shape pool: {len(shapes)} distinct routes "
+    print(f"  shape pool: {len(shapes)} distinct route×purpose variables "
           f"(from {len(cands)} candidates)")
     # Warm the compiled IPF kernel in THIS (parent) process: the flat
     # worker pools fork after prepare_calibration, so a warmed kernel is
@@ -1221,6 +1387,7 @@ def solve_calibration_intervals(
     targets_per_q: list[dict[str, float]],
     bounds_per_q: list[dict[str, tuple[float, float]]],
     priors_per_q: list[dict[str, tuple[float, float]]],
+    purpose_mixes_per_q: list[Counter | dict[str, int]] | None = None,
 ) -> tuple[list[np.ndarray | None], list[int]]:
     """Sequentially solve every interval for one variant.
 
@@ -1233,6 +1400,19 @@ def solve_calibration_intervals(
         sol, rung = solve_interval_with_relaxation(
             shapes, targets_per_q[i], bounds_per_q[i], priors_per_q[i],
             route_cost=route_cost)
+        if (sol is not None and purpose_mixes_per_q is not None
+                and purpose_mixes_per_q[i]):
+            # The flat production worker uses the same two-stage procedure:
+            # first establish how many vehicles are needed for the sensor
+            # constraints, then enforce that interval's immutable
+            # route-provenance margin.
+            _target, purpose_groups = purpose_quota_groups(
+                shapes, purpose_mixes_per_q[i], int(round(float(sol.sum()))))
+            purpose_sol, purpose_rung = solve_interval_with_relaxation(
+                shapes, targets_per_q[i], bounds_per_q[i], priors_per_q[i],
+                route_cost=route_cost, required_groups=purpose_groups)
+            if purpose_sol is not None:
+                sol, rung = purpose_sol, purpose_rung
         solutions.append(sol)
         rungs.append(rung)
     return solutions, rungs
@@ -1322,6 +1502,7 @@ def write_calibration_report(
     enforce_integer_bounds: bool = False,
     structure_groups: list[tuple[list[int], float]] | None = None,
     edge_length_m: dict[str, float] | None = None,
+    purpose_mixes_per_q: list[Counter | dict[str, int]] | None = None,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
 
@@ -1354,8 +1535,16 @@ def write_calibration_report(
     rounding failure."""
     nq = len(targets_per_q)
     infeasible = sum(sol is None for sol in solutions)
+    if enforce_integer_bounds and infeasible:
+        # Do this before opening the staging route file. A partially solved
+        # interval set is not a scenario and must never overwrite the last
+        # valid demand artefact merely because the remaining intervals could
+        # be rendered to XML.
+        raise RuntimeError(
+            f"PFE left {infeasible} infeasible interval(s); no route file was published")
     achieved: dict[str, list[float]] = {}
-    purpose_targets = _purpose_targets_per_quarter(shapes, nq)
+    purpose_targets = (purpose_mixes_per_q if purpose_mixes_per_q is not None
+                       else _purpose_targets_per_quarter(shapes, nq))
     # Length-aware purpose allocation (see allocate_interval_provenance):
     # needs each shape's route length and each purpose's candidate mean.
     shape_km: list[float] | None = None
@@ -1393,6 +1582,19 @@ def write_calibration_report(
             if sol is None:
                 continue
             counts = round_preserving_measured(sol, shapes, targets_per_q[i])
+            purpose_mix = purpose_targets[i] if i < len(purpose_targets) else Counter()
+            strict_purpose = purpose_mixes_per_q is not None and bool(purpose_mix)
+            purpose_groups: list[tuple[list[int], float, float]] = []
+            # Only enforce an exact margin during integer repair when the
+            # continuous solver actually found one.  Otherwise this is the
+            # deliberate counts-first fallback: the routes keep their true
+            # source purposes and the resulting prior deviation is disclosed
+            # below, instead of rejecting a valid measured-count solution.
+            purpose_margin_enforced = (
+                strict_purpose and purpose_mix_is_exact(shapes, sol, purpose_mix))
+            if purpose_margin_enforced:
+                _purpose_target, purpose_groups = purpose_quota_groups(
+                    shapes, purpose_mix, int(counts.sum()))
             rung = rungs[i] if rungs is not None and i < len(rungs) else None
             repair_bounds = (
                 bounds_per_q[i]
@@ -1431,13 +1633,28 @@ def write_calibration_report(
             # actual bound violation in place.  That is backwards: groups
             # are explicitly counts-first best-effort constraints.
             hard_repair_ok = True
-            if repair_bounds:
+            if repair_bounds or purpose_groups:
                 repaired = repair_integer_bounds(
                     counts, shapes, targets_per_q[i], repair_bounds,
+                    groups=purpose_groups,
                     measurement_tol_mult=_rung_measurement_tol_mult(rung))
                 if repaired is None:
                     hard_repair_ok = False
                 else:
+                    counts = repaired
+            if not hard_repair_ok and purpose_groups:
+                # The solver's exact fractional margin can still become
+                # impossible after integer sensor reconciliation. Re-run the
+                # non-negotiable count/bound repair without that behavioural
+                # prior; report the mix relaxation rather than losing a real
+                # sensor fit or assigning a false purpose.
+                purpose_groups = []
+                purpose_margin_enforced = False
+                repaired = repair_integer_bounds(
+                    counts, shapes, targets_per_q[i], repair_bounds,
+                    measurement_tol_mult=_rung_measurement_tol_mult(rung))
+                hard_repair_ok = repaired is not None
+                if repaired is not None:
                     counts = repaired
 
             # Then improve only overflowing groups.  Keep repair_bounds in
@@ -1452,7 +1669,7 @@ def write_calibration_report(
                         break
                     repaired = repair_integer_bounds(
                         counts, shapes, targets_per_q[i], repair_bounds,
-                        groups=quarter_groups)
+                        groups=purpose_groups + quarter_groups)
                     if repaired is None:
                         break
                     counts = repaired
@@ -1479,12 +1696,17 @@ def write_calibration_report(
             route_instances: list[Candidate] = [c for _digest, c in keyed]
             instance_km = ([shape_km_by_id[id(c)] for c in route_instances]
                            if edge_length_m is not None else None)
-            sources, purposes, allocation = allocate_interval_provenance(
-                route_instances, purpose_targets[i],
-                lengths_km=instance_km,
-                category_length_km=category_length_km,
-                purpose_replacements=replacement_index,
-                measured_edges=protected_edges)
+            if strict_purpose:
+                sources, purposes, allocation = allocate_strict_interval_provenance(
+                    route_instances, purpose_mix)
+                allocation["margin_enforced"] = purpose_margin_enforced
+            else:
+                sources, purposes, allocation = allocate_interval_provenance(
+                    route_instances, purpose_targets[i],
+                    lengths_km=instance_km,
+                    category_length_km=category_length_km,
+                    purpose_replacements=replacement_index,
+                    measured_edges=protected_edges)
             purpose_allocation.append({"quarter": i, **allocation})
             # ``allocate_interval_provenance`` can substitute a compatible
             # route shape. Count the FINAL route instances, not the shapes
@@ -1606,9 +1828,25 @@ def write_calibration_report(
                 geh_all += 1
                 geh_ok += geh < 5
     allocation_incompatible = Counter()
+    mix_shortfall = Counter()
+    mix_excess = Counter()
+    mix_reallocation_vehicles = 0
+    relaxed_mix_quarters = 0
     replaced_routes = 0
     for allocation in purpose_allocation:
-        allocation_incompatible.update(allocation["incompatible"])
+        allocation_incompatible.update(allocation.get("incompatible", {}))
+        deviation = allocation.get("mix_deviation", {})
+        if deviation:
+            relaxed_mix_quarters += 1
+            for purpose, delta in deviation.items():
+                if delta > 0:
+                    mix_shortfall[purpose] += int(delta)
+                elif delta < 0:
+                    mix_excess[purpose] += int(-delta)
+            # The positive and negative totals are equal per quarter. Count
+            # one vehicle once, rather than reporting the L1 distance twice.
+            mix_reallocation_vehicles += sum(abs(int(delta))
+                                           for delta in deviation.values()) // 2
         replaced_routes += int(allocation.get("replaced_routes", 0))
     report = {"vehicles": vid, "infeasible_intervals": infeasible,
               "geh_ok": geh_ok, "geh_total": geh_all,
@@ -1623,6 +1861,10 @@ def write_calibration_report(
                       bool(allocation["incompatible"]) for allocation in purpose_allocation),
                   "incompatible_routes_by_purpose": dict(
                       sorted(allocation_incompatible.items())),
+                  "quarters_with_relaxed_mix": relaxed_mix_quarters,
+                  "mix_shortfall_by_purpose": dict(sorted(mix_shortfall.items())),
+                  "mix_excess_by_purpose": dict(sorted(mix_excess.items())),
+                  "mix_reallocation_vehicles": mix_reallocation_vehicles,
                   "replaced_routes": replaced_routes,
               }}
     if rungs is not None:
@@ -1646,6 +1888,7 @@ def calibrate(
     priors_per_q: list[dict[str, tuple[float, float]]],
     enforce_integer_bounds: bool = False,
     integer_bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
+    purpose_departure_offset_s: float = 0.0,
 ) -> dict:
     """Solve all intervals; write a .rou.xml; return a fit report.
 
@@ -1663,8 +1906,12 @@ def calibrate(
     solver as backstop, in the rare case IPF's iteration budget doesn't
     converge for some edge-case constraint combination."""
     shapes, route_cost = prepare_calibration(candidates_path)
+    purpose_mixes = _purpose_targets_per_quarter(
+        shapes, len(targets_per_q), purpose_departure_offset_s)
     solutions, rungs = solve_calibration_intervals(
-        shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q)
+        shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q,
+        purpose_mixes)
     return write_calibration_report(shapes, out_path, targets_per_q, solutions,
                                     integer_bounds_per_q if integer_bounds_per_q is not None else bounds_per_q,
-                                    rungs, enforce_integer_bounds)
+                                    rungs, enforce_integer_bounds,
+                                    purpose_mixes_per_q=purpose_mixes)

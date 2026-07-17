@@ -130,6 +130,16 @@ GATE_WEIGHT = {          # proxy: approach-road class → relative through-flow
     "tertiary": 1, "tertiary_link": 1,
 }
 
+# Bounded-detour naturalness (2026-07-17): a sensor "explains" a movement
+# when routing via it costs at most this much extra over the direct
+# shortest path — max(VIA_DETOUR_ABS_S, VIA_DETOUR_FRAC × direct) seconds.
+# Replaces the exact-shortest-path criterion (±0.5 s), which collapsed the
+# through pool to 2 gate pairs city-wide and confined tour destinations to
+# the shadow cone just behind each sensor — see
+# via_is_natural_in_cost_matrix's docstring for the measurements.
+VIA_DETOUR_ABS_S = 45.0
+VIA_DETOUR_FRAC = 0.20
+
 # Keep the conditioned-destination acceleration bounded: cache pressure must
 # not become OS swapping on a smaller computer or as sensors are added.
 CONDITIONED_MASK_CACHE_MAX_BYTES = 96 * 1024 * 1024
@@ -849,14 +859,67 @@ def find_gates(G, routable_edge_ids: set[str] | None = None):
     return entries, exits
 
 
-def gate_weights(G, gates: list[tuple[str, int]]) -> np.ndarray:
-    w = []
+def gate_weights(G, gates: list[tuple[str, int]],
+                 edge_daily_load: dict[str, float] | None = None) -> np.ndarray:
+    """Relative draw probability per gate.
+
+    Preferred source: the gravity/Dial structural assignment field
+    (assignment_priors.py) evaluated on the gate edges — how much flow the
+    network's own geometry and activity distribution says each approach
+    carries.  Weights are normalised, so the field's measured-data scale
+    factor cancels and only the measurement-independent structure remains
+    (LOSO-safe).
+
+    WHY (measured 2026-07-17): the old road-class proxy gave every motorway
+    gate the same weight, so the busiest approach (Boråsleden) received
+    0.37% of candidate draws while calibration assigned it 19-21% of quarter
+    flow.  Its main corridor ended up with ONE pool shape, onto which the
+    PFE stacked 1 486 vehicles/day — visible in the browser as convoys of
+    identical trips.  Draw density must follow expected flow, or the pool
+    cannot offer the calibration enough distinct routes where they matter.
+
+    The class prior remains as fallback (missing/degenerate field), and a
+    5%-of-mean floor keeps every mapped gate drawable so a low-load gate is
+    still represented in the pool.
+    """
+    class_w = []
     for eid, _ in gates:
         u, v, k = map(int, eid.split("_"))
         hw = str(scalar(G.get_edge_data(u, v, k).get("highway", "")) or "")
-        w.append(GATE_WEIGHT.get(hw, 1))
-    w = np.array(w, dtype=float)
-    return w / w.sum()
+        class_w.append(GATE_WEIGHT.get(hw, 1))
+    class_w = np.array(class_w, dtype=float)
+    if edge_daily_load:
+        load = np.array([float(edge_daily_load.get(eid, 0.0))
+                         for eid, _ in gates])
+        covered = load > 0
+        if covered.sum() >= max(2, len(gates) // 2):
+            floor = 0.05 * load[covered].mean()
+            w = np.maximum(load, floor)
+            return w / w.sum()
+    return class_w / class_w.sum()
+
+
+def load_assignment_gate_loads(path: Path) -> dict[str, float]:
+    """Per-edge daily structural load from the assignment-prior artifact.
+
+    Returns {} when the artifact is absent or unreadable — gate_weights then
+    falls back to the road-class prior, so a --no-assignment-prior or legacy
+    build keeps working unchanged."""
+    try:
+        with open(path) as f:
+            payload = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    loads: dict[str, float] = {}
+    for eid, series in (payload.get("flows") or {}).items():
+        try:
+            total = float(sum(series)) if isinstance(series, list) \
+                else float(series)
+        except (TypeError, ValueError):
+            continue
+        if total > 0:
+            loads[eid] = total
+    return loads
 
 
 def gate_latlon(G, gates: list[tuple[str, int]]) -> tuple[np.ndarray, np.ndarray]:
@@ -1358,10 +1421,31 @@ def upstream_downstream_gates(
 
 def via_is_natural_in_cost_matrix(
     D: np.ndarray, node_idx: dict[int, int], entry_v: int, exit_u: int,
-    m_u: int, m_v: int, via_cost: float, tol_abs: float = 0.5,
-    tol_rel: float = 1e-6,
+    m_u: int, m_v: int, via_cost: float,
+    detour_abs_s: float = VIA_DETOUR_ABS_S,
+    detour_frac: float = VIA_DETOUR_FRAC,
 ) -> bool:
-    """Whether a forced via edge lies on a shortest path in one cost matrix."""
+    """Whether a forced via edge is a REALISTIC route choice for the trip.
+
+    SEMANTICS CHANGED 2026-07-17 (root cause of the endpoint-accuracy
+    defect Gustav reported): the old criterion demanded the via edge lie on
+    the EXACT shortest path (±0.5 s).  Measured on the real network, that
+    left 6 of 7 sensor edges with ZERO verified through gate pairs — all
+    6 000 through candidates (76% of calibrated traffic) entered at 2
+    street cuts and exited at 1, and the tour destination masks admitted
+    only the shadow cone immediately behind each sensor (destinations
+    piling up at the sensor, whole districts with zero endpoints).  Real
+    route choice is stochastic-multipath — the same finding this project
+    already validated for assignment_priors.py ("plain shortest-path
+    collapses onto one canonical route").  A sensor therefore explains a
+    movement when driving via it costs at most a bounded detour:
+    ``via - direct <= max(detour_abs_s, detour_frac * direct)``.
+    At the measured 3-7 min gate-to-gate trips the defaults admit 45-90 s
+    detours — far below drop_excessive_detours' 2.0x pathological-route
+    cutoff, which (with the node-revisit guards) still excludes the
+    U-turn class this check originally protected against.  Measured pair
+    admission per sensor at these defaults: 18-58 (union 265) vs 0-2
+    (union 2) under the exact rule."""
     try:
         direct = D[node_idx[entry_v], node_idx[exit_u]]
         via = (D[node_idx[entry_v], node_idx[m_u]] + via_cost
@@ -1370,8 +1454,8 @@ def via_is_natural_in_cost_matrix(
         return False
     if not math.isfinite(direct) or not math.isfinite(via):
         return False
-    tolerance = max(tol_abs, tol_rel * direct)
-    return abs(via - direct) <= tolerance
+    tolerance = max(detour_abs_s, detour_frac * direct)
+    return via - direct <= tolerance
 
 
 def via_naturally_on_path(
@@ -1464,20 +1548,25 @@ def natural_far_end_weights(
     D: np.ndarray, node_idx: dict[int, int],
     anchor_v: int, m_u: int, m_v: int, m_length: float,
     candidate_u_idx: np.ndarray, base_weights: np.ndarray,
-    tol_abs: float = 0.5, tol_rel: float = 1e-6,
+    detour_abs_s: float = VIA_DETOUR_ABS_S,
+    detour_frac: float = VIA_DETOUR_FRAC,
     anchor_u: int | None = None,
     candidate_v_idx: np.ndarray | None = None,
 ) -> np.ndarray:
     """Vectorized generalization of via_naturally_on_path — same
-    semantics (is routing anchor->m_u->m_v->candidate the true shortest
-    anchor->candidate path), checked via distance ARITHMETIC on the
+    bounded-detour semantics (is routing anchor->m_u->m_v->candidate a
+    REALISTIC route for anchor->candidate, i.e. within
+    max(detour_abs_s, detour_frac × direct) of the shortest path — see
+    via_is_natural_in_cost_matrix's docstring for the 2026-07-17 semantics
+    change and its measurements), checked via distance ARITHMETIC on the
     precomputed all-pairs matrix instead of tracing one nx.shortest_path
-    per candidate: anchor->candidate is a natural via-fit iff
-    dist(anchor,m_u) + m_length + dist(m_v,candidate) == dist(anchor,candidate)
-    (within tolerance). This masks (never reinterprets) whatever weighting
+    per candidate. This masks (never reinterprets) whatever weighting
     a trip category already computes — base_weights passes through
     unchanged wherever the candidate is natural, and becomes 0 elsewhere,
     so gravity_km's existing calibration and meaning are untouched.
+    The bounded detour is what keeps the admitted set from collapsing to
+    the shadow cone just behind the sensor (the measured near-sensor
+    destination pile-up under the old exact-shortest-path rule).
 
     candidate_u_idx must already be MATRIX indices (via node_idx), not
     raw graph node IDs — precompute this once per candidate pool outside
@@ -1493,7 +1582,8 @@ def natural_far_end_weights(
     d_direct = D[a, candidate_u_idx]
     via_dist = d_a_mu + m_length + d_mv_far
     finite = np.isfinite(d_direct) & np.isfinite(via_dist)
-    tol = np.maximum(tol_abs, tol_rel * np.where(finite, d_direct, 0.0))
+    tol = np.maximum(detour_abs_s,
+                     detour_frac * np.where(finite, d_direct, 0.0))
     # inf - inf (both anchor and via-route unreachable to a candidate) is a
     # real, expected case on a graph with disconnected components — numpy
     # eagerly computes via_dist - d_direct for the WHOLE array even inside
@@ -1501,7 +1591,7 @@ def natural_far_end_weights(
     # excludes that element from `natural` correctly, this just silences
     # the resulting (harmless) RuntimeWarning.
     with np.errstate(invalid="ignore"):
-        natural = finite & (np.abs(via_dist - d_direct) <= tol)
+        natural = finite & (via_dist - d_direct <= tol)
     if anchor_u is not None:
         # The fixed origin edge has already been traversed.  If a shortest
         # anchor->via or via->destination leg can revisit its start node, the
@@ -1526,15 +1616,18 @@ def natural_sensor_masks(
     D: np.ndarray, node_idx: dict[int, int], anchor_v: int,
     m_info: dict[str, tuple[int, int, float]],
     dest_u_idx: np.ndarray,
-    tol_abs: float = 0.5, tol_rel: float = 1e-6,
+    detour_abs_s: float = VIA_DETOUR_ABS_S,
+    detour_frac: float = VIA_DETOUR_FRAC,
     anchor_u: int | None = None,
     dest_v_idx: np.ndarray | None = None,
 ) -> dict[str, np.ndarray]:
     """For ONE anchor: per-sensor boolean masks over the destination pool —
-    natural_m(dest) = "routing anchor→sensor m→dest is the true shortest
-    anchor→dest path" — the same arithmetic as natural_far_end_weights,
-    returned per sensor so the caller can take both the UNION (does any
-    sensor lie naturally on the way?) and the attribution (which ones?).
+    natural_m(dest) = "routing anchor→sensor m→dest is a realistic route
+    for anchor→dest" under the bounded-detour rule (see
+    via_is_natural_in_cost_matrix's 2026-07-17 semantics change) — the
+    same arithmetic as natural_far_end_weights, returned per sensor so the
+    caller can take both the UNION (does any sensor lie naturally on the
+    way?) and the attribution (which ones?).
 
     Built for the 2026-07-12 destination-clustering fix (see the
     demand/destination integrity section of IMPROVEMENT_PLAN.md): instead of
@@ -1550,13 +1643,14 @@ def natural_sensor_masks(
     a = node_idx[anchor_v]
     d_direct = D[a, dest_u_idx]
     finite_direct = np.isfinite(d_direct)
-    tol = np.maximum(tol_abs, tol_rel * np.where(finite_direct, d_direct, 0.0))
+    tol = np.maximum(detour_abs_s,
+                     detour_frac * np.where(finite_direct, d_direct, 0.0))
     masks: dict[str, np.ndarray] = {}
     for m_edge, (m_u, m_v, m_length) in m_info.items():
         via = D[a, node_idx[m_u]] + m_length + D[node_idx[m_v], dest_u_idx]
         finite = finite_direct & np.isfinite(via)
         with np.errstate(invalid="ignore"):
-            masks[m_edge] = finite & (np.abs(via - d_direct) <= tol)
+            masks[m_edge] = finite & (via - d_direct <= tol)
         if anchor_u is not None:
             pre_uses_anchor = shortest_paths_use_node(
                 D, a, node_idx[anchor_u], np.array([node_idx[m_u]])
@@ -1596,15 +1690,17 @@ def natural_origin_weights(
     D: np.ndarray, node_idx: dict[int, int],
     candidate_v_idx: np.ndarray, m_u: int, m_v: int, m_length: float,
     dest_u: int, base_weights: np.ndarray,
-    tol_abs: float = 0.5, tol_rel: float = 1e-6,
+    detour_abs_s: float = VIA_DETOUR_ABS_S,
+    detour_frac: float = VIA_DETOUR_FRAC,
     candidate_u_idx: np.ndarray | None = None,
     dest_v: int | None = None,
 ) -> np.ndarray:
     """Mirror of natural_far_end_weights — there the ORIGIN was fixed and
     many DESTINATION candidates were masked; here the DESTINATION
     (dest_u) is fixed and many ORIGIN candidates are masked instead
-    (candidate->m_u->m_v->dest_u must equal the true shortest
-    candidate->dest_u distance).
+    (candidate->m_u->m_v->dest_u must be within the bounded detour of the
+    shortest candidate->dest_u path — see via_is_natural_in_cost_matrix's
+    2026-07-17 semantics change).
 
     FOUND 2026-07-10 (Gustav asked for a thorough review of the new
     sensor-anchored design; confirmed by isolating E-I/I-E generation on
@@ -1634,9 +1730,10 @@ def natural_origin_weights(
     d_direct = D[candidate_v_idx, du]
     via_dist = d_candidate_mu + m_length + d_mv_dest
     finite = np.isfinite(d_direct) & np.isfinite(via_dist)
-    tol = np.maximum(tol_abs, tol_rel * np.where(finite, d_direct, 0.0))
+    tol = np.maximum(detour_abs_s,
+                     detour_frac * np.where(finite, d_direct, 0.0))
     with np.errstate(invalid="ignore"):
-        natural = finite & (np.abs(via_dist - d_direct) <= tol)
+        natural = finite & (via_dist - d_direct <= tol)
     if candidate_u_idx is not None:
         # Each candidate origin edge has already been traversed before its
         # v-node.  Reject a shortest leg that returns to that edge's u-node.
@@ -1901,6 +1998,19 @@ def generate_sensor_anchored_trips(
         good_pairs_ee[m_edge] = verified_via_gate_pairs(
             G, m_edge, in_ids, out_ids, D=D, node_idx=node_idx,
             edge_costs=routing_costs)
+
+    # E-E through pairs stay UNIFORM over the verified pair list — a
+    # deliberate, MEASURED decision (2026-07-17): weighting pairs by the
+    # product of the two gates' structural loads was implemented, built and
+    # measured, and it made both the worst-shape concentration (636 →
+    # 1 465 veh/day on one route) and the structure drift (near-sensor
+    # destinations 18.5 → 25.2%) WORSE.  The candidate pool is a SUPPORT
+    # SET for the PFE, which reweights route flows freely — pool value lies
+    # in covering distinct (entry, exit) pairs, not in matching their
+    # frequencies, and uniform drawing maximises that coverage.  (Tour
+    # ANCHOR draws are different: they feed rejection sampling, where draw
+    # density limits which corridors exist in the pool at all — those DO
+    # use the structural gate weights, see gate_weights.)
 
     n_sensors = len(measured)
     initial_quota = {m: n_total // n_sensors + (1 if i < n_total % n_sensors else 0)
@@ -2350,24 +2460,57 @@ def generate_day_block(
 
     # Geometry reuse must not sever a route's purpose from its departure
     # period. Draw h conditional on the template's already-sampled purpose:
-    # P(h | p, day) ∝ P(h | day) P(p | h, day). This retains route diversity
-    # and the exact-day departure profile without regenerating templates.
-    purposes = [template[3] for template in template_trips]
-    hours = np.empty(len(template_trips), dtype=int)
-    purpose_indices: dict[str, list[int]] = {}
-    for i, purpose in enumerate(purposes):
-        purpose_indices.setdefault(purpose, []).append(i)
-    for purpose, indices in purpose_indices.items():
-        weights = profile
+    # P(h | p, day) ∝ P(h | day) P(p | h, day). Critically, resample the
+    # TWO legs of a paired tour together. The old per-route loop could place
+    # its return before its own outbound leg on a reused multi-day template,
+    # destroying the AM/PM directional structure that the original generator
+    # deliberately created. Reuse still avoids any extra routing work.
+    def departure_weights(purpose: str, *, pm_only: bool = False) -> np.ndarray:
+        weights = np.asarray(profile, dtype=float).copy()
         if purpose in PURPOSE_CATEGORIES:
-            p_by_hour = np.array([
+            weights *= np.array([
                 purpose_shares_for_hour(hour, is_weekend)[purpose]
                 for hour in range(24)
             ])
-            conditional = profile * p_by_hour
-            if conditional.sum() > 0:
-                weights = conditional / conditional.sum()
-        hours[indices] = rng.choice(24, size=len(indices), p=weights)
+        if pm_only:
+            weights *= np.arange(24) >= 12
+        if weights.sum() <= 0:
+            weights = np.asarray(profile, dtype=float).copy()
+            if pm_only:
+                weights *= np.arange(24) >= 12
+        return weights / weights.sum() if weights.sum() > 0 else np.full(24, 1 / 24)
+
+    def is_return_leg(tour_id: str, leg: str) -> bool:
+        kind = _tour_kind(tour_id)
+        return ((kind == "ii" and leg == "return")
+                or (kind == "ei" and leg == "outbound")
+                or (kind == "ie" and leg == "inbound"))
+
+    hours = np.empty(len(template_trips), dtype=int)
+    by_tour: dict[str, list[int]] = {}
+    for i, template in enumerate(template_trips):
+        by_tour.setdefault(str(template[4]), []).append(i)
+    for tour_id, indices in by_tour.items():
+        purpose = str(template_trips[indices[0]][3])
+        return_indices = [i for i in indices if is_return_leg(
+            str(template_trips[i][4]), str(template_trips[i][5]))]
+        outbound_indices = [i for i in indices if i not in return_indices]
+        if not return_indices or not outbound_indices:
+            # E-E through trips have only one leg. A malformed legacy
+            # template is handled the same safe way rather than guessing a
+            # synthetic return relationship.
+            for i in indices:
+                hours[i] = int(rng.choice(24, p=departure_weights(
+                    str(template_trips[i][3]))))
+            continue
+        h_out = int(rng.choice(24, p=departure_weights(purpose)))
+        pm_weights = departure_weights(purpose, pm_only=True)
+        h_ret = max(h_out + 1, int(rng.choice(24, p=pm_weights)))
+        h_ret = min(h_ret, 23)
+        for i in outbound_indices:
+            hours[i] = h_out
+        for i in return_indices:
+            hours[i] = h_ret
     block = [
         (f"{id_prefix}{i}", offset_s + (hour + rng.random()) * 3600,
          from_edge, to_edge, via, purpose, f"{id_prefix}{tour_id}", leg)
@@ -2487,6 +2630,12 @@ def main() -> None:
                          "each gives its own profile, offset and ID prefix. "
                          "Omit it to retain the one-day CLI unchanged.")
     ap.add_argument("--n-total", type=int, default=12000)
+    ap.add_argument("--assignment-priors", default=str(
+        SUMO_DIR / "assignment_priors.json"),
+        help="Gravity/Dial assignment-prior artifact; its per-edge "
+             "structural load weights the gate draws so candidate density "
+             "follows expected approach flow (road-class fallback when "
+             "absent)")
     ap.add_argument("--min-per-sensor", type=int, default=50,
                     help="safety-net floor, not a target — every trip is "
                         "now sensor-anchored (generate_sensor_anchored_trips), "
@@ -2574,8 +2723,15 @@ def main() -> None:
     if not entry_ids or not exit_ids:
         sys.exit("literal sensor-edge exclusion removed every entry or exit gate; "
                  "expand the simulation boundary or review the sensor registry")
-    w_entry = gate_weights(routing_G, entries)
-    w_exit  = gate_weights(routing_G, exits)
+    gate_loads = load_assignment_gate_loads(Path(args.assignment_priors))
+    w_entry = gate_weights(routing_G, entries, gate_loads)
+    w_exit  = gate_weights(routing_G, exits, gate_loads)
+    if gate_loads:
+        covered = sum(1 for e in entry_ids + exit_ids if gate_loads.get(e))
+        print(f"  gate weighting: structural assignment load "
+              f"({covered}/{len(entry_ids) + len(exit_ids)} gates covered)")
+    else:
+        print("  gate weighting: road-class prior (no assignment field)")
     shape_hourly = daily_shape(args.is_weekend)
     if args.real_day_shape_file:
         with open(args.real_day_shape_file) as f:

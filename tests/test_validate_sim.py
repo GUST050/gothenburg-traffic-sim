@@ -87,6 +87,15 @@ class TestCorridorPriorsForFold:
 
 
 class TestHistoricalDemandGuard:
+    def test_single_day_window_keeps_its_begin_and_end(self):
+        start, end = require_historical_demand({
+            "source": "historical", "date": "2025-09-16",
+            "start_date": "2025-09-16", "end_date_exclusive": "2025-09-17",
+            "days": 1, "begin": "06:00", "end": "10:00",
+        })
+        assert str(start) == "2025-09-16 06:00:00"
+        assert str(end) == "2025-09-16 10:00:00"
+
     def test_supported_multi_day_historical_metadata_is_accepted(self):
         start, end = require_historical_demand({
             "source": "historical", "start_date": "2025-09-16",

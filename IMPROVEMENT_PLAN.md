@@ -1579,6 +1579,133 @@ Status of the previously listed concrete changes:
 5. OPEN — freeze the normal, closure and signal golden cases, including an
    exact browser/API smoke result and a loopback-capable full-test result.
 
+### Simulation realism pass (2026-07-17): findings and fixes
+
+Triggered by Gustav's report that the simulation/trips "does not look
+right".  Three root causes found and fixed, one follow-up designed and
+partially delivered.  Deployment spec throughout: 2027-09-15 forecast
+(`5699948becd95c03`).
+
+1. FIXED — **Driven lengths were distorted by netconvert junction cutting.**
+   Where two OSM ways run parallel out of one node, netconvert's junction
+   hull swallowed the street: 319 of 7 125 edges were >30% off, worst case
+   an 88 m street simulated as a **0.20 m lane** (traversed instantly; the
+   browser showed 426 km/h), and every edge was systematically shortened
+   (meso has no internal-link distance).  Fix: `build_sumo_net.py` writes
+   the OSM `length` explicitly on every plain-XML edge (netconvert honours
+   it regardless of lane cutting; verified), the network audit records
+   `graph_length_m`/`sumo_length_m`/`length_ok` per edge, and the build
+   **fails closed** on any distorted length.  netconvert warnings are no
+   longer discarded (`--no-warnings` removed; digest printed, full log in
+   `sumo/netconvert_warnings.log` — the suppression had hidden this class
+   of problem).  After rebuild: 0 mismatches; middle-edge traversals over
+   130 km/h fell 2.07% → **0.000%**; instant (same-second) edge exits fell
+   18.6% → 4.3% (the rest are genuinely short edges at SUMO's 1 s output
+   resolution); trip durations essentially unchanged (p50 280 → 278 s);
+   GEH<5 stayed 100% on all three variants with 0 infeasible intervals.
+
+2. FIXED — **Candidate draw density ignored expected approach flow, so
+   calibration stacked convoys of identical trips.**  Measured on the
+   post-length-fix build: 776 distinct shapes carried all 17 983 vehicles;
+   ONE shape (Boråsleden → via sensors 1074+1076 → Eklandagatan) carried
+   1 486 veh/day, with 42 clones in a single quarter — visible in the
+   browser as trains of identical vehicles.  Root cause chain: (a)
+   `gate_weights()` was road-class-only, giving the busiest approach
+   (Boråsleden, structural load 14 244 veh/day — the field's largest) just
+   0.37% of candidate draws, so its main corridor had ONE pool shape; (b)
+   E-E through pairs were drawn UNIFORMLY from the verified pair lists,
+   ignoring approach importance entirely; (c) the PFE's origin-edge 3× caps
+   were correctly violated-and-dropped by the counts-first fallback
+   (19-21% of quarter flow from one origin vs its 1.1% cap) because the
+   pool offered no alternatives — the guard's own design when feasibility
+   demands it.  Fix: tour ANCHOR gate draws now follow the gravity/Dial
+   structural assignment field (`sumo/assignment_priors.json`; weights
+   normalised so the measured-data scale factor cancels — LOSO-safe;
+   road-class fallback when the field is absent), wired through
+   `build_sumo_demand.py` (cache-fingerprinted) with unit tests.
+   MEASURED NEGATIVE RESULT, kept for the record: extending the same
+   weighting to E-E through PAIRS (probability ∝ product of the two
+   gates' weights) was implemented, built and measured — it made the
+   worst-shape concentration (636 → 1 465 veh/day) and structure drift
+   (18.5 → 25.2% near-sensor destinations) WORSE, and was reverted.
+   Reason: the candidate pool is a SUPPORT SET for the PFE, which
+   reweights freely — pool value is distinct-pair coverage, which the
+   uniform draw maximises; anchor draws differ because rejection sampling
+   makes their density decide which corridors exist in the pool at all.
+
+3. FIXED — **Two web-app defects that made the simulation view lie.**
+   (a) Colour semantics: non-sensor edges fell back to "count / own max",
+   so EVERY street reached full red at its own peak — at rush hour the
+   whole city lit up alarm-red next to visibly sparse vehicles.  Scenario
+   providers now expose a per-edge calm midday (10:00-15:00) mean from
+   their own flows; the renderer uses it with the same "vs calm daytime"
+   semantics as sensor edges, with an absolute floor so a street under
+   ~20 veh/15 min can never show alarm red.  Legend text updated.
+   (b) `?mode=scenario` deep links switched the provider underneath the
+   new workspace landing page without dismissing it; they now route
+   through `openWorkspace()`.
+
+4. FIXED (superseding the "signature-conditioned densification" follow-up
+   drafted earlier the same day) — **Exact-shortest-path naturalness was
+   the real root cause of endpoint inaccuracy** (Gustav: some areas get no
+   trip starts, streets on/near sensors get far too many).  Every
+   naturalness check (`via_is_natural_in_cost_matrix`,
+   `natural_far_end_weights`, `natural_sensor_masks`,
+   `natural_origin_weights`) required the sensor to lie on the EXACT
+   shortest path (±0.5 s).  Measured on the real network: 6 of 7 sensor
+   edges had ZERO verified through gate pairs (city-wide union: 2 pairs —
+   ALL 6 000 through candidates, 76% of calibrated traffic, entered at 2
+   street cuts and exited at 1), and tour destination masks admitted only
+   the shadow cone immediately behind each sensor (destinations 100-200 m
+   from a sensor: 18.0% of trips vs 1.2% of edges).  Real route choice is
+   stochastic-multipath — the same finding assignment_priors.py already
+   validated.  Fix: bounded-detour naturalness, `via − direct ≤ max(45 s,
+   0.20 × direct)` (constants `VIA_DETOUR_ABS_S`/`VIA_DETOUR_FRAC`),
+   admitting 18-58 pairs per sensor (union 265); the exact ±0.5 s rule
+   stays only in `shortest_paths_use_node`, whose U-turn-guard purpose
+   genuinely needs it.  Measured after full rebuild (same spec, GEH<5
+   100%/0 infeasible on all variants, 974 tests green):
+   - dests within 200 m of a sensor **18.5→2.8%** (baseline 1.9) — gone;
+   - onward-after-sensor median 1 115→**2 904 m**, under-200 m 14.6→1.4%;
+   - trip-length L1 vs RVU 0.69→**0.286**; structure gate **pass, zero
+     flags** (first genuine pass on the length-corrected network);
+   - through pool 2 origins/1 dest → **28 origins/19 dests** (every
+     entry gate used); OD matrix now spans all 8 compass sectors;
+   - worst shape 636→**111 veh/day**, ≥10-clone convoys 13.9→**0.9%**,
+     distinct shapes 813→1 238, distinct trip origin edges 234→290;
+   - purpose-incompatible through routes ~9 000→**~3 250** per variant
+     (then to **0** by item 5 below — the purposes P0 is closed);
+   - vehicles 17 097→21 338: single-sensor passages replace artificial
+     multi-sensor chains (3+ passages 1 910→649), so the same counts
+     need more, more-local vehicles — expected and more realistic.
+
+5. CLOSED the same day — **purpose-stratified PFE** (implemented in the
+   parallel session; pfe.py/demand/calibration.py/validate_sim.py): PFE
+   variables are now (geometry × purpose provenance), the solver enforces
+   each quarter's generated purpose mix as required groups in a two-stage
+   solve (counts first, then the exact margin; counts-first fallback with
+   honestly-reported mix deviation instead of relabelling), strict
+   provenance allocation raises rather than fabricating a label, all
+   variants stage-then-flip atomically, and the LOSO fold path uses the
+   identical formulation.  Also fixed: sub-day windows read the correct
+   purpose-mix clock (a 06:00 build no longer inherits the midnight mix).
+   Verified on the combined rebuild (2027-09-15 forecast spec):
+   **validation.json PASS overall with zero warnings — every section
+   green for the first time** — purpose_incompatible 0/0/0,
+   mix_relaxed 0/0/0, purpose_claims_allowed true, GEH<5 100% on all
+   variants, 0 infeasible, 984 tests passing.  Final trip realism:
+   1 492 distinct shapes, worst 127 veh/day, no shape ≥200/day, shapes
+   ≥50/day carry 14.0% of vehicles (was 53%).  One disclosed relaxation:
+   q90 quarter 85 relaxed 1 structural bound edge-quarter (sensor
+   constraints retained).
+
+Honest status note: the 45 s / 20% detour constants are
+literature-plausible route-choice bounds, chosen from the measured
+admission curve (10%→157, 20%→265, 30%→464 pairs); they are assumptions
+and the held-out/LOSO + temporal rerun on 2025-09-16 (plan item 4 above)
+remains the open confirmation step, now with a fully-green baseline to
+run it against.
+
 ## Definition of Success
 
 The project has reached its intended next level when:

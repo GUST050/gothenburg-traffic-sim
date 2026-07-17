@@ -118,6 +118,35 @@ def scalar(val: object) -> object:
     return val[0] if isinstance(val, list) else val
 
 
+def edge_length_m(data: dict, pts: list[tuple[float, float]]) -> float:
+    """True driven length of an edge in metres.
+
+    netconvert cuts lane geometry back at junction boundaries; where two
+    OSM ways run parallel out of the same node the computed junction hull
+    can swallow nearly the whole street (worst case found 2026-07-17: an
+    88 m street cut to a 0.20 m lane, i.e. traversed instantly in meso).
+    Writing the OSM length explicitly makes SUMO drive the real distance
+    regardless of junction geometry, keeping travel times, queue capacity
+    and the web animation consistent with the map.  Falls back to the
+    projected shape length when the OSM tag is missing or implausible.
+    """
+    shape_len = sum(
+        ((pts[i + 1][0] - pts[i][0]) ** 2
+         + (pts[i + 1][1] - pts[i][1]) ** 2) ** 0.5
+        for i in range(len(pts) - 1)
+    )
+    try:
+        osm_len = float(scalar(data.get("length")))
+    except (TypeError, ValueError):
+        osm_len = None
+    # Accept the OSM value only when it broadly agrees with the geometry —
+    # a corrupt tag must not create a teleporting or crawling street.
+    if osm_len is not None and osm_len > 0 and (
+            shape_len == 0 or 0.5 <= osm_len / shape_len <= 2.0):
+        return max(osm_len, 0.1)
+    return max(shape_len, 0.1)
+
+
 def parse_speed_ms(data: dict) -> float:
     """maxspeed tag (km/h) → m/s, falling back on highway-type defaults."""
     parsed = _speed_kmh(data.get("maxspeed"))
@@ -196,10 +225,12 @@ def main() -> None:
                     t.transform(G.nodes[v]["x"], G.nodes[v]["y"]),
                 ]
             shape = " ".join(f"{x:.2f},{y:.2f}" for x, y in pts)
+            length = edge_length_m(data, pts)
 
             f.write(
                 f'  <edge id={quoteattr(edge_id)} from="{u}" to="{v}" '
-                f'numLanes="{lanes}" speed="{speed:.2f}" shape="{shape}"/>\n'
+                f'numLanes="{lanes}" speed="{speed:.2f}" '
+                f'length="{length:.2f}" shape="{shape}"/>\n'
             )
             n_written += 1
         f.write("</edges>\n")
@@ -215,7 +246,6 @@ def main() -> None:
         "-o", str(net_path),
         "--tls.guess", "true",          # OSM signal tags are lost in graphml
         "--geometry.remove", "false",   # keep shapes 1:1 with the map
-        "--no-warnings", "true",
     ]
     print("Running netconvert …")
     res = subprocess.run(cmd, capture_output=True, text=True,
@@ -223,6 +253,21 @@ def main() -> None:
     if res.returncode != 0:
         print(res.stderr[-3000:])
         sys.exit("netconvert failed")
+
+    # Warnings used to be discarded (--no-warnings), which hid the junction
+    # lane-cutting geometry problems for months.  Keep the full text on disk
+    # and print a per-type digest so a rebuild surfaces new problems.
+    warn_log = SUMO_DIR / "netconvert_warnings.log"
+    warn_log.write_text(res.stderr)
+    warn_lines = [line for line in res.stderr.splitlines()
+                  if line.startswith("Warning:")]
+    by_type: dict[str, int] = {}
+    for line in warn_lines:
+        key = re.sub(r"'[^']*'", "'…'", re.sub(r"\d+(?:\.\d+)?", "#", line))
+        by_type[key] = by_type.get(key, 0) + 1
+    print(f"  netconvert: {len(warn_lines)} warnings → {warn_log}")
+    for key, count in sorted(by_type.items(), key=lambda kv: -kv[1])[:8]:
+        print(f"    {count:4d}× {key}")
 
     size_kb = net_path.stat().st_size / 1024
     print(f"Wrote {net_path}  ({size_kb:.0f} KB)")
@@ -232,6 +277,20 @@ def main() -> None:
     audit_path = SUMO_DIR / "network_audit.json"
     audit = write_audit(G, net_path, audit_path)
     print(f"Wrote {audit_path}  ({len(audit['edges'])} audited edges)")
+
+    # Fail closed on length distortion: the simulation must drive the same
+    # street lengths the map shows.  A mismatch here means netconvert ignored
+    # or mangled the explicit edge lengths — do not ship such a network.
+    bad_lengths = [eid for eid, rec in audit["edges"].items()
+                   if rec.get("length_ok") is False]
+    if bad_lengths:
+        for eid in bad_lengths[:10]:
+            rec = audit["edges"][eid]
+            print(f"  LENGTH MISMATCH {eid}: graph {rec['graph_length_m']} m "
+                  f"vs sumo {rec['sumo_length_m']} m")
+        sys.exit(f"{len(bad_lengths)} edges have distorted driven lengths — "
+                 "network rejected")
+    print("  Length fidelity: all audited edges match the source graph.")
     print("SUMO edge IDs are identical to network.geojson/flows.json edge IDs.")
 
 

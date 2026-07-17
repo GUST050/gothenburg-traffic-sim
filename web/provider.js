@@ -47,20 +47,31 @@ class HistoricalProvider {
       ?? Object.values(this._flows)[0]?.length
       ?? 35040;
 
-    // Compute the normalisation maximum in one pass.  The previous
-    // filter+reduce allocated a second array for every edge; with thousands
-    // of edges and year-long flows that was a large, avoidable parse-time
-    // allocation.  null remains missing and never participates in the max.
+    // Compute the normalisation maximum and the calm midday reference in
+    // one pass.  The previous filter+reduce allocated a second array for
+    // every edge; with thousands of edges and year-long flows that was a
+    // large, avoidable parse-time allocation.  null remains missing and
+    // never participates in max or calm.
+    this._calmByEdge = {};
     for (const [edgeId, arr] of Object.entries(this._flows)) {
       let max = 0;
       let hasValue = false;
-      for (const value of arr) {
+      let calmSum = 0;
+      let calmN = 0;
+      for (let i = 0; i < arr.length; i++) {
+        const value = arr[i];
         if (value !== null && value !== undefined) {
           hasValue = true;
           if (value > max) max = value;
+          // Slots 40–59 = 10:00–14:45, the calm daytime window between the
+          // rush peaks (modulo a day, so multi-day scenarios average all
+          // their middays).
+          const slot = i % 96;
+          if (slot >= 40 && slot < 60) { calmSum += value; calmN++; }
         }
       }
       this._maxByEdge[edgeId] = hasValue ? max : 1;
+      this._calmByEdge[edgeId] = calmN ? calmSum / calmN : null;
     }
     return this;
   }
@@ -75,6 +86,15 @@ class HistoricalProvider {
 
   maxFlow(edgeId) {
     return this._maxByEdge[edgeId] ?? null;
+  }
+
+  // Calm midday (10:00–15:00) mean for this edge, from this provider's own
+  // flows.  Gives simulated background streets the same colour semantics as
+  // sensor edges ("relative to calm daytime traffic") — without it the
+  // renderer fell back to each edge's own maximum, which paints EVERY street
+  // full red at its own peak, however little traffic it actually carries.
+  calmFlow(edgeId) {
+    return this._calmByEdge?.[edgeId] ?? null;
   }
 
   // True if this provider carries data for the edge. Scenario providers have

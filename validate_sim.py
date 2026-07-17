@@ -119,6 +119,7 @@ def corridor_priors_for_fold(corridor: dict, edge_to_sensor: dict[str, str],
 _PFE_PAR_SHAPES = None
 _PFE_PAR_ROUTE_COST = None
 _PFE_PAR_STRUCTURE_GROUPS = None
+_PFE_PAR_PURPOSE_MIXES = None
 
 
 def _run_pfe_interval_job(job: dict):
@@ -129,7 +130,8 @@ def _run_pfe_interval_job(job: dict):
     set as the system that ships, or it validates a different one (the
     exact mismatch class this project already fixed once for the meso
     junction-control config)."""
-    if _PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None:
+    if (_PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None
+            or _PFE_PAR_PURPOSE_MIXES is None):
         raise RuntimeError("PFE interval worker was not initialized")
     sol, rung = pfe.solve_interval_with_structure_guard(
         _PFE_PAR_SHAPES,
@@ -138,6 +140,7 @@ def _run_pfe_interval_job(job: dict):
         job["priors"],
         route_cost=_PFE_PAR_ROUTE_COST,
         structure_groups=_PFE_PAR_STRUCTURE_GROUPS,
+        purpose_mix=_PFE_PAR_PURPOSE_MIXES[job["quarter"]],
     )
     return job["quarter"], sol, rung
 
@@ -149,9 +152,11 @@ def calibrate_fold_parallel(
     bounds_pq: list[dict[str, tuple[float, float]]],
     priors_pq: list[dict[str, tuple[float, float]]],
     max_workers: int | None = None,
+    purpose_departure_offset_s: float = 0.0,
 ) -> dict:
     """Solve this LOSO fold through one flat per-quarter worker pool."""
     global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
+    global _PFE_PAR_PURPOSE_MIXES
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     _PFE_PAR_SHAPES = shapes
     _PFE_PAR_ROUTE_COST = route_cost
@@ -159,6 +164,8 @@ def calibrate_fold_parallel(
     # the pool forks so workers inherit them). These depend only on route
     # geometry, never on which sensor a fold holds out — no leakage.
     _PFE_PAR_STRUCTURE_GROUPS = structure_groups_for_shapes(shapes)
+    _PFE_PAR_PURPOSE_MIXES = pfe._purpose_targets_per_quarter(
+        shapes, len(targets), purpose_departure_offset_s)
     try:
         tasks = [
             {
@@ -185,11 +192,13 @@ def calibrate_fold_parallel(
             enforce_integer_bounds=False,
             structure_groups=[(members, cap_share) for _n, members, cap_share
                               in (_PFE_PAR_STRUCTURE_GROUPS or [])],
-            edge_length_m=load_edge_geometry()[2] if GEO_PATH.exists() else None)
+            edge_length_m=load_edge_geometry()[2] if GEO_PATH.exists() else None,
+            purpose_mixes_per_q=_PFE_PAR_PURPOSE_MIXES)
     finally:
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
         _PFE_PAR_STRUCTURE_GROUPS = None
+        _PFE_PAR_PURPOSE_MIXES = None
 
 
 def simulated_series(ed_file: Path, edge: str, nq: int) -> np.ndarray:
@@ -213,12 +222,19 @@ def historical_demand_window(meta: dict) -> tuple[pd.Timestamp, pd.Timestamp]:
     later cannot describe in its own report.
     """
     try:
-        if "start_date" in meta or "end_date_exclusive" in meta:
+        # A one-day build deliberately carries both the newer range fields
+        # and legacy date/begin/end fields. Prefer its actual sub-day window;
+        # only multi-day builds are necessarily full calendar days.
+        if int(meta.get("days", 1)) > 1:
             start = pd.Timestamp(meta["start_date"]).normalize()
             end = pd.Timestamp(meta["end_date_exclusive"]).normalize()
         else:
-            start = pd.Timestamp(meta["date"]).normalize()
-            end = start + pd.Timedelta(days=1)
+            day = pd.Timestamp(meta.get("date") or meta["start_date"]).normalize()
+            begin = str(meta.get("begin", "00:00"))
+            finish = str(meta.get("end", "24:00"))
+            start = pd.Timestamp(f"{day.date()} {begin}")
+            end = (day + pd.Timedelta(days=1) if finish == "24:00"
+                   else pd.Timestamp(f"{day.date()} {finish}"))
     except (KeyError, TypeError, ValueError):
         raise SystemExit(
             "LOSO kräver giltiga date eller start_date/end_date_exclusive i "
@@ -355,7 +371,11 @@ def main() -> None:
             bounds_pq.append(bq)
 
         rou = SUMO_DIR / f"loso_{held}.rou.xml"
-        rep = calibrate_fold_parallel(cand_path, rou, targets, bounds_pq, priors_pq)
+        purpose_departure_offset_s = int(
+            (demand_start - demand_start.normalize()).total_seconds())
+        rep = calibrate_fold_parallel(
+            cand_path, rou, targets, bounds_pq, priors_pq,
+            purpose_departure_offset_s=purpose_departure_offset_s)
         ed = SUMO_DIR / f"loso_ed_{held}.xml"
         run_meso(rou, SUMO_DIR / f"loso_ed_{held}.xml", duration_s)
 

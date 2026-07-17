@@ -922,3 +922,118 @@ class TestProvenanceAllocation:
         # band; integer publication closes this to the exact target.
         assert served(sol, [cand("M")], "M") >= 8.0
         assert rung == RUNG_LP_FALLBACK
+
+
+class TestPurposeStratifiedCalibration:
+    """A calibrated agent must retain the OD/purpose that generated it.
+
+    These regressions cover the defect found in the 2026-07-17 baseline:
+    the purpose-blind PFE chose home/POI routes and a post-solve allocator
+    then labelled 3,344 of them as ``through`` to satisfy a display mix.
+    """
+
+    @staticmethod
+    def _shape(edges, purpose, source_id):
+        source = Candidate(0.0, edges, source_id=source_id,
+                           intent={"purpose": purpose})
+        return Candidate(0.0, edges, source_candidates=[source])
+
+    def test_solver_selects_the_required_provenance_before_publication(self, tmp_path):
+        through = self._shape(["O_t", "M", "D_t"], "through", "t")
+        work = self._shape(["O_w", "M", "D_w"], "arbete", "w")
+        shapes = [through, work]
+        mix = {"through": 1, "arbete": 1}
+
+        sol, rung = pfe.solve_interval_with_structure_guard(
+            shapes, {"M": 2.0}, {}, {}, purpose_mix=mix)
+
+        assert sol is not None
+        assert rung == RUNG_CLEAN
+        out = tmp_path / "calibrated.rou.xml"
+        report = pfe.write_calibration_report(
+            shapes, out, [{"M": 2.0}], [sol], rungs=[rung],
+            purpose_mixes_per_q=[mix])
+        agents = json.loads((tmp_path / "calibrated.agents.json").read_text())["agents"]
+
+        assert sorted(agent["purpose"] for agent in agents) == ["arbete", "through"]
+        assert all(agent["purpose_route_compatible"] for agent in agents)
+        assert report["purpose_allocation_summary"]["quarters_with_incompatible_routes"] == 0
+
+    def test_missing_purpose_candidate_is_an_explicit_error(self):
+        work = self._shape(["O", "M", "D"], "arbete", "w")
+
+        with pytest.raises(ValueError, match="fritid"):
+            pfe.purpose_quota_groups([work], {"fritid": 1}, 1)
+
+    def test_prepare_keeps_same_geometry_in_separate_purpose_variables(self, tmp_path):
+        routes = tmp_path / "candidates.rou.xml"
+        routes.write_text(
+            '<routes>'
+            '<vehicle id="w" depart="0"><route edges="O M D"/></vehicle>'
+            '<vehicle id="f" depart="0"><route edges="O M D"/></vehicle>'
+            '</routes>')
+        (tmp_path / "candidates.meta.json").write_text(json.dumps({
+            "candidates": {
+                "w": {"purpose": "arbete"},
+                "f": {"purpose": "fritid"},
+            }
+        }))
+
+        shapes, _route_cost = pfe.prepare_calibration(routes)
+
+        assert len(shapes) == 2
+        assert {next(iter(pfe._shape_purposes(shape))) for shape in shapes} == {
+            "arbete", "fritid"}
+
+    def test_purpose_mix_uses_the_calibrated_window_clock(self):
+        # Candidate departures are absolute seconds into the behavioural day.
+        # A 06:00 target quarter must not read the midnight candidate mix.
+        night = self._shape(["N"], "through", "night")
+        day = self._shape(["D"], "arbete", "day")
+        night.source_candidates[0].depart = 0.0
+        day.source_candidates[0].depart = 6 * 3600.0
+
+        mix = pfe._purpose_targets_per_quarter(
+            [night, day], 1, departure_offset_s=6 * 3600.0)
+
+        assert [dict(q) for q in mix] == [{"arbete": 1}]
+
+    def test_impossible_purpose_margin_keeps_counts_and_real_provenance(self, tmp_path):
+        # The measured W count requires one work route, while the generated
+        # purpose prior asks for two through trips. The old strict-margin
+        # change turned this into an infeasible quarter. Counts are observed
+        # and must win, but neither selected route may be relabelled.
+        through = self._shape(["O_t", "M", "D_t"], "through", "t")
+        work = self._shape(["O_w", "M", "W", "D_w"], "arbete", "w")
+        shapes = [through, work]
+        mix = {"through": 20}
+
+        sol, rung = pfe.solve_interval_with_structure_guard(
+            shapes, {"M": 20.0, "W": 10.0}, {}, {}, purpose_mix=mix)
+
+        assert sol is not None
+        out = tmp_path / "calibrated.rou.xml"
+        report = pfe.write_calibration_report(
+            shapes, out, [{"M": 20.0, "W": 10.0}], [sol], rungs=[rung],
+            purpose_mixes_per_q=[mix])
+        agents = json.loads((tmp_path / "calibrated.agents.json").read_text())["agents"]
+
+        assert report["achieved"]["M"] == [20.0]
+        assert report["achieved"]["W"] == [10.0]
+        assert all(agent["purpose_route_compatible"] for agent in agents)
+        summary = report["purpose_allocation_summary"]
+        assert summary["quarters_with_incompatible_routes"] == 0
+        assert summary["quarters_with_relaxed_mix"] == 1
+        assert summary["mix_shortfall_by_purpose"] == {"through": 10}
+        assert summary["mix_excess_by_purpose"] == {"arbete": 10}
+
+    def test_infeasible_solution_does_not_touch_existing_route_file(self, tmp_path):
+        out = tmp_path / "calibrated.rou.xml"
+        out.write_text("previous valid route")
+
+        with pytest.raises(RuntimeError, match="infeasible interval"):
+            pfe.write_calibration_report(
+                [self._shape(["M"], "through", "t")], out,
+                [{"M": 1.0}], [None], enforce_integer_bounds=True)
+
+        assert out.read_text() == "previous valid route"

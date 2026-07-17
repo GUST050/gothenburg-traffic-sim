@@ -108,20 +108,39 @@ def _purpose_section(meta: dict | None) -> dict:
         if isinstance(report, dict)
         and "purpose_replaced_routes" in report
     }
+    mix_relaxed = {
+        name: report.get("purpose_mix_relaxed_quarters")
+        for name, report in variant_fit.items()
+        if isinstance(report, dict)
+        and "purpose_mix_relaxed_quarters" in report
+    }
+    mix_reallocated = {
+        name: report.get("purpose_mix_reallocation_vehicles")
+        for name, report in variant_fit.items()
+        if isinstance(report, dict)
+        and "purpose_mix_reallocation_vehicles" in report
+    }
+    relaxed_mix_count = max((value for value in mix_relaxed.values()
+                             if isinstance(value, (int, float))), default=0)
     return {
-        # Purpose labels are diagnostic only while any selected route lacks
-        # matching source provenance. Do not let a perfect GEH fit imply
-        # that purpose-specific behaviour is validated.
-        "status": "warn" if ordering_flag or incompatible else "pass",
+        # Source compatibility and the exact generated purpose margin are
+        # different claims. A counts-first fallback can retain each agent's
+        # real OD/purpose provenance while honestly reporting that the
+        # aggregate behavioural prior could not coexist with hard sensors.
+        "status": "warn" if ordering_flag or incompatible or relaxed_mix_count else "pass",
         "purpose_counts": agents.get("purpose_counts"),
         "purpose_length_km": lengths,
         "ordering_violated": ordering_flag,
         "purpose_incompatible_quarters_by_variant": compatibility,
         "purpose_replaced_routes_by_variant": replacements,
+        "purpose_mix_relaxed_quarters_by_variant": mix_relaxed,
+        "purpose_mix_reallocation_vehicles_by_variant": mix_reallocated,
         "purpose_claims_allowed": incompatible == 0,
+        "purpose_mix_matches_generated_prior": relaxed_mix_count == 0,
         "gate": "fritid ska ha längst medianresa (Trafikanalys RVU Tabell 3); "
-                "exakt ärende×tid-mix per kvart; varje tilldelad rutt "
-                "måste ha kompatibel proveniens",
+                "exakt ärende×tid-mix per kvart när den är förenlig med "
+                "sensorerna; varje tilldelad rutt måste ha kompatibel "
+                "proveniens",
     }
 
 

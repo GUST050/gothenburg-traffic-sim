@@ -30,6 +30,39 @@ def test_audit_records_sources_roundabouts_and_tls(tmp_path):
     assert payload["edges"]["2_3_0"]["speed_source"] == "defaulted"
 
 
+def test_audit_flags_length_distortion(tmp_path):
+    # The SUMO lane is far shorter than the source edge — exactly the
+    # junction-cutting failure the explicit plain-XML length prevents.
+    net = tmp_path / "net.net.xml"
+    net.write_text("""<net>
+      <edge id="1_2_0"><lane id="1_2_0_0" index="0" speed="13.89"
+            length="0.20"/></edge>
+      <edge id="2_3_0"><lane id="2_3_0_0" index="0" speed="13.89"
+            length="88.10"/></edge>
+    </net>""")
+    graph = FakeGraph([
+        (1, 2, 0, {"highway": "residential", "length": 88.0}),
+        (2, 3, 0, {"highway": "residential", "length": 88.0}),
+    ])
+    payload = na.build_audit(graph, net)
+    cut = payload["edges"]["1_2_0"]
+    assert cut["graph_length_m"] == 88.0
+    assert cut["sumo_length_m"] == 0.20
+    assert cut["length_ok"] is False
+    ok = payload["edges"]["2_3_0"]
+    assert ok["length_ok"] is True
+
+
+def test_audit_length_unknown_when_untagged(tmp_path):
+    net = tmp_path / "net.net.xml"
+    net.write_text("""<net><edge id="1_2_0"><lane id="1_2_0_0" index="0"
+        speed="13.89" length="50.0"/></edge></net>""")
+    graph = FakeGraph([(1, 2, 0, {"highway": "residential"})])
+    rec = na.build_audit(graph, net)["edges"]["1_2_0"]
+    assert rec["graph_length_m"] is None
+    assert rec["length_ok"] is None
+
+
 def test_write_audit_is_atomic_and_has_network_hash(tmp_path):
     net = tmp_path / "net.net.xml"
     net.write_text("<net/>")
