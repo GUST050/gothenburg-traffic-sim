@@ -521,6 +521,15 @@ class TestReportSensorCrossHits:
     not during generation, so it reflects what really happened rather
     than generation-time intent."""
 
+    @pytest.fixture(autouse=True)
+    def _isolated_sumo_dir(self, tmp_path, monkeypatch):
+        # report_sensor_cross_hits always writes its JSON report into
+        # SUMO_DIR. The repo's sumo/ directory is a gitignored build product
+        # that does not exist on a fresh clone, so without this redirect
+        # every test here fails with FileNotFoundError on first run and
+        # writes into the real working tree on later runs.
+        monkeypatch.setattr(bc, "SUMO_DIR", tmp_path)
+
     def test_vehicle_touching_only_its_own_sensor_counts_as_cross_0(self, tmp_path):
         path = tmp_path / "candidates.rou.xml"
         write_routes(path, [("v0", ["1_2_0", "2_3_0"])])
@@ -553,8 +562,7 @@ class TestReportSensorCrossHits:
         report = bc.report_sensor_cross_hits(path, ["1_2_0"])
         assert report["1_2_0"]["total"] == 0
 
-    def test_writes_the_report_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(bc, "SUMO_DIR", tmp_path)
+    def test_writes_the_report_file(self, tmp_path):
         path = tmp_path / "candidates.rou.xml"
         write_routes(path, [("v0", ["1_2_0"])])
         bc.report_sensor_cross_hits(path, ["1_2_0"])

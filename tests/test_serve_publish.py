@@ -12,6 +12,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import serve
 
 
+def _hermetic_contract_hashes(monkeypatch):
+    """Stub the registry/network digests behind the sensor contract.
+
+    The real ``network_sha256`` hashes ``sumo/net.net.xml`` — a gitignored
+    build product that only exists on a machine that has run the SUMO
+    pipeline. Hashing through a stub keeps these tests exercising
+    validate_staged_scenarios' comparison logic (contract present, hashes
+    equal, sensor edges checked) instead of the developer machine's build
+    state; on a fresh clone the unstubbed digest is None and every contract
+    would be rejected as missing before the behaviour under test runs.
+    """
+    monkeypatch.setattr(serve, "sha256_file",
+                        lambda path: f"digest:{Path(path).name}")
+
+
 def _staged(tmp_path, geh=100.0, infeasible=0, with_baseline=True,
             flows=True, build_id=None, variant_fit=None, demand_key=None):
     staging = tmp_path / "staging"
@@ -120,7 +135,9 @@ class TestValidateStagedScenarios:
         ok, reason = serve.validate_staged_scenarios(staging, meta)
         assert not ok and "sensor-/nätverkskontrakt" in reason
 
-    def test_new_sensor_contract_accepts_raw_fit_and_variant_provenance(self, tmp_path):
+    def test_new_sensor_contract_accepts_raw_fit_and_variant_provenance(
+            self, tmp_path, monkeypatch):
+        _hermetic_contract_hashes(monkeypatch)
         staging, meta = _staged(tmp_path)
         payload = json.loads((staging / "baseline.json").read_text())
         payload["scenario_spec"] = {
@@ -164,7 +181,8 @@ class TestValidateStagedScenarios:
         ok, reason = serve.validate_staged_scenarios(staging, meta)
         assert ok, reason
 
-    def test_new_sensor_contract_refuses_bad_raw_sumo_fit(self, tmp_path):
+    def test_new_sensor_contract_refuses_bad_raw_sumo_fit(self, tmp_path, monkeypatch):
+        _hermetic_contract_hashes(monkeypatch)
         staging, meta = _staged(tmp_path)
         payload = json.loads((staging / "baseline.json").read_text())
         sensor_edges = serve.current_sensor_edges()
@@ -207,7 +225,9 @@ class TestValidateStagedScenarios:
         assert not ok
         assert "inkonsekvent" in reason or "GEH" in reason
 
-    def test_new_sensor_contract_refuses_geojson_sensor_edge_mismatch(self, tmp_path):
+    def test_new_sensor_contract_refuses_geojson_sensor_edge_mismatch(
+            self, tmp_path, monkeypatch):
+        _hermetic_contract_hashes(monkeypatch)
         staging, meta = _staged(tmp_path)
         demand = json.loads(meta.read_text())
         demand["sensor_targets"] = {"variants": {"edge_shares": {"e1": [1]}}}

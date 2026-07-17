@@ -536,14 +536,29 @@ class TestRunInNewSession:
         # (signal 0). NOTE: PID-reuse could theoretically make this probe
         # hit an unrelated process, but within 2s of the kill that is
         # vanishingly unlikely.
-        for _ in range(20):
+        def gone() -> bool:
             try:
                 os.kill(gpid, 0)
             except ProcessLookupError:
+                return True
+            # A SIGKILLed orphan can linger as a zombie until init reaps it,
+            # and kill(pid, 0) still succeeds on a zombie. Dead-but-unreaped
+            # counts as killed here — it can never write into sumo/ again.
+            try:
+                with open(f"/proc/{gpid}/stat") as stat:
+                    return stat.read().rsplit(")", 1)[1].split()[0] == "Z"
+            except OSError:
+                return False   # no /proc (macOS) — keep the plain probe
+
+        for _ in range(20):
+            if gone():
                 break
             time.sleep(0.1)
         else:
-            os.kill(gpid, 9)   # clean up the leak before failing the test
+            try:
+                os.kill(gpid, 9)   # clean up the leak before failing the test
+            except ProcessLookupError:
+                return             # died between the last probe and now — gone
             pytest.fail(f"grandchild {gpid} survived the group kill")
 
 
