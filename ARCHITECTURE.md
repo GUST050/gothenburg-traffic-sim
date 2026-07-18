@@ -359,6 +359,17 @@ path: `traffic_sim/simulation/monthly_proxy.py` ranks exact calendar
 schedules from explicitly projected forecast/structural flow and detour
 reserve, `proxy_projection.py` preserves the sparse-sensor evidence boundary,
 and `proxy_validation.py` owns the frozen exhaustive-SUMO release gate.
+Matched finalist decisions are isolated in
+`traffic_sim/simulation/finalist_decision.py`: q10/q50/q90 remain separate,
+each observation is paired to the same seed and baseline, hard failures are
+removed before ranking, and the primary score is the worst-variant upper
+simultaneous 95% bound on added SUMO `timeLoss`. The result contract is
+fail-closed (`unique_winner`, `tie`, `inconclusive`, or `no_viable`) and
+returns exact candidate/variant repetition requests when more paired seeds
+are required. `traffic_sim/simulation/micro_confirmation.py` keeps
+conditional bounded microscopic evidence in a separate module, status and
+provenance; it is never mixed into the mesoscopic score, and missing queue
+detail is explicitly `queue_detail_not_assessed`.
 `screen_monthly_closures.py` and `run_monthly_proxy_validation.py` are
 root-level CLI entrypoints only; neither is wired to `serve.py` or the web UI.
 Proxy version `monthly_proxy_v1` failed its 2026-07-18 held-out gate

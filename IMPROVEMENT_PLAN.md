@@ -394,6 +394,17 @@ Implementation Order" at the end of this document.
 10. **Study/job history implemented:** the start workspace now exposes the
    durable `/api/jobs` records; importing a city signal corridor remains
    evidence-bound and is intentionally not fabricated.
+11. **Robust finalist decision slice implemented:** matched mesoscopic
+    observations now retain candidate, q10/q50/q90 variant, seed, baseline
+    and provenance identity. `finalist_decision.py` uses simultaneous 95%
+    paired intervals, ranks the worst-variant upper bound, requests adaptive
+    repetitions, removes hard failures before ranking, and structurally
+    returns `unique_winner`, `tie`, `inconclusive`, or `no_viable`.
+    Conditional two/three-finalist microscopic confirmation remains separate
+    from the mesoscopic score and exposes unavailable or incomplete queue
+    detail instead of guessing. The prior three-seed interval artifacts do
+    not retain variant identity and are deliberately not accepted as robust
+    finalist evidence.
 
 ### Evidence-bound work that must not be faked
 
@@ -1768,10 +1779,19 @@ simulation.
 8. Freeze a golden monthly search, benchmark wall time/RSS/disk, run browser
    recovery tests, and publish only if every previous gate passes.
 
-**Implementation status 2026-07-18:** Steps 1, 2 and 3 are complete. Step 4
-is implemented, but its held-out release gate failed; it is therefore
-complete as an evidence-producing stage and deliberately not released to the
-UI.
+**Implementation status 2026-07-18:** Steps 1, 2, 3 and 5 are internally
+complete. Step 5's synthetic stop cases cover unique winner, practical tie,
+adaptive/inconclusive, repetition-cap, no-viable, incompatible provenance,
+conditional micro confirmation and missing queue detail. Existing SUMO
+evidence also reproduces a real `no_viable` case; old eligible evidence is
+three-seed and variant-collapsed, so it correctly cannot be promoted into the
+new decision contract. Step 4 is implemented, but its held-out release gate
+failed; it is therefore complete as an evidence-producing stage and
+deliberately not released to the UI. Consequently, Step 5's decision engine
+is also internal only: no API/UI/global-best claim is permitted. The
+absolute precision floor, practical-equivalence tolerance and repetition cap
+remain required explicit policy inputs and must be frozen against the named
+golden monthly benchmark before release rather than hidden in code defaults.
 
 Step 1 added the canonical `ClosureSearchSpec`, `DailyTimeBand`,
 `ClosureInterval` and `ClosureSchedule` contracts in
