@@ -1960,12 +1960,39 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    q90 quarter 85 relaxed 1 structural bound edge-quarter (sensor
    constraints retained).
 
+6. VERIFIED + HARDENED 2026-07-18 on the historical reference day
+   (`2025-09-16`) — the remaining purpose warning was not a candidate-support
+   failure: every affected quarter had a feasible exact integer margin, but
+   the local MILP abandoned it from a poor directly-rounded starting vector.
+   Publication now retries exact provenance after count/bound repair and
+   again after the optional structure repair supplies its final warm start.
+   Result on the unchanged 9 424-candidate pool: q50/q10/q90 all remain
+   **100% GEH<5, 0 infeasible, 0 purpose-incompatible, 0 mix-relaxed and 0
+   structural flags**; `validation.json` is PASS with no warnings or missing
+   sections.  The normal and Skånegatan reference-closure scenarios were
+   rebuilt from that same demand release (all vehicles inserted, 0 teleports).
+   That rebuild also exposed and fixed two scenario-publication regressions:
+   legacy `--close` second offsets are now converted to bounded ISO
+   `ClosureSpec` datetimes, and edges omitted by SUMO's
+   `excludeEmpty="true"` edgeData are retained as measured zero specifically
+   for closure-integrity evaluation.  Full suite: **1 011 passed, 20
+   skipped**.
+
+   Leakage-free LOSO was rerun under `loso_pfe_meso_v3`: held-out
+   simulated/measured ratio min **0.76**, median **0.99**, max **2.58**.
+   This is useful but not uniformly strong generalisation: edges 134 and
+   2276 remain high at 2.41 and 2.58, and one direction of station 107 is
+   2.11 while its opposite direction is 0.99.  Keep those outliers visible
+   in confidence/reporting; a good median is not permission to claim every
+   held-out road is accurate.
+
 Honest status note: the 45 s / 20% detour constants are
 literature-plausible route-choice bounds, chosen from the measured
 admission curve (10%→157, 20%→265, 30%→464 pairs); they are assumptions
-and the held-out/LOSO + temporal rerun on 2025-09-16 (plan item 4 above)
-remains the open confirmation step, now with a fully-green baseline to
-run it against.
+and the temporal rerun remains open: the repository currently has a
+leakage-free station LOSO runner but no equivalent date-holdout simulation
+runner.  The 2025-09-16 LOSO evidence above confirms the median, not every
+road and not cross-date transfer.
 
 ## Definition of Success
 

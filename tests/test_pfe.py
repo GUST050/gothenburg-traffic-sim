@@ -1081,6 +1081,47 @@ class TestPurposeStratifiedCalibration:
         assert summary["mix_shortfall_by_purpose"] == {"through": 10}
         assert summary["mix_excess_by_purpose"] == {"arbete": 10}
 
+    def test_integer_writer_retries_purpose_margin_from_count_valid_vector(
+            self, tmp_path, monkeypatch):
+        """A failed joint repair is not proof that the margin is infeasible.
+
+        The full-day baseline found four quarters where the local integer
+        repair failed from the directly rounded entropy vector but succeeded
+        after count/bound reconciliation supplied a better starting point.
+        """
+        through = self._shape(["M"], "through", "t")
+        work = self._shape(["M"], "arbete", "w")
+        shapes = [through, work]
+        mix = {"through": 10, "arbete": 10}
+        calls = []
+
+        def staged_repair(counts, _shapes, _targets, _bounds, groups=None,
+                          measurement_tol_mult=None):
+            calls.append(bool(groups))
+            if len(calls) == 1:
+                return None                 # initial joint repair
+            if len(calls) == 2:
+                return np.array([20, 0])    # count/bound-valid warm start
+            if len(calls) == 3:
+                return None                 # first purpose warm-start retry
+            return np.array([10, 10])       # structure then final purpose retry
+
+        monkeypatch.setattr(pfe, "repair_integer_bounds", staged_repair)
+        out = tmp_path / "calibrated.rou.xml"
+        report = pfe.write_calibration_report(
+            shapes, out, [{"M": 20.0}], [np.array([10.0, 10.0])],
+            bounds_per_q=[{}], rungs=[RUNG_CLEAN],
+            enforce_integer_bounds=True, purpose_mixes_per_q=[mix],
+            structure_groups=[([0], 0.5)])
+
+        assert calls == [True, False, True, True, True]
+        assert report["purpose_allocation_summary"][
+            "quarters_with_relaxed_mix"] == 0
+        agents = json.loads(
+            (tmp_path / "calibrated.agents.json").read_text())["agents"]
+        assert Counter(agent["purpose"] for agent in agents) == {
+            "arbete": 10, "through": 10}
+
     def test_infeasible_solution_does_not_touch_existing_route_file(self, tmp_path):
         out = tmp_path / "calibrated.rou.xml"
         out.write_text("previous valid route")

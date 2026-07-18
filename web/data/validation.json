@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
- "generated_at": "2026-07-18T09:25:18Z",
+ "generated_at": "2026-07-18T10:09:29Z",
  "demand_window": "2025-09-16",
  "demand_source": "historical",
- "overall": "warn",
+ "overall": "pass",
  "sections": {
   "counts_fit": {
    "status": "pass",
@@ -15,50 +15,50 @@
   "structure": {
    "status": "pass",
    "flags": [],
-   "dest_within_200m_pct": 3.6,
+   "dest_within_200m_pct": 3.5,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
     0.0118,
-    0.7809,
-    0.2073
+    0.7799,
+    0.2083
    ],
-   "trip_length_l1_vs_rvu": 0.5109,
-   "onward_after_sensor_median_m": 2855.2,
+   "trip_length_l1_vs_rvu": 0.509,
+   "onward_after_sensor_median_m": 2863.2,
    "onward_under_200m_pct": 1.6,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
   },
   "purposes": {
-   "status": "warn",
+   "status": "pass",
    "purpose_counts": {
-    "arbete": 8032,
-    "external": 1297,
-    "fritid": 2399,
-    "service": 4506,
-    "through": 5422
+    "arbete": 7962,
+    "external": 1311,
+    "fritid": 2397,
+    "service": 4528,
+    "through": 5458
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 8032,
+     "n": 7962,
      "mean_km": 2.74,
-     "median_km": 2.52
+     "median_km": 2.51
     },
     "external": {
-     "n": 1297,
-     "mean_km": 3.63,
+     "n": 1311,
+     "mean_km": 3.62,
      "median_km": 3.38
     },
     "fritid": {
-     "n": 2399,
+     "n": 2397,
      "mean_km": 3.01,
      "median_km": 2.98
     },
     "service": {
-     "n": 4506,
-     "mean_km": 2.98,
+     "n": 4528,
+     "mean_km": 2.99,
      "median_km": 2.78
     },
     "through": {
-     "n": 5422,
+     "n": 5458,
      "mean_km": 5.57,
      "median_km": 5.9
     }
@@ -75,17 +75,17 @@
     "edge_shares_q90": 0
    },
    "purpose_mix_relaxed_quarters_by_variant": {
-    "edge_shares": 1,
-    "edge_shares_q10": 3,
+    "edge_shares": 0,
+    "edge_shares_q10": 0,
     "edge_shares_q90": 0
    },
    "purpose_mix_reallocation_vehicles_by_variant": {
-    "edge_shares": 72,
-    "edge_shares_q10": 247,
+    "edge_shares": 0,
+    "edge_shares_q10": 0,
     "edge_shares_q90": 0
    },
    "purpose_claims_allowed": true,
-   "purpose_mix_matches_generated_prior": false,
+   "purpose_mix_matches_generated_prior": true,
    "gate": "fritid ska ha l\u00e4ngst medianresa (Trafikanalys RVU Tabell 3); exakt \u00e4rende\u00d7tid-mix per kvart n\u00e4r den \u00e4r f\u00f6renlig med sensorerna; varje tilldelad rutt m\u00e5ste ha kompatibel proveniens"
   },
   "simulation": {
@@ -122,7 +122,7 @@
    "uses_raw_ensemble_mean": true,
    "edge_quarters": 671,
    "geh_lt_5_pct": 100.0,
-   "mean_abs_error": 2.591612,
+   "mean_abs_error": 2.623405,
    "max_abs_error": 14.548667,
    "station_edge_quarters": 575,
    "station_max_abs_error": 18.0,

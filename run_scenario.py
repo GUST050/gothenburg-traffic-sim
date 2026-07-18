@@ -357,10 +357,39 @@ def structured_closures(raw: list[str], whole_edges: list[str], epoch: str,
             end = end.tz_convert(None)
         begin_s = (begin - epoch_ts).total_seconds()
         end_s = (end - epoch_ts).total_seconds()
-        if not (0 <= begin_s < end_s <= duration_s + 3600):
+        # User-authored windows belong to the typed ScenarioSpec and must fit
+        # its demand window. The extra simulation drain hour is an internal
+        # legacy whole-run detail, not valid scenario-contract time.
+        if not (0 <= begin_s < end_s <= duration_s):
             raise ValueError("--closure window must be within the simulated run and have begin < end")
         closures.append({"edge_id": edge, "begin_s": int(begin_s), "end_s": int(end_s)})
     return closures
+
+
+def contract_closures(closures: list[dict], epoch: str,
+                      duration_s: int) -> list[dict]:
+    """Project internal second offsets into validated closure datetimes.
+
+    Legacy ``--close`` keeps its historical rerouter active through the
+    one-hour SUMO drain (``duration_s + 3600``). ScenarioSpec deliberately
+    describes the demand/scenario window only, so its equivalent whole-run
+    closure ends at ``duration_s``. Keeping this conversion at the CLI seam
+    prevents internal ``begin_s``/``end_s`` dictionaries from being passed
+    directly to ClosureSpec, which expects ISO datetimes.
+    """
+    epoch_ts = pd.Timestamp(epoch)
+    result = []
+    for closure in closures:
+        begin_s = max(0, min(int(closure["begin_s"]), duration_s))
+        end_s = max(0, min(int(closure["end_s"]), duration_s))
+        if begin_s >= end_s:
+            raise ValueError("closure window must overlap the scenario window")
+        result.append({
+            "edge_id": closure["edge_id"],
+            "start_time": (epoch_ts + pd.Timedelta(seconds=begin_s)).isoformat(),
+            "end_time": (epoch_ts + pd.Timedelta(seconds=end_s)).isoformat(),
+        })
+    return result
 
 
 def edge_freeflow_times() -> dict[str, float]:
@@ -1461,8 +1490,19 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
         web_edges, seed=1000)
 
 
-def parse_edgedata(path: Path, n_intervals: int) -> dict[str, np.ndarray]:
-    """{edge_id: array of 'entered' counts per 15-min interval}."""
+def parse_edgedata(
+    path: Path,
+    n_intervals: int,
+    measured_empty_edges: list[str] | tuple[str, ...] = (),
+) -> dict[str, np.ndarray]:
+    """Return edge ``entered`` counts, retaining required measured zeros.
+
+    ``write_edgedata_additional`` uses ``excludeEmpty=true``: an edge absent
+    from this output was still measured and carried zero vehicles. Most map
+    aggregation already zero-fills absent edges. Closure integrity needs the
+    same distinction explicitly for closed edges so a successful zero-flow
+    closure is not mislabeled "not measurable".
+    """
     flows: dict[str, np.ndarray] = {}
     root = ET.parse(path).getroot()
     for interval in root.findall("interval"):
@@ -1475,6 +1515,8 @@ def parse_edgedata(path: Path, n_intervals: int) -> dict[str, np.ndarray]:
             if eid not in flows:
                 flows[eid] = np.zeros(n_intervals)
             flows[eid][i] = entered
+    for edge_id in measured_empty_edges:
+        flows.setdefault(edge_id, np.zeros(n_intervals))
     return flows
 
 
@@ -1553,7 +1595,9 @@ def run_seed_job(job: dict) -> dict:
         vehroute_write_unfinished=job.get("vehroute_write_unfinished", False),
         summary_output=job.get("summary_file"),
         work_dir=job["work_dir"])
-    flows = parse_edgedata(job["edge_file"], job["n_intervals"])
+    flows = parse_edgedata(
+        job["edge_file"], job["n_intervals"],
+        measured_empty_edges=job.get("closure_edges", ()))
     health = parse_seed_health(job["stats_file"], job["seed"],
                                job["route_path"].name)
     daily = None
@@ -1695,7 +1739,8 @@ def main() -> None:
             "start_time": meta["epoch_sim"],
             "end_time": (pd.Timestamp(meta["epoch_sim"])
                           + pd.Timedelta(seconds=duration_s)).isoformat(),
-            "closures": closures,
+            "closures": contract_closures(
+                closures, meta["epoch_sim"], duration_s),
             "simulation_mode": "micro" if args.micro else "meso",
             "seed_set": seed_values,
             "demand_variant_mapping": variant_by_seed,
@@ -1782,6 +1827,7 @@ def main() -> None:
             "days": days,
             "day_boundaries_s": day_boundaries_s,
             "edge_file": ed_file,
+            "closure_edges": close_edges,
             "n_intervals": n_intervals,
             "vehroute_output": trajectory_vr_file,
             "vehroute_write_unfinished": (seed == trajectory_seed and trajectory_enabled),

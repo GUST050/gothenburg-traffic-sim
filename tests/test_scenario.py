@@ -361,6 +361,27 @@ class TestClosureIntegrityStatus:
         assert run_scenario.aggregate_active_closure_entries(
             [0, 0, 0], [{"edge_id": "a"}]) == 0
 
+    def test_excluded_empty_closed_edge_is_retained_as_measured_zero(
+            self, tmp_path):
+        edge_data = tmp_path / "edge.xml"
+        edge_data.write_text(
+            '<meandata><interval begin="0" end="900">'
+            '<edge id="open" entered="3"/>'
+            '</interval></meandata>')
+
+        flows = run_scenario.parse_edgedata(
+            edge_data, 1, measured_empty_edges=["closed"])
+        closures = [{"edge_id": "closed", "begin_s": 0, "end_s": 900}]
+        active = run_scenario.cm.active_closure_throughput(flows, closures)
+
+        assert flows["open"].tolist() == [3.0]
+        assert flows["closed"].tolist() == [0.0]
+        assert active == 0
+        assert run_scenario.closure_integrity_status(
+            run_scenario.aggregate_active_closure_entries(
+                [active], closures),
+            closures) == "verified_clean"
+
 
 class TestBaselineOutputFitGate:
     @staticmethod
@@ -1140,6 +1161,31 @@ class TestTruncateStrandedVehicles:
 
 
 class TestTimeWindowedClosures:
+    def test_legacy_whole_run_closure_has_valid_contract_datetimes(self):
+        epoch = "2025-09-16T00:00:00"
+        internal = run_scenario.structured_closures(
+            [], ["a_b"], epoch, duration_s=86400)
+
+        assert internal == [
+            {"edge_id": "a_b", "begin_s": 0, "end_s": 90000}]
+        assert run_scenario.contract_closures(
+            internal, epoch, duration_s=86400) == [{
+                "edge_id": "a_b",
+                "start_time": "2025-09-16T00:00:00",
+                "end_time": "2025-09-17T00:00:00",
+            }]
+
+    def test_explicit_closure_cannot_extend_into_internal_drain_hour(self):
+        closure = json.dumps({
+            "edge_id": "a_b",
+            "begin": "2025-09-16T23:45:00",
+            "end": "2025-09-17T00:15:00",
+        })
+
+        with pytest.raises(ValueError, match="within the simulated run"):
+            run_scenario.structured_closures(
+                [closure], [], "2025-09-16T00:00:00", duration_s=86400)
+
     def test_write_closure_additional_emits_one_interval_per_window(self, tmp_path):
         path = tmp_path / "closure.add.xml"
         closures = [

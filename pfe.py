@@ -1687,6 +1687,7 @@ def write_calibration_report(
             if purpose_margin_enforced:
                 _purpose_target, purpose_groups = purpose_quota_groups(
                     shapes, purpose_mix, int(counts.sum()))
+            requested_purpose_groups = list(purpose_groups)
             rung = rungs[i] if rungs is not None and i < len(rungs) else None
             repair_bounds = (
                 bounds_per_q[i]
@@ -1718,6 +1719,23 @@ def write_calibration_report(
                     if float(current[members].sum()) > max(2.0, cap_share * q_total)
                 ]
 
+            def apply_structure_repairs(
+                current: np.ndarray,
+                active_purpose_groups: list[tuple[list[int], float, float]],
+            ) -> np.ndarray:
+                """Best-effort structure repair from the current warm start."""
+                for _repair_pass in range(3):
+                    quarter_groups = overflowing_groups(current)
+                    if not quarter_groups:
+                        break
+                    repaired_structure = repair_integer_bounds(
+                        current, shapes, targets_per_q[i], repair_bounds,
+                        groups=active_purpose_groups + quarter_groups)
+                    if repaired_structure is None:
+                        break
+                    current = repaired_structure
+                return current
+
             # First repair the non-negotiable constraints on their own.  An
             # earlier implementation mixed optional structure groups into
             # this MILP.  If a cap could not coexist with a valid hard-bound
@@ -1735,19 +1753,33 @@ def write_calibration_report(
                 else:
                     counts = repaired
             if not hard_repair_ok and purpose_groups:
-                # The solver's exact fractional margin can still become
-                # impossible after integer sensor reconciliation. Re-run the
-                # non-negotiable count/bound repair without that behavioural
-                # prior; report the mix relaxation rather than losing a real
-                # sensor fit or assigning a false purpose.
-                purpose_groups = []
-                purpose_margin_enforced = False
+                # A joint repair starts from the directly rounded entropy
+                # solution.  On a large, dispersed route pool that vector can
+                # be a poor MILP neighbourhood even when an exact integer
+                # purpose margin exists (the live 2025 baseline exposed four
+                # such quarters).  First establish a count/bound-valid integer
+                # vector, then retry the same exact purpose groups from that
+                # much better starting point.  This is not a relaxed model:
+                # both passes retain every non-negotiable constraint.
+                exact_purpose_groups = purpose_groups
                 repaired = repair_integer_bounds(
                     counts, shapes, targets_per_q[i], repair_bounds,
                     measurement_tol_mult=_rung_measurement_tol_mult(rung))
                 hard_repair_ok = repaired is not None
                 if repaired is not None:
                     counts = repaired
+                    purpose_repaired = repair_integer_bounds(
+                        counts, shapes, targets_per_q[i], repair_bounds,
+                        groups=exact_purpose_groups,
+                        measurement_tol_mult=_rung_measurement_tol_mult(rung))
+                    if purpose_repaired is not None:
+                        counts = purpose_repaired
+                    else:
+                        purpose_groups = []
+                        purpose_margin_enforced = False
+                else:
+                    purpose_groups = []
+                    purpose_margin_enforced = False
 
             # Then improve only overflowing groups.  Keep repair_bounds in
             # the optional pass so moving a vehicle to satisfy a cap cannot
@@ -1755,16 +1787,30 @@ def write_calibration_report(
             # when the optional cap is infeasible.  A repaired group may push
             # another group over its cap, hence the bounded active-set loop.
             if hard_repair_ok:
-                for _repair_pass in range(3):
-                    quarter_groups = overflowing_groups(counts)
-                    if not quarter_groups:
-                        break
-                    repaired = repair_integer_bounds(
-                        counts, shapes, targets_per_q[i], repair_bounds,
-                        groups=purpose_groups + quarter_groups)
-                    if repaired is None:
-                        break
-                    counts = repaired
+                counts = apply_structure_repairs(counts, purpose_groups)
+
+            # The optional structure pass can itself provide the feasible
+            # integer neighbourhood the exact purpose repair needed.  The
+            # audited baseline did exactly that: all four relaxed quarters
+            # became purpose-feasible when retried from their finally
+            # published count/structure-valid vectors.  Make that last
+            # opportunity explicit before declaring a real mix relaxation.
+            if (hard_repair_ok and requested_purpose_groups
+                    and not purpose_margin_enforced):
+                _purpose_target, final_purpose_groups = purpose_quota_groups(
+                    shapes, purpose_mix, int(counts.sum()))
+                purpose_repaired = repair_integer_bounds(
+                    counts, shapes, targets_per_q[i], repair_bounds,
+                    groups=final_purpose_groups,
+                    measurement_tol_mult=_rung_measurement_tol_mult(rung))
+                if purpose_repaired is not None:
+                    counts = purpose_repaired
+                    purpose_groups = final_purpose_groups
+                    purpose_margin_enforced = True
+                    # Purpose reconciliation can move routes back into an
+                    # optional structure group. Reapply the same best-effort
+                    # guard while retaining the now-exact purpose groups.
+                    counts = apply_structure_repairs(counts, purpose_groups)
             # Spread ALL vehicles in this quarter across its full 15-minute
             # interval. The old per-route schedule put every one-vehicle
             # route at exactly :07:30, so thousands of independent routes
