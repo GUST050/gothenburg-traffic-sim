@@ -66,16 +66,20 @@ separate:
   to make the tree look tidy.
 - **Reusable implementation lives in `traffic_sim/`.** Cross-cutting
   contracts and fingerprints are in `traffic_sim/core/`; sensor intake is in
-  `traffic_sim/intake/`; demand cache code is in `traffic_sim/demand/`;
-  SUMO runtime, metadata, network audits and disruption metrics are in
-  `traffic_sim/simulation/`; run/release bookkeeping is in `traffic_sim/ops/`.
+  `traffic_sim/intake/`; demand calibration, the PFE solver/kernel and cache
+  code are in `traffic_sim/demand/`; held-out validation and confidence
+  reporting are in `traffic_sim/confidence/`; SUMO runtime, metadata, network
+  audits and disruption metrics are in `traffic_sim/simulation/`; run/release
+  bookkeeping is in `traffic_sim/ops/`.
 
 The former root modules (`study_contracts.py`, `pipeline_fingerprint.py`,
 `sensor_registry.py`, `candidate_cache.py`, `closure_metrics.py`,
 `sumo_network_metadata.py`, `sumo_runtime.py`, `network_audit.py`,
-`release_registry.py` and `runs.py`) are now thin compatibility imports. They
-contain no second implementation. This preserves existing scripts, tests and
-external command examples while giving new code one canonical import location.
+`release_registry.py`, `runs.py`, `pfe.py`, `pfe_kernel.py`,
+`validate_sim.py` and `validation_report.py`) are now thin compatibility
+imports or CLI wrappers. They contain no second implementation. This preserves
+existing scripts, tests and external command examples while giving new code
+one canonical import location.
 New reusable code must be added to `traffic_sim/` first; a root shim is added
 only when an existing public command or import still requires it. Fingerprint
 maps hash the canonical package files, so changing an implementation invalidates

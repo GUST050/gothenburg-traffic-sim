@@ -578,7 +578,7 @@ def main() -> None:
 
     if args.engine == "pfe":
         # ── The full hierarchy: hard counts + conservation bounds + priors ────
-        import pfe
+        from traffic_sim.demand import pfe
         # Structural (see STRUCTURAL_REFERENCE_DATE) — always the real 2025
         # reference date, even when simulating a --source forecast date.
         bounds_data, priors_data = timed(
@@ -859,7 +859,8 @@ def main() -> None:
         "sensor_registry_data": Path("data_in/sensors.json"),
         "build_candidates": Path("build_candidates.py"),
         "build_sumo_net": Path("build_sumo_net.py"),
-        "pfe": Path("pfe.py"),
+        "pfe": Path("traffic_sim/demand/pfe.py"),
+        "pfe_kernel": Path("traffic_sim/demand/pfe_kernel.py"),
         "candidate_cache": Path("traffic_sim/demand/cache.py"),
         "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
         "assignment_priors": Path("assignment_priors.py"),

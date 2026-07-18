@@ -332,10 +332,11 @@ does not preserve obsolete intermediate proposals as separate instructions.
   so stale scenario sets cannot be mistaken for the requested calibration.
 - Shared runtime code has been reorganized under `traffic_sim/` without
   breaking stable root CLI paths. Contracts, fingerprints, sensor intake,
-  demand caching, SUMO metadata/runtime, disruption metrics, and run/release
-  registries now each have one canonical implementation. Root compatibility
-  imports contain no duplicate logic, and demand cache/build fingerprints hash
-  the canonical package files.
+  demand calibration/PFE, held-out confidence validation, SUMO
+  metadata/runtime, disruption metrics, and run/release registries now each
+  have one canonical implementation. Root compatibility imports and CLI
+  wrappers contain no duplicate logic, and demand cache/build fingerprints
+  hash the canonical package files.
 - The browser supports focused normal, closure, closure-timing and synthetic
   signal-study workflows. Signal output already shows numeric timing changes
   with provenance.

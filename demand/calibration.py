@@ -16,7 +16,7 @@ import os
 import time
 from pathlib import Path
 
-import pfe
+from traffic_sim.demand import pfe
 from demand.structure import (GEO_PATH, load_edge_geometry,
                               structure_groups_for_shapes)
 
@@ -90,7 +90,7 @@ def _run_pfe_interval_job(job: dict):
     Structure preservation is pfe.solve_interval_with_structure_guard's
     two-pass policy — shared with validate_sim's LOSO workers by design.
     """
-    import pfe
+    from traffic_sim.demand import pfe
 
     if (_PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None or
             _PFE_PAR_VARIANT_INPUTS is None or _PFE_PAR_PURPOSE_MIXES is None):
@@ -127,7 +127,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     activity-purpose margin after route validity filtering while retaining
     the survivor mix for through/external categories.
     """
-    import pfe
+    from traffic_sim.demand import pfe
 
     global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
     global _PFE_PAR_VARIANT_INPUTS, _PFE_PAR_PURPOSE_MIXES

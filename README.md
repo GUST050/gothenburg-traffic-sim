@@ -108,8 +108,9 @@ make scenario    # baseline + a Skånegatan closure, 3 Monte Carlo seeds each
 python3 run_scenario.py --close <edgeId>
 ```
 
-Demand calibration is a 4-level hierarchy (`pfe.py`, `observability.py`,
-`assignment_priors.py`, `prior_flows.py`): hard measured counts, mathematical
+Demand calibration is a 4-level hierarchy
+(`traffic_sim/demand/pfe.py`, `observability.py`, `assignment_priors.py`,
+`prior_flows.py`): hard measured counts, mathematical
 conservation bounds (junction/corridor), a structural gravity/stochastic-
 multipath assignment field (Dial-style, the missing "4th step" of the
 classic 4-step transport model), and entropy-maximising route-flow solving
@@ -208,7 +209,8 @@ cross-validated — with a single year of data each holiday is observed once.
 traffic_sim/
   core/                 shared contracts and content fingerprints
   intake/               sensor registry and data-intake helpers
-  demand/               candidate-artifact cache
+  demand/               PFE solver/kernel and candidate-artifact cache
+  confidence/           held-out validation and validation reporting
   simulation/           SUMO runtime, network metadata/audits, disruption metrics
   ops/                  run and release registries
 
@@ -224,8 +226,10 @@ run_scenario.py         baseline/closure Monte Carlo runs
 serve.py                static web + optional local API
 observability.py,       demand-estimation stages (root CLI modules)
 assignment_priors.py,
-prior_flows.py, pfe.py
-validate_sim.py         leave-one-station-out validation
+prior_flows.py
+pfe.py, pfe_kernel.py   compatibility imports for traffic_sim/demand/
+validate_sim.py         stable CLI wrapper for traffic_sim/confidence/loso.py
+validation_report.py    stable CLI wrapper for traffic_sim/confidence/report.py
 dirsplit/               trained direction-split model package
 demand/                 demand model components and data contracts
 web/                    static Leaflet browser runtime
@@ -238,7 +242,7 @@ ARCHITECTURE.md         structural source of truth
 IMPROVEMENT_PLAN.md     canonical improvement and delivery plan
 ```
 
-The ten former shared root modules remain compatibility imports pointing at
-`traffic_sim/`; they are intentionally not duplicate source. Run existing
+Former shared root modules remain compatibility imports or CLI wrappers
+pointing at `traffic_sim/`; they are intentionally not duplicate source. Run existing
 commands from the repository root so relative artifact paths and Makefile
 contracts remain deterministic.
