@@ -311,3 +311,11 @@ def rollback_release(*, root: Path = RELEASES_DIR) -> dict:
     if not pointer or not pointer.get("previous_release_id"):
         raise ValueError("no previous release is available for rollback")
     return activate_release(pointer["previous_release_id"], root=root)
+
+
+def rollback_golden_release(*, root: Path = RELEASES_DIR) -> dict:
+    """Rollback only to a predecessor that still passes every golden gate."""
+    pointer = active_release(root=root)
+    if not pointer or not pointer.get("previous_release_id"):
+        raise ValueError("no previous golden release is available for rollback")
+    return activate_golden_release(pointer["previous_release_id"], root=root)

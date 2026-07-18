@@ -139,7 +139,8 @@ subdirectories preserve same-named run manifests without collisions.
 Activation requires an explicit validation record and can be rolled back by a
 single pointer flip. Golden activation fails closed unless the full suite,
 browser/API smoke, peak-memory measurement, and rollback exercise are all
-recorded as passing.
+recorded as passing. Golden rollback revalidates the predecessor's complete
+bundle and gates before moving the pointer.
 
 **Direction & OD estimation.** The calibrated routes are aggregated into an
 origin–destination matrix over zones (inner-city sub-areas + eight compass

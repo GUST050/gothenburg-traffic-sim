@@ -5,6 +5,26 @@ import pytest
 import release_registry as rr
 
 
+def golden_validation():
+    return {
+        "status": "pass",
+        "cases": {case: {"status": "pass"} for case in rr.GOLDEN_CASES},
+        "acceptance_gates": {
+            gate: {"status": "pass"} for gate in rr.GOLDEN_ACCEPTANCE_GATES
+        },
+    }
+
+
+def create_validated_golden(release_id, tmp_path, root):
+    paths = {}
+    for case in rr.GOLDEN_CASES:
+        path = tmp_path / f"{release_id}-{case}.json"
+        path.write_text(json.dumps({"release": release_id, "case": case}))
+        paths[case] = path
+    rr.create_release(release_id, paths, root=root)
+    rr.mark_validated(release_id, golden_validation(), root=root)
+
+
 def test_release_is_content_addressed_and_can_be_activated_and_rolled_back(tmp_path):
     source = tmp_path / "case.json"
     source.write_text('{"ok": true}\n')
@@ -109,13 +129,7 @@ def test_golden_release_requires_all_cases_and_per_case_pass_status(tmp_path):
     rr.create_release("golden", paths, root=root)
     assert any("per-case validation" in error
                for error in rr.validate_golden_release("golden", root=root))
-    rr.mark_validated("golden", {
-        "status": "pass",
-        "cases": {case: {"status": "pass"} for case in rr.GOLDEN_CASES},
-        "acceptance_gates": {
-            gate: {"status": "pass"} for gate in rr.GOLDEN_ACCEPTANCE_GATES
-        },
-    }, root=root)
+    rr.mark_validated("golden", golden_validation(), root=root)
     assert rr.validate_golden_release("golden", root=root) == []
 
 
@@ -151,6 +165,26 @@ def test_golden_activation_refuses_incomplete_release(tmp_path):
     rr.mark_validated("r1", {}, root=root)
     with pytest.raises(ValueError, match="golden release validation"):
         rr.activate_golden_release("r1", root=root)
+
+
+def test_golden_rollback_revalidates_the_previous_release(tmp_path):
+    root = tmp_path / "releases"
+    create_validated_golden("r1", tmp_path, root)
+    create_validated_golden("r2", tmp_path, root)
+    rr.activate_golden_release("r1", root=root)
+    rr.activate_golden_release("r2", root=root)
+
+    rr.rollback_golden_release(root=root)
+
+    pointer = rr.active_release(root=root)
+    assert pointer["release_id"] == "r1"
+    assert pointer["previous_release_id"] == "r2"
+
+    r2_artifact = root / "r2" / "normal" / "r2-normal.json"
+    r2_artifact.write_text("tampered")
+    with pytest.raises(ValueError, match="golden release validation failed"):
+        rr.rollback_golden_release(root=root)
+    assert rr.active_release(root=root)["release_id"] == "r1"
 
 
 def test_release_rejects_duplicate_artifact_names_and_path_traversal(tmp_path):

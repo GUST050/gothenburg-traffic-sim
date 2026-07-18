@@ -2019,7 +2019,9 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    signal smoke. Release schema v2 stores each case in its own directory so
    same-named manifests cannot collide, and activation now fails closed unless
    the full suite, browser/API smoke, peak-memory measurement, and rollback
-   exercise are all explicitly passing.
+   exercise are all explicitly passing. Golden rollback revalidates the
+   predecessor's complete bundle and gates before flipping the pointer, so a
+   damaged former release cannot be restored merely because it was once active.
 
    Verified so far: **1 025 passed, 20 skipped**; release integrity has zero
    errors; the local API serves the expected 2025-09-16 demand signature,
