@@ -1816,8 +1816,8 @@ committed as one unit):
   directed snaps; intake fails closed on pending/expired/unapproved/changed
   records and build_data revalidates resolved snaps against the registry.
 - SUPERSEDED 2026-07-18 — `runs/releases/` was empty at this checkpoint.
-  `golden-2025-09-16-v1` is now staged as described in the dated status entry
-  below; it is not active while browser and rollback gates remain pending.
+  `golden-2025-09-16-v1` is now validated and active as described in the
+  dated status entry below.
 - Full suite on the dev machine 2026-07-16: **944 passed, 21 skipped**
   (~47 s).  Tests no longer rewrite the live `web/data/validation.json`
   (test_serve.py redirects the report path; found when suite runs churned
@@ -1839,8 +1839,9 @@ Status of the previously listed concrete changes:
    effect) and any bounded output correction; current measured residual is
    mean 2.07 / max ~10.7 veh per station-quarter at 100% GEH<5.  Then rerun
    temporal + LOSO on 2025-09-16 historical.
-5. OPEN — freeze the normal, closure and signal golden cases, including an
-   exact browser/API smoke result and a loopback-capable full-test result.
+5. DONE — normal, closure and bounded micro-signal cases are frozen under the
+   active golden release, including browser/API, memory, full-suite and
+   rollback evidence.
 
 ### Simulation realism pass (2026-07-17): findings and fixes
 
@@ -2011,8 +2012,8 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    This is temporal stability evidence, not a claim that every corridor is
    accurate.
 
-8. STAGED 2026-07-18 — **the first golden release exists but is deliberately
-   not active.** `golden-2025-09-16-v1` contains 22 integrity-checked
+8. CLOSED 2026-07-18 — **the first golden release is validated and active.**
+   `golden-2025-09-16-v1` contains 22 integrity-checked
    artifacts: the normal and Skånegatan scenario/trajectory pairs, all three
    q10/q50/q90 normal and closure route files, producer manifests,
    demand/network/sensor/validation evidence, and a fresh bounded microscopic
@@ -2023,17 +2024,25 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    predecessor's complete bundle and gates before flipping the pointer, so a
    damaged former release cannot be restored merely because it was once active.
 
-   Verified so far: **1 025 passed, 20 skipped**; release integrity has zero
+   Final gate: **1 026 passed, 20 skipped**; release integrity has zero
    errors; the local API serves the expected 2025-09-16 demand signature,
    two-scenario manifest, clean closure integrity and PASS validation report.
    Isolated reruns are semantically identical to the frozen normal, closure and
    signal artifacts, with byte-identical representative trajectories. Peak
    RSS: normal **357 040 128 B**, closure **353 927 168 B**, bounded micro
-   signal **222 052 352 B**. The actual browser backend was unavailable in
-   this session, so the browser half remains pending rather than being replaced
-   by a source-level or HTTP-only approximation. A real pointer rollback also
-   remains pending because no validated predecessor release exists. The
-   registry currently reports both failures and refuses activation.
+   signal **222 052 352 B**. Manual Chrome validation loaded the real Scenario
+   workspace and exposed one red console error: Leaflet's source-map request
+   was blocked by the CSP. `serve.py` now narrowly permits the already-trusted
+   pinned `unpkg.com` origin in `connect-src`; the security regression test
+   passes and Gustav confirmed a clean Console after reload.
+
+   The real registry pointer was exercised, not only a temporary unit-test
+   root: ordinary bootstrap A→B→A first established the initial predecessor,
+   then two complete golden clones were activated A→B and
+   `rollback_golden_release()` restored A after revalidating its complete
+   bundle/gates. The intended release was then activated. `latest.json` points
+   to `golden-2025-09-16-v1`, its previous pointer is the validated bootstrap
+   A, and both integrity and golden validation return zero errors.
 
 Honest status note: the 45 s / 20% detour constants are
 literature-plausible route-choice bounds, chosen from the measured
