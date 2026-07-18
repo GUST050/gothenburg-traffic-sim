@@ -129,16 +129,18 @@ def create_release(
             if not case or Path(case).name != case:
                 raise ValueError(f"invalid case name: {case!r}")
             artifacts = []
+            case_directory = directory / case
+            case_directory.mkdir()
             for src in _case_sources(source):
                 if not src.is_file():
                     raise FileNotFoundError(src)
-                dest = directory / src.name
+                dest = case_directory / src.name
                 if dest.exists():
                     raise ValueError(
                         f"case artifacts have duplicate filename: {src.name}")
                 shutil.copy2(src, dest)
                 artifacts.append({
-                    "file": dest.name,
+                    "file": str(Path(case) / dest.name),
                     "source_path": str(src),
                     "bytes": dest.stat().st_size,
                     "sha256": sha256_file(dest),
@@ -181,7 +183,7 @@ def validate_release(release_id: str, *, root: Path = RELEASES_DIR) -> list[str]
         for artifact in artifacts:
             filename = artifact.get("file", "")
             path = directory / filename
-            prefix = f"{case}/{filename}"
+            prefix = filename if "/" in filename else f"{case}/{filename}"
             if not path.is_file():
                 errors.append(f"{prefix}: missing")
                 continue

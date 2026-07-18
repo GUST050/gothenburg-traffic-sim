@@ -10,7 +10,7 @@ def test_release_is_content_addressed_and_can_be_activated_and_rolled_back(tmp_p
     source.write_text('{"ok": true}\n')
     manifest = rr.create_release("r1", {"normal": source}, root=tmp_path / "releases")
     assert manifest["status"] == "staged"
-    assert manifest["cases"]["normal"]["artifacts"][0]["file"] == "case.json"
+    assert manifest["cases"]["normal"]["artifacts"][0]["file"] == "normal/case.json"
     assert rr.validate_release("r1", root=tmp_path / "releases") == []
     rr.mark_validated("r1", {"all_gates": True}, root=tmp_path / "releases")
     rr.activate_release("r1", root=tmp_path / "releases")
@@ -32,7 +32,7 @@ def test_release_integrity_and_publication_gates(tmp_path):
     rr.create_release("r1", {"normal": source}, root=root)
     with pytest.raises(ValueError, match="validated"):
         rr.activate_release("r1", root=root)
-    artifact = root / "r1" / "case.json"
+    artifact = root / "r1" / "normal" / "case.json"
     artifact.write_text("tampered")
     assert rr.validate_release("r1", root=root)
     with pytest.raises(ValueError, match="integrity"):
@@ -51,9 +51,9 @@ def test_release_case_bundle_copies_and_validates_every_artifact(tmp_path):
 
     artifacts = manifest["cases"]["normal"]["artifacts"]
     assert [artifact["file"] for artifact in artifacts] == [
-        "scenario.json", "trajectory.json"]
+        "normal/scenario.json", "normal/trajectory.json"]
     assert rr.validate_release("r1", root=root) == []
-    (root / "r1" / "trajectory.json").write_text("changed")
+    (root / "r1" / "normal" / "trajectory.json").write_text("changed")
     assert rr.validate_release("r1", root=root) == [
         "normal/trajectory.json: size changed",
         "normal/trajectory.json: sha256 changed",
@@ -109,11 +109,9 @@ def test_golden_activation_refuses_incomplete_release(tmp_path):
 
 def test_release_rejects_duplicate_artifact_names_and_path_traversal(tmp_path):
     a = tmp_path / "a.json"
-    b = tmp_path / "b.json"
     a.write_text("a")
-    b.write_text("b")
     root = tmp_path / "releases"
     with pytest.raises(ValueError, match="duplicate filename"):
-        rr.create_release("r1", {"a": a, "b": a}, root=root)
+        rr.create_release("r1", {"normal": [a, a]}, root=root)
     with pytest.raises(ValueError, match="single path component"):
         rr.create_release("../r1", {"a": a}, root=root)
