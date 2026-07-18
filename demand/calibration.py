@@ -30,6 +30,11 @@ _PFE_PAR_ROUTE_COST = None
 _PFE_PAR_STRUCTURE_GROUPS = None
 _PFE_PAR_VARIANT_INPUTS = None
 _PFE_PAR_PURPOSE_MIXES = None
+_PFE_PAR_SOLUTIONS = None
+_PFE_PAR_RUNGS = None
+_PFE_PAR_STAGED_OUTPUTS = None
+_PFE_PAR_PREPARE_S = None
+_PFE_PAR_SOLVE_S = None
 
 
 def apply_activity_purpose_margin(
@@ -109,6 +114,45 @@ def _run_pfe_interval_job(job: dict):
     return suffix, key, quarter, sol, rung
 
 
+def _write_pfe_variant_report_job(job: tuple[str, str]):
+    """Publish one already-solved uncertainty variant in a fork worker.
+
+    q50/q10/q90 have disjoint output files and immutable inherited inputs.
+    Writing them serially consumed more wall time than the interval solver on
+    multi-day builds (five-day measurement: 1 813 s publish vs 1 403 s solve).
+    Forking only this independent final phase preserves byte order inside each
+    file while avoiding copies of the large solution/shape payload.
+    """
+    suffix, key = job
+    if any(value is None for value in (
+            _PFE_PAR_SHAPES, _PFE_PAR_VARIANT_INPUTS, _PFE_PAR_PURPOSE_MIXES,
+            _PFE_PAR_SOLUTIONS, _PFE_PAR_RUNGS, _PFE_PAR_STAGED_OUTPUTS,
+            _PFE_PAR_PREPARE_S, _PFE_PAR_SOLVE_S)):
+        raise RuntimeError("PFE publish worker was not initialized")
+    data = _PFE_PAR_VARIANT_INPUTS[suffix]
+    started = time.perf_counter()
+    report = pfe.write_calibration_report(
+        _PFE_PAR_SHAPES, _PFE_PAR_STAGED_OUTPUTS[suffix],
+        data["targets"], _PFE_PAR_SOLUTIONS[suffix],
+        data["hard_bounds_pq"], _PFE_PAR_RUNGS[suffix],
+        enforce_integer_bounds=True,
+        structure_groups=[
+            (members, cap_share)
+            for _name, members, cap_share in (_PFE_PAR_STRUCTURE_GROUPS or [])
+        ],
+        edge_length_m=(
+            load_edge_geometry()[2] if GEO_PATH.exists() else None),
+        purpose_mixes_per_q=_PFE_PAR_PURPOSE_MIXES[suffix],
+    )
+    publish_s = time.perf_counter() - started
+    report["timings_s"] = {
+        "prepare_shared": round(_PFE_PAR_PREPARE_S, 3),
+        "interval_solving_shared": round(_PFE_PAR_SOLVE_S, 3),
+        "route_publish": round(publish_s, 3),
+    }
+    return suffix, key, report, publish_s
+
+
 def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, str]],
                                    variant_inputs: dict[str, dict],
                                    max_workers: int | None = None,
@@ -131,6 +175,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
 
     global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
     global _PFE_PAR_VARIANT_INPUTS, _PFE_PAR_PURPOSE_MIXES
+    global _PFE_PAR_SOLUTIONS, _PFE_PAR_RUNGS, _PFE_PAR_STAGED_OUTPUTS
+    global _PFE_PAR_PREPARE_S, _PFE_PAR_SOLVE_S
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
@@ -188,23 +234,33 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         solve_s = time.perf_counter() - solve_started
         print(f"  timing PFE interval solving: {solve_s:.1f}s")
 
+        _PFE_PAR_SOLUTIONS = solutions
+        _PFE_PAR_RUNGS = rungs
+        _PFE_PAR_STAGED_OUTPUTS = staged_outputs
+        _PFE_PAR_PREPARE_S = prepare_s
+        _PFE_PAR_SOLVE_S = solve_s
         reports = {}
+        publish_workers = min(len(variants), n_workers)
+        if publish_workers == 1:
+            published = [
+                _write_pfe_variant_report_job(variant) for variant in variants
+            ]
+        else:
+            publish_started = time.perf_counter()
+            print(f"  PFE route publish: {len(variants)} independent variants "
+                  f"in parallel ({publish_workers} workers)")
+            with mp.get_context("fork").Pool(processes=publish_workers) as pool:
+                published = list(pool.imap_unordered(
+                    _write_pfe_variant_report_job, variants))
+            print(f"  timing PFE parallel route publish wall: "
+                  f"{time.perf_counter() - publish_started:.1f}s")
+        published_by_suffix = {suffix: (key, report, publish_s)
+                               for suffix, key, report, publish_s in published}
         for suffix, key in variants:
-            data = variant_inputs[suffix]
-            report_started = time.perf_counter()
-            reports[suffix] = pfe.write_calibration_report(
-                shapes, staged_outputs[suffix], data["targets"], solutions[suffix],
-                data["hard_bounds_pq"], rungs[suffix], enforce_integer_bounds=True,
-                structure_groups=[(members, cap_share) for _n, members, cap_share
-                                  in (_PFE_PAR_STRUCTURE_GROUPS or [])],
-                edge_length_m=load_edge_geometry()[2] if GEO_PATH.exists() else None,
-                purpose_mixes_per_q=_PFE_PAR_PURPOSE_MIXES[suffix])
-            publish_s = time.perf_counter() - report_started
-            reports[suffix]["timings_s"] = {
-                "prepare_shared": round(prepare_s, 3),
-                "interval_solving_shared": round(solve_s, 3),
-                "route_publish": round(publish_s, 3),
-            }
+            published_key, report, publish_s = published_by_suffix[suffix]
+            if published_key != key:
+                raise RuntimeError("PFE publish worker returned wrong variant")
+            reports[suffix] = report
             print(f"  timing PFE route publish {key}: {publish_s:.1f}s")
         rejected = [
             key for suffix, key in variants
@@ -232,6 +288,11 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
                 }
         return reports
     finally:
+        _PFE_PAR_SOLUTIONS = None
+        _PFE_PAR_RUNGS = None
+        _PFE_PAR_STAGED_OUTPUTS = None
+        _PFE_PAR_PREPARE_S = None
+        _PFE_PAR_SOLVE_S = None
         for staged in staged_outputs.values():
             staged.unlink(missing_ok=True)
             _agent_path_for(staged).unlink(missing_ok=True)
