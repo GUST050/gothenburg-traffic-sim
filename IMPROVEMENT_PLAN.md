@@ -1815,8 +1815,9 @@ committed as one unit):
 - `data_in/sensors.json` has six catalogue-verified records with approved
   directed snaps; intake fails closed on pending/expired/unapproved/changed
   records and build_data revalidates resolved snaps against the registry.
-- `runs/releases/` is still empty — the golden freeze (2025-09-16
-  historical + Skånegatan closure + signal smoke) is the next block.
+- SUPERSEDED 2026-07-18 — `runs/releases/` was empty at this checkpoint.
+  `golden-2025-09-16-v1` is now staged as described in the dated status entry
+  below; it is not active while browser and rollback gates remain pending.
 - Full suite on the dev machine 2026-07-16: **944 passed, 21 skipped**
   (~47 s).  Tests no longer rewrite the live `web/data/validation.json`
   (test_serve.py redirects the report path; found when suite runs churned
@@ -2009,6 +2010,28 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    direction of 107 is 1.965, while the other four edges are 0.757–0.881.
    This is temporal stability evidence, not a claim that every corridor is
    accurate.
+
+8. STAGED 2026-07-18 — **the first golden release exists but is deliberately
+   not active.** `golden-2025-09-16-v1` contains 22 integrity-checked
+   artifacts: the normal and Skånegatan scenario/trajectory pairs, all three
+   q10/q50/q90 normal and closure route files, producer manifests,
+   demand/network/sensor/validation evidence, and a fresh bounded microscopic
+   signal smoke. Release schema v2 stores each case in its own directory so
+   same-named manifests cannot collide, and activation now fails closed unless
+   the full suite, browser/API smoke, peak-memory measurement, and rollback
+   exercise are all explicitly passing.
+
+   Verified so far: **1 025 passed, 20 skipped**; release integrity has zero
+   errors; the local API serves the expected 2025-09-16 demand signature,
+   two-scenario manifest, clean closure integrity and PASS validation report.
+   Isolated reruns are semantically identical to the frozen normal, closure and
+   signal artifacts, with byte-identical representative trajectories. Peak
+   RSS: normal **357 040 128 B**, closure **353 927 168 B**, bounded micro
+   signal **222 052 352 B**. The actual browser backend was unavailable in
+   this session, so the browser half remains pending rather than being replaced
+   by a source-level or HTTP-only approximation. A real pointer rollback also
+   remains pending because no validated predecessor release exists. The
+   registry currently reports both failures and refuses activation.
 
 Honest status note: the 45 s / 20% detour constants are
 literature-plausible route-choice bounds, chosen from the measured
