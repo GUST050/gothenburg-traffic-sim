@@ -137,7 +137,9 @@ Each normal/closure/signal case is an integrity-checked bundle, so its scenario,
 trajectory and exact route inputs cannot drift independently. Case-specific
 subdirectories preserve same-named run manifests without collisions.
 Activation requires an explicit validation record and can be rolled back by a
-single pointer flip.
+single pointer flip. Golden activation fails closed unless the full suite,
+browser/API smoke, peak-memory measurement, and rollback exercise are all
+recorded as passing.
 
 **Direction & OD estimation.** The calibrated routes are aggregated into an
 origin–destination matrix over zones (inner-city sub-areas + eight compass

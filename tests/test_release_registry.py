@@ -39,6 +39,24 @@ def test_release_integrity_and_publication_gates(tmp_path):
         rr.mark_validated("r1", {}, root=root)
 
 
+def test_staged_validation_progress_does_not_validate_release(tmp_path):
+    source = tmp_path / "case.json"
+    source.write_text("payload")
+    root = tmp_path / "releases"
+    rr.create_release("r1", {"normal": source}, root=root)
+
+    manifest = rr.update_staged_validation(
+        "r1", {"status": "pending", "measured": True}, root=root)
+
+    assert manifest["status"] == "staged"
+    assert manifest["validation"]["measured"] is True
+    with pytest.raises(ValueError, match="validated"):
+        rr.activate_release("r1", root=root)
+    rr.mark_validated("r1", {"status": "pass"}, root=root)
+    with pytest.raises(ValueError, match="only while staged"):
+        rr.update_staged_validation("r1", {}, root=root)
+
+
 def test_release_case_bundle_copies_and_validates_every_artifact(tmp_path):
     scenario = tmp_path / "scenario.json"
     trajectory = tmp_path / "trajectory.json"
@@ -92,9 +110,37 @@ def test_golden_release_requires_all_cases_and_per_case_pass_status(tmp_path):
     assert any("per-case validation" in error
                for error in rr.validate_golden_release("golden", root=root))
     rr.mark_validated("golden", {
-        "cases": {case: {"status": "pass"} for case in rr.GOLDEN_CASES}
+        "status": "pass",
+        "cases": {case: {"status": "pass"} for case in rr.GOLDEN_CASES},
+        "acceptance_gates": {
+            gate: {"status": "pass"} for gate in rr.GOLDEN_ACCEPTANCE_GATES
+        },
     }, root=root)
     assert rr.validate_golden_release("golden", root=root) == []
+
+
+def test_golden_release_rejects_pending_acceptance_gate(tmp_path):
+    root = tmp_path / "releases"
+    paths = {}
+    for case in rr.GOLDEN_CASES:
+        path = tmp_path / f"{case}.json"
+        path.write_text(json.dumps({"case": case}))
+        paths[case] = path
+    validation = {
+        "status": "pending_acceptance_gates",
+        "cases": {case: {"status": "pass"} for case in rr.GOLDEN_CASES},
+        "acceptance_gates": {
+            gate: {"status": "pass"} for gate in rr.GOLDEN_ACCEPTANCE_GATES
+        },
+    }
+    validation["acceptance_gates"]["browser_api_smoke"]["status"] = "pending"
+    rr.create_release("golden", paths, validation=validation, root=root)
+
+    errors = rr.validate_golden_release("golden", root=root)
+
+    assert "golden release validation status is not passing" in errors
+    assert ("golden acceptance gate is not passing: browser_api_smoke"
+            in errors)
 
 
 def test_golden_activation_refuses_incomplete_release(tmp_path):

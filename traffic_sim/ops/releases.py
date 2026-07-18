@@ -32,6 +32,12 @@ from pathlib import Path
 RELEASES_DIR = Path("runs") / "releases"
 SCHEMA_VERSION = 2
 GOLDEN_CASES = ("normal", "closure", "signal")
+GOLDEN_ACCEPTANCE_GATES = (
+    "full_suite",
+    "browser_api_smoke",
+    "peak_memory",
+    "rollback_exercise",
+)
 
 
 def _now() -> str:
@@ -196,7 +202,9 @@ def validate_release(release_id: str, *, root: Path = RELEASES_DIR) -> list[str]
 
 def validate_golden_release(release_id: str, *, root: Path = RELEASES_DIR,
                             required_cases: tuple[str, ...] = GOLDEN_CASES,
-                            require_case_pass: bool = True) -> list[str]:
+                            require_case_pass: bool = True,
+                            required_acceptance_gates: tuple[str, ...] =
+                            GOLDEN_ACCEPTANCE_GATES) -> list[str]:
     """Validate the complete reference-release contract.
 
     ``validate_release`` proves only file integrity.  A golden release also
@@ -221,6 +229,18 @@ def validate_golden_release(release_id: str, *, root: Path = RELEASES_DIR,
                     errors.append(f"golden case lacks validation: {case}")
                 elif case_validation[case].get("status") != "pass":
                     errors.append(f"golden case is not passing: {case}")
+    if validation.get("status") != "pass":
+        errors.append("golden release validation status is not passing")
+    acceptance = validation.get("acceptance_gates")
+    if not isinstance(acceptance, dict):
+        errors.append("golden release lacks acceptance-gate records")
+    else:
+        for gate in required_acceptance_gates:
+            record = acceptance.get(gate)
+            if not isinstance(record, dict):
+                errors.append(f"golden acceptance gate is missing: {gate}")
+            elif record.get("status") != "pass":
+                errors.append(f"golden acceptance gate is not passing: {gate}")
     return errors
 
 
@@ -259,6 +279,21 @@ def mark_validated(release_id: str, validation: dict, *,
     manifest["status"] = "validated"
     manifest["validated_at"] = _now()
     manifest["validation"] = validation
+    _atomic_json(release_path(release_id, root) / "manifest.json", manifest)
+    return manifest
+
+
+def update_staged_validation(release_id: str, validation: dict, *,
+                             root: Path = RELEASES_DIR) -> dict:
+    """Atomically record gate progress without making a release activatable."""
+    manifest = load_release(release_id, root=root)
+    if manifest.get("status") != "staged":
+        raise ValueError("validation progress can be updated only while staged")
+    errors = validate_release(release_id, root=root)
+    if errors:
+        raise ValueError("cannot update release validation: integrity check failed")
+    manifest["validation"] = validation
+    manifest["validation_updated_at"] = _now()
     _atomic_json(release_path(release_id, root) / "manifest.json", manifest)
     return manifest
 

@@ -106,6 +106,9 @@ same-named producer manifests without collisions. It must not freeze a scenario
 JSON while leaving referenced dependencies mutable. Neither demand nor scenario
 runs may discover release inputs by globbing the shared `sumo/` or
 `web/data/scenarios/` directories.
+Golden activation additionally requires passing case records plus explicit
+full-suite, browser/API, peak-memory and rollback gates; a staged release with a
+pending gate is not valid merely because its copied files are intact.
 
 The domain packages `demand/` and `dirsplit/` remain separate because they are
 model-specific pipelines with their own data contracts. `web/` is the browser
