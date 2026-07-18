@@ -132,9 +132,11 @@ vehicles as hard disqualifying guards — GEH (sensor-fit) is deliberately
 Every SUMO network build also writes `sumo/network_audit.json`, a provenance
 sidecar showing imported versus defaulted speed/lane values, movement and
 restriction tags, roundabouts, and the TLS membership produced by netconvert.
-Golden artifacts can be staged and activated through `release_registry.py`;
-activation requires an explicit validation record and can be rolled back by a
-single pointer flip.
+Golden artifacts can be staged and activated through `release_registry.py`.
+Each normal/closure/signal case is an integrity-checked bundle, so its scenario,
+trajectory and exact route inputs cannot drift independently. Activation
+requires an explicit validation record and can be rolled back by a single
+pointer flip.
 
 **Direction & OD estimation.** The calibrated routes are aggregated into an
 origin–destination matrix over zones (inner-city sub-areas + eight compass

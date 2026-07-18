@@ -99,9 +99,12 @@ failed replacement therefore leaves the previous demand/scenario release
 coherent and serving.
 
 Golden releases extend that same registry under `runs/releases/`; they copy
-only explicitly named case artifacts and activate through one atomic pointer.
-Neither demand nor scenario runs may discover release inputs by globbing the
-shared `sumo/` or `web/data/scenarios/` directories.
+only explicitly named case-artifact bundles and activate through one atomic
+pointer. A normal/closure bundle keeps its scenario, representative trajectory
+and exact route inputs under one integrity gate; it must not freeze a scenario
+JSON while leaving referenced dependencies mutable. Neither demand nor
+scenario runs may discover release inputs by globbing the shared `sumo/` or
+`web/data/scenarios/` directories.
 
 The domain packages `demand/` and `dirsplit/` remain separate because they are
 model-specific pipelines with their own data contracts. `web/` is the browser

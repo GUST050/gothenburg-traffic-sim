@@ -10,6 +10,7 @@ def test_release_is_content_addressed_and_can_be_activated_and_rolled_back(tmp_p
     source.write_text('{"ok": true}\n')
     manifest = rr.create_release("r1", {"normal": source}, root=tmp_path / "releases")
     assert manifest["status"] == "staged"
+    assert manifest["cases"]["normal"]["artifacts"][0]["file"] == "case.json"
     assert rr.validate_release("r1", root=tmp_path / "releases") == []
     rr.mark_validated("r1", {"all_gates": True}, root=tmp_path / "releases")
     rr.activate_release("r1", root=tmp_path / "releases")
@@ -36,6 +37,48 @@ def test_release_integrity_and_publication_gates(tmp_path):
     assert rr.validate_release("r1", root=root)
     with pytest.raises(ValueError, match="integrity"):
         rr.mark_validated("r1", {}, root=root)
+
+
+def test_release_case_bundle_copies_and_validates_every_artifact(tmp_path):
+    scenario = tmp_path / "scenario.json"
+    trajectory = tmp_path / "trajectory.json"
+    scenario.write_text("scenario")
+    trajectory.write_text("trajectory")
+    root = tmp_path / "releases"
+
+    manifest = rr.create_release(
+        "r1", {"normal": [scenario, trajectory]}, root=root)
+
+    artifacts = manifest["cases"]["normal"]["artifacts"]
+    assert [artifact["file"] for artifact in artifacts] == [
+        "scenario.json", "trajectory.json"]
+    assert rr.validate_release("r1", root=root) == []
+    (root / "r1" / "trajectory.json").write_text("changed")
+    assert rr.validate_release("r1", root=root) == [
+        "normal/trajectory.json: size changed",
+        "normal/trajectory.json: sha256 changed",
+    ]
+
+
+def test_release_validation_accepts_legacy_single_file_manifest(tmp_path):
+    root = tmp_path / "releases"
+    directory = root / "legacy"
+    directory.mkdir(parents=True)
+    artifact = directory / "case.json"
+    artifact.write_text("legacy")
+    (directory / "manifest.json").write_text(json.dumps({
+        "schema_version": 1,
+        "release_id": "legacy",
+        "cases": {
+            "normal": {
+                "file": artifact.name,
+                "bytes": artifact.stat().st_size,
+                "sha256": rr.sha256_file(artifact),
+            }
+        },
+    }))
+
+    assert rr.validate_release("legacy", root=root) == []
 
 
 def test_golden_release_requires_all_cases_and_per_case_pass_status(tmp_path):

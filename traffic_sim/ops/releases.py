@@ -21,14 +21,16 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterable
 from datetime import datetime, timezone
+from os import PathLike
 from pathlib import Path
 
 # Releases extend the immutable run registry instead of creating a second
 # top-level artifact tree.  Callers may still pass an explicit root in tests
 # or for an isolated staging area.
 RELEASES_DIR = Path("runs") / "releases"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 GOLDEN_CASES = ("normal", "closure", "signal")
 
 
@@ -72,14 +74,42 @@ def release_path(release_id: str, root: Path = RELEASES_DIR) -> Path:
     return Path(root) / _safe_release_id(release_id)
 
 
-def create_release(release_id: str, cases: dict[str, Path], *,
+def _case_sources(source: Path | str | PathLike[str] |
+                  Iterable[Path | str | PathLike[str]]) -> list[Path]:
+    """Normalize one case's artifact bundle while keeping the v1 API valid."""
+    if isinstance(source, (str, PathLike)):
+        sources = [Path(source)]
+    else:
+        sources = [Path(path) for path in source]
+    if not sources:
+        raise ValueError("release case artifact bundle must not be empty")
+    return sources
+
+
+def _case_artifacts(entry: dict) -> list[dict]:
+    """Read schema-v2 bundles and legacy schema-v1 single-file entries."""
+    artifacts = entry.get("artifacts")
+    if isinstance(artifacts, list):
+        return artifacts
+    if "file" in entry:
+        return [entry]
+    return []
+
+
+def create_release(
+        release_id: str,
+        cases: dict[str, Path | str | PathLike[str] |
+                    Iterable[Path | str | PathLike[str]]], *,
                    validation: dict | None = None,
                    provenance: dict | None = None,
                    root: Path = RELEASES_DIR) -> dict:
     """Stage an immutable release from finished artifacts.
 
     ``cases`` maps a stable case name (``normal``, ``closure``, ``signal``)
-    to an existing artifact.  The returned manifest is initially ``staged``;
+    to one existing artifact or an iterable forming an artifact bundle.  A
+    bundle keeps a scenario, its trajectory, and its exact route inputs under
+    the same integrity gate instead of freezing a JSON file whose dependencies
+    remain mutable elsewhere.  The returned manifest is initially ``staged``;
     set ``validated`` only after the caller has run all golden health gates.
     Existing release IDs are rejected instead of overwritten.
     """
@@ -98,19 +128,22 @@ def create_release(release_id: str, cases: dict[str, Path], *,
         for case, source in cases.items():
             if not case or Path(case).name != case:
                 raise ValueError(f"invalid case name: {case!r}")
-            src = Path(source)
-            if not src.is_file():
-                raise FileNotFoundError(src)
-            dest = directory / src.name
-            if dest.exists():
-                raise ValueError(f"case artifacts have duplicate filename: {src.name}")
-            shutil.copy2(src, dest)
-            entries[case] = {
-                "file": dest.name,
-                "source_path": str(src),
-                "bytes": dest.stat().st_size,
-                "sha256": sha256_file(dest),
-            }
+            artifacts = []
+            for src in _case_sources(source):
+                if not src.is_file():
+                    raise FileNotFoundError(src)
+                dest = directory / src.name
+                if dest.exists():
+                    raise ValueError(
+                        f"case artifacts have duplicate filename: {src.name}")
+                shutil.copy2(src, dest)
+                artifacts.append({
+                    "file": dest.name,
+                    "source_path": str(src),
+                    "bytes": dest.stat().st_size,
+                    "sha256": sha256_file(dest),
+                })
+            entries[case] = {"artifacts": artifacts}
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "release_id": rid,
@@ -141,14 +174,21 @@ def validate_release(release_id: str, *, root: Path = RELEASES_DIR) -> list[str]
     errors = []
     directory = release_path(release_id, root)
     for case, entry in manifest.get("cases", {}).items():
-        path = directory / entry.get("file", "")
-        if not path.is_file():
-            errors.append(f"{case}: missing {entry.get('file')!r}")
+        artifacts = _case_artifacts(entry)
+        if not artifacts:
+            errors.append(f"{case}: no artifacts recorded")
             continue
-        if path.stat().st_size != entry.get("bytes"):
-            errors.append(f"{case}: size changed")
-        if sha256_file(path) != entry.get("sha256"):
-            errors.append(f"{case}: sha256 changed")
+        for artifact in artifacts:
+            filename = artifact.get("file", "")
+            path = directory / filename
+            prefix = f"{case}/{filename}"
+            if not path.is_file():
+                errors.append(f"{prefix}: missing")
+                continue
+            if path.stat().st_size != artifact.get("bytes"):
+                errors.append(f"{prefix}: size changed")
+            if sha256_file(path) != artifact.get("sha256"):
+                errors.append(f"{prefix}: sha256 changed")
     return errors
 
 
