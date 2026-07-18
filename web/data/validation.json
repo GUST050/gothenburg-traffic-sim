@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "generated_at": "2026-07-17T20:01:11Z",
+ "generated_at": "2026-07-18T09:25:18Z",
  "demand_window": "2025-09-16",
  "demand_source": "historical",
  "overall": "warn",
@@ -9,58 +9,58 @@
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 21664,
+   "vehicles": 21656,
    "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
   },
   "structure": {
    "status": "pass",
    "flags": [],
-   "dest_within_200m_pct": 2.7,
+   "dest_within_200m_pct": 3.6,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0076,
-    0.5681,
-    0.4243
+    0.0118,
+    0.7809,
+    0.2073
    ],
-   "trip_length_l1_vs_rvu": 0.2899,
-   "onward_after_sensor_median_m": 3140.3,
-   "onward_under_200m_pct": 1.0,
+   "trip_length_l1_vs_rvu": 0.5109,
+   "onward_after_sensor_median_m": 2855.2,
+   "onward_under_200m_pct": 1.6,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
   },
   "purposes": {
    "status": "warn",
    "purpose_counts": {
-    "arbete": 3878,
-    "external": 1299,
-    "fritid": 1420,
-    "service": 2258,
-    "through": 12809
+    "arbete": 8032,
+    "external": 1297,
+    "fritid": 2399,
+    "service": 4506,
+    "through": 5422
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 3878,
-     "mean_km": 2.76,
-     "median_km": 2.48
+     "n": 8032,
+     "mean_km": 2.74,
+     "median_km": 2.52
     },
     "external": {
-     "n": 1299,
-     "mean_km": 3.74,
-     "median_km": 3.76
+     "n": 1297,
+     "mean_km": 3.63,
+     "median_km": 3.38
     },
     "fritid": {
-     "n": 1420,
-     "mean_km": 2.89,
-     "median_km": 2.94
+     "n": 2399,
+     "mean_km": 3.01,
+     "median_km": 2.98
     },
     "service": {
-     "n": 2258,
-     "mean_km": 2.87,
-     "median_km": 2.66
+     "n": 4506,
+     "mean_km": 2.98,
+     "median_km": 2.78
     },
     "through": {
-     "n": 12809,
-     "mean_km": 5.48,
-     "median_km": 5.45
+     "n": 5422,
+     "mean_km": 5.57,
+     "median_km": 5.9
     }
    },
    "ordering_violated": false,
@@ -76,12 +76,12 @@
    },
    "purpose_mix_relaxed_quarters_by_variant": {
     "edge_shares": 1,
-    "edge_shares_q10": 2,
+    "edge_shares_q10": 3,
     "edge_shares_q90": 0
    },
    "purpose_mix_reallocation_vehicles_by_variant": {
-    "edge_shares": 67,
-    "edge_shares_q10": 137,
+    "edge_shares": 72,
+    "edge_shares_q10": 247,
     "edge_shares_q90": 0
    },
    "purpose_claims_allowed": true,
@@ -94,22 +94,22 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 21664,
-     "loaded": 21664,
+     "inserted": 21656,
+     "loaded": 21656,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 21055,
-     "loaded": 21055,
+     "inserted": 20879,
+     "loaded": 20879,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 22275,
-     "loaded": 22275,
+     "inserted": 22235,
+     "loaded": 22235,
      "unfinished": 0,
      "teleports": 0
     }
@@ -122,10 +122,10 @@
    "uses_raw_ensemble_mean": true,
    "edge_quarters": 671,
    "geh_lt_5_pct": 100.0,
-   "mean_abs_error": 2.974704,
-   "max_abs_error": 16.0,
+   "mean_abs_error": 2.591612,
+   "max_abs_error": 14.548667,
    "station_edge_quarters": 575,
-   "station_max_abs_error": 20.666667,
+   "station_max_abs_error": 18.0,
    "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "multi_day": {
@@ -138,15 +138,15 @@
    "status": "info",
    "window": "2025-09-16 \u2192 2025-09-17 (exclusive)",
    "ratios": {
-    "107:60786979_3575001205_0": 1.71,
-    "107:1455801464_18241874_0": 2.727,
-    "1074:60790252_60790253_0": 0.706,
-    "1076:30420757_30421744_0": 0.55,
-    "133:26842525_26355153_0": 0.726,
-    "134:26355153_96523321_0": 1.788,
-    "2276:26355153_91615277_0": 2.23
+    "107:60786979_3575001205_0": 0.994,
+    "107:1455801464_18241874_0": 2.111,
+    "1074:60790252_60790253_0": 0.763,
+    "1076:30420757_30421744_0": 0.854,
+    "133:26842525_26355153_0": 0.921,
+    "134:26355153_96523321_0": 2.413,
+    "2276:26355153_91615277_0": 2.576
    },
-   "median_ratio": 1.71,
+   "median_ratio": 0.994,
    "note": "utel\u00e4mnad-station-\u00e5terskapande; karakterisering, inte grind \u2014 extrema veck kan spegla sensorns informationsisolering, inte modellfel"
   }
  }

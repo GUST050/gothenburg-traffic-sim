@@ -1,11 +1,272 @@
 # Gothenburg Traffic Simulation Improvement Plan
 
-**Date:** 2026-07-16 (consolidated 2026-07-15; status re-verified against the
-working tree 2026-07-16)
+**Date:** 2026-07-18 (consolidated 2026-07-15; status re-verified against the
+working tree 2026-07-18)
 **Status:** Canonical improvement plan — active implementation is in progress.
 **Structural authority:** `ARCHITECTURE.md` remains the source of truth for
 the six-stage pipeline and fixed contracts. This is the only improvement,
 review, performance, simulation, closure, signal and sensor-growth plan.
+
+## Known Errors, Inaccuracies and Assumptions in the Simulation Flow
+
+Audited end to end 2026-07-17 (raw data → network → demand → calibration →
+SUMO → web), every number below re-checked against the working tree that
+day.  This register is the honest answer to "what could be wrong?".  An item
+being listed does not mean it is unaddressed — most are disclosed by design
+(the confidence map exists because of them) — but nothing here may be
+silently forgotten.  Ordered by pipeline stage.
+
+### A. Sensor data (the ground truth itself)
+1. **Six stations in two ~400 m clusters** constrain 7 directed edges of
+   7 125.  Everything else is prior-driven inference; held-out accuracy is
+   currently a typical factor 1.56 (geometric absolute error; LOSO
+   2026-07-18 median ratio 0.994, range 0.763–2.576).
+   Only more/better-placed sensors or external counts fundamentally fix
+   this — that is the product's own pitch, not a bug, but every downstream
+   number inherits it.
+2. **Direction is modelled, not measured**, at the five single-direction
+   stations' opposite carriageways and inside every "Total" sum: the
+   dirsplit model is shrunk λ=0.256 toward 50/50 and validated only
+   region-transfer (Nordic cities) plus two local spot checks (107: 52/48;
+   1076 AM/PM 0.90).  The q10/q50/q90 variants carry this uncertainty into
+   the ensemble — but the *center* of that interval is still a model.
+3. **One year (2025), local time**: DST days each miss 4 quarters (kept as
+   null); the 2027 forecast is LightGBM point estimates at the 6 sensors
+   only, and simulating 2027 assumes 2025 structure (bounds/priors/
+   corridor coupling frozen at STRUCTURAL_REFERENCE_DATE 2025-09-16) —
+   documented design decision, unverifiable until 2027 data exists.
+
+### B. Network (OSM → SUMO)
+4. **9% of edges have defaulted speeds and 70% defaulted lane counts**
+   (sumo/network_audit.json: 631 and 4 990 of 7 125) — OSM tags are absent
+   there, so class-based defaults (e.g. residential 30 km/h, 1 lane) set
+   capacity and free-flow time.  Meso travel times and queue capacity on
+   those edges are assumptions.  NVDB import (plan: "Import reviewed road
+   structure") is the evidence path.
+5. **All 190 signal-controlled edges use GUESSED traffic lights**
+   (netconvert --tls.guess; static synthetic programs).  Meso runs
+   `--meso-junction-control.limited`, and SUMO's meso engine does not model
+   actuated control at all (measured 2026-07-06).  Signal timing effects on
+   corridor travel time are therefore approximations everywhere, and the
+   signal-optimization products are relative comparisons on synthetic
+   plans, never claims about the city's real controllers (deferred-claims
+   list).
+6. **The frozen OSM snapshot ages**: real drift observed (128 street-name /
+   15 highway-class changes in one refresh probe).  Deliberate — stable
+   IDs beat freshness — but a periodic reviewed refresh is eventually due.
+   One suspicious import artifact remains unverified against reality: node
+   3575001205 has a single incoming connection (closing it strands a 63-
+   edge pocket, 0.9%).
+
+### C. Demand generation (who drives where)
+7. **Endpoint fields are proxies**: SCB DeSO population (2023) for homes,
+   OSM buildings/POIs for activities (official buildings file absent —
+   OSM fallback in use).  POI density ≠ trip attraction; no local trip-
+   generation rates exist.
+8. **Behavioural constants are regional survey values, not Gothenburg
+   measurements**: purpose shares (RVU Västra Götaland: arbete 0.53 /
+   service 0.30 / fritid 0.17 weekday, hourly-modulated), purpose length
+   scales, gravity deterrence (Tanner, gravity_km 1.8, α 1.5), tour
+   pairing AM/PM structure.  θ was frozen after GEH saturation — sensor
+   counts cannot identify these parameters (that is WHY they were frozen),
+   so they are priors in the strict sense.
+9. **Through traffic is prior-anchored, not measured locally**:
+   `through_share_target=0.25` is now the calibrated default, while
+   `through_fraction=0.5` controls only candidate-pool supply. Gate weights
+   come from the gravity/Dial assignment field and verified via-pairs use
+   the 45 s/20% bounded-detour rule. No cordon count exists to check the
+   level directly (external data request 2 — the single highest-value
+   missing measurement).
+   RESEARCHED 2026-07-17 (external evidence survey): no measured
+   through-share exists for Gothenburg's inner city.  The comparable
+   MEASURED values found are all far lower: Potsdam's 2016 licence-plate
+   cordon survey found 14% through traffic at the whole-city boundary and
+   ~9% on the inner-city Havel bridges; Schwabach's transport plan
+   measured 16–29% through on its main entry roads.  The only Nordic
+   number found near ours — "70–80% of inner-ring traffic is through" for
+   Uppsala — is a cycling-advocacy ESTIMATE with no cited measurement
+   (verified by reading the source).  Two caveats kept the former 70%
+   rush-hour output from being plainly refuted: (a) cordon geometry — our
+   canvas is a small central
+   box that deliberately contains the big approach roads as through
+   gates, which raises the true through share relative to a whole-city
+   cordon; (b) population — the displayed percentage describes the
+   SENSOR-EXPLAINED calibrated population (every simulated vehicle must
+   cross a sensor, and the sensors sit on through corridors), not all
+   real traffic in the area; short internal trips that never touch a
+   sensor are deliberately absent and their real-world share would dilute
+   the through percentage.  Conclusion at that stage: the former 70% was
+   plausible for this cordon and population but above every measured
+   reference found, so it could not remain an unqualified emergent output.
+   Only a local cordon/licence-plate count can settle the real level. UI
+   FIXED the same day: the
+   category is geographic (origin AND destination outside the canvas —
+   a commuter driving through counts here), so the label "genomfart" was
+   renamed "passerar området" with a tooltip defining every category and
+   the population caveat (Gustav's 07:54 screenshot question — "why so
+   little arbete at 8?" — was largely this labelling).
+   IDENTIFIABILITY MEASURED 2026-07-17 (Gustav challenged the 70% —
+   correctly noting the Uppsala figure reflects E4/Stockholm-corridor
+   geography and is an unmeasured estimate, hence no anchor).  Same
+   historical day built twice, through_fraction 0.5 (deployed) vs 0.3:
+   GEH<5 stayed 100.0% on all three variants with 0 infeasible intervals
+   in BOTH — and the whole-day calibrated through share was essentially
+   UNCHANGED: 59% (prior 0.5) vs 60% (prior 0.3).  Three conclusions:
+   (a) the sensor fit is completely indifferent to the through share —
+   it can never be presented as a data result; (b) the share is not even
+   set by the prior knob — it is an EMERGENT property of the pipeline
+   (pre-verified through routes survive filtering at a higher rate than
+   rejection-sampled tours, and the PFE amplifies the survivor pool's
+   through share ~2× because through routes are its most flexible way to
+   close sensor bands), so tuning through_fraction is NOT a lever for
+   the displayed number; (c) the 70–75% figures seen in the UI are
+   PER-QUARTER shares during commute hours — the whole-day share is
+   ~59% — so part of the perceived excess was rush-hour composition of
+   the display.  Whole-day ~59% against the measured references above
+   (9–29% at other cities' cordons, geometry caveats apply): still
+   plausibly high, genuinely unknowable from internal data; the
+   cordon/licence-plate count is the only evidence that can move this
+   number, in either direction.
+   EVIDENCE LADDER (surveyed 2026-07-17, after a second literature pass
+   found no further measured city-centre through shares — Oslo/Bergen/
+   Trondheim publish only whole-urban-area figures, German VEPs keep the
+   percentages inside non-indexed PDFs):
+   (i) SELF-SERVE, highest value: Trafikverket's vägtrafikflödeskartan /
+   Lastkajen / open API carries MEASURED flows on the state roads at our
+   canvas boundary (E6, E20, Rv40, Oscarsleden — exactly the through
+   gates).  Adding 3–5 boundary stations to data_in/sensors.json pins
+   gate in/outflows; conservation (entered = terminated + exited)
+   combined with the internal stations then makes the through/internal
+   split PARTIALLY IDENTIFIABLE for the first time, using the product's
+   own every-new-sensor mechanism.  No permissions needed.
+   (ii) FREE ASK via Miroslaw: an OD extract over our cordon from the
+   city/regional VISUM–Sampers model — modelled, but independently
+   calibrated; would give a defensible through share quickly.
+   (iii) PAID: mobile-network OD data (e.g. Telia Crowd Insights, which
+   Swedish cities routinely buy) — direct through-share measurement.
+   (iv) GOLD STANDARD: ANPR/Bluetooth cordon survey (the existing
+   external data request).
+   THROUGH-SHARE SWEEP JUDGED BY HELD-OUT SENSORS (2026-07-17 late
+   evening, Gustav's proposal: borrow other cities' levels but let our
+   own validation decide): the purpose-margin machinery ENFORCED through
+   shares 0.25/0.35/0.45 (achieved exactly in every fold, verified from
+   the agents sidecars) and full LOSO ran per level on 2025-09-16.
+   Result — monotone, and the literature-anchored low end WINS:
+     level    median  geo-err  mean GEH<5   ratios
+     0.59 ref  1.71    1.82x     37.5%   0.55…2.73
+     θ=0.25    1.00    1.57x     54.2%   0.70…2.51
+     θ=0.35    1.18    1.62x     50.0%
+     θ=0.45    1.67    1.93x     41.7%
+   The cluster-corridor over-prediction largely WAS the through excess
+   (107's first edge: 1.71 → 1.00 at θ=0.25).  Honest caveats: (a) this
+   selects one knob from three candidates USING the validation set —
+   mild tuning, disclosed, and the value must be CONFIRMED on the second
+   day (2025-09-17 spec d2eb4e00b7d8be1c) before becoming default;
+   (b) 2276 stays over-predicted (~2.4-2.5) at every level — its error
+   is NOT through-driven and remains open; (c) 0.25 sits at the low end
+   of the measured external range (9-29% + geometry uplift), so pushing
+   below it would leave the prior-defensible band and overfit LOSO.
+   CONFIRMED ON THE SECOND DAY (2026-07-18, 2025-09-17 historical,
+   spec d2eb4e00b7d8be1c — a day never used for selection). The original
+   sweep, before validation applied the deployed calendar activity margin,
+   reported baseline median 1.63 / geo-err 1.79x / mean GEH<5 43.4% →
+   θ=0.25 median 1.04 / 1.53x / 53.6%. REVIEW-CORRECTED exact
+   validated-equals-shipped rerun (calendar activity margin + θ=0.25):
+   median **1.111**, geo-err **1.545x**, mean GEH<5 **51.2%**, ratios
+   0.647–2.515. The precise figures move, but the held-out improvement
+   over the old mix survives on the untouched day; 134/2276 remain the
+   non-through-driven residual. VERDICT: θ=0.25 is
+   validated as "prior-anchored (measured external range) +
+   held-out-selected + second-day-confirmed" and is now the default via
+   `--through-share-target` (proper flag, provenance in demand_meta,
+   disclosed in the UI tooltip) — NEVER described as a measured
+   Gothenburg value; the cordon count remains the only decisive evidence.
+   DEPLOYED/RE-VERIFIED 2026-07-18 on 2025-09-16: achieved whole-day share
+   25.04% (5,422/21,656 agents), GEH<5 100% on all three direction
+   variants with 0 infeasible intervals. Leakage-free LOSO under the exact
+   shipped activity margin + through target gives median ratio 0.994; four
+   of seven directed edges are 0.763–0.994, while the three documented
+   residual over-predictions remain 2.111, 2.413 and 2.576.
+10. **The 45 s / 20% detour-naturalness constants** are literature-
+    plausible and LOSO-supported in *direction* (isolated station 0.05 →
+    0.55) but not independently calibrated; LOSO 2026-07-18 shows the
+    through target corrected the median to 0.994 but left three
+    OVER-predicted cluster-corridor edges (2.111–2.576) — the next tuning
+    lever, best
+    constrained by tightening the assignment-field ceiling rather than
+    refitting the constants against the validation set.
+11. **The assignment field's scale fit is weak by construction**: robust
+    median ratio on 6 measured edges, R² ≈ −5 (documented "informational
+    only").  It is used as a weak ceiling (w=0.15) and for gate draw
+    density, not as a load claim — but both uses inherit its shape errors.
+12. **Candidate routing is free-flow by default** (congestion_iterations
+    defaults to 1 = no feedback round): route choice ignores congestion
+    unless a feedback build is requested.  Meso baseline delivery 0.87–
+    0.96 suggests acceptable at current volumes; wrong in principle at
+    saturation.
+13. **Finite support pool** (~10 k candidates → ~6 k route×purpose
+    variables): the PFE can only weight offered geometry.  Worst single
+    shape still carries ~110–130 veh/day; convoy share ≥10 clones ~1–5%.
+
+### D. Calibration (PFE)
+14. **Conservation bounds between sensors assume no unmeasured sources/
+    sinks along the corridor segments** — no turning-fraction measurements
+    exist; corridor coupling ratios are learned from the same 6 stations.
+15. **Structure guards cap against the POOL's own shares** (2.5×/3×
+    multipliers): they preserve the generator's seed structure, which is
+    itself assumption C7–C9.  Caps are dropped counts-first when
+    infeasible (disclosed per quarter, currently 0–2 quarters/variant mix
+    relaxation).
+16. **Route geometry is shared across the day**: one shape set serves all
+    96 quarters (departures vary, geometry does not) — no within-day
+    route-choice drift (e.g. rush-hour rat-running) beyond what distinct
+    shapes already encode.
+17. **100% GEH<5 is fit, not accuracy**: it holds AT the 7 constrained
+    edges; the honest generalization number is the LOSO factor (1.56×
+    geometric absolute error, median delivery ratio 0.994) and
+    it is displayed as the confidence map, never as citywide accuracy.
+
+### E. Simulation (SUMO meso)
+18. **Mesoscopic queue model**: no car-following, no lane-changing, no
+    actuated signals; validated for 15-min edge flows (delivery 0.87–0.96
+    vs micro 0.83–0.94), NOT for queue lengths, spillback geometry or
+    travel-time distributions.  Micro exists behind --micro for windows
+    that need it; queue-based closure advice carries the
+    queue_proxy_unmeasured fail-closed gate for exactly this reason.
+19. **Three seeds over three direction variants** is a small Monte Carlo
+    ensemble; per-edge confidence = spatial_prior × exp(−CV) is a
+    heuristic combination, not a calibrated probability.
+20. **No en-route rerouting in the baseline** (closure rerouters only,
+    within 400 m): drivers never divert due to congestion alone.
+21. **Closure behaviour rules are assumptions**: truncate-stranded (driver
+    parks at last reachable edge), rerouting radius 400 m, dropped-only-
+    if-first-edge.  Reasonable, argued, untestable without incident data
+    (external request: closure-period counts).
+22. **1-second exit-time resolution** makes ~4% of edge traversals
+    (short edges) look instantaneous in the trajectory export — display
+    artifact, not a dynamics error.
+
+### F. Display and confidence
+23. **Confidence is distance-only**: exp(−d²/2σ²), σ=127.5 m fitted from
+    7 near-field LOSO points inside two clusters.  It ignores network
+    topology (a parallel unconnected street 150 m away scores high),
+    direction, and volume; beyond ~300 m everything is labelled
+    extrapolation with near-zero confidence — honest but coarse.  The
+    far field has NO validation points at all.
+24. **The Simulering colour scale is a display transform** (conf^(1/8))
+    of the true confidence so the gradient stays legible; tooltips carry
+    the exact value.  Any reader of the map alone sees relative, not
+    absolute, certainty.
+25. **The animated vehicles are ONE representative run** (seed 1000, q50)
+    while road colours/audits use the ensemble mean — labelled in the UI;
+    an individual animated car is an illustration of aggregate 15-min
+    flows, not a tracked real journey (candidate tours provide AM/PM
+    structure as a prior; PFE calibrates aggregates independently).
+
+The mitigation order stays as recorded in the Recommended Implementation
+Order: cluster-corridor over-prediction damping (D/10), golden freeze,
+then the external data package (cordon count first) — external evidence is
+the only closure for C8–C9, D14 and E21.
 
 ## How To Use This Document
 

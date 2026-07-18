@@ -389,13 +389,26 @@
             simAgentHint.hidden = false;
             return;
           }
+          // "through" är en GEOGRAFISK kategori (start OCH mål utanför
+          // kartområdet), inte ett ärende — en pendlare som kör genom
+          // området till ett jobb utanför räknas hit. Den gamla etiketten
+          // "genomfart" lästes som "saknar ärende" (Gustav 2026-07-17,
+          // 07:54-skärmbilden: "varför så lite arbete vid 8-tiden?" — svaret
+          // var till stor del att rusningens pendlare låg i denna kategori).
           const labels = { work: 'arbete', arbete: 'arbete', service: 'service',
-                           leisure: 'fritid', fritid: 'fritid', through: 'genomfart',
+                           leisure: 'fritid', fritid: 'fritid',
+                           through: 'passerar området',
                            external: 'extern', unknown: 'okänd' };
           const parts = Object.entries(counts).map(([purpose, count]) =>
             `${labels[purpose] || purpose} ${Math.round(100 * count / total)}%`);
           simAgentHint.textContent = `Resor nu: ${parts.join(' · ')}`;
-          simAgentHint.title = `${total} individuella kalibrerade avgångar i denna 15-minutersruta`;
+          simAgentHint.title =
+            `${total} individuella kalibrerade avgångar i denna 15-minutersruta.\n` +
+            'passerar området = både start och mål utanför kartområdet ' +
+            '(inkluderar t.ex. pendlare som kör igenom) · extern = ena änden ' +
+            'utanför området · arbete/service/fritid = resans ärende inne i ' +
+            'området. Andelarna beskriver den sensor-förklarade simulerade ' +
+            'trafiken, inte all verklig trafik.';
           simAgentHint.hidden = false;
         }
 

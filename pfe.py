@@ -1167,6 +1167,56 @@ def apply_category_margin(
     return corrected
 
 
+def apply_through_share_target(
+    source_mixes: list[Counter],
+    theta: float | None,
+) -> list[Counter]:
+    """Pin each quarter's through share to an externally chosen level.
+
+    WHY (2026-07-17/18, IMPROVEMENT_PLAN register C9): the calibrated
+    through share is UNIDENTIFIABLE from the sensor counts (measured:
+    GEH<5 stayed 100.0% while the share moved freely) and is otherwise an
+    emergent artifact of candidate filtering (~59%), far above every
+    measured city-cordon reference (9-29%).  A swept, enforced level was
+    judged by held-out sensors instead: θ=0.25 improved LOSO median
+    1.71→0.994 and typical error 1.82×→1.555× on 2025-09-16 and replicated
+    on the never-used-for-selection 2025-09-17 (1.63→1.111,
+    1.79×→1.545×).
+    The level is therefore PRIOR-ANCHORED (measured external range) +
+    HELD-OUT-SELECTED + SECOND-DAY-CONFIRMED — never a measured
+    Gothenburg value; a cordon count remains the decisive evidence.
+
+    Mechanics: through gets θ×total, external keeps its absolute count,
+    activity categories share the remainder in their existing relative
+    (hour-of-day) mix.  A quarter with no activity support keeps its
+    source mix — fabricating quota for categories the pool cannot serve
+    would make :func:`purpose_quota_groups` raise.  ``theta`` None/<=0
+    disables the target (the emergent behaviour, kept for comparison
+    builds)."""
+    if theta is None or theta <= 0:
+        return [Counter(mix) for mix in source_mixes]
+    if not math.isfinite(theta) or theta >= 1:
+        raise ValueError("through share target must be within (0, 1)")
+    out: list[Counter] = []
+    for mix in source_mixes:
+        tot = float(sum(mix.values()))
+        acts = {k: float(v) for k, v in mix.items()
+                if k not in ("through", "external")}
+        a_tot = sum(acts.values())
+        if tot <= 0 or a_tot <= 0:
+            out.append(Counter(mix))
+            continue
+        ext = float(mix.get("external", 0))
+        act_target = max(tot - theta * tot - ext, 0.0)
+        new = Counter({"through": theta * tot})
+        if ext:
+            new["external"] = ext
+        for k, v in acts.items():
+            new[k] = v / a_tot * act_target
+        out.append(new)
+    return out
+
+
 def purpose_replacement_index(
     shapes: list[Candidate], measured_edges: set[str],
 ) -> dict[tuple[str, ...], dict[str, list[tuple[Candidate, Candidate]]]]:
@@ -1932,6 +1982,7 @@ def calibrate(
     integer_bounds_per_q: list[dict[str, tuple[float, float]]] | None = None,
     purpose_departure_offset_s: float = 0.0,
     activity_purpose_shares_by_quarter: list[dict[str, float]] | None = None,
+    through_share_target: float | None = None,
 ) -> dict:
     """Solve all intervals; write a .rou.xml; return a fit report.
 
@@ -1951,8 +2002,10 @@ def calibrate(
     shapes, route_cost = prepare_calibration(candidates_path)
     source_purpose_mixes = _purpose_targets_per_quarter(
         shapes, len(targets_per_q), purpose_departure_offset_s)
-    purpose_mixes = apply_category_margin(
-        source_purpose_mixes, activity_purpose_shares_by_quarter)
+    purpose_mixes = apply_through_share_target(
+        apply_category_margin(
+            source_purpose_mixes, activity_purpose_shares_by_quarter),
+        through_share_target)
     solutions, rungs = solve_calibration_intervals(
         shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q,
         purpose_mixes)

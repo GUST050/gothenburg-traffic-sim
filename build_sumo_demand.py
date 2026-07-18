@@ -144,6 +144,15 @@ def parse_args() -> argparse.Namespace:
                    help="Calibration engine: pfe = the level-1/2/3 hierarchy "
                         "(hard counts, conservation bounds, learned priors); "
                         "routesampler = reference implementation (counts only)")
+    p.add_argument("--through-share-target", type=float, default=0.25,
+                   help="Enforced calibrated through share (start AND end "
+                        "outside the canvas). The share is unidentifiable "
+                        "from sensor counts (GEH indifferent, measured "
+                        "2026-07-17) — this level is prior-anchored in "
+                        "measured city-cordon studies (9-29%%), selected by "
+                        "held-out LOSO (median 1.71→0.99) and confirmed on "
+                        "a second day (1.63→1.11). NOT a measured "
+                        "Gothenburg value. <=0 disables (emergent ~59%%).")
     p.add_argument("--legacy-random-pool", action="store_true",
                    help="Use uniform randomTrips instead of the subarea/DeSO/"
                         "RVU candidate generator (build_candidates.py). Kept "
@@ -234,6 +243,10 @@ def parse_args() -> argparse.Namespace:
         return any(value == flag or value.startswith(flag + "=")
                    for value in sys.argv[1:])
 
+    if (not np.isfinite(args.through_share_target)
+            or args.through_share_target >= 1):
+        p.error("--through-share-target must be finite and below 1; "
+                "values <=0 disable the target")
     if args.date is not None and args.start_date is not None:
         p.error("use either --date or --start-date, not both")
     if args.date is not None and args.days != 1:
@@ -640,7 +653,8 @@ def main() -> None:
                         cand_path, variants, variant_inputs,
                         max_workers=os.cpu_count() or 1,
                         purpose_departure_offset_s=purpose_departure_offset_s,
-                        activity_purpose_shares_by_quarter=activity_purpose_shares))
+                        activity_purpose_shares_by_quarter=activity_purpose_shares,
+                        through_share_target=args.through_share_target))
                 for suffix, key in variants:
                     variant_report = reports[suffix]
                     variant_fit_reports[key] = fit_summary(variant_report)
@@ -672,7 +686,8 @@ def main() -> None:
                     enforce_integer_bounds=True,
                     integer_bounds_per_q=hard_bounds_pq,
                     purpose_departure_offset_s=purpose_departure_offset_s,
-                    activity_purpose_shares_by_quarter=activity_purpose_shares))
+                    activity_purpose_shares_by_quarter=activity_purpose_shares,
+                    through_share_target=args.through_share_target))
             tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
             print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                   f"GEH<5: {report['geh_pct']}%  "
@@ -749,6 +764,11 @@ def main() -> None:
             "no_assignment_prior": args.no_assignment_prior,
             "congestion_iterations": args.congestion_iterations,
             "congestion_method": args.congestion_method,
+            # Provenance contract: prior-anchored + held-out-selected +
+            # second-day-confirmed — never a measured Gothenburg value.
+            # validate_sim reads this so LOSO always validates the shipped
+            # configuration.
+            "through_share_target": args.through_share_target,
         },
     )
     meta["timings_s"] = {name: round(seconds, 3)

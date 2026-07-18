@@ -52,6 +52,7 @@ import pfe
 from build_sumo_demand import (GEO_PATH, build_targets, ensure_observability,
                                load_edge_geometry, load_sensor_edges,
                                structure_groups_for_shapes)
+from demand.intake import activity_purpose_shares_for_window
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.runtime import sumo_home
 
@@ -153,6 +154,8 @@ def calibrate_fold_parallel(
     priors_pq: list[dict[str, tuple[float, float]]],
     max_workers: int | None = None,
     purpose_departure_offset_s: float = 0.0,
+    activity_purpose_shares_by_quarter: list[dict[str, float]] | None = None,
+    through_share_target: float | None = None,
 ) -> dict:
     """Solve this LOSO fold through one flat per-quarter worker pool."""
     global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
@@ -164,8 +167,16 @@ def calibrate_fold_parallel(
     # the pool forks so workers inherit them). These depend only on route
     # geometry, never on which sensor a fold holds out — no leakage.
     _PFE_PAR_STRUCTURE_GROUPS = structure_groups_for_shapes(shapes)
-    _PFE_PAR_PURPOSE_MIXES = pfe._purpose_targets_per_quarter(
+    # Same enforced through-share level as the deployed build (read from
+    # demand_meta by the caller) — LOSO must validate the configuration
+    # that ships, and this level was itself SELECTED by LOSO + confirmed
+    # on a second day (see pfe.apply_through_share_target).
+    source_mixes = pfe._purpose_targets_per_quarter(
         shapes, len(targets), purpose_departure_offset_s)
+    _PFE_PAR_PURPOSE_MIXES = pfe.apply_through_share_target(
+        pfe.apply_category_margin(
+            source_mixes, activity_purpose_shares_by_quarter),
+        through_share_target)
     try:
         tasks = [
             {
@@ -269,6 +280,29 @@ def require_historical_demand(meta: dict) -> tuple[pd.Timestamp, pd.Timestamp]:
     return start, end
 
 
+def demand_through_share_target(meta: dict) -> float | None:
+    """Read the effective PFE through prior from demand metadata.
+
+    Builds predating this option have no key and therefore retain their
+    emergent candidate-pool mix.  New builds must carry the exact value so
+    LOSO validates the demand configuration that scenarios actually use.
+    """
+    raw = (meta.get("build_options") or {}).get("through_share_target")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise SystemExit(
+            "LOSO kräver ett giltigt through_share_target i "
+            "sumo/demand_meta.json.") from None
+    if not np.isfinite(value) or value < 0 or value >= 1:
+        raise SystemExit(
+            "LOSO kräver through_share_target inom intervallet [0, 1) i "
+            "sumo/demand_meta.json.")
+    return value
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-assignment-prior", action="store_true",
@@ -278,6 +312,9 @@ def main() -> None:
 
     flows, meta, all_priors, corridor = load_inputs()
     demand_start, demand_end = require_historical_demand(meta)
+    through_share_target = demand_through_share_target(meta)
+    activity_purpose_shares = activity_purpose_shares_for_window(
+        demand_start, meta["n_intervals"])
     assignment_load = None
     if not args.no_assignment_prior:
         print("Computing structural assignment load once for LOSO folds …")
@@ -301,7 +338,7 @@ def main() -> None:
                   # Sensor-contribution reports use this to reject an
                   # accidental comparison of different dates, candidate
                   # pools, networks or LOSO procedures as a sensor benefit.
-                  "protocol": "loso_pfe_meso_v2",
+                  "protocol": "loso_pfe_meso_v3",
                   "source": meta.get("source"),
                   "window_start": demand_start.isoformat(),
                   "window_end": demand_end.isoformat(),
@@ -310,6 +347,8 @@ def main() -> None:
                   "candidate_pool_sha256": sha256_file(SUMO_DIR / "candidates.rou.xml"),
                   "network_sha256": sha256_file(SUMO_DIR / "net.net.xml"),
                   "assignment_prior_enabled": not args.no_assignment_prior,
+                  "activity_purpose_margin": "calendar_hour_day_type",
+                  "through_share_target": through_share_target,
               },
               "window": f"{demand_start.date()} → {demand_end.date()} (exclusive)",
               "note": "leave-one-station-out — simulated vs measured at the "
@@ -375,7 +414,9 @@ def main() -> None:
             (demand_start - demand_start.normalize()).total_seconds())
         rep = calibrate_fold_parallel(
             cand_path, rou, targets, bounds_pq, priors_pq,
-            purpose_departure_offset_s=purpose_departure_offset_s)
+            purpose_departure_offset_s=purpose_departure_offset_s,
+            activity_purpose_shares_by_quarter=activity_purpose_shares,
+            through_share_target=through_share_target)
         ed = SUMO_DIR / f"loso_ed_{held}.xml"
         run_meso(rou, SUMO_DIR / f"loso_ed_{held}.xml", duration_s)
 

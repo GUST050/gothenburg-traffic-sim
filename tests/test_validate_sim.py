@@ -19,7 +19,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import validate_sim
-from validate_sim import corridor_priors_for_fold, require_historical_demand
+from validate_sim import (corridor_priors_for_fold, demand_through_share_target,
+                          require_historical_demand)
 
 
 def make_corridor(from_edge, to_edge, prior, band):
@@ -123,6 +124,22 @@ class TestHistoricalDemandGuard:
 
         with pytest.raises(SystemExit, match="HISTORISK demand"):
             validate_sim.main()
+
+
+class TestDemandThroughShareTarget:
+    def test_reads_shipped_build_option(self):
+        assert demand_through_share_target({
+            "build_options": {"through_share_target": 0.25},
+        }) == pytest.approx(0.25)
+
+    def test_legacy_build_without_option_keeps_emergent_mix(self):
+        assert demand_through_share_target({"build_options": {}}) is None
+
+    def test_invalid_metadata_fails_closed(self):
+        with pytest.raises(SystemExit, match="through_share_target"):
+            demand_through_share_target({
+                "build_options": {"through_share_target": 1.0},
+            })
 
 
 class TestRunMeso:

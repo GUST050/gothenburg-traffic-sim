@@ -270,6 +270,24 @@ class TestCalibrateGEH:
             "through": 20, "arbete": 10, "fritid": 40,
         })
 
+    def test_through_target_preserves_total_and_external_margin(self):
+        source = Counter({
+            "through": 59, "external": 6,
+            "arbete": 20, "service": 10, "fritid": 5,
+        })
+
+        result = pfe.apply_through_share_target([source], 0.25)[0]
+
+        assert sum(result.values()) == pytest.approx(100)
+        assert result["through"] / sum(result.values()) == pytest.approx(0.25)
+        assert result["external"] == pytest.approx(6)
+        assert result["arbete"] / result["service"] == pytest.approx(2)
+        assert result["service"] / result["fritid"] == pytest.approx(2)
+
+    def test_through_target_rejects_invalid_enabled_value(self):
+        with pytest.raises(ValueError, match=r"within \(0, 1\)"):
+            pfe.apply_through_share_target([Counter({"arbete": 1})], 1.0)
+
 
 class TestCalibrateDispersion:
     def _write_candidates(self, path, vehicle_edges):

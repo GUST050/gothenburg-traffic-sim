@@ -79,6 +79,13 @@ class TestB1DateRangeContract:
         assert args.start_date == "2025-09-17"
         assert args.days == 1
 
+    def test_through_share_target_is_validated_before_build(self, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv",
+            ["build_sumo_demand.py", "--through-share-target", "nan"])
+        with pytest.raises(SystemExit):
+            bsd.parse_args()
+
     def test_validate_range_rejects_year_boundary_crossing(self):
         with pytest.raises(ValueError, match="crosses"):
             bsd.validate_date_range("2025-12-31", days=2, source_year=2025)

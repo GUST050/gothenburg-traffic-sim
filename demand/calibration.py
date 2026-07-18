@@ -114,7 +114,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
                                    max_workers: int | None = None,
                                    purpose_departure_offset_s: float = 0.0,
                                    activity_purpose_shares_by_quarter:
-                                   list[dict[str, float]] | None = None) -> dict[str, dict]:
+                                   list[dict[str, float]] | None = None,
+                                   through_share_target: float | None = None) -> dict[str, dict]:
     """Solve all final direction variants through one flat worker pool.
 
     This avoids nesting multiprocessing pools: the unit of parallel work is one
@@ -146,8 +147,14 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         source_mixes = pfe._purpose_targets_per_quarter(
             shapes, len(variant_inputs[suffix]["targets"]),
             purpose_departure_offset_s)
-        _PFE_PAR_PURPOSE_MIXES[suffix] = apply_activity_purpose_margin(
-            source_mixes, activity_purpose_shares_by_quarter)
+        # Through-share target LAST: the activity margin restores
+        # P(purpose | hour) among activity classes, then the target sets
+        # the through level while preserving that relative activity mix
+        # (see pfe.apply_through_share_target for the validation record).
+        _PFE_PAR_PURPOSE_MIXES[suffix] = pfe.apply_through_share_target(
+            apply_activity_purpose_margin(
+                source_mixes, activity_purpose_shares_by_quarter),
+            through_share_target)
     staged_outputs = {
         suffix: _staged_route_path(Path(variant_inputs[suffix]["out_path"]))
         for suffix, _key in variants
