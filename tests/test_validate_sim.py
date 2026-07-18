@@ -20,7 +20,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import validate_sim
 from validate_sim import (corridor_priors_for_fold, demand_through_share_target,
-                          require_historical_demand)
+                          require_historical_demand,
+                          resolve_evaluation_window)
 
 
 def make_corridor(from_edge, to_edge, prior, band):
@@ -124,6 +125,43 @@ class TestHistoricalDemandGuard:
 
         with pytest.raises(SystemExit, match="HISTORISK demand"):
             validate_sim.main()
+
+
+class TestTemporalHoldoutWindow:
+    META = {
+        "source": "historical", "date": "2025-09-16",
+        "start_date": "2025-09-16", "end_date_exclusive": "2025-09-17",
+        "days": 1, "begin": "00:00", "end": "24:00",
+    }
+
+    def test_distinct_same_class_day_moves_window_without_changing_duration(self):
+        ref_start, ref_end, start, end, mode = resolve_evaluation_window(
+            self.META, "2025-09-17")
+
+        assert str(ref_start) == "2025-09-16 00:00:00"
+        assert str(ref_end) == "2025-09-17 00:00:00"
+        assert str(start) == "2025-09-17 00:00:00"
+        assert str(end) == "2025-09-18 00:00:00"
+        assert mode == "temporal_holdout"
+
+    def test_default_preserves_same_window_loso(self):
+        ref_start, ref_end, start, end, mode = resolve_evaluation_window(
+            self.META, None)
+
+        assert (start, end) == (ref_start, ref_end)
+        assert mode == "same_window_loso"
+
+    def test_reference_day_is_not_a_temporal_holdout(self):
+        with pytest.raises(SystemExit, match="annan dag"):
+            resolve_evaluation_window(self.META, "2025-09-16")
+
+    def test_different_day_class_is_rejected(self):
+        with pytest.raises(SystemExit, match="samma dagtyp"):
+            resolve_evaluation_window(self.META, "2025-09-20")
+
+    def test_malformed_date_is_rejected(self):
+        with pytest.raises(SystemExit, match="YYYY-MM-DD"):
+            resolve_evaluation_window(self.META, "17-09-2025")
 
 
 class TestDemandThroughShareTarget:

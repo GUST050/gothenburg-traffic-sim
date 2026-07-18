@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 
+from datetime import date as calendar_date
 import json
 import multiprocessing as mp
 import os
@@ -52,12 +53,13 @@ import pfe
 from build_sumo_demand import (GEO_PATH, build_targets, ensure_observability,
                                load_edge_geometry, load_sensor_edges,
                                structure_groups_for_shapes)
-from demand.intake import activity_purpose_shares_for_window
+from demand.intake import (activity_purpose_shares_for_window, classify_day)
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.runtime import sumo_home
 
 SUMO_DIR = Path("sumo")
 EPOCH    = pd.Timestamp("2025-01-01")
+MIN_TEMPORAL_COVERAGE = 0.90
 
 
 def load_inputs():
@@ -303,15 +305,83 @@ def demand_through_share_target(meta: dict) -> float | None:
     return value
 
 
+def resolve_evaluation_window(
+    meta: dict,
+    holdout_date: str | None,
+) -> tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp, str]:
+    """Return frozen-reference and evaluation windows for LOSO.
+
+    Without ``holdout_date`` this preserves the established same-window LOSO
+    contract. A temporal holdout moves the exact clock window to a distinct
+    date while retaining the current build's candidate pool, network and
+    structural priors. Only the non-held stations' counts from the evaluation
+    date enter each fold; the held station remains evaluation-only.
+
+    A weekday candidate release is not silently used to claim weekend/holiday
+    transfer. Different behavioural day classes need their own frozen release
+    and are rejected here rather than producing an unlike comparison.
+    """
+    reference_start, reference_end = require_historical_demand(meta)
+    if holdout_date is None:
+        return (reference_start, reference_end,
+                reference_start, reference_end, "same_window_loso")
+    if int(meta.get("days", 1)) != 1:
+        raise SystemExit(
+            "Temporal holdout stöder tills vidare en fryst endags-release; "
+            "bygg en endags historisk demand först.")
+    try:
+        parsed = calendar_date.fromisoformat(holdout_date)
+    except (TypeError, ValueError):
+        raise SystemExit(
+            "--holdout-date måste vara ett giltigt datum i formatet YYYY-MM-DD."
+        ) from None
+    evaluation_start = (
+        pd.Timestamp(parsed)
+        + (reference_start - reference_start.normalize())
+    )
+    evaluation_end = evaluation_start + (reference_end - reference_start)
+    if evaluation_start.normalize() == reference_start.normalize():
+        raise SystemExit(
+            "--holdout-date måste vara en annan dag än den frysta "
+            "referensreleasen.")
+    if (evaluation_start.year != EPOCH.year
+            or (evaluation_end - pd.Timedelta(nanoseconds=1)).year != EPOCH.year):
+        raise SystemExit(
+            "Temporal holdout måste ligga helt inom 2025, året med "
+            "oberoende historiska sensorobservationer.")
+
+    reference_kind = classify_day(
+        str(reference_start.date()), reference_start.dayofweek)[1]
+    evaluation_kind = classify_day(
+        str(evaluation_start.date()), evaluation_start.dayofweek)[1]
+    if evaluation_kind != reference_kind:
+        raise SystemExit(
+            "Temporal holdout kräver samma dagtyp som den frysta releasen "
+            f"({reference_kind}); {evaluation_start.date()} är "
+            f"{evaluation_kind}.")
+    return (reference_start, reference_end,
+            evaluation_start, evaluation_end, "temporal_holdout")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-assignment-prior", action="store_true",
                    help="controlled A/B: disable the gravity-assignment "
                         "prior to isolate its effect on recovery")
+    ap.add_argument(
+        "--holdout-date",
+        help="evaluate the frozen demand release on a distinct historical "
+             "YYYY-MM-DD date; held-station counts remain evaluation-only")
+    ap.add_argument(
+        "--output", type=Path,
+        help="report path (default: loso_report.json, or "
+             "temporal_holdout_report.json with --holdout-date)")
     args = ap.parse_args()
 
     flows, meta, all_priors, corridor = load_inputs()
-    demand_start, demand_end = require_historical_demand(meta)
+    (reference_start, reference_end,
+     demand_start, demand_end, evaluation_mode) = resolve_evaluation_window(
+         meta, args.holdout_date)
     through_share_target = demand_through_share_target(meta)
     activity_purpose_shares = activity_purpose_shares_for_window(
         demand_start, meta["n_intervals"])
@@ -320,7 +390,13 @@ def main() -> None:
         print("Computing structural assignment load once for LOSO folds …")
         assignment_load = compute_assignment_load()
     sensor_edges = load_sensor_edges()
-    qi_start, nq = meta["qi_start"], meta["n_intervals"]
+    nq = int(meta["n_intervals"])
+    expected_nq = int((demand_end - demand_start) / pd.Timedelta(minutes=15))
+    if expected_nq != nq:
+        raise SystemExit(
+            "Temporal validation window does not match demand_meta.n_intervals "
+            f"({expected_nq} != {nq}).")
+    qi_start = int((demand_start - EPOCH) / pd.Timedelta(minutes=15))
     duration_s = nq * 900
     cand_path = SUMO_DIR / "candidates.rou.xml"
     if corridor:
@@ -333,15 +409,39 @@ def main() -> None:
     # all_priors' d["sensor"] == held check below).
     edge_to_sensor = {e: sid for sid, edges in sensor_edges.items() for e in edges}
 
+    full = build_targets(flows, sensor_edges, qi_start, nq)
+    coverage = {
+        edge: sum(edge in quarter for quarter in full)
+        for edges in sensor_edges.values() for edge in edges
+    }
+    if evaluation_mode == "temporal_holdout":
+        insufficient = {
+            edge: observed for edge, observed in coverage.items()
+            if observed / max(1, nq) < MIN_TEMPORAL_COVERAGE
+        }
+        if insufficient:
+            details = ", ".join(
+                f"{edge}={observed}/{nq}"
+                for edge, observed in sorted(insufficient.items()))
+            raise SystemExit(
+                "Temporal holdout saknar tillräcklig oberoende sensortäckning "
+                f"(krav {MIN_TEMPORAL_COVERAGE:.0%}): {details}.")
+
     report = {"schema_version": 2,
               "comparison_contract": {
                   # Sensor-contribution reports use this to reject an
                   # accidental comparison of different dates, candidate
                   # pools, networks or LOSO procedures as a sensor benefit.
-                  "protocol": "loso_pfe_meso_v3",
+                  "protocol": (
+                      "temporal_loso_pfe_meso_v1"
+                      if evaluation_mode == "temporal_holdout"
+                      else "loso_pfe_meso_v3"),
                   "source": meta.get("source"),
                   "window_start": demand_start.isoformat(),
                   "window_end": demand_end.isoformat(),
+                  "reference_window_start": reference_start.isoformat(),
+                  "reference_window_end": reference_end.isoformat(),
+                  "evaluation_mode": evaluation_mode,
                   "n_intervals": nq,
                   "simulation_mode": "meso",
                   "candidate_pool_sha256": sha256_file(SUMO_DIR / "candidates.rou.xml"),
@@ -349,18 +449,28 @@ def main() -> None:
                   "assignment_prior_enabled": not args.no_assignment_prior,
                   "activity_purpose_margin": "calendar_hour_day_type",
                   "through_share_target": through_share_target,
+                  "minimum_temporal_coverage": (
+                      MIN_TEMPORAL_COVERAGE
+                      if evaluation_mode == "temporal_holdout" else None),
               },
               "window": f"{demand_start.date()} → {demand_end.date()} (exclusive)",
-              "note": "leave-one-station-out — simulated vs measured at the "
-                      "held-out station; level-2 bounds, priors, corridor "
-                      "priors, and the assignment-prior scale factor are all "
-                      "recomputed per fold with the held-out station's own "
-                      "data excluded (2026-07-09 fix — the assignment-prior "
-                      "scale factor used to leak: it was fit against ALL "
-                      "sensors including the one being held out)",
+              "note": (
+                  "temporal leave-one-station-out — the candidate pool, "
+                  "network and structural priors remain frozen from "
+                  f"{reference_start.date()}; each fold calibrates only on "
+                  "the other stations' evaluation-date counts and reserves "
+                  "the held station's evaluation-date counts for comparison"
+                  if evaluation_mode == "temporal_holdout"
+                  else "leave-one-station-out — simulated vs measured at the "
+                  "held-out station; level-2 bounds, priors, corridor priors, "
+                  "and the assignment-prior scale factor are all recomputed "
+                  "per fold with the held-out station's own data excluded"),
+              "observed_quarters": dict(sorted(coverage.items())),
               "stations": {}}
 
-    print(f"LOSO över {len(sensor_edges)} stationer, {nq} kvartar")
+    label = "Temporal LOSO" if evaluation_mode == "temporal_holdout" else "LOSO"
+    print(f"{label} över {len(sensor_edges)} stationer, {nq} kvartar "
+          f"({demand_start.date()})")
     for held, held_edges in sorted(sensor_edges.items()):
         assign = {"weight": 0.0, "flows": {}}
         if assignment_load is not None:
@@ -374,7 +484,6 @@ def main() -> None:
         assign_flows = assign.get("flows", {})
         se = {s: e for s, e in sensor_edges.items() if s != held}
         targets = []
-        full = build_targets(flows, sensor_edges, qi_start, nq)
         drop = build_targets(flows, se, qi_start, nq)
         targets = drop
 
@@ -438,14 +547,22 @@ def main() -> None:
                 "measured_total": round(m_tot), "simulated_total": round(s_tot),
                 "ratio": round(s_tot / max(m_tot, 1), 3),
                 "geh_ok_pct": round(100 * geh_ok / max(1, geh_n), 1),
+                "observed_quarters": int(ok.sum()),
             }
             print(f"  utan {held:<6} {e:<26} kvot {s_tot/max(m_tot,1):>5.2f}  "
                   f"GEH<5 {100*geh_ok/max(1,geh_n):>5.1f}%")
         report["stations"][held] = st
 
-    out = Path("web/data/loso_report.json")
-    with open(out, "w") as f:
+    out = args.output or Path(
+        "web/data/temporal_holdout_report.json"
+        if evaluation_mode == "temporal_holdout"
+        else "web/data/loso_report.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out_tmp = out.with_suffix(out.suffix + ".tmp")
+    with open(out_tmp, "w") as f:
         json.dump(report, f, indent=1)
+        f.write("\n")
+    os.replace(out_tmp, out)
     ratios = [e["ratio"] for s in report["stations"].values()
               for e in s["edges"].values()]
     print(f"\nLOSO-kvoter: min {min(ratios):.2f}  median "

@@ -5,7 +5,7 @@
 # validated station record to data_in/sensors.json, then `make refresh`.
 # Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
-.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso benchmark-speed
+.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso benchmark-speed validate-temporal
 
 all: data features agent1 forecast test
 
@@ -43,6 +43,12 @@ demand-morning:
 scenario:
 	python3 run_scenario.py
 	python3 run_scenario.py --close 60786979_3575001205_0 1455801464_18241874_0
+
+# Frozen cross-date validation for the trusted 2025-09-16 release. The
+# evaluation date was not used to select the deployed through-share target.
+validate-temporal:
+	python3 validate_sim.py --holdout-date 2025-09-17
+	python3 validation_report.py
 
 # Standalone speed/semantic benchmark; intentionally not part of `make test`.
 benchmark-speed:

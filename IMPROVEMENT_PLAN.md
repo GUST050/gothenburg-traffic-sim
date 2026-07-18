@@ -1986,13 +1986,35 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    in confidence/reporting; a good median is not permission to claim every
    held-out road is accurate.
 
+7. CLOSED 2026-07-18 — **the temporal holdout is now an executable,
+   stale-safe release artifact**, not a manually quoted second-day run.
+   `validate_sim.py --holdout-date YYYY-MM-DD` keeps the current candidate
+   pool, network, assignment scale, structural priors and through-share
+   contract frozen, moves the measurement window to a distinct same-day-type
+   historical date, calibrates every fold only on the other stations, and
+   reserves the held station's later-date values for evaluation.  It rejects
+   same-day, cross-year, unlike day-type and <90%-coverage comparisons, writes
+   atomically to `web/data/temporal_holdout_report.json`, and leaves the
+   production demand/scenarios untouched.  `validation_report.py` includes
+   the evidence only when candidate/network hashes, source, reference window
+   and through-share target still match the current release; stale evidence
+   becomes explicitly missing.  Reproducible command: `make
+   validate-temporal`.
+
+   Frozen 2025-09-16 release evaluated on independent 2025-09-17:
+   min **0.757**, median **0.881**, max **2.536**, with 95–96 observed
+   quarters on every directed sensor edge.  The same residual pattern
+   survives across dates: 134/2276 remain high at 2.511/2.536 and one
+   direction of 107 is 1.965, while the other four edges are 0.757–0.881.
+   This is temporal stability evidence, not a claim that every corridor is
+   accurate.
+
 Honest status note: the 45 s / 20% detour constants are
 literature-plausible route-choice bounds, chosen from the measured
 admission curve (10%→157, 20%→265, 30%→464 pairs); they are assumptions
-and the temporal rerun remains open: the repository currently has a
-leakage-free station LOSO runner but no equivalent date-holdout simulation
-runner.  The 2025-09-16 LOSO evidence above confirms the median, not every
-road and not cross-date transfer.
+and the LOSO + temporal evidence above still covers only seven directed
+near-field edges in two clusters.  It confirms a repeatable residual pattern,
+not every road, weekend/holiday transfer, or citywide accuracy.
 
 ## Definition of Success
 

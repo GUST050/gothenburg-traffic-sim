@@ -11,6 +11,7 @@ is answerable without reading terminal output:
                       RVU ordering check (agent_demand, purpose_length_km)
   - simulation      — per-seed health + flags (baseline scenario payload)
   - held_out        — LOSO ratios per station (web/data/loso_report.json)
+  - temporal_holdout — frozen-release LOSO on a distinct historical date
   - verdict         — pass / warn per section + overall, with reasons
 
 Each section carries a `status`: "pass", "warn" (published but flagged),
@@ -29,6 +30,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import assess_output_fit
 
 SUMO_DIR = Path("sumo")
@@ -248,10 +250,86 @@ def _held_out_section(loso: dict | None) -> dict:
     }
 
 
+def _temporal_holdout_section(report: dict | None,
+                              meta: dict | None) -> dict:
+    if not report or not report.get("stations"):
+        return {
+            "status": "missing",
+            "reason": "temporal_holdout_report.json saknas — kör "
+                      "validate_sim.py --holdout-date YYYY-MM-DD",
+        }
+    contract = report.get("comparison_contract") or {}
+    expected_reference = (meta or {}).get("epoch_sim")
+    expected_through = ((meta or {}).get("build_options") or {}).get(
+        "through_share_target")
+    stale_reasons = []
+    checks = (
+        ("candidate pool",
+         contract.get("candidate_pool_sha256"),
+         sha256_file(SUMO_DIR / "candidates.rou.xml")),
+        ("network",
+         contract.get("network_sha256"),
+         sha256_file(SUMO_DIR / "net.net.xml")),
+        ("reference window",
+         contract.get("reference_window_start"),
+         expected_reference),
+        ("through-share target",
+         contract.get("through_share_target"),
+         expected_through),
+    )
+    for label, recorded, current in checks:
+        if recorded is None or current is None or str(recorded) != str(current):
+            stale_reasons.append(
+                f"{label}: report={recorded!r}, current={current!r}")
+    if contract.get("source") != (meta or {}).get("source"):
+        stale_reasons.append(
+            f"source: report={contract.get('source')!r}, "
+            f"current={(meta or {}).get('source')!r}")
+    if stale_reasons:
+        return {
+            "status": "missing",
+            "reason": "temporal holdout är inaktuellt för nuvarande release: "
+                      + "; ".join(stale_reasons),
+        }
+    ratios = {}
+    observed = {}
+    for sid, station in sorted(report["stations"].items()):
+        for edge, evidence in station.get("edges", {}).items():
+            key = f"{sid}:{edge}"
+            ratios[key] = evidence.get("ratio")
+            observed[key] = evidence.get("observed_quarters")
+    values = sorted(value for value in ratios.values() if value is not None)
+    return {
+        # Like spatial LOSO, temporal LOSO characterizes independent
+        # recovery rather than imposing a tuned pass threshold on seven
+        # clustered directed edges. Its presence is nevertheless explicit,
+        # so a release cannot claim temporal evidence from the reference-day
+        # LOSO alone.
+        "status": "info",
+        "protocol": contract.get("protocol"),
+        "reference_window": {
+            "start": contract.get("reference_window_start"),
+            "end": contract.get("reference_window_end"),
+        },
+        "evaluation_window": {
+            "start": contract.get("window_start"),
+            "end": contract.get("window_end"),
+        },
+        "minimum_coverage": contract.get("minimum_temporal_coverage"),
+        "observed_quarters": observed,
+        "ratios": ratios,
+        "median_ratio": values[len(values) // 2] if values else None,
+        "note": "fryst kandidatpool/nät/priorer utvärderade på en annan "
+                "historisk dag; utelämnad stations egna värden används "
+                "endast för jämförelse",
+    }
+
+
 def assemble() -> dict:
     meta = _load(SUMO_DIR / "demand_meta.json")
     baseline = _load(WEB_DATA / "scenarios" / "baseline.json")
     loso = _load(WEB_DATA / "loso_report.json")
+    temporal = _load(WEB_DATA / "temporal_holdout_report.json")
 
     sections = {
         "counts_fit": _counts_section(meta),
@@ -261,6 +339,7 @@ def assemble() -> dict:
         "sensor_output": _sensor_output_section(baseline),
         "multi_day": _multi_day_section(meta, baseline),
         "held_out": _held_out_section(loso),
+        "temporal_holdout": _temporal_holdout_section(temporal, meta),
     }
     gated = [s for s in sections.values() if s["status"] in ("pass", "warn")]
     overall = ("warn" if any(s["status"] == "warn" for s in gated)

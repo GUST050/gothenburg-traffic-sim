@@ -1,5 +1,6 @@
 """G3 assembled validation report (IMPROVEMENT_PLAN.md; improvement plan 3.2)."""
 import json
+import hashlib
 import sys
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import validation_report as vr
 
 def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
                   structure_flags=(), seed_flags=(), with_baseline=True,
-                  with_loso=True, purpose_incompatible=None,
+                  with_loso=True, with_temporal=True, purpose_incompatible=None,
                   purpose_mix_relaxed=None):
     sumo = tmp_path / "sumo"
     sumo.mkdir()
@@ -17,6 +18,8 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
     (web / "scenarios").mkdir(parents=True)
     meta = {
         "date": "2025-09-16", "source": "historical",
+        "epoch_sim": "2025-09-16T00:00:00",
+        "build_options": {"through_share_target": 0.25},
         "pfe_fit": {"geh_pct": geh, "infeasible_intervals": infeasible,
                     "vehicles": 21600},
         "agent_demand": {"purpose_counts": {"arbete": 5410, "through": 9806}},
@@ -44,6 +47,10 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
             meta["pfe_fit_variants"]["edge_shares"][
                 "purpose_mix_relaxed_quarters"] = purpose_mix_relaxed
     (sumo / "demand_meta.json").write_text(json.dumps(meta))
+    candidate_bytes = b"<routes/>"
+    network_bytes = b"<net/>"
+    (sumo / "candidates.rou.xml").write_bytes(candidate_bytes)
+    (sumo / "net.net.xml").write_bytes(network_bytes)
     if with_baseline:
         (web / "scenarios" / "baseline.json").write_text(json.dumps({
             "flows": {"e": [1]},
@@ -56,6 +63,25 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
         (web / "loso_report.json").write_text(json.dumps({
             "window": "2025-09-16",
             "stations": {"134": {"edges": {"e1": {"ratio": 0.78}}}}}))
+    if with_temporal:
+        (web / "temporal_holdout_report.json").write_text(json.dumps({
+            "comparison_contract": {
+                "protocol": "temporal_loso_pfe_meso_v1",
+                "reference_window_start": "2025-09-16T00:00:00",
+                "reference_window_end": "2025-09-17T00:00:00",
+                "window_start": "2025-09-17T00:00:00",
+                "window_end": "2025-09-18T00:00:00",
+                "minimum_temporal_coverage": 0.9,
+                "source": "historical",
+                "candidate_pool_sha256": hashlib.sha256(
+                    candidate_bytes).hexdigest(),
+                "network_sha256": hashlib.sha256(network_bytes).hexdigest(),
+                "through_share_target": 0.25,
+            },
+            "stations": {"134": {"edges": {
+                "e1": {"ratio": 0.82, "observed_quarters": 96}
+            }}},
+        }))
     monkeypatch.setattr(vr, "SUMO_DIR", sumo)
     monkeypatch.setattr(vr, "WEB_DATA", web)
     monkeypatch.setattr(vr, "OUT_PATH", web / "validation.json")
@@ -67,9 +93,15 @@ class TestAssemble:
         r = vr.assemble()
         assert r["overall"] == "pass"
         assert {s["status"] for n, s in r["sections"].items()
-                if n not in {"held_out", "sensor_output"}} == {"pass"}
+                if n not in {
+                    "held_out", "temporal_holdout", "sensor_output"
+                }} == {"pass"}
         assert r["sections"]["held_out"]["status"] == "info"
         assert r["sections"]["held_out"]["median_ratio"] == 0.78
+        assert r["sections"]["temporal_holdout"]["status"] == "info"
+        assert r["sections"]["temporal_holdout"]["median_ratio"] == 0.82
+        assert r["sections"]["temporal_holdout"]["observed_quarters"] == {
+            "134:e1": 96}
 
     def test_structure_flag_warns_overall(self, tmp_path, monkeypatch):
         _write_inputs(tmp_path, monkeypatch,
@@ -116,13 +148,27 @@ class TestAssemble:
 
     def test_missing_artifacts_are_stated_not_skipped(self, tmp_path, monkeypatch):
         _write_inputs(tmp_path, monkeypatch, with_baseline=False,
-                      with_loso=False)
+                      with_loso=False, with_temporal=False)
         r = vr.assemble()
         assert r["sections"]["simulation"]["status"] == "missing"
         assert r["sections"]["held_out"]["status"] == "missing"
+        assert r["sections"]["temporal_holdout"]["status"] == "missing"
         assert "saknas" in r["sections"]["held_out"]["reason"]
         # missing never blocks: the present sections still gate overall
         assert r["overall"] == "pass"
+
+    def test_stale_temporal_holdout_is_not_presented_as_current_evidence(
+            self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch)
+        report_path = vr.WEB_DATA / "temporal_holdout_report.json"
+        report = json.loads(report_path.read_text())
+        report["comparison_contract"]["candidate_pool_sha256"] = "stale"
+        report_path.write_text(json.dumps(report))
+
+        section = vr.assemble()["sections"]["temporal_holdout"]
+
+        assert section["status"] == "missing"
+        assert "inaktuellt" in section["reason"]
 
     def test_pre_e3_baseline_without_health_is_missing(self, tmp_path, monkeypatch):
         _write_inputs(tmp_path, monkeypatch)

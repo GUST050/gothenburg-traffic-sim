@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "generated_at": "2026-07-18T10:09:29Z",
+ "generated_at": "2026-07-18T10:26:23Z",
  "demand_window": "2025-09-16",
  "demand_source": "historical",
  "overall": "pass",
@@ -148,6 +148,39 @@
    },
    "median_ratio": 0.994,
    "note": "utel\u00e4mnad-station-\u00e5terskapande; karakterisering, inte grind \u2014 extrema veck kan spegla sensorns informationsisolering, inte modellfel"
+  },
+  "temporal_holdout": {
+   "status": "info",
+   "protocol": "temporal_loso_pfe_meso_v1",
+   "reference_window": {
+    "start": "2025-09-16T00:00:00",
+    "end": "2025-09-17T00:00:00"
+   },
+   "evaluation_window": {
+    "start": "2025-09-17T00:00:00",
+    "end": "2025-09-18T00:00:00"
+   },
+   "minimum_coverage": 0.9,
+   "observed_quarters": {
+    "107:60786979_3575001205_0": 96,
+    "107:1455801464_18241874_0": 96,
+    "1074:60790252_60790253_0": 96,
+    "1076:30420757_30421744_0": 96,
+    "133:26842525_26355153_0": 95,
+    "134:26355153_96523321_0": 96,
+    "2276:26355153_91615277_0": 96
+   },
+   "ratios": {
+    "107:60786979_3575001205_0": 0.86,
+    "107:1455801464_18241874_0": 1.965,
+    "1074:60790252_60790253_0": 0.757,
+    "1076:30420757_30421744_0": 0.881,
+    "133:26842525_26355153_0": 0.878,
+    "134:26355153_96523321_0": 2.511,
+    "2276:26355153_91615277_0": 2.536
+   },
+   "median_ratio": 0.881,
+   "note": "fryst kandidatpool/n\u00e4t/priorer utv\u00e4rderade p\u00e5 en annan historisk dag; utel\u00e4mnad stations egna v\u00e4rden anv\u00e4nds endast f\u00f6r j\u00e4mf\u00f6relse"
   }
  }
 }
