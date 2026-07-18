@@ -256,6 +256,26 @@ class TestValidateStagedScenarios:
         ok, reason = serve.validate_staged_scenarios(staging, meta)
         assert not ok and "varianttäckning" in reason
 
+    def test_multi_day_variant_requires_each_days_pfe_fit(self, tmp_path):
+        staging, meta = _staged(
+            tmp_path,
+            variant_fit={
+                "edge_shares": {
+                    "geh_pct": 100.0, "infeasible_intervals": 0,
+                    "per_day": [
+                        {"day": 1, "geh_pct": 100.0},
+                        {"day": 2, "geh_pct": 50.0},
+                    ],
+                },
+            })
+        demand = json.loads(meta.read_text())
+        demand["days"] = 2
+        meta.write_text(json.dumps(demand))
+
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+
+        assert not ok and "dag 2" in reason and "50.0" in reason
+
     def test_multi_day_staging_requires_boundary_evidence(self, tmp_path):
         staging, meta = _staged(tmp_path)
         demand = json.loads(meta.read_text())

@@ -137,6 +137,26 @@ class TestB1DateRangeContract:
         assert meta["day_kinds"] == ["weekday", "weekday"]
         assert not {"date", "begin", "end"} & set(meta)
 
+    def test_multi_day_pfe_fit_is_split_by_day(self):
+        targets = [{"edge": 10.0} for _ in range(192)]
+        report = {
+            "achieved": {
+                "edge": [10.0] * 96 + [100.0] * 96,
+            },
+        }
+
+        rows = bsd.pfe_fit_by_day(report, targets, days=2)
+
+        assert rows[0]["geh_pct"] == 100.0
+        assert rows[1]["geh_pct"] == 0.0
+        assert [row["quarter_start"] for row in rows] == [0, 96]
+
+    def test_multi_day_pfe_fit_requires_exact_full_days(self):
+        with pytest.raises(ValueError, match="96 quarters"):
+            bsd.pfe_fit_by_day(
+                {"achieved": {"edge": [1.0] * 191}},
+                [{"edge": 1.0} for _ in range(191)], days=2)
+
     def test_bounds_and_priors_remain_tied_to_structural_reference(self, monkeypatch):
         calls = []
         # structural_bounds_and_priors lives in demand.priors now — its

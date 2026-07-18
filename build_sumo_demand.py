@@ -83,10 +83,63 @@ def candidate_routing_weight_cache_input(weight_file: Path | None) -> Path:
     return weight_file if weight_file is not None else SUMO_DIR / ".no-routing-weights"
 
 
-def fit_summary(report: dict) -> dict:
+def pfe_fit_by_day(report: dict, targets: list[dict],
+                   days: int) -> list[dict]:
+    """Recompute PFE's hourly GEH gate separately for every full day.
+
+    A range-wide percentage can hide which date failed. Multi-day releases
+    therefore retain one compact row per day and direction-split variant.
+    ``achieved`` is kept only long enough to build these rows; the large
+    edge×quarter map is still omitted from demand metadata.
+    """
+    if days <= 1:
+        return []
+    quarters_per_day = 96
+    if len(targets) != days * quarters_per_day:
+        raise ValueError(
+            "multi-day PFE targets must contain exactly 96 quarters per day")
+    achieved = report.get("achieved")
+    if not isinstance(achieved, dict):
+        raise ValueError("multi-day PFE report is missing achieved flows")
+
+    rows = []
+    for day_index in range(days):
+        start = day_index * quarters_per_day
+        end = start + quarters_per_day
+        geh_ok = geh_total = 0
+        for hour_start in range(start, end, 4):
+            edges_in_hour: set[str] = set()
+            for quarter in range(hour_start, hour_start + 4):
+                edges_in_hour.update(targets[quarter])
+            for edge_id in edges_in_hour:
+                measured = sum(
+                    achieved.get(edge_id, [0.0] * len(targets))[
+                        hour_start:hour_start + 4])
+                target = sum(
+                    targets[quarter].get(edge_id, 0.0)
+                    for quarter in range(hour_start, hour_start + 4))
+                if measured + target <= 0:
+                    continue
+                geh = float(np.sqrt(
+                    2 * (measured - target) ** 2 / (measured + target)))
+                geh_total += 1
+                geh_ok += geh < 5
+        rows.append({
+            "day": day_index + 1,
+            "quarter_start": start,
+            "quarter_end": end,
+            "geh_ok": geh_ok,
+            "geh_total": geh_total,
+            "geh_pct": round(100 * geh_ok / max(1, geh_total), 1),
+        })
+    return rows
+
+
+def fit_summary(report: dict, *, targets: list[dict] | None = None,
+                days: int = 1) -> dict:
     """Keep publication-relevant calibration gates for one variant."""
     purpose = report.get("purpose_allocation_summary", {})
-    return {
+    result = {
         "geh_pct": report.get("geh_pct"),
         "infeasible_intervals": report.get("infeasible_intervals", 0),
         "vehicles": report.get("vehicles"),
@@ -102,6 +155,11 @@ def fit_summary(report: dict) -> dict:
         "purpose_replaced_routes": purpose.get("replaced_routes", 0),
         "relaxation_summary": report.get("relaxation_summary", {}),
     }
+    if days > 1:
+        if targets is None:
+            raise ValueError("multi-day PFE summary requires frozen targets")
+        result["per_day"] = pfe_fit_by_day(report, targets, days)
+    return result
 
 
 def parse_args() -> argparse.Namespace:
@@ -645,7 +703,10 @@ def main() -> None:
                         "bounds_pq": bounds_pq,
                         "hard_bounds_pq": hard_bounds_pq,
                         "priors_pq": priors_pq,
-                        "keep_achieved": False,
+                        # Multi-day publication must prove every date
+                        # independently. Keep the large achieved map only
+                        # until fit_summary has compacted it into daily rows.
+                        "keep_achieved": args.days > 1,
                     }
                 reports = timed(
                     "pfe_variants_and_rounding",
@@ -657,7 +718,10 @@ def main() -> None:
                         through_share_target=args.through_share_target))
                 for suffix, key in variants:
                     variant_report = reports[suffix]
-                    variant_fit_reports[key] = fit_summary(variant_report)
+                    variant_fit_reports[key] = fit_summary(
+                        variant_report,
+                        targets=variant_inputs[suffix]["targets"],
+                        days=args.days)
                     label = "PFE" if suffix == "" and n_iter == 1 else (
                         f"[congestion-feedback {iteration+1}/{n_iter}]"
                         if suffix == "" else "PFE"

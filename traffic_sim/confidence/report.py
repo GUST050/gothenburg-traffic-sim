@@ -170,7 +170,8 @@ def _simulation_section(baseline: dict | None) -> dict:
     }
 
 
-def _sensor_output_section(baseline: dict | None) -> dict:
+def _sensor_output_section(meta: dict | None,
+                           baseline: dict | None) -> dict:
     """Report fit against SUMO edgeData, not only PFE's pre-SUMO targets."""
     audit = (baseline or {}).get("sensor_audit") if baseline else None
     output_fit = audit.get("output_fit") if isinstance(audit, dict) else None
@@ -178,7 +179,8 @@ def _sensor_output_section(baseline: dict | None) -> dict:
         return {"status": "missing",
                 "reason": "baseline saknar slutlig SUMO sensor-output-fit"}
     assessment = assess_output_fit(
-        audit, n_intervals=int((baseline or {}).get("n_quarters", 0) or 0))
+        audit, n_intervals=int((baseline or {}).get("n_quarters", 0) or 0),
+        days=int((meta or {}).get("days", 1) or 1))
     ensemble = assessment["directions"] or output_fit.get("ensemble") or {}
     station = assessment["stations"] or output_fit.get("station_ensemble") or {}
     raw = output_fit.get("uses_raw_ensemble_mean") is True
@@ -186,6 +188,7 @@ def _sensor_output_section(baseline: dict | None) -> dict:
         "status": "pass" if not assessment["errors"] else "warn",
         "contract": output_fit.get("contract"),
         "uses_raw_ensemble_mean": raw,
+        "aggregation_minutes": output_fit.get("aggregation_minutes", 15),
         "edge_quarters": ensemble.get("edge_quarters"),
         "geh_lt_5_pct": ensemble.get("geh_lt_5_pct"),
         "mean_abs_error": ensemble.get("mean_abs_error"),
@@ -336,7 +339,7 @@ def assemble() -> dict:
         "structure": _structure_section(meta),
         "purposes": _purpose_section(meta),
         "simulation": _simulation_section(baseline),
-        "sensor_output": _sensor_output_section(baseline),
+        "sensor_output": _sensor_output_section(meta, baseline),
         "multi_day": _multi_day_section(meta, baseline),
         "held_out": _held_out_section(loso),
         "temporal_holdout": _temporal_holdout_section(temporal, meta),

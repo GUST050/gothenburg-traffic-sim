@@ -31,6 +31,27 @@ def test_parse_summary_uses_cumulative_deltas_and_boundary_snapshots(tmp_path):
     assert payload["days"][0]["boundary_lag_s"] == 0.0
 
 
+def test_time_zero_loaded_vehicle_is_counted_in_day_one(tmp_path):
+    path = tmp_path / "summary.xml"
+    path.write_text(
+        '<summary>'
+        '<step time="0" loaded="1" inserted="0" running="0" waiting="1" '
+        'teleports="0" collisions="0" halting="0"/>'
+        '<step time="86400" loaded="10" inserted="8" running="2" waiting="0" '
+        'teleports="0" collisions="0" halting="0"/>'
+        '</summary>')
+
+    payload = parse_summary(
+        path, day_boundaries_s=[0, 86400], days=1)
+
+    assert payload["days"][0]["loaded_delta"] == 10
+    assert payload["days"][0]["inserted_delta"] == 8
+    assert payload["days"][0]["observed_time_zero_snapshot"]["loaded"] == 1
+    combined = aggregate(
+        [payload], days=1, day_boundaries_s=[0, 86400])
+    assert validate(combined, days=1, day_boundaries_s=[0, 86400]) == []
+
+
 def test_aggregate_and_validate_require_every_seed_and_day():
     one = {"complete": True, "days": [
         {"day": 1, "loaded_delta": 10, "inserted_delta": 10,
@@ -79,6 +100,25 @@ def test_validate_recomputes_aggregate_from_each_seed_boundary_evidence():
     errors = validate(payload, days=1, day_boundaries_s=[0, 86400])
 
     assert any("inkonsekvent loaded_delta_min" in error for error in errors)
+
+
+def test_validate_rejects_a_daily_teleport_spike():
+    seed = {"complete": True, "days": [
+        {"day": 1, "loaded_delta": 1000, "inserted_delta": 1000,
+         "teleports_delta": 0, "loaded_at_boundary": 1000,
+         "inserted_at_boundary": 1000, "boundary_lag_s": 0},
+        {"day": 2, "loaded_delta": 1000, "inserted_delta": 1000,
+         "teleports_delta": 11, "loaded_at_boundary": 2000,
+         "inserted_at_boundary": 2000, "boundary_lag_s": 0},
+    ]}
+    payload = aggregate([seed], days=2,
+                        day_boundaries_s=[0, 86400, 172800])
+
+    errors = validate(payload, days=2,
+                      day_boundaries_s=[0, 86400, 172800])
+
+    assert any("11 teleports" in error and "dag 2" in error
+               for error in errors)
 
 
 def test_validate_allows_midnight_insertion_carryover():

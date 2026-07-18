@@ -16,6 +16,10 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 SUMMARY_BOUNDARY_LAG_MAX_S = 900
+# Keep the daily health contract aligned with run_scenario.seed_health_flags:
+# a later date may not hide a teleport spike inside a healthy range total.
+HEALTH_TELEPORT_MAX_ABS = 10
+HEALTH_TELEPORT_MAX_SHARE = 0.005
 
 
 def _number(attrs: dict[str, str], name: str) -> float | None:
@@ -90,9 +94,13 @@ def parse_summary(path: Path, *, day_boundaries_s: list[int], days: int) -> dict
     for day in range(days):
         start_s, end_s = boundaries[day], boundaries[day + 1]
         before, after = at_or_before(start_s), at_or_before(end_s)
+        observed_before = before
         # SUMO omits empty leading periods.  A zero baseline at t=0 is exact;
-        # any later missing boundary is a continuity error.
-        if before is None and start_s == 0:
+        # any later missing boundary is a continuity error. SUMO may also
+        # report the first already-loaded vehicle in its t=0 snapshot. That
+        # vehicle belongs to day 1, so the cumulative accounting baseline is
+        # still mathematical zero rather than the observed t=0 counters.
+        if start_s == 0:
             before = zero
         if before is None or after is None:
             reasons.append(f"summary saknar steg för dag {day + 1}")
@@ -108,6 +116,13 @@ def parse_summary(path: Path, *, day_boundaries_s: list[int], days: int) -> dict
             "summary_end_s": round(after["time_s"], 3),
             "boundary_lag_s": round(end_s - after["time_s"], 3),
         }
+        if day == 0 and observed_before is not None:
+            row["observed_time_zero_snapshot"] = {
+                key: (int(round(observed_before[key]))
+                      if observed_before.get(key) is not None else None)
+                for key in ("loaded", "inserted", "teleports", "collisions",
+                            "running", "waiting", "halting")
+            }
         for key in ("loaded", "inserted", "teleports", "collisions"):
             a, b = before.get(key), after.get(key)
             row[f"{key}_delta"] = (int(round(b - a))
@@ -213,6 +228,12 @@ def validate(payload: dict, *, days: int, day_boundaries_s: list[int]) -> list[s
                 # never exceed all demand loaded up to that boundary.
                 if loaded_delta <= 0 or inserted_delta <= 0 or teleports_delta < 0:
                     errors.append(f"multi_day_validation har ogiltig daglig demand för frö {seed_index} dag {expected}")
+                if teleports_delta > max(
+                        HEALTH_TELEPORT_MAX_ABS,
+                        HEALTH_TELEPORT_MAX_SHARE * inserted_delta):
+                    errors.append(
+                        f"multi_day_validation har {teleports_delta} teleports "
+                        f"för frö {seed_index} dag {expected}")
                 if loaded - previous_loaded != loaded_delta or \
                         inserted - previous_inserted != inserted_delta:
                     errors.append(f"multi_day_validation har inkonsekventa räknardeltan för frö {seed_index} dag {expected}")

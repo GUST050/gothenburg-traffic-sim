@@ -512,6 +512,7 @@ def validate_staged_scenarios(staging_dir: Path,
             meta = json.load(f)
     except (OSError, json.JSONDecodeError):
         return False, "demand_meta.json är ogiltig JSON"
+    days = int(meta.get("days", 1) or 1)
     expected_build_id = meta.get("build_id")
     expected_demand_key = meta.get("demand_build_key")
     demand_spec = meta.get("demand_spec") or {}
@@ -555,6 +556,20 @@ def validate_staged_scenarios(staging_dir: Path,
             return False, f"varianten {label} bryter mot hårda bounds"
         if variant.get("unserviceable_edges"):
             return False, f"varianten {label} saknar rutter för mätta kanter"
+        if days > 1:
+            daily = variant.get("per_day")
+            if not isinstance(daily, list) or len(daily) != days:
+                return False, (
+                    f"varianten {label} saknar separat PFE-fit för varje dag")
+            for day_index, row in enumerate(daily, 1):
+                if not isinstance(row, dict) or row.get("day") != day_index:
+                    return False, (
+                        f"varianten {label} saknar PFE-fit för dag {day_index}")
+                daily_geh = row.get("geh_pct")
+                if daily_geh is None or daily_geh < 99.0:
+                    return False, (
+                        f"varianten {label} dag {day_index} nådde bara "
+                        f"GEH<5 {daily_geh}% — publiceras inte")
 
     # P0 sensor contract: the PFE target fit is not the final SUMO output.
     # New demand builds persist the frozen target/observation arrays, so a
@@ -590,7 +605,8 @@ def validate_staged_scenarios(staging_dir: Path,
         if not isinstance(audit, dict) or not isinstance(output_fit, dict):
             return False, "baseline saknar SUMO:s slutliga sensor-output-fit"
         expected_quarters = int(baseline.get("n_quarters", 0) or 0)
-        assessment = assess_output_fit(audit, n_intervals=expected_quarters)
+        assessment = assess_output_fit(
+            audit, n_intervals=expected_quarters, days=days)
         if assessment["errors"]:
             return False, assessment["errors"][0]
         provenance = audit.get("provenance") or {}
@@ -612,7 +628,6 @@ def validate_staged_scenarios(staging_dir: Path,
     # aggregate end-of-run health record cannot prove that a midnight
     # boundary did not lose vehicles, so staged multi-day results must carry
     # the periodic SUMO summary proof before they replace the live set.
-    days = int(meta.get("days", 1) or 1)
     if days > 1:
         from traffic_sim.simulation.multiday import validate as validate_multiday
         multi_day = baseline.get("multi_day_validation") if baseline else None

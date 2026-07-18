@@ -46,7 +46,9 @@ import numpy as np
 import pandas as pd
 
 from traffic_sim.simulation import metrics as cm
-from traffic_sim.simulation.sensor_fit import assess_output_fit, summarize_pairs
+from traffic_sim.simulation.sensor_fit import (assess_output_fit,
+                                               summarize_pairs,
+                                               summarize_rows)
 from traffic_sim.simulation.runtime import sumo_home
 from traffic_sim.simulation.metadata import load_metadata
 from traffic_sim.core.fingerprint import sha256_file
@@ -251,7 +253,9 @@ def baseline_output_fit_errors(meta: dict, audit: dict, *, n_intervals: int,
     if closures or not (meta.get("sensor_targets") or
                         meta.get("sensor_output_fit_required")):
         return []
-    return assess_output_fit(audit, n_intervals=n_intervals)["errors"]
+    return assess_output_fit(
+        audit, n_intervals=n_intervals,
+        days=int(meta.get("days", 1) or 1))["errors"]
 
 
 def demand_window_label(meta: dict) -> str:
@@ -675,7 +679,6 @@ def build_sensor_audit(meta: dict, results: list[dict],
     directions = []
     ensemble_pairs: list[tuple[float, float]] = []
     representative_pairs: list[tuple[float, float]] = []
-    station_ensemble_pairs: list[tuple[float, float]] = []
     station_rows: dict[str, dict] = {}
 
     for info in sensor_audit_edges():
@@ -744,15 +747,53 @@ def build_sensor_audit(meta: dict, results: list[dict],
                                           for value in station["simulated_mean_raw"]]
         stations_public.append({key: value for key, value in station.items()
                                 if key != "target_seen"})
-        for qi, target in enumerate(station["target_mean"]):
-            if target is not None:
-                station_ensemble_pairs.append(
-                    (station["simulated_mean_raw"][qi], target))
-
     fit = {
         "ensemble": summarize_pairs(ensemble_pairs),
         "representative": summarize_pairs(representative_pairs),
     }
+    daily_output_fit = []
+    days = int(meta.get("days", 1) or 1)
+    # PFE's documented GEH calibration metric is hourly. Keep raw 15-minute
+    # arrays in the audit, but compare their aligned four-quarter sums so
+    # ordinary travel time across a quarter boundary is not misclassified as
+    # lost demand. Tiny synthetic/unit windows retain the legacy per-quarter
+    # summary; production full-day windows are always divisible by four.
+    output_fit_aggregation = (
+        4 if n_intervals >= 4 and n_intervals % 4 == 0 else 1)
+    output_ensemble = summarize_rows(
+        directions, n_intervals=n_intervals,
+        aggregation_quarters=output_fit_aggregation)
+    output_station_ensemble = summarize_rows(
+        stations_public, n_intervals=n_intervals,
+        aggregation_quarters=output_fit_aggregation)
+    if days > 1:
+        if n_intervals != days * 96:
+            raise ValueError(
+                "multi-day sensor audit requires exactly 96 quarters per day")
+        for day_index in range(days):
+            start = day_index * 96
+            end = start + 96
+            daily_output_fit.append({
+                "day": day_index + 1,
+                "quarter_start": start,
+                "quarter_end": end,
+                "ensemble": summarize_rows(
+                    [{
+                        "target_mean": row["target_mean"][start:end],
+                        "simulated_mean_raw":
+                            row["simulated_mean_raw"][start:end],
+                    } for row in directions],
+                    n_intervals=96,
+                    aggregation_quarters=output_fit_aggregation),
+                "station_ensemble": summarize_rows(
+                    [{
+                        "target_mean": row["target_mean"][start:end],
+                        "simulated_mean_raw":
+                            row["simulated_mean_raw"][start:end],
+                    } for row in stations_public],
+                    n_intervals=96,
+                    aggregation_quarters=output_fit_aggregation),
+            })
     return {
         "schema_version": 1,
         "source": meta.get("source", "historical"),
@@ -764,10 +805,13 @@ def build_sensor_audit(meta: dict, results: list[dict],
         },
         "fit": fit,
         "output_fit": {
-            "contract": "raw_edgeData_ensemble_vs_frozen_targets",
+            "contract": "raw_edgeData_hourly_ensemble_vs_frozen_15min_targets",
             "uses_raw_ensemble_mean": raw_mean_flows is not None,
-            "ensemble": fit["ensemble"],
-            "station_ensemble": summarize_pairs(station_ensemble_pairs),
+            "aggregation_quarters": output_fit_aggregation,
+            "aggregation_minutes": output_fit_aggregation * 15,
+            "ensemble": output_ensemble,
+            "station_ensemble": output_station_ensemble,
+            **({"per_day": daily_output_fit} if daily_output_fit else {}),
         },
         "stations": sorted(stations_public,
                             key=lambda item: item["sensor_id"]),

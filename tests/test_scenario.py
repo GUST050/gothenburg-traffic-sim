@@ -416,6 +416,89 @@ class TestBaselineOutputFitGate:
         assert run_scenario.baseline_output_fit_errors(
             {}, bad_audit, n_intervals=1, closures=[]) == []
 
+    @staticmethod
+    def _multi_day_audit(day_two_raw: float) -> dict:
+        from traffic_sim.simulation.sensor_fit import summarize_rows
+
+        targets = [10.0] * 192
+        raw = [10.0] * 96 + [day_two_raw] * 96
+        whole = summarize_rows(
+            [{"target_mean": targets, "simulated_mean_raw": raw}],
+            n_intervals=192, aggregation_quarters=4)
+        first = summarize_rows(
+            [{"target_mean": targets[:96],
+              "simulated_mean_raw": raw[:96]}],
+            n_intervals=96, aggregation_quarters=4)
+        second = summarize_rows(
+            [{"target_mean": targets[96:],
+              "simulated_mean_raw": raw[96:]}],
+            n_intervals=96, aggregation_quarters=4)
+        return {
+            "output_fit": {
+                "uses_raw_ensemble_mean": True,
+                "aggregation_quarters": 4,
+                "aggregation_minutes": 60,
+                "ensemble": whole,
+                "station_ensemble": whole,
+                "per_day": [
+                    {"day": 1, "quarter_start": 0, "quarter_end": 96,
+                     "ensemble": first, "station_ensemble": first},
+                    {"day": 2, "quarter_start": 96, "quarter_end": 192,
+                     "ensemble": second, "station_ensemble": second},
+                ],
+            },
+            "directions": [{"target_mean": targets,
+                            "simulated_mean_raw": raw}],
+            "stations": [{"target_mean": targets,
+                          "simulated_mean_raw": raw}],
+        }
+
+    def test_bad_second_day_cannot_hide_in_multi_day_output_fit(self):
+        errors = run_scenario.baseline_output_fit_errors(
+            {"days": 2, "sensor_targets": {"variants": {"q50": {}}}},
+            self._multi_day_audit(day_two_raw=100.0),
+            n_intervals=192, closures=[])
+
+        assert any("dag 2" in error and "GEH" in error for error in errors)
+
+    def test_each_multi_day_output_fit_row_is_required(self):
+        audit = self._multi_day_audit(day_two_raw=10.0)
+        audit["output_fit"].pop("per_day")
+
+        errors = run_scenario.baseline_output_fit_errors(
+            {"days": 2, "sensor_targets": {"variants": {"q50": {}}}},
+            audit, n_intervals=192, closures=[])
+
+        assert any("per dag" in error for error in errors)
+
+    def test_hourly_gate_accepts_adjacent_quarter_travel_time_spillover(self):
+        from traffic_sim.simulation.sensor_fit import summarize_rows
+
+        targets = [30.0, 30.0, 30.0, 0.0]
+        raw = [30.0, 30.0, 10.0, 20.0]
+        summary = summarize_rows(
+            [{"target_mean": targets, "simulated_mean_raw": raw}],
+            n_intervals=4, aggregation_quarters=4)
+        audit = {
+            "output_fit": {
+                "uses_raw_ensemble_mean": True,
+                "aggregation_quarters": 4,
+                "aggregation_minutes": 60,
+                "ensemble": summary,
+                "station_ensemble": summary,
+            },
+            "directions": [{"target_mean": targets,
+                            "simulated_mean_raw": raw}],
+            "stations": [{"target_mean": targets,
+                          "simulated_mean_raw": raw}],
+        }
+
+        errors = run_scenario.baseline_output_fit_errors(
+            {"sensor_targets": {"variants": {"q50": {}}}},
+            audit, n_intervals=4, closures=[])
+
+        assert errors == []
+
 
 class TestAtomicWriteJson:
     """atomic_write_json (found in review 2026-07-10): a live browser polling

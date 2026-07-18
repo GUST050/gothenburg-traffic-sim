@@ -459,7 +459,8 @@
                 + `${x.unfinished} ofullbordade, ${x.teleports} teleport`).join(' · ')
                 + (s.flags?.length ? ` · FLAGGOR: ${s.flags.join('; ')}` : '');
             case 'sensor_output':
-              return `${s.edge_quarters ?? '–'} riktade intervall · `
+              return `${s.edge_quarters ?? '–'} riktade `
+                + `${s.aggregation_minutes === 60 ? 'sensor-timmar' : 'intervall'} · `
                 + `GEH<5 ${s.geh_lt_5_pct ?? '–'}% · `
                 + (s.reason || 'rå SUMO edgeData och stationsaggregering');
             case 'multi_day':
