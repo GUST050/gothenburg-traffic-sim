@@ -354,6 +354,18 @@ SUMO **mesoscopic** Monte Carlo (43× faster than micro at equal/better
 sensor delivery, 0.87–0.96), identical edge IDs, local rerouters for
 closures, interactive API. Gate: baseline delivery ≥ 0.85 at stations.
 
+Recurring monthly closure searches now have a separate internal screening
+path: `traffic_sim/simulation/monthly_proxy.py` ranks exact calendar
+schedules from explicitly projected forecast/structural flow and detour
+reserve, `proxy_projection.py` preserves the sparse-sensor evidence boundary,
+and `proxy_validation.py` owns the frozen exhaustive-SUMO release gate.
+`screen_monthly_closures.py` and `run_monthly_proxy_validation.py` are
+root-level CLI entrypoints only; neither is wired to `serve.py` or the web UI.
+Proxy version `monthly_proxy_v1` failed its 2026-07-18 held-out gate
+(winner-recall upper bound 0.7778 < 0.90; median Spearman 0.50 < 0.60), so
+the architecture currently permits only internal screening or exhaustive
+fallback and forbids a global-best/UI claim.
+
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
 of a hidden station's traffic (range 0.06–0.83). CONFOUND WARNING (missing

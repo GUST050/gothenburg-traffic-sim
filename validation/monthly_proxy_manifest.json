@@ -1,0 +1,331 @@
+{
+  "schema_version": 1,
+  "kind": "monthly_proxy_validation_manifest",
+  "proxy_version": "monthly_proxy_v1",
+  "frozen_at": "2026-07-18T23:15:00Z",
+  "frozen_before_outcomes": true,
+  "minimum_cases": 12,
+  "minimum_spearman_case_fraction": 0.9,
+  "minimum_ranking_case_fraction": 0.8,
+  "required_strata": {
+    "road_class": [
+      "primary",
+      "secondary",
+      "tertiary",
+      "residential",
+      "unclassified"
+    ],
+    "sensor_distance_band": [
+      "near_0_250m",
+      "medium_250_750m",
+      "far_over_750m"
+    ],
+    "topology": [
+      "single_detour",
+      "multiple_detours",
+      "dense_alternatives"
+    ],
+    "duration": [
+      "single_4h",
+      "single_8h",
+      "recurring_24h_total",
+      "recurring_40h_total"
+    ],
+    "day_type": [
+      "weekday",
+      "weekend",
+      "holiday",
+      "mixed_weekday_weekend"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "primary-far-weekday-4h",
+      "strata": {
+        "road_class": "primary",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "single_detour",
+        "duration": "single_4h",
+        "day_type": "weekday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-primary-far-4h",
+        "directed_edges": ["25653337_26022231_0"],
+        "demand_build_id": "a814eed26d4f1a7b",
+        "source": "forecast",
+        "permitted_date_start": "2027-02-11",
+        "permitted_date_end": "2027-02-11",
+        "required_work_minutes": 240,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "12:00"
+        }
+      }
+    },
+    {
+      "case_id": "secondary-near-weekday-8h",
+      "strata": {
+        "road_class": "secondary",
+        "sensor_distance_band": "near_0_250m",
+        "topology": "multiple_detours",
+        "duration": "single_8h",
+        "day_type": "weekday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-secondary-near-8h",
+        "directed_edges": ["1455801464_18241874_0"],
+        "demand_build_id": "166b7589bfa3204f",
+        "source": "forecast",
+        "permitted_date_start": "2027-02-26",
+        "permitted_date_end": "2027-02-26",
+        "required_work_minutes": 480,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "16:00"
+        }
+      }
+    },
+    {
+      "case_id": "secondary-medium-weekday-4h",
+      "strata": {
+        "road_class": "secondary",
+        "sensor_distance_band": "medium_250_750m",
+        "topology": "multiple_detours",
+        "duration": "single_4h",
+        "day_type": "weekday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-secondary-medium-4h",
+        "directed_edges": ["301653130_1304766596_0"],
+        "demand_build_id": "394b8a7a551599e3",
+        "source": "forecast",
+        "permitted_date_start": "2027-07-15",
+        "permitted_date_end": "2027-07-15",
+        "required_work_minutes": 240,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "12:00",
+          "latest_end": "18:00"
+        }
+      }
+    },
+    {
+      "case_id": "secondary-far-weekend-8h",
+      "strata": {
+        "road_class": "secondary",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "multiple_detours",
+        "duration": "single_8h",
+        "day_type": "weekend"
+      },
+      "closure_search_spec": {
+        "search_id": "val-secondary-far-8h",
+        "directed_edges": ["9945755726_71611746_0"],
+        "demand_build_id": "7f624db51de7d57c",
+        "source": "forecast",
+        "permitted_date_start": "2027-07-17",
+        "permitted_date_end": "2027-07-17",
+        "required_work_minutes": 480,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "10:00",
+          "latest_end": "20:00"
+        }
+      }
+    },
+    {
+      "case_id": "tertiary-near-weekday-4h",
+      "strata": {
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_0_250m",
+        "topology": "dense_alternatives",
+        "duration": "single_4h",
+        "day_type": "weekday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-tertiary-near-4h",
+        "directed_edges": ["26842526_96527131_0"],
+        "demand_build_id": "a618ddcb99228e5e",
+        "source": "forecast",
+        "permitted_date_start": "2027-07-22",
+        "permitted_date_end": "2027-07-22",
+        "required_work_minutes": 240,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "12:00"
+        }
+      }
+    },
+    {
+      "case_id": "tertiary-medium-weekday-8h",
+      "strata": {
+        "road_class": "tertiary",
+        "sensor_distance_band": "medium_250_750m",
+        "topology": "multiple_detours",
+        "duration": "single_8h",
+        "day_type": "weekday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-tertiary-medium-8h",
+        "directed_edges": ["105980153_312999719_0"],
+        "demand_build_id": "5699948becd95c03",
+        "source": "forecast",
+        "permitted_date_start": "2027-09-15",
+        "permitted_date_end": "2027-09-15",
+        "required_work_minutes": 480,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "16:00"
+        }
+      }
+    },
+    {
+      "case_id": "tertiary-far-weekday-4h",
+      "strata": {
+        "road_class": "tertiary",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "single_detour",
+        "duration": "single_4h",
+        "day_type": "weekday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-tertiary-far-4h",
+        "directed_edges": ["288049563_288049833_0"],
+        "demand_build_id": "eeeda78b308e19f8",
+        "source": "forecast",
+        "permitted_date_start": "2027-10-20",
+        "permitted_date_end": "2027-10-20",
+        "required_work_minutes": 240,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "12:00",
+          "latest_end": "18:00"
+        }
+      }
+    },
+    {
+      "case_id": "residential-near-weekday-8h",
+      "strata": {
+        "road_class": "residential",
+        "sensor_distance_band": "near_0_250m",
+        "topology": "dense_alternatives",
+        "duration": "single_8h",
+        "day_type": "weekday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-residential-near-8h",
+        "directed_edges": ["30420876_30420899_0"],
+        "demand_build_id": "98ca4521645ce718",
+        "source": "forecast",
+        "permitted_date_start": "2027-11-18",
+        "permitted_date_end": "2027-11-18",
+        "required_work_minutes": 480,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "16:00"
+        }
+      }
+    },
+    {
+      "case_id": "residential-medium-holiday-4h",
+      "strata": {
+        "road_class": "residential",
+        "sensor_distance_band": "medium_250_750m",
+        "topology": "single_detour",
+        "duration": "single_4h",
+        "day_type": "holiday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-residential-medium-holiday",
+        "directed_edges": ["96156274_2441612874_1"],
+        "demand_build_id": "3b2b93661dc49b8a",
+        "source": "forecast",
+        "permitted_date_start": "2027-12-24",
+        "permitted_date_end": "2027-12-24",
+        "required_work_minutes": 240,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "08:00",
+          "latest_end": "14:00"
+        }
+      }
+    },
+    {
+      "case_id": "residential-far-weekday-8h",
+      "strata": {
+        "road_class": "residential",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "dense_alternatives",
+        "duration": "single_8h",
+        "day_type": "weekday"
+      },
+      "closure_search_spec": {
+        "search_id": "val-residential-far-8h",
+        "directed_edges": ["30133656_30133705_0"],
+        "demand_build_id": "a814eed26d4f1a7b",
+        "source": "forecast",
+        "permitted_date_start": "2027-02-11",
+        "permitted_date_end": "2027-02-11",
+        "required_work_minutes": 480,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {
+          "earliest_start": "12:00",
+          "latest_end": "22:00"
+        }
+      }
+    },
+    {
+      "case_id": "unclassified-near-mixed-24h",
+      "strata": {
+        "road_class": "unclassified",
+        "sensor_distance_band": "near_0_250m",
+        "topology": "multiple_detours",
+        "duration": "recurring_24h_total",
+        "day_type": "mixed_weekday_weekend"
+      },
+      "closure_search_spec": {
+        "search_id": "val-unclassified-near-recurring",
+        "directed_edges": ["60790252_60790253_0"],
+        "demand_build_id": "96269d0654122378",
+        "source": "forecast",
+        "permitted_date_start": "2027-07-15",
+        "permitted_date_end": "2027-07-17",
+        "required_work_minutes": 1440,
+        "max_consecutive_start_days": 3,
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "18:00"
+        }
+      }
+    },
+    {
+      "case_id": "unclassified-far-mixed-40h",
+      "strata": {
+        "road_class": "unclassified",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "dense_alternatives",
+        "duration": "recurring_40h_total",
+        "day_type": "mixed_weekday_weekend"
+      },
+      "closure_search_spec": {
+        "search_id": "val-unclassified-far-recurring",
+        "directed_edges": ["133217135_71611746_0"],
+        "demand_build_id": "5ac8dc3f64dbfb28",
+        "source": "forecast",
+        "permitted_date_start": "2027-07-15",
+        "permitted_date_end": "2027-07-21",
+        "required_work_minutes": 2400,
+        "max_consecutive_start_days": 5,
+        "permitted_daily_band": {
+          "earliest_start": "08:00",
+          "latest_end": "18:00"
+        }
+      }
+    }
+  ]
+}

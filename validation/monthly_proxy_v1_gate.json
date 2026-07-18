@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "kind": "monthly_proxy_validation_gate_record",
+  "proxy_version": "monthly_proxy_v1",
+  "manifest_content_key": "b3c2416d7b9a5b8784a30f756a96d37c915f0f0bccb734701aa7fefb9d0d53c1",
+  "completed_cases": 9,
+  "required_cases": 12,
+  "completed_schedules": 81,
+  "missing_case_ids": [
+    "residential-medium-holiday-4h",
+    "unclassified-far-mixed-40h",
+    "unclassified-near-mixed-24h"
+  ],
+  "metrics": {
+    "winner_recall": 0.666667,
+    "winner_recall_optimistic_upper_bound": 0.777778,
+    "p90_normalized_shortlist_regret": 0.08168,
+    "median_spearman": 0.5,
+    "spearman_case_fraction": 0.5,
+    "ranking_case_fraction": 0.666667,
+    "failure_disqualification_recall": 0.672619
+  },
+  "thresholds": {
+    "winner_recall_minimum": 0.9,
+    "p90_normalized_shortlist_regret_maximum": 0.1,
+    "median_spearman_minimum": 0.6
+  },
+  "gate_checks": {
+    "all_frozen_cases_complete": false,
+    "winner_recall": false,
+    "p90_normalized_shortlist_regret": true,
+    "median_spearman": false
+  },
+  "gate_status": "fail",
+  "ui_exposure_allowed": false,
+  "global_best_claim_allowed": false,
+  "reason": "Even perfect winner recall on all three unfinished cases gives only (4+3)/(6+3)=0.777778, below 0.90; additional demand builds cannot change the release decision.",
+  "local_evidence": {
+    "report_path": "runs/closure-proxy-validation/b3c2416d7b9a5b8784a30f756a96d37c915f0f0bccb734701aa7fefb9d0d53c1/report.partial.json",
+    "report_sha256": "cf3560d9f95c68066e3a922828aa273956f2fd6db39a9a8ab82eaa7a51f82226",
+    "outcomes_path": "runs/closure-proxy-validation/b3c2416d7b9a5b8784a30f756a96d37c915f0f0bccb734701aa7fefb9d0d53c1/outcomes.partial.json",
+    "outcomes_sha256": "abb6d0f766ab98a3ae05992269313bf35ec4eb88125af515a767087e3874ecc4"
+  },
+  "source_fingerprints": {
+    "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "run_scenario": "a73f22a41d8846eeb068ac751fd210a5424c75d2f111e82ad8a799355e3db999",
+    "suggest_closure_time": "8a4639241ab47dcfdbb02249902f02caa4185278649bc35982d56f4c4193470f",
+    "closure_metrics": "3edf71b82933601b5084229eac0ca63f8bd83a87fef946e23cb14b572d120134",
+    "monthly_proxy": "f42a62a1d9a73d484fe204e000dc4cb858a230ec3ec1fa7d1fa49d5a4948ec88",
+    "proxy_projection": "bd5d69316499c573433f655a6d3e4c36d9f5dff33819ff5e98e7b50c375794e0"
+  }
+}

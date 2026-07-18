@@ -1,0 +1,741 @@
+"""Frozen held-out validation gate for the monthly closure proxy.
+
+The validation manifest is frozen before SUMO outcomes are collected.  It
+defines exact cases, schedule IDs, and required representation strata.
+Outcomes are a separate artifact tied to the manifest's content key.  The
+gate cannot pass on partial, non-exhaustive, or provenance-free evidence.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+from statistics import median
+from typing import Any, Mapping, Sequence
+
+from traffic_sim.core.closure_calendar import generate_closure_schedules
+from traffic_sim.core.contracts import ClosureSearchSpec
+from traffic_sim.simulation.monthly_proxy import PROXY_VERSION
+
+
+SCHEMA_VERSION = 1
+WINNER_RECALL_GATE = 0.90
+P90_NORMALIZED_REGRET_GATE = 0.10
+MEDIAN_SPEARMAN_GATE = 0.60
+_MODES = frozenset({"meso", "micro"})
+
+
+def _canonical_key(payload: Mapping[str, Any]) -> str:
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _number(value: Any, label: str) -> float:
+    if value is None or isinstance(value, bool):
+        raise ValueError(f"{label} must be finite")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be finite") from exc
+    if not math.isfinite(parsed):
+        raise ValueError(f"{label} must be finite")
+    return parsed
+
+
+def _quantile(values: Sequence[float], fraction: float) -> float:
+    if not values:
+        raise ValueError("quantile requires values")
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = fraction * (len(ordered) - 1)
+    lower = int(math.floor(position))
+    upper = int(math.ceil(position))
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1 - weight) + ordered[upper] * weight
+
+
+def _average_ranks(values: Sequence[float]) -> list[float]:
+    order = sorted(range(len(values)), key=lambda index: (values[index], index))
+    ranks = [0.0] * len(values)
+    cursor = 0
+    while cursor < len(order):
+        end = cursor + 1
+        while end < len(order) and values[order[end]] == values[order[cursor]]:
+            end += 1
+        average = (cursor + end - 1) / 2
+        for position in range(cursor, end):
+            ranks[order[position]] = average
+        cursor = end
+    return ranks
+
+
+def _spearman(left: Sequence[float], right: Sequence[float]) -> float | None:
+    if len(left) != len(right):
+        raise ValueError("Spearman inputs differ in length")
+    if len(left) < 3:
+        return None
+    rank_left = _average_ranks(left)
+    rank_right = _average_ranks(right)
+    mean_left = sum(rank_left) / len(rank_left)
+    mean_right = sum(rank_right) / len(rank_right)
+    covariance = sum(
+        (a - mean_left) * (b - mean_right)
+        for a, b in zip(rank_left, rank_right)
+    )
+    variance_left = sum((value - mean_left) ** 2 for value in rank_left)
+    variance_right = sum((value - mean_right) ** 2 for value in rank_right)
+    denominator = math.sqrt(variance_left * variance_right)
+    if denominator == 0:
+        return None
+    return covariance / denominator
+
+
+def validation_manifest_content_key(manifest: Mapping[str, Any]) -> str:
+    """Return the immutable identity of a validated held-out manifest."""
+    normalized = validate_validation_manifest(manifest)
+    payload = {
+        key: value
+        for key, value in normalized.items()
+        if key != "content_key"
+    }
+    return _canonical_key(payload)
+
+
+def validate_validation_manifest(
+    raw: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(raw, Mapping):
+        raise ValueError("validation manifest must be an object")
+    if raw.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("unsupported validation manifest schema")
+    if raw.get("kind") != "monthly_proxy_validation_manifest":
+        raise ValueError("validation manifest kind is invalid")
+    if raw.get("proxy_version") != PROXY_VERSION:
+        raise ValueError("validation manifest proxy_version is not current")
+    if raw.get("frozen_before_outcomes") is not True:
+        raise ValueError("validation manifest must be frozen before outcomes")
+    if not isinstance(raw.get("frozen_at"), str) or not raw["frozen_at"]:
+        raise ValueError("validation manifest frozen_at is required")
+    minimum_cases = raw.get("minimum_cases")
+    if (
+        isinstance(minimum_cases, bool)
+        or not isinstance(minimum_cases, int)
+        or minimum_cases < 1
+    ):
+        raise ValueError("validation manifest minimum_cases must be positive")
+    minimum_spearman_fraction = _number(
+        raw.get("minimum_spearman_case_fraction"),
+        "minimum_spearman_case_fraction",
+    )
+    if not 0 < minimum_spearman_fraction <= 1:
+        raise ValueError(
+            "minimum_spearman_case_fraction must be above zero and at most one"
+        )
+    minimum_ranking_fraction = _number(
+        raw.get("minimum_ranking_case_fraction"),
+        "minimum_ranking_case_fraction",
+    )
+    if not 0 < minimum_ranking_fraction <= 1:
+        raise ValueError(
+            "minimum_ranking_case_fraction must be above zero and at most one"
+        )
+
+    required_raw = raw.get("required_strata")
+    if not isinstance(required_raw, Mapping) or not required_raw:
+        raise ValueError("validation manifest required_strata is required")
+    required: dict[str, list[str]] = {}
+    for dimension, values in sorted(required_raw.items()):
+        if (
+            not isinstance(dimension, str)
+            or not dimension
+            or isinstance(values, (str, bytes))
+        ):
+            raise ValueError("validation required strata are invalid")
+        normalized = sorted({str(value) for value in values})
+        if not normalized or any(not value for value in normalized):
+            raise ValueError("validation required strata cannot be empty")
+        required[dimension] = normalized
+
+    cases_raw = raw.get("cases")
+    if not isinstance(cases_raw, Sequence) or isinstance(
+        cases_raw, (str, bytes)
+    ):
+        raise ValueError("validation manifest cases must be a list")
+    cases = []
+    case_ids: set[str] = set()
+    represented = {dimension: set() for dimension in required}
+    for item in cases_raw:
+        if not isinstance(item, Mapping):
+            raise ValueError("validation case must be an object")
+        case_id = str(item.get("case_id", ""))
+        if not case_id or case_id in case_ids:
+            raise ValueError("validation case IDs must be unique and non-empty")
+        case_ids.add(case_id)
+        strata_raw = item.get("strata")
+        if not isinstance(strata_raw, Mapping):
+            raise ValueError(f"validation case {case_id} has no strata")
+        strata = {}
+        for dimension in required:
+            value = str(strata_raw.get(dimension, ""))
+            if not value:
+                raise ValueError(
+                    f"validation case {case_id} lacks stratum {dimension}"
+                )
+            strata[dimension] = value
+            represented[dimension].add(value)
+        spec_raw = item.get("closure_search_spec")
+        try:
+            spec = ClosureSearchSpec.from_dict(spec_raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"validation case {case_id} has an invalid closure search spec"
+            ) from exc
+        schedule_ids_raw = item.get("schedule_ids")
+        generated_ids = tuple(
+            schedule.schedule_id for schedule in generate_closure_schedules(spec)
+        )
+        if schedule_ids_raw is None:
+            schedule_ids = generated_ids
+        else:
+            if isinstance(schedule_ids_raw, (str, bytes)) or not isinstance(
+                schedule_ids_raw, Sequence
+            ):
+                raise ValueError(
+                    f"validation case {case_id} schedule_ids must be a list"
+                )
+            schedule_ids = tuple(str(value) for value in schedule_ids_raw)
+        if (
+            len(schedule_ids) < 3
+            or len(set(schedule_ids)) != len(schedule_ids)
+            or any(not value for value in schedule_ids)
+        ):
+            raise ValueError(
+                f"validation case {case_id} needs at least three unique schedules"
+            )
+        if schedule_ids != generated_ids:
+            raise ValueError(
+                f"validation case {case_id} schedule IDs do not exactly match "
+                "its frozen closure search"
+            )
+        descriptor = {
+            "case_id": case_id,
+            "closure_search_content_key": spec.content_key,
+            "closure_search_spec": spec.to_dict(),
+            "directed_edges": sorted(spec.directed_edges),
+            "strata": strata,
+            "schedule_ids": list(schedule_ids),
+        }
+        cases.append(descriptor)
+
+    if len(cases) < minimum_cases:
+        raise ValueError("validation manifest has fewer than minimum_cases")
+    coverage_missing = {
+        dimension: sorted(set(values) - represented[dimension])
+        for dimension, values in required.items()
+        if set(values) - represented[dimension]
+    }
+    if coverage_missing:
+        raise ValueError(
+            "validation manifest misses required strata: "
+            + json.dumps(coverage_missing, sort_keys=True)
+        )
+
+    normalized_manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "monthly_proxy_validation_manifest",
+        "proxy_version": PROXY_VERSION,
+        "frozen_at": raw["frozen_at"],
+        "frozen_before_outcomes": True,
+        "minimum_cases": minimum_cases,
+        "minimum_spearman_case_fraction": minimum_spearman_fraction,
+        "minimum_ranking_case_fraction": minimum_ranking_fraction,
+        "required_strata": required,
+        "cases": sorted(cases, key=lambda case: case["case_id"]),
+    }
+    supplied_key = raw.get("content_key")
+    expected = _canonical_key(normalized_manifest)
+    if supplied_key is not None and supplied_key != expected:
+        raise ValueError("validation manifest content_key does not match")
+    normalized_manifest["content_key"] = expected
+    return normalized_manifest
+
+
+def _validate_provenance(
+    provenance: Mapping[str, Any],
+    case_id: str,
+) -> dict[str, Any]:
+    if not isinstance(provenance, Mapping):
+        raise ValueError(f"validation case {case_id} has no provenance")
+    for digest_name in (
+        "network_sha256",
+        "demand_sha256",
+        "proxy_input_sha256",
+    ):
+        digest = provenance.get(digest_name)
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            raise ValueError(
+                f"validation case {case_id} has invalid {digest_name}"
+            )
+    mode = provenance.get("simulation_mode")
+    if mode not in _MODES:
+        raise ValueError(f"validation case {case_id} has invalid simulation mode")
+    seeds = provenance.get("seed_set")
+    if (
+        isinstance(seeds, (str, bytes))
+        or not isinstance(seeds, Sequence)
+        or not seeds
+        or any(isinstance(seed, bool) or not isinstance(seed, int) for seed in seeds)
+    ):
+        raise ValueError(f"validation case {case_id} has invalid seed_set")
+    if not isinstance(provenance.get("sumo_version"), str) or not provenance[
+        "sumo_version"
+    ]:
+        raise ValueError(f"validation case {case_id} has no SUMO version")
+    if not isinstance(provenance.get("matched_baseline_id"), str) or not provenance[
+        "matched_baseline_id"
+    ]:
+        raise ValueError(f"validation case {case_id} has no matched baseline")
+    return dict(provenance)
+
+
+def evaluate_validation_case(
+    descriptor: Mapping[str, Any],
+    outcome: Mapping[str, Any],
+) -> dict[str, Any]:
+    case_id = descriptor["case_id"]
+    if outcome.get("case_id") != case_id:
+        raise ValueError(f"validation outcome case ID differs for {case_id}")
+    if outcome.get("exhaustive") is not True:
+        raise ValueError(f"validation case {case_id} is not exhaustive")
+    provenance = _validate_provenance(outcome.get("provenance"), case_id)
+    expected_ids = set(descriptor["schedule_ids"])
+    candidates_raw = outcome.get("candidates")
+    if isinstance(candidates_raw, (str, bytes)) or not isinstance(
+        candidates_raw, Sequence
+    ):
+        raise ValueError(f"validation case {case_id} candidates must be a list")
+    candidates = []
+    seen: set[str] = set()
+    ranks: set[int] = set()
+    for raw in candidates_raw:
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"validation case {case_id} candidate is invalid")
+        schedule_id = str(raw.get("schedule_id", ""))
+        if schedule_id in seen or schedule_id not in expected_ids:
+            raise ValueError(
+                f"validation case {case_id} has duplicate or unknown schedule"
+            )
+        seen.add(schedule_id)
+        eligible = raw.get("eligible")
+        if not isinstance(eligible, bool):
+            raise ValueError(
+                f"validation case {case_id} candidate eligibility is invalid"
+            )
+        objective = (
+            _number(raw.get("sumo_objective"), "sumo_objective")
+            if eligible
+            else None
+        )
+        proxy_rank = raw.get("proxy_rank")
+        if proxy_rank is not None:
+            if (
+                isinstance(proxy_rank, bool)
+                or not isinstance(proxy_rank, int)
+                or proxy_rank < 0
+                or proxy_rank in ranks
+            ):
+                raise ValueError(
+                    f"validation case {case_id} proxy ranks are invalid"
+                )
+            ranks.add(proxy_rank)
+        shortlisted = raw.get("shortlisted")
+        failure_flag = raw.get("proxy_failure_flag")
+        if not isinstance(shortlisted, bool) or not isinstance(failure_flag, bool):
+            raise ValueError(
+                f"validation case {case_id} screening flags are invalid"
+            )
+        candidates.append({
+            "schedule_id": schedule_id,
+            "eligible": eligible,
+            "sumo_objective": objective,
+            "proxy_rank": proxy_rank,
+            "shortlisted": shortlisted,
+            "proxy_failure_flag": failure_flag,
+        })
+    if seen != expected_ids:
+        raise ValueError(
+            f"validation case {case_id} is missing exhaustive schedules"
+        )
+
+    eligible = [candidate for candidate in candidates if candidate["eligible"]]
+    failures = [candidate for candidate in candidates if not candidate["eligible"]]
+    caught_failures = [
+        candidate
+        for candidate in failures
+        if candidate["proxy_failure_flag"] or candidate["shortlisted"]
+    ]
+    failure_recall = (
+        len(caught_failures) / len(failures) if failures else None
+    )
+    if not eligible:
+        return {
+            "case_id": case_id,
+            "case_role": "failure_only",
+            "strata": dict(descriptor["strata"]),
+            "candidate_count": len(candidates),
+            "eligible_count": 0,
+            "disqualified_count": len(failures),
+            "winner_schedule_ids": [],
+            "winner_recalled": None,
+            "best_sumo_objective": None,
+            "best_shortlisted_sumo_objective": None,
+            "normalized_shortlist_regret": None,
+            "spearman_rho": None,
+            "spearman_n": 0,
+            "failure_disqualification_recall": failure_recall,
+            "provenance": provenance,
+        }
+    best_objective = min(
+        float(candidate["sumo_objective"]) for candidate in eligible
+    )
+    tolerance = max(1e-9, abs(best_objective) * 1e-12)
+    winners = [
+        candidate for candidate in eligible
+        if math.isclose(
+            float(candidate["sumo_objective"]),
+            best_objective,
+            abs_tol=tolerance,
+            rel_tol=0.0,
+        )
+    ]
+    winner_recalled = any(candidate["shortlisted"] for candidate in winners)
+    shortlisted_eligible = [
+        candidate for candidate in eligible if candidate["shortlisted"]
+    ]
+    if not shortlisted_eligible:
+        shortlist_best = None
+        regret = None
+    else:
+        shortlist_best = min(
+            float(candidate["sumo_objective"])
+            for candidate in shortlisted_eligible
+        )
+        impact_range = (
+            _quantile(
+                [float(candidate["sumo_objective"]) for candidate in eligible],
+                0.9,
+            )
+            - best_objective
+        )
+        regret = (
+            max(0.0, shortlist_best - best_objective)
+            / max(impact_range, 1e-9)
+        )
+
+    correlated = [
+        candidate
+        for candidate in eligible
+        if candidate["proxy_rank"] is not None
+    ]
+    spearman = _spearman(
+        [float(candidate["proxy_rank"]) for candidate in correlated],
+        [float(candidate["sumo_objective"]) for candidate in correlated],
+    )
+    return {
+        "case_id": case_id,
+        "case_role": "ranking",
+        "strata": dict(descriptor["strata"]),
+        "candidate_count": len(candidates),
+        "eligible_count": len(eligible),
+        "disqualified_count": len(failures),
+        "winner_schedule_ids": sorted(
+            candidate["schedule_id"] for candidate in winners
+        ),
+        "winner_recalled": winner_recalled,
+        "best_sumo_objective": best_objective,
+        "best_shortlisted_sumo_objective": shortlist_best,
+        "normalized_shortlist_regret": regret,
+        "spearman_rho": spearman,
+        "spearman_n": len(correlated),
+        "failure_disqualification_recall": failure_recall,
+        "provenance": provenance,
+    }
+
+
+def evaluate_validation_set(
+    manifest_raw: Mapping[str, Any],
+    outcomes_raw: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Evaluate the release gate; incomplete evidence always keeps UI closed."""
+    manifest = validate_validation_manifest(manifest_raw)
+    if not isinstance(outcomes_raw, Mapping):
+        raise ValueError("validation outcomes must be an object")
+    if outcomes_raw.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("unsupported validation outcomes schema")
+    if outcomes_raw.get("kind") != "monthly_proxy_validation_outcomes":
+        raise ValueError("validation outcomes kind is invalid")
+    if outcomes_raw.get("proxy_version") != PROXY_VERSION:
+        raise ValueError("validation outcomes proxy_version is not current")
+    if outcomes_raw.get("manifest_content_key") != manifest["content_key"]:
+        raise ValueError("validation outcomes do not belong to the manifest")
+    outcomes = outcomes_raw.get("cases")
+    if isinstance(outcomes, (str, bytes)) or not isinstance(outcomes, Sequence):
+        raise ValueError("validation outcomes cases must be a list")
+    by_id = {
+        str(outcome.get("case_id", "")): outcome
+        for outcome in outcomes
+        if isinstance(outcome, Mapping)
+    }
+    expected_ids = {case["case_id"] for case in manifest["cases"]}
+    if set(by_id) != expected_ids or len(by_id) != len(outcomes):
+        raise ValueError("validation outcomes do not exactly cover frozen cases")
+
+    case_reports = [
+        evaluate_validation_case(case, by_id[case["case_id"]])
+        for case in manifest["cases"]
+    ]
+    ranking_reports = [
+        report for report in case_reports if report["case_role"] == "ranking"
+    ]
+    if not ranking_reports:
+        raise ValueError("validation set has no ranking cases")
+    winner_recall = sum(
+        report["winner_recalled"] for report in ranking_reports
+    ) / len(ranking_reports)
+    regrets = [
+        report["normalized_shortlist_regret"]
+        for report in case_reports
+        if report["normalized_shortlist_regret"] is not None
+    ]
+    spearmans = [
+        report["spearman_rho"]
+        for report in case_reports
+        if report["spearman_rho"] is not None
+    ]
+    failure_recalls = [
+        report["failure_disqualification_recall"]
+        for report in case_reports
+        if report["failure_disqualification_recall"] is not None
+    ]
+    p90_regret = _quantile(regrets, 0.9) if regrets else None
+    median_spearman = median(spearmans) if spearmans else None
+    failure_recall = (
+        sum(failure_recalls) / len(failure_recalls)
+        if failure_recalls
+        else None
+    )
+    spearman_case_fraction = len(spearmans) / len(ranking_reports)
+    ranking_case_fraction = len(ranking_reports) / len(case_reports)
+    gate_checks = {
+        "winner_recall": winner_recall >= WINNER_RECALL_GATE,
+        "p90_normalized_shortlist_regret": (
+            p90_regret is not None
+            and p90_regret <= P90_NORMALIZED_REGRET_GATE
+        ),
+        "median_spearman": (
+            median_spearman is not None
+            and median_spearman >= MEDIAN_SPEARMAN_GATE
+        ),
+        "spearman_case_coverage": (
+            spearman_case_fraction
+            >= manifest["minimum_spearman_case_fraction"]
+        ),
+        "ranking_case_coverage": (
+            ranking_case_fraction
+            >= manifest["minimum_ranking_case_fraction"]
+        ),
+        "all_shortlists_contain_eligible_candidate": (
+            len(regrets) == len(ranking_reports)
+        ),
+    }
+    passed = all(gate_checks.values())
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "monthly_proxy_validation_report",
+        "proxy_version": PROXY_VERSION,
+        "manifest_content_key": manifest["content_key"],
+        "case_count": len(case_reports),
+        "metrics": {
+            "winner_recall": round(winner_recall, 6),
+            "p90_normalized_shortlist_regret": (
+                round(p90_regret, 6) if p90_regret is not None else None
+            ),
+            "median_spearman": (
+                round(median_spearman, 6)
+                if median_spearman is not None
+                else None
+            ),
+            "spearman_case_fraction": round(spearman_case_fraction, 6),
+            "ranking_case_fraction": round(ranking_case_fraction, 6),
+            "failure_disqualification_recall": (
+                round(failure_recall, 6)
+                if failure_recall is not None
+                else None
+            ),
+        },
+        "thresholds": {
+            "winner_recall_minimum": WINNER_RECALL_GATE,
+            "p90_normalized_shortlist_regret_maximum":
+                P90_NORMALIZED_REGRET_GATE,
+            "median_spearman_minimum": MEDIAN_SPEARMAN_GATE,
+            "minimum_spearman_case_fraction":
+                manifest["minimum_spearman_case_fraction"],
+            "minimum_ranking_case_fraction":
+                manifest["minimum_ranking_case_fraction"],
+        },
+        "gate_checks": gate_checks,
+        "gate_status": "pass" if passed else "fail",
+        "ui_exposure_allowed": passed,
+        "global_best_claim_allowed": passed,
+        "case_reports": case_reports,
+        "regret_definition": (
+            "(best shortlisted objective - exhaustive best) / "
+            "(exhaustive eligible p90 objective - exhaustive best)"
+        ),
+        "failure_recall_definition": (
+            "actual SUMO disqualifications either flagged by the proxy or "
+            "included in the SUMO shortlist"
+        ),
+    }
+
+
+def evaluate_partial_validation_set(
+    manifest_raw: Mapping[str, Any],
+    outcomes_raw: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Report resumable partial evidence without ever opening the UI gate."""
+    manifest = validate_validation_manifest(manifest_raw)
+    if not isinstance(outcomes_raw, Mapping):
+        raise ValueError("partial validation outcomes must be an object")
+    if outcomes_raw.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("unsupported partial validation outcomes schema")
+    if outcomes_raw.get("kind") != "monthly_proxy_validation_outcomes":
+        raise ValueError("partial validation outcomes kind is invalid")
+    if outcomes_raw.get("proxy_version") != PROXY_VERSION:
+        raise ValueError("partial validation outcomes proxy_version is not current")
+    if outcomes_raw.get("manifest_content_key") != manifest["content_key"]:
+        raise ValueError("partial outcomes do not belong to the manifest")
+    outcomes = outcomes_raw.get("cases")
+    if isinstance(outcomes, (str, bytes)) or not isinstance(outcomes, Sequence):
+        raise ValueError("partial validation cases must be a list")
+    descriptors = {case["case_id"]: case for case in manifest["cases"]}
+    by_id: dict[str, Mapping[str, Any]] = {}
+    for outcome in outcomes:
+        if not isinstance(outcome, Mapping):
+            raise ValueError("partial validation case is invalid")
+        case_id = str(outcome.get("case_id", ""))
+        if case_id not in descriptors or case_id in by_id:
+            raise ValueError("partial validation has duplicate or unknown cases")
+        by_id[case_id] = outcome
+    reports = [
+        evaluate_validation_case(descriptors[case_id], outcome)
+        for case_id, outcome in sorted(by_id.items())
+    ]
+    ranking = [report for report in reports if report["case_role"] == "ranking"]
+    regrets = [
+        report["normalized_shortlist_regret"]
+        for report in ranking
+        if report["normalized_shortlist_regret"] is not None
+    ]
+    spearmans = [
+        report["spearman_rho"]
+        for report in ranking
+        if report["spearman_rho"] is not None
+    ]
+    failure_recalls = [
+        report["failure_disqualification_recall"]
+        for report in reports
+        if report["failure_disqualification_recall"] is not None
+    ]
+    winner_recall = (
+        sum(bool(report["winner_recalled"]) for report in ranking) / len(ranking)
+        if ranking
+        else None
+    )
+    missing = sorted(set(descriptors) - set(by_id))
+    recalled_winners = sum(
+        bool(report["winner_recalled"]) for report in ranking
+    )
+    # Optimistic bound: pretend every unfinished case becomes a ranking case
+    # whose exhaustive winner is recalled.  If even that cannot reach the
+    # threshold, the release gate is conclusively failed and further costly
+    # SUMO runs cannot change that decision.
+    winner_recall_upper_bound = (
+        (recalled_winners + len(missing)) / (len(ranking) + len(missing))
+        if ranking or missing
+        else 0.0
+    )
+    conclusively_failed = winner_recall_upper_bound < WINNER_RECALL_GATE
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "monthly_proxy_validation_report",
+        "proxy_version": PROXY_VERSION,
+        "manifest_content_key": manifest["content_key"],
+        "case_count": len(reports),
+        "required_case_count": len(manifest["cases"]),
+        "missing_case_ids": missing,
+        "metrics": {
+            "winner_recall": (
+                round(winner_recall, 6) if winner_recall is not None else None
+            ),
+            "winner_recall_upper_bound": round(
+                winner_recall_upper_bound, 6
+            ),
+            "p90_normalized_shortlist_regret": (
+                round(_quantile(regrets, 0.9), 6) if regrets else None
+            ),
+            "median_spearman": (
+                round(median(spearmans), 6) if spearmans else None
+            ),
+            "spearman_case_fraction": (
+                round(len(spearmans) / len(ranking), 6) if ranking else 0.0
+            ),
+            "ranking_case_fraction": round(
+                len(ranking) / len(reports), 6
+            ) if reports else 0.0,
+            "failure_disqualification_recall": (
+                round(sum(failure_recalls) / len(failure_recalls), 6)
+                if failure_recalls
+                else None
+            ),
+        },
+        "gate_status": "fail" if conclusively_failed else "incomplete",
+        "gate_checks": {
+            "all_frozen_cases_complete": False,
+            "winner_recall": (
+                winner_recall is not None
+                and winner_recall >= WINNER_RECALL_GATE
+            ),
+            "p90_normalized_shortlist_regret": (
+                bool(regrets)
+                and _quantile(regrets, 0.9) <= P90_NORMALIZED_REGRET_GATE
+            ),
+            "median_spearman": (
+                bool(spearmans)
+                and median(spearmans) >= MEDIAN_SPEARMAN_GATE
+            ),
+        },
+        "ui_exposure_allowed": False,
+        "global_best_claim_allowed": False,
+        "case_reports": reports,
+        "reason": (
+            "even perfect results on every unfinished case cannot raise "
+            "winner recall to the release threshold"
+            if conclusively_failed
+            else "held-out evidence is incomplete; partial metrics are "
+                 "diagnostic only and can never satisfy the release gate"
+        ),
+    }

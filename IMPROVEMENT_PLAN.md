@@ -1768,7 +1768,10 @@ simulation.
 8. Freeze a golden monthly search, benchmark wall time/RSS/disk, run browser
    recovery tests, and publish only if every previous gate passes.
 
-**Implementation status 2026-07-18:** Steps 1, 2 and 3 are complete.
+**Implementation status 2026-07-18:** Steps 1, 2 and 3 are complete. Step 4
+is implemented, but its held-out release gate failed; it is therefore
+complete as an evidence-producing stage and deliberately not released to the
+UI.
 
 Step 1 added the canonical `ClosureSearchSpec`, `DailyTimeBand`,
 `ClosureInterval` and `ClosureSchedule` contracts in
@@ -1836,7 +1839,59 @@ maximum 0.23 s and signed total 0.04 s, inside the explicit one-step limit;
 the difference is disclosed rather than mislabeled as bit-identical. The
 restored matched baseline was identical to the stored evidence. The focused
 step-3 gate passes 113 tests and the complete project suite passes 1,115
-tests with 20 expected skips. Step 4 has not started.
+tests with 20 expected skips.
+
+Step 4 adds the reusable proxy, projection and validation modules under
+`traffic_sim/simulation/`, with `screen_monthly_closures.py` as an internal
+screening CLI and `run_monthly_proxy_validation.py` as the resumable,
+isolated SUMO validation runner. The proxy reports separate ranks/features
+for closed-edge vehicle exposure, existing detour utilization/reserve and
+post-diversion utilization. It never emits invented delay seconds. Missing
+closed-edge data or a missing evaluable detour makes a schedule unscoreable;
+low spatial/structural/domain support enlarges the shortlist and withholds a
+recommendation.
+
+The 2027 projection is explicit about its evidence boundary. Agent 1 directly
+forecasts only seven measured directed sensor edges. Every other requested
+edge comes from the fixed 96-slot structural hierarchy
+`learned_direction_prior → corridor_prior → assignment_prior`, scaled per
+quarter by the median station-level change from the real 2025-09-16
+reference. Two-way sensor 107 is direction-split once before aggregation;
+each physical station receives equal scale influence. Fewer than three valid
+stations leaves the structural projection `null`, never zero. A real
+July-2027 smoke search ranked 272 legal schedules in 2.2 s, selected 54
+stratified SUMO finalists, labelled all road-domain evidence unvalidated and
+kept both UI/global-best flags false.
+
+The held-out manifest
+`validation/monthly_proxy_manifest.json` was frozen before SUMO outcomes
+with content key
+`b3c2416d7b9a5b8784a30f756a96d37c915f0f0bccb734701aa7fefb9d0d53c1`.
+It contains 12 cases and 140 exact schedules spanning five road classes,
+three sensor-distance bands, three topology classes, four work-duration
+classes and weekday/weekend/holiday/mixed periods. Every outcome requires an
+exhaustive schedule set, matched three-seed baseline, SUMO/network/demand/
+proxy hashes and explicit disqualifications. Partial evidence can never open
+the release gate.
+
+Nine cases (81 schedules) could be run entirely from immutable archived
+demand without touching the active release. The observed diagnostic metrics
+were winner recall 0.6667, p90 normalized shortlist regret 0.08168, median
+Spearman 0.50, Spearman case coverage 0.50 and failure/disqualification
+recall 0.6726. Three demand envelopes remain unbuilt, but the gate is already
+mathematically decided: even if all three became ranking cases and recalled
+their winners, the optimistic upper bound would be
+`(4 + 3) / (6 + 3) = 0.7778`, below the required 0.90. The current proxy
+therefore has a conclusive `fail`; the UI was not changed and may not claim a
+global best.
+
+Any proxy-v2 tuning must treat these outcomes as development evidence and
+freeze a new untouched held-out set before release. The safe alternative is
+to enlarge the SUMO shortlist or use bounded exhaustive SUMO while continuing
+to withhold a global recommendation. Re-running or relabelling the same
+frozen cases as new out-of-sample evidence is forbidden. The focused step-4
+gate passes 59 tests; the complete project suite passes 1,148 tests with 20
+expected skips.
 
 ### Final acceptance gate
 
