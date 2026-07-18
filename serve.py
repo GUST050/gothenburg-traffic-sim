@@ -816,13 +816,17 @@ class Handler(SimpleHTTPRequestHandler):
         # inline block moved to app.js for exactly this); unpkg.com serves
         # Leaflet; CARTO serves the basemap tiles; style-src needs
         # unsafe-inline because Leaflet positions panes via inline styles.
+        # DevTools also fetches Leaflet's declared source map from the same
+        # pinned CDN origin. Allowing that already-trusted origin in
+        # connect-src keeps browser diagnostics clean without broadening the
+        # policy to arbitrary network destinations.
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; "
             "script-src 'self' https://unpkg.com; "
             "style-src 'self' 'unsafe-inline' https://unpkg.com; "
             "img-src 'self' data: https://*.basemaps.cartocdn.com; "
-            "connect-src 'self'; "
+            "connect-src 'self' https://unpkg.com; "
             "object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
         self.send_header("X-Content-Type-Options", "nosniff")
         super().end_headers()

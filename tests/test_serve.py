@@ -1541,6 +1541,7 @@ class TestSecurityHardening:
             with urllib.request.urlopen(f"{base_url}{path}", timeout=5) as r:
                 csp = r.headers.get("Content-Security-Policy", "")
             assert "script-src 'self' https://unpkg.com" in csp, path
+            assert "connect-src 'self' https://unpkg.com" in csp, path
             assert "frame-ancestors 'none'" in csp, path
 
     def test_status_endpoints_stay_get(self, base_url):
