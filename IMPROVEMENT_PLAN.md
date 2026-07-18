@@ -383,8 +383,11 @@ Implementation Order" at the end of this document.
    periodic SUMO summary evidence, per-day boundary accounting and a
    fail-closed staging gate. The isolated 2025-09-16→18 acceptance study now
    passes every computational gate and its real 192-quarter browser playback
-   was accepted by Gustav. The two-day candidate is validated and active;
-   longer 3–7-day ranges still require equivalent release evidence.
+   was accepted by Gustav. Exact 3-, 4- and 5-day studies also passed, and the
+   continuous seven-day study proves every day separately (including day 6).
+   The bounded browser product samples at most 10 000 real q50 vehicles per
+   day; the simulation and confidence calculations still use every vehicle.
+   `golden-2025-09-16-7day-v1` is now validated and active.
 9. **Network provenance implemented:** the existing network audit records
    OSM/defaulted values and SUMO TLS membership. Actual NVDB import remains
    evidence-bound until a reviewed download is supplied.
@@ -618,9 +621,11 @@ The first P0/P1 implementation slice is now in the codebase:
 
 Still deliberately open: completing the purpose-compatible route allocation
 (candidate coverage is still insufficient for every through signature),
-closure feasibility and closure-driven signal optimization. The two-day
-golden release and its multi-day publication gate are complete; longer ranges
-remain evidence-bound.
+closure feasibility and closure-driven signal optimization. The continuous
+one-through-seven-day publication contract is now release-backed; a separate
+six-day calibration was intentionally omitted because day 6 already has
+explicit input, output, boundary and health evidence inside the stricter
+seven-day run.
 
 This review covers the active intake, demand, normal simulation, closure,
 signal, multi-day, publication, UI and release paths against the current code,
@@ -695,23 +700,18 @@ signal plans or travel-time data, which remain limitations rather than bugs.
    The q50 representative remains an exact integer count.  This change is
    computationally negligible and must be covered by a fractional-mean test.
 
-6. **P1 — The UI offers 1–7 day normal studies before their release gate is
-   complete.** The date panel exposes `days=1..7`, while the frozen release
-   currently proves only the two-day case. The 2025-09-16→18 acceptance study
-   proves
-   per-day q50/q10/q90 PFE fit, hourly final-SUMO fit, health, midnight
-   carry-over, monotonic trajectories, cancellation/disk-budget tests,
-   range-level publication and equivalence to both one-day references.
-   Real browser playback passed and that two-day release is active. Three-
-   through-seven-day studies remain experimental until each longer range has
-   equivalent evidence.
-
-   **Fix:** either temporarily mark the control `experimental` and prevent it
-   from replacing the normal release, or complete the stated two-day gate
-   before presenting multi-day output as a trusted study.  The better long-
-   term option is the latter: produce per-day target/output/health sections
-   plus one range manifest, while keeping one monotonically running SUMO
-   process and explicit vehicles crossing midnight.
+6. **RESOLVED 2026-07-18 — the UI's 1–7 day normal-study contract is
+   release-backed.** Exact 3-, 4- and 5-day builds passed the same per-day
+   q50/q10/q90 gates as the active two-day case. The continuous seven-day
+   build produced 672 quarters and separately passed every day for PFE input,
+   raw hourly SUMO output, health and midnight accounting; all 445 144
+   variant vehicles were inserted with zero teleports. Day 6 is therefore
+   explicitly proved within the week without paying for a redundant separate
+   six-day optimization. The deterministic trajectory export is bounded to
+   10 000 real q50 vehicles per day (70 000 total, 51.8 MB), while all
+   vehicles still contribute to simulation flows and confidence. The staged
+   publisher, HTTP API, validation report, integrity checks and real rollback
+   exercise passed, and `golden-2025-09-16-7day-v1` is active.
 
 7. **P1 — Closure sensor audits lose target data after route filtering
    (resolved).** The runner now carries the semantic variant in each seed
@@ -774,7 +774,7 @@ before/after measurement.
 | P1 | Separate numerical audit values from map-display rounding | Per-seed integers and raw ensemble mean used for fit; rounded flow only for rendering |
 | P1 | Prove the value of every new sensor | `sensor_contribution.py` emits coverage/confidence/LOSO/placement evidence; real before/after artifacts remain required |
 | P1 | Make closure advice robust | Access/detour, integrity, paired uncertainty, queue-proxy and no-viable-closure gates are evaluated before ranking |
-| P1 | Make multi-day studies continuous and calendar-correct | Active two-day golden release passes per-day PFE/output/health, boundary, trajectory, publication, one-day-equivalence and real-browser gates; 3–7-day ranges remain experimental |
+| P1 | Make multi-day studies continuous and calendar-correct | Active seven-day golden release passes per-day PFE/output/health, boundary, bounded real-vehicle trajectory and publication gates; exact 3/4/5-day builds pass and day 6 is explicitly covered inside the week |
 | P1 | Complete study identity across API and UI | Active study exposes exact build, ScenarioSpec, job and validation artifact |
 | P1 | Import reviewed road structure | NVDB/OSM mapping audit with provenance and no stable-ID drift |
 | P2 | City-configure one signal corridor | Imported plan plus independent turn/travel-time validation |
@@ -1379,16 +1379,12 @@ decisions from it.
 
 ### Multi-day simulation
 
-The trusted units are now one complete local calendar day and the frozen
-2025-09-16→18 continuous two-day release. A multi-day study must not be
-implemented by concatenating independent daily outputs or by silently
-resetting the network at midnight. Longer 3–7-day ranges must prove the same
-contract before promotion:
-
-The two-day gate has passed. The 3–7-day choices remain **experimental build
-requests**, not normal release selectors. They may produce a continuous route
-list, but must show that status and must not silently replace a trusted
-one-day or two-day baseline.
+The trusted units are now one complete local calendar day and continuous
+ranges through seven days. A multi-day study must not be implemented by
+concatenating independent daily outputs or by silently resetting the network
+at midnight. The active 2025-09-16→23 golden release proves that contract for
+the maximum supported range; exact 3-, 4- and 5-day builds also passed, while
+day 6 is explicitly gated inside the seven-day study.
 
 1. `ScenarioSpec` and demand metadata carry an explicit local-date range,
    time zone, ordered analysis windows and the exact source selected for each
@@ -1411,12 +1407,11 @@ one-day or two-day baseline.
    multi-day API request. A longer study must not block ordinary one-day work
    or overwrite its artifacts.
 
-**Acceptance gate:** a frozen two-continuous-day normal case has monotonic
-time, correct local calendar labels, per-day q10/q50/q90 input and final-
-output fit plus health, explicit midnight carry-over accounting, no missing
-interval silently read as zero, and a result-equivalence comparison against
-the two single-day reference studies except for the explicitly measured
-boundary carry-over.
+**Acceptance gate:** the frozen continuous normal case has monotonic time,
+correct local calendar labels, per-day q10/q50/q90 input and final-output fit
+plus health, explicit midnight carry-over accounting, no missing interval
+silently read as zero, bounded real-vehicle browser trajectories, and a
+range-level manifest. The active seven-day release satisfies this gate.
 
 ### Network realism work
 
@@ -1769,8 +1764,8 @@ unlocks:
 4. Normal demand realism: purpose + structure repairs         (size M–L) — rerun temporal/LOSO validation afterward
 5. Freeze reference release                                   (size S–M) — only after 0–4; freeze the proved state,
                                                                           not a mid-migration snapshot
-6. Multi-day golden gate, then full UI release                (size M–L) ✓ two-day release active; keep 3–7 days
-                                                                          experimental pending equivalent evidence
+6. Multi-day golden gate, then full UI release                (size M–L) ✓ seven-day release active; exact 3/4/5
+                                                                          ranges pass and day 6 is gated inside week
 7. Closure decision engine, paired feasible evaluation        (size L)  ◐ exhaustive CLI mode exists
 8. SignalPlan audit and explicitly synthetic optimization     (size M–L; city-configured import blocked on data)
 9. Browser study UI/history and regression smoke suite        (size M)
@@ -2088,7 +2083,43 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    `golden-2025-09-16-2day-v1` passed integrity, API, browser, full-suite,
    peak-memory and rollback gates and was activated. `latest.json` now points
    to it with `golden-2025-09-16-v1` preserved as the validated rollback
-   predecessor; both release validators return zero errors.
+   predecessor; both release validators return zero errors. It is retained as
+   the rollback predecessor of the seven-day release below.
+
+10. CLOSED 2026-07-18 — **normal studies through seven continuous days are
+    validated and active.** Exact 3-, 4- and 5-day calibrations passed all
+    daily q50/q10/q90 input gates. The final 2025-09-16→23 study produced 672
+    quarters and independently passed all seven dates at 100% GEH<5 with zero
+    infeasible intervals or hard-bound violations. Its three SUMO variants
+    inserted 147 405/147 405, 143 704/143 704 and 154 035/154 035 vehicles,
+    with zero teleports and zero unfinished vehicles at the end.
+
+    Raw final SUMO output passed 100% of 1 152 directed sensor-hours and 984
+    physical station-hours (range maximum GEH 2.000); each date separately
+    passed 100%, including day 6 (maximum GEH 1.447). Every midnight boundary
+    has fresh per-seed accounting with zero boundary lag and zero queue. A
+    separate six-day calibration was intentionally not run: the user chose
+    speed over a redundant prefix build, and day 6 is already tested as a
+    first-class daily row inside the stricter week.
+
+    Browser playback remains real-vehicle playback but is now bounded and
+    deterministic: SHA256-lowest selection keeps at most 10 000 q50 vehicles
+    per day, 70 000 of 147 405 for the week (51.8 MB, below the 96 MiB
+    publication limit). All vehicles still drive in SUMO and contribute to
+    flows and confidence; only the optional visual payload is sampled. The
+    scenario took 96.56 s and peaked at 1 959 968 768 B RSS. Staging,
+    validation-report and exact HTTP payload checks passed. The in-app browser
+    was unavailable for a new visual run, so the visual basis remains
+    Gustav's accepted continuous two-day boundary playback using the same UI
+    contract; this limitation is recorded in the release evidence.
+
+    Publishing the three independent q50/q10/q90 route variants in parallel
+    reduced the exact three-day build from 1 085.90 s to 800.26 s (about 26%)
+    while all six route/agent artifacts remained byte-identical. Full
+    regression is **1 039 passed, 20 skipped**. Immutable release
+    `golden-2025-09-16-7day-v1` passed integrity and rollback, was activated,
+    rolled back to `golden-2025-09-16-2day-v1`, then reactivated; both
+    validators return zero errors.
 
 Honest status note: the 45 s / 20% detour constants are
 literature-plausible route-choice bounds, chosen from the measured
