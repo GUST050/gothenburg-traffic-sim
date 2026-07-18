@@ -127,6 +127,10 @@ from traffic_sim.core.contracts import (DemandBuildSpec, ScenarioSpec,
                                          write_scenario_spec)
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import assess_output_fit
+from traffic_sim.simulation.trajectory_contract import (
+    MULTIDAY_MAX_ARTIFACT_BYTES,
+    validate_multiday_trajectory,
+)
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -637,6 +641,44 @@ def validate_staged_scenarios(staging_dir: Path,
                                    day_boundaries_s=boundaries)
         if errors:
             return False, "flerdagsvalidering underkänd: " + "; ".join(errors[:2])
+
+        # Simulation mode promises real vehicles. Multi-day playback is a
+        # deterministic bounded sample of the representative q50 run, while
+        # flows and audits above remain complete. Refuse a technically healthy
+        # range that would open in the browser with no cars, an unbounded file,
+        # a missing date, or a trajectory from the wrong seed.
+        trajectory_name = (baseline or {}).get("trajectories")
+        if (not isinstance(trajectory_name, str)
+                or Path(trajectory_name).name != trajectory_name):
+            return False, "flerdagsbaslinjen saknar säker fordonsfil"
+        trajectory_path = staging_dir / trajectory_name
+        if not trajectory_path.is_file():
+            return False, "flerdagsbaslinjens fordonsfil saknas i staging"
+        if trajectory_path.stat().st_size > MULTIDAY_MAX_ARTIFACT_BYTES:
+            return False, "flerdagsbaslinjens fordonsfil överskrider diskbudgeten"
+        try:
+            with open(trajectory_path) as handle:
+                trajectory = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            return False, "flerdagsbaslinjens fordonsfil är ogiltig JSON"
+        trajectory_seed = trajectory.get("seed")
+        variant_mapping = ((baseline or {}).get("scenario_spec") or {}).get(
+            "demand_variant_mapping", {})
+        if (not isinstance(variant_mapping, dict)
+                or variant_mapping.get(str(trajectory_seed)) != "q50"):
+            return False, "flerdagsfordon kommer inte från representativt q50-frö"
+        representative_health = next((
+            row for row in (baseline.get("seed_health") or [])
+            if isinstance(row, dict) and row.get("seed") == trajectory_seed
+        ), None)
+        expected_inserted = (
+            representative_health.get("inserted")
+            if isinstance(representative_health, dict) else None)
+        trajectory_errors = validate_multiday_trajectory(
+            trajectory, days=days, expected_inserted=expected_inserted)
+        if trajectory_errors:
+            return False, "flerdagsfordon underkända: " + "; ".join(
+                trajectory_errors[:2])
     return True, ""
 
 

@@ -58,6 +58,45 @@ def _staged(tmp_path, geh=100.0, infeasible=0, with_baseline=True,
     return staging, meta
 
 
+def _add_multiday_trajectory(staging, days):
+    payload = json.loads((staging / "baseline.json").read_text())
+    payload.update({
+        "trajectories": "baseline_traj.json",
+        "scenario_spec": {
+            "demand_variant_mapping": {"1000": "q50"},
+        },
+        "seed_health": [{
+            "seed": 1000, "loaded": days, "inserted": days,
+        }],
+    })
+    (staging / "baseline.json").write_text(json.dumps(payload))
+    vehicles = [
+        {"d": day * 86400, "e": [0], "x": [day * 86400 + 10]}
+        for day in range(days)
+    ]
+    (staging / "baseline_traj.json").write_text(json.dumps({
+        "seed": 1000,
+        "variant": "calibrated.rou.xml",
+        "n_vehicles": days,
+        "n_unfinished": 0,
+        "inserted_in_run": days,
+        "displayed_share": 1.0,
+        "sampling": {
+            "enabled": True,
+            "method": "sha256_vehicle_id_per_day",
+            "max_vehicles_per_day": 10_000,
+            "eligible_vehicles": days,
+            "selected_vehicles": days,
+            "per_day": [
+                {"day": day + 1, "eligible": 1, "selected": 1}
+                for day in range(days)
+            ],
+        },
+        "edges": ["e1"],
+        "vehicles": vehicles,
+    }))
+
+
 class TestValidateStagedScenarios:
     def test_healthy_staging_passes(self, tmp_path):
         staging, meta = _staged(tmp_path)
@@ -314,6 +353,10 @@ class TestValidateStagedScenarios:
             ],
         }
         (staging / "baseline.json").write_text(json.dumps(payload))
+        ok, reason = serve.validate_staged_scenarios(staging, meta)
+        assert not ok and "fordonsfil" in reason
+
+        _add_multiday_trajectory(staging, days=2)
         ok, reason = serve.validate_staged_scenarios(staging, meta)
         assert ok, reason
 

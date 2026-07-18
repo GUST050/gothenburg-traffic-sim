@@ -151,11 +151,17 @@
             const variantLabel = { 'calibrated.rou.xml': 'q50',
                                    'calibrated_v1.rou.xml': 'q10',
                                    'calibrated_v2.rou.xml': 'q90' }[traj.variant] || traj.variant;
+            const sampled = traj.sampling?.enabled === true;
             provEl.textContent = `🚗 representativ körning (frö ${traj.seed}, ${variantLabel})`;
             provEl.title = 'Vägfärgerna är medelvärdet av 3 Monte Carlo-körningar; '
               + 'de animerade bilarna är EN av dessa körningar — representativ, '
               + 'inte identisk med medelvärdet.'
-              + (traj.displayed_share != null
+              + (sampled
+                 ? ` Ett deterministiskt urval på ${traj.n_vehicles} av `
+                   + `${traj.inserted_in_run} riktiga fordon ritas `
+                   + `(${traj.sampling.max_vehicles_per_day} högst per dag); `
+                   + 'flöden och sensorresultat använder fortfarande alla fordon.'
+                 : traj.displayed_share != null
                  ? ` ${traj.n_vehicles} av ${traj.inserted_in_run} fordon ritas `
                    + '(resten kör delvis utanför kartans vägnät).'
                  : '')

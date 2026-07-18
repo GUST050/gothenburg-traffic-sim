@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
+import heapq
 import json
 import math
 import os
@@ -54,6 +55,10 @@ from traffic_sim.simulation.metadata import load_metadata
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.core.contracts import ScenarioSpec, load_scenario_spec
 from traffic_sim.simulation.multiday import parse_summary
+from traffic_sim.simulation.trajectory_contract import (
+    MULTIDAY_MAX_VEHICLES_PER_DAY,
+    SAMPLING_METHOD as TRAJECTORY_SAMPLING_METHOD,
+)
 
 SUMO_DIR  = Path("sumo")
 NET_PATH  = SUMO_DIR / "net.net.xml"
@@ -185,15 +190,20 @@ def validate_variant_coverage(meta: dict, mapping: dict[int, str], *,
 
 
 def want_trajectories(args: argparse.Namespace, n_intervals: int) -> bool:
-    """Trajectory export defaults on for single-day demand (unchanged,
-    existing behaviour), off above one day (~10 MB/day; a week would be
-    ~90 MB by default otherwise). --trajectories/--no-trajectories always
-    override the default explicitly in either direction."""
+    """Real vehicle playback is part of every scenario by default.
+
+    Multi-day output is bounded later by a deterministic per-day sample;
+    ``--no-trajectories`` remains an explicit batch/diagnostic escape hatch.
+    """
     if args.no_trajectories:
         return False
-    if args.trajectories:
-        return True
-    return n_intervals <= 96
+    return True
+
+
+def trajectory_sample_cap(n_intervals: int) -> int | None:
+    """Return the per-day browser cap, or ``None`` for a full one-day run."""
+    return (MULTIDAY_MAX_VEHICLES_PER_DAY
+            if n_intervals > 96 else None)
 
 
 def closure_integrity_status(active_closure_entries: int | None,
@@ -304,15 +314,12 @@ def parse_args() -> argparse.Namespace:
                    help="Use microscopic simulation (default: mesoscopic — "
                         "~20x faster, adequate for 15-min edge flows)")
     p.add_argument("--no-trajectories", action="store_true",
-                   help="Skip the per-vehicle trajectory export (one extra "
-                        "seed-1000 run with vehroute exit-times)")
+                   help="Skip real-vehicle playback for a diagnostic/batch "
+                        "run. Published UI baselines normally keep it.")
     p.add_argument("--trajectories", action="store_true",
-                   help="Force per-vehicle trajectory export for multi-day "
-                        "demand, where it is off by default (~10 MB/day, "
-                        "so ~90 MB for a week — opt in deliberately). No "
-                        "effect for single-day demand, which already "
-                        "exports by default; use --no-trajectories there "
-                        "to skip it instead.")
+                   help="Backward-compatible explicit request for trajectory "
+                        "export. Export is already on by default; multi-day "
+                        "output is deterministically capped per day.")
     p.add_argument("--out-dir", default=None, metavar="DIR",
                    help="Write scenario JSON + trajectories + index to DIR "
                         "instead of web/data/scenarios — the STAGING half "
@@ -1368,8 +1375,9 @@ def load_agent_endpoint_positions(route_path: Path) -> dict[str, dict]:
 
 
 def parse_vehroute_file(vr_file: Path, web_edges: set[str],
-                        endpoint_positions: dict[str, dict] | None = None
-                        ) -> tuple[dict[str, int], list[dict], int, int]:
+                        endpoint_positions: dict[str, dict] | None = None,
+                        max_vehicles_per_day: int | None = None,
+                        return_sampling: bool = False):
     """vehroute XML → compact vehicle timelines for the web animation.
 
     Returns (edge_index, vehicles, n_in_file, n_unfinished). F2: an
@@ -1377,15 +1385,31 @@ def parse_vehroute_file(vr_file: Path, web_edges: set[str],
     --vehroute-output.write-unfinished) has exit times only for the edges
     it actually left; sumo emits -1 for the rest. The driven prefix is
     kept and the vehicle marked "u": 1 so the renderer parks it at its
-    last known position instead of erasing the trip."""
-    edge_index: dict[str, int] = {}
-    vehicles: list[dict] = []
+    last known position instead of erasing the trip.
+
+    ``iterparse`` is deliberate: a seven-day vehroute file can contain well
+    over 100 000 large route elements. Loading the whole XML tree made peak
+    memory scale with the study length. When ``max_vehicles_per_day`` is set,
+    the lowest SHA-256 ranks per departure day are retained, making the sample
+    stable across reruns and XML ordering while preserving every day.
+    """
+    if max_vehicles_per_day is not None and max_vehicles_per_day <= 0:
+        raise ValueError("max_vehicles_per_day must be positive")
+
+    selected: list[dict] = []
+    day_heaps: dict[int, list[tuple[int, str, dict]]] = {}
+    eligible_by_day: dict[int, int] = {}
     n_in_file = 0
-    n_unfinished = 0
-    for veh in ET.parse(vr_file).getroot().iter("vehicle"):
+    context = ET.iterparse(vr_file, events=("start", "end"))
+    _event, root = next(context)
+    for event, veh in context:
+        if event != "end" or veh.tag != "vehicle":
+            continue
         n_in_file += 1
         route = final_route(veh)
         if route is None or not route.get("exitTimes"):
+            veh.clear()
+            root.clear()
             continue
         edges = route.get("edges").split()
         exits: list[int] = []
@@ -1397,36 +1421,86 @@ def parse_vehroute_file(vr_file: Path, web_edges: set[str],
         unfinished = len(exits) < len(edges)
         if unfinished:
             if not exits:
+                veh.clear()
+                root.clear()
                 continue   # never left its first edge — no drawable path
             edges = edges[:len(exits)]
-            n_unfinished += 1
-        # keep only edges the map can draw (all net edges are in the geojson,
-        # but guard against internal/unknown ids)
-        idxs = []
-        for e in edges:
-            if e not in edge_index:
-                if e not in web_edges:
-                    idxs = None
-                    break
-                edge_index[e] = len(edge_index)
-            idxs.append(edge_index[e])
-        if not idxs:
+        if not edges or any(edge not in web_edges for edge in edges):
+            veh.clear()
+            root.clear()
             continue
-        rec = {"d": int(float(veh.get("depart"))), "e": idxs, "x": exits}
-        endpoint = (endpoint_positions or {}).get(veh.get("id", ""), {})
+        vehicle_id = veh.get("id", "")
+        depart = int(float(veh.get("depart")))
+        day = max(0, depart // 86400)
+        rec = {"_vehicle_id": vehicle_id, "_edges": edges,
+               "_unfinished": unfinished, "d": depart, "x": exits}
+        endpoint = (endpoint_positions or {}).get(vehicle_id, {})
         if "p" in endpoint:
             rec["p"] = endpoint["p"]
         if "a" in endpoint:
             rec["a"] = endpoint["a"]
         if unfinished:
             rec["u"] = 1
+        eligible_by_day[day] = eligible_by_day.get(day, 0) + 1
+        if max_vehicles_per_day is None:
+            selected.append(rec)
+        else:
+            rank = int.from_bytes(
+                hashlib.sha256(vehicle_id.encode("utf-8")).digest(), "big")
+            entry = (-rank, vehicle_id, rec)
+            heap = day_heaps.setdefault(day, [])
+            if len(heap) < max_vehicles_per_day:
+                heapq.heappush(heap, entry)
+            elif rank < -heap[0][0]:
+                heapq.heapreplace(heap, entry)
+        veh.clear()
+        root.clear()
+
+    if max_vehicles_per_day is not None:
+        selected = [entry[2] for day in sorted(day_heaps)
+                    for entry in day_heaps[day]]
+    selected.sort(key=lambda rec: (rec["d"], rec["_vehicle_id"]))
+
+    edge_index: dict[str, int] = {}
+    vehicles: list[dict] = []
+    selected_by_day: dict[int, int] = {}
+    n_unfinished = 0
+    for rec in selected:
+        day = max(0, rec["d"] // 86400)
+        selected_by_day[day] = selected_by_day.get(day, 0) + 1
+        idxs = []
+        for edge in rec.pop("_edges"):
+            if edge not in edge_index:
+                edge_index[edge] = len(edge_index)
+            idxs.append(edge_index[edge])
+        rec["e"] = idxs
+        rec.pop("_vehicle_id", None)
+        if rec.pop("_unfinished"):
+            n_unfinished += 1
         vehicles.append(rec)
-    return edge_index, vehicles, n_in_file, n_unfinished
+
+    all_days = sorted(set(eligible_by_day) | set(selected_by_day))
+    sampling = {
+        "enabled": max_vehicles_per_day is not None,
+        "method": (TRAJECTORY_SAMPLING_METHOD
+                   if max_vehicles_per_day is not None else None),
+        "max_vehicles_per_day": max_vehicles_per_day,
+        "eligible_vehicles": sum(eligible_by_day.values()),
+        "selected_vehicles": len(vehicles),
+        "per_day": [{
+            "day": day + 1,
+            "eligible": eligible_by_day.get(day, 0),
+            "selected": selected_by_day.get(day, 0),
+        } for day in all_days],
+    }
+    result = (edge_index, vehicles, n_in_file, n_unfinished)
+    return (*result, sampling) if return_sampling else result
 
 
 def publish_trajectories_from_vehroute(
         name: str, route_path: Path, vr_file: Path, stats_path: Path,
-        web_edges: set[str], seed: int = 1000) -> str | None:
+        web_edges: set[str], seed: int = 1000,
+        max_vehicles_per_day: int | None = None) -> str | None:
     """Publish trajectories from an already-completed SUMO run.
 
     The normal scenario path requests vehroute output during its representative
@@ -1439,8 +1513,11 @@ def publish_trajectories_from_vehroute(
         return None
 
     endpoint_positions = load_agent_endpoint_positions(route_path)
-    edge_index, vehicles, n_in_file, n_unfinished = parse_vehroute_file(
-        vr_file, web_edges, endpoint_positions=endpoint_positions)
+    edge_index, vehicles, n_in_file, n_unfinished, sampling = \
+        parse_vehroute_file(
+            vr_file, web_edges, endpoint_positions=endpoint_positions,
+            max_vehicles_per_day=max_vehicles_per_day,
+            return_sampling=True)
     vehicles.sort(key=lambda v: v["d"])
     inv = [None] * len(edge_index)
     for e, i in edge_index.items():
@@ -1465,6 +1542,7 @@ def publish_trajectories_from_vehroute(
                        "n_vehicles": len(vehicles),
                        "n_unfinished": n_unfinished,
                        "inserted_in_run": inserted,
+                       "sampling": sampling,
                        "displayed_share": (round(len(vehicles) / inserted, 4)
                                            if inserted else None),
                        "edges": inv, "vehicles": vehicles},
@@ -1995,7 +2073,8 @@ def main() -> None:
             name, trajectory_route_path,
             scratch_dir / f"seed-{trajectory_seed}" / f"vehroutes_{name}.xml",
             trajectory_stats_file,
-            web_edges, seed=trajectory_seed)
+            web_edges, seed=trajectory_seed,
+            max_vehicles_per_day=trajectory_sample_cap(n_intervals))
         _LAST_TRAJECTORY_OUTPUT = OUT_DIR / traj_name
 
     payload = {

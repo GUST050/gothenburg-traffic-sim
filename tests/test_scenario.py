@@ -1014,9 +1014,10 @@ class TestScenarioManifestDemandScope:
         args = argparse.Namespace(no_trajectories=False, trajectories=False)
         assert run_scenario.want_trajectories(args, n_intervals=96) is True
 
-    def test_trajectories_default_off_above_one_day(self):
+    def test_trajectories_default_on_above_one_day_with_bounded_sampling(self):
         args = argparse.Namespace(no_trajectories=False, trajectories=False)
-        assert run_scenario.want_trajectories(args, n_intervals=192) is False
+        assert run_scenario.want_trajectories(args, n_intervals=192) is True
+        assert run_scenario.trajectory_sample_cap(192) == 10_000
 
     def test_trajectories_flag_forces_on_for_multi_day(self):
         args = argparse.Namespace(no_trajectories=False, trajectories=True)
@@ -1025,6 +1026,46 @@ class TestScenarioManifestDemandScope:
     def test_no_trajectories_flag_forces_off_for_single_day(self):
         args = argparse.Namespace(no_trajectories=True, trajectories=False)
         assert run_scenario.want_trajectories(args, n_intervals=96) is False
+
+    def test_multiday_trajectory_sample_is_deterministic_and_capped_per_day(
+            self, tmp_path):
+        def write(path, vehicles):
+            body = "".join(
+                f"<vehicle id='{vehicle_id}' depart='{depart}'>"
+                f"<route edges='a b' exitTimes='{depart + 5} {depart + 10}'/>"
+                "</vehicle>"
+                for vehicle_id, depart in vehicles)
+            path.write_text(f"<routes>{body}</routes>")
+
+        source = [(f"d1-{i}", i * 10) for i in range(4)]
+        source += [(f"d2-{i}", 86400 + i * 10) for i in range(4)]
+        first, second = tmp_path / "first.xml", tmp_path / "second.xml"
+        write(first, source)
+        write(second, list(reversed(source)))
+
+        parsed_first = run_scenario.parse_vehroute_file(
+            first, {"a", "b"}, max_vehicles_per_day=2,
+            return_sampling=True)
+        parsed_second = run_scenario.parse_vehroute_file(
+            second, {"a", "b"}, max_vehicles_per_day=2,
+            return_sampling=True)
+
+        assert parsed_first == parsed_second
+        _edges, vehicles, total, unfinished, sampling = parsed_first
+        assert total == 8
+        assert unfinished == 0
+        assert len(vehicles) == 4
+        assert sampling == {
+            "enabled": True,
+            "method": "sha256_vehicle_id_per_day",
+            "max_vehicles_per_day": 2,
+            "eligible_vehicles": 8,
+            "selected_vehicles": 4,
+            "per_day": [
+                {"day": 1, "eligible": 4, "selected": 2},
+                {"day": 2, "eligible": 4, "selected": 2},
+            ],
+        }
 
     def test_trajectories_and_no_trajectories_together_is_a_cli_error(self, monkeypatch):
         monkeypatch.setattr(sys, "argv",
