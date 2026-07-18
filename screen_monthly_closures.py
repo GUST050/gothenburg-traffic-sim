@@ -248,6 +248,7 @@ def build_screening_artifact(
         ranked,
         all_candidate_count=len(scored),
         unavailable_candidate_count=len(unavailable),
+        unavailable_candidates=unavailable,
         policy=policy,
     )
 

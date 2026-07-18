@@ -265,6 +265,70 @@ class TestStratifiedShortlist:
         assert result["selection_mode"] == "bounded_exhaustive_fallback"
         assert len(result["entries"]) == 20
 
+    def test_bounded_fallback_includes_unscoreable_legal_candidates(self):
+        ranked = _ranked_candidates(2)
+        unavailable = [
+            {
+                "schedule_id": "unavailable-000",
+                "day_count": 1,
+                "first_work_date": "2027-04-03",
+            }
+        ]
+        result = stratified_shortlist(
+            ranked,
+            all_candidate_count=3,
+            unavailable_candidate_count=1,
+            unavailable_candidates=unavailable,
+        )
+        assert result["selection_mode"] == "bounded_exhaustive_fallback"
+        assert [entry["schedule_id"] for entry in result["entries"]] == [
+            "schedule-000",
+            "schedule-001",
+            "unavailable-000",
+        ]
+        assert result["entries"][-1]["proxy_rank"] is None
+        assert result["shortlist_fraction"] == 1.0
+        assert result["withhold_recommendation"] is True
+
+    def test_bounded_fallback_rejects_missing_unavailable_objects(self):
+        with pytest.raises(
+            ValueError,
+            match="requires every unavailable candidate",
+        ):
+            stratified_shortlist(
+                _ranked_candidates(2),
+                all_candidate_count=3,
+                unavailable_candidate_count=1,
+            )
+
+    def test_rejects_candidate_count_that_leaves_unclassified_gap(self):
+        with pytest.raises(ValueError, match="candidate counts are inconsistent"):
+            stratified_shortlist(
+                _ranked_candidates(2),
+                all_candidate_count=4,
+                unavailable_candidate_count=1,
+                policy=ShortlistPolicy(bounded_exhaustive_limit=1),
+            )
+
+    def test_bounded_fallback_handles_all_candidates_unscoreable(self):
+        unavailable = [
+            {
+                "schedule_id": f"unavailable-{index:03}",
+                "day_count": 1,
+                "first_work_date": f"2027-04-{index + 1:02}",
+            }
+            for index in range(3)
+        ]
+        result = stratified_shortlist(
+            [],
+            all_candidate_count=3,
+            unavailable_candidate_count=3,
+            unavailable_candidates=unavailable,
+        )
+        assert len(result["entries"]) == 3
+        assert all(entry["proxy_rank"] is None for entry in result["entries"])
+        assert result["withhold_reasons"] == ["unscoreable_legal_candidates"]
+
     def test_includes_day_counts_date_blocks_and_controls(self):
         ranked = _ranked_candidates()
         result = stratified_shortlist(
@@ -316,10 +380,19 @@ class TestStratifiedShortlist:
         assert "low_proxy_support" in low["withhold_reasons"]
 
     def test_unscoreable_legal_candidates_expand_and_withhold(self):
+        unavailable = [
+            {
+                "schedule_id": f"unavailable-{index:03}",
+                "day_count": 1,
+                "first_work_date": "2027-04-30",
+            }
+            for index in range(10)
+        ]
         result = stratified_shortlist(
             _ranked_candidates(),
             all_candidate_count=210,
             unavailable_candidate_count=10,
+            unavailable_candidates=unavailable,
             policy=ShortlistPolicy(
                 best_overall=10,
                 bounded_exhaustive_limit=20,
@@ -329,6 +402,91 @@ class TestStratifiedShortlist:
         assert result["withhold_recommendation"] is True
         assert "unscoreable_legal_candidates" in result["withhold_reasons"]
         assert len(result["entries"]) >= 25
+        assert result["unavailable_selected_count"] == 10
+        assert {
+            entry["schedule_id"]
+            for entry in result["entries"]
+            if entry["proxy_rank"] is None
+        } == {candidate["schedule_id"] for candidate in unavailable}
+
+    def test_unscoreable_controls_respect_cap_and_disclose_omissions(self):
+        unavailable = [
+            {
+                "schedule_id": f"unavailable-{index:03}",
+                "day_count": 1,
+                "first_work_date": "2027-04-30",
+            }
+            for index in range(20)
+        ]
+        result = stratified_shortlist(
+            _ranked_candidates(20),
+            all_candidate_count=40,
+            unavailable_candidate_count=20,
+            unavailable_candidates=unavailable,
+            policy=ShortlistPolicy(
+                best_overall=5,
+                bounded_exhaustive_limit=10,
+                validation_quantiles=(1.0,),
+                maximum_shortlist=10,
+            ),
+        )
+        assert len(result["entries"]) == 10
+        assert result["candidate_coverage_complete"] is False
+        assert (
+            "unscoreable_candidates_exceed_shortlist_capacity"
+            in result["withhold_reasons"]
+        )
+
+    def test_all_unscoreable_large_search_keeps_explicit_sumo_controls(self):
+        unavailable = [
+            {
+                "schedule_id": f"unavailable-{index:03}",
+                "day_count": 1,
+                "first_work_date": "2027-04-30",
+            }
+            for index in range(21)
+        ]
+        result = stratified_shortlist(
+            [],
+            all_candidate_count=21,
+            unavailable_candidate_count=21,
+            unavailable_candidates=unavailable,
+            policy=ShortlistPolicy(
+                bounded_exhaustive_limit=20,
+                maximum_shortlist=25,
+            ),
+        )
+        assert len(result["entries"]) == 21
+        assert result["candidate_coverage_complete"] is True
+        assert result["withhold_recommendation"] is True
+
+    def test_required_strata_over_cap_is_deterministic_and_withheld(self):
+        policy = ShortlistPolicy(
+            best_overall=1,
+            best_per_day_count=1,
+            best_per_date_block=1,
+            validation_quantiles=(0.25, 0.5, 0.75, 1.0),
+            bounded_exhaustive_limit=1,
+            maximum_shortlist=2,
+        )
+        first = stratified_shortlist(
+            _ranked_candidates(),
+            all_candidate_count=200,
+            unavailable_candidate_count=0,
+            policy=policy,
+        )
+        second = stratified_shortlist(
+            _ranked_candidates(),
+            all_candidate_count=200,
+            unavailable_candidate_count=0,
+            policy=policy,
+        )
+        assert first == second
+        assert len(first["entries"]) == 2
+        assert (
+            "required_strata_exceed_shortlist_capacity"
+            in first["withhold_reasons"]
+        )
 
     def test_selection_is_deterministic(self):
         ranked = _ranked_candidates()

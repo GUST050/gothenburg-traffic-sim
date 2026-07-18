@@ -1913,6 +1913,65 @@ frozen cases as new out-of-sample evidence is forbidden. The focused step-4
 gate passes 59 tests; the complete project suite passes 1,148 tests with 20
 expected skips.
 
+**Step-4 recovery decision, frozen 2026-07-19.**  The v1 failure is not a
+reason to fit new rank weights to the nine observed cases.  Inspection found
+two different problems that must not be conflated:
+
+1. one real safety bug: a legal candidate whose structural detour flow could
+   not be scored was omitted even when the normal bounded-exhaustive policy
+   had room to run every schedule;
+2. two apparent winner misses were differences of about 4 s and 22 s in
+   whole-network aggregate time loss, while their three-seed ranges spanned
+   hundreds of seconds.  Calling either noisy median a unique exact winner is
+   false precision, not evidence for a new proxy weight.
+
+The shortlist contract is therefore `stratified_shortlist_v2` while the
+unchanged analytical ranks remain `monthly_proxy_v1`.  For at most 120 legal
+schedules, every candidate is selected for SUMO, including candidates with
+no proxy rank.  Above that bound, unscoreable candidates are explicit SUMO
+controls whenever the 240-candidate cap permits; any omitted unscoreable
+candidate structurally withholds a recommendation.  Missing evidence is
+never interpreted as poor traffic performance.
+
+The researched release path is a three-fidelity ranking-and-selection
+procedure:
+
+1. use the zero-cost analytical proxy only to order and stratify candidates;
+2. use matched mesoscopic SUMO pilot runs for the broad shortlist, preserving
+   q10/q50/q90 identities and common random seeds;
+3. spend adaptive repetitions only on the surviving finalists and decide
+   them with `finalist_decision.py`'s worst-variant simultaneous bound.
+
+This follows SUMO's documented division of labour: mesoscopic simulation is
+intended for large urban areas and is much faster than microscopic
+simulation, while microscopic confirmation is reserved for local
+lane/signal/bottleneck questions
+([SUMO mesoscopic model](https://sumo.dlr.de/docs/Simulation/Meso.html)).
+It also follows simulation ranking-and-selection practice: the smallest
+operationally meaningful separation must be pre-registered as an
+indifference zone, common random numbers reduce comparison variance, and
+inferior alternatives should be eliminated sequentially rather than giving
+every option the final replication budget
+([INFORMS simulation optimization tutorial](https://pubsonline.informs.org/doi/pdf/10.1287/educ.2013.0118?download=true)).
+
+This decision does **not** reopen the UI gate.  Before a global-best claim,
+the pilot/finalist policy, practical-equivalence tolerance, precision floor
+and repetition cap are frozen against a named golden monthly benchmark; a
+new untouched held-out set then measures practical-winner recall, regret and
+failure recall.  The old v1 cases remain development diagnostics only.
+
+**Implementation checkpoint 2026-07-19.**  The shortlist-v2 safety contract,
+the fail-closed matched pilot selector, explicit per-replication
+q10/q50/q90+seed records and identity-based baseline/candidate pairing are
+implemented.  Pilot output is structurally `screening_only` and cannot carry
+a winner.  Missing pilot pairs return `incomplete`; too many contenders
+inside the frozen retention band return `capacity_exceeded`; every hard-gated
+candidate returns `no_viable`.  The real v1 failure case
+`tertiary-far-weekday-4h` now selects all 9/9 legal schedules despite having
+0/9 scoreable proxy schedules.  The focused recovery gate passes 117 tests
+and the full suite passes 1,190 tests with 20 expected skips.  The golden
+policy freeze and new held-out SUMO outcomes remain the next stop gate.
+
 ### Final acceptance gate
 
 - The displayed schedule is byte-for-byte derivable from the immutable

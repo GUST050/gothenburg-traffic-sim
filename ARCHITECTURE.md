@@ -360,7 +360,10 @@ schedules from explicitly projected forecast/structural flow and detour
 reserve, `proxy_projection.py` preserves the sparse-sensor evidence boundary,
 and `proxy_validation.py` owns the frozen exhaustive-SUMO release gate.
 Matched finalist decisions are isolated in
-`traffic_sim/simulation/finalist_decision.py`: q10/q50/q90 remain separate,
+`traffic_sim/simulation/pilot_selection.py` and
+`traffic_sim/simulation/finalist_decision.py`: the former can only retain a
+pre-registered band of matched worst-variant mesoscopic pilot contenders and
+can never publish a winner; the latter keeps q10/q50/q90 separate,
 each observation is paired to the same seed and baseline, hard failures are
 removed before ranking, and the primary score is the worst-variant upper
 simultaneous 95% bound on added SUMO `timeLoss`. The result contract is
@@ -376,6 +379,13 @@ Proxy version `monthly_proxy_v1` failed its 2026-07-18 held-out gate
 (winner-recall upper bound 0.7778 < 0.90; median Spearman 0.50 < 0.60), so
 the architecture currently permits only internal screening or exhaustive
 fallback and forbids a global-best/UI claim.
+The 2026-07-19 `stratified_shortlist_v2` safety correction does not relabel
+that failed evidence: bounded searches select every legal schedule even when
+the proxy cannot score it, and larger searches explicitly simulate
+unscoreable controls when capacity permits and withhold whenever any such
+candidate is omitted.  The release path is analytical ordering → matched
+q10/q50/q90 mesoscopic pilot → adaptive robust finalists; its policies still
+require a named golden benchmark and a new untouched held-out validation set.
 
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %

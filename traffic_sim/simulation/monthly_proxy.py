@@ -27,6 +27,7 @@ from traffic_sim.core.contracts import ClosureSchedule
 
 SCHEMA_VERSION = 1
 PROXY_VERSION = "monthly_proxy_v1"
+SHORTLIST_VERSION = "stratified_shortlist_v2"
 _STRUCTURAL_SOURCES = frozenset({
     "forecast_sensor",
     "learned_direction_prior",
@@ -609,6 +610,7 @@ def stratified_shortlist(
     *,
     all_candidate_count: int,
     unavailable_candidate_count: int,
+    unavailable_candidates: Sequence[Mapping[str, Any]] = (),
     policy: ShortlistPolicy = ShortlistPolicy(),
 ) -> dict[str, Any]:
     """Select a deterministic, evidence-aware SUMO shortlist.
@@ -618,18 +620,91 @@ def stratified_shortlist(
     leaders from every date block, and deterministic rank-quantile controls.
     """
     ranked_copy = [dict(candidate) for candidate in ranked]
-    if all_candidate_count < len(ranked_copy) or unavailable_candidate_count < 0:
+    unavailable_copy = [dict(candidate) for candidate in unavailable_candidates]
+    if (
+        all_candidate_count != len(ranked_copy) + unavailable_candidate_count
+        or unavailable_candidate_count < 0
+        or len(unavailable_copy) > unavailable_candidate_count
+    ):
         raise ValueError("candidate counts are inconsistent")
-    if not ranked_copy:
+    if all_candidate_count <= policy.bounded_exhaustive_limit:
+        if unavailable_candidate_count and not unavailable_copy:
+            raise ValueError(
+                "bounded exhaustive fallback requires every unavailable candidate"
+            )
+        entries = [
+            {
+                "schedule_id": str(candidate["schedule_id"]),
+                "proxy_rank": candidate.get("proxy_rank"),
+                "day_count": candidate["day_count"],
+                "first_work_date": candidate["first_work_date"],
+                "selection_reasons": ["bounded_exhaustive_fallback"],
+            }
+            for candidate in sorted(
+                [*ranked_copy, *unavailable_copy],
+                key=lambda candidate: (
+                    candidate.get("proxy_rank") is None,
+                    candidate.get("proxy_rank", math.inf),
+                    str(candidate["schedule_id"]),
+                ),
+            )
+        ]
         return {
             "schema_version": SCHEMA_VERSION,
             "proxy_version": PROXY_VERSION,
+            "shortlist_version": SHORTLIST_VERSION,
+            "selection_mode": "bounded_exhaustive_fallback",
+            "entries": entries,
+            "scoreable_candidate_count": len(ranked_copy),
+            "unavailable_candidate_count": unavailable_candidate_count,
+            "unavailable_selected_count": len(unavailable_copy),
+            "candidate_coverage_complete": len(entries) == all_candidate_count,
+            "shortlist_fraction": 1.0,
+            "withhold_recommendation": bool(unavailable_candidate_count),
+            "withhold_reasons": (
+                ["unscoreable_legal_candidates"]
+                if unavailable_candidate_count
+                else []
+            ),
+            "screening_only": True,
+        }
+    if not ranked_copy:
+        selected_unavailable = sorted(
+            unavailable_copy,
+            key=lambda candidate: str(candidate["schedule_id"]),
+        )[:policy.maximum_shortlist]
+        entries = [
+            {
+                "schedule_id": str(candidate["schedule_id"]),
+                "proxy_rank": None,
+                "day_count": candidate["day_count"],
+                "first_work_date": candidate["first_work_date"],
+                "selection_reasons": ["unscoreable_sumo_control"],
+            }
+            for candidate in selected_unavailable
+        ]
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "proxy_version": PROXY_VERSION,
+            "shortlist_version": SHORTLIST_VERSION,
             "selection_mode": "no_scoreable_candidates",
-            "entries": [],
+            "entries": entries,
             "scoreable_candidate_count": 0,
             "unavailable_candidate_count": unavailable_candidate_count,
+            "unavailable_selected_count": len(selected_unavailable),
+            "candidate_coverage_complete": len(entries) == all_candidate_count,
+            "shortlist_fraction": round(
+                len(entries) / all_candidate_count, 6
+            ),
             "withhold_recommendation": True,
-            "withhold_reasons": ["no_scoreable_candidates"],
+            "withhold_reasons": [
+                "no_scoreable_candidates",
+                *(
+                    ["unscoreable_candidates_exceed_shortlist_capacity"]
+                    if len(selected_unavailable) < unavailable_candidate_count
+                    else []
+                ),
+            ],
             "screening_only": True,
         }
 
@@ -646,79 +721,81 @@ def stratified_shortlist(
         expansion = max(expansion, policy.unavailable_multiplier)
         withhold_reasons.append("unscoreable_legal_candidates")
 
-    if len(ranked_copy) <= policy.bounded_exhaustive_limit:
-        selected_reasons = {
-            candidate["schedule_id"]: {"bounded_exhaustive_fallback"}
-            for candidate in ranked_copy
-        }
-        mode = "bounded_exhaustive_fallback"
-    else:
-        mode = "stratified_proxy"
-        selected_reasons: dict[str, set[str]] = {}
+    mode = "stratified_proxy"
+    selected_reasons: dict[str, set[str]] = {}
+    strata_capacity_exceeded = False
 
-        def choose(candidate: Mapping[str, Any], reason: str) -> None:
-            selected_reasons.setdefault(
-                str(candidate["schedule_id"]), set()
-            ).add(reason)
+    def choose(candidate: Mapping[str, Any], reason: str) -> None:
+        selected_reasons.setdefault(
+            str(candidate["schedule_id"]), set()
+        ).add(reason)
 
-        overall_n = min(
-            len(ranked_copy),
-            max(
-                policy.best_overall,
-                int(math.ceil(policy.best_overall * expansion)),
-            ),
+    overall_n = min(
+        len(ranked_copy),
+        max(
+            policy.best_overall,
+            int(math.ceil(policy.best_overall * expansion)),
+        ),
+    )
+    for candidate in ranked_copy[:overall_n]:
+        choose(candidate, "best_overall")
+
+    by_day_count: dict[int, list[Mapping[str, Any]]] = {}
+    for candidate in ranked_copy:
+        by_day_count.setdefault(int(candidate["day_count"]), []).append(candidate)
+    for day_count, group in sorted(by_day_count.items()):
+        for candidate in group[: policy.best_per_day_count]:
+            choose(candidate, f"best_day_count:{day_count}")
+
+    origin = min(str(candidate["first_work_date"]) for candidate in ranked_copy)
+    by_block: dict[int, list[Mapping[str, Any]]] = {}
+    for candidate in ranked_copy:
+        block = _date_block(
+            str(candidate["first_work_date"]),
+            origin,
+            policy.date_block_days,
         )
-        for candidate in ranked_copy[:overall_n]:
-            choose(candidate, "best_overall")
+        by_block.setdefault(block, []).append(candidate)
+    for block, group in sorted(by_block.items()):
+        for candidate in group[: policy.best_per_date_block]:
+            choose(candidate, f"best_date_block:{block}")
 
-        by_day_count: dict[int, list[Mapping[str, Any]]] = {}
-        for candidate in ranked_copy:
-            by_day_count.setdefault(int(candidate["day_count"]), []).append(candidate)
-        for day_count, group in sorted(by_day_count.items()):
-            for candidate in group[: policy.best_per_day_count]:
-                choose(candidate, f"best_day_count:{day_count}")
+    for fraction in policy.validation_quantiles:
+        position = round(fraction * (len(ranked_copy) - 1))
+        choose(
+            ranked_copy[position],
+            f"validation_control_q{fraction:.2f}",
+        )
 
-        origin = min(str(candidate["first_work_date"]) for candidate in ranked_copy)
-        by_block: dict[int, list[Mapping[str, Any]]] = {}
-        for candidate in ranked_copy:
-            block = _date_block(
-                str(candidate["first_work_date"]),
-                origin,
-                policy.date_block_days,
-            )
-            by_block.setdefault(block, []).append(candidate)
-        for block, group in sorted(by_block.items()):
-            for candidate in group[: policy.best_per_date_block]:
-                choose(candidate, f"best_date_block:{block}")
-
-        for fraction in policy.validation_quantiles:
-            position = round(fraction * (len(ranked_copy) - 1))
-            choose(
-                ranked_copy[position],
-                f"validation_control_q{fraction:.2f}",
-            )
-
-        if len(selected_reasons) > policy.maximum_shortlist:
-            # Preserve every non-overall stratum/control first, then fill by
-            # proxy rank.  This cap can never let adjacent global leaders
-            # erase the required diversity.
-            protected = {
-                schedule_id
-                for schedule_id, reasons in selected_reasons.items()
-                if any(reason != "best_overall" for reason in reasons)
-            }
+    if len(selected_reasons) > policy.maximum_shortlist:
+        # Preserve every non-overall stratum/control first, then fill by
+        # proxy rank.  This cap can never let adjacent global leaders
+        # erase the required diversity.
+        protected = {
+            schedule_id
+            for schedule_id, reasons in selected_reasons.items()
+            if any(reason != "best_overall" for reason in reasons)
+        }
+        if len(protected) > policy.maximum_shortlist:
+            strata_capacity_exceeded = True
+            keep = set([
+                str(candidate["schedule_id"])
+                for candidate in ranked_copy
+                if str(candidate["schedule_id"]) in protected
+            ][:policy.maximum_shortlist])
+        else:
             keep = set(protected)
-            for candidate in ranked_copy:
-                if len(keep) >= policy.maximum_shortlist:
-                    break
-                schedule_id = str(candidate["schedule_id"])
-                if schedule_id in selected_reasons:
-                    keep.add(schedule_id)
-            selected_reasons = {
-                key: value
-                for key, value in selected_reasons.items()
-                if key in keep
-            }
+        for candidate in ranked_copy:
+            if len(keep) >= policy.maximum_shortlist:
+                break
+            schedule_id = str(candidate["schedule_id"])
+            if schedule_id in selected_reasons:
+                keep.add(schedule_id)
+        selected_reasons = {
+            key: value
+            for key, value in selected_reasons.items()
+            if key in keep
+        }
 
     entries = []
     for candidate in ranked_copy:
@@ -733,13 +810,38 @@ def stratified_shortlist(
             "selection_reasons": sorted(selected_reasons[schedule_id]),
         })
 
+    remaining_capacity = max(0, policy.maximum_shortlist - len(entries))
+    selected_unavailable = sorted(
+        unavailable_copy,
+        key=lambda candidate: str(candidate["schedule_id"]),
+    )[:remaining_capacity]
+    entries.extend(
+        {
+            "schedule_id": str(candidate["schedule_id"]),
+            "proxy_rank": None,
+            "day_count": candidate["day_count"],
+            "first_work_date": candidate["first_work_date"],
+            "selection_reasons": ["unscoreable_sumo_control"],
+        }
+        for candidate in selected_unavailable
+    )
+    if len(selected_unavailable) < unavailable_candidate_count:
+        withhold_reasons.append(
+            "unscoreable_candidates_exceed_shortlist_capacity"
+        )
+    if strata_capacity_exceeded:
+        withhold_reasons.append("required_strata_exceed_shortlist_capacity")
+
     return {
         "schema_version": SCHEMA_VERSION,
         "proxy_version": PROXY_VERSION,
+        "shortlist_version": SHORTLIST_VERSION,
         "selection_mode": mode,
         "entries": entries,
         "scoreable_candidate_count": len(ranked_copy),
         "unavailable_candidate_count": unavailable_candidate_count,
+        "unavailable_selected_count": len(selected_unavailable),
+        "candidate_coverage_complete": len(entries) == all_candidate_count,
         "shortlist_fraction": round(len(entries) / all_candidate_count, 6),
         "withhold_recommendation": bool(withhold_reasons),
         "withhold_reasons": withhold_reasons,

@@ -49,6 +49,7 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any, Sequence
 
 import numpy as np
 from scipy import stats as scipy_stats
@@ -312,6 +313,9 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      rerouter_edges: list[str] | None = None,
                      work_dir: Path | None = None,
                      seed_workers: int = 1,
+                     seed_start: int = 1000,
+                     variant_labels: Sequence[str] | None = None,
+                     replication_records: list[dict[str, Any]] | None = None,
                      ) -> tuple[cm.DisruptionMetrics, int, int, list[float]]:
     """Run `seeds` Monte Carlo replications of one candidate (or the
     baseline, when close_edges is empty) and aggregate their disruption
@@ -348,6 +352,30 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     closure_add: list[Path] = []
     if seed_workers < 1:
         raise ValueError("seed_workers must be >= 1")
+    if (
+        isinstance(seed_start, bool)
+        or not isinstance(seed_start, int)
+        or seed_start < 0
+    ):
+        raise ValueError("seed_start must be a non-negative integer")
+    if not variants:
+        raise ValueError("simulate_closure requires at least one demand variant")
+    if variant_labels is not None:
+        labels = tuple(str(label) for label in variant_labels)
+        if (
+            len(labels) != len(variants)
+            or len(set(labels)) != len(labels)
+            or any(not label for label in labels)
+        ):
+            raise ValueError(
+                "variant_labels must uniquely identify every demand variant"
+            )
+    elif replication_records is not None:
+        raise ValueError(
+            "replication_records require explicit variant_labels"
+        )
+    else:
+        labels = tuple(f"variant_{index}" for index in range(len(variants)))
     base_dir = Path(work_dir) if work_dir is not None else rs.SUMO_DIR
     if work_dir is not None:
         base_dir.mkdir(parents=True, exist_ok=False)
@@ -373,7 +401,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
 
     jobs = []
     for s in range(seeds):
-        seed = 1000 + s
+        seed = seed_start + s
         variant_idx = s % len(run_variants)
         route_path = run_variants[variant_idx]
         seed_truncated, seed_dropped = per_variant_trunc[variant_idx]
@@ -386,11 +414,12 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         scratch += [ed_file, add_path]
         jobs.append({"seed": seed, "route_path": route_path,
                      "variant_idx": variant_idx, "seed_dir": seed_dir,
+                     "demand_variant": labels[variant_idx],
                      "ed_file": ed_file, "add_path": add_path,
                      "seed_truncated": seed_truncated,
                      "seed_dropped": seed_dropped})
 
-    def run_one(job: dict) -> tuple[int, cm.DisruptionMetrics, list[Path]]:
+    def run_one(job: dict) -> tuple[int, int, str, cm.DisruptionMetrics, list[Path]]:
         metric_paths = rs.run_sumo(
             job["seed"], job["route_path"], [job["add_path"]] + closure_add,
             duration_s, home, micro=micro, metrics=True,
@@ -405,7 +434,13 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             dropped_unreachable=job["seed_dropped"],
             summary_path=metric_paths["summary"],
             closed_edge_throughput=active_throughput)
-        return job["seed"], metrics, list(metric_paths.values())
+        return (
+            job["seed"],
+            job["variant_idx"],
+            job["demand_variant"],
+            metrics,
+            list(metric_paths.values()),
+        )
 
     if seed_workers == 1 or len(jobs) == 1:
         completed = [run_one(job) for job in jobs]
@@ -423,9 +458,26 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
         else:
             executor.shutdown(wait=True)
     completed.sort(key=lambda item: item[0])
-    per_seed_metrics = [item[1] for item in completed]
+    per_seed_metrics = [item[3] for item in completed]
     for item in completed:
-        scratch.extend(item[2])
+        scratch.extend(item[4])
+    if replication_records is not None:
+        replication_records.extend(
+            {
+                "seed": seed,
+                "variant_index": variant_idx,
+                "demand_variant": demand_variant,
+                "total_time_loss_s": metrics.total_time_loss_s,
+                "truncated_unreachable": metrics.truncated_unreachable,
+                "dropped_unreachable": metrics.dropped_unreachable,
+                "teleport_total": metrics.teleport_total,
+                "unfinished_trips": metrics.unfinished_trips,
+                "unfinished_waiting_trips": metrics.unfinished_waiting_trips,
+                "running_at_end": metrics.running_at_end,
+                "waiting_at_end": metrics.waiting_at_end,
+            }
+            for seed, variant_idx, demand_variant, metrics, _ in completed
+        )
     per_seed_time_loss = [m.total_time_loss_s for m in per_seed_metrics]
     # Candidate-level totals: sum over the DISTINCT variants actually used
     # (not over seeds — repeat seeds on the same variant don't add new

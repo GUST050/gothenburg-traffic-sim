@@ -505,6 +505,70 @@ class TestSimulateClosureVariantAttribution:
 
         assert n_trunc == 3   # 2 + 1, NOT 2 + 2 + 1 (variant 0 sampled twice)
 
+    def test_replication_records_preserve_variant_and_seed_identity(
+            self, tmp_path, monkeypatch):
+        vp0, vp1, vp2 = self._setup_variants(
+            tmp_path, monkeypatch, [2, 1, 5]
+        )
+        adj = run_scenario.build_edge_graph({"closed"})
+
+        def fake_run_sumo(seed, route_path, add_paths, duration_s, home, **kw):
+            return _write_tiny_metrics_fixtures(tmp_path, f"seed{seed}")
+
+        monkeypatch.setattr(sct.rs, "run_sumo", fake_run_sumo)
+        records = []
+        sct.simulate_closure(
+            name="w0",
+            closures=[
+                {"edge_id": "closed", "begin_s": 0, "end_s": 400}
+            ],
+            close_edges=["closed"],
+            variants=[vp0, vp1, vp2],
+            seeds=4,
+            n_intervals=4,
+            duration_s=900,
+            home=tmp_path,
+            micro=True,
+            adj=adj,
+            freeflow={"lead": 10.0},
+            scratch=[],
+            seed_start=2000,
+            variant_labels=("q50", "q10", "q90"),
+            replication_records=records,
+        )
+        assert [
+            (record["seed"], record["demand_variant"])
+            for record in records
+        ] == [
+            (2000, "q50"),
+            (2001, "q10"),
+            (2002, "q90"),
+            (2003, "q50"),
+        ]
+        assert [record["truncated_unreachable"] for record in records] == [
+            2, 1, 5, 2
+        ]
+
+    def test_replication_records_require_explicit_variant_labels(
+            self, tmp_path, monkeypatch):
+        variants = self._setup_variants(tmp_path, monkeypatch, [1])
+        with pytest.raises(ValueError, match="explicit variant_labels"):
+            sct.simulate_closure(
+                name="baseline",
+                closures=None,
+                close_edges=[],
+                variants=variants,
+                seeds=1,
+                n_intervals=1,
+                duration_s=900,
+                home=tmp_path,
+                micro=True,
+                adj=None,
+                freeflow=None,
+                scratch=[],
+                replication_records=[],
+            )
+
 
 class TestLoadBaselineFlows:
     def test_signature_mismatch_exits(self, tmp_path, monkeypatch):

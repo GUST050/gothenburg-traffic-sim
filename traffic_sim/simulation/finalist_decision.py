@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import math
 from statistics import mean, median, stdev
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 from scipy.stats import t as student_t
 
@@ -159,6 +159,89 @@ class CandidateEvidence:
     @property
     def eligible(self) -> bool:
         return not self.hard_failures
+
+
+def paired_candidate_evidence(
+    candidate_id: str,
+    *,
+    baseline_records: Sequence[Mapping[str, Any]],
+    candidate_records: Sequence[Mapping[str, Any]],
+    matched_baseline_id: str,
+    provenance_key: str,
+    hard_failures: Sequence[str] = (),
+) -> CandidateEvidence:
+    """Build explicit paired evidence from SUMO replication records.
+
+    Ordering is irrelevant.  Both sides must contain exactly the same unique
+    ``(demand_variant, seed)`` identities; positional zip/pooling is forbidden.
+    """
+
+    def index_records(
+        records: Sequence[Mapping[str, Any]],
+        label: str,
+    ) -> dict[tuple[str, int], float]:
+        indexed: dict[tuple[str, int], float] = {}
+        for record in records:
+            if not isinstance(record, Mapping):
+                raise ValueError(f"{label} replication record must be an object")
+            variant = str(record.get("demand_variant", ""))
+            seed = record.get("seed")
+            if variant not in DEMAND_VARIANTS:
+                raise ValueError(
+                    f"{label} replication demand_variant must be q10/q50/q90"
+                )
+            if (
+                isinstance(seed, bool)
+                or not isinstance(seed, int)
+                or seed < 0
+            ):
+                raise ValueError(
+                    f"{label} replication seed must be non-negative"
+                )
+            identity = (variant, seed)
+            if identity in indexed:
+                raise ValueError(
+                    f"{label} has duplicate replication identity {identity}"
+                )
+            indexed[identity] = _finite(
+                record.get("total_time_loss_s"),
+                f"{label} total_time_loss_s",
+            )
+        return indexed
+
+    baseline = index_records(baseline_records, "baseline")
+    candidate = index_records(candidate_records, "candidate")
+    if set(baseline) != set(candidate):
+        missing_candidate = sorted(set(baseline) - set(candidate))
+        missing_baseline = sorted(set(candidate) - set(baseline))
+        raise ValueError(
+            "candidate and baseline replication identities differ: "
+            f"missing_candidate={missing_candidate}, "
+            f"missing_baseline={missing_baseline}"
+        )
+    observations = tuple(
+        PairedObservation(
+            candidate_id=candidate_id,
+            demand_variant=variant,
+            seed=seed,
+            baseline_time_loss_s=baseline[(variant, seed)],
+            candidate_time_loss_s=candidate[(variant, seed)],
+            matched_baseline_id=matched_baseline_id,
+            provenance_key=provenance_key,
+        )
+        for variant, seed in sorted(
+            baseline,
+            key=lambda identity: (
+                DEMAND_VARIANTS.index(identity[0]),
+                identity[1],
+            ),
+        )
+    )
+    return CandidateEvidence(
+        candidate_id=candidate_id,
+        observations=observations,
+        hard_failures=tuple(str(reason) for reason in hard_failures),
+    )
 
 
 @dataclass(frozen=True)
@@ -633,4 +716,3 @@ def decide_finalists(
         confidence_level=policy.confidence_level,
         simultaneous_comparisons=comparisons,
     )
-

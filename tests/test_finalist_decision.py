@@ -7,6 +7,7 @@ from traffic_sim.simulation.finalist_decision import (
     FinalistPolicy,
     PairedObservation,
     decide_finalists,
+    paired_candidate_evidence,
 )
 from traffic_sim.simulation.micro_confirmation import (
     MicroContext,
@@ -62,6 +63,76 @@ def _all_variants(q10, q50=None, q90=None):
         "q50": q10 if q50 is None else q50,
         "q90": q10 if q90 is None else q90,
     }
+
+
+class TestPairedCandidateEvidence:
+    def test_pairs_by_variant_and_seed_not_list_position(self):
+        baseline = [
+            {"demand_variant": "q10", "seed": 10, "total_time_loss_s": 100},
+            {"demand_variant": "q50", "seed": 20, "total_time_loss_s": 200},
+            {"demand_variant": "q90", "seed": 30, "total_time_loss_s": 300},
+        ]
+        candidate = [
+            {"demand_variant": "q90", "seed": 30, "total_time_loss_s": 303},
+            {"demand_variant": "q10", "seed": 10, "total_time_loss_s": 101},
+            {"demand_variant": "q50", "seed": 20, "total_time_loss_s": 202},
+        ]
+        evidence = paired_candidate_evidence(
+            "candidate",
+            baseline_records=baseline,
+            candidate_records=candidate,
+            matched_baseline_id="baseline",
+            provenance_key="study",
+        )
+        assert [
+            (
+                observation.demand_variant,
+                observation.seed,
+                observation.delta_time_loss_s,
+            )
+            for observation in evidence.observations
+        ] == [
+            ("q10", 10, 1),
+            ("q50", 20, 2),
+            ("q90", 30, 3),
+        ]
+
+    def test_rejects_nonidentical_pair_sets(self):
+        with pytest.raises(ValueError, match="replication identities differ"):
+            paired_candidate_evidence(
+                "candidate",
+                baseline_records=[
+                    {
+                        "demand_variant": "q50",
+                        "seed": 10,
+                        "total_time_loss_s": 100,
+                    }
+                ],
+                candidate_records=[
+                    {
+                        "demand_variant": "q50",
+                        "seed": 11,
+                        "total_time_loss_s": 100,
+                    }
+                ],
+                matched_baseline_id="baseline",
+                provenance_key="study",
+            )
+
+    def test_rejects_duplicate_pair_identity(self):
+        duplicate = {
+            "demand_variant": "q50",
+            "seed": 10,
+            "total_time_loss_s": 100,
+        }
+        with pytest.raises(ValueError, match="duplicate replication identity"):
+            paired_candidate_evidence(
+                "candidate",
+                baseline_records=[duplicate, duplicate],
+                candidate_records=[duplicate],
+                matched_baseline_id="baseline",
+                provenance_key="study",
+            )
 
 
 class TestRobustFinalistDecision:
