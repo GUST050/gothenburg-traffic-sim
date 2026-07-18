@@ -382,8 +382,9 @@ Implementation Order" at the end of this document.
 8. **Implementation slice complete:** continuous multi-day runs now emit cheap
    periodic SUMO summary evidence, per-day boundary accounting and a
    fail-closed staging gate. The isolated 2025-09-16→18 acceptance study now
-   passes every computational gate; browser playback is still required before
-   its staged golden candidate can be activated or called trusted UI output.
+   passes every computational gate and its real 192-quarter browser playback
+   was accepted by Gustav. The two-day candidate is validated and active;
+   longer 3–7-day ranges still require equivalent release evidence.
 9. **Network provenance implemented:** the existing network audit records
    OSM/defaulted values and SUMO TLS membership. Actual NVDB import remains
    evidence-bound until a reviewed download is supplied.
@@ -617,9 +618,9 @@ The first P0/P1 implementation slice is now in the codebase:
 
 Still deliberately open: completing the purpose-compatible route allocation
 (candidate coverage is still insufficient for every through signature),
-the two-day golden release, closure feasibility and closure-driven signal
-optimization. The signal certificate and multi-day publication gate are now
-implemented, but their final golden artifacts still require an actual run.
+closure feasibility and closure-driven signal optimization. The two-day
+golden release and its multi-day publication gate are complete; longer ranges
+remain evidence-bound.
 
 This review covers the active intake, demand, normal simulation, closure,
 signal, multi-day, publication, UI and release paths against the current code,
@@ -695,12 +696,15 @@ signal plans or travel-time data, which remain limitations rather than bugs.
    computationally negligible and must be covered by a fractional-mean test.
 
 6. **P1 — The UI offers 1–7 day normal studies before their release gate is
-   complete.** The date panel exposes `days=1..7`, and the builder can create
-   a continuous route list. The 2025-09-16→18 acceptance study now proves
+   complete.** The date panel exposes `days=1..7`, while the frozen release
+   currently proves only the two-day case. The 2025-09-16→18 acceptance study
+   proves
    per-day q50/q10/q90 PFE fit, hourly final-SUMO fit, health, midnight
    carry-over, monotonic trajectories, cancellation/disk-budget tests,
    range-level publication and equivalence to both one-day references.
-   Activation remains blocked only on the real browser/playback gate.
+   Real browser playback passed and that two-day release is active. Three-
+   through-seven-day studies remain experimental until each longer range has
+   equivalent evidence.
 
    **Fix:** either temporarily mark the control `experimental` and prevent it
    from replacing the normal release, or complete the stated two-day gate
@@ -770,7 +774,7 @@ before/after measurement.
 | P1 | Separate numerical audit values from map-display rounding | Per-seed integers and raw ensemble mean used for fit; rounded flow only for rendering |
 | P1 | Prove the value of every new sensor | `sensor_contribution.py` emits coverage/confidence/LOSO/placement evidence; real before/after artifacts remain required |
 | P1 | Make closure advice robust | Access/detour, integrity, paired uncertainty, queue-proxy and no-viable-closure gates are evaluated before ranking |
-| P1 | Make multi-day studies continuous and calendar-correct | Two-day computational golden study passes per-day PFE/output/health, boundary, trajectory, publication and one-day-equivalence gates; real browser playback still blocks activation |
+| P1 | Make multi-day studies continuous and calendar-correct | Active two-day golden release passes per-day PFE/output/health, boundary, trajectory, publication, one-day-equivalence and real-browser gates; 3–7-day ranges remain experimental |
 | P1 | Complete study identity across API and UI | Active study exposes exact build, ScenarioSpec, job and validation artifact |
 | P1 | Import reviewed road structure | NVDB/OSM mapping audit with provenance and no stable-ID drift |
 | P2 | City-configure one signal corridor | Imported plan plus independent turn/travel-time validation |
@@ -1375,15 +1379,16 @@ decisions from it.
 
 ### Multi-day simulation
 
-The current trusted unit is one complete local calendar day. A multi-day study
-must not be implemented by concatenating independent daily outputs or by
-silently resetting the network at midnight. Build it only after a two-day
-continuous prototype proves the following contract:
+The trusted units are now one complete local calendar day and the frozen
+2025-09-16→18 continuous two-day release. A multi-day study must not be
+implemented by concatenating independent daily outputs or by silently
+resetting the network at midnight. Longer 3–7-day ranges must prove the same
+contract before promotion:
 
-Until that gate passes, the existing 1–7-day control is an **experimental
-build request**, not a normal release selector.  It may produce a continuous
-route list, but it must show that status and must not silently replace a
-trusted one-day baseline.
+The two-day gate has passed. The 3–7-day choices remain **experimental build
+requests**, not normal release selectors. They may produce a continuous route
+list, but must show that status and must not silently replace a trusted
+one-day or two-day baseline.
 
 1. `ScenarioSpec` and demand metadata carry an explicit local-date range,
    time zone, ordered analysis windows and the exact source selected for each
@@ -1764,8 +1769,8 @@ unlocks:
 4. Normal demand realism: purpose + structure repairs         (size M–L) — rerun temporal/LOSO validation afterward
 5. Freeze reference release                                   (size S–M) — only after 0–4; freeze the proved state,
                                                                           not a mid-migration snapshot
-6. Multi-day golden gate, then full UI release                (size M–L) ◐ computational gates pass; keep 1–7 days
-                                                                          experimental until browser playback passes
+6. Multi-day golden gate, then full UI release                (size M–L) ✓ two-day release active; keep 3–7 days
+                                                                          experimental pending equivalent evidence
 7. Closure decision engine, paired feasible evaluation        (size L)  ◐ exhaustive CLI mode exists
 8. SignalPlan audit and explicitly synthetic optimization     (size M–L; city-configured import blocked on data)
 9. Browser study UI/history and regression smoke suite        (size M)
@@ -2041,12 +2046,11 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    root: ordinary bootstrap A→B→A first established the initial predecessor,
    then two complete golden clones were activated A→B and
    `rollback_golden_release()` restored A after revalidating its complete
-   bundle/gates. The intended release was then activated. `latest.json` points
-   to `golden-2025-09-16-v1`, its previous pointer is the validated bootstrap
-   A, and both integrity and golden validation return zero errors.
+   bundle/gates. The one-day release was then activated and later became the
+   validated rollback predecessor of the two-day release described below.
 
-9. IN REVIEW 2026-07-18 — **the continuous two-day computational gate
-   passes; activation is browser-blocked.** An isolated historical build for
+9. CLOSED 2026-07-18 — **the continuous two-day golden release is validated
+   and active.** An isolated historical build for
    2025-09-16→18 produced 192 monotonically ordered quarters. Every q50/q10/
    q90 variant passed **166/166 hourly sensor checks on each day** with zero
    infeasible intervals. The three continuous SUMO seeds inserted
@@ -2077,11 +2081,14 @@ partially delivered.  Deployment spec throughout: 2027-09-15 forecast
    differ by only +0.466%/+0.432%, and citywide daily flow-vector cosine is
    0.9876/0.9848. Full regression: **1 034 passed, 20 skipped**.
 
-   The in-app browser surface was unavailable during this run. The staged
-   result therefore remains non-active until a real 192-quarter playback
-   verifies the day label and clock on both sides of midnight, moving vehicles,
-   scenario/validation panels, network requests and a clean console. No
-   computational result is being promoted as a browser pass.
+   Gustav then exercised the staged 192-quarter result in the real browser at
+   the midnight boundary and confirmed “de funkar”: the day label and clock,
+   moving vehicles, scenario/validation panels, network requests and console
+   showed no issue. The immutable 36-artifact release
+   `golden-2025-09-16-2day-v1` passed integrity, API, browser, full-suite,
+   peak-memory and rollback gates and was activated. `latest.json` now points
+   to it with `golden-2025-09-16-v1` preserved as the validated rollback
+   predecessor; both release validators return zero errors.
 
 Honest status note: the 45 s / 20% detour constants are
 literature-plausible route-choice bounds, chosen from the measured
