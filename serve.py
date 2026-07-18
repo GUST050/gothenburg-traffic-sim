@@ -1049,13 +1049,11 @@ class Handler(SimpleHTTPRequestHandler):
                 spec = ScenarioSpec.from_dict(structured)
             except (AttributeError, KeyError, TypeError, ValueError) as exc:
                 return self._json(400, {"error": f"ogiltig ScenarioSpec: {exc}"})
-            edges = [closure.edge_id for closure in spec.closures]
+            edges = list(dict.fromkeys(
+                closure.edge_id for closure in spec.closures))
             if not edges:
                 return self._json(400, {"error":
                                         "ScenarioSpec måste innehålla minst en stängning"})
-            if len(edges) != len(set(edges)):
-                return self._json(400, {"error":
-                                        "ScenarioSpec får inte upprepa samma stängda kant"})
             begin = end = ""
         else:
             edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
@@ -1238,6 +1236,10 @@ class Handler(SimpleHTTPRequestHandler):
         if demand_spec.structural_reference_date != "2025-09-16":
             return self._json(400, {"error":
                                     "structural_reference_date måste vara 2025-09-16"})
+        if demand_spec.purpose != "standard":
+            return self._json(400, {"error":
+                                    "closure_envelope-demand får bara startas "
+                                    "av den isolerade stängningsstudien"})
         date = demand_spec.start_date
         source = demand_spec.source
         days = demand_spec.days
@@ -1591,10 +1593,8 @@ class Handler(SimpleHTTPRequestHandler):
                 window_start, window_end = _signal_window_from_spec(spec)
             except (AttributeError, KeyError, TypeError, ValueError) as exc:
                 return self._json(400, {"error": f"ogiltig signal-ScenarioSpec: {exc}"})
-            edges = [closure.edge_id for closure in spec.closures]
-            if len(edges) != len(set(edges)):
-                return self._json(400, {"error":
-                                        "ScenarioSpec får inte upprepa samma stängda kant"})
+            edges = list(dict.fromkeys(
+                closure.edge_id for closure in spec.closures))
         else:
             edges = [e for e in qs.get("edges", [""])[0].split(",") if e]
             window_start = qs.get("window_start", [OPTIMIZE_WINDOW_START])[0]

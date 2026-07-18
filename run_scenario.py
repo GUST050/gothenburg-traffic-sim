@@ -873,17 +873,59 @@ def edges_near(close_edges: list[str], radius_m: float) -> list[str]:
     return sorted(out)
 
 
+def grouped_closure_intervals(closures: list[dict]) -> list[dict]:
+    """Validate closure windows and group simultaneous edges.
+
+    SUMO accepts multiple ``closingReroute`` children in one interval.  The
+    grouping keeps a recurring multi-edge worksite as one exact daily
+    interval while still allowing the same edge to close again on a later
+    non-overlapping day.
+    """
+    grouped: dict[tuple[int, int], list[str]] = {}
+    by_edge: dict[str, list[tuple[int, int]]] = {}
+    for closure in closures:
+        edge = closure.get("edge_id")
+        begin = closure.get("begin_s")
+        end = closure.get("end_s")
+        if (not isinstance(edge, str) or not edge
+                or isinstance(begin, bool) or not isinstance(begin, int)
+                or isinstance(end, bool) or not isinstance(end, int)
+                or begin < 0 or end <= begin):
+            raise ValueError(
+                "closures require edge_id and non-negative increasing "
+                "integer begin_s/end_s")
+        grouped.setdefault((begin, end), []).append(edge)
+        by_edge.setdefault(edge, []).append((begin, end))
+    for edge, intervals in by_edge.items():
+        intervals.sort()
+        if any(current_begin < previous_end
+               for (_, previous_end), (current_begin, _)
+               in zip(intervals, intervals[1:])):
+            raise ValueError(
+                f"closure intervals for {edge} must not overlap")
+    return [
+        {"begin_s": begin, "end_s": end,
+         "edge_ids": tuple(dict.fromkeys(grouped[(begin, end)]))}
+        for begin, end in sorted(grouped)
+    ]
+
+
 def write_closure_additional(path: Path, closures: list[dict],
                              all_edges: list[str]) -> None:
     """One shared closure file per scenario. Vehicles whose remaining route
     uses a closed edge recompute when they enter a rerouter edge (the
     closure's neighbourhood)."""
+    intervals = grouped_closure_intervals(closures)
     with open(path, "w") as f:
         f.write("<additional>\n")
         f.write(f'  <rerouter id="closure" edges="{" ".join(all_edges)}">\n')
-        for closure in closures:
-            f.write(f'    <interval begin="{closure["begin_s"]}" end="{closure["end_s"]}">\n')
-            f.write(f'      <closingReroute id="{closure["edge_id"]}" disallow="all"/>\n')
+        for interval in intervals:
+            f.write(
+                f'    <interval begin="{interval["begin_s"]}" '
+                f'end="{interval["end_s"]}">\n')
+            for edge_id in interval["edge_ids"]:
+                f.write(
+                    f'      <closingReroute id="{edge_id}" disallow="all"/>\n')
             f.write("    </interval>\n")
         f.write("  </rerouter>\n")
         f.write("</additional>\n")

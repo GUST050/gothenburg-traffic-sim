@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 SCHEMA_VERSION = 1
 _EDGE_ID = re.compile(r"^[^\s/\\]+$")
@@ -25,6 +26,15 @@ _VARIANTS = frozenset({"q10", "q50", "q90", "edge_shares"})
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _CLOCK = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$|^24:00$")
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9_.+-]+$")
+_CLOSURE_SOURCES = frozenset({"historical", "forecast"})
+_DST_POLICIES = frozenset({"exclude_transition_dates"})
+_DURATION_BASES = frozenset({"required_work_time"})
+_WORK_TO_CLOSURE_ASSUMPTIONS = frozenset({"one_to_one"})
+_POLICY_STATUSES = frozenset({"user_supplied_unverified"})
+_DEMAND_PURPOSE_MAX_DAYS = {
+    "standard": 7,
+    "closure_envelope": 9,
+}
 
 
 def _date(value: str, label: str) -> str:
@@ -96,6 +106,17 @@ def _string_list(values: Any, label: str) -> tuple[str, ...]:
     return result
 
 
+def _strict_int(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{label} must be an integer")
+    return value
+
+
+def _content_key(payload: Mapping[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:20]
+
+
 @dataclass(frozen=True)
 class AnalysisWindow:
     """Warm-up, measured interval, and drain for bounded studies."""
@@ -139,6 +160,7 @@ class DemandBuildSpec:
     begin: str = "00:00"
     end: str = "24:00"
     structural_reference_date: str = "2025-09-16"
+    purpose: str = "standard"
 
     def __post_init__(self) -> None:
         _date(self.start_date, "demand.start_date")
@@ -146,8 +168,16 @@ class DemandBuildSpec:
               "demand.structural_reference_date")
         if self.source not in {"historical", "forecast"}:
             raise ValueError("demand.source must be historical or forecast")
-        if isinstance(self.days, bool) or not isinstance(self.days, int) or not (1 <= self.days <= 7):
-            raise ValueError("demand.days must be an integer from 1 through 7")
+        if self.purpose not in _DEMAND_PURPOSE_MAX_DAYS:
+            raise ValueError(
+                f"demand.purpose must be one of "
+                f"{sorted(_DEMAND_PURPOSE_MAX_DAYS)}")
+        maximum_days = _DEMAND_PURPOSE_MAX_DAYS[self.purpose]
+        if (isinstance(self.days, bool) or not isinstance(self.days, int)
+                or not (1 <= self.days <= maximum_days)):
+            raise ValueError(
+                f"demand.days must be an integer from 1 through {maximum_days} "
+                f"for purpose={self.purpose}")
         _clock(self.begin, "demand.begin")
         _clock(self.end, "demand.end")
         if _clock_minutes(self.end) <= _clock_minutes(self.begin):
@@ -168,6 +198,9 @@ class DemandBuildSpec:
             "end": self.end,
             "structural_reference_date": self.structural_reference_date,
         }
+        # Keep every existing standard build key byte-for-byte stable.
+        if self.purpose != "standard":
+            payload["purpose"] = self.purpose
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:16]
 
@@ -181,11 +214,11 @@ class DemandBuildSpec:
             raise ValueError("demand.start_date is required")
         raw_days = raw.get("days", 1)
         if isinstance(raw_days, bool):
-            raise ValueError("demand.days must be an integer from 1 through 7")
+            raise ValueError("demand.days must be an integer")
         try:
             parsed_days = int(raw_days)
         except (TypeError, ValueError) as exc:
-            raise ValueError("demand.days must be an integer from 1 through 7") from exc
+            raise ValueError("demand.days must be an integer") from exc
         spec = cls(
             start_date=str(start_date),
             source=str(raw.get("source", "historical")),
@@ -194,6 +227,7 @@ class DemandBuildSpec:
             end=str(raw.get("end", "24:00")),
             structural_reference_date=str(
                 raw.get("structural_reference_date", "2025-09-16")),
+            purpose=str(raw.get("purpose", "standard")),
         )
         supplied_key = raw.get("build_key")
         if supplied_key is not None and str(supplied_key) != spec.build_key:
@@ -210,7 +244,433 @@ class DemandBuildSpec:
             "begin": self.begin,
             "end": self.end,
             "structural_reference_date": self.structural_reference_date,
+            "purpose": self.purpose,
             "build_key": self.build_key,
+        }
+
+
+@dataclass(frozen=True)
+class DailyTimeBand:
+    """Earliest start and latest end allowed for one daily work shift.
+
+    ``latest_end`` earlier than ``earliest_start`` denotes a band that
+    crosses midnight, for example 22:00--06:00.
+    """
+
+    earliest_start: str
+    latest_end: str
+
+    def __post_init__(self) -> None:
+        _clock(self.earliest_start, "closure_search.permitted_daily_band.earliest_start")
+        _clock(self.latest_end, "closure_search.permitted_daily_band.latest_end")
+        if self.earliest_start == "24:00":
+            raise ValueError("permitted_daily_band.earliest_start cannot be 24:00")
+        if self.earliest_start == self.latest_end:
+            raise ValueError("permitted_daily_band must have a non-zero duration")
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "DailyTimeBand":
+        if not isinstance(raw, Mapping):
+            raise ValueError("permitted_daily_band must be a JSON object")
+        return cls(
+            earliest_start=str(raw.get("earliest_start", "")),
+            latest_end=str(raw.get("latest_end", "")),
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "earliest_start": self.earliest_start,
+            "latest_end": self.latest_end,
+        }
+
+
+@dataclass(frozen=True)
+class ClosureSearchSpec:
+    """Immutable user intent for a recurring road-work schedule search."""
+
+    search_id: str
+    directed_edges: tuple[str, ...]
+    demand_build_id: str
+    permitted_date_start: str
+    permitted_date_end: str
+    required_work_minutes: int
+    max_consecutive_start_days: int
+    permitted_daily_band: DailyTimeBand
+    source: str = "forecast"
+    timezone: str = "Europe/Stockholm"
+    dst_policy: str = "exclude_transition_dates"
+    allowed_weekdays: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 6)
+    blackout_dates: tuple[str, ...] = field(default_factory=tuple)
+    same_daily_window: bool = True
+    resolution_minutes: int = 15
+    closure_type: str = "full"
+    duration_basis: str = "required_work_time"
+    work_to_closure_assumption: str = "one_to_one"
+    objective_profile: str = "robust_time_loss"
+    policy_status: str = "user_supplied_unverified"
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.search_id, str) or not self.search_id
+                or not _SAFE_KEY.fullmatch(self.search_id)):
+            raise ValueError("closure_search.search_id must be a safe non-empty key")
+        edges = tuple(
+            _edge(value, "closure_search.directed_edges")
+            for value in _string_list(self.directed_edges,
+                                      "closure_search.directed_edges")
+        )
+        if not edges:
+            raise ValueError("closure_search.directed_edges cannot be empty")
+        if len(set(edges)) != len(edges):
+            raise ValueError("closure_search.directed_edges must be unique")
+        object.__setattr__(self, "directed_edges", edges)
+
+        if not isinstance(self.demand_build_id, str) or not self.demand_build_id.strip():
+            raise ValueError("closure_search.demand_build_id must be non-empty")
+        if self.source not in _CLOSURE_SOURCES:
+            raise ValueError(
+                f"closure_search.source must be one of {sorted(_CLOSURE_SOURCES)}")
+        _date(self.permitted_date_start, "closure_search.permitted_date_start")
+        _date(self.permitted_date_end, "closure_search.permitted_date_end")
+        if self.permitted_date_start > self.permitted_date_end:
+            raise ValueError(
+                "closure_search.permitted_date_start must not be after permitted_date_end")
+
+        if self.timezone != "Europe/Stockholm":
+            raise ValueError("closure_search.timezone must be Europe/Stockholm")
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("closure_search.timezone is unavailable") from exc
+        if self.dst_policy not in _DST_POLICIES:
+            raise ValueError(
+                f"closure_search.dst_policy must be one of {sorted(_DST_POLICIES)}")
+
+        required = _strict_int(
+            self.required_work_minutes, "closure_search.required_work_minutes")
+        if required <= 0:
+            raise ValueError("closure_search.required_work_minutes must be positive")
+        maximum_days = _strict_int(
+            self.max_consecutive_start_days,
+            "closure_search.max_consecutive_start_days",
+        )
+        if not 1 <= maximum_days <= 7:
+            raise ValueError(
+                "closure_search.max_consecutive_start_days must be from 1 through 7")
+        resolution = _strict_int(
+            self.resolution_minutes, "closure_search.resolution_minutes")
+        if resolution != 15:
+            raise ValueError("closure_search.resolution_minutes must be 15")
+        if not isinstance(self.permitted_daily_band, DailyTimeBand):
+            raise ValueError(
+                "closure_search.permitted_daily_band must be a DailyTimeBand")
+        if (_clock_minutes(self.permitted_daily_band.earliest_start) % resolution
+                or _clock_minutes(self.permitted_daily_band.latest_end) % resolution):
+            raise ValueError(
+                "closure_search.permitted_daily_band must align to 15 minutes")
+
+        weekdays_raw = self.allowed_weekdays
+        if isinstance(weekdays_raw, (str, bytes)):
+            raise ValueError("closure_search.allowed_weekdays must be integer weekdays")
+        try:
+            weekdays = tuple(weekdays_raw)
+        except TypeError as exc:
+            raise ValueError(
+                "closure_search.allowed_weekdays must be integer weekdays") from exc
+        if not weekdays or any(
+            isinstance(day, bool) or not isinstance(day, int) or not 0 <= day <= 6
+            for day in weekdays
+        ):
+            raise ValueError(
+                "closure_search.allowed_weekdays must contain values from 0 through 6")
+        if len(set(weekdays)) != len(weekdays):
+            raise ValueError("closure_search.allowed_weekdays must be unique")
+        object.__setattr__(self, "allowed_weekdays", tuple(sorted(weekdays)))
+
+        blackouts = tuple(sorted(
+            _date(value, "closure_search.blackout_dates")
+            for value in _string_list(
+                self.blackout_dates, "closure_search.blackout_dates")
+        ))
+        if len(set(blackouts)) != len(blackouts):
+            raise ValueError("closure_search.blackout_dates must be unique")
+        object.__setattr__(self, "blackout_dates", blackouts)
+
+        if self.same_daily_window is not True:
+            raise ValueError("closure_search.same_daily_window must be true")
+        if self.closure_type != "full":
+            raise ValueError("closure_search.closure_type must be full")
+        if self.duration_basis not in _DURATION_BASES:
+            raise ValueError(
+                f"closure_search.duration_basis must be one of {sorted(_DURATION_BASES)}")
+        if self.work_to_closure_assumption not in _WORK_TO_CLOSURE_ASSUMPTIONS:
+            raise ValueError(
+                "closure_search.work_to_closure_assumption must be one_to_one")
+        if not isinstance(self.objective_profile, str) or not self.objective_profile.strip():
+            raise ValueError("closure_search.objective_profile must be non-empty")
+        if self.policy_status not in _POLICY_STATUSES:
+            raise ValueError(
+                f"closure_search.policy_status must be one of {sorted(_POLICY_STATUSES)}")
+
+    def _content_payload(self) -> dict[str, Any]:
+        return {
+            "directed_edges": sorted(self.directed_edges),
+            "demand_build_id": self.demand_build_id,
+            "source": self.source,
+            "permitted_date_start": self.permitted_date_start,
+            "permitted_date_end": self.permitted_date_end,
+            "timezone": self.timezone,
+            "dst_policy": self.dst_policy,
+            "required_work_minutes": self.required_work_minutes,
+            "max_consecutive_start_days": self.max_consecutive_start_days,
+            "permitted_daily_band": self.permitted_daily_band.to_dict(),
+            "allowed_weekdays": list(self.allowed_weekdays),
+            "blackout_dates": list(self.blackout_dates),
+            "same_daily_window": self.same_daily_window,
+            "resolution_minutes": self.resolution_minutes,
+            "closure_type": self.closure_type,
+            "duration_basis": self.duration_basis,
+            "work_to_closure_assumption": self.work_to_closure_assumption,
+            "objective_profile": self.objective_profile,
+            "policy_status": self.policy_status,
+        }
+
+    @property
+    def content_key(self) -> str:
+        return _content_key(self._content_payload())
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "ClosureSearchSpec":
+        if not isinstance(raw, Mapping):
+            raise ValueError("closure_search_spec must be a JSON object")
+        spec = cls(
+            search_id=str(raw.get("search_id", "")),
+            directed_edges=raw.get("directed_edges", ()),
+            demand_build_id=str(raw.get("demand_build_id", "")),
+            source=str(raw.get("source", "forecast")),
+            permitted_date_start=str(raw.get("permitted_date_start", "")),
+            permitted_date_end=str(raw.get("permitted_date_end", "")),
+            timezone=str(raw.get("timezone", "Europe/Stockholm")),
+            dst_policy=str(raw.get("dst_policy", "exclude_transition_dates")),
+            required_work_minutes=raw.get("required_work_minutes"),
+            max_consecutive_start_days=raw.get("max_consecutive_start_days"),
+            permitted_daily_band=DailyTimeBand.from_dict(
+                raw.get("permitted_daily_band", {})),
+            allowed_weekdays=raw.get(
+                "allowed_weekdays", (0, 1, 2, 3, 4, 5, 6)),
+            blackout_dates=raw.get("blackout_dates", ()),
+            same_daily_window=raw.get("same_daily_window", True),
+            resolution_minutes=raw.get("resolution_minutes", 15),
+            closure_type=str(raw.get("closure_type", "full")),
+            duration_basis=str(raw.get(
+                "duration_basis", "required_work_time")),
+            work_to_closure_assumption=str(raw.get(
+                "work_to_closure_assumption", "one_to_one")),
+            objective_profile=str(raw.get(
+                "objective_profile", "robust_time_loss")),
+            policy_status=str(raw.get(
+                "policy_status", "user_supplied_unverified")),
+        )
+        supplied_key = raw.get("content_key")
+        if supplied_key is not None and str(supplied_key) != spec.content_key:
+            raise ValueError(
+                "closure_search.content_key does not match the spec contents")
+        return spec
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "closure_search",
+            "search_id": self.search_id,
+            **self._content_payload(),
+            "content_key": self.content_key,
+        }
+
+
+@dataclass(frozen=True)
+class ClosureInterval:
+    """One exact local-time work/closure interval generated for a schedule."""
+
+    work_date: str
+    start_time: str
+    end_time: str
+
+    def __post_init__(self) -> None:
+        _date(self.work_date, "closure_interval.work_date")
+        _ordered(self.start_time, self.end_time, "closure_interval")
+        start = _parse_time(self.start_time, "closure_interval.start_time")
+        end = _parse_time(self.end_time, "closure_interval.end_time")
+        if start.tzinfo is not None or end.tzinfo is not None:
+            raise ValueError(
+                "closure_interval times must be timezone-less local datetimes")
+        if start.date().isoformat() != self.work_date:
+            raise ValueError(
+                "closure_interval.start_time must start on work_date")
+        if any((start.second, start.microsecond, end.second, end.microsecond)):
+            raise ValueError("closure_interval times must align to whole minutes")
+
+    @property
+    def duration_minutes(self) -> int:
+        start = _parse_time(self.start_time, "closure_interval.start_time")
+        end = _parse_time(self.end_time, "closure_interval.end_time")
+        seconds = int((end - start).total_seconds())
+        if seconds % 60:
+            raise ValueError("closure_interval duration must use whole minutes")
+        return seconds // 60
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "ClosureInterval":
+        if not isinstance(raw, Mapping):
+            raise ValueError("closure_interval must be a JSON object")
+        return cls(
+            work_date=str(raw.get("work_date", "")),
+            start_time=str(raw.get("start_time", "")),
+            end_time=str(raw.get("end_time", "")),
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ClosureSchedule:
+    """One fully enumerated same-time recurring closure candidate."""
+
+    schedule_id: str
+    search_content_key: str
+    first_work_date: str
+    day_count: int
+    daily_start: str
+    daily_end: str
+    required_work_minutes: int
+    scheduled_work_minutes: int
+    actual_closed_minutes: int
+    rounding_overshoot_minutes: int
+    intervals: tuple[ClosureInterval, ...]
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.schedule_id, str) or not self.schedule_id
+                or not _SAFE_KEY.fullmatch(self.schedule_id)):
+            raise ValueError("closure_schedule.schedule_id must be a safe key")
+        if (not isinstance(self.search_content_key, str)
+                or not re.fullmatch(r"[0-9a-f]{20}", self.search_content_key)):
+            raise ValueError(
+                "closure_schedule.search_content_key must be a 20-character hex key")
+        _date(self.first_work_date, "closure_schedule.first_work_date")
+        day_count = _strict_int(self.day_count, "closure_schedule.day_count")
+        if day_count <= 0 or len(self.intervals) != day_count:
+            raise ValueError(
+                "closure_schedule.intervals must contain exactly day_count entries")
+        _clock(self.daily_start, "closure_schedule.daily_start")
+        _clock(self.daily_end, "closure_schedule.daily_end")
+        if self.daily_start == "24:00":
+            raise ValueError("closure_schedule.daily_start cannot be 24:00")
+        if (_clock_minutes(self.daily_start) % 15
+                or _clock_minutes(self.daily_end) % 15):
+            raise ValueError(
+                "closure_schedule daily times must align to 15 minutes")
+
+        required = _strict_int(
+            self.required_work_minutes, "closure_schedule.required_work_minutes")
+        scheduled = _strict_int(
+            self.scheduled_work_minutes, "closure_schedule.scheduled_work_minutes")
+        closed = _strict_int(
+            self.actual_closed_minutes, "closure_schedule.actual_closed_minutes")
+        overshoot = _strict_int(
+            self.rounding_overshoot_minutes,
+            "closure_schedule.rounding_overshoot_minutes",
+        )
+        if required <= 0 or scheduled < required:
+            raise ValueError(
+                "closure_schedule scheduled work must satisfy required work")
+        if closed != scheduled:
+            raise ValueError(
+                "closure_schedule one-to-one work and closure minutes must match")
+        if overshoot != scheduled - required:
+            raise ValueError(
+                "closure_schedule rounding overshoot does not match scheduled work")
+        if scheduled % 15 or closed % 15:
+            raise ValueError(
+                "closure_schedule work and closure must align to 15 minutes")
+
+        expected_schedule_id = "closure-" + _content_key({
+            "search_content_key": self.search_content_key,
+            "first_work_date": self.first_work_date,
+            "day_count": self.day_count,
+            "daily_start": self.daily_start,
+            "daily_end": self.daily_end,
+            "scheduled_work_minutes": self.scheduled_work_minutes,
+        })
+        if self.schedule_id != expected_schedule_id:
+            raise ValueError(
+                "closure_schedule.schedule_id does not match the schedule contents")
+
+        first = datetime.strptime(self.first_work_date, "%Y-%m-%d").date()
+        durations: set[int] = set()
+        for index, interval in enumerate(self.intervals):
+            expected_date = first.fromordinal(first.toordinal() + index)
+            if interval.work_date != expected_date.isoformat():
+                raise ValueError(
+                    "closure_schedule work dates must be consecutive")
+            start = _parse_time(
+                interval.start_time, "closure_schedule.interval.start_time")
+            end = _parse_time(
+                interval.end_time, "closure_schedule.interval.end_time")
+            if start.strftime("%H:%M") != self.daily_start:
+                raise ValueError(
+                    "closure_schedule intervals must use the same daily start")
+            end_label = (
+                "24:00"
+                if end.date() > start.date()
+                and end.strftime("%H:%M") == "00:00"
+                else end.strftime("%H:%M")
+            )
+            if end_label != self.daily_end:
+                raise ValueError(
+                    "closure_schedule intervals must use the same daily end")
+            if interval.duration_minutes % 15:
+                raise ValueError(
+                    "closure_schedule interval durations must align to 15 minutes")
+            durations.add(interval.duration_minutes)
+        if len(durations) != 1 or sum(
+                interval.duration_minutes for interval in self.intervals) != closed:
+            raise ValueError(
+                "closure_schedule intervals must have equal durations matching closure")
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "ClosureSchedule":
+        if not isinstance(raw, Mapping):
+            raise ValueError("closure_schedule must be a JSON object")
+        return cls(
+            schedule_id=str(raw.get("schedule_id", "")),
+            search_content_key=str(raw.get("search_content_key", "")),
+            first_work_date=str(raw.get("first_work_date", "")),
+            day_count=raw.get("day_count"),
+            daily_start=str(raw.get("daily_start", "")),
+            daily_end=str(raw.get("daily_end", "")),
+            required_work_minutes=raw.get("required_work_minutes"),
+            scheduled_work_minutes=raw.get("scheduled_work_minutes"),
+            actual_closed_minutes=raw.get("actual_closed_minutes"),
+            rounding_overshoot_minutes=raw.get(
+                "rounding_overshoot_minutes"),
+            intervals=tuple(ClosureInterval.from_dict(item)
+                            for item in raw.get("intervals", ())),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "closure_schedule",
+            "schedule_id": self.schedule_id,
+            "search_content_key": self.search_content_key,
+            "first_work_date": self.first_work_date,
+            "day_count": self.day_count,
+            "daily_start": self.daily_start,
+            "daily_end": self.daily_end,
+            "required_work_minutes": self.required_work_minutes,
+            "scheduled_work_minutes": self.scheduled_work_minutes,
+            "actual_closed_minutes": self.actual_closed_minutes,
+            "rounding_overshoot_minutes": self.rounding_overshoot_minutes,
+            "intervals": [interval.to_dict() for interval in self.intervals],
         }
 
 
@@ -298,13 +758,32 @@ class ScenarioSpec:
             raise ValueError("objective_profile must be non-empty")
         scenario_start = _parse_time(self.start_time, "scenario.start")
         scenario_end = _parse_time(self.end_time, "scenario.end")
-        for closure in self.closures:
+        closures = tuple(self.closures)
+        if any(not isinstance(closure, ClosureSpec) for closure in closures):
+            raise ValueError("scenario.closures must contain ClosureSpec values")
+        object.__setattr__(self, "closures", closures)
+        intervals_by_edge: dict[str, list[tuple[datetime, datetime]]] = {}
+        for closure in closures:
+            _same_timezone_style(
+                [self.start_time, self.end_time,
+                 closure.start_time, closure.end_time],
+                "scenario.closures",
+            )
             closure_start = _parse_time(closure.start_time, "closure.start")
             closure_end = _parse_time(closure.end_time, "closure.end")
             if closure_start < scenario_start or closure_end > scenario_end:
                 raise ValueError(
                     f"closure {closure.edge_id} must fit within the scenario window"
                 )
+            intervals_by_edge.setdefault(closure.edge_id, []).append(
+                (closure_start, closure_end))
+        for edge_id, intervals in intervals_by_edge.items():
+            intervals.sort()
+            if any(current_start < previous_end
+                   for (_, previous_end), (current_start, _)
+                   in zip(intervals, intervals[1:])):
+                raise ValueError(
+                    f"closure intervals for {edge_id} must not overlap")
         if self.analysis_window is not None:
             _same_timezone_style(
                 [self.start_time, self.end_time,
@@ -422,6 +901,31 @@ def load_demand_build_spec(path: Path) -> DemandBuildSpec:
 def write_demand_build_spec(path: Path, spec: DemandBuildSpec) -> None:
     """Write a validated demand contract atomically."""
     spec = DemandBuildSpec.from_dict(spec.to_dict())
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(spec.to_dict(), handle, indent=2, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+
+
+def load_closure_search_spec(path: Path) -> ClosureSearchSpec:
+    """Load and validate one recurring closure-search contract."""
+    with Path(path).open(encoding="utf-8") as handle:
+        raw = json.load(handle)
+    if raw.get("schema_version", SCHEMA_VERSION) != SCHEMA_VERSION:
+        raise ValueError("unsupported ClosureSearchSpec schema_version")
+    if raw.get("kind", "closure_search") != "closure_search":
+        raise ValueError("spec is not a closure_search contract")
+    return ClosureSearchSpec.from_dict(raw)
+
+
+def write_closure_search_spec(path: Path, spec: ClosureSearchSpec) -> None:
+    """Write a validated closure-search contract atomically."""
+    spec = ClosureSearchSpec.from_dict(spec.to_dict())
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")

@@ -1324,6 +1324,38 @@ class TestTimeWindowedClosures:
                  i.find("closingReroute").get("id")) for i in intervals] == [
             ("600", "1200", "a_b"), ("1800", "2400", "c_d")]
 
+    def test_write_closure_additional_groups_simultaneous_edges_and_reopens(
+            self, tmp_path):
+        path = tmp_path / "closure.add.xml"
+        closures = [
+            {"edge_id": "a_b", "begin_s": 600, "end_s": 1200},
+            {"edge_id": "c_d", "begin_s": 600, "end_s": 1200},
+            {"edge_id": "a_b", "begin_s": 1800, "end_s": 2400},
+            {"edge_id": "c_d", "begin_s": 1800, "end_s": 2400},
+        ]
+
+        run_scenario.write_closure_additional(
+            path, closures, ["lead", "a_b", "c_d"])
+
+        intervals = ET.parse(path).getroot().findall(".//interval")
+        assert [(item.get("begin"), item.get("end")) for item in intervals] == [
+            ("600", "1200"), ("1800", "2400")]
+        assert [[closing.get("id") for closing in
+                 item.findall("closingReroute")] for item in intervals] == [
+            ["a_b", "c_d"], ["a_b", "c_d"]]
+
+    def test_write_closure_additional_rejects_overlap_on_same_edge(
+            self, tmp_path):
+        with pytest.raises(ValueError, match="must not overlap"):
+            run_scenario.write_closure_additional(
+                tmp_path / "closure.add.xml",
+                [
+                    {"edge_id": "a_b", "begin_s": 600, "end_s": 1200},
+                    {"edge_id": "a_b", "begin_s": 900, "end_s": 1500},
+                ],
+                ["a_b"],
+            )
+
     def test_prefilter_only_truncates_windowed_no_detour_when_wait_can_teleport(
             self, monkeypatch, tmp_path):
         net_path = tmp_path / "net.net.xml"

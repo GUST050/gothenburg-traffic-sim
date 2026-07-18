@@ -600,6 +600,16 @@ class TestRecalibrateValidation:
             payload={"demand_spec": {"start_date": "2025-09-16"}})
         assert status == 400
 
+    def test_generic_recalibrate_rejects_closure_envelope_demand(self, base_url):
+        status, _ = post_json_or_error(
+            base_url + "/api/recalibrate",
+            payload={"demand_spec": {
+                "start_date": "2025-09-16",
+                "days": 8,
+                "purpose": "closure_envelope",
+            }})
+        assert status == 400
+
     def test_bad_date_format_is_400(self, base_url):
         status, _ = post_json_or_error(f"{base_url}/api/recalibrate?date=2025-9-16")
         assert status == 400

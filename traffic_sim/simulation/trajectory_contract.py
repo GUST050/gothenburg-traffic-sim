@@ -35,8 +35,8 @@ def validate_multiday_trajectory(payload: Any, *, days: int,
     errors: list[str] = []
     if not isinstance(payload, dict):
         return ["fordonsfilen är inte ett JSON-objekt"]
-    if not isinstance(days, int) or not 2 <= days <= 7:
-        return ["fordonsvalideringen kräver 2–7 dagar"]
+    if not isinstance(days, int) or not 2 <= days <= 9:
+        return ["fordonsvalideringen kräver 2–9 dagar"]
 
     inserted = _strict_nonnegative_int(payload.get("inserted_in_run"))
     selected = _strict_nonnegative_int(payload.get("n_vehicles"))

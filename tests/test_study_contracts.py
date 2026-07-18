@@ -66,6 +66,20 @@ def test_demand_build_spec_rejects_tampered_identity():
         DemandBuildSpec.from_dict({**spec.to_dict(), "source": "forecast"})
 
 
+def test_standard_demand_build_key_is_unchanged_when_purpose_is_omitted():
+    spec = DemandBuildSpec(start_date="2025-09-16")
+    legacy_payload = {
+        key: value for key, value in spec.to_dict().items()
+        if key not in {"purpose", "build_key"}
+    }
+
+    loaded = DemandBuildSpec.from_dict(legacy_payload)
+
+    assert loaded.purpose == "standard"
+    assert loaded.build_key == spec.build_key
+    assert spec.build_key == "f59ea19f882259b4"
+
+
 def test_multi_day_demand_build_requires_effective_full_day_window():
     with pytest.raises(ValueError, match="multi-day"):
         DemandBuildSpec(start_date="2025-09-16", days=2,
@@ -76,6 +90,38 @@ def test_closure_must_fit_scenario_window():
     with pytest.raises(ValueError, match="fit within"):
         _spec(closures=(ClosureSpec(
             "u_v_0", "2025-09-17T00:00:00", "2025-09-17T00:15:00"),))
+
+
+def test_same_edge_may_close_again_after_it_has_reopened():
+    spec = _spec(closures=(
+        ClosureSpec("u_v_0", "2025-09-16T08:00:00",
+                    "2025-09-16T10:00:00"),
+        ClosureSpec("u_v_0", "2025-09-16T13:00:00",
+                    "2025-09-16T15:00:00"),
+    ))
+
+    assert len(spec.closures) == 2
+
+
+def test_same_edge_closure_intervals_must_not_overlap():
+    with pytest.raises(ValueError, match="must not overlap"):
+        _spec(closures=(
+            ClosureSpec("u_v_0", "2025-09-16T08:00:00",
+                        "2025-09-16T10:00:00"),
+            ClosureSpec("u_v_0", "2025-09-16T09:45:00",
+                        "2025-09-16T11:00:00"),
+        ))
+
+
+def test_touching_same_edge_closure_intervals_are_non_overlapping():
+    spec = _spec(closures=(
+        ClosureSpec("u_v_0", "2025-09-16T08:00:00",
+                    "2025-09-16T10:00:00"),
+        ClosureSpec("u_v_0", "2025-09-16T10:00:00",
+                    "2025-09-16T11:00:00"),
+    ))
+
+    assert len(spec.closures) == 2
 
 
 def test_variant_mapping_must_cover_each_seed_once():

@@ -761,6 +761,49 @@ capturing required trajectory output during an existing seed run. Every
 accepted speed-up requires semantic result comparison and a golden-case
 before/after measurement.
 
+#### Speed research 2026-07-18 (measured budget + ranked result-neutral levers)
+
+Gustav's requirement: faster, with results that are NOT allowed to get
+worse.  Every candidate below therefore has an equivalence argument and a
+proof protocol (byte/semantic-digest comparison against a sequential run);
+anything without one was rejected.  Measured time budget on the dev
+machine, current deployed 2025-09-16 build:
+
+| Stage | Measured | Notes |
+| --- | --- | --- |
+| run_scenario (3 seeds, whole day, audits, trajectories) | **13.8 s** | NOT a bottleneck; vehroute parse 0.6 s, JSON writes ~0 s |
+| Demand rebuild, cache-hit (PFE stage) | **~173 s** | solve 73 s (already parallel) + route publish 34.5 s + per-variant integer/purpose/report ~65 s (SEQUENTIAL) |
+| Candidate generation, cache MISS only | 40–90 s | duarouter + generation; cache hits are ~0.1 s |
+| Full LOSO (6 folds) | ~13–15 min | folds SEQUENTIAL; prepare_calibration recomputed identically per fold |
+
+Ranked levers (largest first, all result-neutral by construction):
+
+1. **Parallelize the three variants' post-solve stage** (integer repair +
+   purpose allocation + route/agents publish in write_calibration_report):
+   independent inputs and output files, no RNG in the path — expected
+   −60–70 s of the 173 s on every recalibration.  Proof: byte-identical
+   calibrated{,_v1,_v2}.rou.xml + .agents.json + fit reports vs sequential.
+2. **LOSO: hoist prepare_calibration out of the fold loop** (the six folds
+   rebuild the identical shape pool six times) **and run 2–3 folds
+   concurrently** (fully independent read-only inputs, per-fold output
+   files, report assembled in sorted station order).  Expected wall
+   ~15 min → ~5–7 min.  Proof: identical loso_report.json.
+3. **Cache-miss candidate path**: duarouter `--routing-threads N` (SUMO
+   docs: per-vehicle routing, deterministic given seed/weights) and
+   `--xml-validation never` on our self-generated XML.  −10–30 s, only on
+   parameter/date changes.
+4. serve.py recalibration inherits (1): ~6 min → ~4–4.5 min cache-hit.
+
+Measured and REJECTED as not worth it: `--seed-workers >1` for
+run_scenario (whole stage is 14 s; flag exists for multi-day),
+vehroute/JSON parsing optimizations (0.6 s), further meso flags
+(--no-step-log/--no-warnings already set).  FORBIDDEN by the
+results-must-not-change constraint: numba fastmath, micro `--threads`
+(nondeterministic ordering), any solver approximation or tolerance
+loosening.  Protocol for every implementation:
+tools/benchmark_speed.py before/after + semantic digest + one golden-case
+rebuild comparison, per the P2 register row.
+
 ### Active quality register
 
 | Priority | Improvement | Completion evidence |
@@ -1445,56 +1488,335 @@ to inspect why an edge is uncertain.
 **Purpose:** Answer "when should this road be closed?" as a constrained,
 auditable decision rather than a low-flow guess.
 
-### Candidate definition
+### Final design decision (frozen 2026-07-18)
 
-The user supplies road directions, closure duration, permitted dates/times,
-access requirements, and optional operational restrictions. The engine builds
-all feasible 15-minute-aligned windows within that scope.
+Version 1 optimizes a **traffic closure schedule**, not construction
+productivity and not permit compliance. Its precise promise is:
 
-### Feasibility screen
+> Within the dates and daily hours allowed by the user, find the simulated
+> full-road-closure schedule that has the smallest robust traffic impact.
 
-Reject or flag a candidate before ranking when it has:
+The road is closed during one contiguous work interval per selected calendar
+day, at exactly the same local clock time every day. It is open between work
+shifts. The selected days are consecutive calendar dates; a disallowed
+weekday or blackout date invalidates the whole candidate rather than being
+silently skipped.
 
-- no network detour for affected movements;
-- unacceptable lost access or stranded trips;
-- closed-edge leakage;
-- health failure, excessive teleporting, or excessive unfinished vehicles;
-- an incompatible ScenarioSpec or stale baseline;
-- policy constraints such as emergency, public transport, pedestrian, or
-  construction restrictions when those inputs are available.
+The duration input means **minimum total work time required**. Version 1 uses
+the explicit assumption that one scheduled work minute requires one minute
+of road closure: the road is closed for the complete work shift and opens
+between shifts. Setup, teardown and pauses must be included by the user in
+the required work time when they consume part of the shift. An optional
+per-shift overhead/productivity model is deliberately deferred until there
+is real construction evidence.
 
-### Evaluation
+Version 1 supports:
 
-1. Reuse the exact normal demand build and same seed-to-variant mapping.
-2. Compare each candidate against its matched baseline seed/variant pair.
-   Do not compare a candidate only to a baseline mean when pairing exists.
-3. Prefer exhaustive simulation of all feasible windows for a bounded
-   one-day study, after measuring the candidate grid. A closure spanning
-   `d` 15-minute intervals permits `96 - d + 1` start slots within a day;
-   the measured whole-day 3-seed meso closure costs ~40 s, but actual
-   runtime also depends on closure geometry and candidate count. Benchmark
-   multi-day demand separately before promising an overnight result. A
-   proxy may prioritize work, but it must never be presented as proof of
-   the best global choice.
-4. Use bounded independent SUMO processes only after the benchmark confirms
-   that the selected worker count is faster and result-equivalent.
-5. Score expected and worst-case delay, added distance, rerouted vehicles,
-   access loss, stranded/truncated trips, queue/spillback proxy, closure
-   integrity, and confidence. A short time loss caused by dropping access is
-   not a good outcome.
+- one connected worksite/corridor made from one or more directed SUMO edges;
+- the same closure interval for every selected direction;
+- forecast demand and a permitted date range;
+- minimum total required work minutes;
+- maximum consecutive closure days, initially 1--7;
+- an earliest start and latest end daily band, including an overnight band;
+- allowed weekdays and explicit blackout dates;
+- one 15-minute-aligned contiguous interval per day;
+- full motor-vehicle closure only.
 
-### Result
+It does not silently accept lane-only closures, access exceptions, disjoint
+worksites, changing daily work hours, split shifts, non-consecutive workdays,
+or effective-work-hour claims. Those require later explicit contracts and
+validation.
 
-Return a ranked feasible set, a clear best candidate only when it is robust,
-and `no viable closure` when every option violates a hard gate. If the top
-alternatives overlap under uncertainty, show that there is no clear winner.
+### Canonical inputs and generated schedules
 
-### Acceptance gate
+Create one immutable `ClosureSearchSpec` in `traffic_sim/core/`:
 
-- The reported closure schedule is exactly the schedule simulated.
-- Every eligible candidate uses matched seeds/variants and the same demand
-  build.
-- The result distinguishes lowest delay from least harmful overall outcome.
+```text
+search_id and content_key
+directed_edges
+source and demand_build_id
+permitted_date_start, permitted_date_end
+timezone = Europe/Stockholm
+dst_policy = exclude_transition_dates
+required_work_minutes
+max_consecutive_start_days
+permitted_daily_band
+allowed_weekdays
+blackout_dates
+same_daily_window = true
+resolution_minutes = 15
+closure_type = full
+duration_basis = required_work_time
+work_to_closure_assumption = one_to_one
+objective_profile
+policy_status = user_supplied_unverified
+```
+
+For each possible day count `n`, the generator uses
+`ceil(required_work_minutes / (15*n))` quarters per day. It enumerates
+every feasible same-time daily window and records the resulting rounding
+overshoot. A `ClosureSchedule` contains the exact dated intervals,
+start/end clock time, day count, required and scheduled work minutes, actual
+closed minutes, and overshoot. Under the version-1 one-to-one assumption,
+scheduled work minutes and actual closed minutes are identical. Fewer shifts
+and less rounding overshoot are tie-breakers only; they may never defeat a
+meaningfully better traffic result.
+
+An overnight interval occupies both calendar dates. The complete interval,
+including its after-midnight part, must remain inside the permitted range and
+must not touch a blackout or disallowed date. Until the forecast contract is
+fully timezone-aware, Swedish daylight-saving transition dates are rejected
+rather than interpreted ambiguously.
+
+All selected edges must be connected in the underlying undirected road graph.
+Repeated closures of the same edge are valid only when their intervals do
+not overlap. `ScenarioSpec` validation must therefore change from "edge may
+appear once" to "same edge may appear in multiple non-overlapping
+intervals". Simultaneous selected edges are emitted together in each SUMO
+rerouter interval; one interval is emitted for every workday.
+
+### Simulation envelope: warm-up, continuous days, and recovery
+
+Every finalist is one continuous multi-day simulation. Days must never be
+simulated independently and added together, because vehicles and congestion
+can carry into the next shift.
+
+The simulation envelope is separate from the workday count:
+
+1. warm up before the first closure using a duration derived from the
+   baseline p95/p99 trip duration plus a safety margin;
+2. measure from the first closure through all work shifts;
+3. keep simulating after the final shift until the affected network has
+   returned near its matched baseline for a sustained interval;
+4. apply a bounded recovery cap; if traffic has not recovered at the cap,
+   mark the candidate ineligible as `congestion_not_dissipated`.
+
+This may require eight or nine calendar days for a seven-day closure. The
+current 1--7-day demand contract must therefore be extended and
+resource-tested before the UI can offer seven workdays. The engine must fail
+closed instead of clipping the warm-up, overnight interval, or recovery tail.
+
+A warmed baseline state may be cached once per unique demand/date block and
+branched for candidates, including SUMO's random-number state. This
+optimization is allowed only after an equivalence test proves that a
+save/load branch produces the same decision metrics as an uninterrupted run.
+The cache key includes all inputs, network and demand hashes, code
+fingerprint, SUMO version and platform; a mismatch invalidates the cache.
+
+### Two-stage monthly search
+
+Running SUMO for every 15-minute start time across a month would be wasteful.
+The search therefore has two explicitly different evidence levels.
+
+**Stage A -- screening proxy**
+
+Enumerate every legal schedule and rank it cheaply from the forecast demand,
+the structural 96-slot assignment field, traffic on the closed edges, and
+estimated load/reserve on plausible detour corridors. Missing values remain
+missing and never become zero. The proxy produces a rank and screening
+features, not invented seconds of delay and not the final recommendation.
+
+The shortlist is stratified so adjacent times on one date cannot consume it:
+include the best overall schedules, the best for every feasible day count,
+distinct date blocks, and validation controls. Low spatial support, a missing
+assignment prior, or out-of-domain road features automatically enlarge the
+SUMO shortlist or withhold a recommendation.
+
+Before release, validate the proxy out of sample on representative held-out
+roads, road classes, sensor distances, topologies, durations and day types.
+Freeze the validation set before tuning. Report:
+
+- Spearman rank correlation as a diagnostic;
+- recall of the exhaustive SUMO winner in the shortlist;
+- shortlist regret: the difference between the exhaustive SUMO optimum and
+  the best shortlisted SUMO candidate;
+- failure/disqualification recall.
+
+The initial gate is at least 90% winner recall, p90 normalized shortlist
+regret at most 10%, and median Spearman at least 0.6. If it fails, increase
+the shortlist or fall back to exhaustive SUMO for a bounded search; the UI
+must not claim a global best from an unvalidated proxy.
+
+**Stage B -- matched SUMO finalists**
+
+Group finalists by demand/date envelope so their calibrated demand, matched
+baseline and validated warm state can be reused. Begin with one heavy SUMO
+worker. Enable parallel workers only after a resource benchmark proves a real
+speed gain, semantic equivalence and safe peak memory.
+
+### SUMO evidence and hard gates
+
+Use citywide mesoscopic SUMO for screening finalists because this project has
+validated it for 15-minute edge-flow studies, not for exact lane queues or
+spillback geometry. The primary comparison is the paired change in total
+SUMO `timeLoss` against the same no-closure baseline. Also retain validated
+edge travel time, waiting time, entered/left counts, throughput, added
+distance and affected/rerouted vehicles where available.
+
+The current mesoscopic `halting`/network-wide queue value is diagnostic only.
+It must never be a primary ranking objective or be presented as an exact
+queue length. For the top two or three candidates, run bounded microscopic
+confirmation when the worksite is near a signal, roundabout or known
+bottleneck, when the halting diagnostic is high, or when the candidates are
+too close to distinguish. If microscopic confirmation is not available,
+state `queue_detail_not_assessed`.
+
+Reject a candidate before ranking when any of these gates fails:
+
+- no valid detour or unacceptable access loss;
+- trips dropped in a way that can make low flow look artificially good;
+- closed-edge leakage outside the declared tolerance;
+- teleport, route-error, stranded, unfinished or simulation-health failure;
+- closure interval mismatch, midnight clipping or stale demand/baseline;
+- recovery not complete before the bounded drain cap;
+- incompatible scenario, network, demand, variant or cache provenance.
+
+Flow reduction is never evidence of success by itself.
+
+### Uncertainty, repetitions, and the winner
+
+The q10, q50 and q90 direction-demand variants represent different
+epistemic demand assumptions. They are not independent random seeds and must
+never be pooled as if they were.
+
+For every variant:
+
+1. run baseline and candidate with common matched seeds;
+2. start with four random seeds;
+3. use paired differences and add repetitions adaptively until the
+   pre-registered 95% precision target is met or a maximum run cap is
+   reached;
+4. preserve the separate variant result and confidence interval.
+
+The initial statistical tolerance is 5% at 95% confidence; an absolute
+tolerance floor and maximum repetition count are frozen from the golden
+benchmark before release. Multiple finalist comparisons use a Holm-adjusted
+or simultaneous procedure, rather than repeated uncorrected pairwise tests.
+At the repetition cap, an unresolved comparison is reported as inconclusive.
+
+The primary objective is the smallest **worst-variant upper 95% confidence
+bound of paired total time-loss increase**. Secondary evidence is median/
+mean paired time loss, per-day worst impact, throughput/access integrity,
+validated extra distance and affected vehicles. Queue/halting remains
+diagnostic. A unique winner is shown only when it is practically and
+statistically better under the robust objective. Otherwise return an honest
+tie set or `no clear winner`; return `no viable closure` if every schedule
+fails a hard gate.
+
+### Confidence, policy, and wording
+
+Do not compress confidence into a fake probability. The result exposes:
+
+- forecast temporal error at sensors;
+- LOSO/spatial support for the worksite and detours;
+- proxy held-out coverage and regret;
+- spread across q10/q50/q90 demand variants;
+- paired seed confidence intervals;
+- simulation and closure-integrity health.
+
+Low spatial confidence or out-of-domain proxy use may still produce
+exploratory results, but suppresses the strong `recommended` label.
+
+The program says **trafficmässigt bäst inom angivna tider**. It does not say
+that a schedule is permitted, safe for workers, compliant with a TA plan, or
+acceptable for public transport, events, emergency access or construction
+noise. Allowed weekdays and blackout dates are user-supplied and stored as
+`policy_status = user_supplied_unverified`. Relevant warnings are shown, but
+policy cannot become a hard automatic gate until authoritative machine-
+readable inputs exist.
+
+### Persistence, API, and UI
+
+Each search writes an isolated immutable artifact under
+`runs/closure-search/<search_id>/`, including the input spec, candidate
+ledger, proxy evidence, exact simulated schedules, matched baselines,
+statistics, health reports, hashes and final `DecisionResult`. It must never
+reuse the old shared suggestion file or overwrite the active golden release.
+
+The API follows the existing start/status/cancel job pattern. Progress stages
+are enumerate, screen, build/cache demand, warm baseline, simulate finalists,
+confirm, and publish. Cancellation removes only isolated scratch data; a
+failed or cancelled search leaves the active release untouched.
+
+The UI shows the exact interpretation before starting:
+
+```text
+Road closed 08:00--14:00 on 5 consecutive permitted days
+Minimum work requested: 30 h; scheduled work/closure: 30 h
+Screened schedules: N; SUMO-verified finalists: K
+```
+
+The result separates proxy-screened candidates from SUMO-simulated
+candidates, shows every exact interval and each evidence component, and can
+load only the exact winning/tied `ScenarioSpec` back into the forecast
+simulation.
+
+### Build order and stop gates
+
+1. Implement pure contracts and calendar enumeration; stop until month-end,
+   leap-day, overnight, blackout, weekday, rounding and DST tests pass.
+2. Implement repeated SUMO intervals plus warm-up and adaptive drain; stop
+   until continuous 2-, 7-, and extended-envelope resource tests pass.
+3. Add isolated workspaces, baseline/warm-state caching and save/load
+   equivalence; stop on any provenance or semantic mismatch.
+4. Build and validate the monthly proxy out of sample; do not expose it in
+   the UI until recall/regret gates pass.
+5. Add paired robust finalist statistics and conditional microscopic
+   confirmation; stop until tie, inconclusive and no-viable cases work.
+6. Add asynchronous API, status, cancellation and restart recovery.
+7. Add the forecast UI and exact-schedule handoff.
+8. Freeze a golden monthly search, benchmark wall time/RSS/disk, run browser
+   recovery tests, and publish only if every previous gate passes.
+
+**Implementation status 2026-07-18:** Steps 1 and 2 are complete.
+
+Step 1 added the canonical `ClosureSearchSpec`, `DailyTimeBand`,
+`ClosureInterval` and `ClosureSchedule` contracts in
+`traffic_sim/core/contracts.py`, plus the pure deterministic generator,
+exact `ClosureSpec` expansion, DST exclusion and connected-worksite
+validator in `traffic_sim/core/closure_calendar.py`.
+
+Step 2 now lets one directed edge close in multiple non-overlapping
+intervals, groups simultaneous multi-edge closures into one SUMO rerouter
+interval, and proves with a real SUMO network that the edge reopens between
+two work shifts. `traffic_sim/simulation/envelope.py` derives a continuous
+full-day envelope from the baseline trip-duration p99 plus margin, rejects
+DST transitions and envelopes beyond the validated nine-day ceiling, and
+evaluates sustained post-closure recovery against the matched no-closure
+per-edge `timeLoss` series. The ordinary recalibration contract remains
+limited to seven days; only an isolated `purpose=closure_envelope` build can
+represent days eight and nine, and the generic recalibration API rejects
+that internal purpose.
+
+The resource gate uses the existing frozen two- and seven-day evidence plus
+`tools/benchmark_nine_day_envelope.py`. The two-day computational run passed
+in 25.34 s at 623,591,424 bytes RSS; the frozen seven-day acceptance passed
+in 96.56 s at 1,959,968,768 bytes RSS. The isolated nine-day SUMO 1.27.1
+proof ran 190,730 vehicles in 19.345 s at 208,715,776 bytes RSS, with every
+vehicle loaded and inserted, none waiting or running at drain completion,
+and zero teleports. Days eight and nine deliberately repeat frozen q50 days
+one and two, so this proves continuity and resources only, not new
+calibration. The focused integration gate passes 210 tests and the complete
+project suite passes 1,088 tests with 20 expected skips. Step 3 has not
+started.
+
+### Final acceptance gate
+
+- The displayed schedule is byte-for-byte derivable from the immutable
+  schedule that SUMO ran.
+- Same daily hours, consecutive dates, opening between shifts and requested
+  total work time are all enforced by contract tests.
+- Warm-up, overnight vehicle carryover and recovery cannot be truncated.
+- Every eligible candidate uses matched baselines, seeds and separate demand
+  variants from the same demand release.
+- Proxy quality passes held-out recall/regret gates or the system clearly
+  falls back/withholds a global recommendation.
+- Mesoscopic diagnostics are never mislabeled as exact queues.
+- Access, integrity, simulation health and policy limitations cannot be
+  hidden by a favorable delay score.
+- The system can return a unique robust winner, a tie, an inconclusive
+  result, no viable closure, or insufficient evidence without fabricating
+  certainty.
 
 ## Phase 5: Build a Defensible Signal Optimizer
 
