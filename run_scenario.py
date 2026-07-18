@@ -59,6 +59,10 @@ from traffic_sim.simulation.trajectory_contract import (
     MULTIDAY_MAX_VEHICLES_PER_DAY,
     SAMPLING_METHOD as TRAJECTORY_SAMPLING_METHOD,
 )
+from traffic_sim.simulation.warm_state_cache import (
+    load_state_arguments,
+    save_state_arguments,
+)
 
 SUMO_DIR  = Path("sumo")
 NET_PATH  = SUMO_DIR / "net.net.xml"
@@ -1136,6 +1140,9 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              run_label: str | None = None,
              stats_path: Path | None = None,
              summary_output: Path | None = None,
+             save_state_path: Path | None = None,
+             save_state_time_s: int | None = None,
+             load_state_path: Path | None = None,
              work_dir: Path | None = None) -> dict[str, Path] | None:
     # EdgeData's file attribute is relative to the SUMO cwd. A private
     # work_dir therefore isolates every generated XML while all input paths
@@ -1218,6 +1225,24 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         "--ignore-route-errors", "true",
     ]
     metric_paths: dict[str, Path] = {}
+    if (save_state_path is None) != (save_state_time_s is None):
+        raise ValueError(
+            "save_state_path and save_state_time_s must be supplied together")
+    if save_state_path is not None:
+        # SUMO's --end is exclusive: a state requested exactly at --end is
+        # never written.  Require at least one following simulation second.
+        if not begin_s < save_state_time_s < duration_s + flush_s:
+            raise ValueError(
+                "save_state_time_s must be after begin_s and before the "
+                "exclusive simulation end")
+        metric_paths["state"] = Path(save_state_path)
+        cmd.extend(save_state_arguments(
+            save_state_path, warmup_end_s=save_state_time_s))
+    if load_state_path is not None:
+        if begin_s <= 0:
+            raise ValueError(
+                "loading a warm state requires its positive saved time as begin_s")
+        cmd.extend(load_state_arguments(load_state_path))
     if metrics:
         # Deliberately opt-in: interactive closures only need edgeData and
         # retain their current fast command path. The stem makes per-seed,
@@ -1280,6 +1305,10 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
     if res.returncode != 0:
         print(res.stderr[-2000:])
         sys.exit(f"sumo failed (seed {seed})")
+    if save_state_path is not None and not Path(save_state_path).is_file():
+        sys.exit(
+            f"sumo did not write requested warm state (seed {seed}): "
+            f"{save_state_path}")
     # `or None`: every existing caller's behaviour is unchanged when
     # neither metrics nor vehroute_output was requested (returns None, not
     # an empty dict) — only the SHAPE of what "requested output" means grew

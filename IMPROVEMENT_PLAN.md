@@ -1768,7 +1768,7 @@ simulation.
 8. Freeze a golden monthly search, benchmark wall time/RSS/disk, run browser
    recovery tests, and publish only if every previous gate passes.
 
-**Implementation status 2026-07-18:** Steps 1 and 2 are complete.
+**Implementation status 2026-07-18:** Steps 1, 2 and 3 are complete.
 
 Step 1 added the canonical `ClosureSearchSpec`, `DailyTimeBand`,
 `ClosureInterval` and `ClosureSchedule` contracts in
@@ -1797,8 +1797,46 @@ vehicle loaded and inserted, none waiting or running at drain completion,
 and zero teleports. Days eight and nine deliberately repeat frozen q50 days
 one and two, so this proves continuity and resources only, not new
 calibration. The focused integration gate passes 210 tests and the complete
-project suite passes 1,088 tests with 20 expected skips. Step 3 has not
-started.
+project suite passed 1,088 tests with 20 expected skips at the step-2 gate.
+
+Step 3 adds exclusive `runs/closure-search/<search_id>` workspaces in
+`traffic_sim/simulation/search_workspace.py`. The exact search input and
+every published artifact are hashed and ledgered; search IDs cannot be
+reused, path traversal and overwrites fail closed, unledgered/tampered files
+block success, failure preserves only its own diagnostic scratch, and
+cancellation removes only that isolated scratch without touching an active
+release.
+
+`traffic_sim/simulation/warm_state_cache.py` adds two immutable caches: one
+for SUMO warm states and one for matched no-closure baseline metrics. The
+warm-state key covers the network and route bytes, demand build and variant,
+seed, mode, warm-up boundary, any baseline additional inputs, mandatory code
+hashes, Git commit, Python, the full SUMO version, platform, RNG-state flag
+and state precision. Baseline identity additionally covers its exact
+analysis window, affected-edge set, objective profile and metric schema.
+Missing, changed, corrupt or incompatible provenance is a cache miss; an
+invalid existing entry cannot be silently overwritten.
+
+Cache publication requires a save/load equivalence certificate for the
+exact warm-state identity and the fixed
+`closure_decision_metrics_v1` schema. The cache itself enforces the policy:
+`entered`, `left`, primary `timeLoss` and every other field are exact
+(absolute tolerance zero); only supporting per-edge `travel_time_s` may
+differ by at most one default SUMO simulation step (1 s). A caller cannot
+substitute a looser global tolerance or another metric schema.
+
+The real small-network closure test proves that a closure introduced after
+the warm state produces the same decision metrics in an uninterrupted,
+freshly loaded and cache-restored branch. The production-scale proof in
+`tools/validate_warm_state_equivalence.py` uses the frozen Gothenburg
+seven-day q50 release with SUMO 1.27.1: four 15-minute intervals, 7,125
+edges, 4,806 entered, 4,793 left and total `timeLoss` 27.33 s were exact in
+all branches. Four of 28,500 supporting travel-time values differed, with a
+maximum 0.23 s and signed total 0.04 s, inside the explicit one-step limit;
+the difference is disclosed rather than mislabeled as bit-identical. The
+restored matched baseline was identical to the stored evidence. The focused
+step-3 gate passes 113 tests and the complete project suite passes 1,115
+tests with 20 expected skips. Step 4 has not started.
 
 ### Final acceptance gate
 
