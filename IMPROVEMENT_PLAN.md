@@ -2137,6 +2137,27 @@ opens, weekday/source controls respond, and the run gate (no edges → no
 POST) holds.  The full browser recovery test (reload mid-search) remains
 open for step 8.  Complete suite: **1,238 tests with 20 expected skips**.
 
+**Step-8 browser recovery test — PASS (2026-07-19, same session).**
+`tools/browser_recovery_test.py` is a repeatable headless-Chrome/CDP test
+of the exact incident shape this project shipped twice in 2026-07: a
+long server job whose starting tab disappears.  It runs the real serve.py
+handler/threading/status stack and the real web-app JS against a faked
+monthly CLI (35 s, persisting the same workspace manifest phases the
+status endpoint reads), and asserts four things: (1) a search started
+from one page keeps running after that page reloads mid-job; (2) the
+fresh page's on-load discovery re-attaches — run button locked to
+"Söker…" and the live workspace phase surfaced from the persisted
+manifest; (3) completion reaches the re-attached page, rendering the
+result panel with the honest claim wording and the global-best
+disclaimer; (4) controls return to idle.  Screenshot-verified.  A first
+run of the test caught its own fixture racing a too-short fake job —
+the mid-run window must exceed page load + reload + one 4 s poll tick.
+
+The only remaining release gate for the monthly product is the untouched
+monthly held-out set (practical-winner recall, regret, failure recall),
+which is what keeps `global_best_claim_allowed=false`; bounded-exhaustive
+results are UI-exposed with the restricted wording.
+
 ### Final acceptance gate
 
 - The displayed schedule is byte-for-byte derivable from the immutable
