@@ -2104,6 +2104,39 @@ result keeps `global_best_claim_allowed=false` and the winner wording stays
 "best among SUMO-verified finalists".  Complete suite after this
 checkpoint: **1,237 tests with 20 expected skips**.
 
+**Step-7 UI + evidence-level claim boundary (2026-07-19, same session).**
+The claim boundary in `_final_result` is now evidence-level aware: bounded
+exhaustive screening involves no proxy — every ranked candidate carries
+real SUMO evidence, the same evidence level the released closure-time
+feature already shows — so those results carry
+`ui_exposure_allowed=true` with scope `sumo_verified_bounded_exhaustive`;
+proxy-screened results stay unexposed, and `global_best_claim_allowed`
+stays false in EVERY mode until the untouched held-out gate passes (the
+pilot retention band is golden-frozen, not held-out validated).  The
+result now also records `shortlisted_schedules` (every SUMO-verified
+candidate's exact intervals) so readers can map robust statistics to real
+dates without re-deriving the calendar.
+
+The web app gained the "Bästa arbetsperiod" workspace: edge picking reused
+from the closure flow, a date-range/daily-band/weekday/work-hours form,
+start + poll with the workspace's own persisted phase shown live, cancel
+(kind=monthly, workspace stays resumable — the deterministic
+form-content-derived `search_id` means re-running the same search resumes
+its immutable workspace), an on-load running-job discovery, and a result
+table showing every SUMO-verified schedule with its worst-variant robust
+point/upper-95 deltas, hard-failure tags and honest wording ("bäst bland
+SUMO-verifierade scheman inom angivna tider", never "globalt bäst").  The
+exact-schedule handoff builds the loaded scenario from the schedule's OWN
+intervals: if the live demand does not cover the schedule's dates it first
+runs the ordinary recalibration pipeline (confirmed with the honest
+~6 min/day cost), then runs a normal windowed multi-interval closure
+ScenarioSpec through `/api/close` (the ScenarioSpec contract already
+accepts multiple non-overlapping intervals per edge — verified).  Headless
+Chrome/CDP smoke: page loads with zero console errors, the workspace
+opens, weekday/source controls respond, and the run gate (no edges → no
+POST) holds.  The full browser recovery test (reload mid-search) remains
+open for step 8.  Complete suite: **1,238 tests with 20 expected skips**.
+
 ### Final acceptance gate
 
 - The displayed schedule is byte-for-byte derivable from the immutable

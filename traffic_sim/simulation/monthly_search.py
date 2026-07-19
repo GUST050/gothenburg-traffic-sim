@@ -548,6 +548,10 @@ def _final_result(
     winner_id = decision.get("winner_id") if decision else None
     tie_ids = list(decision.get("tie_ids", ())) if decision else []
     selected = [item for item in [winner_id, *tie_ids] if item]
+    shortlist_ids = [
+        str(item["schedule_id"])
+        for item in screening["shortlist"]["entries"]
+    ]
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "monthly_closure_search_result",
@@ -562,6 +566,14 @@ def _final_result(
             schedules[candidate_id].to_dict()
             for candidate_id in selected
         ],
+        # Every SHORTLISTED schedule's exact intervals, so a reader can map
+        # the per-candidate statistics in robust_decision back to real
+        # dates/times without re-deriving the calendar (at most the
+        # shortlist cap of schedules; each is a few intervals).
+        "shortlisted_schedules": [
+            schedules[candidate_id].to_dict()
+            for candidate_id in shortlist_ids
+        ],
         "screening": {
             "candidate_count": screening.get("candidate_count"),
             "scoreable_candidate_count": screening.get(
@@ -572,19 +584,54 @@ def _final_result(
         },
         "pilot_selection": dict(pilot_selection),
         "robust_decision": dict(decision) if decision is not None else None,
-        "claim_boundary": {
-            "best_result_available": decision_status == "unique_winner",
-            "best_result_scope": (
-                "sumo_verified_monthly_shortlist"
-                if decision_status == "unique_winner"
-                else None
-            ),
-            "global_best_claim_allowed": False,
-            "ui_exposure_allowed": False,
-            "reason": (
-                "a new untouched monthly held-out release gate has not passed"
-            ),
-        },
+        "claim_boundary": _claim_boundary(screening, decision_status),
+    }
+
+
+def _claim_boundary(
+    screening: Mapping[str, Any],
+    decision_status: str,
+) -> dict[str, Any]:
+    """Evidence-level honesty labels for one monthly result.
+
+    Two different gates are folded here and must not be confused:
+
+    - ``global_best_claim_allowed`` stays False in every mode until the new
+      untouched monthly held-out release gate passes — even a bounded
+      exhaustive search runs the frozen pilot retention band, which has
+      only been exercised against the golden benchmark, not held out.
+    - ``ui_exposure_allowed`` depends on how candidates were SCREENED.  A
+      proxy shortlist may not reach the UI at all (its held-out gate
+      failed).  A bounded exhaustive search has no proxy: every ranked
+      candidate carries real SUMO evidence, which is exactly the evidence
+      level the already-released closure-time feature shows, so the result
+      may be displayed with the restricted "best among SUMO-verified
+      finalists" wording.
+    """
+    exhaustive = (
+        str(screening.get("proxy_version", ""))
+        == "bounded_exhaustive_sumo_v1"
+    )
+    return {
+        "best_result_available": decision_status == "unique_winner",
+        "best_result_scope": (
+            (
+                "sumo_verified_bounded_exhaustive"
+                if exhaustive
+                else "sumo_verified_monthly_shortlist"
+            )
+            if decision_status == "unique_winner"
+            else None
+        ),
+        "global_best_claim_allowed": False,
+        "ui_exposure_allowed": exhaustive,
+        "reason": (
+            "bounded exhaustive screening: every ranked candidate is "
+            "SUMO-verified; the global-best claim still awaits the new "
+            "untouched monthly held-out release gate"
+            if exhaustive
+            else "a new untouched monthly held-out release gate has not passed"
+        ),
     }
 
 

@@ -185,6 +185,30 @@ def test_backend_prepares_only_screened_shortlist_before_provenance(tmp_path):
     )
 
 
+def test_bounded_exhaustive_result_is_ui_exposable_but_never_global(tmp_path):
+    """No proxy is involved in bounded-exhaustive screening: every ranked
+    candidate carries real SUMO evidence, so the result may reach the UI
+    with the restricted wording — while the global-best claim stays gated
+    on the untouched held-out set in every mode."""
+    def exhaustive_builder(spec_path):
+        payload = _screen_builder(spec_path)
+        payload["proxy_version"] = "bounded_exhaustive_sumo_v1"
+        return payload
+
+    result = run_monthly_search(
+        _spec("monthly-exhaustive-claims"),
+        _policy(),
+        runner=FakeRunner(),
+        screen_builder=exhaustive_builder,
+        root=tmp_path,
+    )
+    boundary = result["claim_boundary"]
+    assert result["status"] == "unique_winner"
+    assert boundary["ui_exposure_allowed"] is True
+    assert boundary["global_best_claim_allowed"] is False
+    assert boundary["best_result_scope"] == "sumo_verified_bounded_exhaustive"
+
+
 def test_runs_full_resumable_pipeline_and_remains_fail_closed(tmp_path):
     runner = FakeRunner()
     result = run_monthly_search(

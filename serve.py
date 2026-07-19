@@ -938,6 +938,7 @@ def summarize_monthly_search(result: dict) -> dict:
         "winner_id": result.get("winner_id"),
         "tie_ids": result.get("tie_ids", []),
         "selected_schedules": result.get("selected_schedules", []),
+        "shortlisted_schedules": result.get("shortlisted_schedules", []),
         "screening": result.get("screening", {}),
         "robust_decision": result.get("robust_decision"),
         "policy_id": policy.get("policy_id"),

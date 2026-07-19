@@ -248,9 +248,29 @@
       color-scheme: dark;
     }
 
+    /* ── Monthly search banner (Phase 4 step 7) — a two-row form, so it
+         wraps instead of the single-row layout the other banners use. ── */
+    #monthly-banner {
+      display: none; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap;
+    }
+    #monthly-banner.show { display: flex; }
+    #monthly-banner .hint { font-size: 0.74rem; color: var(--sim-2); font-weight: 600; }
+    #monthly-banner input[type="date"], #monthly-banner input[type="time"],
+    #monthly-banner input[type="number"] {
+      background: rgba(15, 23, 42, 0.85); color: var(--ink);
+      border: 1px solid var(--panel-line); border-radius: 8px;
+      padding: 4px 7px; font-size: 0.72rem; color-scheme: dark;
+    }
+    #monthly-banner input[type="number"] { width: 3.4em; }
+    #monthly-weekdays button {
+      min-width: 30px; padding: 4px 6px; font-size: 0.68rem;
+    }
+    #monthly-progress-hint { font-size: 0.72rem; color: var(--ink-3); }
+
     /* ── Suggest-closure-time results — a floating panel, distinct from
-         the horizontal sim-panel because it needs real table space. ──── */
-    #suggest-results {
+         the horizontal sim-panel because it needs real table space.
+         The monthly-search results panel shares the exact layout. ──── */
+    #suggest-results, #monthly-results {
       display: none;
       position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
       z-index: 1000; width: min(720px, 92vw); max-height: 55vh;
@@ -259,26 +279,26 @@
       box-shadow: 0 8px 32px rgba(0,0,0,0.45);
       flex-direction: column; overflow: hidden;
     }
-    #suggest-results.show { display: flex; }
-    #suggest-results-header {
+    #suggest-results.show, #monthly-results.show { display: flex; }
+    #suggest-results-header, #monthly-results-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 12px 16px; border-bottom: 1px solid var(--panel-line);
     }
-    #suggest-results-title { font-size: 0.82rem; font-weight: 700; color: var(--ink); }
-    #suggest-results-meta {
+    #suggest-results-title, #monthly-results-title { font-size: 0.82rem; font-weight: 700; color: var(--ink); }
+    #suggest-results-meta, #monthly-results-meta {
       padding: 8px 16px; font-size: 0.7rem; color: var(--ink-3); line-height: 1.6;
     }
-    #suggest-results-meta b { color: var(--ink-2); }
-    #suggest-results-warn, .opt-warn { color: #f59e0b; }
-    #suggest-results-body-wrap { overflow-y: auto; padding: 0 8px 8px; }
-    #suggest-results-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
-    #suggest-results-table th {
+    #suggest-results-meta b, #monthly-results-meta b { color: var(--ink-2); }
+    #suggest-results-warn, .opt-warn, .monthly-warn { color: #f59e0b; }
+    #suggest-results-body-wrap, #monthly-results-body-wrap { overflow-y: auto; padding: 0 8px 8px; }
+    #suggest-results-table, #monthly-results-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+    #suggest-results-table th, #monthly-results-table th {
       text-align: left; padding: 6px 8px; color: var(--ink-3);
       font-weight: 600; text-transform: uppercase; font-size: 0.62rem;
       letter-spacing: 0.04em; position: sticky; top: 0; background: var(--panel);
     }
-    #suggest-results-table td { padding: 6px 8px; color: var(--ink-2); border-top: 1px solid var(--panel-line); }
-    #suggest-results-table tr.disqualified td { opacity: 0.5; }
+    #suggest-results-table td, #monthly-results-table td { padding: 6px 8px; color: var(--ink-2); border-top: 1px solid var(--panel-line); }
+    #suggest-results-table tr.disqualified td, #monthly-results-table tr.disqualified td { opacity: 0.5; }
     #suggest-results-table tr.outside-topk td:first-child { color: var(--ink-3); }
     .sr-load-btn {
       background: var(--sim); color: #fff; border: none; border-radius: 6px;
@@ -511,6 +531,7 @@
         <button class="task-card" data-task="demand"><span class="task-card-icon">▦</span><strong>Simulera datum</strong><span>En dag eller flera</span></button>
         <button class="task-card" data-task="closure"><span class="task-card-icon">×</span><strong>Stäng väg</strong><span>Skapa avstängning</span></button>
         <button class="task-card" data-task="suggest"><span class="task-card-icon">◷</span><strong>Välj stängningstid</strong><span>Analysera tidpunkt</span></button>
+        <button class="task-card" data-task="monthly"><span class="task-card-icon">▧</span><strong>Bästa arbetsperiod</strong><span>Sök över datum</span></button>
         <button class="task-card" data-task="signals"><span class="task-card-icon">≡</span><strong>Optimera signaler</strong><span>Grönt och rött</span></button>
         <button class="task-card" data-task="history"><span class="task-card-icon">▤</span><strong>Körhistorik</strong><span>Studier och jobb</span></button>
       </div>
@@ -629,6 +650,8 @@
               title="Kalibrera om simuleringen mot ett annat datum (tar ~6 min)">📅 Byt dag</button>
       <button id="suggest-mode-btn" class="action-btn"
               title="Klicka på en väg för att hitta den bästa tiden att stänga den">🕐 Föreslå tid</button>
+      <button id="monthly-mode-btn" class="action-btn"
+              title="Sök den minst störande arbetsperioden över ett datumintervall — varje kandidat verifieras i SUMO">📆 Bästa arbetsperiod</button>
       <button id="optimize-signals-btn" class="action-btn"
               title="Optimera trafikljusen för det valda scenariot (~2-5 min, syntetiska ljusprogram)">⚡ Optimera signaler</button>
       <!-- G3: assembled validation report (web/data/validation.json) —
@@ -666,6 +689,43 @@
         <input type="number" id="suggest-duration-input" value="6" min="0.25" max="24" step="0.25">
         <button id="suggest-run-btn" class="action-btn primary" disabled>Sök bästa tid</button>
         <button id="suggest-cancel-btn" class="action-btn">Avbryt</button>
+      </div>
+
+      <div id="monthly-banner">
+        <span class="hint">Klicka på väg(ar) att stänga</span>
+        <span id="monthly-pick-count">0 valda</span>
+        <div class="seg" id="monthly-source-seg">
+          <button data-source="historical">Historik 2025</button>
+          <button data-source="forecast" class="active">Prognos 2027</button>
+        </div>
+        <input type="date" id="monthly-date-start" value="2027-07-15"
+               title="Första tillåtna datum">
+        <span class="hint">–</span>
+        <input type="date" id="monthly-date-end" value="2027-07-22"
+               title="Sista tillåtna datum">
+        <input type="time" id="monthly-band-start" value="06:00" step="900"
+               title="Tidigast start per dag">
+        <span class="hint">–</span>
+        <input type="time" id="monthly-band-end" value="18:00" step="900"
+               title="Senast slut per dag">
+        <label class="hint" for="monthly-work-hours">arbetstimmar</label>
+        <input type="number" id="monthly-work-hours" value="4" min="0.25" max="63" step="0.25"
+               title="Totalt begärd arbets-/avstängningstid">
+        <label class="hint" for="monthly-max-days">dagar i följd max</label>
+        <input type="number" id="monthly-max-days" value="1" min="1" max="7">
+        <div class="seg" id="monthly-weekdays"
+             title="Tillåtna veckodagar (arbetsdagar markerade)">
+          <button data-day="0" class="active">Må</button>
+          <button data-day="1" class="active">Ti</button>
+          <button data-day="2" class="active">On</button>
+          <button data-day="3" class="active">To</button>
+          <button data-day="4" class="active">Fr</button>
+          <button data-day="5">Lö</button>
+          <button data-day="6">Sö</button>
+        </div>
+        <span id="monthly-progress-hint" hidden></span>
+        <button id="monthly-run-btn" class="action-btn primary" disabled>Sök arbetsperiod</button>
+        <button id="monthly-cancel-btn" class="action-btn">Avbryt</button>
       </div>
 
       <div id="recal-progress" role="status" aria-live="polite">
@@ -709,6 +769,25 @@
             </tr>
           </thead>
           <tbody id="suggest-results-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="monthly-results">
+      <div id="monthly-results-header">
+        <span id="monthly-results-title"></span>
+        <button id="monthly-results-close" class="action-btn">Stäng</button>
+      </div>
+      <div id="monthly-results-meta"></div>
+      <div id="monthly-results-body-wrap">
+        <table id="monthly-results-table">
+          <thead>
+            <tr>
+              <th>Schema</th><th>ΔTid p50 (värsta variant)</th><th>Övre 95 %</th>
+              <th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="monthly-results-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -761,6 +840,6 @@
   <script src="render.js?v=14"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

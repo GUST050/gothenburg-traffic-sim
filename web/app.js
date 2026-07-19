@@ -46,7 +46,8 @@
         const taskNames = {
           traffic: 'Historisk trafik', forecast: 'Prognos', scenario: 'Scenario',
           demand: 'Simulera datum', closure: 'Stäng väg',
-          suggest: 'Välj stängningstid', signals: 'Optimera signaler',
+          suggest: 'Välj stängningstid', monthly: 'Bästa arbetsperiod',
+          signals: 'Optimera signaler',
           history: 'Körhistorik',
         };
         let workspaceTask = 'home';
@@ -848,6 +849,33 @@
         const btnSuggestResultsClose = document.getElementById('suggest-results-close');
         let suggestMode = false;
 
+        // ── Bästa arbetsperiod (Phase 4 step 7) — the resumable monthly
+        // closure search. Reuses the same edge picking (`selected`); every
+        // candidate the server ranks is SUMO-verified (bounded exhaustive,
+        // no proxy — the proxy failed its held-out gate and never reaches
+        // the UI).
+        const btnMonthly        = document.getElementById('monthly-mode-btn');
+        const monthlyBanner     = document.getElementById('monthly-banner');
+        const monthlyPickCount  = document.getElementById('monthly-pick-count');
+        const monthlySourceSeg  = document.getElementById('monthly-source-seg');
+        const monthlyDateStart  = document.getElementById('monthly-date-start');
+        const monthlyDateEnd    = document.getElementById('monthly-date-end');
+        const monthlyBandStart  = document.getElementById('monthly-band-start');
+        const monthlyBandEnd    = document.getElementById('monthly-band-end');
+        const monthlyWorkHours  = document.getElementById('monthly-work-hours');
+        const monthlyMaxDays    = document.getElementById('monthly-max-days');
+        const monthlyWeekdays   = document.getElementById('monthly-weekdays');
+        const monthlyProgress   = document.getElementById('monthly-progress-hint');
+        const btnMonthlyRun     = document.getElementById('monthly-run-btn');
+        const btnMonthlyCancel  = document.getElementById('monthly-cancel-btn');
+        const monthlyResults      = document.getElementById('monthly-results');
+        const monthlyResultsTitle = document.getElementById('monthly-results-title');
+        const monthlyResultsMeta  = document.getElementById('monthly-results-meta');
+        const monthlyResultsBody  = document.getElementById('monthly-results-tbody');
+        const btnMonthlyResultsClose = document.getElementById('monthly-results-close');
+        let monthlyMode = false;
+        let monthlyJobRunning = false;
+
         // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — no picking mode:
         // acts on the currently loaded scenario and sends its full
         // ScenarioSpec, including the exact closure/window/seed identity.
@@ -861,24 +889,31 @@
         const optimizePlanBody       = document.getElementById('optimize-plan-tbody');
 
         function refreshCloseUI() {
-          const showNormal = !closureMode && !dayPickMode && !suggestMode;
+          const showNormal = !closureMode && !dayPickMode && !suggestMode && !monthlyMode;
           const showApiActions = showNormal && apiAvailable;
-          const showScenarioPicker = ['scenario', 'demand', 'closure', 'suggest', 'signals'].includes(workspaceTask);
+          const showScenarioPicker = ['scenario', 'demand', 'closure', 'suggest', 'monthly', 'signals'].includes(workspaceTask);
           scenSelect.style.display   = showNormal && showScenarioPicker ? '' : 'none';
           simDayHint.style.display   = showNormal ? '' : 'none';
           btnClose.style.display     = showApiActions && workspaceTask === 'closure' ? '' : 'none';
           btnDay.style.display       = showApiActions && workspaceTask === 'demand' ? '' : 'none';
           btnSuggest.style.display   = showApiActions && workspaceTask === 'suggest' ? '' : 'none';
+          btnMonthly.style.display   = showApiActions && workspaceTask === 'monthly' ? '' : 'none';
           btnOptimize.style.display  = showApiActions && workspaceTask === 'signals' ? '' : 'none';
           pickBanner.classList.toggle('show', closureMode);
           dayBanner.classList.toggle('show', dayPickMode);
           suggestBanner.classList.toggle('show', suggestMode);
+          monthlyBanner.classList.toggle('show', monthlyMode);
           pickCount.textContent = `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
           btnRun.disabled = selected.size === 0;
           if (suggestMode) {
             suggestPickCount.textContent =
               `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
             btnSuggestRun.disabled = selected.size === 0;
+          }
+          if (monthlyMode) {
+            monthlyPickCount.textContent =
+              `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
+            btnMonthlyRun.disabled = monthlyJobRunning || selected.size === 0;
           }
           Render.setPending([...selected]);
         }
@@ -892,6 +927,7 @@
           taskTitle.textContent = taskNames[task] || 'Göteborg Trafik';
           exitPicking();
           exitSuggestPicking();
+          exitMonthlyPicking();
           dayPickMode = false;
           if (task === 'history') {
             await loadHistory();
@@ -908,6 +944,8 @@
               enterPicking();
             } else if (task === 'suggest') {
               enterSuggestPicking();
+            } else if (task === 'monthly') {
+              enterMonthlyPicking();
             }
           }
           refreshCloseUI();
@@ -921,6 +959,7 @@
           historyPanel.hidden = true;
           exitPicking();
           exitSuggestPicking();
+          exitMonthlyPicking();
           dayPickMode = false;
           refreshCloseUI();
           requestAnimationFrame(() => Render.invalidateSize());
@@ -947,6 +986,18 @@
         function exitSuggestPicking() {
           suggestMode = false;
           selected.clear();
+          refreshCloseUI();
+        }
+        function enterMonthlyPicking() {
+          monthlyMode = true;
+          if (!monthlyJobRunning) selected.clear();
+          monthlyResults.classList.remove('show');
+          optimizeResults.classList.remove('show');
+          refreshCloseUI();
+        }
+        function exitMonthlyPicking() {
+          monthlyMode = false;
+          if (!monthlyJobRunning) selected.clear();
           refreshCloseUI();
         }
 
@@ -1226,7 +1277,8 @@
         });
 
         Render.onEdgeClick(id => {
-          if (!closureMode && !suggestMode) return;
+          if (!closureMode && !suggestMode && !monthlyMode) return;
+          if (monthlyMode && monthlyJobRunning) return;
           selected.has(id) ? selected.delete(id) : selected.add(id);
           refreshCloseUI();
         });
@@ -1624,6 +1676,378 @@
             btnSuggestRun.textContent = 'Sök bästa tid';
           }
         });
+
+        // ── Bästa arbetsperiod (Phase 4 step 7): resumable monthly closure
+        // search. The server forces the frozen golden policy and bounded-
+        // exhaustive screening; the browser only supplies user intent (the
+        // ClosureSearchSpec). ─────────────────────────────────────────────
+        let monthlySource = 'forecast';
+        let lastMonthlyResult = null;
+        let lastMonthlySpec = null;
+
+        // Deterministic id from the form content: re-running the exact same
+        // search resumes the same immutable workspace (completed SUMO work
+        // is loaded, not repeated) instead of starting from scratch.
+        function monthlyStableKey(text) {
+          let h = 0x811c9dc5;
+          for (let i = 0; i < text.length; i++) {
+            h ^= text.charCodeAt(i);
+            h = Math.imul(h, 0x01000193) >>> 0;
+          }
+          return h.toString(36);
+        }
+
+        function monthlyClosureSearchSpec(edges) {
+          const weekdays = [...monthlyWeekdays.querySelectorAll('button.active')]
+            .map(btn => Number(btn.dataset.day));
+          const body = {
+            directed_edges: edges,
+            source: monthlySource,
+            permitted_date_start: monthlyDateStart.value,
+            permitted_date_end: monthlyDateEnd.value,
+            required_work_minutes:
+              Math.round((Number(monthlyWorkHours.value) || 4) * 60),
+            max_consecutive_start_days:
+              Math.min(7, Math.max(1, Number(monthlyMaxDays.value) || 1)),
+            permitted_daily_band: {
+              earliest_start: monthlyBandStart.value.slice(0, 5),
+              latest_end: monthlyBandEnd.value.slice(0, 5),
+            },
+            allowed_weekdays: weekdays,
+            same_daily_window: true,
+            resolution_minutes: 15,
+            closure_type: 'full',
+            duration_basis: 'required_work_time',
+            work_to_closure_assumption: 'one_to_one',
+            objective_profile: 'robust_time_loss',
+            policy_status: 'user_supplied_unverified',
+          };
+          const key = monthlyStableKey(JSON.stringify(body));
+          return {
+            search_id: `ui-monthly-${key}`,
+            demand_build_id: `ui-monthly-release-${key}`,
+            ...body,
+          };
+        }
+
+        const MONTHLY_PHASE_LABELS = {
+          policy: 'Startar',
+          enumerate: 'Räknar upp lagliga scheman',
+          screen: 'Väljer kandidater',
+          prepare_backend: 'Bygger kalibrerat underlag per datum (~6 min/datum första gången)',
+          pilot: 'Pilotkörningar i SUMO',
+          finalists: 'Finalistkörningar i SUMO',
+          decide: 'Beslutar',
+          adaptive_finalists: 'Fler körningar för precision',
+          publish: 'Publicerar resultat',
+        };
+
+        function updateMonthlyProgress(status) {
+          const progress = status.progress || {};
+          const label = MONTHLY_PHASE_LABELS[progress.phase] || 'Söker';
+          const counts = progress.total
+            ? ` ${progress.completed}/${progress.total}` : '';
+          btnMonthlyRun.textContent = `Söker… (${status.elapsed_s || 0}s)`;
+          monthlyProgress.hidden = false;
+          monthlyProgress.textContent = status.status === 'cancelling'
+            ? 'Avbryter…' : `${label}${counts}`;
+        }
+
+        async function pollMonthly(onProgress) {
+          for (;;) {
+            await new Promise(r => setTimeout(r, 4000));
+            let status;
+            try {
+              status = await (await fetch('/api/monthly_search/status')).json();
+            } catch (e) {
+              continue;   // transient network hiccup — keep polling
+            }
+            if (status.status === 'running' || status.status === 'cancelling') {
+              onProgress?.(status);
+              continue;
+            }
+            return status;
+          }
+        }
+
+        function scheduleLabel(schedule) {
+          const intervals = schedule.intervals || [];
+          const parts = intervals.slice(0, 2).map(iv =>
+            `${iv.start_time.slice(0, 10)} ${iv.start_time.slice(11, 16)}–` +
+            `${iv.end_time.slice(11, 16)}`);
+          return intervals.length > 2
+            ? `${parts[0]} … (${intervals.length} dagar)` : parts.join(', ');
+        }
+
+        function renderMonthlyResults(result) {
+          lastMonthlyResult = result;
+          const screening = result.screening || {};
+          monthlyResultsTitle.textContent =
+            `Bästa arbetsperiod · ${screening.candidate_count ?? '?'} lagliga ` +
+            `scheman · ${screening.shortlist_count ?? '?'} SUMO-verifierade`;
+
+          const metaLines = [];
+          const boundary = result.claim_boundary || {};
+          const winner = (result.selected_schedules || [])
+            .find(s => s.schedule_id === result.winner_id);
+          if (!boundary.ui_exposure_allowed) {
+            metaLines.push('<span class="monthly-warn">Resultatet får inte visas ' +
+              'som rekommendation: ' + (boundary.reason || 'okänd orsak') + '</span>');
+          } else if (result.status === 'unique_winner' && winner) {
+            metaLines.push(`<b>Bäst bland SUMO-verifierade scheman inom angivna ` +
+              `tider: ${scheduleLabel(winner)}</b>`);
+          } else if (result.status === 'tie') {
+            metaLines.push(`<b>Ingen ensam vinnare:</b> ${result.tie_ids.length} ` +
+              `scheman är praktiskt likvärdiga.`);
+          } else if (result.status === 'no_viable') {
+            metaLines.push('<span class="monthly-warn">Ingen genomförbar ' +
+              'arbetsperiod hittades — alla kandidater föll på hårda grindar ' +
+              '(omväg, strandade fordon, simuleringshälsa).</span>');
+          } else {
+            metaLines.push('<span class="monthly-warn">Inget säkert svar — ' +
+              'resultatet är statistiskt oavgjort eller pilotgrinden kunde ' +
+              'inte gå vidare.</span>');
+          }
+          metaLines.push('Varje kandidat körs parat mot sin egen baslinje i ' +
+            'SUMO över q10/q50/q90-varianterna; poängen är den värsta ' +
+            'variantens övre 95 %-gräns för total förlorad restid.');
+          if (!boundary.global_best_claim_allowed) {
+            metaLines.push('<span class="monthly-warn">Gäller de uppräknade ' +
+              'kandidaterna — grinden för påståendet “globalt bäst för en hel ' +
+              'månad” är ännu inte godkänd.</span>');
+          }
+          monthlyResultsMeta.innerHTML = metaLines.join('<br>');
+
+          const statsById = Object.fromEntries(
+            ((result.robust_decision || {}).candidates || [])
+              .map(c => [c.candidate_id, c]));
+          const tieIds = new Set(result.tie_ids || []);
+          monthlyResultsBody.replaceChildren(
+            ...(result.shortlisted_schedules || []).map(schedule => {
+              const stats = statsById[schedule.schedule_id];
+              const tr = document.createElement('tr');
+              const failed = stats?.hard_failures?.length;
+              if (failed) tr.classList.add('disqualified');
+
+              const schedTd = document.createElement('td');
+              schedTd.textContent = scheduleLabel(schedule);
+
+              const deltaTd = document.createElement('td');
+              deltaTd.textContent = stats?.robust_point_s != null
+                ? fmtDelta(stats.robust_point_s) : '–';
+
+              const upperTd = document.createElement('td');
+              upperTd.textContent = stats?.robust_upper_95_s != null
+                ? fmtDelta(stats.robust_upper_95_s) : '–';
+
+              const statusTd = document.createElement('td');
+              if (failed) {
+                const tag = document.createElement('span');
+                tag.className = 'sr-tag disq';
+                tag.textContent = stats.hard_failures.join(', ');
+                statusTd.appendChild(tag);
+              } else if (schedule.schedule_id === result.winner_id) {
+                statusTd.textContent = 'Bäst';
+              } else if (tieIds.has(schedule.schedule_id)) {
+                statusTd.textContent = 'Likvärdig';
+              } else if (stats) {
+                statusTd.textContent = 'Finalist';
+              } else {
+                statusTd.textContent = 'Utsållad i pilot';
+              }
+
+              const loadTd = document.createElement('td');
+              const loadBtn = document.createElement('button');
+              loadBtn.className = 'sr-load-btn';
+              loadBtn.textContent = 'Ladda';
+              loadBtn.disabled = Boolean(failed) ||
+                !boundary.ui_exposure_allowed;
+              loadBtn.title = failed
+                ? 'Föll på hårda grindar — ej lämplig att ladda'
+                : 'Bygg detta schema som ett riktigt scenario på kartan';
+              loadBtn.addEventListener('click',
+                () => loadMonthlySchedule(schedule, loadBtn));
+              loadTd.appendChild(loadBtn);
+
+              tr.append(schedTd, deltaTd, upperTd, statusTd, loadTd);
+              return tr;
+            }));
+          monthlyResults.classList.add('show');
+        }
+
+        // Exact-schedule handoff: the loaded scenario is built from the
+        // schedule's OWN intervals, never re-derived. If the live demand
+        // does not cover the schedule's dates it is recalibrated first via
+        // the ordinary "Byt dag" pipeline (the honest ~6 min/day cost),
+        // then the closure runs as a normal windowed scenario.
+        async function loadMonthlySchedule(schedule, btn) {
+          const edges = (lastMonthlySpec &&
+                         lastMonthlySpec.directed_edges) ||
+                        lastMonthlyResult?.edges || [...selected];
+          const intervals = schedule.intervals || [];
+          if (!edges.length || !intervals.length) {
+            return alert('Schemat saknar kanter eller intervall.');
+          }
+          const source = lastMonthlySpec?.source || monthlySource;
+          const firstDate = intervals[0].start_time.slice(0, 10);
+          const lastDate = intervals[intervals.length - 1]
+            .start_time.slice(0, 10);
+          const days = Math.min(7, Math.max(1, Math.round(
+            (Date.parse(lastDate) - Date.parse(firstDate)) / 86400000) + 1));
+          const others = monthlyResultsBody.querySelectorAll('.sr-load-btn');
+          others.forEach(b => b.disabled = true);
+          try {
+            const base = await baseScenarioSpec();
+            const covered = currentSimSource === source &&
+              base.start_time <= intervals[0].start_time &&
+              base.end_time >= intervals[intervals.length - 1].end_time;
+            if (!covered) {
+              if (!confirm(`Kartan är kalibrerad för ${currentSimDate} ` +
+                  `(${currentSimSource === 'forecast' ? 'prognos' : 'historik'}). ` +
+                  `Kalibrera om för ${firstDate} (${days} dag(ar), ` +
+                  `~${estimatedMinutes(days)} min) och ladda schemat?`)) return;
+              btn.textContent = 'Kalibrerar…';
+              rememberPendingRecal(firstDate, source, days);
+              await requestRecalibration(firstDate, source, days, {
+                start_date: firstDate, source, days,
+                begin: '00:00', end: '24:00',
+                structural_reference_date: '2025-09-16',
+              });
+              recalibrationJobRunning = true;
+              await pollRecalibration();
+              recalibrationJobRunning = false;
+            }
+            const spec = await baseScenarioSpec();
+            spec.scenario_id = (`close_${edges.join('_')}` +
+              `_p${monthlyStableKey(JSON.stringify(intervals))}`)
+              .replace(/[^A-Za-z0-9_+-]/g, '_').slice(0, 80);
+            spec.closures = intervals.flatMap(iv => edges.map(edge_id => ({
+              edge_id,
+              start_time: iv.start_time,
+              end_time: iv.end_time,
+              closure_type: 'full',
+              permitted_access_exceptions: [],
+            })));
+            spec.objective_profile = 'closure-window';
+            btn.textContent = 'Simulerar… (0s)';
+            const res = await fetch('/api/close', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ scenario_spec: spec }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            const status = await pollClose(
+              s => btn.textContent = `Simulerar… (${s}s)`);
+            if (status.status === 'error') throw new Error(status.error);
+            monthlyResults.classList.remove('show');
+            exitMonthlyPicking();
+            await activateClosedScenario(status);
+          } catch (e) {
+            alert('Kunde inte ladda schemat: ' + e.message);
+          } finally {
+            others.forEach(b => b.disabled = false);
+            btn.textContent = 'Ladda';
+          }
+        }
+
+        btnMonthly.addEventListener('click', enterMonthlyPicking);
+        btnMonthlyResultsClose.addEventListener('click',
+          () => monthlyResults.classList.remove('show'));
+        monthlyWeekdays.querySelectorAll('button').forEach(btn =>
+          btn.addEventListener('click', () => btn.classList.toggle('active')));
+        monthlySourceSeg.querySelectorAll('button').forEach(btn =>
+          btn.addEventListener('click', () => {
+            monthlySource = btn.dataset.source;
+            monthlySourceSeg.querySelectorAll('button').forEach(b =>
+              b.classList.toggle('active', b === btn));
+            const range = DATE_RANGES[monthlySource];
+            for (const input of [monthlyDateStart, monthlyDateEnd]) {
+              input.min = range.min;
+              input.max = range.max;
+              if (input.value) {
+                input.value = `${range.min.slice(0, 4)}${input.value.slice(4)}`;
+              }
+            }
+          }));
+
+        btnMonthlyRun.addEventListener('click', async () => {
+          const spec = monthlyClosureSearchSpec([...selected]);
+          if (!spec.allowed_weekdays.length) {
+            return alert('Välj minst en veckodag.');
+          }
+          if (!spec.permitted_date_start || !spec.permitted_date_end) {
+            return alert('Välj ett datumintervall.');
+          }
+          lastMonthlySpec = spec;
+          monthlyJobRunning = true;
+          refreshCloseUI();
+          btnMonthlyRun.disabled = true;
+          btnMonthlyRun.textContent = 'Startar…';
+          try {
+            const res = await fetch('/api/monthly_search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ closure_search_spec: spec }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            const status = await pollMonthly(updateMonthlyProgress);
+            if (status.status === 'error') throw new Error(status.error);
+            if (status.status === 'cancelled') {
+              monthlyProgress.hidden = false;
+              monthlyProgress.textContent =
+                status.note || 'Avbruten — sökningen kan återupptas.';
+              return;
+            }
+            monthlyProgress.hidden = true;
+            renderMonthlyResults(status.result);
+          } catch (e) {
+            alert('Sökningen misslyckades: ' + e.message);
+          } finally {
+            monthlyJobRunning = false;
+            btnMonthlyRun.textContent = 'Sök arbetsperiod';
+            refreshCloseUI();
+          }
+        });
+
+        btnMonthlyCancel.addEventListener('click', async () => {
+          if (!monthlyJobRunning) return exitMonthlyPicking();
+          btnMonthlyCancel.disabled = true;
+          btnMonthlyCancel.textContent = 'Avbryter…';
+          try {
+            const res = await fetch('/api/cancel?kind=monthly', { method: 'POST' });
+            if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+          } catch (e) {
+            alert('Kunde inte avbryta sökningen: ' + e.message);
+          } finally {
+            btnMonthlyCancel.disabled = false;
+            btnMonthlyCancel.textContent = 'Avbryt';
+          }
+        });
+
+        // A monthly search started from another tab/session (or one whose
+        // tab closed) is still the server's current work — same on-load
+        // discovery as the recalibration below. Only a RUNNING job is
+        // resumed unconditionally; a finished one is left for the tab that
+        // started it (its poll loop renders the result).
+        (async () => {
+          try {
+            const status = await (await fetch('/api/monthly_search/status')).json();
+            if (status.status === 'running' || status.status === 'cancelling') {
+              monthlyJobRunning = true;
+              refreshCloseUI();
+              const done = await pollMonthly(updateMonthlyProgress);
+              monthlyJobRunning = false;
+              monthlyProgress.hidden = true;
+              btnMonthlyRun.textContent = 'Sök arbetsperiod';
+              refreshCloseUI();
+              if (done.status === 'done' && done.result && monthlyMode) {
+                renderMonthlyResults(done.result);
+              }
+            }
+          } catch (e) { /* static hosting — ignore */ }
+        })();
 
         // The recalibration takes ~6 min — a single held-open fetch for
         // that long is fragile (browser timeout, closed tab, sleeping
