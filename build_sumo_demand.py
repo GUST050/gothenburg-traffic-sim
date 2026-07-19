@@ -202,6 +202,9 @@ def parse_args() -> argparse.Namespace:
                    help="Calibration engine: pfe = the level-1/2/3 hierarchy "
                         "(hard counts, conservation bounds, learned priors); "
                         "routesampler = reference implementation (counts only)")
+    p.add_argument("--pfe-workers", type=int, default=None,
+                   help="Maximum PFE worker processes (default: CPU count; "
+                        "use 1 for serial solving and publication)")
     p.add_argument("--through-share-target", type=float, default=0.25,
                    help="Enforced calibrated through share (start AND end "
                         "outside the canvas). The share is unidentifiable "
@@ -305,6 +308,8 @@ def parse_args() -> argparse.Namespace:
             or args.through_share_target >= 1):
         p.error("--through-share-target must be finite and below 1; "
                 "values <=0 disable the target")
+    if args.pfe_workers is not None and args.pfe_workers < 1:
+        p.error("--pfe-workers must be a positive integer")
     if args.date is not None and args.start_date is not None:
         p.error("use either --date or --start-date, not both")
     if args.date is not None and args.days != 1:
@@ -712,7 +717,7 @@ def main() -> None:
                     "pfe_variants_and_rounding",
                     lambda: run_pfe_variants_flat_parallel(
                         cand_path, variants, variant_inputs,
-                        max_workers=os.cpu_count() or 1,
+                        max_workers=args.pfe_workers or (os.cpu_count() or 1),
                         purpose_departure_offset_s=purpose_departure_offset_s,
                         activity_purpose_shares_by_quarter=activity_purpose_shares,
                         through_share_target=args.through_share_target))
@@ -1022,6 +1027,11 @@ def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
     candidates = [
         sumo_dir / "demand_meta.json",
         sumo_dir / "demand_build_spec.json",
+        # The calibrated structure and purpose audit is relative to this exact
+        # generated pool. Archive it with the release so restoring demand can
+        # never silently pair calibrated routes with another run's pool.
+        sumo_dir / "candidates.rou.xml",
+        sumo_dir / "candidates.meta.json",
         sumo_dir / "calibrated.rou.xml",
         sumo_dir / "calibrated.agents.json",
         sumo_dir / "calibrated_v1.rou.xml",

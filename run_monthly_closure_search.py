@@ -20,6 +20,7 @@ from traffic_sim.simulation.monthly_search import (
     MonthlySearchPolicy,
     run_monthly_search,
 )
+from traffic_sim.simulation.monthly_demand import MonthlyDemandResolverRunner
 from traffic_sim.simulation.monthly_sumo import ArchivedDemandSumoRunner
 from traffic_sim.simulation.search_workspace import DEFAULT_ROOT
 
@@ -96,8 +97,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--demand-archive",
         type=Path,
-        required=True,
-        help="Succeeded immutable demand archive covering every shortlist envelope.",
+        help=(
+            "Compatibility mode: one succeeded immutable demand archive "
+            "covering every shortlist envelope. Omit to resolve/build and "
+            "freeze one exact archive per shortlist envelope automatically."
+        ),
+    )
+    parser.add_argument(
+        "--demand-runs-root",
+        type=Path,
+        default=Path("runs"),
+        help="Run registry searched for exact succeeded demand archives.",
+    )
+    parser.add_argument(
+        "--demand-release-root",
+        type=Path,
+        default=Path("runs") / "monthly-demand-releases",
+        help="Immutable envelope-to-archive release manifests.",
+    )
+    parser.add_argument(
+        "--no-build-missing-demand",
+        action="store_true",
+        help="Fail instead of automatically calibrating missing envelopes.",
     )
     parser.add_argument(
         "--baseline-trip-duration-p99-s",
@@ -144,7 +165,6 @@ def main() -> None:
             "network_sha256": sha256_file(Path("sumo/net.net.xml")),
         })
         runner_options = {
-            "archive": args.demand_archive,
             "baseline_trip_duration_p99_s": (
                 args.baseline_trip_duration_p99_s
             ),
@@ -153,7 +173,20 @@ def main() -> None:
         }
         if args.baseline_cache is not None:
             runner_options["cache_root"] = args.baseline_cache
-        runner = ArchivedDemandSumoRunner(spec, **runner_options)
+        if args.demand_archive is not None:
+            runner = ArchivedDemandSumoRunner(
+                spec,
+                archive=args.demand_archive,
+                **runner_options,
+            )
+        else:
+            runner = MonthlyDemandResolverRunner(
+                spec,
+                runs_root=args.demand_runs_root,
+                release_root=args.demand_release_root,
+                build_missing=not args.no_build_missing_demand,
+                **runner_options,
+            )
         if args.screening_mode == "proxy":
             screen_builder = build_screening_artifact
         else:

@@ -240,20 +240,14 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         _PFE_PAR_PREPARE_S = prepare_s
         _PFE_PAR_SOLVE_S = solve_s
         reports = {}
-        publish_workers = min(len(variants), n_workers)
-        if publish_workers == 1:
-            published = [
-                _write_pfe_variant_report_job(variant) for variant in variants
-            ]
-        else:
-            publish_started = time.perf_counter()
-            print(f"  PFE route publish: {len(variants)} independent variants "
-                  f"in parallel ({publish_workers} workers)")
-            with mp.get_context("fork").Pool(processes=publish_workers) as pool:
-                published = list(pool.imap_unordered(
-                    _write_pfe_variant_report_job, variants))
-            print(f"  timing PFE parallel route publish wall: "
-                  f"{time.perf_counter() - publish_started:.1f}s")
+        # Publishing materializes large XML + agent JSON artifacts. Forking
+        # three writers duplicates the full shape/solution state and can
+        # deadlock under memory pressure even after all interval solves have
+        # completed. Keep the expensive interval solves parallel, but publish
+        # the three variants serially and deterministically.
+        published = [
+            _write_pfe_variant_report_job(variant) for variant in variants
+        ]
         published_by_suffix = {suffix: (key, report, publish_s)
                                for suffix, key, report, publish_s in published}
         for suffix, key in variants:

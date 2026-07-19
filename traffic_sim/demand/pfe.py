@@ -47,6 +47,7 @@ import os
 import hashlib
 import json
 import math
+from typing import Iterable
 import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import dataclass, field
@@ -1249,6 +1250,28 @@ def purpose_replacement_index(
     return index
 
 
+def purpose_signature_coverage(
+    replacement_index: dict[tuple[str, ...], dict[str, list[tuple[Candidate, Candidate]]]],
+    requested_purposes: Iterable[str],
+) -> dict[str, dict[str, int]]:
+    """Report protected-edge signatures missing requested purpose variants.
+
+    This is a pre-solve diagnostic: it only counts candidates already present
+    in the generated pool and never treats another purpose as interchangeable.
+    """
+    purposes = tuple(sorted(set(str(item) for item in requested_purposes)))
+    return {
+        "signatures": len(replacement_index),
+        "missing_by_purpose": {
+            purpose: sum(
+                1 for choices in replacement_index.values()
+                if not choices.get(purpose)
+            )
+            for purpose in purposes
+        },
+    }
+
+
 def allocate_interval_provenance(
     route_instances: list[Candidate], source_mix: Counter,
     lengths_km: list[float] | None = None,
@@ -1730,9 +1753,85 @@ def write_calibration_report(
                         break
                     repaired_structure = repair_integer_bounds(
                         current, shapes, targets_per_q[i], repair_bounds,
-                        groups=active_purpose_groups + quarter_groups)
+                        groups=active_purpose_groups + quarter_groups,
+                        # The continuous interval may legitimately have used
+                        # a wider measurement rung. Re-imposing the exact
+                        # rounded target here makes a feasible structure
+                        # repair look impossible (observed in forecast q79:
+                        # 24 short trips stayed published although a
+                        # rung-consistent repair reduces them to 2).
+                        measurement_tol_mult=(
+                            _rung_measurement_tol_mult(rung)
+                            if rung in RUNG_NAMES
+                            and rung != RUNG_INFEASIBLE
+                            else None
+                        ))
                     if repaired_structure is None:
-                        break
+                        # Deterministic exact-preserving fallback. The MILP
+                        # can fail on a large active set even when the pool
+                        # contains an obvious one-for-one alternative. Move
+                        # only between generated shapes with identical
+                        # purpose and identical incidence on every protected
+                        # sensor/bound edge; this cannot change a hard count
+                        # or provenance. Refuse a move that would overflow
+                        # another structure group.
+                        protected = set(targets_per_q[i]) | set(repair_bounds)
+                        signatures = [
+                            tuple(sorted(set(shape.edges) & protected))
+                            for shape in shapes
+                        ]
+                        purposes_by_shape = [
+                            tuple(sorted(_shape_purposes(shape)))
+                            for shape in shapes
+                        ]
+                        all_limits = [
+                            (set(members),
+                             int(np.floor(max(2.0, cap * float(current.sum()))
+                                          + 0.5)))
+                            for members, cap in (structure_groups or [])
+                        ]
+                        changed = False
+                        for members, _lo, hi in quarter_groups:
+                            member_set = set(members)
+                            excess = int(current[members].sum()) - int(
+                                np.floor(hi + 0.5))
+                            if excess <= 0:
+                                continue
+                            donors = [
+                                j for j in members if current[j] > 0
+                            ]
+                            for donor in donors:
+                                alternatives = [
+                                    k for k in range(len(shapes))
+                                    if k not in member_set
+                                    and signatures[k] == signatures[donor]
+                                    and purposes_by_shape[k]
+                                    == purposes_by_shape[donor]
+                                ]
+                                for target in alternatives:
+                                    headrooms = [
+                                        limit - int(current[list(group)].sum())
+                                        for group, limit in all_limits
+                                        if target in group and donor not in group
+                                    ]
+                                    if headrooms and min(headrooms) <= 0:
+                                        continue
+                                    moved = min(
+                                        int(current[donor]),
+                                        excess,
+                                        min(headrooms) if headrooms else excess,
+                                    )
+                                    current[donor] -= moved
+                                    current[target] += moved
+                                    excess -= moved
+                                    changed = True
+                                    if excess == 0:
+                                        break
+                                if excess == 0:
+                                    break
+                        if not changed:
+                            break
+                        continue
                     current = repaired_structure
                 return current
 
@@ -2004,6 +2103,9 @@ def write_calibration_report(
                   "mix_excess_by_purpose": dict(sorted(mix_excess.items())),
                   "mix_reallocation_vehicles": mix_reallocation_vehicles,
                   "replaced_routes": replaced_routes,
+                  "protected_signature_coverage": purpose_signature_coverage(
+                      replacement_index,
+                      {purpose for mix in purpose_targets for purpose in mix}),
               }}
     if rungs is not None:
         # Which relaxation-ladder rung each interval actually converged at —

@@ -4,7 +4,11 @@ from pathlib import Path
 import pytest
 
 from traffic_sim.core.closure_calendar import generate_closure_schedules
-from traffic_sim.core.contracts import ClosureSearchSpec, DailyTimeBand
+from traffic_sim.core.contracts import (
+    ClosureSearchSpec,
+    DailyTimeBand,
+    DemandBuildSpec,
+)
 from traffic_sim.simulation.finalist_decision import (
     CandidateEvidence,
     PairedObservation,
@@ -28,16 +32,23 @@ def _spec(build_key="demand-key"):
     )
 
 
-def _archive(tmp_path, *, build_key="demand-key", days=1):
+def _archive(tmp_path, *, build_key="demand-key", days=1, demand_spec=None):
     archive = tmp_path / "archive"
     archive.mkdir()
     (archive / "manifest.json").write_text(json.dumps({"status": "succeeded"}))
-    (archive / "demand_meta.json").write_text(json.dumps({
+    metadata = {
         "demand_build_key": build_key,
         "epoch_sim": "2025-09-16T00:00:00",
         "n_intervals": days * 96,
         "n_variants": 3,
-    }))
+    }
+    if demand_spec is not None:
+        metadata["source"] = demand_spec.source
+        metadata["demand_spec"] = demand_spec.to_dict()
+        (archive / "demand_build_spec.json").write_text(
+            json.dumps(demand_spec.to_dict())
+        )
+    (archive / "demand_meta.json").write_text(json.dumps(metadata))
     for filename in (
         "calibrated.rou.xml",
         "calibrated_v1.rou.xml",
@@ -121,6 +132,32 @@ def test_archive_with_wrong_build_key_is_rejected(tmp_path, patched_runtime):
             study_provenance_key="study",
             cache_root=tmp_path / "cache",
         )
+
+
+def test_exact_envelope_demand_contract_is_validated(
+        tmp_path, patched_runtime):
+    demand_spec = DemandBuildSpec(
+        start_date="2025-09-16",
+        source="historical",
+        days=1,
+        begin="00:00",
+        end="24:00",
+        purpose="closure_envelope",
+    )
+    runner = ArchivedDemandSumoRunner(
+        _spec("release-id"),
+        archive=_archive(
+            tmp_path,
+            build_key=demand_spec.build_key,
+            demand_spec=demand_spec,
+        ),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+        expected_demand_spec=demand_spec,
+    )
+    assert runner.provenance()["demand_release_id"] == "release-id"
+    assert runner.provenance()["demand_build_id"] == demand_spec.build_key
 
 
 def test_runner_adds_only_missing_canonical_repetitions(

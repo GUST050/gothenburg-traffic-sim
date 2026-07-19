@@ -528,6 +528,41 @@ class TestBoundViolationsFromRounding:
         assert report["achieved"]["U"] == [6.0]
         assert report["bound_violations"] == []
 
+    def test_optional_structure_repair_uses_the_solver_measurement_band(
+            self, tmp_path, monkeypatch):
+        """A relaxed interval must not regain an exact-count constraint.
+
+        The live q79 build was count-valid on the tol4 rung, but its optional
+        short-trip repair called the integer solver without that rung.  The
+        repair therefore reimposed exact rounded sensor totals, immediately
+        reported infeasible, and retained 24 short trips against a cap of 2.
+        """
+        shapes = [Candidate(depart=0.0, edges=["M", "SHORT"]),
+                  Candidate(depart=0.0, edges=["M", "LONG"])]
+        calls = []
+
+        def repair_with_relaxed_band(counts, _shapes, _targets, _bounds,
+                                     groups=None, measurement_tol_mult=None):
+            calls.append(measurement_tol_mult)
+            if measurement_tol_mult != 4.0:
+                return None
+            return np.array([2, 8])
+
+        monkeypatch.setattr(pfe, "repair_integer_bounds",
+                            repair_with_relaxed_band)
+        out = tmp_path / "out.rou.xml"
+        write_calibration_report(
+            shapes, out, [{"M": 10.0}], [np.array([8.0, 2.0])],
+            bounds_per_q=[{}], rungs=[RUNG_RELAX_TOL4X],
+            enforce_integer_bounds=True,
+            structure_groups=[([0], 0.2)])
+
+        assert calls == [4.0]
+        route_counts = Counter(
+            vehicle.find("route").get("edges")
+            for vehicle in ET.parse(out).getroot().iter("vehicle"))
+        assert route_counts == {"M SHORT": 2, "M LONG": 8}
+
     def test_optional_structure_cap_never_blocks_hard_bound_repair(self, tmp_path):
         # This is the production failure mode from 2027-02-26 q94 in small
         # form.  The rounded sensor count M is exact, but it puts seven
@@ -1018,6 +1053,15 @@ class TestPurposeStratifiedCalibration:
 
         with pytest.raises(ValueError, match="fritid"):
             pfe.purpose_quota_groups([work], {"fritid": 1}, 1)
+
+    def test_signature_coverage_audit_reports_missing_purpose_without_fabrication(self):
+        work = self._shape(["O", "M", "D"], "arbete", "w")
+        leisure = self._shape(["O", "M", "D"], "fritid", "f")
+        index = pfe.purpose_replacement_index([work, leisure], {"M"})
+        assert pfe.purpose_signature_coverage(index, ["arbete", "fritid"])["missing_by_purpose"] == {
+            "arbete": 0, "fritid": 0}
+        partial = pfe.purpose_replacement_index([work], {"M"})
+        assert pfe.purpose_signature_coverage(partial, ["arbete", "fritid"])["missing_by_purpose"]["fritid"] == 1
 
     def test_prepare_keeps_same_geometry_in_separate_purpose_variables(self, tmp_path):
         routes = tmp_path / "candidates.rou.xml"

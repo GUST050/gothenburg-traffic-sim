@@ -1,0 +1,488 @@
+"""Resolve and freeze one calibrated demand archive per monthly envelope.
+
+The proxy shortlist can contain schedules on different dates.  Their SUMO
+times are local to different calibrated route files, so one archive cannot
+honestly serve the whole month.  This module groups schedules by the exact
+``DemandBuildSpec`` derived from their simulation envelope, resolves or builds
+each missing archive once, freezes the mapping in an immutable release
+manifest, and routes every candidate to its matched SUMO backend.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any, Callable, Mapping, Sequence
+
+from traffic_sim.core.contracts import (
+    ClosureSchedule,
+    ClosureSearchSpec,
+    DemandBuildSpec,
+    write_demand_build_spec,
+)
+from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.simulation.envelope import (
+    EnvelopePolicy,
+    build_simulation_envelope,
+    envelope_demand_spec,
+)
+from traffic_sim.simulation.finalist_decision import CandidateEvidence
+from traffic_sim.simulation.monthly_sumo import (
+    DEFAULT_BASELINE_CACHE,
+    ArchivedDemandSumoRunner,
+)
+
+
+SCHEMA_VERSION = 1
+DEFAULT_RUNS_ROOT = Path("runs")
+DEFAULT_RELEASE_ROOT = DEFAULT_RUNS_ROOT / "monthly-demand-releases"
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_REQUIRED_ARCHIVE_FILES = (
+    "demand_meta.json",
+    "demand_build_spec.json",
+    "calibrated.rou.xml",
+    "calibrated_v1.rou.xml",
+    "calibrated_v2.rou.xml",
+)
+
+
+def _read(path: Path) -> dict[str, Any]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"JSON input must be an object: {path}")
+    return payload
+
+
+def _canonical_digest(payload: Any, *, length: int = 64) -> str:
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:length]
+
+
+def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    try:
+        with temporary.open("w", encoding="utf-8") as handle:
+            json.dump(
+                payload,
+                handle,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _manifest_outputs(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    values = manifest.get("outputs", ())
+    if not isinstance(values, list):
+        return {}
+    result: dict[str, Mapping[str, Any]] = {}
+    for value in values:
+        if isinstance(value, Mapping) and isinstance(value.get("name"), str):
+            result[str(value["name"])] = value
+    return result
+
+
+def validate_demand_archive(
+    archive: Path,
+    required: DemandBuildSpec,
+) -> dict[str, Any]:
+    """Validate one immutable run archive against an exact envelope contract."""
+    archive = Path(archive).resolve()
+    manifest = _read(archive / "manifest.json")
+    if manifest.get("kind") != "demand" or manifest.get("status") != "succeeded":
+        raise ValueError(f"demand archive is not a succeeded demand run: {archive}")
+
+    archived_spec = DemandBuildSpec.from_dict(
+        _read(archive / "demand_build_spec.json")
+    )
+    metadata = _read(archive / "demand_meta.json")
+    metadata_spec = DemandBuildSpec.from_dict(metadata.get("demand_spec", {}))
+    if archived_spec != required or metadata_spec != required:
+        raise ValueError(f"demand archive has another build contract: {archive}")
+    if metadata.get("demand_build_key") != required.build_key:
+        raise ValueError(f"demand archive build key is inconsistent: {archive}")
+    if str(metadata.get("epoch_sim")) != f"{required.start_date}T00:00:00":
+        raise ValueError(f"demand archive epoch does not match envelope: {archive}")
+    if int(metadata.get("n_intervals", -1)) != required.days * 96:
+        raise ValueError(f"demand archive duration does not match envelope: {archive}")
+    if int(metadata.get("n_variants", 0)) != 3:
+        raise ValueError(f"demand archive lacks q10/q50/q90 variants: {archive}")
+
+    outputs = _manifest_outputs(manifest)
+    records = []
+    for name in _REQUIRED_ARCHIVE_FILES:
+        path = archive / name
+        expected = outputs.get(name)
+        digest = sha256_file(path)
+        if (
+            digest is None
+            or expected is None
+            or digest != expected.get("sha256")
+            or path.stat().st_size != int(expected.get("bytes", -1))
+        ):
+            raise ValueError(
+                f"demand archive output is missing or has changed: {path}"
+            )
+        records.append({
+            "name": name,
+            "bytes": path.stat().st_size,
+            "sha256": digest,
+        })
+    return {
+        "run_id": str(manifest.get("run_id", archive.name)),
+        "archive": str(archive),
+        "finished_at": str(manifest.get("finished_at", "")),
+        "demand_build_spec": required.to_dict(),
+        "archive_manifest_sha256": sha256_file(archive / "manifest.json"),
+        "outputs": records,
+        "archive_content_key": _canonical_digest(records),
+    }
+
+
+def find_demand_archives(
+    runs_root: Path,
+    required: DemandBuildSpec,
+) -> tuple[dict[str, Any], ...]:
+    """Return all valid succeeded archives for ``required``, newest first."""
+    matches: list[dict[str, Any]] = []
+    for archive in sorted(Path(runs_root).glob("demand-*")):
+        if not archive.is_dir():
+            continue
+        try:
+            record = validate_demand_archive(archive, required)
+        except (
+            FileNotFoundError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ):
+            continue
+        matches.append(record)
+    matches.sort(
+        key=lambda item: (str(item["finished_at"]), str(item["run_id"])),
+        reverse=True,
+    )
+    return tuple(matches)
+
+
+def build_demand_archive(required: DemandBuildSpec) -> None:
+    """Run the tracked demand builder for one missing envelope."""
+    with tempfile.TemporaryDirectory(prefix="monthly-demand-spec-") as raw:
+        spec_path = Path(raw) / f"{required.build_key}.json"
+        write_demand_build_spec(spec_path, required)
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "build_sumo_demand.py",
+                "--demand-spec",
+                str(spec_path),
+                "--keep-scenarios",
+            ],
+            check=False,
+            cwd=_PROJECT_ROOT,
+        )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"demand build {required.build_key} failed with exit code "
+            f"{completed.returncode}"
+        )
+
+
+RunnerFactory = Callable[..., ArchivedDemandSumoRunner]
+DemandBuilder = Callable[[DemandBuildSpec], None]
+
+
+class MonthlyDemandResolverRunner:
+    """Candidate runner spanning several frozen calendar-envelope archives."""
+
+    def __init__(
+        self,
+        spec: ClosureSearchSpec,
+        *,
+        baseline_trip_duration_p99_s: int,
+        study_provenance_key: str,
+        runs_root: Path = DEFAULT_RUNS_ROOT,
+        release_root: Path = DEFAULT_RELEASE_ROOT,
+        cache_root: Path = DEFAULT_BASELINE_CACHE,
+        seed_workers: int = 1,
+        envelope_policy: EnvelopePolicy = EnvelopePolicy(),
+        build_missing: bool = True,
+        demand_builder: DemandBuilder = build_demand_archive,
+        runner_factory: RunnerFactory = ArchivedDemandSumoRunner,
+    ) -> None:
+        self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
+        if (
+            isinstance(baseline_trip_duration_p99_s, bool)
+            or not isinstance(baseline_trip_duration_p99_s, int)
+            or baseline_trip_duration_p99_s <= 0
+        ):
+            raise ValueError(
+                "baseline_trip_duration_p99_s must be a positive integer"
+            )
+        self.baseline_trip_duration_p99_s = baseline_trip_duration_p99_s
+        self.study_provenance_key = study_provenance_key
+        self.runs_root = Path(runs_root)
+        self.release_root = Path(release_root)
+        self.cache_root = Path(cache_root)
+        self.seed_workers = seed_workers
+        self.envelope_policy = envelope_policy
+        self.build_missing = bool(build_missing)
+        self.demand_builder = demand_builder
+        self.runner_factory = runner_factory
+        self._schedule_build_keys: dict[str, str] = {}
+        self._runners: dict[str, ArchivedDemandSumoRunner] = {}
+        self._release: dict[str, Any] | None = None
+        self._prepared_schedule_ids: tuple[str, ...] | None = None
+
+    def _required(
+        self,
+        schedule: ClosureSchedule,
+    ) -> DemandBuildSpec:
+        envelope = build_simulation_envelope(
+            self.spec,
+            schedule,
+            baseline_trip_duration_p99_s=self.baseline_trip_duration_p99_s,
+            policy=self.envelope_policy,
+        )
+        return envelope_demand_spec(self.spec, envelope)
+
+    def _request(
+        self,
+        schedules: Sequence[ClosureSchedule],
+        required_by_key: Mapping[str, DemandBuildSpec],
+    ) -> dict[str, Any]:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "monthly_demand_release_request",
+            "release_id": self.spec.demand_build_id,
+            "search_content_key": self.spec.content_key,
+            "shortlist_schedule_ids": [
+                schedule.schedule_id for schedule in schedules
+            ],
+            "baseline_trip_duration_p99_s": (
+                self.baseline_trip_duration_p99_s
+            ),
+            "envelope_policy": dataclasses.asdict(self.envelope_policy),
+            "required_builds": [
+                required_by_key[key].to_dict()
+                for key in sorted(required_by_key)
+            ],
+        }
+
+    @staticmethod
+    def _release_content(payload: Mapping[str, Any]) -> str:
+        return _canonical_digest({
+            key: value
+            for key, value in payload.items()
+            if key != "content_key"
+        })
+
+    def _load_release(
+        self,
+        path: Path,
+        request: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        release = _read(path)
+        if (
+            release.get("schema_version") != SCHEMA_VERSION
+            or release.get("kind") != "monthly_demand_release"
+            or release.get("request") != request
+            or release.get("content_key") != self._release_content(release)
+        ):
+            raise ValueError(f"monthly demand release is invalid: {path}")
+        return release
+
+    def _resolve_new_release(
+        self,
+        request: Mapping[str, Any],
+        required_by_key: Mapping[str, DemandBuildSpec],
+    ) -> dict[str, Any]:
+        entries = []
+        for key in sorted(required_by_key):
+            required = required_by_key[key]
+            matches = find_demand_archives(self.runs_root, required)
+            if not matches and self.build_missing:
+                self.demand_builder(required)
+                matches = find_demand_archives(self.runs_root, required)
+            if not matches:
+                raise FileNotFoundError(
+                    f"no succeeded immutable demand archive for "
+                    f"{required.build_key} ({required.start_date}, "
+                    f"{required.days} day(s), {required.source}); run "
+                    f"build_sumo_demand.py with this closure-envelope "
+                    f"DemandBuildSpec or allow automatic builds"
+                )
+            entries.append(matches[0])
+        release = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "monthly_demand_release",
+            "request": dict(request),
+            "entries": entries,
+        }
+        release["content_key"] = self._release_content(release)
+        return release
+
+    def prepare(self, schedules: Sequence[ClosureSchedule]) -> None:
+        schedules = tuple(schedules)
+        if not schedules:
+            raise ValueError("monthly demand resolver needs a non-empty shortlist")
+        schedule_ids = tuple(schedule.schedule_id for schedule in schedules)
+        if len(set(schedule_ids)) != len(schedule_ids):
+            raise ValueError("monthly demand shortlist has duplicate schedules")
+        if self._prepared_schedule_ids is not None:
+            if schedule_ids != self._prepared_schedule_ids:
+                raise ValueError(
+                    "monthly demand resolver was prepared for another shortlist"
+                )
+            return
+
+        required_by_key: dict[str, DemandBuildSpec] = {}
+        for schedule in schedules:
+            required = self._required(schedule)
+            previous = required_by_key.get(required.build_key)
+            if previous is not None and previous != required:
+                raise ValueError("DemandBuildSpec build-key collision")
+            required_by_key[required.build_key] = required
+            self._schedule_build_keys[schedule.schedule_id] = required.build_key
+
+        request = self._request(schedules, required_by_key)
+        request_key = _canonical_digest(request, length=32)
+        release_path = self.release_root / f"{request_key}.json"
+        if release_path.is_file():
+            release = self._load_release(release_path, request)
+        else:
+            release = self._resolve_new_release(request, required_by_key)
+            _atomic_json(release_path, release)
+
+        entries = release.get("entries")
+        if not isinstance(entries, list):
+            raise ValueError("monthly demand release entries are invalid")
+        by_key = {
+            str(entry.get("demand_build_spec", {}).get("build_key")): entry
+            for entry in entries
+            if isinstance(entry, Mapping)
+        }
+        if set(by_key) != set(required_by_key):
+            raise ValueError("monthly demand release does not cover the shortlist")
+
+        for key, required in required_by_key.items():
+            pinned = by_key[key]
+            archive = Path(str(pinned["archive"]))
+            # Releases may be copied or created with relative archive paths;
+            # resolve them relative to the release manifest, never the
+            # process working directory.
+            if not archive.is_absolute():
+                archive = (release_path.parent / archive).resolve()
+            current = validate_demand_archive(archive, required)
+            expected_pinned = dict(pinned)
+            expected_pinned["archive"] = str(archive)
+            if current != expected_pinned:
+                raise ValueError(
+                    f"pinned monthly demand archive changed: {archive}"
+                )
+            runner = self.runner_factory(
+                self.spec,
+                archive=archive,
+                baseline_trip_duration_p99_s=(
+                    self.baseline_trip_duration_p99_s
+                ),
+                study_provenance_key=self.study_provenance_key,
+                cache_root=self.cache_root,
+                seed_workers=self.seed_workers,
+                envelope_policy=self.envelope_policy,
+                expected_demand_spec=required,
+            )
+            self._runners[key] = runner
+
+        self._release = {
+            **release,
+            "manifest_path": str(release_path.resolve()),
+        }
+        self._prepared_schedule_ids = schedule_ids
+
+    def provenance(self) -> Mapping[str, Any]:
+        if self._release is None or not self._runners:
+            raise RuntimeError(
+                "monthly demand resolver must be prepared before provenance"
+            )
+        child = [self._runners[key].provenance() for key in sorted(self._runners)]
+        common_fields = (
+            "source_files",
+            "source_digest",
+            "simulation_source_digest",
+            "sumo_version",
+            "platform",
+            "simulation_mode",
+            "metric_schema",
+        )
+        for field in common_fields:
+            if any(item.get(field) != child[0].get(field) for item in child[1:]):
+                raise ValueError(
+                    f"monthly envelope backends disagree on {field}"
+                )
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "multi_envelope_monthly_sumo_backend",
+            "simulation_mode": "meso",
+            "study_provenance_key": self.study_provenance_key,
+            "search_content_key": self.spec.content_key,
+            "demand_release_id": self.spec.demand_build_id,
+            "demand_release": dict(self._release),
+            "envelope_backends": [
+                {
+                    "demand_build_id": item["demand_build_id"],
+                    "archive_digest": item["archive_digest"],
+                    "matched_baseline_id": item["matched_baseline_id"],
+                    "archive_inputs": item["archive_inputs"],
+                }
+                for item in child
+            ],
+            "baseline_trip_duration_p99_s": (
+                self.baseline_trip_duration_p99_s
+            ),
+            "envelope_policy": dataclasses.asdict(self.envelope_policy),
+            **{
+                field: child[0][field]
+                for field in common_fields
+            },
+        }
+
+    def run_candidate(
+        self,
+        schedule: ClosureSchedule,
+        *,
+        target_repetitions: Mapping[str, int],
+        existing: CandidateEvidence | None,
+        stage: str,
+    ) -> CandidateEvidence:
+        if self._prepared_schedule_ids is None:
+            raise RuntimeError("monthly demand resolver is not prepared")
+        key = self._schedule_build_keys.get(schedule.schedule_id)
+        if key is None:
+            raise ValueError("candidate was not part of the frozen shortlist")
+        return self._runners[key].run_candidate(
+            schedule,
+            target_repetitions=target_repetitions,
+            existing=existing,
+            stage=stage,
+        )

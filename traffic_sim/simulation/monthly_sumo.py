@@ -15,7 +15,11 @@ from typing import Any, Mapping
 
 import run_scenario as rs
 import suggest_closure_time as legacy
-from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
+from traffic_sim.core.contracts import (
+    ClosureSchedule,
+    ClosureSearchSpec,
+    DemandBuildSpec,
+)
 from traffic_sim.core.fingerprint import sha256_file, sumo_version
 from traffic_sim.simulation import metrics as closure_metrics
 from traffic_sim.simulation.envelope import (
@@ -119,6 +123,7 @@ class ArchivedDemandSumoRunner:
         cache_root: Path = DEFAULT_BASELINE_CACHE,
         seed_workers: int = 1,
         envelope_policy: EnvelopePolicy = EnvelopePolicy(),
+        expected_demand_spec: DemandBuildSpec | None = None,
     ) -> None:
         self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
         self.archive = Path(archive).resolve()
@@ -128,10 +133,49 @@ class ArchivedDemandSumoRunner:
             manifest = _read(manifest_path)
             if manifest.get("status") not in {"succeeded", "validated"}:
                 raise ValueError("demand archive is not succeeded/validated")
-        if self.metadata.get("demand_build_key") != self.spec.demand_build_id:
+        self.expected_demand_spec = (
+            DemandBuildSpec.from_dict(expected_demand_spec.to_dict())
+            if expected_demand_spec is not None
+            else None
+        )
+        self.demand_build_key = (
+            self.expected_demand_spec.build_key
+            if self.expected_demand_spec is not None
+            else self.spec.demand_build_id
+        )
+        if self.metadata.get("demand_build_key") != self.demand_build_key:
             raise ValueError(
-                "demand archive build key does not match ClosureSearchSpec"
+                "demand archive build key does not match expected demand"
             )
+        if self.expected_demand_spec is not None:
+            archived_spec_path = self.archive / "demand_build_spec.json"
+            if not archived_spec_path.is_file():
+                raise FileNotFoundError(archived_spec_path)
+            archived_spec = DemandBuildSpec.from_dict(
+                _read(archived_spec_path)
+            )
+            metadata_spec = DemandBuildSpec.from_dict(
+                self.metadata.get("demand_spec", {})
+            )
+            if (
+                archived_spec != self.expected_demand_spec
+                or metadata_spec != self.expected_demand_spec
+            ):
+                raise ValueError(
+                    "demand archive contract does not match expected envelope"
+                )
+            if (
+                str(self.metadata.get("source"))
+                != self.expected_demand_spec.source
+                or str(self.metadata.get("epoch_sim"))
+                != f"{self.expected_demand_spec.start_date}T00:00:00"
+                or int(self.metadata.get("n_intervals", -1))
+                != self.expected_demand_spec.days * 96
+            ):
+                raise ValueError(
+                    "demand archive time/source metadata does not match "
+                    "expected envelope"
+                )
         if int(self.metadata.get("n_variants", 0)) != 3:
             raise ValueError("monthly SUMO runner requires q10/q50/q90 routes")
         self.variants = {
@@ -231,6 +275,10 @@ class ArchivedDemandSumoRunner:
                 Path(__file__),
             ),
             (
+                "traffic_sim/simulation/monthly_demand.py",
+                Path("traffic_sim/simulation/monthly_demand.py"),
+            ),
+            (
                 "traffic_sim/simulation/monthly_proxy.py",
                 Path("traffic_sim/simulation/monthly_proxy.py"),
             ),
@@ -273,6 +321,7 @@ class ArchivedDemandSumoRunner:
         ]
         simulation_source_labels = {
             "traffic_sim/simulation/monthly_sumo.py",
+            "traffic_sim/simulation/monthly_demand.py",
             "suggest_closure_time.py",
             "run_scenario.py",
             "traffic_sim/simulation/envelope.py",
@@ -301,7 +350,13 @@ class ArchivedDemandSumoRunner:
             "simulation_mode": "meso",
             "study_provenance_key": self.study_provenance_key,
             "search_content_key": self.spec.content_key,
-            "demand_build_id": self.spec.demand_build_id,
+            "demand_release_id": self.spec.demand_build_id,
+            "demand_build_id": self.demand_build_key,
+            "demand_build_spec": (
+                self.expected_demand_spec.to_dict()
+                if self.expected_demand_spec is not None
+                else None
+            ),
             "archive_digest": self.archive_digest,
             "matched_baseline_id": self.matched_baseline_id,
             "archive_inputs": list(self.input_records),

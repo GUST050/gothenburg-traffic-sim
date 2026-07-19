@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "kind": "multi_envelope_monthly_forecast_smoke",
+  "smoke_id": "multi-envelope-forecast-smoke-2027-july-v1",
+  "executed_at": "2026-07-19",
+  "sumo_version": "1.27.1",
+  "search_spec": {
+    "path": "validation/multi_envelope_forecast_smoke_spec_v1.json",
+    "sha256": "f2fe7e9cf42e1f4959b7b5e03dcbd688d07b3da2b0532daba9190f40524ef56a",
+    "search_content_key": "88b4311cb5d7b65bcfff",
+    "candidate_count": 2
+  },
+  "demand_release": {
+    "release_id": "forecast-july-envelope-release-v1",
+    "content_key": "a4489747c279874119d885101810f279a5366c005ef11dcbfa6a77fbf1e49458",
+    "manifest_sha256": "2f062f97f986251b55b2ecc886fd5f9d467e492273d9a978d4e65dcc84900631",
+    "entries": [
+      {
+        "start_date": "2027-07-15",
+        "days": 1,
+        "purpose": "closure_envelope",
+        "demand_build_key": "18d9c712dc356ef3",
+        "run_id": "demand-20260719-103337-2ee86c10-599b",
+        "archive_content_key": "aefaf8f8b4da2e82c7013638d4edc1c473f9c6645862774fbfe46484366cb178",
+        "matched_baseline_id": "monthly-baseline-225333786fc37e874101",
+        "q10_q50_q90_geh_lt_5_pct": [
+          100.0,
+          100.0,
+          100.0
+        ],
+        "infeasible_intervals": 0,
+        "structure_flags": [
+          "trips_under_1km_pct: calibrated 1.26 vs pool 0.5 (over 2.50x)"
+        ]
+      },
+      {
+        "start_date": "2027-07-22",
+        "days": 1,
+        "purpose": "closure_envelope",
+        "demand_build_key": "ed13ae34506ce104",
+        "run_id": "demand-20260719-103634-f5e7b0bf-93c4",
+        "archive_content_key": "a08416dc20e5e408c610c48196d03eefc16e15826bc1fcf8b525228c90c5c9de",
+        "matched_baseline_id": "monthly-baseline-ea7f90e177efcf71c6dc",
+        "q10_q50_q90_geh_lt_5_pct": [
+          100.0,
+          100.0,
+          100.0
+        ],
+        "infeasible_intervals": 0,
+        "structure_flags": [
+          "trips_under_1km_pct: calibrated 1.26 vs pool 0.5 (over 2.50x)"
+        ]
+      }
+    ]
+  },
+  "execution": {
+    "started_at": "2026-07-19T10:33:36Z",
+    "finished_at": "2026-07-19T10:41:45Z",
+    "wall_seconds_including_two_demand_builds": 489,
+    "completed_reload_wall_seconds": 2.38,
+    "result_sha256": "913f9e2dc8848348d7c2ed4c1cfa7dae22669d83a05235054b2e266d40ce50f1",
+    "backend_provenance_sha256": "b702c4ed20b81a40afbdb63406c9ce7218796ed5c264c53ce30aad5861e233a4"
+  },
+  "result": {
+    "status": "unique_winner",
+    "winner_id": "closure-260f8609ba69e23e7018",
+    "winner_start": "2027-07-15T06:00:00",
+    "winner_end": "2027-07-15T10:00:00",
+    "winner_robust_point_added_time_loss_s": 321.7920000000042,
+    "winner_robust_upper_95_added_time_loss_s": 852.2092418840709,
+    "winner_variant_pair_counts": {
+      "q10": 4,
+      "q50": 5,
+      "q90": 5
+    },
+    "excluded_candidates": [
+      {
+        "candidate_id": "closure-7324f0b23aa79948a59a",
+        "start": "2027-07-22T06:00:00",
+        "hard_failures": [
+          "active_closure_edge_throughput",
+          "teleports"
+        ]
+      }
+    ]
+  },
+  "claim_boundary": {
+    "resolver_and_multi_envelope_execution_validated": true,
+    "best_among_this_two_candidate_sumo_shortlist": true,
+    "global_best_claim_allowed": false,
+    "ui_exposure_allowed": false,
+    "reason": "diagnostic two-date forecast smoke; the new untouched monthly held-out release gate has not run, and both demand archives retain a documented short-trip structure warning"
+  }
+}

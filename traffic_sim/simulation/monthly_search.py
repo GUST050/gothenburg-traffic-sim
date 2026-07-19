@@ -163,6 +163,13 @@ class CandidateRunner(Protocol):
         """Return cumulative paired evidence through every requested target."""
 
 
+class PreparatoryCandidateRunner(CandidateRunner, Protocol):
+    """Backend that must freeze resources for the screened shortlist."""
+
+    def prepare(self, schedules: Sequence[ClosureSchedule]) -> None:
+        """Resolve and pin every resource before provenance is published."""
+
+
 ScreenBuilder = Callable[[Path], Mapping[str, Any]]
 
 
@@ -598,6 +605,40 @@ def run_monthly_search(
         if workspace.status == "running":
             workspace.update_progress(phase)
         _existing_policy(workspace, policy)
+
+        phase = "enumerate"
+        if workspace.status == "running":
+            workspace.update_progress(phase)
+        schedule_values = _schedule_ledger(workspace, spec)
+        schedules = {item.schedule_id: item for item in schedule_values}
+
+        phase = "screen"
+        if workspace.status == "running":
+            workspace.update_progress(phase)
+        screening = _screening_artifact(
+            workspace,
+            spec,
+            schedule_values,
+            screen_builder,
+        )
+        shortlist_ids = [
+            str(item["schedule_id"])
+            for item in screening["shortlist"]["entries"]
+        ]
+        shortlisted_schedules = [
+            schedules[candidate_id] for candidate_id in shortlist_ids
+        ]
+
+        phase = "prepare_backend"
+        if workspace.status == "running":
+            workspace.update_progress(
+                phase,
+                completed=0,
+                total=len(shortlisted_schedules),
+            )
+        prepare = getattr(runner, "prepare", None)
+        if prepare is not None:
+            prepare(shortlisted_schedules)
         backend_provenance = _backend_provenance(workspace, runner)
         final_records = _artifact_records(
             workspace,
@@ -609,24 +650,6 @@ def run_monthly_search(
                     "succeeded monthly search has no unique final result"
                 )
             return _read_artifact(workspace, final_records[0])
-
-        phase = "enumerate"
-        workspace.update_progress(phase)
-        schedule_values = _schedule_ledger(workspace, spec)
-        schedules = {item.schedule_id: item for item in schedule_values}
-
-        phase = "screen"
-        workspace.update_progress(phase)
-        screening = _screening_artifact(
-            workspace,
-            spec,
-            schedule_values,
-            screen_builder,
-        )
-        shortlist_ids = [
-            str(item["schedule_id"])
-            for item in screening["shortlist"]["entries"]
-        ]
 
         phase = "pilot"
         pilot_records = _evidence_records(

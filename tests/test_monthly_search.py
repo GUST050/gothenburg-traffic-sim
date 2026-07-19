@@ -145,12 +145,44 @@ class FakeRunner:
         )
 
 
+class PreparingRunner(FakeRunner):
+    def __init__(self):
+        super().__init__()
+        self.prepared = None
+
+    def prepare(self, schedules):
+        self.prepared = tuple(schedule.schedule_id for schedule in schedules)
+
+    def provenance(self):
+        assert self.prepared is not None
+        return {
+            **super().provenance(),
+            "prepared_schedule_ids": list(self.prepared),
+        }
+
+
 def test_policy_round_trips_with_stable_content_key():
     policy = _policy()
     loaded = MonthlySearchPolicy.from_dict(policy.to_dict())
     assert loaded.content_key == policy.content_key
     assert loaded.pilot.variants == ("q10", "q50", "q90")
     assert loaded.finalist.variants == ("q10", "q50", "q90")
+
+
+def test_backend_prepares_only_screened_shortlist_before_provenance(tmp_path):
+    runner = PreparingRunner()
+    result = run_monthly_search(
+        _spec("monthly-prepare-order"),
+        _policy(),
+        runner=runner,
+        screen_builder=_screen_builder,
+        root=tmp_path,
+    )
+    assert runner.prepared is not None
+    assert len(runner.prepared) == 2
+    assert result["simulation_backend"]["prepared_schedule_ids"] == list(
+        runner.prepared
+    )
 
 
 def test_runs_full_resumable_pipeline_and_remains_fail_closed(tmp_path):

@@ -41,7 +41,13 @@ def trip_length_fit(lengths_km: list[float]) -> dict:
     """RVU short-distance-bin fit; identical contract to candidate reporting."""
     n = len(lengths_km)
     if n == 0:
-        return {"shares": [0.0, 0.0, 0.0], "l1_distance": float("inf"), "n": 0}
+        return {
+            "shares": [0.0, 0.0, 0.0],
+            "counts": [0, 0, 0],
+            "short_trip_count": 0,
+            "l1_distance": float("inf"),
+            "n": 0,
+        }
     counts = [0, 0, 0]
     over_10km = 0
     for distance in lengths_km:
@@ -56,6 +62,8 @@ def trip_length_fit(lengths_km: list[float]) -> dict:
     n_short = n - over_10km
     shares = [count / n_short for count in counts] if n_short else [0.0, 0.0, 0.0]
     return {"shares": [round(value, 4) for value in shares],
+            "counts": counts,
+            "short_trip_count": n_short,
             "l1_distance": round(sum(abs(value - target)
                                      for value, target in zip(shares, RVU_SHORT_BIN_SHARES)), 4),
             "n": n, "over_10km_pct": round(100 * over_10km / n, 1)}
@@ -192,6 +200,8 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
     dest_edges: list[str] = []
     onward_m: list[float] = []
     passages = Counter()
+    quarter_totals = Counter()
+    under_1km_by_quarter = Counter()
     n_no_sensor = 0
     for veh in ET.parse(route_path).getroot().iter("vehicle"):
         route = veh.find("route")
@@ -201,8 +211,13 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
         o, d = edge_latlon.get(edges[0]), edge_latlon.get(edges[-1])
         dest_edges.append(edges[-1])
         if o is not None and d is not None:
-            lengths_km.append(float(gravity_distance_km(
-                np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0]))
+            distance_km = float(gravity_distance_km(
+                np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0])
+            lengths_km.append(distance_km)
+            quarter = int(float(veh.get("depart", "0")) // 900)
+            quarter_totals[quarter] += 1
+            if distance_km <= RVU_SHORT_BIN_EDGES_KM[0]:
+                under_1km_by_quarter[quarter] += 1
         n_pass = sum(1 for e in edges if e in sensor_edge_ids)
         passages[min(n_pass, 3)] += 1   # 3 == "3 or more"
         if n_pass == 0:
@@ -215,7 +230,11 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
         return None
     onward_sorted = sorted(onward_m)
     return {
-        "trip_length_fit": trip_length_fit(lengths_km),
+        "trip_length_fit": {
+            **trip_length_fit(lengths_km),
+            "quarter_totals": dict(sorted(quarter_totals.items())),
+            "under_1km_by_quarter": dict(sorted(under_1km_by_quarter.items())),
+        },
         "dest_sensor_proximity": destination_sensor_proximity(
             dest_edges, edge_latlon, sorted(sensor_edge_ids)),
         "onward_after_last_sensor": {
@@ -353,9 +372,49 @@ def calibrated_structure_report(route_path: Path,
             ratio_flag("onward_under_200m_pct",
                        report["onward_after_last_sensor"]["pct_under_200m"],
                        pool["onward_after_last_sensor"]["pct_under_200m"])
-            ratio_flag("trips_under_1km_pct",
-                       report["trip_length_fit"]["shares"][0] * 100,
-                       pool["trip_length_fit"]["shares"][0] * 100)
+            calibrated_fit = report["trip_length_fit"]
+            pool_fit = pool["trip_length_fit"]
+            pool_short_n = pool_fit.get("short_trip_count", 0)
+            pool_share = (
+                pool_fit["counts"][0] / pool_short_n
+                if pool_short_n else 0.0
+            )
+            quarter_totals = calibrated_fit.get("quarter_totals", {})
+            short_by_quarter = calibrated_fit.get(
+                "under_1km_by_quarter", {})
+            violations = []
+            for quarter, total in quarter_totals.items():
+                actual = int(short_by_quarter.get(quarter, 0))
+                limit = max(2.0, DEST_GROUP_CAP_MULT * pool_share * total)
+                if actual > limit + 1e-9:
+                    violations.append((int(quarter), actual, limit))
+            calibrated_fit["under_1km_cap_audit"] = {
+                "pool_share": pool_share,
+                "violating_quarters": len(violations),
+                "max_excess_vehicles": round(
+                    max((actual - limit for _, actual, limit in violations),
+                        default=0.0),
+                    3,
+                ),
+                "violations": [
+                    {
+                        "quarter": quarter,
+                        "actual": actual,
+                        "limit": round(limit, 3),
+                        "excess": round(actual - limit, 3),
+                    }
+                    for quarter, actual, limit in violations
+                ],
+            }
+            if violations:
+                flags.append(
+                    "trips_under_1km_cap: "
+                    f"{len(violations)} quarter(s) exceed the exact "
+                    f"{DEST_GROUP_CAP_MULT:.2f}x pool-share/floor-2 cap; "
+                    f"maximum excess "
+                    f"{max(actual - limit for _, actual, limit in violations):.2f} "
+                    "vehicle(s)"
+                )
     report["structure_flags"] = flags
     for flag in flags:
         print(f"  WARNING structure drift: {flag}")
