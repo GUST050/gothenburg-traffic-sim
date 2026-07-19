@@ -6,6 +6,7 @@ from traffic_sim.core.contracts import ClosureSearchSpec, DailyTimeBand
 from traffic_sim.simulation.search_workspace import (
     create_search_workspace,
     load_search_workspace,
+    open_search_workspace,
     verify_search_workspace,
 )
 
@@ -36,6 +37,40 @@ def test_workspace_is_exclusive_and_stores_exact_input(tmp_path):
 
     with pytest.raises(FileExistsError):
         create_search_workspace(_spec(), root=tmp_path)
+
+
+def test_open_resumes_running_workspace_and_reads_succeeded_idempotently(
+        tmp_path):
+    created, was_created = open_search_workspace(_spec(), root=tmp_path)
+    assert was_created is True
+    created.update_progress("pilot", completed=2, total=5)
+
+    resumed, was_created = open_search_workspace(_spec(), root=tmp_path)
+    assert was_created is False
+    assert resumed.status == "running"
+    assert resumed.manifest["progress"]["phase"] == "pilot"
+    assert resumed.manifest["progress"]["completed"] == 2
+
+    resumed.finish("succeeded")
+    completed, was_created = open_search_workspace(_spec(), root=tmp_path)
+    assert was_created is False
+    assert completed.status == "succeeded"
+
+
+def test_open_rejects_different_input_and_terminal_failure(tmp_path):
+    workspace, _ = open_search_workspace(_spec(), root=tmp_path)
+    changed = _spec().to_dict()
+    changed["required_work_minutes"] = 60
+    changed.pop("content_key")
+    with pytest.raises(ValueError, match="different input"):
+        open_search_workspace(
+            ClosureSearchSpec.from_dict(changed),
+            root=tmp_path,
+        )
+
+    workspace.finish("failed", error="boom")
+    with pytest.raises(RuntimeError, match="new search_id"):
+        open_search_workspace(_spec(), root=tmp_path)
 
 
 def test_artifact_is_copied_once_with_explicit_provenance(tmp_path):

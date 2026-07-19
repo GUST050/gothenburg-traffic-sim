@@ -101,6 +101,46 @@ class SearchWorkspace:
     def _flush(self) -> None:
         _atomic_json(self.directory / "manifest.json", self.manifest)
 
+    def update_progress(
+        self,
+        phase: str,
+        *,
+        completed: int = 0,
+        total: int | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Persist a resumable progress pointer while the workspace runs."""
+        self._require_running()
+        if not isinstance(phase, str) or not phase.strip():
+            raise ValueError("workspace progress phase must be non-empty")
+        if (
+            isinstance(completed, bool)
+            or not isinstance(completed, int)
+            or completed < 0
+        ):
+            raise ValueError("workspace progress completed must be non-negative")
+        if (
+            total is not None
+            and (
+                isinstance(total, bool)
+                or not isinstance(total, int)
+                or total < completed
+            )
+        ):
+            raise ValueError(
+                "workspace progress total must be at least completed"
+            )
+        progress = {
+            "phase": phase,
+            "completed": completed,
+            "total": total,
+            "updated_at": _now(),
+        }
+        if error is not None:
+            progress["last_error"] = str(error)
+        self.manifest["progress"] = progress
+        self._flush()
+
     def publish_artifact(
         self,
         source: Path,
@@ -236,6 +276,40 @@ def load_search_workspace(
                 "closure-search workspace integrity failed: "
                 + "; ".join(errors))
     return workspace
+
+
+def open_search_workspace(
+    spec: ClosureSearchSpec,
+    *,
+    root: Path = DEFAULT_ROOT,
+) -> tuple[SearchWorkspace, bool]:
+    """Create or resume the exact workspace.
+
+    Returns ``(workspace, created)``. A running workspace is resumable and a
+    succeeded workspace is idempotently readable. Failed or cancelled work
+    must use a new search ID so old diagnostic evidence cannot be silently
+    reinterpreted.
+    """
+    spec = ClosureSearchSpec.from_dict(spec.to_dict())
+    directory = Path(root) / spec.search_id
+    if not directory.exists():
+        return create_search_workspace(spec, root=root), True
+    workspace = load_search_workspace(directory)
+    stored = load_closure_search_spec(workspace.spec_path)
+    if (
+        stored.search_id != spec.search_id
+        or stored.content_key != spec.content_key
+    ):
+        raise ValueError(
+            "existing closure-search workspace belongs to different input"
+        )
+    if workspace.status in {"failed", "cancelled"}:
+        raise RuntimeError(
+            f"closure-search workspace is {workspace.status}; use a new search_id"
+        )
+    if workspace.status == "running" and not workspace.scratch_dir.is_dir():
+        raise ValueError("running closure-search workspace has no scratch directory")
+    return workspace, False
 
 
 def verify_search_workspace(workspace: SearchWorkspace) -> list[str]:

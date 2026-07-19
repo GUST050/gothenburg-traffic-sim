@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from pathlib import Path
 
@@ -35,6 +36,7 @@ def _candidate(
     baseline=1000.0,
     provenance="study-one",
     matched_baseline="baseline-one",
+    seed_start=1000,
 ):
     """Build variant -> deltas evidence with the same seed pairs."""
     observations = []
@@ -44,7 +46,7 @@ def _candidate(
                 PairedObservation(
                     candidate_id=candidate_id,
                     demand_variant=variant,
-                    seed=1000 + offset,
+                    seed=seed_start + offset,
                     baseline_time_loss_s=baseline,
                     candidate_time_loss_s=baseline + delta,
                     matched_baseline_id=matched_baseline,
@@ -330,19 +332,62 @@ class TestRobustFinalistDecision:
         assert result.status == "unique_winner"
         assert result.winner_id == "valid"
 
-    def test_cross_candidate_baseline_provenance_must_match(self):
-        with pytest.raises(ValueError, match="same matched baseline"):
+    def test_different_date_envelopes_may_use_different_matched_baselines(self):
+        result = decide_finalists(
+            [
+                _candidate("a", _all_variants([10.0] * 4)),
+                _candidate(
+                    "b",
+                    _all_variants([100.0] * 4),
+                    matched_baseline="different-date-baseline",
+                    baseline=5000.0,
+                ),
+            ],
+            _policy(),
+        )
+        assert result.status == "unique_winner"
+        assert result.winner_id == "a"
+
+    def test_same_envelope_baseline_value_must_match(self):
+        with pytest.raises(ValueError, match="same envelope"):
             decide_finalists(
                 [
                     _candidate("a", _all_variants([10.0] * 4)),
                     _candidate(
                         "b",
                         _all_variants([20.0] * 4),
-                        matched_baseline="different-baseline",
+                        baseline=5000.0,
                     ),
                 ],
                 _policy(),
             )
+
+    def test_same_envelope_common_seed_prefix_must_match(self):
+        with pytest.raises(ValueError, match="common seed"):
+            decide_finalists(
+                [
+                    _candidate("a", _all_variants([10.0] * 4)),
+                    _candidate(
+                        "b",
+                        _all_variants([20.0] * 4),
+                        seed_start=2000,
+                    ),
+                ],
+                _policy(),
+            )
+
+    def test_one_candidate_cannot_span_multiple_baseline_envelopes(self):
+        candidate = _candidate("a", _all_variants([10.0] * 4))
+        changed = dataclasses.replace(
+            candidate.observations[-1],
+            matched_baseline_id="another-envelope",
+        )
+        mixed = CandidateEvidence(
+            candidate_id="a",
+            observations=candidate.observations[:-1] + (changed,),
+        )
+        with pytest.raises(ValueError, match="multiple matched baseline"):
+            decide_finalists([mixed], _policy())
 
     def test_cross_candidate_scenario_provenance_must_match(self):
         with pytest.raises(ValueError, match="provenance"):

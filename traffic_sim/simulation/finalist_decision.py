@@ -340,6 +340,7 @@ def _validate_candidate_observations(
     grouped = {variant: [] for variant in policy.variants}
     seen: set[tuple[str, int]] = set()
     provenance_keys: set[str] = set()
+    baseline_ids: set[str] = set()
     for observation in candidate.observations:
         if observation.demand_variant not in grouped:
             raise ValueError(
@@ -353,10 +354,16 @@ def _validate_candidate_observations(
             )
         seen.add(pair)
         provenance_keys.add(observation.provenance_key)
+        baseline_ids.add(observation.matched_baseline_id)
         grouped[observation.demand_variant].append(observation)
     if len(provenance_keys) > 1:
         raise ValueError(
             f"{candidate.candidate_id}: incompatible scenario provenance"
+        )
+    if len(baseline_ids) > 1:
+        raise ValueError(
+            f"{candidate.candidate_id}: candidate spans multiple matched "
+            "baseline envelopes"
         )
     for observations in grouped.values():
         observations.sort(key=lambda item: item.seed)
@@ -367,30 +374,63 @@ def _cross_candidate_provenance(
     candidates: Sequence[CandidateEvidence],
     policy: FinalistPolicy,
 ) -> None:
-    """Require identical baselines for a shared variant/seed across finalists."""
-    reference: dict[tuple[str, int], tuple[str, str, float]] = {}
+    """Require one study provenance and exact baselines inside each envelope.
+
+    A monthly search compares schedules on different calendar dates.  Those
+    schedules necessarily have different no-closure traffic and therefore
+    different matched baseline IDs and values.  Common-random-number pairing
+    is required *within* an envelope/baseline group, not across unrelated
+    dates.  The study provenance still has to be identical for every
+    finalist so network, code, policy and demand-release semantics cannot be
+    mixed.
+    """
+    grouped: dict[
+        str,
+        dict[str, dict[str, list[PairedObservation]]],
+    ] = {}
     study_provenance: set[str] = set()
     for candidate in candidates:
         if not candidate.eligible:
             continue
+        candidate_grouped = _validate_candidate_observations(candidate, policy)
+        baseline_ids = {
+            observation.matched_baseline_id
+            for observation in candidate.observations
+        }
+        if not baseline_ids:
+            continue
+        baseline_id = next(iter(baseline_ids))
+        grouped.setdefault(baseline_id, {})[
+            candidate.candidate_id
+        ] = candidate_grouped
         for observation in candidate.observations:
             study_provenance.add(observation.provenance_key)
-            if observation.demand_variant not in policy.variants:
-                continue
-            pair = (observation.demand_variant, observation.seed)
-            identity = (
-                observation.matched_baseline_id,
-                observation.provenance_key,
-                observation.baseline_time_loss_s,
-            )
-            previous = reference.setdefault(pair, identity)
-            if previous != identity:
-                raise ValueError(
-                    "finalists do not share the same matched baseline and "
-                    f"provenance for {pair}"
-                )
     if len(study_provenance) > 1:
         raise ValueError("finalists do not share compatible scenario provenance")
+    for baseline_id, by_candidate in grouped.items():
+        reference: dict[
+            tuple[str, int],
+            tuple[int, str, float],
+        ] = {}
+        for candidate_id, candidate_grouped in by_candidate.items():
+            for variant in policy.variants:
+                for repetition, observation in enumerate(
+                    candidate_grouped[variant]
+                ):
+                    pair = (variant, repetition)
+                    identity = (
+                        observation.seed,
+                        observation.provenance_key,
+                        observation.baseline_time_loss_s,
+                    )
+                    previous = reference.setdefault(pair, identity)
+                    if previous != identity:
+                        raise ValueError(
+                            "finalists in the same envelope do not share "
+                            "the same matched baseline/common seed "
+                            f"for {(baseline_id, *pair)}; mismatch at "
+                            f"{candidate_id}"
+                        )
 
 
 def _variant_statistics(

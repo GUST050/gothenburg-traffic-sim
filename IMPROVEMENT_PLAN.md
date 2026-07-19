@@ -2001,6 +2001,56 @@ the globally best work period for a month.  This checkpoint passes 183
 focused search/API tests and the complete suite passes 1,193 tests with 20
 expected skips.
 
+**Resumable monthly execution checkpoint 2026-07-19.**  The missing
+orchestration layer is now implemented in
+`traffic_sim/simulation/monthly_search.py`, with an archived-demand SUMO
+backend in `monthly_sumo.py` and
+`run_monthly_closure_search.py` as the stable root CLI.  The workspace
+persists immutable policy, calendar ledger, screening, each pilot candidate,
+pilot selection, cumulative adaptive finalist rounds, every robust decision,
+complete input/runtime/source provenance and the terminal result.  A restart
+loads completed candidate evidence instead of rerunning SUMO; a succeeded
+search is idempotent.  A changed policy, backend/archive, semantic source
+digest, malformed screening or non-canonical seed fails before it can
+reinterpret an old result.
+
+The implementation review corrected one prerequisite that the earlier pure
+decision slice could not represent: candidates on different dates
+necessarily have different no-closure traffic.  They may now use distinct
+matched baseline IDs while sharing one study provenance. Candidates inside
+the same date/envelope baseline group still must share the exact baseline
+value and common variant/seed identity. This preserves paired comparisons
+without incorrectly requiring July 5 and July 20 to have identical normal
+traffic.
+
+**Golden monthly policy v1 — PASS (internal), 2026-07-19.**  The tracked
+policy in `validation/monthly_search_policy_v1.json` is frozen from the
+diagnostic and confirmed by
+`validation/golden_monthly_search_v1.json`: one pilot repetition per
+q10/q50/q90 variant, 300 s pilot retention band, four initial finalist
+repetitions, 600 s absolute precision floor, 300 s practical-equivalence
+tolerance and at most 12 repetitions per variant.  The final portable golden
+v6 ran three bounded-exhaustive four-hour windows on a real Gothenburg demand
+archive in SUMO 1.27.1.  It completed in **211.42 s**, peak RSS
+**427,819,008 bytes**, used one worker, and selected **06:30--10:30** as the
+only viable window; 06:00 and 06:15 failed the teleport gate.  The finalist
+met precision after q10/q50/q90 repetition counts **4/5/7**, below the cap.
+The immutable workspace passed its ledger/hash verification, and an
+idempotent completed-result reload required no new SUMO work.
+
+This closes the CLI/orchestration and named golden-policy parts of the stop
+gate, not the release gate.  The production backend currently accepts one
+explicit successful demand archive and proves that all shortlisted envelopes
+fit it. A real future-month search still needs a resolver that groups
+schedules by their 1--9 day envelopes and builds/reuses every required
+forecast demand archive.  After that, one newly frozen untouched monthly
+held-out set must pass practical-winner recall, regret and failure recall.
+The asynchronous API/status/cancel path, exact-schedule UI handoff and
+browser recovery test also remain. Therefore the golden result deliberately
+retains `global_best_claim_allowed=false` and `ui_exposure_allowed=false`.
+The focused monthly execution gate passes 63 tests; the complete project
+suite passes **1,212 tests with 20 expected skips**.
+
 ### Final acceptance gate
 
 - The displayed schedule is byte-for-byte derivable from the immutable

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "kind": "golden_monthly_closure_search",
+  "status": "passing",
+  "validated_at": "2026-07-19T10:17:00Z",
+  "golden_search_id": "golden-monthly-search-2025-09-16-v6",
+  "sumo_version": "1.27.1",
+  "scope": {
+    "purpose": "freeze and exercise the resumable pilot/finalist policy",
+    "source": "historical",
+    "demand_build_id": "f59ea19f882259b4",
+    "first_work_date": "2025-09-16",
+    "directed_edges": [
+      "26842526_96527131_0"
+    ],
+    "required_work_minutes": 240,
+    "candidate_windows": [
+      "06:00-10:00",
+      "06:15-10:15",
+      "06:30-10:30"
+    ],
+    "screening_mode": "bounded_exhaustive_sumo_v1"
+  },
+  "policy": {
+    "policy_id": "monthly-closure-policy-v1",
+    "content_key": "7a36a25cf01bd417d5cb11e4",
+    "pilot_repetitions_per_variant": 1,
+    "pilot_retention_band_s": 300.0,
+    "absolute_precision_floor_s": 600.0,
+    "practical_equivalence_s": 300.0,
+    "initial_repetitions": 4,
+    "maximum_repetitions": 12,
+    "confidence_level": 0.95,
+    "selection_basis": "v1 diagnostic failed the 300 s precision floor; v2-v6 demonstrated that a 600 s floor reaches precision adaptively without the 12-repetition cap"
+  },
+  "result": {
+    "status": "unique_winner",
+    "winner_id": "closure-d9af6f11562e20e708e5",
+    "winner_window": "06:30-10:30",
+    "winner_required_work_minutes": 240,
+    "winner_scheduled_work_minutes": 240,
+    "pilot_disqualified": {
+      "06:00-10:00": [
+        "teleports"
+      ],
+      "06:15-10:15": [
+        "teleports"
+      ]
+    },
+    "worst_variant": "q50",
+    "robust_point_s": 1537.9200000000826,
+    "robust_lower_95_s": 994.6487800800172,
+    "robust_upper_95_s": 2081.191219920148,
+    "precision_met": true,
+    "variant_repetitions": {
+      "q10": 4,
+      "q50": 5,
+      "q90": 7
+    },
+    "variant_half_width_s": {
+      "q10": 381.7076450926959,
+      "q50": 543.2712199200654,
+      "q90": 529.6815260298032
+    }
+  },
+  "resources": {
+    "wall_time_s": 211.42,
+    "maximum_resident_set_bytes": 427819008,
+    "workspace_kib": 112,
+    "shared_baseline_cache_kib_after_run": 960,
+    "sumo_workers": 1
+  },
+  "resume_validation": {
+    "status": "passing",
+    "completed_result_reload_wall_time_s": 1.61,
+    "new_sumo_runs": 0,
+    "unit_cases": [
+      "restart skips immutable completed candidates",
+      "succeeded result is idempotent",
+      "changed policy is rejected",
+      "changed backend provenance is rejected",
+      "invalid screening is never published"
+    ]
+  },
+  "provenance": {
+    "search_spec_sha256": "093c7e92bc0b471ae56a2711e6cab99e20ab9c6d4abc2a2ded5be3d81b1ec0b9",
+    "policy_sha256": "cd18b2a4d4ec9149e2d4191eebb76738ca5c9a6871f0fe84b6a1ffacd4666298",
+    "result_sha256": "59d82012f8c47e02d060a07def845d27d0b0efef53e5915af869aa03decb6627",
+    "backend_artifact_sha256": "0e5c3ec4211bd631220f4de2cfda681a6b38792bdf1d74b9beb24f5f64c33238",
+    "backend_source_digest": "e8cce69eddc48099b99c484fa101bd9834ae0cab16cbc6d243949389a91ebacc",
+    "simulation_source_digest": "d0ed4f02f6bb6543fe555b7e994e93ce05238ae36fe8bb9bd7e97e6db5259785",
+    "archive_digest": "237e44b1ce24d79e36e7ed8a4bf44a3b9fe3a993e598d4c255a9910e4302ddcd",
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "claim_boundary": {
+    "best_result_available": true,
+    "best_result_scope": "sumo_verified_monthly_shortlist",
+    "global_best_claim_allowed": false,
+    "ui_exposure_allowed": false,
+    "reason": "the golden benchmark validates execution and freezes policy; a new untouched monthly held-out release gate has not passed"
+  }
+}

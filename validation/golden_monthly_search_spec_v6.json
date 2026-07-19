@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "kind": "closure_search",
+  "search_id": "golden-monthly-search-2025-09-16-v6",
+  "directed_edges": [
+    "26842526_96527131_0"
+  ],
+  "demand_build_id": "f59ea19f882259b4",
+  "source": "historical",
+  "permitted_date_start": "2025-09-16",
+  "permitted_date_end": "2025-09-16",
+  "timezone": "Europe/Stockholm",
+  "dst_policy": "exclude_transition_dates",
+  "required_work_minutes": 240,
+  "max_consecutive_start_days": 1,
+  "permitted_daily_band": {
+    "earliest_start": "06:00",
+    "latest_end": "10:30"
+  },
+  "allowed_weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "blackout_dates": [],
+  "same_daily_window": true,
+  "resolution_minutes": 15,
+  "closure_type": "full",
+  "duration_basis": "required_work_time",
+  "work_to_closure_assumption": "one_to_one",
+  "objective_profile": "robust_time_loss",
+  "policy_status": "user_supplied_unverified"
+}

@@ -158,24 +158,37 @@ def _validate_shared_pairing(
     grouped_by_candidate: dict[str, dict[str, list[PairedObservation]]],
     policy: PilotPolicy,
 ) -> None:
-    reference: dict[tuple[str, int], tuple[int, str, str, float]] = {}
+    """Validate CRN pairing within each date/envelope baseline group."""
+    reference: dict[
+        tuple[str, str, int],
+        tuple[int, str, float],
+    ] = {}
+    study_provenance: set[str] = set()
     for candidate_id, grouped in grouped_by_candidate.items():
         for variant in policy.variants:
             for repetition, observation in enumerate(grouped[variant]):
+                study_provenance.add(observation.provenance_key)
                 identity = (
                     observation.seed,
-                    observation.matched_baseline_id,
                     observation.provenance_key,
-                    observation.baseline_time_loss_s,
+                    float(observation.baseline_time_loss_s),
                 )
-                pair = (variant, repetition)
+                pair = (
+                    observation.matched_baseline_id,
+                    variant,
+                    repetition,
+                )
                 previous = reference.setdefault(pair, identity)
                 if previous != identity:
                     raise ValueError(
-                        "pilot candidates do not share the same matched "
-                        f"baseline/provenance for {pair}; mismatch at "
+                        "pilot candidates in the same envelope do not share "
+                        f"the same matched baseline/provenance for {pair}; mismatch at "
                         f"{candidate_id}"
                     )
+    if len(study_provenance) > 1:
+        raise ValueError(
+            "pilot candidates do not share compatible study provenance"
+        )
 
 
 def select_pilot_finalists(

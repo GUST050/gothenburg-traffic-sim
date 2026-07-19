@@ -400,6 +400,33 @@ smoke case is frozen in
 path and its fail-closed result contract; it is not the resumable multi-day
 monthly orchestrator and cannot lift the global-best gate above.
 
+The resumable monthly execution seam is now built separately under
+`traffic_sim/simulation/monthly_search.py`, with
+`run_monthly_closure_search.py` as its root CLI and
+`monthly_sumo.py` as the archived-demand SUMO backend.  Every stage publishes
+an immutable, hashed workspace artifact: policy, exact schedule ledger,
+screening, per-candidate pilot evidence, pilot selection, cumulative
+adaptive finalist evidence, each robust decision round, complete backend
+provenance and the final result. A process restart skips completed
+candidates; a changed search, policy, demand/backend identity, source digest
+or non-canonical seed mapping fails closed. Candidates from different
+calendar envelopes may correctly use different matched baseline IDs, while
+candidates inside the same envelope must still share byte-identical
+baseline/provenance for each variant/seed.
+
+`validation/golden_monthly_search_v1.json` freezes the first internal
+execution policy: one q10/q50/q90 pilot replication, a 300 s retention band,
+four initial finalist repetitions, a 600 s absolute precision floor, 300 s
+practical equivalence and a cap of 12 repetitions per variant.  The bounded
+three-window Gothenburg/SUMO 1.27.1 golden completed in 211.42 s at
+427,819,008 bytes peak RSS; the sole viable schedule reached precision after
+q10/q50/q90 counts 4/5/7. This validates execution, restart and policy
+resources only. The backend currently consumes one explicit immutable demand
+archive covering the shortlist envelopes; automatic build/cache resolution
+across all date envelopes in a future month remains required. The new
+untouched monthly held-out gate has also not run, so global-best and UI
+exposure remain false.
+
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
 of a hidden station's traffic (range 0.06–0.83). CONFOUND WARNING (missing

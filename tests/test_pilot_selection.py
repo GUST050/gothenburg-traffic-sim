@@ -28,6 +28,7 @@ def _candidate(
     seeds=(1000, 1001, 1002),
     provenance="study-one",
     baseline_id="baseline-one",
+    baseline=100.0,
     failures=(),
 ):
     if failures:
@@ -40,8 +41,8 @@ def _candidate(
             candidate_id=candidate_id,
             demand_variant=variant,
             seed=seed,
-            baseline_time_loss_s=100.0,
-            candidate_time_loss_s=100.0 + delta,
+            baseline_time_loss_s=baseline,
+            candidate_time_loss_s=baseline + delta,
             matched_baseline_id=baseline_id,
             provenance_key=provenance,
         )
@@ -102,11 +103,42 @@ def test_missing_variant_is_incomplete_and_requests_exact_pair():
 
 
 def test_mismatched_common_random_number_pair_is_rejected():
-    with pytest.raises(ValueError, match="same matched baseline/provenance"):
+    with pytest.raises(ValueError, match="same envelope"):
         select_pilot_finalists(
             [
                 _candidate("a"),
                 _candidate("b", seeds=(1000, 1001, 9002)),
+            ],
+            _policy(),
+        )
+
+
+def test_different_date_envelopes_may_use_different_matched_baselines():
+    result = select_pilot_finalists(
+        [
+            _candidate("a"),
+            _candidate(
+                "b",
+                baseline_id="baseline-other-date",
+                baseline=500.0,
+            ),
+        ],
+        _policy(),
+    )
+    assert result.status == "ready"
+    assert result.selected_ids == ("a", "b")
+
+
+def test_different_study_provenance_is_rejected_across_envelopes():
+    with pytest.raises(ValueError, match="study provenance"):
+        select_pilot_finalists(
+            [
+                _candidate("a"),
+                _candidate(
+                    "b",
+                    baseline_id="baseline-other-date",
+                    provenance="different-study",
+                ),
             ],
             _policy(),
         )
@@ -174,4 +206,3 @@ def test_every_hard_failed_candidate_returns_no_viable():
     )
     assert result.status == "no_viable"
     assert result.selected_ids == ()
-
