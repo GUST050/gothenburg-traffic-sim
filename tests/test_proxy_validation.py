@@ -198,11 +198,13 @@ def test_gate_passes_only_complete_held_out_evidence():
     assert report["ui_exposure_allowed"] is True
     assert report["metrics"] == {
         "winner_recall": 1.0,
+        "practical_winner_recall": None,
         "p90_normalized_shortlist_regret": 0.0,
         "median_spearman": 1.0,
         "spearman_case_fraction": 1.0,
         "ranking_case_fraction": 1.0,
         "failure_disqualification_recall": 1.0,
+        "total_disqualified_schedules": 2,
     }
 
 
@@ -302,6 +304,129 @@ def test_partial_report_can_conclusively_fail_when_best_case_is_unreachable():
     assert report["metrics"]["winner_recall_upper_bound"] == 0.5
     assert report["gate_status"] == "fail"
     assert "cannot raise winner recall" in report["reason"]
+    assert report["ui_exposure_allowed"] is False
+
+
+def _gated_manifest(raw_transform=None):
+    """Manifest carrying the frozen held-out-v2 gate object."""
+    manifest = _manifest()
+    raw = {key: value for key, value in manifest.items() if key != "content_key"}
+    raw["gate"] = {
+        "practical_equivalence_s": 15.0,
+        "practical_winner_recall_minimum": 0.9,
+        "p90_normalized_shortlist_regret_maximum": 0.1,
+        "failure_disqualification_recall_minimum": 0.6,
+    }
+    if raw_transform is not None:
+        raw_transform(raw)
+    return validate_validation_manifest(raw)
+
+
+def test_gate_object_is_content_keyed_and_validated():
+    plain = _manifest()
+    gated = _gated_manifest()
+    assert gated["content_key"] != plain["content_key"]
+    with pytest.raises(ValueError, match="gate must define exactly"):
+        _gated_manifest(lambda raw: raw["gate"].pop("practical_equivalence_s"))
+    with pytest.raises(ValueError, match="must be positive"):
+        _gated_manifest(
+            lambda raw: raw["gate"].update(practical_equivalence_s=0))
+    with pytest.raises(ValueError, match="at most one"):
+        _gated_manifest(
+            lambda raw: raw["gate"].update(practical_winner_recall_minimum=1.5))
+
+
+def test_practical_winner_recall_gates_with_indifference_zone():
+    """The v1 false-precision case: the shortlist misses the exact winner
+    but contains a schedule within the practical-equivalence tolerance —
+    strict recall fails, the practical gate passes."""
+    manifest = _gated_manifest()
+    schedules = {
+        case["case_id"]: case["schedule_ids"] for case in manifest["cases"]
+    }
+    # Exact winner is index 0 (0.0 s), shortlist only holds index 1
+    # (10.0 s — inside the 15 s tolerance) and index 2.
+    outcomes = _outcomes(
+        manifest,
+        **{
+            case_id: _case_outcome(
+                case_id, schedules[case_id], shortlist=(1, 2))
+            for case_id in schedules
+        },
+    )
+    report = evaluate_validation_set(manifest, outcomes)
+    assert report["metrics"]["winner_recall"] == 0.0
+    assert report["metrics"]["practical_winner_recall"] == 1.0
+    assert report["gate_checks"]["practical_winner_recall"] is True
+    assert "winner_recall" not in report["gate_checks"]
+    assert "median_spearman" not in report["gate_checks"]
+    assert report["metrics"]["median_spearman"] is not None  # diagnostic
+    assert report["thresholds"]["practical_equivalence_s"] == 15.0
+    # regret: shortlist best 10.0 vs best 0.0 over eligible p90 range —
+    # still reported and still a gate.
+    assert report["gate_checks"]["p90_normalized_shortlist_regret"] in (
+        True, False)
+
+
+def test_practical_gate_fails_when_shortlist_misses_the_tolerance_band():
+    manifest = _gated_manifest()
+    schedules = {
+        case["case_id"]: case["schedule_ids"] for case in manifest["cases"]
+    }
+    # Shortlist only holds index 2 (20.0 s) — outside the 15 s band.
+    outcomes = _outcomes(
+        manifest,
+        **{
+            case_id: _case_outcome(case_id, schedules[case_id], shortlist=(2,))
+            for case_id in schedules
+        },
+    )
+    report = evaluate_validation_set(manifest, outcomes)
+    assert report["metrics"]["practical_winner_recall"] == 0.0
+    assert report["gate_checks"]["practical_winner_recall"] is False
+    assert report["gate_status"] == "fail"
+    assert report["ui_exposure_allowed"] is False
+
+
+def test_failure_recall_gates_under_gate_object():
+    manifest = _gated_manifest()
+    schedules = {
+        case["case_id"]: case["schedule_ids"] for case in manifest["cases"]
+    }
+    # Disqualified schedule (index 4) neither flagged nor shortlisted in
+    # either case: failure recall 0.0, below the 0.6 threshold.
+    cases = {}
+    for case_id in schedules:
+        outcome = _case_outcome(case_id, schedules[case_id], shortlist=(0, 1))
+        for candidate in outcome["candidates"]:
+            candidate["proxy_failure_flag"] = False
+        cases[case_id] = outcome
+    outcomes = _outcomes(manifest, **cases)
+    report = evaluate_validation_set(manifest, outcomes)
+    assert report["metrics"]["failure_disqualification_recall"] == 0.0
+    assert report["gate_checks"]["failure_disqualification_recall"] is False
+    assert report["gate_status"] == "fail"
+
+
+def test_partial_conclusive_fail_uses_practical_metric_under_gate_object():
+    manifest = _gated_manifest()
+    schedules = {
+        case["case_id"]: case["schedule_ids"] for case in manifest["cases"]
+    }
+    partial = _outcomes(
+        manifest,
+        **{
+            case_id: _case_outcome(case_id, schedules[case_id], shortlist=(2,))
+            for case_id in schedules
+        },
+    )
+    partial["cases"].pop()
+    report = evaluate_partial_validation_set(manifest, partial)
+    # One finished case missed the practical band; even a perfect second
+    # case gives 1/2 = 0.5 < 0.9 — conclusively failed.
+    assert report["metrics"]["practical_winner_recall"] == 0.0
+    assert report["metrics"]["practical_winner_recall_upper_bound"] == 0.5
+    assert report["gate_status"] == "fail"
     assert report["ui_exposure_allowed"] is False
 
 

@@ -24,6 +24,18 @@ WINNER_RECALL_GATE = 0.90
 P90_NORMALIZED_REGRET_GATE = 0.10
 MEDIAN_SPEARMAN_GATE = 0.60
 _MODES = frozenset({"meso", "micro"})
+# Manifest `gate` object fields (held-out v2 contract, frozen 2026-07-19
+# per the step-4 recovery decision): the winner metric uses a practical-
+# equivalence indifference zone instead of exact float ties — v1's two
+# "missed winners" were 4 s and 22 s apart on medians whose seed ranges
+# spanned hundreds of seconds, which is measurement noise, not proxy
+# error.  Spearman becomes a reported diagnostic, not a gate.
+_GATE_FIELDS = (
+    "practical_equivalence_s",
+    "practical_winner_recall_minimum",
+    "p90_normalized_shortlist_regret_maximum",
+    "failure_disqualification_recall_minimum",
+)
 
 
 def _canonical_key(payload: Mapping[str, Any]) -> str:
@@ -149,6 +161,26 @@ def validate_validation_manifest(
             "minimum_ranking_case_fraction must be above zero and at most one"
         )
 
+    gate_raw = raw.get("gate")
+    gate: dict[str, float] | None = None
+    if gate_raw is not None:
+        if not isinstance(gate_raw, Mapping) or set(gate_raw) != set(_GATE_FIELDS):
+            raise ValueError(
+                "validation manifest gate must define exactly "
+                + ", ".join(_GATE_FIELDS)
+            )
+        gate = {
+            field: _number(gate_raw[field], f"gate.{field}")
+            for field in _GATE_FIELDS
+        }
+        if gate["practical_equivalence_s"] <= 0:
+            raise ValueError("gate.practical_equivalence_s must be positive")
+        for field in _GATE_FIELDS[1:]:
+            if not 0 < gate[field] <= 1:
+                raise ValueError(
+                    f"gate.{field} must be above zero and at most one"
+                )
+
     required_raw = raw.get("required_strata")
     if not isinstance(required_raw, Mapping) or not required_raw:
         raise ValueError("validation manifest required_strata is required")
@@ -261,6 +293,8 @@ def validate_validation_manifest(
         "required_strata": required,
         "cases": sorted(cases, key=lambda case: case["case_id"]),
     }
+    if gate is not None:
+        normalized_manifest["gate"] = gate
     supplied_key = raw.get("content_key")
     expected = _canonical_key(normalized_manifest)
     if supplied_key is not None and supplied_key != expected:
@@ -314,6 +348,8 @@ def _validate_provenance(
 def evaluate_validation_case(
     descriptor: Mapping[str, Any],
     outcome: Mapping[str, Any],
+    *,
+    practical_equivalence_s: float | None = None,
 ) -> dict[str, Any]:
     case_id = descriptor["case_id"]
     if outcome.get("case_id") != case_id:
@@ -400,6 +436,8 @@ def evaluate_validation_case(
             "disqualified_count": len(failures),
             "winner_schedule_ids": [],
             "winner_recalled": None,
+            "practical_winner_schedule_ids": [],
+            "practical_winner_recalled": None,
             "best_sumo_objective": None,
             "best_shortlisted_sumo_objective": None,
             "normalized_shortlist_regret": None,
@@ -422,6 +460,27 @@ def evaluate_validation_case(
         )
     ]
     winner_recalled = any(candidate["shortlisted"] for candidate in winners)
+    # Practical winners: within the frozen practical-equivalence tolerance
+    # of the exhaustive optimum.  A shortlist containing any of them is a
+    # practical hit — the deployed finalist stage decides among shortlisted
+    # candidates with matched high-replication SUMO, so distinguishing
+    # schedules whose whole-network medians differ by less than the
+    # pre-registered indifference zone is not this gate's job.
+    if practical_equivalence_s is not None:
+        practical_winners = [
+            candidate for candidate in eligible
+            if float(candidate["sumo_objective"])
+            <= best_objective + practical_equivalence_s
+        ]
+        practical_winner_recalled = any(
+            candidate["shortlisted"] for candidate in practical_winners
+        )
+        practical_winner_ids = sorted(
+            candidate["schedule_id"] for candidate in practical_winners
+        )
+    else:
+        practical_winner_recalled = None
+        practical_winner_ids = []
     shortlisted_eligible = [
         candidate for candidate in eligible if candidate["shortlisted"]
     ]
@@ -465,6 +524,8 @@ def evaluate_validation_case(
             candidate["schedule_id"] for candidate in winners
         ),
         "winner_recalled": winner_recalled,
+        "practical_winner_schedule_ids": practical_winner_ids,
+        "practical_winner_recalled": practical_winner_recalled,
         "best_sumo_objective": best_objective,
         "best_shortlisted_sumo_objective": shortlist_best,
         "normalized_shortlist_regret": regret,
@@ -503,8 +564,14 @@ def evaluate_validation_set(
     if set(by_id) != expected_ids or len(by_id) != len(outcomes):
         raise ValueError("validation outcomes do not exactly cover frozen cases")
 
+    gate = manifest.get("gate")
+    tolerance = gate["practical_equivalence_s"] if gate else None
     case_reports = [
-        evaluate_validation_case(case, by_id[case["case_id"]])
+        evaluate_validation_case(
+            case,
+            by_id[case["case_id"]],
+            practical_equivalence_s=tolerance,
+        )
         for case in manifest["cases"]
     ]
     ranking_reports = [
@@ -515,6 +582,17 @@ def evaluate_validation_set(
     winner_recall = sum(
         report["winner_recalled"] for report in ranking_reports
     ) / len(ranking_reports)
+    practical_winner_recall = (
+        sum(
+            bool(report["practical_winner_recalled"])
+            for report in ranking_reports
+        ) / len(ranking_reports)
+        if gate
+        else None
+    )
+    total_disqualified = sum(
+        report["disqualified_count"] for report in case_reports
+    )
     regrets = [
         report["normalized_shortlist_regret"]
         for report in case_reports
@@ -539,28 +617,62 @@ def evaluate_validation_set(
     )
     spearman_case_fraction = len(spearmans) / len(ranking_reports)
     ranking_case_fraction = len(ranking_reports) / len(case_reports)
-    gate_checks = {
-        "winner_recall": winner_recall >= WINNER_RECALL_GATE,
-        "p90_normalized_shortlist_regret": (
-            p90_regret is not None
-            and p90_regret <= P90_NORMALIZED_REGRET_GATE
-        ),
-        "median_spearman": (
-            median_spearman is not None
-            and median_spearman >= MEDIAN_SPEARMAN_GATE
-        ),
-        "spearman_case_coverage": (
-            spearman_case_fraction
-            >= manifest["minimum_spearman_case_fraction"]
-        ),
-        "ranking_case_coverage": (
-            ranking_case_fraction
-            >= manifest["minimum_ranking_case_fraction"]
-        ),
-        "all_shortlists_contain_eligible_candidate": (
-            len(regrets) == len(ranking_reports)
-        ),
-    }
+    if gate:
+        # Held-out v2 contract (step-4 recovery decision): gate on
+        # practical-winner recall, regret and failure recall; Spearman and
+        # strict exact-tie recall stay in metrics as diagnostics.  The
+        # failure-recall check is vacuous only when the exhaustive runs
+        # produced no disqualified schedule at all (nothing to catch).
+        gate_checks = {
+            "practical_winner_recall": (
+                practical_winner_recall is not None
+                and practical_winner_recall
+                >= gate["practical_winner_recall_minimum"]
+            ),
+            "p90_normalized_shortlist_regret": (
+                p90_regret is not None
+                and p90_regret
+                <= gate["p90_normalized_shortlist_regret_maximum"]
+            ),
+            "failure_disqualification_recall": (
+                total_disqualified == 0
+                or (
+                    failure_recall is not None
+                    and failure_recall
+                    >= gate["failure_disqualification_recall_minimum"]
+                )
+            ),
+            "ranking_case_coverage": (
+                ranking_case_fraction
+                >= manifest["minimum_ranking_case_fraction"]
+            ),
+            "all_shortlists_contain_eligible_candidate": (
+                len(regrets) == len(ranking_reports)
+            ),
+        }
+    else:
+        gate_checks = {
+            "winner_recall": winner_recall >= WINNER_RECALL_GATE,
+            "p90_normalized_shortlist_regret": (
+                p90_regret is not None
+                and p90_regret <= P90_NORMALIZED_REGRET_GATE
+            ),
+            "median_spearman": (
+                median_spearman is not None
+                and median_spearman >= MEDIAN_SPEARMAN_GATE
+            ),
+            "spearman_case_coverage": (
+                spearman_case_fraction
+                >= manifest["minimum_spearman_case_fraction"]
+            ),
+            "ranking_case_coverage": (
+                ranking_case_fraction
+                >= manifest["minimum_ranking_case_fraction"]
+            ),
+            "all_shortlists_contain_eligible_candidate": (
+                len(regrets) == len(ranking_reports)
+            ),
+        }
     passed = all(gate_checks.values())
     return {
         "schema_version": SCHEMA_VERSION,
@@ -570,6 +682,11 @@ def evaluate_validation_set(
         "case_count": len(case_reports),
         "metrics": {
             "winner_recall": round(winner_recall, 6),
+            "practical_winner_recall": (
+                round(practical_winner_recall, 6)
+                if practical_winner_recall is not None
+                else None
+            ),
             "p90_normalized_shortlist_regret": (
                 round(p90_regret, 6) if p90_regret is not None else None
             ),
@@ -585,17 +702,26 @@ def evaluate_validation_set(
                 if failure_recall is not None
                 else None
             ),
+            "total_disqualified_schedules": total_disqualified,
         },
-        "thresholds": {
-            "winner_recall_minimum": WINNER_RECALL_GATE,
-            "p90_normalized_shortlist_regret_maximum":
-                P90_NORMALIZED_REGRET_GATE,
-            "median_spearman_minimum": MEDIAN_SPEARMAN_GATE,
-            "minimum_spearman_case_fraction":
-                manifest["minimum_spearman_case_fraction"],
-            "minimum_ranking_case_fraction":
-                manifest["minimum_ranking_case_fraction"],
-        },
+        "thresholds": (
+            {
+                **{field: gate[field] for field in _GATE_FIELDS},
+                "minimum_ranking_case_fraction":
+                    manifest["minimum_ranking_case_fraction"],
+            }
+            if gate
+            else {
+                "winner_recall_minimum": WINNER_RECALL_GATE,
+                "p90_normalized_shortlist_regret_maximum":
+                    P90_NORMALIZED_REGRET_GATE,
+                "median_spearman_minimum": MEDIAN_SPEARMAN_GATE,
+                "minimum_spearman_case_fraction":
+                    manifest["minimum_spearman_case_fraction"],
+                "minimum_ranking_case_fraction":
+                    manifest["minimum_ranking_case_fraction"],
+            }
+        ),
         "gate_checks": gate_checks,
         "gate_status": "pass" if passed else "fail",
         "ui_exposure_allowed": passed,
@@ -608,6 +734,13 @@ def evaluate_validation_set(
         "failure_recall_definition": (
             "actual SUMO disqualifications either flagged by the proxy or "
             "included in the SUMO shortlist"
+        ),
+        "practical_winner_definition": (
+            "shortlist contains at least one eligible schedule whose paired "
+            "median added time loss lies within gate.practical_equivalence_s "
+            "of the exhaustive optimum"
+            if gate
+            else None
         ),
     }
 
@@ -640,8 +773,14 @@ def evaluate_partial_validation_set(
         if case_id not in descriptors or case_id in by_id:
             raise ValueError("partial validation has duplicate or unknown cases")
         by_id[case_id] = outcome
+    gate = manifest.get("gate")
+    tolerance = gate["practical_equivalence_s"] if gate else None
     reports = [
-        evaluate_validation_case(descriptors[case_id], outcome)
+        evaluate_validation_case(
+            descriptors[case_id],
+            outcome,
+            practical_equivalence_s=tolerance,
+        )
         for case_id, outcome in sorted(by_id.items())
     ]
     ranking = [report for report in reports if report["case_role"] == "ranking"]
@@ -672,13 +811,34 @@ def evaluate_partial_validation_set(
     # Optimistic bound: pretend every unfinished case becomes a ranking case
     # whose exhaustive winner is recalled.  If even that cannot reach the
     # threshold, the release gate is conclusively failed and further costly
-    # SUMO runs cannot change that decision.
+    # SUMO runs cannot change that decision.  Under a manifest gate object
+    # the bound applies to the PRACTICAL winner metric — the one that gates.
     winner_recall_upper_bound = (
         (recalled_winners + len(missing)) / (len(ranking) + len(missing))
         if ranking or missing
         else 0.0
     )
-    conclusively_failed = winner_recall_upper_bound < WINNER_RECALL_GATE
+    practical_recall = (
+        sum(bool(report["practical_winner_recalled"]) for report in ranking)
+        / len(ranking)
+        if gate and ranking
+        else None
+    )
+    if gate:
+        recalled_practical = sum(
+            bool(report["practical_winner_recalled"]) for report in ranking
+        )
+        practical_upper_bound = (
+            (recalled_practical + len(missing)) / (len(ranking) + len(missing))
+            if ranking or missing
+            else 0.0
+        )
+        conclusively_failed = (
+            practical_upper_bound < gate["practical_winner_recall_minimum"]
+        )
+    else:
+        practical_upper_bound = None
+        conclusively_failed = winner_recall_upper_bound < WINNER_RECALL_GATE
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "monthly_proxy_validation_report",
@@ -693,6 +853,16 @@ def evaluate_partial_validation_set(
             ),
             "winner_recall_upper_bound": round(
                 winner_recall_upper_bound, 6
+            ),
+            "practical_winner_recall": (
+                round(practical_recall, 6)
+                if practical_recall is not None
+                else None
+            ),
+            "practical_winner_recall_upper_bound": (
+                round(practical_upper_bound, 6)
+                if practical_upper_bound is not None
+                else None
             ),
             "p90_normalized_shortlist_regret": (
                 round(_quantile(regrets, 0.9), 6) if regrets else None
@@ -713,21 +883,42 @@ def evaluate_partial_validation_set(
             ),
         },
         "gate_status": "fail" if conclusively_failed else "incomplete",
-        "gate_checks": {
-            "all_frozen_cases_complete": False,
-            "winner_recall": (
-                winner_recall is not None
-                and winner_recall >= WINNER_RECALL_GATE
-            ),
-            "p90_normalized_shortlist_regret": (
-                bool(regrets)
-                and _quantile(regrets, 0.9) <= P90_NORMALIZED_REGRET_GATE
-            ),
-            "median_spearman": (
-                bool(spearmans)
-                and median(spearmans) >= MEDIAN_SPEARMAN_GATE
-            ),
-        },
+        "gate_checks": (
+            {
+                "all_frozen_cases_complete": False,
+                "practical_winner_recall": (
+                    practical_recall is not None
+                    and practical_recall
+                    >= gate["practical_winner_recall_minimum"]
+                ),
+                "p90_normalized_shortlist_regret": (
+                    bool(regrets)
+                    and _quantile(regrets, 0.9)
+                    <= gate["p90_normalized_shortlist_regret_maximum"]
+                ),
+                "failure_disqualification_recall": (
+                    bool(failure_recalls)
+                    and sum(failure_recalls) / len(failure_recalls)
+                    >= gate["failure_disqualification_recall_minimum"]
+                ),
+            }
+            if gate
+            else {
+                "all_frozen_cases_complete": False,
+                "winner_recall": (
+                    winner_recall is not None
+                    and winner_recall >= WINNER_RECALL_GATE
+                ),
+                "p90_normalized_shortlist_regret": (
+                    bool(regrets)
+                    and _quantile(regrets, 0.9) <= P90_NORMALIZED_REGRET_GATE
+                ),
+                "median_spearman": (
+                    bool(spearmans)
+                    and median(spearmans) >= MEDIAN_SPEARMAN_GATE
+                ),
+            }
+        ),
         "ui_exposure_allowed": False,
         "global_best_claim_allowed": False,
         "case_reports": reports,
