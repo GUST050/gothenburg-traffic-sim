@@ -275,6 +275,97 @@ def test_missing_archive_is_built_once_then_resolved(tmp_path):
         tmp_path, resolver._required(schedules[0]))) == 1
 
 
+def _live_release(root):
+    """Create a live release product tree with sentinel bytes.
+
+    One product (calibrated_v2.agents.json) is deliberately left missing so
+    the restore path proves absence is preserved too."""
+    contents = {}
+    for relative in monthly_demand.LIVE_DEMAND_RELEASE_PRODUCTS:
+        if relative.name == "calibrated_v2.agents.json":
+            continue
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"live:{relative.name}")
+        contents[str(relative)] = target.read_bytes()
+    return contents
+
+
+def _scribbling_builder(runs_root, live_root, *, fail=False):
+    """Fake demand builder with the real one's side effect: it writes the
+    envelope's demand THROUGH every live release path."""
+    def builder(required):
+        for relative in monthly_demand.LIVE_DEMAND_RELEASE_PRODUCTS:
+            target = live_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(f"envelope:{required.build_key}")
+        if fail:
+            raise RuntimeError("demand build failed after touching live state")
+        _archive(
+            runs_root,
+            required,
+            f"demand-built-{required.build_key}",
+            finished_at="2027-01-01T00:00:00Z",
+        )
+    return builder
+
+
+def test_envelope_build_restores_live_release_products(tmp_path):
+    FakeChildRunner.created = []
+    spec = _spec(end_date="2027-07-15")
+    schedules = generate_closure_schedules(spec)
+    live_root = tmp_path / "live"
+    before = _live_release(live_root)
+
+    resolver = MonthlyDemandResolverRunner(
+        spec,
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        demand_builder=_scribbling_builder(tmp_path, live_root),
+        runner_factory=FakeChildRunner,
+        live_release_root=live_root,
+    )
+    resolver.prepare(schedules)
+
+    for relative in monthly_demand.LIVE_DEMAND_RELEASE_PRODUCTS:
+        target = live_root / relative
+        if str(relative) in before:
+            assert target.read_bytes() == before[str(relative)], relative
+        else:
+            assert not target.exists(), (
+                f"missing live product must stay missing: {relative}")
+
+
+def test_failed_envelope_build_still_restores_live_release(tmp_path):
+    FakeChildRunner.created = []
+    spec = _spec(end_date="2027-07-15")
+    schedules = generate_closure_schedules(spec)
+    live_root = tmp_path / "live"
+    before = _live_release(live_root)
+
+    resolver = MonthlyDemandResolverRunner(
+        spec,
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        demand_builder=_scribbling_builder(tmp_path, live_root, fail=True),
+        runner_factory=FakeChildRunner,
+        live_release_root=live_root,
+    )
+    with pytest.raises(RuntimeError, match="after touching live state"):
+        resolver.prepare(schedules)
+
+    for relative in monthly_demand.LIVE_DEMAND_RELEASE_PRODUCTS:
+        target = live_root / relative
+        if str(relative) in before:
+            assert target.read_bytes() == before[str(relative)], relative
+        else:
+            assert not target.exists(), relative
+
+
 def test_missing_archive_fails_closed_when_build_is_disabled(tmp_path):
     spec = _spec(end_date="2027-07-15")
     schedules = generate_closure_schedules(spec)

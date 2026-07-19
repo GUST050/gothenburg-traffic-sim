@@ -127,6 +127,9 @@ def base_url(tmp_path, monkeypatch):
     monkeypatch.setattr(serve, "OPTIMIZE_OUT", tmp_path / "signal_optimize_web.json")
     monkeypatch.setattr(serve, "OPTIMIZE_CLOSURE_OUT",
                         tmp_path / "signal_closure_combine_web.json")
+    monkeypatch.setattr(serve, "MONTHLY_SEARCH_ROOT", tmp_path / "closure-search")
+    monkeypatch.setattr(serve, "CLOSURE_SEARCH_SPEC_DIR",
+                        tmp_path / "closure_search_specs")
 
     def fake_known_edges():
         return frozenset({"a_b_0", "b_a_0"})
@@ -141,6 +144,8 @@ def base_url(tmp_path, monkeypatch):
     serve._suggest_state.update(status="idle")
     serve._optimize_state.clear()
     serve._optimize_state.update(status="idle")
+    serve._monthly_state.clear()
+    serve._monthly_state.update(status="idle")
     serve.finish_active_job("close")
     serve.finish_active_job("recalibrate")
     if serve._sim_lock.locked():
@@ -407,6 +412,197 @@ class TestCancel:
     def test_cancel_rejects_an_idle_or_unknown_job(self, base_url):
         assert post_json_or_error(f"{base_url}/api/cancel?kind=close")[0] == 409
         assert post_json_or_error(f"{base_url}/api/cancel?kind=unknown")[0] == 400
+
+
+def _closure_search_spec(search_id="monthly-api-test"):
+    return {
+        "search_id": search_id,
+        "directed_edges": ["a_b_0"],
+        "demand_build_id": "release-x",
+        "source": "forecast",
+        "permitted_date_start": "2027-07-15",
+        "permitted_date_end": "2027-07-15",
+        "required_work_minutes": 60,
+        "max_consecutive_start_days": 1,
+        "permitted_daily_band": {"earliest_start": "06:00",
+                                 "latest_end": "07:00"},
+    }
+
+
+def _monthly_result(search_id):
+    return {
+        "search_id": search_id,
+        "status": "unique_winner",
+        "winner_id": "closure-1",
+        "tie_ids": [],
+        "selected_schedules": [{"schedule_id": "closure-1", "intervals": [
+            {"start_time": "2027-07-15T06:00:00",
+             "end_time": "2027-07-15T07:00:00"}]}],
+        "screening": {"candidate_count": 4, "scoreable_candidate_count": 0,
+                      "shortlist_count": 4,
+                      "proxy_version": "bounded_exhaustive_sumo_v1"},
+        "policy": {"policy_id": "monthly-closure-policy-v1",
+                   "benchmark_id": "golden-monthly-search-2025-09-16-v6"},
+        "simulation_backend": {
+            "kind": "multi_envelope_monthly_sumo_backend",
+            "simulation_mode": "meso", "sumo_version": "SUMO 1.27.1",
+            "demand_release_id": "release-x", "source_digest": "sd",
+            "simulation_source_digest": "ssd",
+            "source_files": [{"label": "big-internal-list"}]},
+        "robust_decision": {"status": "unique_winner"},
+        "claim_boundary": {
+            "best_result_available": True,
+            "best_result_scope": "sumo_verified_monthly_shortlist",
+            "global_best_claim_allowed": False,
+            "ui_exposure_allowed": False,
+            "reason": "a new untouched monthly held-out release gate has "
+                      "not passed"},
+    }
+
+
+class TestMonthlySearch:
+    """Phase 4 step 6: async monthly closure search. Same lifecycle contract
+    as the other four jobs, plus two properties of its own: live progress is
+    read from the CLI child's own persisted workspace manifest, and the
+    curated result must carry claim_boundary through verbatim."""
+
+    def test_requires_exact_spec_body(self, base_url):
+        assert post_json_or_error(f"{base_url}/api/monthly_search")[0] == 400
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": _closure_search_spec(),
+                     "policy": {"sneaky": True}})
+        assert status == 400
+
+    def test_invalid_spec_and_unknown_edge_are_400(self, base_url):
+        bad = _closure_search_spec()
+        bad["directed_edges"] = ["not_an_edge_9"]
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": bad})
+        assert status == 400
+        assert "not_an_edge_9" in body["error"]
+        status, _ = post_json_or_error(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": {"search_id": "x"}})
+        assert status == 400
+
+    def test_busy_lock_returns_409(self, base_url):
+        serve._sim_lock.acquire()
+        try:
+            status, _ = post_json_or_error(
+                f"{base_url}/api/monthly_search",
+                payload={"closure_search_spec": _closure_search_spec()})
+            assert status == 409
+        finally:
+            serve._sim_lock.release()
+
+    def test_status_post_is_405(self, base_url):
+        assert post_json_or_error(
+            f"{base_url}/api/monthly_search/status")[0] == 405
+
+    def test_missing_frozen_policy_is_500_and_starts_nothing(
+            self, base_url, monkeypatch, tmp_path):
+        monkeypatch.setattr(serve, "MONTHLY_POLICY_PATH",
+                            tmp_path / "missing-policy.json")
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": _closure_search_spec()})
+        assert status == 500
+        assert not serve._sim_lock.locked()
+
+    def test_frozen_policy_artifact_is_valid_and_golden(self):
+        from traffic_sim.simulation.monthly_search import MonthlySearchPolicy
+        policy = MonthlySearchPolicy.from_dict(
+            json.loads(serve.MONTHLY_POLICY_PATH.read_text()))
+        assert policy.status == "golden_frozen"
+
+    def test_lifecycle_progress_then_curated_result(self, base_url, monkeypatch):
+        sid = "monthly-api-test"
+        started = threading.Event()
+        release = threading.Event()
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen["cmd"] = cmd
+            workspace = serve.MONTHLY_SEARCH_ROOT / sid
+            (workspace / "artifacts").mkdir(parents=True)
+            (workspace / "manifest.json").write_text(json.dumps({
+                "status": "running",
+                "progress": {"phase": "pilot", "completed": 1, "total": 4,
+                             "updated_at": "2026-07-19T00:00:00Z"}}))
+            started.set()
+            release.wait(timeout=5)
+            (workspace / "artifacts" / "result.json").write_text(
+                json.dumps(_monthly_result(sid)))
+            return FakeCompletedProcess(returncode=0, stdout="ok")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        status, body = post_json(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": _closure_search_spec(sid)})
+        assert status == 202
+        assert body == {"status": "started", "search_id": sid}
+        assert started.wait(timeout=5)
+
+        _, running = get_json(f"{base_url}/api/monthly_search/status")
+        assert running["status"] == "running"
+        assert running["progress"]["phase"] == "pilot"
+        assert running["progress"]["completed"] == 1
+
+        release.set()
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/monthly_search/status")[1]["status"] == "done")
+        _, done = get_json(f"{base_url}/api/monthly_search/status")
+        result = done["result"]
+        # The frozen policy and bounded-exhaustive screening must be forced
+        # by the server, never taken from the client.
+        cmd = seen["cmd"]
+        assert str(serve.MONTHLY_POLICY_PATH.resolve()) in cmd
+        assert "bounded-exhaustive" in cmd
+        assert str(serve.MONTHLY_BASELINE_TRIP_P99_S) in cmd
+        # Claim boundary passes through verbatim; internals are curated out.
+        assert result["claim_boundary"] == _monthly_result(sid)["claim_boundary"]
+        assert result["winner_id"] == "closure-1"
+        assert result["selected_schedules"][0]["intervals"]
+        assert "source_files" not in result["simulation_backend"]
+        assert not serve._sim_lock.locked()
+
+    def test_cli_error_last_line_is_surfaced(self, base_url, monkeypatch):
+        def fake_run(cmd, **kw):
+            return FakeCompletedProcess(
+                returncode=1,
+                stderr="traceback noise\nbounded exhaustive screening "
+                       "generated 96 candidates, above the explicit cap 12\n")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": _closure_search_spec()})[0] == 202
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/monthly_search/status")[1]["status"] == "error")
+        _, state = get_json(f"{base_url}/api/monthly_search/status")
+        assert "above the explicit cap 12" in state["error"]
+        assert not serve._sim_lock.locked()
+
+    def test_cancel_reports_resumable_workspace(self, base_url, monkeypatch):
+        release = threading.Event()
+
+        def fake_run(cmd, **kw):
+            release.wait(timeout=5)
+            return FakeCompletedProcess(returncode=-9)
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": _closure_search_spec()})[0] == 202
+        assert post_json(f"{base_url}/api/cancel?kind=monthly")[0] == 202
+        release.set()
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/monthly_search/status")[1]["status"] == "cancelled")
+        _, state = get_json(f"{base_url}/api/monthly_search/status")
+        assert "återupptagbar" in state["note"]
+        assert not serve._sim_lock.locked()
 
 
 class TestCloseWindowed:

@@ -40,7 +40,7 @@ Endpoints:
                                 job started from one tab/session is visible
                                 from any other and survives a dropped
                                 connection, laptop sleep, or closed tab.
-  POST /api/cancel?kind=close|recalibrate
+  POST /api/cancel?kind=close|recalibrate|monthly
                               — stops the active process group for the
                                 selected job and reports status="cancelled"
                                 once cleanup has completed.
@@ -84,6 +84,33 @@ Endpoints:
                                 plan diff, and the tls_provenance="synthetic"
                                 label/caveat every signal result must carry
                                 until IMPROVEMENT_PLAN.md D6 imports real city plans.
+  POST /api/monthly_search with {"closure_search_spec": {...}}
+                              — Phase 4 step 6: runs the resumable robust
+                                recurring closure search
+                                (run_monthly_closure_search.py) against the
+                                server's FROZEN policy
+                                (validation/monthly_search_policy_v1.json)
+                                in bounded-exhaustive screening mode ONLY —
+                                the monthly proxy failed its held-out gate
+                                and must not reach the UI, so every ranked
+                                candidate here is SUMO-verified. Same
+                                async/poll pattern, shares _sim_lock.
+                                Cancellation kills the process tree but the
+                                immutable workspace under
+                                runs/closure-search/<search_id>/ stays
+                                resumable: POSTing the same spec again
+                                loads completed SUMO evidence instead of
+                                rerunning it.
+  GET /api/monthly_search/status — {"status": ..., ...}; while running,
+                                includes the workspace's own persisted
+                                progress pointer (phase enumerate/screen/
+                                prepare_backend/pilot/finalists/decide/
+                                publish + counts) read from its manifest,
+                                so a page load in any tab sees a live
+                                search. On "done", a curated summary that
+                                ALWAYS carries the result's claim_boundary
+                                verbatim — global-best/UI claims stay
+                                disabled until the new held-out gate passes.
 
 WHY ASYNC (found from a real failure): a multi-minute job tied to a single
 blocking HTTP GET is fragile — a browser's own request timeout, a closed
@@ -122,9 +149,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from signal_optimize import SIGNAL_CONDITION_COUNT
-from traffic_sim.core.contracts import (DemandBuildSpec, ScenarioSpec,
+from traffic_sim.core.contracts import (ClosureSearchSpec, DemandBuildSpec,
+                                         ScenarioSpec,
+                                         write_closure_search_spec,
                                          write_demand_build_spec,
                                          write_scenario_spec)
+from traffic_sim.simulation.monthly_search import MonthlySearchPolicy
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import assess_output_fit
 from traffic_sim.simulation.trajectory_contract import (
@@ -160,6 +190,26 @@ OPTIMIZE_SEEDS = 3
 # D2 owns this count; import it so an added/removed experiment condition
 # cannot silently leave the HTTP job timeout stale.
 OPTIMIZE_SIGNAL_CONDITIONS = SIGNAL_CONDITION_COUNT
+# Monthly closure search (Phase 4 step 6). The policy file is the frozen
+# golden artifact — the API never accepts tolerances from the client, so a
+# browser cannot vary what was frozen against the golden benchmark.
+MONTHLY_POLICY_PATH = ROOT / "validation" / "monthly_search_policy_v1.json"
+MONTHLY_SEARCH_ROOT = ROOT / "runs" / "closure-search"
+CLOSURE_SEARCH_SPEC_DIR = ROOT / "runs" / "closure_search_specs"
+# Frozen with the golden monthly benchmark (its workspace's backend
+# provenance records exactly this value); a longer p99 only lengthens
+# warm-up, so this is the conservative choice. Changing it is a policy
+# change and needs a new golden freeze, not a code edit.
+MONTHLY_BASELINE_TRIP_P99_S = 3600
+# Web searches run bounded-exhaustive ONLY: the monthly screening proxy
+# failed its held-out release gate, so no proxy-ranked shortlist may reach
+# the UI. Above this cap the CLI fails with a clear message instead of
+# silently truncating the search space.
+MONTHLY_BOUNDED_EXHAUSTIVE_CAP = 12
+# A monthly search is resumable by design; a timeout here only pauses it
+# (the workspace keeps every completed candidate), so the cap can be
+# generous without risking an unbounded server job.
+MONTHLY_TIMEOUT_S = 4 * 3600
 PORT     = 8000
 
 
@@ -192,6 +242,8 @@ _suggest_lock = threading.Lock()   # guards _suggest_state below
 _suggest_state: dict = {"status": "idle"}
 _optimize_lock = threading.Lock()  # guards _optimize_state below
 _optimize_state: dict = {"status": "idle"}
+_monthly_lock = threading.Lock()   # guards _monthly_state below
+_monthly_state: dict = {"status": "idle"}
 
 # Per-kind live state, one map — the durable job layer below reads a
 # kind's terminal status through this instead of four hardcoded branches.
@@ -200,6 +252,7 @@ _STATE_BY_KIND: dict = {
     "close": (_close_lock, _close_state),
     "suggest": (_suggest_lock, _suggest_state),
     "optimize": (_optimize_lock, _optimize_state),
+    "monthly": (_monthly_lock, _monthly_state),
 }
 
 # There is only one simulation-class job at a time (_sim_lock). Keep the
@@ -868,6 +921,37 @@ def summarize_signal_optimization(result: dict, closure: bool) -> dict:
     }
 
 
+def summarize_monthly_search(result: dict) -> dict:
+    """Curated monthly-search result for the UI.
+
+    Drops the backend's full source-file records (large, server-internal)
+    but keeps its identity digests, keeps the exact selected schedules
+    verbatim (they ARE the step-7 exact-schedule handoff payload), and
+    ALWAYS carries claim_boundary through unchanged — the honesty labels
+    (global_best_claim_allowed / ui_exposure_allowed and their reason) must
+    never be summarized away between the search and the reader."""
+    backend = result.get("simulation_backend") or {}
+    policy = result.get("policy") or {}
+    return {
+        "search_id": result.get("search_id"),
+        "status": result.get("status"),
+        "winner_id": result.get("winner_id"),
+        "tie_ids": result.get("tie_ids", []),
+        "selected_schedules": result.get("selected_schedules", []),
+        "screening": result.get("screening", {}),
+        "robust_decision": result.get("robust_decision"),
+        "policy_id": policy.get("policy_id"),
+        "policy_benchmark_id": policy.get("benchmark_id"),
+        "simulation_backend": {
+            key: backend.get(key)
+            for key in ("kind", "simulation_mode", "sumo_version",
+                        "demand_release_id", "source_digest",
+                        "simulation_source_digest")
+        },
+        "claim_boundary": result.get("claim_boundary"),
+    }
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_DIR), **kwargs)
@@ -964,7 +1048,7 @@ class Handler(SimpleHTTPRequestHandler):
     # (prefetchers, link previews and crawlers follow GETs), and the POST
     # path carries the same-origin CSRF guard above.
     _MUTATING = ("/api/close", "/api/recalibrate", "/api/suggest_closure",
-                 "/api/optimize_signals", "/api/cancel")
+                 "/api/optimize_signals", "/api/monthly_search", "/api/cancel")
 
     def do_GET(self):
         if self.path.startswith("/api/ping"):
@@ -977,6 +1061,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._suggest_closure_status()
         if self.path.startswith("/api/optimize_signals/status"):
             return self._optimize_signals_status()
+        if self.path.startswith("/api/monthly_search/status"):
+            return self._monthly_search_status()
         if self.path.startswith("/api/jobs"):
             return self._jobs()
         if any(self.path.startswith(p) for p in self._MUTATING):
@@ -1006,6 +1092,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(405, {"error": "statusläsning använder GET"})
         if self.path.startswith("/api/optimize_signals"):
             return self._optimize_signals()
+        if self.path.startswith("/api/monthly_search/status"):
+            return self._json(405, {"error": "statusläsning använder GET"})
+        if self.path.startswith("/api/monthly_search"):
+            return self._monthly_search()
         return self._json(404, {"error": "okänd endpoint"})
 
     def _jobs(self) -> None:
@@ -1032,6 +1122,7 @@ class Handler(SimpleHTTPRequestHandler):
         states = {
             "close": (_close_lock, _close_state),
             "recalibrate": (_recal_lock, _recal_state),
+            "monthly": (_monthly_lock, _monthly_state),
         }
         if kind not in states:
             return self._json(400, {"error": "okänd körning att avbryta"})
@@ -1751,6 +1842,157 @@ class Handler(SimpleHTTPRequestHandler):
             state = dict(_optimize_state)
         if state.get("status") == "running":
             state["elapsed_s"] = round(time.time() - state["started_at"])
+        return self._json(200, state)
+
+    def _monthly_search(self) -> None:
+        # Phase 4 step 6 (IMPROVEMENT_PLAN.md "Persistence, API, and UI").
+        # Same async/poll pattern and shared _sim_lock as the other four
+        # simulation jobs. The client supplies ONLY the ClosureSearchSpec
+        # (user intent); the pilot/finalist policy is the server's frozen
+        # golden artifact and screening is bounded-exhaustive, so nothing a
+        # browser sends can widen a claim or vary a frozen tolerance.
+        try:
+            body = self._json_body()
+        except ValueError as exc:
+            return self._json(400, {"error": str(exc)})
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        structured = body.get("closure_search_spec")
+        if structured is None or qs or set(body) != {"closure_search_spec"}:
+            return self._json(400, {"error":
+                "POST-kroppen måste vara exakt "
+                "{\"closure_search_spec\": {...}}"})
+        try:
+            spec = ClosureSearchSpec.from_dict(structured)
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            return self._json(400, {"error": f"ogiltig ClosureSearchSpec: {exc}"})
+        unknown = [e for e in spec.directed_edges if e not in known_edges()]
+        if unknown:
+            return self._json(400, {"error": f"okända kanter: {unknown}"})
+        try:
+            policy = MonthlySearchPolicy.from_dict(
+                json.loads(MONTHLY_POLICY_PATH.read_text(encoding="utf-8")))
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return self._json(500, {"error":
+                "den frusna månadspolicyn kunde inte läsas — se serverloggen",
+                "detail": str(exc)[:200]})
+        if policy.status != "golden_frozen":
+            return self._json(500, {"error":
+                "månadspolicyn är inte golden_frozen — sökning vägras"})
+
+        blocked = simulation_recovery_block()
+        if blocked:
+            return self._json(503, blocked)
+        if not _sim_lock.acquire(blocking=False):
+            return self._json(409, {"error": "en simulering kör redan — vänta"})
+        with _monthly_lock:
+            _monthly_state.clear()
+            _monthly_state.update(status="running",
+                                  search_id=spec.search_id,
+                                  search_content_key=spec.content_key,
+                                  policy_id=policy.policy_id,
+                                  edges=list(spec.directed_edges),
+                                  started_at=time.time())
+        begin_active_job("monthly", {
+            "search_id": spec.search_id,
+            "search_content_key": spec.content_key,
+            "closure_search_spec": spec.to_dict(),
+        })
+        threading.Thread(target=self._run_monthly_search, args=(spec,),
+                         daemon=True).start()
+        return self._json(202, {"status": "started",
+                                "search_id": spec.search_id})
+
+    @staticmethod
+    def _set_monthly(**kw) -> None:
+        with _monthly_lock:
+            _monthly_state.update(**kw)
+
+    def _run_monthly_search(self, spec: ClosureSearchSpec) -> None:
+        try:
+            CLOSURE_SEARCH_SPEC_DIR.mkdir(parents=True, exist_ok=True)
+            spec_path = CLOSURE_SEARCH_SPEC_DIR / (
+                f"{spec.search_id}-{time.strftime('%Y%m%d-%H%M%S')}-"
+                f"{os.urandom(2).hex()}.json")
+            write_closure_search_spec(spec_path, spec)
+            cmd = [sys.executable, "run_monthly_closure_search.py",
+                   "--spec", str(spec_path.resolve()),
+                   "--policy", str(MONTHLY_POLICY_PATH.resolve()),
+                   "--baseline-trip-duration-p99-s",
+                   str(MONTHLY_BASELINE_TRIP_P99_S),
+                   "--screening-mode", "bounded-exhaustive",
+                   "--bounded-exhaustive-cap",
+                   str(MONTHLY_BOUNDED_EXHAUSTIVE_CAP)]
+            res = run_in_new_session(cmd, cwd=str(ROOT),
+                                     timeout=MONTHLY_TIMEOUT_S)
+            if active_job_cancelled("monthly"):
+                # The killed CLI leaves its workspace status "running" with
+                # every completed candidate published — deliberately NOT
+                # finish("cancelled"), which would forbid resuming. POSTing
+                # the same spec again continues from the saved evidence.
+                self._set_monthly(status="cancelled",
+                                  note="arbetsytan är återupptagbar — starta "
+                                       "samma sökning igen för att fortsätta")
+                return
+            if res.returncode != 0:
+                print(res.stdout[-2000:], res.stderr[-2000:])
+                # run_monthly_closure_search.py's own user-facing errors
+                # (over-cap enumeration, failed/cancelled workspace, missing
+                # demand archive) are SystemExit(msg) — surface them
+                # verbatim, same as /api/suggest_closure.
+                tail = res.stderr.strip().splitlines()
+                last_line = tail[-1] if tail else ""
+                msg = last_line if last_line and len(last_line) < 300 else \
+                    "månadssökningen misslyckades — se serverloggen"
+                self._set_monthly(status="error", error=msg)
+                return
+            result_path = (MONTHLY_SEARCH_ROOT / spec.search_id
+                           / "artifacts" / "result.json")
+            try:
+                with open(result_path) as f:
+                    result = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                self._set_monthly(status="error",
+                                  error="resultatfilen skrevs inte — se serverloggen")
+                return
+            self._set_monthly(status="done",
+                              result=summarize_monthly_search(result))
+        except subprocess.TimeoutExpired:
+            self._set_monthly(status="error",
+                              error="månadssökningen nådde tidsgränsen och "
+                                    "pausades — arbetsytan är återupptagbar, "
+                                    "starta samma sökning igen")
+        except Exception as e:
+            print(f"monthly_search: unexpected {type(e).__name__}: {e}")
+            self._set_monthly(status="error",
+                              error=f"oväntat fel — se serverloggen "
+                                    f"({type(e).__name__})")
+        finally:
+            finish_active_job("monthly")
+            _sim_lock.release()
+
+    def _monthly_search_status(self) -> None:
+        with _monthly_lock:
+            state = dict(_monthly_state)
+        if state.get("status") in {"running", "cancelling"}:
+            state["elapsed_s"] = round(time.time() - state["started_at"])
+            # The CLI child persists a resumable progress pointer in its
+            # workspace manifest (atomic replace) — surface it so any tab,
+            # including one opened after the job started, sees which stage
+            # (enumerate/screen/prepare_backend/pilot/finalists/decide/
+            # publish) is running. search_id is contract-validated as a
+            # safe key, so it cannot escape MONTHLY_SEARCH_ROOT.
+            search_id = state.get("search_id")
+            if search_id:
+                manifest_path = (MONTHLY_SEARCH_ROOT / str(search_id)
+                                 / "manifest.json")
+                try:
+                    with open(manifest_path) as f:
+                        manifest = json.load(f)
+                except (OSError, json.JSONDecodeError):
+                    manifest = None
+                if isinstance(manifest, dict) and \
+                        isinstance(manifest.get("progress"), dict):
+                    state["progress"] = manifest["progress"]
         return self._json(200, state)
 
 

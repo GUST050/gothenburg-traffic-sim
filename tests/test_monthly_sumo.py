@@ -123,6 +123,40 @@ def test_archive_identity_and_envelope_are_validated(
     )
 
 
+def test_archive_calibrated_on_another_network_is_rejected(
+        tmp_path, patched_runtime):
+    archive = _archive(tmp_path)
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["sensor_contract"] = {"network_sha256": "0" * 64}
+    (archive / "demand_meta.json").write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match="another SUMO network"):
+        ArchivedDemandSumoRunner(
+            _spec(),
+            archive=archive,
+            baseline_trip_duration_p99_s=1800,
+            study_provenance_key="study",
+            cache_root=tmp_path / "cache",
+        )
+
+
+def test_archive_matching_active_network_is_accepted(
+        tmp_path, patched_runtime):
+    from traffic_sim.core.fingerprint import sha256_file
+    archive = _archive(tmp_path)
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["sensor_contract"] = {
+        "network_sha256": sha256_file(monthly_sumo.rs.NET_PATH)}
+    (archive / "demand_meta.json").write_text(json.dumps(metadata))
+    runner = ArchivedDemandSumoRunner(
+        _spec(),
+        archive=archive,
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    assert runner.matched_baseline_id.startswith("monthly-baseline-")
+
+
 def test_archive_with_wrong_build_key_is_rejected(tmp_path, patched_runtime):
     with pytest.raises(ValueError, match="build key"):
         ArchivedDemandSumoRunner(

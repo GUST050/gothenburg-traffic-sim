@@ -2051,6 +2051,59 @@ retains `global_best_claim_allowed=false` and `ui_exposure_allowed=false`.
 The focused monthly execution gate passes 63 tests; the complete project
 suite passes **1,212 tests with 20 expected skips**.
 
+**Multi-envelope resolver + forecast smoke — 2026-07-19.**  The missing
+resolver exists: `traffic_sim/simulation/monthly_demand.py` groups
+shortlisted schedules by the exact `DemandBuildSpec` of their simulation
+envelope, finds or builds one succeeded immutable archive per envelope,
+freezes the mapping in a release manifest under
+`runs/monthly-demand-releases/`, and routes each candidate to its matched
+`ArchivedDemandSumoRunner`.  A pinned archive that changes after freezing
+fails closed.  `validation/multi_envelope_forecast_smoke_v1.json` records a
+real two-envelope 2027 forecast search (two demand builds + 28 SUMO runs in
+489 s): 07-15 06:00--10:00 was the robust winner and the 07-22 candidate was
+excluded by real teleport/throughput hard gates.  Claim boundary unchanged:
+diagnostic smoke, `global_best_claim_allowed=false`.
+
+**Async API + live-release protection checkpoint (2026-07-19, this
+session).**  Build-order step 6 is implemented: `POST /api/monthly_search`
+(body exactly `{"closure_search_spec": ...}`), `GET
+/api/monthly_search/status` and `POST /api/cancel?kind=monthly` in
+`serve.py`, sharing `_sim_lock` and the durable job records with the other
+four simulation jobs.  The server forces the frozen golden policy file and
+bounded-exhaustive screening; a browser cannot supply tolerances or a
+proxy shortlist (the proxy stays failed/unreleased).  Status polling
+surfaces the CLI child's own persisted workspace progress pointer, so any
+tab sees the live phase; the curated "done" summary always carries the
+result's `claim_boundary` verbatim.  Cancel kills the process group but the
+workspace stays resumable — POSTing the same spec continues from completed
+SUMO evidence.
+
+Two defects found reviewing the resolver slice, both fixed with regression
+tests:
+
+1. **P0 — envelope demand builds clobbered the live release.**  The
+   resolver's automatic `build_sumo_demand.py` runs write THROUGH the live
+   `sumo/` demand products and `web/data/od_matrix.*`; the smoke left the
+   deployed site silently calibrated for 2027-07-22 forecast (committed in
+   9bb3e28).  `monthly_demand.py` now snapshots the runtime release product
+   set before the first missing-envelope build and restores it
+   byte-for-byte afterwards, on success and failure; the live release was
+   repaired to the documented 2025-09-16 historical build
+   (57e3fd904e32776bc481) from its immutable run archive, with
+   scenarios/OD/validation verified coherent.
+2. **P1 — archived routes could run on a different network.**  Demand
+   archives carry no `net.net.xml`, so the runner's network check was
+   vacuous.  It now enforces `demand_meta.json`'s
+   `sensor_contract.network_sha256` against the active `sumo/net.net.xml`
+   whenever the record exists.
+
+Remaining before release: the new untouched monthly held-out set
+(practical-winner recall, regret, failure recall), the step-7 forecast-UI
+exact-schedule handoff, and the browser recovery test.  Until then the API
+result keeps `global_best_claim_allowed=false` and the winner wording stays
+"best among SUMO-verified finalists".  Complete suite after this
+checkpoint: **1,237 tests with 20 expected skips**.
+
 ### Final acceptance gate
 
 - The displayed schedule is byte-for-byte derivable from the immutable

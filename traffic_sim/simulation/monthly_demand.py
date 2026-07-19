@@ -14,6 +14,7 @@ import dataclasses
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -49,6 +50,28 @@ _REQUIRED_ARCHIVE_FILES = (
     "calibrated.rou.xml",
     "calibrated_v1.rou.xml",
     "calibrated_v2.rou.xml",
+)
+# The tracked demand builder writes THROUGH the live release paths (sumo/
+# demand products, web/data OD export) even when it is only materializing a
+# closure-envelope archive.  A monthly search must never change what the
+# deployed site simulates (2026-07-19: two smoke envelope builds silently
+# left the live site calibrated for 2027-07-22), so every path a consumer
+# reads at scenario time is snapshotted before the first missing-envelope
+# build and restored byte-for-byte afterwards, on success and on failure.
+# Diagnostic intermediates (candidate pools, fit reports) are deliberately
+# not restored: nothing reads them at runtime and the next tracked build
+# rewrites them; the runtime contract below is what defines the release.
+LIVE_DEMAND_RELEASE_PRODUCTS = (
+    Path("sumo") / "demand_meta.json",
+    Path("sumo") / "demand_build_spec.json",
+    Path("sumo") / "calibrated.rou.xml",
+    Path("sumo") / "calibrated_v1.rou.xml",
+    Path("sumo") / "calibrated_v2.rou.xml",
+    Path("sumo") / "calibrated.agents.json",
+    Path("sumo") / "calibrated_v1.agents.json",
+    Path("sumo") / "calibrated_v2.agents.json",
+    Path("web") / "data" / "od_matrix.json",
+    Path("web") / "data" / "od_matrix.csv",
 )
 
 
@@ -185,6 +208,58 @@ def find_demand_archives(
     return tuple(matches)
 
 
+def snapshot_live_demand_release(
+    *,
+    root: Path = _PROJECT_ROOT,
+    products: Sequence[Path] = LIVE_DEMAND_RELEASE_PRODUCTS,
+) -> dict[str, Any]:
+    """Copy the live release product set aside before an envelope build."""
+    directory = Path(tempfile.mkdtemp(prefix="live-demand-release-"))
+    entries: list[dict[str, Any]] = []
+    try:
+        for index, relative in enumerate(products):
+            source = Path(root) / relative
+            saved: str | None = None
+            if source.is_file():
+                saved = f"{index:03}-{source.name}"
+                shutil.copy2(source, directory / saved)
+            entries.append({"relative": str(relative), "saved": saved})
+    except BaseException:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
+    return {"root": Path(root), "directory": directory, "entries": entries}
+
+
+def restore_live_demand_release(snapshot: Mapping[str, Any]) -> None:
+    """Return every live release product to its snapshotted bytes.
+
+    A product that did not exist at snapshot time is removed again: a box
+    with no active release must not gain a half-labelled one as a side
+    effect of a monthly search.
+    """
+    directory = Path(snapshot["directory"])
+    root = Path(snapshot["root"])
+    for entry in snapshot["entries"]:
+        target = root / str(entry["relative"])
+        saved = entry["saved"]
+        if saved is None:
+            target.unlink(missing_ok=True)
+            continue
+        source = directory / str(saved)
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"live demand release snapshot is incomplete: {source}"
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(target.name + ".restore.tmp")
+        try:
+            shutil.copy2(source, temporary)
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    shutil.rmtree(directory, ignore_errors=True)
+
+
 def build_demand_archive(required: DemandBuildSpec) -> None:
     """Run the tracked demand builder for one missing envelope."""
     with tempfile.TemporaryDirectory(prefix="monthly-demand-spec-") as raw:
@@ -229,6 +304,8 @@ class MonthlyDemandResolverRunner:
         build_missing: bool = True,
         demand_builder: DemandBuilder = build_demand_archive,
         runner_factory: RunnerFactory = ArchivedDemandSumoRunner,
+        live_release_root: Path = _PROJECT_ROOT,
+        live_release_products: Sequence[Path] = LIVE_DEMAND_RELEASE_PRODUCTS,
     ) -> None:
         self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
         if (
@@ -249,6 +326,8 @@ class MonthlyDemandResolverRunner:
         self.build_missing = bool(build_missing)
         self.demand_builder = demand_builder
         self.runner_factory = runner_factory
+        self.live_release_root = Path(live_release_root)
+        self.live_release_products = tuple(live_release_products)
         self._schedule_build_keys: dict[str, str] = {}
         self._runners: dict[str, ArchivedDemandSumoRunner] = {}
         self._release: dict[str, Any] | None = None
@@ -318,21 +397,31 @@ class MonthlyDemandResolverRunner:
         required_by_key: Mapping[str, DemandBuildSpec],
     ) -> dict[str, Any]:
         entries = []
-        for key in sorted(required_by_key):
-            required = required_by_key[key]
-            matches = find_demand_archives(self.runs_root, required)
-            if not matches and self.build_missing:
-                self.demand_builder(required)
+        live_snapshot: dict[str, Any] | None = None
+        try:
+            for key in sorted(required_by_key):
+                required = required_by_key[key]
                 matches = find_demand_archives(self.runs_root, required)
-            if not matches:
-                raise FileNotFoundError(
-                    f"no succeeded immutable demand archive for "
-                    f"{required.build_key} ({required.start_date}, "
-                    f"{required.days} day(s), {required.source}); run "
-                    f"build_sumo_demand.py with this closure-envelope "
-                    f"DemandBuildSpec or allow automatic builds"
-                )
-            entries.append(matches[0])
+                if not matches and self.build_missing:
+                    if live_snapshot is None:
+                        live_snapshot = snapshot_live_demand_release(
+                            root=self.live_release_root,
+                            products=self.live_release_products,
+                        )
+                    self.demand_builder(required)
+                    matches = find_demand_archives(self.runs_root, required)
+                if not matches:
+                    raise FileNotFoundError(
+                        f"no succeeded immutable demand archive for "
+                        f"{required.build_key} ({required.start_date}, "
+                        f"{required.days} day(s), {required.source}); run "
+                        f"build_sumo_demand.py with this closure-envelope "
+                        f"DemandBuildSpec or allow automatic builds"
+                    )
+                entries.append(matches[0])
+        finally:
+            if live_snapshot is not None:
+                restore_live_demand_release(live_snapshot)
         release = {
             "schema_version": SCHEMA_VERSION,
             "kind": "monthly_demand_release",

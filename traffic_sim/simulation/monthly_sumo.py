@@ -191,6 +191,22 @@ class ArchivedDemandSumoRunner:
             and sha256_file(archive_net) != sha256_file(rs.NET_PATH)
         ):
             raise ValueError("demand archive network differs from active SUMO net")
+        # Demand archives do not carry net.net.xml, so the file check above
+        # is usually vacuous — but demand_meta.json records the exact
+        # network the calibration constrained against.  Simulating archived
+        # routes on a different active network would silently break edge
+        # identity, so this is a hard gate whenever the record exists.
+        recorded_network = (
+            self.metadata.get("sensor_contract") or {}
+        ).get("network_sha256")
+        if (
+            recorded_network is not None
+            and recorded_network != sha256_file(rs.NET_PATH)
+        ):
+            raise ValueError(
+                "demand archive was calibrated against another SUMO network "
+                "than the active sumo/net.net.xml"
+            )
         if (
             isinstance(seed_workers, bool)
             or not isinstance(seed_workers, int)
