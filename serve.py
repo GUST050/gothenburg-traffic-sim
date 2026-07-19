@@ -727,12 +727,22 @@ def summarize_suggestion(result: dict) -> dict:
     simulated vs N candidate windows total is always shown, so a small
     top-k is visibly a small top-k, not silently presented as exhaustive."""
     top_k = result["top_k"]
+    decision = result.get("robust_decision")
+    decision_stats = {
+        item["candidate_id"]: item
+        for item in (decision or {}).get("candidates", [])
+    }
+    winner_id = (decision or {}).get("winner_id")
+    tie_ids = set((decision or {}).get("tie_ids", []))
     candidates = []
     for s in result["simulated"]:
         w = s["window"]
         interval = s["delta_time_loss_interval"]
         feasibility = s.get("feasibility")
+        candidate_id = f"w{w['begin_s']}"
+        robust = decision_stats.get(candidate_id, {})
         candidates.append({
+            "candidate_id": candidate_id,
             "begin_s": w["begin_s"], "end_s": w["end_s"],
             "proxy_rank": w["proxy_rank"],
             "in_proxy_top_k": w["proxy_rank"] < top_k,
@@ -751,6 +761,11 @@ def summarize_suggestion(result: dict) -> dict:
             "max_queue_vehicles": s["metrics"]["max_queue_vehicles"],
             "queue_delta": ((feasibility.get("queue") or {}).get("delta")
                             if isinstance(feasibility, dict) else None),
+            "evidence_level": s.get("evidence_level", "legacy"),
+            "robust_upper_95_s": robust.get("robust_upper_95_s"),
+            "worst_variant": robust.get("worst_variant"),
+            "is_robust_winner": candidate_id == winner_id,
+            "is_robust_tie": candidate_id in tie_ids,
         })
     candidates.sort(key=lambda c: c["proxy_rank"])
     return {
@@ -766,6 +781,11 @@ def summarize_suggestion(result: dict) -> dict:
         "validation": result["validation"],
         "epoch_sim": result["epoch_sim"],
         "demand_signature": result["demand_signature"],
+        "pilot_selection": result.get("pilot_selection"),
+        "robust_decision": decision,
+        "claim_boundary": result.get("claim_boundary", {
+            "global_best_claim_allowed": False,
+        }),
         "candidates": candidates,
     }
 
@@ -1409,6 +1429,7 @@ class Handler(SimpleHTTPRequestHandler):
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         structured = body.get("scenario_spec")
         spec: ScenarioSpec | None = None
+        structured_seed_count: int | None = None
         if structured is not None:
             if qs:
                 return self._json(400, {"error":
@@ -1420,6 +1441,20 @@ class Handler(SimpleHTTPRequestHandler):
             if spec.closures:
                 return self._json(400, {"error":
                                         "stängningstidssökningen kräver en bas-ScenarioSpec"})
+            structured_seed_count = len(spec.seed_set)
+            expected_mapping = {
+                1000 + index: ("q50", "q10", "q90")[index % 3]
+                for index in range(structured_seed_count)
+            }
+            if (
+                spec.simulation_mode != "meso"
+                or structured_seed_count < 12
+                or structured_seed_count % 3
+                or dict(spec.demand_variant_mapping) != expected_mapping
+            ):
+                return self._json(400, {"error":
+                    "robust stängningstidssökning kräver meso och minst 12 "
+                    "kanoniskt parade q50/q10/q90-seeds"})
             raw_edges = body.get("edges", [])
             edges = [str(edge) for edge in raw_edges] if isinstance(raw_edges, list) else []
             value = lambda name, default=None: body.get(name, default)
@@ -1469,9 +1504,22 @@ class Handler(SimpleHTTPRequestHandler):
         extra_bad = int_param("extra_bad", 2, 0, 5)
         if extra_bad is None:
             return self._json(400, {"error": "extra_bad måste vara ett heltal 0-5"})
-        seeds = int_param("seeds", 3, 1, 5)
-        if seeds is None:
-            return self._json(400, {"error": "seeds måste vara ett heltal 1-5"})
+        seeds = int_param(
+            "seeds",
+            structured_seed_count or 12,
+            12,
+            24,
+        )
+        if (
+            seeds is None
+            or seeds % 3
+            or (
+                structured_seed_count is not None
+                and seeds != structured_seed_count
+            )
+        ):
+            return self._json(400, {"error":
+                                    "seeds måste vara 12, 15, 18, 21 eller 24"})
 
         blocked = simulation_recovery_block()
         if blocked:

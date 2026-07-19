@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -152,6 +153,23 @@ class TestRobustFinalistDecision:
         json.dumps(payload, allow_nan=False)
         assert payload["policy"]["initial_repetitions"] == 4
         assert payload["policy"]["absolute_precision_floor_s"] == 10.0
+
+    def test_real_gothenburg_smoke_record_remains_fail_closed(self):
+        record = json.loads(
+            Path(
+                "validation/robust_closure_search_smoke_v1.json"
+            ).read_text()
+        )
+        assert record["status"] == "passing"
+        assert record["decision"]["status"] == "unique_winner"
+        assert record["decision"]["matched_seed_count"] == 12
+        assert record["decision"]["pairs_per_variant"] == 4
+        assert record["decision"]["precision_met"] is True
+        assert record["claim_boundary"]["best_result_available"] is True
+        assert (
+            record["claim_boundary"]["global_best_claim_allowed"]
+            is False
+        )
 
     def test_worst_variant_upper_bound_is_the_primary_objective(self):
         evidence = [

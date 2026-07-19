@@ -1336,6 +1336,15 @@
         async function startSuggestJob(edges, durationHours) {
           const scenario_spec = await baseScenarioSpec();
           scenario_spec.objective_profile = 'closure-search';
+          // Robust search contract: one matched pilot seed per q50/q10/q90,
+          // then four repetitions per variant for the finalist decision.
+          // The complete seed/variant identity travels in ScenarioSpec.
+          scenario_spec.seed_set = Array.from(
+            { length: 12 }, (_, index) => 1000 + index);
+          scenario_spec.demand_variant_mapping = Object.fromEntries(
+            scenario_spec.seed_set.map((seed, index) => [
+              String(seed), ['q50', 'q10', 'q90'][index % 3],
+            ]));
           const res = await fetch('/api/suggest_closure', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1449,6 +1458,42 @@
           metaLines.push(`Baslinje: <b>${Math.round(summary.baseline_total_time_loss_s / 60)} ` +
                          `min total väntetid</b> över ${summary.baseline_trip_count} resor ` +
                          `(${summary.seeds} seeds).`);
+          const decision = summary.robust_decision;
+          if (decision?.status === 'unique_winner') {
+            const winner = summary.candidates.find(c => c.is_robust_winner);
+            if (winner) {
+              metaLines.push(
+                `<b>Bäst bland SUMO-verifierade finalister: ` +
+                `${fmtHHMM(summary.epoch_sim, winner.begin_s)}–` +
+                `${fmtHHMM(summary.epoch_sim, winner.end_s)}</b>.`);
+            } else {
+              metaLines.push(
+                `<span id="suggest-results-warn">Vinnarens kördata saknas; ` +
+                `resultatet visas inte som en rekommendation.</span>`);
+            }
+          } else if (decision?.status === 'tie') {
+            metaLines.push(
+              `<b>Ingen ensam vinnare:</b> ${decision.tie_ids.length} tider är ` +
+              `praktiskt likvärdiga.`);
+          } else if (decision?.status === 'no_viable') {
+            metaLines.push(
+              `<span id="suggest-results-warn">Ingen säker genomförbar ` +
+              `stängning hittades.</span>`);
+          } else if (decision) {
+            metaLines.push(
+              `<span id="suggest-results-warn">Ingen tydlig vinnare ännu; ` +
+              `resultatet är statistiskt osäkert.</span>`);
+          } else {
+            metaLines.push(
+              `<span id="suggest-results-warn">Pilotgrinden kunde inte gå ` +
+              `vidare till robusta finalister.</span>`);
+          }
+          if (!summary.claim_boundary?.global_best_claim_allowed) {
+            metaLines.push(
+              `<span id="suggest-results-warn">Resultatet gäller de ` +
+              `SUMO-verifierade finalisterna; den nya månadsgrinden är ännu ` +
+              `inte godkänd för påståendet “globalt bäst”.</span>`);
+          }
           const det = summary.detour_availability;
           if (det.score === null) {
             metaLines.push(`<span id="suggest-results-warn">⚠ Vägen har ingen anslutning ` +
@@ -1509,8 +1554,14 @@
               tag.className = 'sr-tag disq';
               tag.textContent = c.disqualification_reasons.join(', ');
               statusTd.appendChild(tag);
+            } else if (c.is_robust_winner) {
+              statusTd.textContent = 'Bäst';
+            } else if (c.is_robust_tie) {
+              statusTd.textContent = 'Likvärdig';
+            } else if (c.evidence_level === 'robust_finalist') {
+              statusTd.textContent = 'Finalist';
             } else {
-              statusTd.textContent = 'OK';
+              statusTd.textContent = 'Pilot';
             }
 
             const loadTd = document.createElement('td');

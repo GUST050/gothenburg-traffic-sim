@@ -926,6 +926,32 @@ class TestSummarizeSuggestion:
         ranks = [c["proxy_rank"] for c in summary["candidates"]]
         assert ranks == sorted(ranks)
 
+    def test_exposes_robust_winner_and_claim_boundary(self):
+        result = _fake_suggest_result(
+            robust_decision={
+                "status": "unique_winner",
+                "winner_id": "w0",
+                "tie_ids": [],
+                "candidates": [{
+                    "candidate_id": "w0",
+                    "robust_upper_95_s": 142.0,
+                    "worst_variant": "q90",
+                }],
+            },
+            claim_boundary={
+                "best_result_available": True,
+                "best_result_scope": "sumo_verified_finalists",
+                "global_best_claim_allowed": False,
+            },
+        )
+        result["simulated"][0]["evidence_level"] = "robust_finalist"
+        summary = serve.summarize_suggestion(result)
+        winner = summary["candidates"][0]
+        assert winner["is_robust_winner"] is True
+        assert winner["robust_upper_95_s"] == 142.0
+        assert winner["worst_variant"] == "q90"
+        assert summary["claim_boundary"]["global_best_claim_allowed"] is False
+
 
 class TestSuggestClosure:
     def test_missing_edges_is_400(self, base_url):
@@ -1029,12 +1055,18 @@ class TestSuggestClosure:
         assert final["result"]["candidates"][0]["delta_time_loss_median_s"] == 500.0
 
     def test_structured_base_spec_is_passed_to_search_tool(self, base_url, monkeypatch):
+        seed_set = list(range(1000, 1012))
         spec = {
             "scenario_id": "normal-api-spec",
             "demand_build_id": "demand-a",
             "network_build_id": "network-b",
             "start_time": "2025-09-16T00:00:00",
             "end_time": "2025-09-17T00:00:00",
+            "seed_set": seed_set,
+            "demand_variant_mapping": {
+                str(seed): ("q50", "q10", "q90")[index % 3]
+                for index, seed in enumerate(seed_set)
+            },
         }
         captured = {}
 
@@ -1057,6 +1089,26 @@ class TestSuggestClosure:
             lambda: get_json(f"{base_url}/api/suggest_closure/status")[1]["status"] == "done")
         assert "--scenario-spec" in captured["cmd"]
         assert captured["spec"]["scenario_id"] == "normal-api-spec"
+
+    def test_structured_three_seed_search_is_rejected_before_start(
+            self, base_url):
+        spec = {
+            "scenario_id": "old-three-seed-search",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+        }
+        status, body = post_json_or_error(
+            f"{base_url}/api/suggest_closure",
+            payload={
+                "scenario_spec": spec,
+                "edges": ["a_b_0"],
+                "duration_hours": 6,
+            },
+        )
+        assert status == 400
+        assert "minst 12" in body["error"]
 
     def test_failed_search_surfaces_the_tool_own_error_message(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",

@@ -57,9 +57,20 @@ from scipy import stats as scipy_stats
 from traffic_sim.simulation import metrics as cm
 import run_scenario as rs
 from traffic_sim.core.contracts import load_scenario_spec
+from traffic_sim.simulation.finalist_decision import (
+    FinalistPolicy,
+    decide_finalists,
+    paired_candidate_evidence,
+)
+from traffic_sim.simulation.pilot_selection import (
+    PilotPolicy,
+    select_pilot_finalists,
+)
 
 SCT_PREFIX = "sct_"   # every scratch file this tool writes into sumo/
 BASELINE_SCENARIO = rs.OUT_DIR / "baseline.json"
+ROBUST_VARIANT_LABELS = ("q50", "q10", "q90")
+PILOT_SEEDS = 3
 
 
 def load_baseline_flows(demand_sig: str, n_intervals: int) -> dict[str, np.ndarray]:
@@ -660,8 +671,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--extra-bad", type=int, default=2,
                    help="How many proxy-worst windows to simulate as negative "
                         "controls (default 2).")
-    p.add_argument("--seeds", type=int, default=3,
-                   help="Monte Carlo seeds per simulated candidate (default 3).")
+    p.add_argument("--seeds", type=int, default=12,
+                   help="Matched finalist SUMO seeds (default 12 = 4 per "
+                        "q10/q50/q90; must be a multiple of 3 and at least 12).")
+    p.add_argument("--pilot-retention-band-s", type=float, default=300.0,
+                   help="Provisional aggregate timeLoss band retained after "
+                        "the 3-run pilot (default 300 s; stored in output).")
+    p.add_argument("--practical-equivalence-s", type=float, default=300.0,
+                   help="Provisional finalist equivalence tolerance (default 300 s).")
+    p.add_argument("--absolute-precision-floor-s", type=float, default=300.0,
+                   help="Provisional finalist CI precision floor (default 300 s).")
     p.add_argument("--seed-workers", type=int, default=1,
                    help="Concurrent SUMO seeds per candidate (default 1; benchmark first).")
     p.add_argument("--micro", action="store_true",
@@ -705,6 +724,26 @@ def main() -> None:
             sys.exit("closure-time search ScenarioSpec must be a base study without closures")
         args.seeds = len(base_spec.seed_set)
         args.micro = base_spec.simulation_mode == "micro"
+        expected_mapping = {
+            1000 + index: ROBUST_VARIANT_LABELS[index % 3]
+            for index in range(args.seeds)
+        }
+        if dict(base_spec.demand_variant_mapping) != expected_mapping:
+            sys.exit(
+                "closure-time search ScenarioSpec must use canonical matched "
+                "seed mapping 1000..N across q50/q10/q90"
+            )
+    if args.micro:
+        sys.exit("robust closure-time search requires mesoscopic simulation")
+    if args.seeds < 12 or args.seeds % 3:
+        sys.exit("--seeds must be a multiple of 3 and at least 12")
+    for label, value in (
+        ("--pilot-retention-band-s", args.pilot_retention_band_s),
+        ("--practical-equivalence-s", args.practical_equivalence_s),
+        ("--absolute-precision-floor-s", args.absolute_precision_floor_s),
+    ):
+        if not math.isfinite(value) or value <= 0:
+            sys.exit(f"{label} must be finite and above zero")
 
     prior, names = rs.load_geojson_meta()
     for e in args.edge:
@@ -738,6 +777,10 @@ def main() -> None:
              f"regardless of which window is chosen.")
 
     variants = rs.demand_variants(meta)
+    if len(variants) != 3:
+        sys.exit(
+            "robust closure-time search requires q50/q10/q90 demand variants"
+        )
     adj = rs.build_edge_graph(set(args.edge))
     freeflow = rs.edge_freeflow_times()
     rerouter_edges = rs.edges_near(args.edge, rs.REROUTER_RADIUS_M)
@@ -766,13 +809,17 @@ def main() -> None:
     try:
         print("  running baseline (metrics) …")
         t0 = time.time()
+        baseline_pilot_records: list[dict[str, Any]] = []
         baseline_metrics, _, _, baseline_per_seed = simulate_closure(
             name="baseline", closures=None, close_edges=[], variants=variants,
-            seeds=args.seeds, n_intervals=n_intervals, duration_s=total_duration_s,
+            seeds=PILOT_SEEDS, n_intervals=n_intervals,
+            duration_s=total_duration_s,
             home=home, micro=args.micro, adj=None, freeflow=None, scratch=scratch,
             rerouter_edges=rerouter_edges,
-            work_dir=batch_workspace / "baseline",
-            seed_workers=args.seed_workers)
+            work_dir=batch_workspace / "baseline-pilot",
+            seed_workers=args.seed_workers,
+            variant_labels=ROBUST_VARIANT_LABELS,
+            replication_records=baseline_pilot_records)
         print(f"  baseline done ({time.time() - t0:.0f}s): "
              f"timeLoss={baseline_metrics.total_time_loss_s:.0f}s, "
              f"{baseline_metrics.trip_count} trips")
@@ -787,14 +834,17 @@ def main() -> None:
             closures = [{"edge_id": e, "begin_s": w["begin_s"], "end_s": w["end_s"]}
                        for e in args.edge]
             t0 = time.time()
+            pilot_records: list[dict[str, Any]] = []
             metrics, n_trunc, n_drop, candidate_per_seed = simulate_closure(
                 name=name, closures=closures, close_edges=args.edge,
-                variants=variants, seeds=args.seeds, n_intervals=n_intervals,
+                variants=variants, seeds=PILOT_SEEDS, n_intervals=n_intervals,
                 duration_s=total_duration_s, home=home, micro=args.micro,
                 adj=adj, freeflow=freeflow, scratch=scratch,
                 rerouter_edges=rerouter_edges,
-                work_dir=batch_workspace / name,
-                seed_workers=args.seed_workers)
+                work_dir=batch_workspace / f"pilot-{name}",
+                seed_workers=args.seed_workers,
+                variant_labels=ROBUST_VARIANT_LABELS,
+                replication_records=pilot_records)
             comparison = cm.compare_metrics(baseline_metrics, metrics)
             interval = delta_time_loss_interval(candidate_per_seed, baseline_per_seed)
             feasibility = closure_feasibility(
@@ -812,14 +862,184 @@ def main() -> None:
                 "delta_time_loss_interval": interval,
                 "feasibility": feasibility,
                 "truncated_vehicles": n_trunc, "dropped_vehicles": n_drop,
+                "pilot_replications": pilot_records,
+                "pilot_comparison": dataclasses.asdict(comparison),
+                "pilot_feasibility": feasibility,
+                "evidence_level": "meso_pilot",
             })
 
+        # ── Matched multi-fidelity decision ────────────────────────────
+        provenance_key = (
+            f"{demand_sig}:meso:{','.join(sorted(args.edge))}:"
+            f"{total_duration_s}"
+        )
+        pilot_baseline_id = f"pilot-{demand_sig}-1000-1002"
+        pilot_evidence = [
+            paired_candidate_evidence(
+                f"w{item['window']['begin_s']}",
+                baseline_records=baseline_pilot_records,
+                candidate_records=item["pilot_replications"],
+                matched_baseline_id=pilot_baseline_id,
+                provenance_key=provenance_key,
+                hard_failures=item["feasibility"]["hard_failures"],
+            )
+            for item in simulated
+        ]
+        pilot_policy = PilotPolicy(
+            retention_band_s=args.pilot_retention_band_s,
+            repetitions_per_variant=1,
+            minimum_finalists=3,
+            maximum_finalists=12,
+        )
+        pilot_selection = select_pilot_finalists(
+            pilot_evidence,
+            pilot_policy,
+        )
+        print(
+            f"  pilot status={pilot_selection.status}; "
+            f"finalists={len(pilot_selection.selected_ids)}"
+        )
+
+        robust_decision = None
+        decision_baseline_metrics = baseline_metrics
+        decision_baseline_per_seed = baseline_per_seed
+        if pilot_selection.status == "ready":
+            final_baseline_records: list[dict[str, Any]] = []
+            print(
+                f"  running {args.seeds}-seed matched finalist baseline …"
+            )
+            (
+                decision_baseline_metrics,
+                _,
+                _,
+                decision_baseline_per_seed,
+            ) = simulate_closure(
+                name="baseline-final",
+                closures=None,
+                close_edges=[],
+                variants=variants,
+                seeds=args.seeds,
+                n_intervals=n_intervals,
+                duration_s=total_duration_s,
+                home=home,
+                micro=False,
+                adj=None,
+                freeflow=None,
+                scratch=scratch,
+                rerouter_edges=rerouter_edges,
+                work_dir=batch_workspace / "baseline-final",
+                seed_workers=args.seed_workers,
+                variant_labels=ROBUST_VARIANT_LABELS,
+                replication_records=final_baseline_records,
+            )
+            by_candidate_id = {
+                f"w{item['window']['begin_s']}": item
+                for item in simulated
+            }
+            final_evidence = []
+            for position, candidate_id in enumerate(
+                pilot_selection.selected_ids,
+                start=1,
+            ):
+                item = by_candidate_id[candidate_id]
+                window = item["window"]
+                closures = [
+                    {
+                        "edge_id": edge,
+                        "begin_s": window["begin_s"],
+                        "end_s": window["end_s"],
+                    }
+                    for edge in args.edge
+                ]
+                final_records: list[dict[str, Any]] = []
+                print(
+                    f"    finalist [{position}/"
+                    f"{len(pilot_selection.selected_ids)}] "
+                    f"proxy_rank={window['proxy_rank']}"
+                )
+                metrics, n_trunc, n_drop, per_seed = simulate_closure(
+                    name=f"final-{candidate_id}",
+                    closures=closures,
+                    close_edges=args.edge,
+                    variants=variants,
+                    seeds=args.seeds,
+                    n_intervals=n_intervals,
+                    duration_s=total_duration_s,
+                    home=home,
+                    micro=False,
+                    adj=adj,
+                    freeflow=freeflow,
+                    scratch=scratch,
+                    rerouter_edges=rerouter_edges,
+                    work_dir=batch_workspace / f"final-{candidate_id}",
+                    seed_workers=args.seed_workers,
+                    variant_labels=ROBUST_VARIANT_LABELS,
+                    replication_records=final_records,
+                )
+                interval = delta_time_loss_interval(
+                    per_seed,
+                    decision_baseline_per_seed,
+                )
+                feasibility = closure_feasibility(
+                    metrics,
+                    decision_baseline_metrics,
+                    detour=diagnostic,
+                )
+                feasibility["paired_delta_time_loss"] = interval
+                item.update({
+                    "metrics": dataclasses.asdict(metrics),
+                    "comparison": dataclasses.asdict(
+                        cm.compare_metrics(
+                            decision_baseline_metrics,
+                            metrics,
+                        )
+                    ),
+                    "delta_time_loss_interval": interval,
+                    "feasibility": feasibility,
+                    "truncated_vehicles": n_trunc,
+                    "dropped_vehicles": n_drop,
+                    "final_replications": final_records,
+                    "evidence_level": "robust_finalist",
+                })
+                final_evidence.append(
+                    paired_candidate_evidence(
+                        candidate_id,
+                        baseline_records=final_baseline_records,
+                        candidate_records=final_records,
+                        matched_baseline_id=(
+                            f"final-{demand_sig}-1000-"
+                            f"{999 + args.seeds}"
+                        ),
+                        provenance_key=provenance_key,
+                        hard_failures=feasibility["hard_failures"],
+                    )
+                )
+            robust_decision = decide_finalists(
+                final_evidence,
+                FinalistPolicy(
+                    absolute_precision_floor_s=(
+                        args.absolute_precision_floor_s
+                    ),
+                    practical_equivalence_s=args.practical_equivalence_s,
+                    initial_repetitions=4,
+                    max_repetitions=args.seeds // 3,
+                ),
+            )
+            print(f"  robust decision={robust_decision.status}")
+
         # ── Validate the proxy ───────────────────────────────────────────
-        eligible = [s for s in simulated if s["feasibility"]["eligible"]]
+        eligible = [
+            item
+            for item in simulated
+            if item["pilot_feasibility"]["eligible"]
+        ]
         correlation = None
         if len(eligible) >= 3:
             proxy_ranks = [s["window"]["proxy_rank"] for s in eligible]
-            deltas = [s["comparison"]["delta_time_loss_s"] for s in eligible]
+            deltas = [
+                item["pilot_comparison"]["delta_time_loss_s"]
+                for item in eligible
+            ]
             rho, pval = scipy_stats.spearmanr(proxy_ranks, deltas)
             correlation = {"spearman_rho": float(rho), "p_value": float(pval),
                            "n": len(eligible),
@@ -836,21 +1056,30 @@ def main() -> None:
             print("  fewer than 3 non-disqualified simulated candidates — "
                  "skipping correlation check")
 
-        best = min(eligible, key=lambda s: s["comparison"]["delta_time_loss_s"],
-                  default=None)
+        best = None
+        if robust_decision is not None and robust_decision.status == "unique_winner":
+            best = next(
+                (
+                    item
+                    for item in simulated
+                    if f"w{item['window']['begin_s']}"
+                    == robust_decision.winner_id
+                ),
+                None,
+            )
         best_in_topk = (best is not None and
                         best["window"]["proxy_rank"] < args.top_k)
         if best is not None:
             flag = "" if best_in_topk else "  (OUTSIDE proxy top-k — widen --top-k)"
-            print(f"  simulated best: begin={best['window']['begin_s']}s "
+            print(f"  robust finalist best: begin={best['window']['begin_s']}s "
                  f"ΔtimeLoss={best['comparison']['delta_time_loss_s']:+.0f}s{flag}")
 
         result = {
-            "method": ("IMPROVEMENT_PLAN.md Phase C4: exhaustive feasible windows, "
-                       "Spearman-validated"
-                       if args.exhaustive else
-                       "IMPROVEMENT_PLAN.md Phase C4: proxy-ranked hourly windows, "
-                       "top-k + controls simulated, Spearman-validated"),
+            "method": (
+                "matched multi-fidelity closure search: analytical ordering, "
+                "q10/q50/q90 mesoscopic pilot, robust simultaneous-bound "
+                "finalist decision"
+            ),
             "edges": args.edge, "streets": streets,
             "duration_hours": args.duration_hours, "slide_hours": args.slide_hours,
             "total_duration_s": total_duration_s, "n_candidate_windows": len(windows),
@@ -862,10 +1091,29 @@ def main() -> None:
             "epoch_sim": meta["epoch_sim"],
             "base_scenario_spec": (base_spec.to_dict() if base_spec is not None else None),
             "detour_availability": diagnostic,
-            "baseline_metrics": dataclasses.asdict(baseline_metrics),
-            "baseline_per_seed_time_loss_s": baseline_per_seed,
+            "baseline_metrics": dataclasses.asdict(decision_baseline_metrics),
+            "baseline_per_seed_time_loss_s": decision_baseline_per_seed,
             "proxy_candidates": ranked,
             "simulated": simulated,
+            "pilot_selection": pilot_selection.to_dict(),
+            "robust_decision": (
+                robust_decision.to_dict()
+                if robust_decision is not None
+                else None
+            ),
+            "claim_boundary": {
+                "best_result_available": best is not None,
+                "best_result_scope": (
+                    "sumo_verified_finalists"
+                    if best is not None
+                    else None
+                ),
+                "global_best_claim_allowed": False,
+                "ui_result_allowed": robust_decision is not None,
+                "reason": (
+                    "new monthly held-out release gate has not passed"
+                ),
+            },
             "validation": {
                 "correlation": correlation,
                 "simulated_best_in_proxy_top_k": best_in_topk if best else None,

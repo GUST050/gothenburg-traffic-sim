@@ -1972,6 +1972,35 @@ candidate returns `no_viable`.  The real v1 failure case
 and the full suite passes 1,190 tests with 20 expected skips.  The golden
 policy freeze and new held-out SUMO outcomes remain the next stop gate.
 
+**Runnable decision checkpoint 2026-07-19.**  The existing active-demand
+closure-time path now returns the same fail-closed robust result categories
+instead of choosing the minimum of three noisy medians.  It runs a matched
+three-seed q50/q10/q90 pilot, removes candidates that fail closure-integrity
+or health gates, then evaluates retained finalists with 12 matched SUMO
+runs (four per variant).  Only `finalist_decision.py` may emit
+`unique_winner`; the API and web UI otherwise show `tie`, `inconclusive`,
+`no_viable`, or that the pilot could not advance.  Structured web requests
+must be mesoscopic and carry the canonical 1000--1011 seed/variant mapping.
+
+The frozen real smoke record
+`validation/robust_closure_search_smoke_v1.json` closes the executable slice:
+on the 2025-09-16 demand release and edge `26842526_96527131_0`, three
+four-hour candidates were run in SUMO 1.27.1.  Two failed health/integrity
+gates; 00:00--04:00 was the robust winner among the verified finalists after
+12 matched runs, with q90 the worst demand variant and a 142.96 s
+simultaneous upper bound.  The record deliberately retains
+`global_best_claim_allowed=false`.  It validates the implementation and
+result honesty, not the future monthly scheduling policy.
+
+The next stop gate is unchanged: build the resumable multi-day monthly
+orchestrator, freeze its pilot/finalist tolerances and repetition cap against
+a named golden monthly benchmark, then evaluate once on a newly frozen
+untouched held-out set.  Until that passes, the product may return “best
+among SUMO-verified finalists” for the active demand window but may not claim
+the globally best work period for a month.  This checkpoint passes 183
+focused search/API tests and the complete suite passes 1,193 tests with 20
+expected skips.
+
 ### Final acceptance gate
 
 - The displayed schedule is byte-for-byte derivable from the immutable

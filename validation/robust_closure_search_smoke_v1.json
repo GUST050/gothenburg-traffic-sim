@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "kind": "robust_closure_search_smoke",
+  "status": "passing",
+  "validated_at": "2026-07-19T11:00:58",
+  "sumo_version": "1.27.1",
+  "study": {
+    "epoch_sim": "2025-09-16T00:00:00",
+    "duration_s": 86400,
+    "closed_edges": [
+      "26842526_96527131_0"
+    ],
+    "closure_duration_hours": 4.0,
+    "candidate_starts_s": [
+      0,
+      36000,
+      72000
+    ],
+    "demand_signature": "57e3fd904e32776bc481",
+    "simulation_mode": "meso"
+  },
+  "input_sha256": {
+    "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "demand_metadata": "7496115dafd026ae9f15b0ea8380b1be1a0e5a16b59afe6ff6a5db9d15c7a710",
+    "q50_routes": "0a0cdad78d06245be71d716bf23ea7dee804496c96e36919d7c5027c0979039b",
+    "q10_routes": "30472d6a3aadde5ba31893e2be1277f3f5abaa962f08870cfbffdcb3afcb12a0",
+    "q90_routes": "2a4124f5795f6b425a01dda45581c5f844a1c5b830a1b0f5357affff476b4239"
+  },
+  "pilot": {
+    "method": "matched_worst_variant_pilot_v1",
+    "seeds": [
+      1000,
+      1001,
+      1002
+    ],
+    "retention_band_s": 300.0,
+    "selected_candidate_ids": [
+      "w0"
+    ],
+    "disqualified": {
+      "w36000": [
+        "active_closure_edge_throughput",
+        "teleports"
+      ],
+      "w72000": [
+        "teleports"
+      ]
+    }
+  },
+  "decision": {
+    "method": "paired_worst_variant_ucb_v1",
+    "status": "unique_winner",
+    "winner_id": "w0",
+    "winner_window_s": [
+      0,
+      14400
+    ],
+    "matched_seed_count": 12,
+    "pairs_per_variant": 4,
+    "worst_variant": "q90",
+    "robust_point_s": 40.05500000001484,
+    "robust_lower_95_s": -10.74174054406263,
+    "robust_upper_95_s": 142.9615803709093,
+    "precision_met": true,
+    "absolute_precision_floor_s": 300.0,
+    "practical_equivalence_s": 300.0
+  },
+  "claim_boundary": {
+    "best_result_available": true,
+    "best_result_scope": "sumo_verified_finalists",
+    "global_best_claim_allowed": false,
+    "reason": "new monthly held-out release gate has not passed"
+  }
+}

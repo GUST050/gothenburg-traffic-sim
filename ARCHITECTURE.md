@@ -387,6 +387,19 @@ candidate is omitted.  The release path is analytical ordering → matched
 q10/q50/q90 mesoscopic pilot → adaptive robust finalists; its policies still
 require a named golden benchmark and a new untouched held-out validation set.
 
+The existing single-day closure-time entrypoint now exercises the safe
+decision seam end to end. `suggest_closure_time.py` uses one matched
+q50/q10/q90 pilot replication per candidate, applies all closure-integrity
+gates before finalist selection, and gives retained finalists four matched
+replications per variant (12 runs) for the simultaneous-bound decision.
+`serve.py` rejects old three-seed or non-canonical structured requests, and
+the web UI distinguishes a robust finalist winner, a practical tie,
+inconclusive evidence and no viable closure.  A real Gothenburg/SUMO 1.27.1
+smoke case is frozen in
+`validation/robust_closure_search_smoke_v1.json`.  This proves the runtime
+path and its fail-closed result contract; it is not the resumable multi-day
+monthly orchestrator and cannot lift the global-best gate above.
+
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
 of a hidden station's traffic (range 0.06–0.83). CONFOUND WARNING (missing
