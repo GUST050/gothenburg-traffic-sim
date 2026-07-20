@@ -363,9 +363,27 @@ Implementation Order" at the end of this document.
 2. **Implemented:** make final SUMO sensor output auditable and calibrate
    normal runs against the frozen target at the correct physical-station
    aggregation. A fresh staged set fails closed when this evidence is absent.
-3. Finish purpose-compatible route allocation and revalidate normal demand.
-   Same-signature replacement is implemented; uncovered through/service
-   signatures still require a larger compatible candidate pool.
+3. **Implemented (verified 2026-07-20):** purpose-compatible route
+   allocation is complete and `purpose_claims_allowed` is TRUE on the
+   active release.  This entry previously described the pre-fix state and
+   was stale: the fix landed with the 2026-07-17 realism pass (`46719f4`,
+   hardened in `ce7112d`) and is exactly the formulation this plan asked
+   for — compatibility BEFORE publication, not relabelling after
+   calibration.  `prepare_calibration` keys the LP/IPF variable pool on
+   `(geometry, provenance purpose)`, so a geometry occurring in several
+   generated purpose classes becomes several variables and the selected
+   route's purpose is an INVARIANT rather than a post-hoc label; the
+   production path then uses `allocate_strict_interval_provenance`, which
+   raises rather than substituting when a shape has mixed purposes or no
+   matching-purpose source.  When an exact purpose margin is infeasible
+   beside the hard sensor counts it falls back counts-first and discloses
+   `mix_deviation` instead of forcing the mix.  Measured on the active
+   2025-09-16 release, all three variants: 0 incompatible quarters, 0
+   replaced routes, 0 relaxed-mix quarters, RVU length ordering intact
+   (through 5.90 km > fritid 2.98 > service 2.78 > arbete 2.51 km median).
+   Through-traffic SHARE remains a sensitivity-tested prior until a cordon
+   count identifies it (external data request 2) — that is a separate
+   open question from route/purpose compatibility, which is closed.
 4. Freeze and exercise a golden normal, closure and bounded micro-signal
    release, including rollback.
 5. **Contribution slice implemented:** `sensor_contribution.py` now emits
@@ -441,13 +459,19 @@ sensor-route sampling, destination naturalness masks, downstream-distance and
 trip-length structure checks, near-sensor destination diagnostics, and
 calibrated-output checks in addition to generated-pool checks.
 
-The remaining improvement is not to relabel trips after calibration. It is a
-purpose-compatible allocation or purpose-stratified calibration formulation
-that makes the selected route instance compatible with purpose, departure time
-and length before it is published. Until its incompatibility diagnostic is
-zero, purpose labels are diagnostics rather than evidence of individual trip
-intent. Through-traffic share remains a sensitivity-tested prior until a
-cordon count or local OD source identifies it.
+The improvement demanded here — not relabelling trips after calibration, but
+a purpose-stratified formulation making the selected route instance
+compatible with purpose, departure time and length BEFORE publication — is
+**implemented and its incompatibility diagnostic is zero** (see ranked item
+3 for the mechanism and the measured per-variant evidence).  Purpose labels
+on the active release therefore rest on compatible provenance rather than
+being diagnostics only, and `purpose_claims_allowed` is true.
+
+Two honest limits survive that fix and must not be conflated with it: a
+compatible label states which generated behavioural class the route came
+from, not verified individual trip intent; and through-traffic SHARE remains
+a sensitivity-tested prior until a cordon count or local OD source
+identifies it.
 
 ### Simulation integrity and closure realism
 
@@ -2610,14 +2634,16 @@ committed as one unit):
   station-aggregated for 107) and per-station rows.  `validation.json`:
   counts_fit/structure/simulation/sensor_output/multi_day **pass** —
   the two long-standing structure drift flags cleared with this rebuild —
-  and only `purposes` still warns (see next bullet).
-- Purpose compatibility remains the open P0: signature-preserving
-  replacement repaired ~2 500-2 650 routes per variant at identical sensor
-  counts and 100% GEH<5, but ~5 300-5 900 mostly `through` routes per
-  variant still lack same-purpose provenance in all 96 quarters, so
-  `purpose_claims_allowed` stays false.  The remaining fix is
-  purpose-stratified calibration and/or the cordon count (external data
-  request 2).
+  and only `purposes` still warns (see next bullet — that warning is
+  SUPERSEDED; every section is green on the current release).
+- ~~Purpose compatibility remains the open P0~~ **SUPERSEDED 2026-07-20.**
+  This bullet described the state on 2026-07-16, before the realism pass;
+  it is retained only to date the change.  Purpose-stratified calibration
+  landed and closed it: on the active release all three variants report 0
+  incompatible quarters, 0 replaced routes and 0 relaxed-mix quarters, and
+  `purpose_claims_allowed` is TRUE.  See ranked item 3 for the mechanism
+  and evidence.  The cordon count is still wanted, but for the
+  through-traffic SHARE — not for route/purpose compatibility.
 - `data_in/sensors.json` has six catalogue-verified records with approved
   directed snaps; intake fails closed on pending/expired/unapproved/changed
   records and build_data revalidates resolved snaps against the registry.
