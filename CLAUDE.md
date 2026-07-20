@@ -387,6 +387,16 @@ Goal arc, in order:
 ## Open questions
 - Miroslaw: confirm the simulation engine (SUMO / MATSim / his own).
 - (Closed: scope = two cluster areas; Felicia will not send anything more — no directional re-export.)
+- (Closed 2026-07-20: NO MORE EXTERNAL DATA. Decided by Gustav — the
+  project ships permanently on the delivered 2025 six-sensor counts. The
+  four data requests in IMPROVEMENT_PLAN.md ("External Data Requests")
+  will NOT be sent. Consequence: signal results are `synthetic`
+  permanently (never `city-configured`); through-traffic share stays a
+  sensitivity-tested prior; purpose labels state a behavioural class, not
+  verified intent; no local speed/travel-time calibration. These are
+  FIXED honest boundaries, not pending unlocks — do not re-open them as
+  TODOs or recommend sending a data request. `DATA_REQUEST_2026-07.md` is
+  a not-sent record only.)
 
 ## Files
 - Pipeline (run in order): `build_data.py` → `build_features.py` → [`build_dataset.py` for future GNN] → `train_agent1.py` → `build_agent1_flows.py`. Or just `make all` (Makefile has the raw-data paths; `make serve` starts the web app).

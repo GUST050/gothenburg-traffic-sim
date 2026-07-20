@@ -2553,15 +2553,33 @@ scheduling, and I/O discipline, not touching the solver.
   the results changed).
 - No cache is keyed on anything less than the full build fingerprint.
 
-## External Data Requests (one consolidated list)
+## External Data Requests — CLOSED, no further data coming (decided 2026-07-20)
 
-Four standing requests gate the highest rungs of this plan. Ask for them
-together, through Miroslaw, as one package — each names exactly what it
-unlocks.  **A ready-to-send draft (Swedish, with English summary and a
-concrete Skånegatan corridor proposal) is committed as
-`DATA_REQUEST_2026-07.md` (2026-07-20)** — sending it is Gustav's action;
-the city's response time is the critical path for the city-configured
-signal rung:
+**DECISION (Gustav, 2026-07-20): there is no more data. The project ships
+with the delivered 2025 six-sensor counts as its permanent measured input.**
+The four requests below will NOT be sent, and their absence is no longer a
+pending dependency — it is a fixed boundary. The consequences are therefore
+PERMANENT honest labels, not provisional ones awaiting an unlock:
+
+- Signal results are `synthetic` **permanently** — a real, mechanically
+  safe, TSFS-certified experiment, never `city-configured`. The step-5/6
+  city-import rungs of Phase 5 are closed as won't-do, not deferred.
+- Through-traffic SHARE stays a sensitivity-tested prior, permanently. The
+  OD matrix stays "one plausible matrix consistent with the six counts",
+  as already labelled.
+- Purpose labels rest on compatible generated provenance (ranked item 3,
+  done) and state a behavioural class, not verified individual intent —
+  permanently.
+- No local road-speed/travel-time calibration; queue/roundabout/spillback
+  numbers stay diagnostic, never presented as measured.
+
+None of this stops the product. It is complete on the data it has, and the
+confidence map plus these labels are exactly the honesty mechanism that
+makes shipping on six sensors defensible. `DATA_REQUEST_2026-07.md` is
+retained only as a record of what WOULD strengthen which claim, marked
+not-sent; it is not an action item.
+
+The original four (kept for the record — what each would have unlocked):
 
 1. **City signal controller plans** (phase diagrams, timings, detectors,
    priority rules — the exact one-corridor package is spelled out in

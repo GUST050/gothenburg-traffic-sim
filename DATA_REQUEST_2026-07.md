@@ -1,7 +1,15 @@
 # Konsoliderad dataförfrågan — trafiksimulering Göteborgs innerstad
 
-*Utkast 2026-07-20, att skickas som ett paket via Miroslaw Staron (Chalmers).
-Projektägare: Gustav Trogen. Engelsk sammanfattning sist i dokumentet.*
+> **STATUS: SKICKAS INTE (beslut 2026-07-20).** Projektet levereras
+> permanent på de levererade 2025 sex-sensorräkningarna; ingen ytterligare
+> extern data begärs. Detta dokument behålls ENBART som en anteckning om
+> vad som skulle ha stärkt vilket påstående — det är inte en åtgärdspunkt.
+> Följdriktiga permanenta, ärliga begränsningar (syntetiska signaler,
+> genomfartsandel som prior, ärendeklass ≠ verifierad avsikt) står i
+> IMPROVEMENT_PLAN.md, avsnittet "External Data Requests".
+
+*Ursprungligt utkast 2026-07-20 (aldrig skickat). Projektägare: Gustav
+Trogen. Engelsk sammanfattning sist i dokumentet.*
 
 Projektet simulerar trafiken i Göteborgs innerstad (kalibrerad mot stadens
 sex 15-minuterssensorer, levererade juni 2026) och kan i dag rekommendera
