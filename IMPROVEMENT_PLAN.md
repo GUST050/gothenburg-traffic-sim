@@ -2158,6 +2158,48 @@ monthly held-out set (practical-winner recall, regret, failure recall),
 which is what keeps `global_best_claim_allowed=false`; bounded-exhaustive
 results are UI-exposed with the restricted wording.
 
+**Held-out v2 campaign — PASS (2026-07-20).**  The release gate has now
+run and passed.  Method, frozen before outcomes (commit e4edb90):
+`validation/monthly_proxy_manifest_v2.json` — 12 NEW cases, 104 exact
+schedules, every edge disjoint from all 12 v1 edges, full strata
+coverage, with the gate thresholds content-keyed INTO the manifest
+(practical-winner recall ≥0.90 at the golden policy's frozen 300 s
+practical-equivalence tolerance, p90 normalized shortlist regret ≤0.10,
+failure recall ≥0.60; Spearman and strict exact-tie recall demoted to
+reported diagnostics per the step-4 recovery decision — v1's two "missed
+winners" were 4 s and 22 s on medians whose seed ranges spanned hundreds
+of seconds).  Three missing demand envelopes (2027-12-24 holiday 1-day,
+2027-07-15 3-day and 5-day) were built first, all 100% GEH<5 with zero
+infeasible intervals, with the live release snapshotted/restored around
+the builds (verified back on 2025-09-16/57e3fd90 afterwards).
+
+Result (`validation/monthly_proxy_v2_gate.json`, evidence digests inside;
+raw outcomes under `runs/closure-proxy-validation/dec211d4…/`): all 12
+cases and 104 schedules completed exhaustively.  **Practical-winner
+recall 1.0 (strict recall also 1.0), p90 regret 0.0, failure recall
+0.867 (39/45 disqualified schedules caught), ranking coverage 7/12 —
+every check passed.**  Honest composition: 5 of 7 ranking cases involved
+genuine proxy pruning (shortlists of 4-6 of 9) and still recalled every
+exhaustive winner with zero regret; 2 ranking cases were
+unscoreable-fallback (shortlist-everything, trivially recalled — the
+deployed safety behavior); 5 cases were failure-only, with real
+infrastructure findings (closing those roads strands ~200-4,300 vehicles
+per run).  Spearman was measurable in only 1 of 7 ranking cases (0.894)
+— reported, not gated.
+
+Consequence, wired fail-closed in `monthly_search.py`
+(`load_passing_heldout_gate` + the evidence-aware claim boundary): with
+the tracked passing record present, bounded-exhaustive results now carry
+`global_best_claim_allowed=true` (scope: the enumerated search space),
+and `monthly_proxy_v1`-screened results are UI-exposable with
+`sumo_verified_monthly_shortlist_heldout_validated` scope.  Any missing,
+failed or malformed record reverts every claim to the pre-release
+boundary; a proxy version not covered by the record stays closed.  The
+pre-registered release contract (golden-frozen policy + passing untouched
+held-out set) is therefore satisfied and the claim language may say
+**trafikmässigt bäst inom angivna tider** — still never permitted/safe/
+TA-plan compliant, which remain user-supplied unverified policy.
+
 ### Final acceptance gate
 
 - The displayed schedule is byte-for-byte derivable from the immutable

@@ -42,6 +42,36 @@ from traffic_sim.simulation.search_workspace import (
 
 SCHEMA_VERSION = 1
 POLICY_STATUSES = frozenset({"provisional", "golden_frozen"})
+# The tracked held-out release gate (IMPROVEMENT_PLAN.md Phase 4).  When
+# this record exists, is well-formed and says "pass", the pre-registered
+# release contract is satisfied: the pilot/finalist policy is golden-frozen
+# AND an untouched held-out set passed practical-winner recall, regret and
+# failure recall.  Any problem with the record fails closed to the
+# pre-release claim boundary.
+HELDOUT_GATE_RECORD = Path("validation") / "monthly_proxy_v2_gate.json"
+
+
+def load_passing_heldout_gate(
+    path: Path | None = None,
+) -> dict[str, Any] | None:
+    """Return the passing held-out gate record, or None (fail closed)."""
+    try:
+        record = json.loads(
+            Path(path if path is not None else HELDOUT_GATE_RECORD)
+            .read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    if (
+        not isinstance(record, dict)
+        or record.get("kind") != "monthly_proxy_validation_gate_record"
+        or record.get("gate_status") != "pass"
+        or record.get("ui_exposure_allowed") is not True
+        or record.get("global_best_claim_allowed") is not True
+        or not isinstance(record.get("proxy_version"), str)
+    ):
+        return None
+    return record
 
 
 def _canonical_digest(value: Any, *, length: int = 24) -> str:
@@ -584,54 +614,90 @@ def _final_result(
         },
         "pilot_selection": dict(pilot_selection),
         "robust_decision": dict(decision) if decision is not None else None,
-        "claim_boundary": _claim_boundary(screening, decision_status),
+        "claim_boundary": _claim_boundary(
+            screening,
+            decision_status,
+            heldout_gate=load_passing_heldout_gate(),
+        ),
     }
 
 
 def _claim_boundary(
     screening: Mapping[str, Any],
     decision_status: str,
+    *,
+    heldout_gate: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """Evidence-level honesty labels for one monthly result.
 
-    Two different gates are folded here and must not be confused:
+    The pre-registered release contract (IMPROVEMENT_PLAN.md, step-4
+    recovery decision): a global-best claim requires the golden-frozen
+    pilot/finalist policy AND a passing untouched held-out gate measuring
+    practical-winner recall, regret and failure recall.  ``heldout_gate``
+    is the tracked passing record or None; everything fails closed.
 
-    - ``global_best_claim_allowed`` stays False in every mode until the new
-      untouched monthly held-out release gate passes — even a bounded
-      exhaustive search runs the frozen pilot retention band, which has
-      only been exercised against the golden benchmark, not held out.
-    - ``ui_exposure_allowed`` depends on how candidates were SCREENED.  A
-      proxy shortlist may not reach the UI at all (its held-out gate
-      failed).  A bounded exhaustive search has no proxy: every ranked
-      candidate carries real SUMO evidence, which is exactly the evidence
-      level the already-released closure-time feature shows, so the result
-      may be displayed with the restricted "best among SUMO-verified
-      finalists" wording.
+    - Bounded exhaustive screening has no proxy: every ranked candidate
+      carries real SUMO evidence, so results are UI-exposable regardless,
+      and the global-best claim (within the enumerated search space)
+      opens once the held-out gate has passed.
+    - Proxy screening may reach the UI and claim a global best only when
+      the passing record covers the SAME proxy version that produced the
+      shortlist.
     """
-    exhaustive = (
-        str(screening.get("proxy_version", ""))
-        == "bounded_exhaustive_sumo_v1"
+    proxy_version = str(screening.get("proxy_version", ""))
+    exhaustive = proxy_version == "bounded_exhaustive_sumo_v1"
+    validated_proxy = (
+        heldout_gate is not None
+        and proxy_version == heldout_gate.get("proxy_version")
     )
+    released = exhaustive and heldout_gate is not None or validated_proxy
+    if exhaustive:
+        scope = "sumo_verified_bounded_exhaustive"
+        if heldout_gate is not None:
+            reason = (
+                "bounded exhaustive screening: every ranked candidate is "
+                "SUMO-verified and the held-out release gate "
+                f"({heldout_gate.get('heldout_set', 'v2')}) has passed"
+            )
+        else:
+            reason = (
+                "bounded exhaustive screening: every ranked candidate is "
+                "SUMO-verified; the global-best claim still awaits a "
+                "passing untouched monthly held-out release gate"
+            )
+    elif validated_proxy:
+        scope = "sumo_verified_monthly_shortlist_heldout_validated"
+        reason = (
+            f"proxy {proxy_version} passed the untouched held-out release "
+            f"gate ({heldout_gate.get('heldout_set', 'v2')}): practical-"
+            "winner recall, regret and failure recall within frozen "
+            "thresholds"
+        )
+    else:
+        scope = "sumo_verified_monthly_shortlist"
+        reason = (
+            "no passing untouched held-out release gate covers this "
+            "screening"
+        )
     return {
         "best_result_available": decision_status == "unique_winner",
         "best_result_scope": (
-            (
-                "sumo_verified_bounded_exhaustive"
-                if exhaustive
-                else "sumo_verified_monthly_shortlist"
-            )
-            if decision_status == "unique_winner"
+            scope if decision_status == "unique_winner" else None
+        ),
+        "global_best_claim_allowed": released,
+        "ui_exposure_allowed": exhaustive or validated_proxy,
+        "heldout_gate_record": (
+            {
+                "heldout_set": heldout_gate.get("heldout_set"),
+                "manifest_content_key": heldout_gate.get(
+                    "manifest_content_key"
+                ),
+                "gate_status": heldout_gate.get("gate_status"),
+            }
+            if heldout_gate is not None
             else None
         ),
-        "global_best_claim_allowed": False,
-        "ui_exposure_allowed": exhaustive,
-        "reason": (
-            "bounded exhaustive screening: every ranked candidate is "
-            "SUMO-verified; the global-best claim still awaits the new "
-            "untouched monthly held-out release gate"
-            if exhaustive
-            else "a new untouched monthly held-out release gate has not passed"
-        ),
+        "reason": reason,
     }
 
 
@@ -916,7 +982,9 @@ def run_monthly_search(
                 "search_content_key": spec.content_key,
                 "policy_content_key": policy.content_key,
                 "status": result["status"],
-                "global_best_claim_allowed": False,
+                "global_best_claim_allowed": (
+                    result["claim_boundary"]["global_best_claim_allowed"]
+                ),
             },
         )
         workspace.finish("succeeded")

@@ -72,6 +72,11 @@ LIVE_DEMAND_RELEASE_PRODUCTS = (
     Path("sumo") / "calibrated_v2.agents.json",
     Path("web") / "data" / "od_matrix.json",
     Path("web") / "data" / "od_matrix.csv",
+    # Found live during the held-out v2 campaign (2026-07-20): the demand
+    # builder also refreshes the assembled validation report for ITS OWN
+    # build, leaving the live site's shield panel describing the wrong
+    # demand window.
+    Path("web") / "data" / "validation.json",
 )
 
 

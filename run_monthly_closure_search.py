@@ -204,10 +204,13 @@ def main() -> None:
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
         raise SystemExit(str(exc)) from exc
 
+    boundary = result.get("claim_boundary", {})
     print(
         f"Monthly closure search {spec.search_id}: {result['status']}; "
         f"winner={result.get('winner_id')}; "
-        "global-best/UI claim remains disabled pending new held-out gate."
+        f"scope={boundary.get('best_result_scope')}; "
+        f"global_best_claim_allowed={boundary.get('global_best_claim_allowed')}; "
+        f"ui_exposure_allowed={boundary.get('ui_exposure_allowed')}"
     )
 
 

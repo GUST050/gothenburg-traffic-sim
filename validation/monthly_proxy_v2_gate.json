@@ -1,0 +1,76 @@
+{
+ "completed_cases": 12,
+ "completed_schedules": 104,
+ "evidence_notes": {
+  "failure_only_cases": [
+   "v2-primary-far-weekday-4h",
+   "v2-secondary-near-weekday-8h",
+   "v2-tertiary-far-weekday-8h",
+   "v2-tertiary-medium-mixed-24h",
+   "v2-tertiary-near-weekday-4h"
+  ],
+  "ranking_cases_fallback_full_shortlist": [
+   "v2-residential-far-mixed-40h",
+   "v2-unclassified-far-weekend-8h"
+  ],
+  "ranking_cases_with_real_pruning": [
+   "v2-residential-far-holiday-4h",
+   "v2-residential-medium-weekday-4h",
+   "v2-residential-near-weekday-8h",
+   "v2-secondary-medium-weekend-4h",
+   "v2-unclassified-medium-weekday-4h"
+  ],
+  "spearman_diagnostic": "measurable in 1 of 7 ranking cases (median 0.894); diagnostic only under the frozen v2 gate",
+  "strict_winner_recall_equals_practical": true
+ },
+ "executed_at": "2026-07-20",
+ "gate_checks": {
+  "all_shortlists_contain_eligible_candidate": true,
+  "failure_disqualification_recall": true,
+  "p90_normalized_shortlist_regret": true,
+  "practical_winner_recall": true,
+  "ranking_case_coverage": true
+ },
+ "gate_status": "pass",
+ "global_best_claim_allowed": true,
+ "heldout_set": "v2",
+ "kind": "monthly_proxy_validation_gate_record",
+ "local_evidence": {
+  "outcomes_path": "runs/closure-proxy-validation/dec211d42932281730b0b478ccb62c69f10a13efe937e265d4b6397102654eae/outcomes.json",
+  "outcomes_sha256": "c071e7557d4c07d10a1b7628992433487ae01f016365bb10b1e6881c8612c2b4",
+  "report_path": "runs/closure-proxy-validation/dec211d42932281730b0b478ccb62c69f10a13efe937e265d4b6397102654eae/report.json",
+  "report_sha256": "63bb6e3037098e78b9b12b85be1e010e8d81853dae0d47f739ba50d20a0ed5fd"
+ },
+ "manifest_content_key": "dec211d42932281730b0b478ccb62c69f10a13efe937e265d4b6397102654eae",
+ "manifest_path": "validation/monthly_proxy_manifest_v2.json",
+ "metrics": {
+  "failure_disqualification_recall": 0.866667,
+  "median_spearman": 0.894427,
+  "p90_normalized_shortlist_regret": 0.0,
+  "practical_winner_recall": 1.0,
+  "ranking_case_fraction": 0.583333,
+  "spearman_case_fraction": 0.142857,
+  "total_disqualified_schedules": 45,
+  "winner_recall": 1.0
+ },
+ "proxy_version": "monthly_proxy_v1",
+ "required_cases": 12,
+ "schema_version": 1,
+ "source_fingerprints": {
+  "closure_metrics": "3edf71b82933601b5084229eac0ca63f8bd83a87fef946e23cb14b572d120134",
+  "monthly_proxy": "74aef7eb33464e33464dbeec479d74c194eb638f2c6d9ad1ee73accdd6315a96",
+  "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "proxy_projection": "bd5d69316499c573433f655a6d3e4c36d9f5dff33819ff5e98e7b50c375794e0",
+  "proxy_validation": "278fa7ca9cdc12403c52ffbe4c71ccc14452c61aae62d1d5647fbd105ec0ac0b",
+  "run_scenario": "a73f22a41d8846eeb068ac751fd210a5424c75d2f111e82ad8a799355e3db999",
+  "suggest_closure_time": "6eaf562e82c4b67785a1c31e678bc6e7fb5b6e49c14673f1383867eb027c860c"
+ },
+ "thresholds": {
+  "failure_disqualification_recall_minimum": 0.6,
+  "minimum_ranking_case_fraction": 0.5,
+  "p90_normalized_shortlist_regret_maximum": 0.1,
+  "practical_equivalence_s": 300.0,
+  "practical_winner_recall_minimum": 0.9
+ },
+ "ui_exposure_allowed": true
+}

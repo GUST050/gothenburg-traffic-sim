@@ -185,28 +185,137 @@ def test_backend_prepares_only_screened_shortlist_before_provenance(tmp_path):
     )
 
 
-def test_bounded_exhaustive_result_is_ui_exposable_but_never_global(tmp_path):
+def test_bounded_exhaustive_result_is_ui_exposable_and_gate_aware(
+        tmp_path, monkeypatch):
     """No proxy is involved in bounded-exhaustive screening: every ranked
     candidate carries real SUMO evidence, so the result may reach the UI
-    with the restricted wording — while the global-best claim stays gated
-    on the untouched held-out set in every mode."""
+    with the restricted wording.  The global-best claim follows the
+    tracked held-out gate record: absent/failed record → withheld."""
+    import traffic_sim.simulation.monthly_search as monthly_search
+
     def exhaustive_builder(spec_path):
         payload = _screen_builder(spec_path)
         payload["proxy_version"] = "bounded_exhaustive_sumo_v1"
         return payload
 
+    monkeypatch.setattr(
+        monthly_search, "HELDOUT_GATE_RECORD", tmp_path / "missing.json")
     result = run_monthly_search(
         _spec("monthly-exhaustive-claims"),
         _policy(),
         runner=FakeRunner(),
         screen_builder=exhaustive_builder,
-        root=tmp_path,
+        root=tmp_path / "no-gate",
     )
     boundary = result["claim_boundary"]
     assert result["status"] == "unique_winner"
     assert boundary["ui_exposure_allowed"] is True
     assert boundary["global_best_claim_allowed"] is False
     assert boundary["best_result_scope"] == "sumo_verified_bounded_exhaustive"
+
+    passing = tmp_path / "gate.json"
+    passing.write_text(json.dumps({
+        "kind": "monthly_proxy_validation_gate_record",
+        "heldout_set": "v2",
+        "proxy_version": "monthly_proxy_v1",
+        "manifest_content_key": "m" * 64,
+        "gate_status": "pass",
+        "ui_exposure_allowed": True,
+        "global_best_claim_allowed": True,
+    }))
+    monkeypatch.setattr(monthly_search, "HELDOUT_GATE_RECORD", passing)
+    released = run_monthly_search(
+        _spec("monthly-exhaustive-released"),
+        _policy(),
+        runner=FakeRunner(),
+        screen_builder=exhaustive_builder,
+        root=tmp_path / "with-gate",
+    )
+    boundary = released["claim_boundary"]
+    assert boundary["ui_exposure_allowed"] is True
+    assert boundary["global_best_claim_allowed"] is True
+    assert boundary["heldout_gate_record"]["gate_status"] == "pass"
+
+
+def test_validated_proxy_screening_is_released_but_others_stay_closed(
+        tmp_path, monkeypatch):
+    import traffic_sim.simulation.monthly_search as monthly_search
+
+    passing = tmp_path / "gate.json"
+    passing.write_text(json.dumps({
+        "kind": "monthly_proxy_validation_gate_record",
+        "heldout_set": "v2",
+        "proxy_version": "monthly_proxy_v1",
+        "manifest_content_key": "m" * 64,
+        "gate_status": "pass",
+        "ui_exposure_allowed": True,
+        "global_best_claim_allowed": True,
+    }))
+    monkeypatch.setattr(monthly_search, "HELDOUT_GATE_RECORD", passing)
+
+    def proxy_builder(version):
+        def build(spec_path):
+            payload = _screen_builder(spec_path)
+            payload["proxy_version"] = version
+            return payload
+        return build
+
+    covered = run_monthly_search(
+        _spec("monthly-proxy-released"),
+        _policy(),
+        runner=FakeRunner(),
+        screen_builder=proxy_builder("monthly_proxy_v1"),
+        root=tmp_path / "covered",
+    )
+    assert covered["claim_boundary"]["ui_exposure_allowed"] is True
+    assert covered["claim_boundary"]["global_best_claim_allowed"] is True
+    assert covered["claim_boundary"]["best_result_scope"] == (
+        "sumo_verified_monthly_shortlist_heldout_validated")
+
+    uncovered = run_monthly_search(
+        _spec("monthly-proxy-uncovered"),
+        _policy(),
+        runner=FakeRunner(),
+        screen_builder=proxy_builder("some_other_proxy_v9"),
+        root=tmp_path / "uncovered",
+    )
+    assert uncovered["claim_boundary"]["ui_exposure_allowed"] is False
+    assert uncovered["claim_boundary"]["global_best_claim_allowed"] is False
+
+
+def test_failed_or_malformed_gate_record_fails_closed(tmp_path):
+    from traffic_sim.simulation.monthly_search import load_passing_heldout_gate
+    missing = load_passing_heldout_gate(tmp_path / "none.json")
+    assert missing is None
+    failed = tmp_path / "failed.json"
+    failed.write_text(json.dumps({
+        "kind": "monthly_proxy_validation_gate_record",
+        "proxy_version": "monthly_proxy_v1",
+        "gate_status": "fail",
+        "ui_exposure_allowed": False,
+        "global_best_claim_allowed": False,
+    }))
+    assert load_passing_heldout_gate(failed) is None
+    malformed = tmp_path / "malformed.json"
+    malformed.write_text("not json")
+    assert load_passing_heldout_gate(malformed) is None
+
+
+def test_tracked_v2_gate_record_is_a_valid_passing_release_record():
+    from traffic_sim.simulation.monthly_search import load_passing_heldout_gate
+    record = load_passing_heldout_gate()
+    assert record is not None
+    assert record["heldout_set"] == "v2"
+    assert record["proxy_version"] == "monthly_proxy_v1"
+    metrics = record["metrics"]
+    thresholds = record["thresholds"]
+    assert metrics["practical_winner_recall"] >= (
+        thresholds["practical_winner_recall_minimum"])
+    assert metrics["p90_normalized_shortlist_regret"] <= (
+        thresholds["p90_normalized_shortlist_regret_maximum"])
+    assert metrics["failure_disqualification_recall"] >= (
+        thresholds["failure_disqualification_recall_minimum"])
+    assert record["completed_cases"] == record["required_cases"] == 12
 
 
 def test_runs_full_resumable_pipeline_and_remains_fail_closed(tmp_path):
