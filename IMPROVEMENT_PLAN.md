@@ -2454,7 +2454,11 @@ scheduling, and I/O discipline, not touching the solver.
 
 Four standing requests gate the highest rungs of this plan. Ask for them
 together, through Miroslaw, as one package — each names exactly what it
-unlocks:
+unlocks.  **A ready-to-send draft (Swedish, with English summary and a
+concrete Skånegatan corridor proposal) is committed as
+`DATA_REQUEST_2026-07.md` (2026-07-20)** — sending it is Gustav's action;
+the city's response time is the critical path for the city-configured
+signal rung:
 
 1. **City signal controller plans** (phase diagrams, timings, detectors,
    priority rules — the exact one-corridor package is spelled out in
@@ -2558,10 +2562,22 @@ Status of the previously listed concrete changes:
 3. DONE — `sensor_audit.output_fit` from raw pre-rounding edgeData in
    scenario JSON, `validation_report.py` (`sensor_output` section) and
    `serve.validate_staged_scenarios` (fails closed for new builds).
-4. OPEN — residual classification (timing shift vs coverage vs integer
-   effect) and any bounded output correction; current measured residual is
-   mean 2.07 / max ~10.7 veh per station-quarter at 100% GEH<5.  Then rerun
-   temporal + LOSO on 2025-09-16 historical.
+4. DONE (2026-07-20) — residual CLASSIFIED as unbiased stochastic
+   dispersion; no bounded output correction is justified and none was
+   applied.  Analysis on the active golden release's frozen audit series
+   (7 directed sensor edges × 96 quarters, targets vs raw edgeData
+   ensemble): (a) NOT a timing shift — MAE at lag 0 (1.9-3.2 veh/q) is
+   strictly better than at ±1 quarter (4.2-8.6) on every edge; (b) NOT a
+   coverage deficit — per-edge daily sums deviate +0.04% to +0.80%
+   (network +0.42%, slightly positive, no end-of-day loss pattern);
+   (c) volume-proportional dispersion — |residual| 0.95 veh/q below 20
+   veh/q vs 3.94 at ≥60 veh/q (~5.4% of volume), signed mean +0.16 veh/q,
+   and the ensemble-vs-target residual (2.62 veh/q mean) is the same
+   order as the single-seed vs ensemble-mean spread (2.07 veh/q) — i.e.
+   the residual is at the Monte-Carlo noise floor of a 3-run ensemble.
+   A "correction" would fit noise.  Consequently the contingent temporal/
+   LOSO rerun is not triggered: the release is unchanged and the standing
+   post-destination-fix LOSO baseline remains authoritative.
 5. DONE — normal, closure and bounded micro-signal cases are frozen under the
    active golden release, including browser/API, memory, full-suite and
    rollback evidence.
