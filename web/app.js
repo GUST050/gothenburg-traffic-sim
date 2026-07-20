@@ -53,6 +53,117 @@
         let workspaceTask = 'home';
         const historyPanel = document.getElementById('history-panel');
         const historyBody = document.getElementById('history-body');
+        const historyDetail = document.getElementById('history-detail');
+        const historyDetailTitle = document.getElementById('history-detail-title');
+        const historyDetailBody = document.getElementById('history-detail-body');
+
+        // Phase 6 acceptance gate: from a result, the operator must reach the
+        // exact ScenarioSpec, build ID, job record and validation report that
+        // produced it — without hand-querying the API or reading server logs.
+        // Everything below builds the DOM with textContent, never innerHTML:
+        // job args echo user-supplied edge IDs and error strings.
+        function appendDefinition(list, term, value) {
+          if (value === null || value === undefined || value === '') return;
+          const dt = document.createElement('dt');
+          dt.textContent = term;
+          const dd = document.createElement('dd');
+          dd.textContent = String(value);
+          list.append(dt, dd);
+        }
+
+        async function showJobDetail(jobId) {
+          historyDetail.hidden = false;
+          historyDetailTitle.textContent = jobId;
+          historyDetailBody.textContent = 'Läser jobbposten…';
+          // The job list scrolls; without this a row near the top opens the
+          // detail below the fold and the click looks like it did nothing.
+          historyDetail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          let record;
+          try {
+            const response = await fetch(
+              `/api/jobs/${encodeURIComponent(jobId)}?t=` + Date.now());
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            record = await response.json();
+          } catch (error) {
+            historyDetailBody.textContent =
+              `Jobbposten kunde inte läsas: ${error.message}`;
+            return;
+          }
+          const args = record.args || {};
+          const result = record.result || {};
+          const spec = args.scenario_spec || result.scenario_spec
+            || args.closure_search_spec || null;
+          const list = document.createElement('dl');
+          appendDefinition(list, 'Typ', record.kind);
+          appendDefinition(list, 'Status', record.status);
+          appendDefinition(list, 'Startad', record.started_at
+            ? new Date(record.started_at * 1000).toLocaleString('sv-SE') : null);
+          appendDefinition(list, 'Avslutad', record.finished_at
+            ? new Date(record.finished_at * 1000).toLocaleString('sv-SE') : null);
+          appendDefinition(list, 'Fel', record.error || result.error);
+          if (Array.isArray(args.edges) && args.edges.length) {
+            appendDefinition(list, 'Kanter', args.edges.join(', '));
+          }
+          appendDefinition(list, 'Datum', args.date || args.start_date);
+          appendDefinition(list, 'Källa', args.source);
+          if (spec) {
+            appendDefinition(list, 'ScenarioSpec-id',
+                             spec.scenario_id || spec.search_id);
+            appendDefinition(list, 'Byggnads-id (demand)', spec.demand_build_id);
+            appendDefinition(list, 'Nät-id', spec.network_build_id);
+            appendDefinition(list, 'Fönster', spec.start_time
+              ? `${spec.start_time} → ${spec.end_time}` : null);
+            appendDefinition(list, 'Läge', spec.simulation_mode);
+            if (Array.isArray(spec.seed_set) && spec.seed_set.length) {
+              appendDefinition(list, 'Frön', spec.seed_set.join(', '));
+            }
+            if (Array.isArray(spec.closures) && spec.closures.length) {
+              appendDefinition(list, 'Avstängningar', spec.closures
+                .map(c => `${c.edge_id} ${c.start_time}–${c.end_time}`)
+                .join(' · '));
+            }
+          }
+          historyDetailBody.replaceChildren(list);
+
+          // Does the active validation report describe THIS job's build?
+          // Same honesty rule as the shield panel: state it, never imply it.
+          if (spec?.demand_build_id) {
+            const note = document.createElement('div');
+            note.style.marginTop = '8px';
+            try {
+              const report = await (await fetch(
+                'data/validation.json?t=' + Date.now())).json();
+              if (!report.demand_build_id) {
+                note.textContent = 'Valideringsrapporten anger inget bygge-id '
+                  + '— den kan inte kopplas till detta jobb.';
+              } else if (report.demand_build_id === spec.demand_build_id) {
+                note.textContent = '🛡 Valideringsrapporten gäller detta bygge '
+                  + `(${report.demand_build_id.slice(0, 12)}, `
+                  + `${report.overall}).`;
+              } else {
+                note.textContent = '⚠ Valideringsrapporten gäller ETT ANNAT '
+                  + `bygge (${report.demand_build_id.slice(0, 12)}) än detta `
+                  + 'jobb — dess grindar säger inget om denna körning.';
+                note.style.color = '#f59e0b';
+              }
+            } catch {
+              note.textContent = 'Valideringsrapporten kunde inte läsas.';
+            }
+            historyDetailBody.append(note);
+          }
+
+          if (spec) {
+            const heading = document.createElement('div');
+            heading.style.marginTop = '8px';
+            heading.textContent = 'Exakt spec som kördes:';
+            const pre = document.createElement('pre');
+            pre.textContent = JSON.stringify(spec, null, 1);
+            historyDetailBody.append(heading, pre);
+          }
+        }
+
+        document.getElementById('history-detail-close')
+          .addEventListener('click', () => { historyDetail.hidden = true; });
 
         async function loadHistory() {
           historyBody.textContent = 'Läser körhistorik…';
@@ -67,6 +178,11 @@
             const table = document.createElement('table');
             for (const record of records) {
               const row = document.createElement('tr');
+              row.className = 'history-row';
+              row.title = 'Visa exakt spec, bygge och jobbpost';
+              if (record.id) {
+                row.addEventListener('click', () => showJobDetail(record.id));
+              }
               const status = document.createElement('td');
               status.textContent = record.status || 'okänd';
               status.className = `history-${record.status || 'unknown'}`;
@@ -478,6 +594,37 @@
               return `medianåterskapande ${s.median_ratio} — ${s.note}`;
           }
           return '';
+        }
+
+        // ── "Which study is actually in force" (Phase 6 acceptance gate) ──
+        // A cancelled or failed study leaves the PREVIOUS published study on
+        // screen. A transient alert() is not a label: once dismissed, the map
+        // shows the old study with nothing saying so. This banner persists
+        // until the operator acknowledges it, and always names both the study
+        // that failed and the one still being displayed.
+        const studyState = document.getElementById('study-state');
+        const studyStateText = document.getElementById('study-state-text');
+        document.getElementById('study-state-dismiss')
+          .addEventListener('click', () => { studyState.hidden = true; });
+
+        function describeActiveStudy() {
+          const srcLabel = currentSimSource === 'forecast' ? 'prognos' : 'historik';
+          const build = activeStudyBuildId();
+          return `${currentSimDate} (${srcLabel})`
+            + (build ? `, bygge ${build.slice(0, 12)}` : '');
+        }
+
+        function announceStudyOutcome(kind, outcome, attempted, detail = '') {
+          const verb = outcome === 'cancelled' ? 'avbröts' : 'misslyckades';
+          studyStateText.textContent =
+            `${kind} för ${attempted} ${verb}. Kartan visar fortfarande den `
+            + `föregående studien: ${describeActiveStudy()}.`
+            + (detail ? ` (${detail})` : '');
+          studyState.hidden = false;
+        }
+
+        function clearStudyOutcome() {
+          studyState.hidden = true;
         }
 
         // The build the ACTIVE scenario was calibrated from — the identity
@@ -1466,13 +1613,17 @@
             });
             if (status.status === 'error') throw new Error(status.error);
             if (status.status === 'cancelled') {
+              announceStudyOutcome('Avstängningssimuleringen', 'cancelled',
+                                   [...selected].join(', '));
               exitPicking();
               return;
             }
+            clearStudyOutcome();
             exitPicking();
             await activateClosedScenario(status);
           } catch (e) {
-            alert('Simuleringen misslyckades: ' + e.message);
+            announceStudyOutcome('Avstängningssimuleringen', 'error',
+                                 [...selected].join(', '), e.message);
           } finally {
             closureJobRunning = false;
             hideRecalibrationProgress();
@@ -2120,12 +2271,17 @@
               continue;
             }
             hideRecalibrationProgress();
+            const attempted = `${status.date || 'okänt datum'}`
+              + (status.source ? ` (${status.source})` : '');
             if (status.status === 'error') {
               forgetPendingRecal();
-              alert('Omkalibreringen misslyckades: ' + status.error);
+              announceStudyOutcome('Omkalibreringen', 'error', attempted,
+                                   status.error);
             } else if (status.status === 'cancelled') {
               forgetPendingRecal();
+              announceStudyOutcome('Omkalibreringen', 'cancelled', attempted);
             } else if (status.status === 'done') {
+              clearStudyOutcome();
               await applyFinishedRecalibration(status);
             }
             return;

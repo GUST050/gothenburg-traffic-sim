@@ -86,6 +86,25 @@
     #history-body .history-running { color: #f59e0b; font-weight: 700; }
     #history-body .history-succeeded { color: #4ade80; font-weight: 700; }
     #history-body .history-failed, #history-body .history-orphaned { color: #f87171; font-weight: 700; }
+    /* Phase 6: a result must be traceable to the exact spec/build/job that
+       produced it, without hand-querying the API. */
+    #history-body tr.history-row { cursor: pointer; }
+    #history-body tr.history-row:hover td { background: rgba(96, 165, 250, 0.08); }
+    #history-detail {
+      margin-top: 12px; border-top: 1px solid var(--panel-line); padding-top: 10px;
+    }
+    #history-detail[hidden] { display: none; }
+    #history-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    #history-detail-title { color: var(--ink); font-size: 0.76rem; }
+    #history-detail-body { margin-top: 8px; font-size: 0.7rem; color: var(--ink-2); }
+    #history-detail-body dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; }
+    #history-detail-body dt { color: var(--ink-3); }
+    #history-detail-body dd { color: var(--ink-2); word-break: break-all; }
+    #history-detail-body pre {
+      margin-top: 8px; padding: 8px; max-height: 220px; overflow: auto;
+      background: rgba(15, 23, 42, 0.75); border: 1px solid var(--panel-line);
+      border-radius: 6px; color: var(--ink-2); font-size: 0.66rem; white-space: pre;
+    }
     @media (max-width: 700px) {
       #task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .task-card { min-height: 100px; }
@@ -484,6 +503,14 @@
       border-left: 3px solid #f59e0b; padding-left: 8px;
     }
     #validation-panel table.v-stale { opacity: 0.45; }
+    #study-state {
+      flex: 1 1 100%; display: flex; align-items: center; gap: 12px;
+      background: rgba(180, 83, 9, 0.16); border: 1px solid rgba(245, 158, 11, 0.5);
+      border-radius: 8px; padding: 8px 12px; color: #fbbf24; font-size: 0.72rem;
+      font-weight: 600;
+    }
+    #study-state[hidden] { display: none; }
+    #study-state-text { flex: 1; }
     #sensor-audit-panel {
       flex: 1 1 100%;
       background: #fff;
@@ -545,6 +572,13 @@
       <div id="history-panel" hidden>
         <div id="history-head"><strong>Senaste körningar</strong><button id="history-back" class="action-btn">Tillbaka</button></div>
         <div id="history-body">Läser körhistorik…</div>
+        <div id="history-detail" hidden>
+          <div id="history-detail-head">
+            <strong id="history-detail-title"></strong>
+            <button id="history-detail-close" class="action-btn">Stäng</button>
+          </div>
+          <div id="history-detail-body"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -740,6 +774,14 @@
         <span id="recal-progress-label">Förbereder simulering…</span>
       </div>
 
+      <!-- Phase 6: a cancelled or failed study must leave the previous one
+           visible AND clearly labelled as the one still in force. A
+           dismissed alert() box is not a label. -->
+      <div id="study-state" role="status" aria-live="polite" hidden>
+        <span id="study-state-text"></span>
+        <button id="study-state-dismiss" class="action-btn">OK</button>
+      </div>
+
       <div id="validation-panel" hidden>
         <div id="validation-body"></div>
       </div>
@@ -847,6 +889,6 @@
   <script src="render.js?v=14"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

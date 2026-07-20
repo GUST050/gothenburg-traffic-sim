@@ -2420,6 +2420,18 @@ whether it completed healthily, and what the result is allowed to claim.
 - From any result page, the operator can reach the exact ScenarioSpec,
   build ID, job record, and validation report that produced it, without
   reading server logs.
+  **DONE 2026-07-20.**  The data was always durable and API-reachable
+  (job records embed the full spec; the scenario index carries
+  `scenario_spec`/`build_id`/`demand_build_key`), but no surface exposed
+  it — the history panel showed only status/kind/time/id, so an operator
+  had to hand-query `/api/jobs/<id>`.  Job rows are now clickable and
+  open a detail view rendering the job record, the run's exact
+  ScenarioSpec (summary fields plus the verbatim JSON), its demand and
+  network build IDs, closure intervals and seed set — and a linkage line
+  stating whether the active validation report covers THIS job's build,
+  with the same amber warning as the shield when it does not.  Built with
+  `textContent` throughout: job args echo user-supplied edge IDs and
+  error strings.
 - The 🛡 validation panel reflects the ACTIVE study's build, not merely
   the latest demand build.
   **DONE 2026-07-20.**  This was a real integrity gap, not a cosmetic
@@ -2453,8 +2465,37 @@ whether it completed healthily, and what the result is allowed to claim.
   falsely nor claims the gates apply.
 - The sensor table never makes a source observation, a split assumption, a
   rounded map value and a final SUMO count look like the same number.
+  **VERIFIED ALREADY SATISFIED 2026-07-20** (audited, no change needed):
+  the source cell is labelled by kind (`riktad` / `tvåvägs-total (en
+  mätning)`); a two-way station renders as ONE station row with indented
+  children whose source cell reads `modellandel av total`, so the raw
+  Total is never repeated as if it were two measurements; frozen target
+  and simulated output are separate columns, as are representative-seed
+  and ensemble values; `auditSimMean` prefers the pre-rounding
+  `simulated_mean_raw` over the map's rounded integer; every cell keeps
+  the exact value in its `title`; and `auditSum` propagates null so a
+  missing directed value makes the station value unknown, never zero.
 - A cancelled or failed study leaves the previous published study visible
   and clearly labelled as the one still in force.
+  **DONE 2026-07-20.**  The BEHAVIOUR was already correct and tested
+  (staging plus atomic publish; cancellation/failure leaves the live
+  scenario set untouched; the publish gate refuses staged sets on GEH
+  collapse, infeasible intervals, build-ID mismatch, variant gaps or
+  corrupt JSON).  The LABEL was missing: a failure fired a transient
+  `alert()` and then went quiet, so after a failed 2027-03-15
+  recalibration the operator was looking at 2025-09-16 data with the only
+  evidence being a dismissed dialog.  A persistent, operator-dismissible
+  banner now names both sides — e.g. "Omkalibreringen för 2027-03-15
+  (forecast) misslyckades. Kartan visar fortfarande den föregående
+  studien: 2025-09-16 (historik), bygge 57e3fd904e32." — and is wired
+  into the recalibration and closure paths, whose outcomes replace what
+  is displayed.  Deliberately NOT wired into the closure-time and monthly
+  searches: those do not publish a study, so claiming "the previous study
+  is still shown" would misdescribe what happened; they keep their local
+  error reporting.  Verified in headless Chrome by driving the real
+  failure path (stubbed API, app's own poll loop), asserting the previous
+  scenario stays loaded and the banner names the attempted study, the
+  in-force study and its build.
 
 ## Phase 7: Maintain Performance Without Reducing Fidelity
 
