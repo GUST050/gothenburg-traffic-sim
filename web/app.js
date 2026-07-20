@@ -480,6 +480,15 @@
           return '';
         }
 
+        // The build the ACTIVE scenario was calibrated from — the identity
+        // the validation report must match to be about what you are
+        // looking at. Null in Historisk/Prognos mode (no scenario study).
+        function activeStudyBuildId() {
+          const active = scenIndex?.scenarios.find(s => s.file === scenSelect.value);
+          return active?.scenario_spec?.demand_build_id
+            || active?.build_id || active?.demand_signature || null;
+        }
+
         async function loadValidation() {
           let res;
           try {
@@ -487,7 +496,17 @@
           } catch { return; }
           if (!res.ok) return;
           const r = await res.json();
-          const [mark, cls] = V_MARK[r.overall] || V_MARK.missing;
+          // Phase 6 acceptance gate: this panel must reflect the ACTIVE
+          // study's build. validation.json is ONE global artifact for
+          // whichever demand was calibrated when it ran — when the loaded
+          // scenario comes from a different build, its gates say nothing
+          // about what is on screen, so the shield must not read "pass".
+          const studyBuild = activeStudyBuildId();
+          const stale = Boolean(studyBuild && r.demand_build_id &&
+                                studyBuild !== r.demand_build_id);
+          const [mark, cls] = stale
+            ? V_MARK.missing
+            : (V_MARK[r.overall] || V_MARK.missing);
           validationBtn.hidden = false;
           validationBtn.innerHTML = `🛡 Validering <span class="${cls}">${mark}</span>`;
           const rows = Object.entries(r.sections).map(([name, s]) => {
@@ -498,10 +517,19 @@
               + (s.gate ? `<span class="v-detail" style="opacity:.7">grind: ${s.gate}</span>` : '')
               + `</td></tr>`;
           }).join('');
+          const provenance = `bygge ${r.demand_window} (${r.demand_source})`
+            + (r.demand_build_id ? ` · id ${r.demand_build_id.slice(0, 12)}` : '')
+            + ` · genererad ${r.generated_at}`;
           validationBody.innerHTML =
-            `<table>${rows}</table>`
-            + `<div class="v-detail" style="margin-top:4px">`
-            + `bygge ${r.demand_window} (${r.demand_source}) · genererad ${r.generated_at}</div>`;
+            (stale
+              ? `<div class="v-detail" id="validation-stale">⚠ Rapporten gäller ` +
+                `ett ANNAT bygge än det laddade scenariot ` +
+                `(scenario ${studyBuild.slice(0, 12)}). Grindarna nedan säger ` +
+                `ingenting om det du ser på kartan — kör om valideringen för ` +
+                `det aktiva bygget.</div>`
+              : '')
+            + `<table${stale ? ' class="v-stale"' : ''}>${rows}</table>`
+            + `<div class="v-detail" style="margin-top:4px">${provenance}</div>`;
         }
         validationBtn.addEventListener('click', () => {
           validationPanel.hidden = !validationPanel.hidden;

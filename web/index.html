@@ -477,6 +477,13 @@
     #validation-panel .v-missing { color: #9ca3af; font-weight: 700; }
     #validation-panel .v-info { color: #2563eb; font-weight: 700; }
     #validation-panel .v-detail { color: var(--ink-2); }
+    /* A report describing another build must not read as evidence for what
+       is on screen: state it loudly and mute the gate rows behind it. */
+    #validation-stale {
+      color: #b45309; font-weight: 600; margin-bottom: 6px;
+      border-left: 3px solid #f59e0b; padding-left: 8px;
+    }
+    #validation-panel table.v-stale { opacity: 0.45; }
     #sensor-audit-panel {
       flex: 1 1 100%;
       background: #fff;
@@ -840,6 +847,6 @@
   <script src="render.js?v=14"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

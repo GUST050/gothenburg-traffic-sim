@@ -354,6 +354,14 @@ def assemble() -> dict:
         "demand_window": ((meta or {}).get("date")
                           or (meta or {}).get("start_date")),
         "demand_source": (meta or {}).get("source"),
+        # Phase 6 acceptance gate: the validation panel must reflect the
+        # ACTIVE study's build, not merely the latest demand build.  The
+        # report is one global artifact describing whichever demand was
+        # calibrated when it ran, so it has to STATE that identity —
+        # otherwise a reader looking at a scenario from another build sees
+        # a green shield that validates something else entirely.  The web
+        # app compares this against the active scenario's own build id.
+        "demand_build_id": (meta or {}).get("build_id"),
         "overall": overall,
         "sections": sections,
     }

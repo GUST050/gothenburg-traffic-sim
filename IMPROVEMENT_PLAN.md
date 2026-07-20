@@ -2422,6 +2422,35 @@ whether it completed healthily, and what the result is allowed to claim.
   reading server logs.
 - The 🛡 validation panel reflects the ACTIVE study's build, not merely
   the latest demand build.
+  **DONE 2026-07-20.**  This was a real integrity gap, not a cosmetic
+  one: `validation.json` recorded `demand_window`/`demand_source` but no
+  build identity, and the panel rendered it beside whatever scenario was
+  loaded — so a scenario from another build showed a green shield
+  validating something else.  The report now records `demand_build_id`
+  (null, never invented, when the build did not record one), and the web
+  app compares it against the active scenario's own
+  `scenario_spec.demand_build_id`.  On mismatch the shield drops to "–"
+  (never "pass"), an amber banner states that the report describes a
+  DIFFERENT build and says the gates below mean nothing for what is on
+  screen, and the gate table is visually muted.  Verified in headless
+  Chrome in both states (matching → normal shield with the build id in
+  the provenance line; mismatched → warning state), plus regression tests
+  on the report side.
+
+  KNOWN STATE while doing this (2026-07-20): the tracked
+  `web/data/validation.json` is deliberately left at its last COHERENT
+  version and therefore does not yet carry `demand_build_id`; it will on
+  the next legitimate regeneration.  Reason: the held-out v2 campaign's
+  envelope builds overwrote `sumo/candidates.rou.xml`, which the report
+  hashes to prove the frozen temporal-holdout evidence still belongs to
+  the live release.  Regenerating now records a FALSE stale for that
+  section — the evidence is valid for release `57e3fd90…`, only the proof
+  file on disk was clobbered — and the live pool is not recoverable (no
+  archive stores it, and rebuilding would mint a new build id that no
+  longer matches the published scenarios).  The pool is now part of the
+  protected live-release product set so this cannot recur.  The UI treats
+  a missing `demand_build_id` as "cannot compare": it neither warns
+  falsely nor claims the gates apply.
 - The sensor table never makes a source observation, a split assumption, a
   rounded map value and a final SUMO count look like the same number.
 - A cancelled or failed study leaves the previous published study visible

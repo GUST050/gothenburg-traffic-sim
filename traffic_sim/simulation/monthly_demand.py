@@ -77,6 +77,15 @@ LIVE_DEMAND_RELEASE_PRODUCTS = (
     # build, leaving the live site's shield panel describing the wrong
     # demand window.
     Path("web") / "data" / "validation.json",
+    # The candidate pool was originally excluded as a "diagnostic
+    # intermediate nothing reads at runtime" — wrong: the validation
+    # report hashes it to prove the frozen temporal-holdout evidence still
+    # belongs to the live release.  Leaving a later envelope build's pool
+    # behind makes that check report a FALSE stale, and the live pool is
+    # not recoverable from any archive (found 2026-07-20, after it had
+    # already happened once).
+    Path("sumo") / "candidates.rou.xml",
+    Path("sumo") / "candidates.meta.json",
 )
 
 

@@ -18,6 +18,7 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
     (web / "scenarios").mkdir(parents=True)
     meta = {
         "date": "2025-09-16", "source": "historical",
+        "build_id": "buildid0123456789ab",
         "epoch_sim": "2025-09-16T00:00:00",
         "build_options": {"through_share_target": 0.25},
         "pfe_fit": {"geh_pct": geh, "infeasible_intervals": infeasible,
@@ -85,6 +86,25 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
     monkeypatch.setattr(vr, "SUMO_DIR", sumo)
     monkeypatch.setattr(vr, "WEB_DATA", web)
     monkeypatch.setattr(vr, "OUT_PATH", web / "validation.json")
+
+
+class TestStudyIdentity:
+    """Phase 6 acceptance gate: the panel must reflect the ACTIVE study's
+    build. The report is one global artifact, so it has to STATE which
+    build it validates — the web app refuses a pass shield when that id
+    differs from the loaded scenario's."""
+
+    def test_report_records_the_build_it_validates(self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch)
+        assert vr.assemble()["demand_build_id"] == "buildid0123456789ab"
+
+    def test_missing_build_id_is_null_not_invented(self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch)
+        meta_path = vr.SUMO_DIR / "demand_meta.json"
+        meta = json.loads(meta_path.read_text())
+        del meta["build_id"]
+        meta_path.write_text(json.dumps(meta))
+        assert vr.assemble()["demand_build_id"] is None
 
 
 class TestAssemble:
