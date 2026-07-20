@@ -11,9 +11,12 @@ routeDistribution wins" rule, verified 2026-07-11 against 139 real rerouted
 vehicles), and comparing two such extractions for route-choice stability.
 """
 
+import json
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import signal_closure_combine as scc
@@ -167,3 +170,61 @@ class TestRouteStability:
         assert result["n_common_vehicles"] == 0
         assert result["fraction_identical"] is None
         assert "note" in result
+
+
+NET_XML = """<net>
+  <edge id="A" from="a" to="J"><lane id="A_0" speed="13.89" length="50"/></edge>
+  <edge id=":J" function="internal"><lane id=":J_0" speed="13.89" length="20"/></edge>
+  <connection from="A" to="B" via=":J_0" tl="J" linkIndex="0"/>
+  <tlLogic id="J" type="static" programID="0">
+    <phase duration="20" state="G"/><phase duration="4" state="y"/>
+  </tlLogic>
+</net>"""
+
+
+class TestCertifyAndExportPlans:
+    """Phase 5 exit condition for the closure path: every timing result
+    identifies its SignalPlan, and an optimized plan violating the
+    TSFS-informed envelope aborts instead of publishing."""
+
+    def _setup(self, monkeypatch, tmp_path, *, yellow_s=4):
+        net = tmp_path / "net.net.xml"
+        net.write_text(NET_XML)
+        adapted = tmp_path / "adapted.add.xml"
+        adapted.write_text(
+            '<additional><tlLogic id="J" type="static" programID="opt">'
+            f'<phase duration="30" state="G"/><phase duration="{yellow_s}" state="y"/>'
+            "</tlLogic></additional>")
+        coordinated = tmp_path / "coord.add.xml"
+        coordinated.write_text(
+            '<additional><tlLogic id="J" programID="opt" offset="7"/></additional>')
+        monkeypatch.setattr(scc.rs, "SUMO_DIR", tmp_path)
+        monkeypatch.setattr(scc.rs, "NET_PATH", net)
+        return adapted, coordinated
+
+    def test_exports_both_plans_and_passing_certificate(self, monkeypatch, tmp_path):
+        adapted, coordinated = self._setup(monkeypatch, tmp_path)
+        artifacts, certificates, optimized = scc.certify_and_export_plans(
+            "lbl", adapted, coordinated)
+        assert set(artifacts) == {"pass1_baseline_signals",
+                                  "pass2_optimized_signals"}
+        for path in artifacts.values():
+            payload = json.loads(Path(path).read_text())
+            assert payload["kind"] == "SignalPlan"
+        assert certificates["pass1_baseline_signals"]["status"] == "not_applicable"
+        assert certificates["pass2_optimized_signals"]["status"] == "pass"
+        assert certificates["pass2_optimized_signals"]["provenance"] == (
+            "synthetic_tsfs_informed")
+        assert optimized["plan_id"]
+        # The optimized artifact reflects the ADAPTED phases, not the net's.
+        opt_payload = json.loads(
+            Path(artifacts["pass2_optimized_signals"]).read_text())
+        assert opt_payload["controllers"][0]["phases"][0]["duration_s"] == 30
+
+    def test_unsafe_optimized_plan_aborts_before_publication(
+            self, monkeypatch, tmp_path):
+        adapted, coordinated = self._setup(monkeypatch, tmp_path, yellow_s=1)
+        with pytest.raises(SystemExit, match="säkerhetscertifikatet"):
+            scc.certify_and_export_plans("lbl", adapted, coordinated)
+
+

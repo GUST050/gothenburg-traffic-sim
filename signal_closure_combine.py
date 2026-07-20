@@ -63,10 +63,12 @@ import run_scenario as rs
 from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
                         sumo_version, tls_plan_diff, tls_timing_schedule,
                         window_offsets_s)
-from signal_optimize import (CAVEAT, paired_comparison, relative_pct, run_condition,
+from signal_optimize import (CAVEAT, REGULATION_PROVENANCE, paired_comparison,
+                             relative_pct, run_condition,
                              run_tls_coordinator, run_tls_cycle_adaptation,
                              scenario_spec_key)
-from signal_regulation import enforce_timing_minimums
+from signal_regulation import (enforce_timing_minimums, timing_certificate,
+                               write_signal_plan_artifact)
 from traffic_sim.core.contracts import load_scenario_spec
 
 
@@ -149,6 +151,55 @@ def route_stability(vr1_path: Path, vr2_path: Path) -> dict:
     identical = sum(1 for vid in common if r1[vid] == r2[vid])
     return {"n_common_vehicles": len(common), "n_identical_routes": identical,
             "fraction_identical": round(identical / len(common), 3)}
+
+
+def certify_and_export_plans(
+        label: str, adapted_path: Path, coordinated_path: Path,
+) -> tuple[dict, dict, dict]:
+    """Export both effective plans as SignalPlan artifacts; certify pass 2.
+
+    Same contract as signal_optimize.py (Phase 5 exit condition: "every
+    timing result identifies its SignalPlan").  The optimized closure plan
+    is CERTIFIED before it is evaluated — a candidate violating the
+    TSFS-informed timing envelope must abort here, not be published with
+    attractive numbers.  Pass 1's baseline is the raw netconvert guess and
+    stays an explicitly uncertified reference (forcing it through the
+    certificate would abort on the 3 s yellows the optimized plan exists
+    to fix — same reasoning as signal_optimize.py's raw conditions).
+    """
+    plan_artifacts = {}
+    baseline_plan_path = rs.SUMO_DIR / f"signal_plan_d4_{label}_baseline.json"
+    write_signal_plan_artifact(
+        rs.NET_PATH, rs.NET_PATH, baseline_plan_path,
+        provenance=TLS_PROVENANCE)
+    plan_artifacts["pass1_baseline_signals"] = str(baseline_plan_path)
+    optimized_plan_path = rs.SUMO_DIR / f"signal_plan_d4_{label}_optimized.json"
+    optimized_artifact = write_signal_plan_artifact(
+        rs.NET_PATH, adapted_path, optimized_plan_path,
+        overlay_paths=(coordinated_path,),
+        provenance=REGULATION_PROVENANCE)
+    plan_artifacts["pass2_optimized_signals"] = str(optimized_plan_path)
+    plan_certificates = {
+        "pass1_baseline_signals": {
+            "schema_version": 1,
+            "status": "not_applicable",
+            "provenance": TLS_PROVENANCE,
+            "plan_file": str(rs.NET_PATH),
+            "overlay_files": [],
+            "reason": "oregelad referens används endast för jämförelse",
+        },
+        "pass2_optimized_signals": timing_certificate(
+            rs.NET_PATH, adapted_path,
+            overlay_paths=(coordinated_path,),
+            provenance=REGULATION_PROVENANCE),
+    }
+    if plan_certificates["pass2_optimized_signals"]["status"] != "pass":
+        sys.exit(
+            "den optimerade stängningssignalplanen klarade inte "
+            "säkerhetscertifikatet: "
+            + "; ".join(
+                plan_certificates["pass2_optimized_signals"]["errors"][:3]))
+    return plan_artifacts, plan_certificates, optimized_artifact
 
 
 def parse_args() -> argparse.Namespace:
@@ -326,6 +377,9 @@ def main() -> None:
         run_tls_coordinator(home, extracted_path, adapted_path, coordinated_path)
         scratch += [adapted_raw_path, adapted_path, coordinated_path]
 
+        plan_artifacts, plan_certificates, optimized_artifact = \
+            certify_and_export_plans(label, adapted_path, coordinated_path)
+
         print("  Pass 2: closure + OPTIMIZED signals …")
         vr2_paths = [rs.SUMO_DIR / f"d4_vehroute2_{label}_seed{seed}.xml"
                      for seed, _ in seed_plan]
@@ -408,6 +462,9 @@ def main() -> None:
             "route_stability": stability,
             "tls_plan_diff": plan_diff,
             "tls_timing_schedule": timing_schedule,
+            "signal_plan_id": optimized_artifact["plan_id"],
+            "signal_plan_artifacts": plan_artifacts,
+            "signal_plan_certificates": plan_certificates,
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
         out_path = args.out or rs.SUMO_DIR / f"signal_closure_combine_{close_key}.json"

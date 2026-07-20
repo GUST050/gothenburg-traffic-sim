@@ -917,6 +917,18 @@ def summarize_signal_optimization(result: dict, closure: bool) -> dict:
         "median_cycle_delta_pct": median_cycle_delta_pct,
         "tls_plan_diff": plan_diff,
         "tls_timing_schedule": result.get("tls_timing_schedule", []),
+        # Phase 5 exit condition: every timing result identifies its
+        # SignalPlan. Both schemas now carry versioned plan artifacts and
+        # per-plan timing certificates (D2 keyed by condition, D4 by pass);
+        # the reader gets the identity and the safety status, not just the
+        # delay numbers.
+        "signal_plan_id": result.get("signal_plan_id"),
+        "signal_plan_artifacts": result.get("signal_plan_artifacts", {}),
+        "signal_plan_certificate_status": {
+            name: certificate.get("status")
+            for name, certificate in (
+                result.get("signal_plan_certificates") or {}).items()
+        },
         **extra,
     }
 

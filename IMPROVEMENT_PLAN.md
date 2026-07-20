@@ -372,10 +372,19 @@ Implementation Order" at the end of this document.
    evidence-bound before/after holdout, confidence, coverage and isolation
    reports plus a placement screen. A new station still needs a real before/
    after artifact before it can be called an improvement.
-6. **Certificate implemented:** every signal-optimization condition now gets
-   a machine-readable TSFS-informed phase/link timing certificate. Remaining:
-   optimize closure-driven arrivals under that certificate; this stays
-   synthetic until a city controller plan is imported.
+6. **Certificate implemented, and extended to the closure path
+   (2026-07-20):** every signal-optimization condition gets a
+   machine-readable TSFS-informed phase/link timing certificate, and
+   `signal_closure_combine.py` (D4) now emits the same evidence for
+   closure-driven arrivals — versioned `SignalPlan` artifacts for both the
+   uncertified baseline reference and the optimized plan, plus a timing
+   certificate for the optimized plan that ABORTS the study before
+   publication if the TSFS-informed envelope is violated.  The result
+   carries `signal_plan_id`/artifacts/certificates and `serve.py` surfaces
+   them, so Phase 5's exit condition ("every timing result identifies its
+   SignalPlan") now holds on both the normal and closure paths.  Remaining
+   in this item: nothing internal — it stays synthetic until a city
+   controller plan is imported (external data request 1).
 7. **Feasibility slice implemented:** closure-time ranking now rejects missing
    queue evidence, partial/no detours, truncation and unhealthy candidates;
    paired uncertainty and queue deltas are published with every candidate.
