@@ -519,6 +519,9 @@ class TestMonthlySearch:
 
     def test_lifecycle_progress_then_curated_result(self, base_url, monkeypatch):
         sid = "monthly-api-test"
+        # Held-out gate present -> validated proxy screening is used.
+        monkeypatch.setattr(serve, "load_passing_heldout_gate",
+                            lambda: {"gate_status": "pass"})
         started = threading.Event()
         release = threading.Event()
         seen = {}
@@ -555,17 +558,41 @@ class TestMonthlySearch:
             f"{base_url}/api/monthly_search/status")[1]["status"] == "done")
         _, done = get_json(f"{base_url}/api/monthly_search/status")
         result = done["result"]
-        # The frozen policy and bounded-exhaustive screening must be forced
-        # by the server, never taken from the client.
+        # The frozen policy is forced by the server; with the held-out gate
+        # present, validated proxy screening (not bounded-exhaustive) runs.
         cmd = seen["cmd"]
         assert str(serve.MONTHLY_POLICY_PATH.resolve()) in cmd
-        assert "bounded-exhaustive" in cmd
+        assert cmd[cmd.index("--screening-mode") + 1] == "proxy"
+        assert "bounded-exhaustive" not in cmd
         assert str(serve.MONTHLY_BASELINE_TRIP_P99_S) in cmd
         # Claim boundary passes through verbatim; internals are curated out.
         assert result["claim_boundary"] == _monthly_result(sid)["claim_boundary"]
         assert result["winner_id"] == "closure-1"
         assert result["selected_schedules"][0]["intervals"]
         assert "source_files" not in result["simulation_backend"]
+        assert not serve._sim_lock.locked()
+
+    def test_no_heldout_gate_falls_back_to_bounded_exhaustive(
+            self, base_url, monkeypatch):
+        # Without a passing held-out record the proxy is not validated, so
+        # the server reverts to the pre-gate safe mode (SUMO every candidate,
+        # hard cap) rather than exposing an unvalidated shortlist.
+        monkeypatch.setattr(serve, "load_passing_heldout_gate", lambda: None)
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen["cmd"] = cmd
+            return FakeCompletedProcess(returncode=1, stderr="stopped")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": _closure_search_spec()})[0] == 202
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/monthly_search/status")[1]["status"] == "error")
+        cmd = seen["cmd"]
+        assert cmd[cmd.index("--screening-mode") + 1] == "bounded-exhaustive"
+        assert str(serve.MONTHLY_BOUNDED_EXHAUSTIVE_CAP) in cmd
         assert not serve._sim_lock.locked()
 
     def test_cli_error_last_line_is_surfaced(self, base_url, monkeypatch):

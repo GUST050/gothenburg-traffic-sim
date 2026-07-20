@@ -162,6 +162,25 @@ class ShortlistPolicy:
             raise ValueError("validation quantiles must be from zero through one")
 
 
+# The screening policy the held-out v2 gate actually validated (practical-
+# winner recall 1.0, regret 0.0).  Deployment MUST screen with exactly this
+# policy, or the "held-out validated" claim would not cover the shortlist
+# the operator sees.  `run_monthly_proxy_validation.VALIDATION_POLICY` keeps
+# its own copy (that file is on the frozen held-out path and stays
+# byte-identical); an equality test guards the two against silent drift.
+HELD_OUT_VALIDATED_SHORTLIST_POLICY = ShortlistPolicy(
+    best_overall=2,
+    best_per_day_count=1,
+    best_per_date_block=1,
+    date_block_days=7,
+    validation_quantiles=(0.5, 1.0),
+    low_support_multiplier=2.0,
+    unavailable_multiplier=2.5,
+    bounded_exhaustive_limit=1,
+    maximum_shortlist=32,
+)
+
+
 def _shortest_path(
     start: str,
     target: str,

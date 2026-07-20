@@ -89,11 +89,13 @@ Endpoints:
                                 recurring closure search
                                 (run_monthly_closure_search.py) against the
                                 server's FROZEN policy
-                                (validation/monthly_search_policy_v1.json)
-                                in bounded-exhaustive screening mode ONLY —
-                                the monthly proxy failed its held-out gate
-                                and must not reach the UI, so every ranked
-                                candidate here is SUMO-verified. Same
+                                (validation/monthly_search_policy_v1.json).
+                                Screening mode follows the held-out gate:
+                                with a passing v2 record the validated proxy
+                                screens a large candidate set down to a
+                                bounded shortlist (only then SUMO-verified);
+                                without one it falls back to bounded-
+                                exhaustive with a hard cap. Same
                                 async/poll pattern, shares _sim_lock.
                                 Cancellation kills the process tree but the
                                 immutable workspace under
@@ -154,7 +156,8 @@ from traffic_sim.core.contracts import (ClosureSearchSpec, DemandBuildSpec,
                                          write_closure_search_spec,
                                          write_demand_build_spec,
                                          write_scenario_spec)
-from traffic_sim.simulation.monthly_search import MonthlySearchPolicy
+from traffic_sim.simulation.monthly_search import (MonthlySearchPolicy,
+                                                   load_passing_heldout_gate)
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import assess_output_fit
 from traffic_sim.simulation.trajectory_contract import (
@@ -201,9 +204,11 @@ CLOSURE_SEARCH_SPEC_DIR = ROOT / "runs" / "closure_search_specs"
 # warm-up, so this is the conservative choice. Changing it is a policy
 # change and needs a new golden freeze, not a code edit.
 MONTHLY_BASELINE_TRIP_P99_S = 3600
-# Web searches run bounded-exhaustive ONLY: the monthly screening proxy
-# failed its held-out release gate, so no proxy-ranked shortlist may reach
-# the UI. Above this cap the CLI fails with a clear message instead of
+# Fallback cap for bounded-exhaustive mode, used ONLY when no passing
+# held-out gate record exists (see _run_monthly_search). With the v2 gate
+# passed, the web path uses validated proxy screening instead, which has no
+# such cap because it screens to a bounded shortlist before any SUMO. Above
+# this cap the bounded-exhaustive CLI fails with a clear message rather than
 # silently truncating the search space.
 MONTHLY_BOUNDED_EXHAUSTIVE_CAP = 12
 # A monthly search is resumable by design; a timeout here only pauses it
@@ -1931,10 +1936,21 @@ class Handler(SimpleHTTPRequestHandler):
                    "--spec", str(spec_path.resolve()),
                    "--policy", str(MONTHLY_POLICY_PATH.resolve()),
                    "--baseline-trip-duration-p99-s",
-                   str(MONTHLY_BASELINE_TRIP_P99_S),
-                   "--screening-mode", "bounded-exhaustive",
-                   "--bounded-exhaustive-cap",
-                   str(MONTHLY_BOUNDED_EXHAUSTIVE_CAP)]
+                   str(MONTHLY_BASELINE_TRIP_P99_S)]
+            # Screening mode follows the held-out gate: with a passing v2
+            # record the proxy IS validated (practical-winner recall 1.0),
+            # so use it — it screens hundreds/thousands of legal schedules
+            # down to a bounded shortlist that only THEN gets SUMO. Without
+            # a passing record, fall back to bounded-exhaustive (every
+            # candidate SUMO-verified, hard cap) — the pre-gate safe mode
+            # that could only handle a tiny search. This is the same gate
+            # the claim boundary checks, so mode and claim stay consistent.
+            if load_passing_heldout_gate() is not None:
+                cmd += ["--screening-mode", "proxy"]
+            else:
+                cmd += ["--screening-mode", "bounded-exhaustive",
+                        "--bounded-exhaustive-cap",
+                        str(MONTHLY_BOUNDED_EXHAUSTIVE_CAP)]
             res = run_in_new_session(cmd, cwd=str(ROOT),
                                      timeout=MONTHLY_TIMEOUT_S)
             if active_job_cancelled("monthly"):

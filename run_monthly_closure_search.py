@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from screen_monthly_closures import build_screening_artifact
+from traffic_sim.simulation.monthly_proxy import (
+    HELD_OUT_VALIDATED_SHORTLIST_POLICY,
+)
 from traffic_sim.core.closure_calendar import generate_closure_schedules
 from traffic_sim.core.contracts import (
     load_closure_search_spec,
@@ -188,7 +191,16 @@ def main() -> None:
                 **runner_options,
             )
         if args.screening_mode == "proxy":
-            screen_builder = build_screening_artifact
+            # Screen with EXACTLY the policy the held-out v2 gate validated,
+            # so the shortlist the operator sees is the one whose recall/
+            # regret were measured. road_domain_status matches the
+            # validation runner (in_domain); per-worksite coverage scoring
+            # is a future refinement the gate did not cover.
+            screen_builder = lambda path: build_screening_artifact(
+                path,
+                road_domain_status="in_domain",
+                policy=HELD_OUT_VALIDATED_SHORTLIST_POLICY,
+            )
         else:
             screen_builder = lambda path: _bounded_exhaustive_builder(
                 path,

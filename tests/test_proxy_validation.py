@@ -307,6 +307,19 @@ def test_partial_report_can_conclusively_fail_when_best_case_is_unreachable():
     assert report["ui_exposure_allowed"] is False
 
 
+def test_deployed_screening_policy_matches_the_validated_one():
+    """The web monthly search screens with
+    HELD_OUT_VALIDATED_SHORTLIST_POLICY; the held-out gate measured recall/
+    regret with run_monthly_proxy_validation.VALIDATION_POLICY. If these
+    drift, the 'held-out validated' claim would no longer cover the
+    shortlist the operator sees, so pin them equal here."""
+    from traffic_sim.simulation.monthly_proxy import (
+        HELD_OUT_VALIDATED_SHORTLIST_POLICY,
+    )
+    from run_monthly_proxy_validation import VALIDATION_POLICY
+    assert HELD_OUT_VALIDATED_SHORTLIST_POLICY == VALIDATION_POLICY
+
+
 def _gated_manifest(raw_transform=None):
     """Manifest carrying the frozen held-out-v2 gate object."""
     manifest = _manifest()
