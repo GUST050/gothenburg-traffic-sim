@@ -1037,6 +1037,7 @@
         const monthlyDateEnd    = document.getElementById('monthly-date-end');
         const monthlyBandStart  = document.getElementById('monthly-band-start');
         const monthlyBandEnd    = document.getElementById('monthly-band-end');
+        const monthlyFullday    = document.getElementById('monthly-fullday');
         const monthlyWorkHours  = document.getElementById('monthly-work-hours');
         const monthlyMaxDays    = document.getElementById('monthly-max-days');
         const monthlyWeekdays   = document.getElementById('monthly-weekdays');
@@ -1888,10 +1889,15 @@
               Math.round((Number(monthlyWorkHours.value) || 4) * 60),
             max_consecutive_start_days:
               Math.min(7, Math.max(1, Number(monthlyMaxDays.value) || 1)),
-            permitted_daily_band: {
-              earliest_start: monthlyBandStart.value.slice(0, 5),
-              latest_end: monthlyBandEnd.value.slice(0, 5),
-            },
+            // "Heldag" gives the true full-day band 00:00–24:00 (the
+            // contract accepts 24:00 only as latest_end, which a
+            // type="time" input cannot express).
+            permitted_daily_band: monthlyFullday.checked
+              ? { earliest_start: '00:00', latest_end: '24:00' }
+              : {
+                  earliest_start: monthlyBandStart.value.slice(0, 5),
+                  latest_end: monthlyBandEnd.value.slice(0, 5),
+                },
             allowed_weekdays: weekdays,
             same_daily_window: true,
             resolution_minutes: 15,
@@ -2133,6 +2139,11 @@
         btnMonthly.addEventListener('click', enterMonthlyPicking);
         btnMonthlyResultsClose.addEventListener('click',
           () => monthlyResults.classList.remove('show'));
+        // Full-day band overrides (and visibly disables) the time inputs.
+        monthlyFullday.addEventListener('change', () => {
+          monthlyBandStart.disabled = monthlyFullday.checked;
+          monthlyBandEnd.disabled = monthlyFullday.checked;
+        });
         monthlyWeekdays.querySelectorAll('button').forEach(btn =>
           btn.addEventListener('click', () => btn.classList.toggle('active')));
         monthlySourceSeg.querySelectorAll('button').forEach(btn =>
@@ -2150,14 +2161,44 @@
             }
           }));
 
+        // Catch the invalid combinations the contract would reject, but with
+        // a plain Swedish message and no server round-trip to a raw error.
+        function monthlyBandMinutes(hhmm) {
+          const [h, m] = hhmm.split(':').map(Number);
+          return h * 60 + m;
+        }
+        function validateMonthlySpec(spec) {
+          if (!spec.allowed_weekdays.length) return 'Välj minst en veckodag.';
+          if (!spec.permitted_date_start || !spec.permitted_date_end) {
+            return 'Välj ett datumintervall.';
+          }
+          if (spec.permitted_date_start > spec.permitted_date_end) {
+            return 'Första datumet måste vara före det sista.';
+          }
+          const band = spec.permitted_daily_band;
+          const start = monthlyBandMinutes(band.earliest_start);
+          const end = monthlyBandMinutes(band.latest_end);
+          if (end <= start) {
+            return 'Tidsbandet måste ha en positiv längd — sätt sluttiden '
+              + 'efter starttiden, eller kryssa i Heldag.';
+          }
+          // Work distributes across up to max_consecutive_start_days days,
+          // each day's closure bounded by the band — so the necessary
+          // condition is total work ≤ days × band length.
+          const capacity = (end - start) * spec.max_consecutive_start_days;
+          if (spec.required_work_minutes > capacity) {
+            return `Arbetstiden (${spec.required_work_minutes / 60} h) ryms `
+              + `inte i ${spec.max_consecutive_start_days} dag(ar) × `
+              + `${(end - start) / 60} h tidsband. Vidga bandet (eller Heldag), `
+              + 'öka dagar i följd, eller minska arbetstiden.';
+          }
+          return null;
+        }
+
         btnMonthlyRun.addEventListener('click', async () => {
           const spec = monthlyClosureSearchSpec([...selected]);
-          if (!spec.allowed_weekdays.length) {
-            return alert('Välj minst en veckodag.');
-          }
-          if (!spec.permitted_date_start || !spec.permitted_date_end) {
-            return alert('Välj ett datumintervall.');
-          }
+          const problem = validateMonthlySpec(spec);
+          if (problem) return alert(problem);
           lastMonthlySpec = spec;
           monthlyJobRunning = true;
           refreshCloseUI();
