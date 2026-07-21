@@ -9,6 +9,15 @@ levers 1 and 4/benchmark path, completed to the day-library architecture),
 and inherits its constraint verbatim: **results are not allowed to get
 worse.***
 
+## Status (updated 2026-07-21)
+
+| Stage | State |
+| --- | --- |
+| A1 per-quarter parallel publish | **LANDED** `6045d34`. Byte-identity proven through the production orchestration on a real pool (`validation/a1_publish_identity_v1.json`) + regression tests in both suites. The running 40h/3mo search picks it up from its next envelope build. Golden-build byte comparison (§6.1) still owed once `sumo/` frees. |
+| A2 parallel SUMO seeds | **CODE LANDED, GATE CLOSED** `f054ed0`. The monthly runner overlaps a candidate's observations but yields them in canonical order and truncates at the first hard failure, so evidence cannot change; equivalence is unit-tested. `--seed-workers` stays refused above the count in `validation/a2_parallel_seed_benchmark_v1.json`, which `benchmark_seed_workers.py` writes only on identical `result.json` + measured peak RSS. **Run the benchmark on an idle machine to open it.** |
+| B calendar-date seeding + day library | not started — blocked: needs `sumo/` free (running search) for its golden A/B, and must not land mid-search |
+| C pre-warm job + L4 + horizon UI | not started — depends on B |
+
 ## 0. Goal, stated precisely
 
 Make closure-search and simulation-viewing latency drop from hours to
