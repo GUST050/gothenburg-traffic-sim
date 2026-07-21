@@ -1,0 +1,65 @@
+{
+  "record": "b_heldout_v3_campaign",
+  "created": "2026-07-22",
+  "plan": "SPEED_ARCHITECTURE_PLAN_2026-07.md 6.3 -> held-out v3 on stage-B demand",
+  "gate_status": "pass",
+  "method": "The frozen v2 held-out case set - same 12 cases, schedules, proxy and thresholds - rerun end to end on demand REBUILT under stage-B code. The cases were frozen before stage B existed, so they are genuinely held out with respect to it; only the demand generator changed. Isolated state root; live release guarded around every build and SUMO phase.",
+  "gate_checks": {
+    "all_shortlists_contain_eligible_candidate": true,
+    "failure_disqualification_recall": true,
+    "p90_normalized_shortlist_regret": true,
+    "practical_winner_recall": true,
+    "ranking_case_coverage": true
+  },
+  "thresholds": {
+    "failure_disqualification_recall_minimum": 0.6,
+    "minimum_ranking_case_fraction": 0.5,
+    "p90_normalized_shortlist_regret_maximum": 0.1,
+    "practical_equivalence_s": 300.0,
+    "practical_winner_recall_minimum": 0.9
+  },
+  "metrics": {
+    "failure_disqualification_recall": 0.722222,
+    "median_spearman": -0.97619,
+    "p90_normalized_shortlist_regret": 0.0,
+    "practical_winner_recall": 1.0,
+    "ranking_case_fraction": 0.583333,
+    "spearman_case_fraction": 0.142857,
+    "total_disqualified_schedules": 46,
+    "winner_recall": 1.0
+  },
+  "comparison_to_v2": {
+    "practical_winner_recall": {
+      "v2": 1.0,
+      "b": 1.0,
+      "floor": 0.9
+    },
+    "p90_normalized_shortlist_regret": {
+      "v2": 0.0,
+      "b": 0.0,
+      "ceiling": 0.1
+    },
+    "failure_disqualification_recall": {
+      "v2": 0.867,
+      "b": 0.722222,
+      "floor": 0.6
+    },
+    "median_spearman": {
+      "v2": 0.894,
+      "b": -0.97619,
+      "note": "NOT a gate check"
+    }
+  },
+  "verdict": "PASS on all five defined gate checks, each with margin.",
+  "caveats_stated_plainly": {
+    "failure_recall_dropped": "0.867 -> 0.722, still above the 0.6 floor. B's demand disqualifies a slightly different borderline set than pre-B; the practical winner the proxy must preserve is preserved.",
+    "spearman_sign_flip_is_noise_not_regression": "median_spearman went +0.894 -> -0.976, but it is computed on the ONE ranking case with any objective spread (v2-secondary-medium-weekend-4h), whose 8 eligible objectives span only 71s - entirely inside the 300s practical-equivalence band. Every eligible candidate there is a practical winner, so regret stays 0.0 and recall 1.0 despite the fine-order flip. The flip measures rank noise inside the band, not a decision-affecting ranking regression.",
+    "case_set_weakness_reconfirmed": "spearman_case_fraction is 1/7: six of seven ranking cases have near-tied objectives, so the v2 set cannot actually test ranking DISCRIMINATION at spreads beyond the equivalence band. A stronger v3 should include cases whose true objective spread exceeds 300s."
+  },
+  "consequence": "This is a legitimate held-out PASS of the gate as defined, on B demand - it satisfies the plan's 6.3 requirement to re-validate before global-best claims continue. But because it re-uses the weak v2 case set, it re-opens the claim at the SAME evidential strength v2 had, not a stronger one. Opening the global-best claim on B is therefore a defensible decision, not an automatic one; it is an outward-facing honesty-label choice for the owner.",
+  "evidence": {
+    "state_root": "runs/b-neutrality/state",
+    "report_sha256": "68ec608efda7049d153b124e7dc962648b0d2fc420c13c0ad2a1888152a3c2da",
+    "outcomes_sha256": "3dfead0b3cd8ed4364e1d1a376eee3fe39b13cdb6b3a4f75b5c58937250ec661"
+  }
+}
