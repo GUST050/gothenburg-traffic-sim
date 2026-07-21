@@ -806,6 +806,74 @@ class TestPurposeLengthOrdering:
         assert "purpose_length_km" not in report
 
 
+_FAKE_PUBLISH_STAGED: dict = {}
+
+
+def _fake_publish_job(job):
+    """Module-level stand-in for _write_pfe_variant_report_job (picklable,
+    fork-inheritable) writing deterministic staged artifacts."""
+    suffix, key = job
+    path = _FAKE_PUBLISH_STAGED[suffix]
+    path.write_text(f"routes for {key}")
+    dcal._agent_path_for(path).write_text(f"agents for {key}")
+    return suffix, key, {"vehicles": 1, "geh_pct": 100.0,
+                         "infeasible_intervals": 0}, 0.5
+
+
+class TestPublishWorkerBudget:
+    """Memory-gated publish pool (speed lever 1, 2026-07-21): parallel only
+    when the machine can hold worker-count copies of the parent."""
+
+    def test_single_variant_never_pools(self):
+        assert dcal._publish_worker_budget(1) == 1
+
+    def test_measurement_failure_falls_back_to_serial(self, monkeypatch):
+        monkeypatch.setattr(dcal.resource, "getrusage",
+                            lambda _who: (_ for _ in ()).throw(OSError("no")))
+        assert dcal._publish_worker_budget(3) == 1
+
+    def test_tight_memory_falls_back_to_serial(self, monkeypatch):
+        class Usage:
+            ru_maxrss = 20 * 1024**3 if dcal.sys.platform == "darwin" \
+                else 20 * 1024**2
+        monkeypatch.setattr(dcal.resource, "getrusage", lambda _who: Usage())
+        assert dcal._publish_worker_budget(3) == 1
+
+    def test_ample_memory_grants_all_variants(self, monkeypatch):
+        class Usage:
+            ru_maxrss = 1 * 1024**3 if dcal.sys.platform == "darwin" \
+                else 1 * 1024**2
+        monkeypatch.setattr(dcal.resource, "getrusage", lambda _who: Usage())
+        assert dcal._publish_worker_budget(3) == 3
+
+    def test_pool_and_serial_publish_identical_files(self, tmp_path):
+        """The pool path must write byte-identical staged artifacts to the
+        serial path — same worker function, distinct files per variant.
+        The worker and its path map are module-level so fork children can
+        unpickle/inherit them, mirroring production's fork-inherited state."""
+        global _FAKE_PUBLISH_STAGED
+        _FAKE_PUBLISH_STAGED = {
+            suffix: dcal._staged_route_path(
+                tmp_path / f"calibrated{suffix}.rou.xml")
+            for suffix in ("", "_v1", "_v2")
+        }
+        variants = [("", "edge_shares"), ("_v1", "edge_shares_q10"),
+                    ("_v2", "edge_shares_q90")]
+
+        def snapshot():
+            return {s: (path.read_text(),
+                        dcal._agent_path_for(path).read_text())
+                    for s, path in _FAKE_PUBLISH_STAGED.items()}
+
+        serial_reports = [_fake_publish_job(v) for v in variants]
+        serial_files = snapshot()
+
+        with dcal.mp.get_context("fork").Pool(processes=3) as pool:
+            pool_reports = pool.map(_fake_publish_job, variants)
+        assert snapshot() == serial_files
+        assert pool_reports == serial_reports
+
+
 class TestVariantPublication:
     """All direction variants must publish atomically as one demand build."""
 
@@ -824,6 +892,9 @@ class TestVariantPublication:
                             lambda _shapes, n, _offset=0.0: [{} for _ in range(n)])
         monkeypatch.setattr(dcal, "structure_groups_for_shapes", lambda _shapes: [])
         monkeypatch.setattr(dcal, "GEO_PATH", tmp_path / "absent.geojson")
+        # This test exercises atomic rejection, not publish parallelism —
+        # force the serial path so FakePool only fakes the SOLVE pool.
+        monkeypatch.setattr(dcal, "_publish_worker_budget", lambda _n: 1)
 
         class FakePool:
             def __init__(self, *args, **kwargs):

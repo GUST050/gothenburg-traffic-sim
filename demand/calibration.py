@@ -13,6 +13,8 @@ from __future__ import annotations
 from collections import Counter
 import multiprocessing as mp
 import os
+import resource
+import sys
 import time
 from pathlib import Path
 
@@ -112,6 +114,32 @@ def _run_pfe_interval_job(job: dict):
         purpose_mix=_PFE_PAR_PURPOSE_MIXES[suffix][quarter],
     )
     return suffix, key, quarter, sol, rung
+
+
+def _publish_worker_budget(variant_count: int) -> int:
+    """Publish-pool size bounded by real memory headroom, never optimism.
+
+    Each forked publisher can end up holding a full copy of the parent's
+    shape/solution state, so grant one worker per parent-sized slice of
+    60% of machine RAM (the rest is headroom for the OS, SUMO and page
+    cache). Any measurement failure returns 1 — the always-safe serial
+    path this function exists to guard.
+    """
+    if variant_count <= 1:
+        return 1
+    try:
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        if sys.platform != "darwin":
+            rss *= 1024   # Linux reports KiB; macOS reports bytes
+        total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (AttributeError, OSError, ValueError):
+        return 1
+    if rss <= 0 or total <= 0:
+        return 1
+    headroom = int(total * 0.6) - rss
+    if headroom < rss:
+        return 1
+    return max(1, min(variant_count, headroom // rss))
 
 
 def _write_pfe_variant_report_job(job: tuple[str, str]):
@@ -241,13 +269,27 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         _PFE_PAR_SOLVE_S = solve_s
         reports = {}
         # Publishing materializes large XML + agent JSON artifacts. Forking
-        # three writers duplicates the full shape/solution state and can
-        # deadlock under memory pressure even after all interval solves have
-        # completed. Keep the expensive interval solves parallel, but publish
-        # the three variants serially and deterministically.
-        published = [
-            _write_pfe_variant_report_job(variant) for variant in variants
-        ]
+        # writers gradually duplicates the parent's shape/solution state
+        # (refcount touches defeat copy-on-write), which can thrash or
+        # deadlock under memory pressure — the reason this once ran
+        # unconditionally serially. But serial publishing is the DOMINANT
+        # cost on long closure-envelope builds (measured 2026-07-21 on a
+        # real 11-day build: 3 x ~37 min = 110 min of a 154-min build), so
+        # the safe form is a MEMORY-GATED pool: fork extra publishers only
+        # when the machine can hold that many full copies of the parent
+        # with headroom; otherwise fall back to the proven serial path.
+        # Byte-identity is by construction — the same worker function
+        # writes the same distinct staged files in either mode.
+        publish_workers = _publish_worker_budget(len(variants))
+        if publish_workers > 1:
+            print(f"  PFE publishing {len(variants)} variants in parallel "
+                  f"({publish_workers} workers)")
+            with mp.get_context("fork").Pool(processes=publish_workers) as pool:
+                published = pool.map(_write_pfe_variant_report_job, variants)
+        else:
+            published = [
+                _write_pfe_variant_report_job(variant) for variant in variants
+            ]
         published_by_suffix = {suffix: (key, report, publish_s)
                                for suffix, key, report, publish_s in published}
         for suffix, key in variants:

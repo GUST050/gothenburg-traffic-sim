@@ -102,6 +102,7 @@ import argparse
 from collections import OrderedDict
 import json
 import math
+import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -3133,7 +3134,14 @@ def main() -> None:
          # validity.  The original trip XML is checked immediately after
          # routing, so any such repair that changes origin, destination or
          # via is rejected instead of being silently accepted.
-         "--ignore-errors", "--no-warnings", "--repair", "--remove-loops"],
+         "--ignore-errors", "--no-warnings", "--repair", "--remove-loops",
+         # IMPROVEMENT_PLAN.md speed lever 3 (2026-07-21): per-vehicle routing
+         # threads. PROVEN result-identical on real project data (byte-equal
+         # route bodies vs a single-threaded run; only the header comment's
+         # timestamp/echoed options differ) at 2.2x routing speed. The trip
+         # XML is self-generated, so schema validation adds nothing.
+         "--routing-threads", str(min(8, os.cpu_count() or 1)),
+         "--xml-validation", "never"],
         capture_output=True, text=True, timeout=300)
     if res.returncode != 0:
         print(res.stderr[-1500:])

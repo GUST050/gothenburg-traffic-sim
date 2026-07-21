@@ -848,6 +848,46 @@ loosening.  Protocol for every implementation:
 tools/benchmark_speed.py before/after + semantic digest + one golden-case
 rebuild comparison, per the P2 register row.
 
+**Implementation 2026-07-21 (levers 1, 3, 4 — triggered by the first
+multi-week closure-envelope builds).**  A real 11-day envelope build
+measured the publish stage as the DOMINANT cost at that scale, far beyond
+the 2026-07-18 single-day numbers: 154 min total, of which the three
+variants' serial route publishing took 110 min (~37 min each) while the
+parallel interval solve took 44 min.
+
+- **Lever 1 done, memory-gated:** `run_pfe_variants_flat_parallel` now
+  publishes the three variants through a fork pool sized by
+  `_publish_worker_budget()` — one worker per parent-RSS-sized slice of
+  60% of machine RAM, else the previously proven serial path.  The
+  serial fallback exists because forked publishers can each hold a full
+  copy of the parent's shape/solution state (the reason publishing was
+  serialized in the first place); the gate makes that a measured
+  condition instead of a permanent worst-case assumption.  Result
+  identity is by construction (same worker function, disjoint staged
+  files, same validate-then-flip publication gate) and covered by tests
+  including a real fork-pool vs serial byte comparison.  Expected: big
+  envelope builds ~154 min → ~85 min; serve.py recalibration inherits
+  this automatically (lever 4).
+- **Lever 3 done:** duarouter now runs with `--routing-threads` (≤8) and
+  `--xml-validation never` on our self-generated trip XML.  Proven on
+  real project data: route bodies byte-identical to a single-threaded
+  run (only the header comment's timestamp/echoed options differ) at
+  2.2x routing speed.
+- **Lever 2 (LOSO hoist + concurrent folds) deliberately deferred:** it
+  is not on the monthly-search critical path, and its required proof
+  (identical loso_report.json before/after) cannot be run honestly while
+  a closure-envelope search occupies the shared `sumo/` directory —
+  LOSO would read a closure envelope's candidate pool and fight the
+  search for cores.  Do it after the active search completes, with the
+  live release restored.
+
+Compatibility note: demand `build_key`s are content-addressed over the
+DemandBuildSpec (never source code), and both changes are output-
+identical, so archives built before/after this landing mix safely inside
+one monthly release.  A search already running picks the fixes up from
+its NEXT envelope build (each build is a fresh subprocess); the build in
+flight at edit time finishes on the old serial path.
+
 ### Active quality register
 
 | Priority | Improvement | Completion evidence |
