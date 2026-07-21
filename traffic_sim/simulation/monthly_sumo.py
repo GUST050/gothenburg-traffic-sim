@@ -9,6 +9,8 @@ import os
 import platform
 import shutil
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping
@@ -39,6 +41,9 @@ from traffic_sim.simulation.monthly_search import canonical_seed
 
 SCHEMA_VERSION = 1
 DEFAULT_BASELINE_CACHE = Path("runs") / "closure-search-baselines"
+SEED_WORKER_BENCHMARK_RECORD = (
+    Path("validation") / "a2_parallel_seed_benchmark_v1.json"
+)
 VARIANT_FILENAMES = {
     "q50": "calibrated.rou.xml",
     "q10": "calibrated_v1.rou.xml",
@@ -97,6 +102,37 @@ def _file_record(path: Path, *, label: str) -> dict[str, Any]:
 
 def _buckets_to_dict(values: tuple[RecoveryBucket, ...]) -> list[dict[str, Any]]:
     return [dataclasses.asdict(value) for value in values]
+
+
+def approved_seed_workers(path: Path | None = None) -> int:
+    """How many concurrent SUMO seeds the recorded benchmark approves.
+
+    Fail closed at 1 (today's proven behaviour) unless a benchmark record
+    exists that actually demonstrates what the speed plan's stage-A2 gate
+    asks for: identical evidence between serial and parallel execution, and
+    a measured peak memory that fits the machine. A record that merely
+    asserts a number, without those two facts, unlocks nothing.
+    """
+    try:
+        record = json.loads(
+            Path(path if path is not None else SEED_WORKER_BENCHMARK_RECORD)
+            .read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return 1
+    approved = record.get("approved_seed_workers")
+    if (
+        not isinstance(record, dict)
+        or record.get("kind") != "monthly_seed_worker_benchmark_record"
+        or record.get("gate_status") != "pass"
+        or record.get("evidence_identical") is not True
+        or record.get("peak_rss_within_budget") is not True
+        or isinstance(approved, bool)
+        or not isinstance(approved, int)
+        or approved < 1
+    ):
+        return 1
+    return approved
 
 
 def _buckets_from_dict(values: Any) -> tuple[RecoveryBucket, ...]:
@@ -610,6 +646,56 @@ class ArchivedDemandSumoRunner:
         finally:
             shutil.rmtree(temporary_root, ignore_errors=True)
 
+    def _observations_for(
+        self,
+        schedule: ClosureSchedule,
+        pending: list[tuple[str, int]],
+    ):
+        """Yield this candidate's observations in canonical (variant, seed) order.
+
+        With ``seed_workers == 1`` each run starts only when the previous one
+        finished, exactly as the search has always executed. Above 1 the runs
+        are started concurrently — they are independent SUMO processes with
+        their own seed, their own scratch directory and (within one candidate)
+        distinct matched-baseline cache keys — but they are still YIELDED in
+        canonical order, one at a time.
+
+        That ordering is what makes concurrency a pure speed change. The caller
+        stops consuming at the first observation with a hard failure, so it
+        sees precisely the observation set the serial loop would have produced;
+        runs that the serial loop would never have reached are discarded, and
+        an exception raised by such a run is discarded with it rather than
+        surfacing early. Concurrency therefore costs speculative work on
+        candidates that fail, never a different result.
+        """
+        if self.seed_workers == 1 or len(pending) <= 1:
+            for variant, seed in pending:
+                observation, run_failures = self._run_observation(
+                    schedule, variant=variant, seed=seed)
+                yield variant, seed, observation, run_failures
+            return
+
+        executor = ThreadPoolExecutor(
+            max_workers=min(self.seed_workers, len(pending)),
+            thread_name_prefix="monthly-seed")
+        futures: list = []
+        try:
+            futures = [
+                executor.submit(
+                    self._run_observation, schedule, variant=variant, seed=seed)
+                for variant, seed in pending
+            ]
+            for (variant, seed), future in zip(pending, futures):
+                observation, run_failures = future.result()
+                yield variant, seed, observation, run_failures
+        finally:
+            # Drop what has not started, then wait for the few still in
+            # flight: a search that walked away from a failed candidate must
+            # not leave stray SUMO processes competing with the next one.
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=True)
+
     def run_candidate(
         self,
         schedule: ClosureSchedule,
@@ -633,6 +719,7 @@ class ArchivedDemandSumoRunner:
         seen = {
             (item.demand_variant, item.seed) for item in observations
         }
+        pending: list[tuple[str, int]] = []
         for variant in DEMAND_VARIANTS:
             target = target_repetitions.get(variant)
             if (
@@ -645,18 +732,15 @@ class ArchivedDemandSumoRunner:
                 seed = canonical_seed(variant, repetition)
                 if (variant, seed) in seen:
                     continue
-                observation, run_failures = self._run_observation(
-                    schedule,
-                    variant=variant,
-                    seed=seed,
-                )
+                pending.append((variant, seed))
+
+        with closing(self._observations_for(schedule, pending)) as stream:
+            for variant, seed, observation, run_failures in stream:
                 observations.append(observation)
                 seen.add((variant, seed))
                 failures.update(run_failures)
                 if failures:
                     break
-            if failures:
-                break
         observations.sort(
             key=lambda item: (
                 DEMAND_VARIANTS.index(item.demand_variant),

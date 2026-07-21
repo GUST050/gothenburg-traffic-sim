@@ -1,4 +1,5 @@
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -274,3 +275,193 @@ def test_hard_failure_stops_additional_work(
         stage="finalist",
     )
     assert result.hard_failures == ("teleports",)
+
+
+def _observation_stub(runner, calls, *, failing=(), raising=(), lock=None):
+    """Deterministic stand-in for one SUMO observation.
+
+    ``failing`` / ``raising`` are (variant, seed_index) pairs, so a test can
+    put a hard failure or a crash at an exact position in canonical order.
+    """
+    def observation(selected, *, variant, seed):
+        if lock is not None:
+            with lock:
+                calls.append((variant, seed))
+        else:
+            calls.append((variant, seed))
+        position = (variant, seed)
+        if position in raising:
+            raise RuntimeError(f"simulated crash at {variant}/{seed}")
+        return (
+            PairedObservation(
+                candidate_id=selected.schedule_id,
+                demand_variant=variant,
+                seed=seed,
+                baseline_time_loss_s=100.0,
+                candidate_time_loss_s=110.0 + seed,
+                matched_baseline_id=runner.matched_baseline_id,
+                provenance_key="study",
+            ),
+            ("teleports",) if position in failing else (),
+        )
+    return observation
+
+
+def _runner(tmp_path, seed_workers):
+    return ArchivedDemandSumoRunner(
+        _spec(),
+        archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+        seed_workers=seed_workers,
+    )
+
+
+class TestParallelSeedEquivalence:
+    """Speed plan stage A2: concurrent seeds must be a pure speed change.
+
+    Observations are independent SUMO processes, but the search's evidence
+    depends on WHICH observations exist — the serial loop stops at the first
+    hard failure. Concurrency is therefore only admissible if it yields
+    results in canonical order and discards runs the serial loop would never
+    have reached. These tests hold it to exactly that.
+    """
+
+    TARGETS = {"q10": 2, "q50": 2, "q90": 2}
+
+    def _evidence(self, tmp_path, seed_workers, **stub):
+        # Own archive/cache tree per invocation so a test can run the same
+        # case twice (serial, then parallel) in one tmp_path.
+        root = tmp_path / f"run-{seed_workers}-{len(stub)}-{id(stub):x}"
+        root.mkdir()
+        runner = _runner(root, seed_workers)
+        schedule = generate_closure_schedules(_spec())[0]
+        calls = []
+        runner._run_observation = _observation_stub(
+            runner, calls, lock=threading.Lock(), **stub)
+        evidence = runner.run_candidate(
+            schedule, target_repetitions=self.TARGETS, existing=None,
+            stage="finalist")
+        return evidence, calls
+
+    def test_clean_candidate_is_identical_to_serial(self, tmp_path, patched_runtime):
+        serial, serial_calls = self._evidence(tmp_path, 1)
+        parallel, parallel_calls = self._evidence(tmp_path, 4)
+
+        assert parallel == serial
+        assert sorted(parallel_calls) == sorted(serial_calls)
+        assert len(serial.observations) == 6
+
+    def test_failure_truncates_at_the_same_observation(
+            self, tmp_path, patched_runtime):
+        # Hard failure on the SECOND q10 repetition: the serial loop keeps
+        # the two q10 observations and never reaches q50/q90.
+        failing = {("q10", canonical_seed("q10", 1))}
+        serial, serial_calls = self._evidence(tmp_path, 1, failing=failing)
+        parallel, _calls = self._evidence(tmp_path, 4, failing=failing)
+
+        assert serial.hard_failures == ("teleports",)
+        assert [item.seed for item in serial.observations] == [
+            canonical_seed("q10", 0), canonical_seed("q10", 1)]
+        assert parallel == serial
+        assert len(serial_calls) == 2
+
+    def test_speculative_crash_after_a_failure_is_discarded(
+            self, tmp_path, patched_runtime):
+        # A run the serial loop would never have started must not be able to
+        # fail the candidate with its own exception.
+        failing = {("q10", canonical_seed("q10", 0))}
+        raising = {("q90", canonical_seed("q90", 1))}
+        serial, _ = self._evidence(tmp_path, 1, failing=failing)
+        parallel, _ = self._evidence(
+            tmp_path, 6, failing=failing, raising=raising)
+
+        assert parallel == serial
+        assert len(parallel.observations) == 1
+
+    def test_a_reached_crash_still_propagates(self, tmp_path, patched_runtime):
+        raising = {("q50", canonical_seed("q50", 0))}
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            self._evidence(tmp_path, 4, raising=raising)
+
+    def test_concurrency_actually_overlaps_runs(self, tmp_path, patched_runtime):
+        # Guard against a future refactor quietly serialising the pool: with
+        # four workers the six runs must not all execute one after another.
+        root = tmp_path / "overlap"
+        root.mkdir()
+        runner = _runner(root, 4)
+        schedule = generate_closure_schedules(_spec())[0]
+        started = threading.Semaphore(0)
+        release = threading.Event()
+        overlap = []
+
+        def observation(selected, *, variant, seed):
+            overlap.append(threading.current_thread().name)
+            started.release()
+            release.wait(timeout=10)
+            return (
+                PairedObservation(
+                    candidate_id=selected.schedule_id,
+                    demand_variant=variant, seed=seed,
+                    baseline_time_loss_s=100.0, candidate_time_loss_s=110.0,
+                    matched_baseline_id=runner.matched_baseline_id,
+                    provenance_key="study"),
+                (),
+            )
+
+        runner._run_observation = observation
+        worker = threading.Thread(target=runner.run_candidate, args=(schedule,),
+                                  kwargs={"target_repetitions": self.TARGETS,
+                                          "existing": None, "stage": "finalist"})
+        worker.start()
+        try:
+            for _ in range(4):
+                assert started.acquire(timeout=10), "runs did not start concurrently"
+        finally:
+            release.set()
+            worker.join(timeout=30)
+        assert len(set(overlap)) >= 4
+
+
+class TestSeedWorkerApproval:
+    """Parallel SUMO stays closed until a benchmark record proves it safe."""
+
+    def _record(self, tmp_path, **overrides):
+        payload = {
+            "kind": "monthly_seed_worker_benchmark_record",
+            "gate_status": "pass",
+            "evidence_identical": True,
+            "peak_rss_within_budget": True,
+            "approved_seed_workers": 3,
+        }
+        payload.update(overrides)
+        path = tmp_path / "record.json"
+        path.write_text(json.dumps(payload))
+        return path
+
+    def test_missing_record_approves_only_serial(self, tmp_path):
+        assert monthly_sumo.approved_seed_workers(tmp_path / "absent.json") == 1
+
+    def test_unreadable_record_approves_only_serial(self, tmp_path):
+        path = tmp_path / "record.json"
+        path.write_text("{not json")
+        assert monthly_sumo.approved_seed_workers(path) == 1
+
+    def test_passing_record_approves_its_worker_count(self, tmp_path):
+        assert monthly_sumo.approved_seed_workers(self._record(tmp_path)) == 3
+
+    @pytest.mark.parametrize("overrides", [
+        {"gate_status": "fail"},
+        {"evidence_identical": False},
+        {"peak_rss_within_budget": False},
+        {"kind": "something_else"},
+        {"approved_seed_workers": True},
+        {"approved_seed_workers": "3"},
+        {"approved_seed_workers": 0},
+    ])
+    def test_unproven_record_approves_only_serial(self, tmp_path, overrides):
+        # An assertion without the two measured facts behind it unlocks
+        # nothing — including a boolean masquerading as a worker count.
+        path = self._record(tmp_path, **overrides)
+        assert monthly_sumo.approved_seed_workers(path) == 1

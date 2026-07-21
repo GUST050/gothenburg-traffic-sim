@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Mapping
@@ -24,7 +25,11 @@ from traffic_sim.simulation.monthly_search import (
     run_monthly_search,
 )
 from traffic_sim.simulation.monthly_demand import MonthlyDemandResolverRunner
-from traffic_sim.simulation.monthly_sumo import ArchivedDemandSumoRunner
+from traffic_sim.simulation.monthly_sumo import (
+    ArchivedDemandSumoRunner,
+    SEED_WORKER_BENCHMARK_RECORD,
+    approved_seed_workers,
+)
 from traffic_sim.simulation.search_workspace import DEFAULT_ROOT
 
 
@@ -152,10 +157,26 @@ def main() -> None:
         raise SystemExit("--baseline-trip-duration-p99-s must be positive")
     if args.bounded_exhaustive_cap <= 0:
         raise SystemExit("--bounded-exhaustive-cap must be positive")
-    if args.seed_workers != 1:
+    if args.seed_workers < 1:
+        raise SystemExit("--seed-workers must be at least 1")
+    approved = approved_seed_workers()
+    if args.seed_workers > approved and os.environ.get(
+            "MONTHLY_SEED_WORKER_BENCHMARK") == "1":
+        # The benchmark that produces the approval must be able to exercise
+        # the unapproved path exactly once, on purpose, and say so out loud.
+        print(
+            f"benchmark mode: running {args.seed_workers} SUMO workers "
+            f"without an approval record (approved: {approved})",
+            file=sys.stderr,
+        )
+        approved = args.seed_workers
+    if args.seed_workers > approved:
         raise SystemExit(
-            "monthly search currently requires one SUMO worker until the "
-            "golden resource benchmark approves parallel execution"
+            f"--seed-workers {args.seed_workers} exceeds the {approved} "
+            "approved by the recorded resource benchmark "
+            f"({SEED_WORKER_BENCHMARK_RECORD}). Run "
+            "benchmark_seed_workers.py to establish identical evidence and a "
+            "measured peak RSS first; parallel SUMO stays closed until then."
         )
     try:
         spec = load_closure_search_spec(args.spec)
