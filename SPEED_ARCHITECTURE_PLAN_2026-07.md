@@ -15,7 +15,7 @@ worse.***
 | --- | --- |
 | A1 per-quarter parallel publish | **LANDED** `6045d34`. Byte-identity proven through the production orchestration on a real pool (`validation/a1_publish_identity_v1.json`) + regression tests in both suites. The running 40h/3mo search picks it up from its next envelope build. Golden-build byte comparison (§6.1) still owed once `sumo/` frees. |
 | A2 parallel SUMO seeds | **CODE LANDED, GATE CLOSED** `f054ed0`. The monthly runner overlaps a candidate's observations but yields them in canonical order and truncates at the first hard failure, so evidence cannot change; equivalence is unit-tested. `--seed-workers` stays refused above the count in `validation/a2_parallel_seed_benchmark_v1.json`, which `benchmark_seed_workers.py` writes only on identical `result.json` + measured peak RSS. **Run the benchmark on an idle machine to open it.** |
-| B calendar-date seeding + day library | not started — blocked: needs `sumo/` free (running search) for its golden A/B, and must not land mid-search |
+| B calendar-date seeding + day library | **IN PROGRESS on branch `speed-stage-b`** (not merged). Landed there: the four day-local stream changes (§4, revised) `5f32bb2`/`513b38e`, and the L1 store + L2 assembly with the decisive equality proven as a permanent test — a 2-day window assembled from separately written days is byte-identical to the monolithic build `3efa4d2`. Remaining: split the candidate step into a per-day-type template pool + per-date blocks, wire `build_sumo_demand` to build-missing-then-assemble, add the generator-hash release-manifest guard, then §6.2/§6.3 proofs and the golden re-freeze. Blocked from merging until the running search frees `sumo/`. |
 | C pre-warm job + L4 + horizon UI | not started — depends on B |
 
 ## 0. Goal, stated precisely
@@ -156,11 +156,35 @@ L4 view artifacts       per (date, L2/L3 fp)  scenario JSON + trajectories
 
 ## 4. The one results-affecting change, isolated and named
 
-**B-seeding:** candidate departures keyed by calendar date and geometry
-keyed by canonical day-type (F3 ⇒ today they are window-relative). This
-changes random draws — statistically neutral (same generator, same
-distributions, different stream) but numerically different outputs.
-Everything else in this plan is bit-identical by construction.
+**B-seeding: every per-day stream becomes day-local.** Implementation
+(2026-07-21) found FOUR window-relative streams, not the two §2's F3
+described. All are the same family — same generator, same distributions,
+different stream position — and all had to move for a day to be reusable:
+
+1. candidate **departures**, seeded `seed + day_index` → keyed by calendar
+   date (`build_candidates.day_block_seed`);
+2. route **geometry**, taken from whichever block of a day type came first
+   in the window → canonical per day type
+   (`build_candidates.day_type_template_seed`);
+3. the writer's **endpoint draw ordinals**, running continuously across
+   midnight → restarted at each day boundary (`pfe.write_calibration_report`
+   `day_quarters`);
+4. the **intra-quarter departure scramble**, keyed by the absolute quarter
+   index → keyed within the day.
+
+Statistically neutral, numerically different. Everything else in this plan
+is bit-identical by construction. Callers with no date and no day structure
+(single-day builds, sub-day windows, LOSO folds, tests) keep the old
+behaviour exactly, so only multi-day windows move.
+
+A fifth consequence is structural rather than random: the PFE solves every
+quarter over the whole shape pool, so a day's result depends on which
+day-type geometry pools the window contains. That is why `pool_composition`
+is part of a stored day's identity (`demand/day_library.DayIdentity`) —
+the same date calibrated in a weekday-only window and beside a weekend is
+two different, equally correct entries. The alternative, always pooling
+every day type, was rejected: it would roughly double the variable count
+(and the solve cost) of weekday-only envelopes to buy key simplicity.
 
 Consequences, handled honestly:
 
