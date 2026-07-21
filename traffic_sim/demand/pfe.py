@@ -1975,11 +1975,19 @@ def write_calibration_report(
             # copies of a shape share one key and the stable sort parks
             # them in consecutive departure slots — an identical-route
             # platoon, the very artifact this ordering exists to prevent.
+            # The scramble is keyed by the quarter's position WITHIN ITS DAY
+            # (stage B): an absolute window index would give the same date a
+            # different vehicle order depending on which day the window
+            # started on, so a day could never be published once and reused.
+            # Any deterministic per-quarter key serves the anti-platoon
+            # purpose equally.
+            order_q = i % day_quarters if day_quarters else i
             keyed: list[tuple[bytes, Candidate]] = []
             for cand, k in zip(shapes, counts):
                 edges_str = " ".join(cand.edges)
                 keyed.extend(
-                    (hashlib.sha1(f"{i}:{edges_str}:{dup}".encode()).digest(),
+                    (hashlib.sha1(
+                        f"{order_q}:{edges_str}:{dup}".encode()).digest(),
                      cand)
                     for dup in range(int(k)))
             keyed.sort(key=lambda item: item[0])

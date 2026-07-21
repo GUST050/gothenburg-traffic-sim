@@ -1326,6 +1326,23 @@ class TestPerDayEndpointDrawOrdinals:
         # continuation of day one's counters.
         assert two_days[len(one_day):] == one_day
 
+    def test_vehicle_order_within_a_quarter_is_day_local(self, tmp_path):
+        # Departure order inside a quarter is a deterministic scramble. Keyed
+        # by the ABSOLUTE quarter it would differ between "day 2 of a window"
+        # and "the same date built alone"; keyed within the day it matches.
+        shapes = self._shapes()
+        out = tmp_path / "order.rou.xml"
+        nq = 192
+        write_calibration_report(
+            shapes, out, [{"E": 3.0} for _ in range(nq)],
+            [np.array([3.0]) for _ in range(nq)], day_quarters=96)
+        departs = [float(veh.get("depart"))
+                   for veh in ET.parse(out).getroot().iter("vehicle")]
+        first_day = [d for d in departs if d < 86400.0]
+        second_day = [d - 86400.0 for d in departs if d >= 86400.0]
+
+        assert second_day == pytest.approx(first_day)
+
     def test_no_day_structure_keeps_the_continuous_sequence(self, tmp_path):
         continuous = self._positions(tmp_path, "cont.rou.xml", 192, None)
         one_day = self._positions(tmp_path, "cont_one.rou.xml", 96, None)
