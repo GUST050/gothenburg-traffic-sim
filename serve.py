@@ -40,7 +40,7 @@ Endpoints:
                                 job started from one tab/session is visible
                                 from any other and survives a dropped
                                 connection, laptop sleep, or closed tab.
-  POST /api/cancel?kind=close|recalibrate|monthly
+  POST /api/cancel?kind=close|recalibrate|suggest|optimize|monthly
                               — stops the active process group for the
                                 selected job and reports status="cancelled"
                                 once cleanup has completed.
@@ -236,9 +236,7 @@ def _signal_window_from_spec(spec: ScenarioSpec) -> tuple[str, str]:
         raise ValueError("signal analysis_window must stay within the scenario's first day")
     return measure_start.strftime("%H:%M"), measure_end.strftime("%H:%M")
 
-_sim_lock   = threading.Lock()     # one simulation (close OR recalibrate OR
-                                    # suggest_closure OR optimize_signals) at
-                                    # a time
+_sim_lock   = threading.Lock()     # one simulation-class job at a time
 _recal_lock = threading.Lock()     # guards _recal_state below
 _recal_state: dict = {"status": "idle"}
 _close_lock = threading.Lock()     # guards _close_state below
@@ -949,8 +947,21 @@ def summarize_monthly_search(result: dict) -> dict:
     never be summarized away between the search and the reader."""
     backend = result.get("simulation_backend") or {}
     policy = result.get("policy") or {}
+    raw_search_spec = result.get("closure_search_spec")
+    search_spec = (
+        ClosureSearchSpec.from_dict(raw_search_spec).to_dict()
+        if isinstance(raw_search_spec, dict)
+        else None
+    )
     return {
         "search_id": result.get("search_id"),
+        "closure_search_spec": search_spec,
+        "edges": (
+            (search_spec or {}).get("directed_edges", [])
+        ),
+        "source": (
+            (search_spec or {}).get("source")
+        ),
         "status": result.get("status"),
         "winner_id": result.get("winner_id"),
         "tie_ids": result.get("tie_ids", []),
@@ -1140,6 +1151,8 @@ class Handler(SimpleHTTPRequestHandler):
         states = {
             "close": (_close_lock, _close_state),
             "recalibrate": (_recal_lock, _recal_state),
+            "suggest": (_suggest_lock, _suggest_state),
+            "optimize": (_optimize_lock, _optimize_state),
             "monthly": (_monthly_lock, _monthly_state),
         }
         if kind not in states:
@@ -1682,6 +1695,9 @@ class Handler(SimpleHTTPRequestHandler):
                 write_scenario_spec(spec_path, spec)
                 cmd += ["--scenario-spec", str(spec_path.resolve())]
             res = run_in_new_session(cmd, cwd=str(ROOT), timeout=timeout)
+            if active_job_cancelled("suggest"):
+                self._set_suggest(status="cancelled")
+                return
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])
                 # suggest_closure_time.py's own user-facing errors (stale
@@ -1826,6 +1842,9 @@ class Handler(SimpleHTTPRequestHandler):
             # setup steps, same reasoning as /api/suggest_closure's timeout.
             timeout = 180 + n_sumo_runs * seed_count * 90
             res = run_in_new_session(cmd, cwd=str(ROOT), timeout=timeout)
+            if active_job_cancelled("optimize"):
+                self._set_optimize(status="cancelled")
+                return
             if res.returncode != 0:
                 print(res.stdout[-2000:], res.stderr[-2000:])
                 tail = res.stderr.strip().splitlines()
@@ -1858,7 +1877,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _optimize_signals_status(self) -> None:
         with _optimize_lock:
             state = dict(_optimize_state)
-        if state.get("status") == "running":
+        if state.get("status") in {"running", "cancelling"}:
             state["elapsed_s"] = round(time.time() - state["started_at"])
         return self._json(200, state)
 
@@ -1909,6 +1928,7 @@ class Handler(SimpleHTTPRequestHandler):
                                   search_content_key=spec.content_key,
                                   policy_id=policy.policy_id,
                                   edges=list(spec.directed_edges),
+                                  closure_search_spec=spec.to_dict(),
                                   started_at=time.time())
         begin_active_job("monthly", {
             "search_id": spec.search_id,
@@ -1983,8 +2003,17 @@ class Handler(SimpleHTTPRequestHandler):
                 self._set_monthly(status="error",
                                   error="resultatfilen skrevs inte — se serverloggen")
                 return
-            self._set_monthly(status="done",
-                              result=summarize_monthly_search(result))
+            summary = summarize_monthly_search(result)
+            # Older resumable workspaces may predate the embedded search
+            # contract. Preserve the exact request held by this server job so
+            # a browser reload can still load the winning roads and source.
+            if not summary.get("closure_search_spec"):
+                summary["closure_search_spec"] = spec.to_dict()
+            if not summary.get("edges"):
+                summary["edges"] = list(spec.directed_edges)
+            if not summary.get("source"):
+                summary["source"] = spec.source
+            self._set_monthly(status="done", result=summary)
         except subprocess.TimeoutExpired:
             self._set_monthly(status="error",
                               error="månadssökningen nådde tidsgränsen och "

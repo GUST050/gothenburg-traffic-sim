@@ -51,9 +51,9 @@ Two halves that never mix:
   → `build_features.py` → feature matrices + `normal_profile.json`
   → `train_agent1.py` → per-sensor models → `build_agent1_flows.py` → `flows_forecast.json`
 - **Runtime (browser)** is a static Leaflet app (`web/`); `serve.py` adds an
-  optional local API for on-demand closures/recalibration (feature-detected —
-  the app still works fully static without it, just without those two
-  actions).
+  optional local API for recalibration, road-closure simulation/search, and
+  signal studies (feature-detected — historical, forecast, and already-built
+  scenarios still work when hosted fully static).
 
 The renderer only ever calls `flowAt(edgeId, quarterIndex)` — the provider
 seam. Historical data, the forecast, and SUMO scenarios all plug in behind
@@ -71,13 +71,14 @@ make all
 make serve
 ```
 
-**Close roads from the map:** with `make serve` running, click **🚧 Stäng väg**,
-select any streets on the map, and hit *Simulera* — the server runs the SUMO
-Monte Carlo on demand (~1 min) and the map switches to the resulting scenario,
-closed edges drawn black-dashed and diverted traffic recoloured. Multiple
-simultaneous closures are supported (`run_scenario.py --close e1 e2 …` from
-the CLI does the same), and closures can be time-windowed (open again after
-a stated end time) rather than only whole-run.
+**Close roads from the map:** with `make serve` running, open
+**Vägavstängning**. One workspace handles all road-closing scopes: simulate
+the active period, optimize a window within the active day, or search a
+multi-day permitted calendar. Select any streets on the map and run the
+chosen operation. The server uses SUMO and the map can load the resulting
+scenario with closed edges black-dashed and diverted traffic recoloured.
+Multiple simultaneous closures are supported (`run_scenario.py --close e1
+e2 …` from the CLI does the same).
 
 **Simulating more than one day:** `build_sumo_demand.py --start-date
 YYYY-MM-DD --days N` (N up to 7) builds one continuous multi-day demand

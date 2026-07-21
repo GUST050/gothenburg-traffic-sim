@@ -563,9 +563,7 @@
         <button class="task-card" data-task="forecast"><span class="task-card-icon">↗</span><strong>Prognos</strong><span>2027 flöden</span></button>
         <button class="task-card" data-task="scenario"><span class="task-card-icon">▣</span><strong>Scenario</strong><span>Visa simulering</span></button>
         <button class="task-card" data-task="demand"><span class="task-card-icon">▦</span><strong>Simulera datum</strong><span>En dag eller flera</span></button>
-        <button class="task-card" data-task="closure"><span class="task-card-icon">×</span><strong>Stäng väg</strong><span>Skapa avstängning</span></button>
-        <button class="task-card" data-task="suggest"><span class="task-card-icon">◷</span><strong>Välj stängningstid</strong><span>Analysera tidpunkt</span></button>
-        <button class="task-card" data-task="monthly"><span class="task-card-icon">▧</span><strong>Bästa arbetsperiod</strong><span>Sök över datum</span></button>
+        <button class="task-card" data-task="closure"><span class="task-card-icon">×</span><strong>Vägavstängning</strong><span>Simulera eller optimera tid</span></button>
         <button class="task-card" data-task="signals"><span class="task-card-icon">≡</span><strong>Optimera signaler</strong><span>Grönt och rött</span></button>
         <button class="task-card" data-task="history"><span class="task-card-icon">▤</span><strong>Körhistorik</strong><span>Studier och jobb</span></button>
       </div>
@@ -686,11 +684,11 @@
       <span class="hint" id="traj-provenance" hidden></span>
       <div class="v-divider"></div>
       <button id="close-mode-btn" class="action-btn"
-              title="Klicka på vägar i kartan för att simulera en avstängning">+ Ny avstängning</button>
+              title="Klicka på vägar i kartan för att simulera en avstängning">Simulera vald tid</button>
       <button id="change-day-btn" class="action-btn"
               title="Kalibrera om simuleringen mot ett annat datum (tar ~6 min)">📅 Byt dag</button>
       <button id="suggest-mode-btn" class="action-btn"
-              title="Klicka på en väg för att hitta den bästa tiden att stänga den">🕐 Föreslå tid</button>
+              title="Klicka på en väg för att hitta den bästa tiden att stänga den">🕐 Optimera inom aktiv dag</button>
       <button id="monthly-mode-btn" class="action-btn"
               title="Sök den minst störande arbetsperioden över ett datumintervall — varje kandidat verifieras i SUMO">📆 Bästa arbetsperiod</button>
       <button id="optimize-signals-btn" class="action-btn"
@@ -753,10 +751,11 @@
                title="Tillåt stängning när som helst på dygnet (00:00–24:00)">
           <input type="checkbox" id="monthly-fullday"> heldag</label>
         <label class="hint" for="monthly-work-hours">arbetstimmar</label>
-        <input type="number" id="monthly-work-hours" value="4" min="0.25" max="63" step="0.25"
-               title="Totalt begärd arbets-/avstängningstid">
+        <input type="number" id="monthly-work-hours" value="4" min="0.25" max="504" step="0.25"
+               title="Totalt begärd arbets-/avstängningstid (fördelas jämnt över dagarna i följd; upp till ~3 veckor)">
         <label class="hint" for="monthly-max-days">dagar i följd max</label>
-        <input type="number" id="monthly-max-days" value="1" min="1" max="7">
+        <input type="number" id="monthly-max-days" value="1" min="1" max="21"
+               title="Sammanhängande dagar en stängning varar (upp till 21 = 3 veckor). Långa perioder är dyra att bygga och ligger bortom den 7-dagars golden-validerade kontinuiteten.">
         <div class="seg" id="monthly-weekdays"
              title="Tillåtna veckodagar (arbetsdagar markerade)">
           <button data-day="0" class="active">Må</button>
@@ -892,6 +891,6 @@
   <script src="render.js?v=14"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

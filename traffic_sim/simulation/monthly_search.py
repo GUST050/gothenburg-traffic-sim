@@ -587,6 +587,7 @@ def _final_result(
         "kind": "monthly_closure_search_result",
         "search_id": spec.search_id,
         "search_content_key": spec.content_key,
+        "closure_search_spec": spec.to_dict(),
         "policy": policy.to_dict(),
         "simulation_backend": dict(backend_provenance),
         "status": decision_status,

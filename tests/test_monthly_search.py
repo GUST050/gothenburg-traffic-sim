@@ -329,6 +329,7 @@ def test_runs_full_resumable_pipeline_and_remains_fail_closed(tmp_path):
     )
 
     assert result["status"] == "unique_winner"
+    assert result["closure_search_spec"] == _spec().to_dict()
     assert result["selected_schedules"][0]["daily_start"] == "08:00"
     assert result["claim_boundary"]["global_best_claim_allowed"] is False
     assert result["claim_boundary"]["ui_exposure_allowed"] is False

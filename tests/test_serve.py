@@ -47,6 +47,19 @@ class FakeCompletedProcess:
         self.stderr = stderr
 
 
+def test_web_has_one_road_closure_workspace_and_orchestrator():
+    html = (Path(__file__).parent.parent / "web" / "index.html").read_text()
+    app = (Path(__file__).parent.parent / "web" / "app.js").read_text()
+
+    assert html.count('data-task="closure"') == 1
+    assert 'data-task="suggest"' not in html
+    assert 'data-task="monthly"' not in html
+    assert app.count("async function runRoadClosureOperation(") == 1
+    for endpoint in ("/api/close", "/api/suggest_closure",
+                     "/api/monthly_search"):
+        assert endpoint in app
+
+
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
                           analysis_window=True):
     spec = {
@@ -148,6 +161,9 @@ def base_url(tmp_path, monkeypatch):
     serve._monthly_state.update(status="idle")
     serve.finish_active_job("close")
     serve.finish_active_job("recalibrate")
+    serve.finish_active_job("suggest")
+    serve.finish_active_job("optimize")
+    serve.finish_active_job("monthly")
     if serve._sim_lock.locked():
         serve._sim_lock.release()
 
@@ -432,6 +448,7 @@ def _closure_search_spec(search_id="monthly-api-test"):
 def _monthly_result(search_id):
     return {
         "search_id": search_id,
+        "closure_search_spec": _closure_search_spec(search_id),
         "status": "unique_winner",
         "winner_id": "closure-1",
         "tie_ids": [],
@@ -519,6 +536,8 @@ class TestMonthlySearch:
 
     def test_lifecycle_progress_then_curated_result(self, base_url, monkeypatch):
         sid = "monthly-api-test"
+        expected_spec = serve.ClosureSearchSpec.from_dict(
+            _closure_search_spec(sid)).to_dict()
         # Held-out gate present -> validated proxy screening is used.
         monkeypatch.setattr(serve, "load_passing_heldout_gate",
                             lambda: {"gate_status": "pass"})
@@ -550,6 +569,7 @@ class TestMonthlySearch:
 
         _, running = get_json(f"{base_url}/api/monthly_search/status")
         assert running["status"] == "running"
+        assert running["closure_search_spec"] == expected_spec
         assert running["progress"]["phase"] == "pilot"
         assert running["progress"]["completed"] == 1
 
@@ -568,6 +588,9 @@ class TestMonthlySearch:
         # Claim boundary passes through verbatim; internals are curated out.
         assert result["claim_boundary"] == _monthly_result(sid)["claim_boundary"]
         assert result["winner_id"] == "closure-1"
+        assert result["closure_search_spec"] == expected_spec
+        assert result["edges"] == ["a_b_0"]
+        assert result["source"] == "forecast"
         assert result["selected_schedules"][0]["intervals"]
         assert "source_files" not in result["simulation_backend"]
         assert not serve._sim_lock.locked()
@@ -1364,6 +1387,25 @@ class TestSuggestClosure:
         status, _ = post_json(f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6")
         assert status == 202
 
+    def test_cancel_stops_suggestion_without_reporting_an_error(
+            self, base_url, monkeypatch):
+        release = threading.Event()
+
+        def fake_run(cmd, **kw):
+            release.wait(timeout=5)
+            return FakeCompletedProcess(returncode=-9, stderr="terminated")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(
+            f"{base_url}/api/suggest_closure?edges=a_b_0&duration_hours=6"
+        )[0] == 202
+        assert post_json(f"{base_url}/api/cancel?kind=suggest")[0] == 202
+        release.set()
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/suggest_closure/status"
+        )[1]["status"] == "cancelled")
+        assert not serve._sim_lock.locked()
+
     def test_shares_the_sim_lock_with_close(self, base_url):
         """A suggest_closure search and a /api/close run are the same
         resource class (both real SUMO batches) — must not run concurrently."""
@@ -1775,6 +1817,23 @@ class TestOptimizeSignals:
         assert not serve._sim_lock.locked()
         status, _ = post_json(f"{base_url}/api/optimize_signals")
         assert status == 202
+
+    def test_cancel_stops_signal_optimization_without_reporting_an_error(
+            self, base_url, monkeypatch):
+        release = threading.Event()
+
+        def fake_run(cmd, **kw):
+            release.wait(timeout=5)
+            return FakeCompletedProcess(returncode=-9, stderr="terminated")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(f"{base_url}/api/optimize_signals")[0] == 202
+        assert post_json(f"{base_url}/api/cancel?kind=optimize")[0] == 202
+        release.set()
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/optimize_signals/status"
+        )[1]["status"] == "cancelled")
+        assert not serve._sim_lock.locked()
 
     def test_shares_the_sim_lock_with_close(self, base_url):
         """An optimize_signals run and a /api/close run are the same

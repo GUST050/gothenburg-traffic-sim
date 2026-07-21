@@ -45,8 +45,7 @@
         const taskTitle = document.getElementById('workspace-task-title');
         const taskNames = {
           traffic: 'Historisk trafik', forecast: 'Prognos', scenario: 'Scenario',
-          demand: 'Simulera datum', closure: 'Stäng väg',
-          suggest: 'Välj stängningstid', monthly: 'Bästa arbetsperiod',
+          demand: 'Simulera datum', closure: 'Vägavstängning',
           signals: 'Optimera signaler',
           history: 'Körhistorik',
         };
@@ -475,7 +474,9 @@
         const pickBanner = document.getElementById('pick-banner');
         const pickCount  = document.getElementById('pick-count');
         const selected = new Set();
-        let closureMode = false;
+        // One road-closure workspace, one active tool. The three values are
+        // different scopes of the same operation, not separate app modes.
+        let closureTool = null; // null | 'simulate' | 'suggest' | 'monthly'
         let closureJobRunning = false;
         let apiAvailable = false;
 
@@ -1022,13 +1023,13 @@
         const suggestResultsMeta  = document.getElementById('suggest-results-meta');
         const suggestResultsBody  = document.getElementById('suggest-results-tbody');
         const btnSuggestResultsClose = document.getElementById('suggest-results-close');
-        let suggestMode = false;
+        let suggestJobRunning = false;
 
         // ── Bästa arbetsperiod (Phase 4 step 7) — the resumable monthly
         // closure search. Reuses the same edge picking (`selected`); every
-        // candidate the server ranks is SUMO-verified (bounded exhaustive,
-        // no proxy — the proxy failed its held-out gate and never reaches
-        // the UI).
+        // candidate the server ranks is SUMO-verified. A held-out-validated
+        // proxy may screen the legal calendar first; without that gate the
+        // server falls back to a bounded exhaustive search.
         const btnMonthly        = document.getElementById('monthly-mode-btn');
         const monthlyBanner     = document.getElementById('monthly-banner');
         const monthlyPickCount  = document.getElementById('monthly-pick-count');
@@ -1049,7 +1050,6 @@
         const monthlyResultsMeta  = document.getElementById('monthly-results-meta');
         const monthlyResultsBody  = document.getElementById('monthly-results-tbody');
         const btnMonthlyResultsClose = document.getElementById('monthly-results-close');
-        let monthlyMode = false;
         let monthlyJobRunning = false;
 
         // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — no picking mode:
@@ -1065,28 +1065,28 @@
         const optimizePlanBody       = document.getElementById('optimize-plan-tbody');
 
         function refreshCloseUI() {
-          const showNormal = !closureMode && !dayPickMode && !suggestMode && !monthlyMode;
+          const showNormal = !closureTool && !dayPickMode;
           const showApiActions = showNormal && apiAvailable;
-          const showScenarioPicker = ['scenario', 'demand', 'closure', 'suggest', 'monthly', 'signals'].includes(workspaceTask);
+          const showScenarioPicker = ['scenario', 'demand', 'closure', 'signals'].includes(workspaceTask);
           scenSelect.style.display   = showNormal && showScenarioPicker ? '' : 'none';
           simDayHint.style.display   = showNormal ? '' : 'none';
           btnClose.style.display     = showApiActions && workspaceTask === 'closure' ? '' : 'none';
           btnDay.style.display       = showApiActions && workspaceTask === 'demand' ? '' : 'none';
-          btnSuggest.style.display   = showApiActions && workspaceTask === 'suggest' ? '' : 'none';
-          btnMonthly.style.display   = showApiActions && workspaceTask === 'monthly' ? '' : 'none';
+          btnSuggest.style.display   = showApiActions && workspaceTask === 'closure' ? '' : 'none';
+          btnMonthly.style.display   = showApiActions && workspaceTask === 'closure' ? '' : 'none';
           btnOptimize.style.display  = showApiActions && workspaceTask === 'signals' ? '' : 'none';
-          pickBanner.classList.toggle('show', closureMode);
+          pickBanner.classList.toggle('show', closureTool === 'simulate');
           dayBanner.classList.toggle('show', dayPickMode);
-          suggestBanner.classList.toggle('show', suggestMode);
-          monthlyBanner.classList.toggle('show', monthlyMode);
+          suggestBanner.classList.toggle('show', closureTool === 'suggest');
+          monthlyBanner.classList.toggle('show', closureTool === 'monthly');
           pickCount.textContent = `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
           btnRun.disabled = selected.size === 0;
-          if (suggestMode) {
+          if (closureTool === 'suggest') {
             suggestPickCount.textContent =
               `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
-            btnSuggestRun.disabled = selected.size === 0;
+            btnSuggestRun.disabled = suggestJobRunning || selected.size === 0;
           }
-          if (monthlyMode) {
+          if (closureTool === 'monthly') {
             monthlyPickCount.textContent =
               `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
             btnMonthlyRun.disabled = monthlyJobRunning || selected.size === 0;
@@ -1101,9 +1101,7 @@
           historyPanel.hidden = task !== 'history';
           modeToggle.style.display = 'none';
           taskTitle.textContent = taskNames[task] || 'Göteborg Trafik';
-          exitPicking();
-          exitSuggestPicking();
-          exitMonthlyPicking();
+          setClosureTool(null);
           dayPickMode = false;
           if (task === 'history') {
             await loadHistory();
@@ -1116,12 +1114,6 @@
             await openScenario();
             if (task === 'demand') {
               dayPickMode = true;
-            } else if (task === 'closure') {
-              enterPicking();
-            } else if (task === 'suggest') {
-              enterSuggestPicking();
-            } else if (task === 'monthly') {
-              enterMonthlyPicking();
             }
           }
           refreshCloseUI();
@@ -1133,47 +1125,20 @@
           document.body.dataset.task = 'home';
           taskHome.hidden = false;
           historyPanel.hidden = true;
-          exitPicking();
-          exitSuggestPicking();
-          exitMonthlyPicking();
+          setClosureTool(null);
           dayPickMode = false;
           refreshCloseUI();
           requestAnimationFrame(() => Render.invalidateSize());
         }
 
-        function enterPicking() {
-          closureMode = true;
-          selected.clear();
-          optimizeResults.classList.remove('show');
-          refreshCloseUI();
-        }
-        function exitPicking() {
-          closureMode = false;
-          selected.clear();
-          refreshCloseUI();
-        }
-        function enterSuggestPicking() {
-          suggestMode = true;
-          selected.clear();
-          suggestResults.classList.remove('show');
-          optimizeResults.classList.remove('show');
-          refreshCloseUI();
-        }
-        function exitSuggestPicking() {
-          suggestMode = false;
-          selected.clear();
-          refreshCloseUI();
-        }
-        function enterMonthlyPicking() {
-          monthlyMode = true;
-          if (!monthlyJobRunning) selected.clear();
-          monthlyResults.classList.remove('show');
-          optimizeResults.classList.remove('show');
-          refreshCloseUI();
-        }
-        function exitMonthlyPicking() {
-          monthlyMode = false;
-          if (!monthlyJobRunning) selected.clear();
+        function setClosureTool(tool) {
+          if (monthlyJobRunning && tool !== 'monthly') return;
+          if (suggestJobRunning && tool !== 'suggest') return;
+          closureTool = tool;
+          if (!monthlyJobRunning && !suggestJobRunning) selected.clear();
+          if (tool === 'suggest') suggestResults.classList.remove('show');
+          if (tool === 'monthly') monthlyResults.classList.remove('show');
+          if (tool) optimizeResults.classList.remove('show');
           refreshCloseUI();
         }
 
@@ -1188,9 +1153,9 @@
           refreshCloseUI();
         });
 
-        btnClose.addEventListener('click', enterPicking);
+        btnClose.addEventListener('click', () => setClosureTool('simulate'));
         btnCancel.addEventListener('click', async () => {
-          if (!closureJobRunning) return exitPicking();
+          if (!closureJobRunning) return setClosureTool(null);
           btnCancel.disabled = true;
           btnCancel.textContent = 'Avbryter…';
           try {
@@ -1202,8 +1167,20 @@
             btnCancel.textContent = 'Avbryt';
           }
         });
-        btnSuggest.addEventListener('click', enterSuggestPicking);
-        btnSuggestCancel.addEventListener('click', exitSuggestPicking);
+        btnSuggest.addEventListener('click', () => setClosureTool('suggest'));
+        btnSuggestCancel.addEventListener('click', async () => {
+          if (!suggestJobRunning) return setClosureTool(null);
+          btnSuggestCancel.disabled = true;
+          btnSuggestCancel.textContent = 'Avbryter…';
+          try {
+            const res = await fetch('/api/cancel?kind=suggest', { method: 'POST' });
+            if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+          } catch (e) {
+            alert('Kunde inte avbryta sökningen: ' + e.message);
+            btnSuggestCancel.disabled = false;
+            btnSuggestCancel.textContent = 'Avbryt';
+          }
+        });
         btnSuggestResultsClose.addEventListener('click', () => {
           suggestResults.classList.remove('show');
         });
@@ -1213,8 +1190,8 @@
           button.addEventListener('click', () => openWorkspace(button.dataset.task));
         });
 
-        // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — same async start/poll
-        // pattern as pollClose/pollSuggest above. The active scenario's full
+        // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — async start/poll.
+        // The active scenario's full
         // ScenarioSpec tells the server whether D2 or D4 applies; the web app
         // only consumes the uniform summary shape.
         async function pollOptimize(onProgress) {
@@ -1453,30 +1430,69 @@
         });
 
         Render.onEdgeClick(id => {
-          if (!closureMode && !suggestMode && !monthlyMode) return;
-          if (monthlyMode && monthlyJobRunning) return;
+          if (!closureTool) return;
+          if (closureTool === 'monthly' && monthlyJobRunning) return;
+          if (closureTool === 'suggest' && suggestJobRunning) return;
           selected.has(id) ? selected.delete(id) : selected.add(id);
           refreshCloseUI();
         });
 
-        // Async (2026-07-10, same reasoning as the recalibration polling
-        // below, applied here after a review correctly flagged /api/close
-        // as the same risk class — a browser tab, proxy, or dropped
-        // connection can abandon a blocking request well before the
-        // server's own up-to-600s timeout, even though a closure usually
-        // finishes in ~30-90s): start the job, poll for its result instead
-        // of holding one fetch open for the whole run.
-        async function pollClose(onProgress) {
+        // One orchestration function for every road-closing operation. The
+        // backend contracts remain deliberately different (ScenarioSpec for
+        // a concrete simulation, ScenarioSpec + search inputs for an active
+        // day, ClosureSearchSpec for a calendar search), but start/poll/error
+        // handling lives here once so the three UI paths cannot drift.
+        const ROAD_CLOSURE_OPERATIONS = {
+          simulate: {
+            startUrl: '/api/close',
+            statusUrl: '/api/close/status',
+            pollMs: 2000,
+          },
+          suggest: {
+            startUrl: '/api/suggest_closure',
+            statusUrl: '/api/suggest_closure/status',
+            pollMs: 3000,
+          },
+          monthly: {
+            startUrl: '/api/monthly_search',
+            statusUrl: '/api/monthly_search/status',
+            pollMs: 4000,
+          },
+        };
+
+        async function runRoadClosureOperation(kind, requestBody, onProgress) {
+          const operation = ROAD_CLOSURE_OPERATIONS[kind];
+          if (!operation) throw new Error(`okänd avstängningsåtgärd: ${kind}`);
+          if (requestBody) {
+            const response = await fetch(operation.startUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody),
+            });
+            let data;
+            try {
+              data = await response.json();
+            } catch (_) {
+              throw new Error('servern gav ett ofullständigt startsvar');
+            }
+            if (!response.ok) {
+              throw new Error(data.error || `HTTP ${response.status}`);
+            }
+          }
           for (;;) {
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, operation.pollMs));
             let status;
             try {
-              status = await (await fetch('/api/close/status')).json();
+              const response = await fetch(operation.statusUrl, {
+                cache: 'no-store',
+              });
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              status = await response.json();
             } catch (e) {
               continue;   // transient network hiccup — keep polling
             }
-            if (status.status === 'running') {
-              onProgress?.(status.elapsed_s);
+            if (status.status === 'running' || status.status === 'cancelling') {
+              onProgress?.(status);
               continue;
             }
             return status;
@@ -1561,7 +1577,7 @@
           return spec;
         }
 
-        async function startSuggestJob(edges, durationHours) {
+        async function suggestClosureRequest(edges, durationHours) {
           const scenario_spec = await baseScenarioSpec();
           scenario_spec.objective_profile = 'closure-search';
           // Robust search contract: one matched pilot seed per q50/q10/q90,
@@ -1573,30 +1589,11 @@
             scenario_spec.seed_set.map((seed, index) => [
               String(seed), ['q50', 'q10', 'q90'][index % 3],
             ]));
-          const res = await fetch('/api/suggest_closure', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              scenario_spec,
-              edges,
-              duration_hours: durationHours,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-          return data;
-        }
-
-        async function startCloseJob(edges, begin = null, end = null) {
-          const scenario_spec = await closureScenarioSpec(edges, begin, end);
-          const res = await fetch('/api/close', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scenario_spec }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-          return data;
+          return {
+            scenario_spec,
+            edges,
+            duration_hours: durationHours,
+          };
         }
 
         btnRun.addEventListener('click', async () => {
@@ -1606,21 +1603,23 @@
           btnRun.textContent = 'Startar…';
           showJobProgress('Startar simulering', 0, 90);
           try {
-            await startCloseJob([...selected]);
-            btnRun.textContent = 'Simulerar… (0s)';
-            const status = await pollClose(s => {
-              btnRun.textContent = `Simulerar… (${s}s)`;
-              showJobProgress('Simulerar avstängning', s, 90);
+            const scenario_spec = await closureScenarioSpec([...selected]);
+            const status = await runRoadClosureOperation(
+              'simulate', { scenario_spec }, state => {
+              const elapsed = state.elapsed_s || 0;
+              btnRun.textContent = state.status === 'cancelling'
+                ? 'Avbryter…' : `Simulerar… (${elapsed}s)`;
+              showJobProgress('Simulerar avstängning', elapsed, 90);
             });
             if (status.status === 'error') throw new Error(status.error);
             if (status.status === 'cancelled') {
               announceStudyOutcome('Avstängningssimuleringen', 'cancelled',
                                    [...selected].join(', '));
-              exitPicking();
+              setClosureTool(null);
               return;
             }
             clearStudyOutcome();
-            exitPicking();
+            setClosureTool(null);
             await activateClosedScenario(status);
           } catch (e) {
             announceStudyOutcome('Avstängningssimuleringen', 'error',
@@ -1634,25 +1633,6 @@
             btnCancel.textContent = 'Avbryt';
           }
         });
-
-        // ── Föreslå stängningstid: start + poll, same async pattern as
-        // every other job here. ────────────────────────────────────────
-        async function pollSuggest(onProgress) {
-          for (;;) {
-            await new Promise(r => setTimeout(r, 3000));
-            let status;
-            try {
-              status = await (await fetch('/api/suggest_closure/status')).json();
-            } catch (e) {
-              continue;
-            }
-            if (status.status === 'running') {
-              onProgress?.(status.elapsed_s);
-              continue;
-            }
-            return status;
-          }
-        }
 
         // begin_s/end_s are seconds from the search's own epoch_sim — the
         // SAME naive-local-wall-time convention the rest of the app uses
@@ -1821,12 +1801,18 @@
           try {
             const begin = isoFromOffset(lastSuggestResult.epoch_sim, candidate.begin_s);
             const end   = isoFromOffset(lastSuggestResult.epoch_sim, candidate.end_s);
-            await startCloseJob(lastSuggestResult.edges, begin, end);
-            btn.textContent = 'Simulerar… (0s)';
-            const status = await pollClose(s => btn.textContent = `Simulerar… (${s}s)`);
+            const scenario_spec = await closureScenarioSpec(
+              lastSuggestResult.edges, begin, end);
+            const status = await runRoadClosureOperation(
+              'simulate', { scenario_spec }, state => {
+                btn.textContent = state.status === 'cancelling'
+                  ? 'Avbryter…'
+                  : `Simulerar… (${state.elapsed_s || 0}s)`;
+              });
             if (status.status === 'error') throw new Error(status.error);
+            if (status.status === 'cancelled') return;
             suggestResults.classList.remove('show');
-            exitSuggestPicking();
+            setClosureTool(null);
             await activateClosedScenario(status);
           } catch (e) {
             alert('Kunde inte ladda scenariot: ' + e.message);
@@ -1837,30 +1823,45 @@
         }
 
         btnSuggestRun.addEventListener('click', async () => {
+          suggestJobRunning = true;
           btnSuggestRun.disabled = true;
-          btnSuggestCancel.disabled = true;
+          btnSuggestCancel.disabled = false;
           const durationHours = Number(durationInput.value) || 6;
           btnSuggestRun.textContent = 'Startar…';
           try {
-            await startSuggestJob([...selected], durationHours);
-            btnSuggestRun.textContent = 'Söker… (0s)';
-            const status = await pollSuggest(
-              s => btnSuggestRun.textContent = `Söker… (${s}s)`);
+            const request = await suggestClosureRequest(
+              [...selected], durationHours);
+            const status = await runRoadClosureOperation(
+              'suggest', request, state => {
+                btnSuggestRun.textContent = state.status === 'cancelling'
+                  ? 'Avbryter…'
+                  : `Söker… (${state.elapsed_s || 0}s)`;
+              });
             if (status.status === 'error') throw new Error(status.error);
+            if (status.status === 'cancelled') {
+              announceStudyOutcome('Tidsoptimeringen', 'cancelled',
+                                   [...selected].join(', '));
+              suggestJobRunning = false;
+              setClosureTool(null);
+              return;
+            }
             renderSuggestResults(status.result);
           } catch (e) {
             alert('Sökningen misslyckades: ' + e.message);
           } finally {
+            suggestJobRunning = false;
             btnSuggestRun.disabled = selected.size === 0;
             btnSuggestCancel.disabled = false;
+            btnSuggestCancel.textContent = 'Avbryt';
             btnSuggestRun.textContent = 'Sök bästa tid';
+            refreshCloseUI();
           }
         });
 
         // ── Bästa arbetsperiod (Phase 4 step 7): resumable monthly closure
-        // search. The server forces the frozen golden policy and bounded-
-        // exhaustive screening; the browser only supplies user intent (the
-        // ClosureSearchSpec). ─────────────────────────────────────────────
+        // search. The server forces the frozen golden policy and chooses
+        // held-out-validated proxy screening or the safe bounded-exhaustive
+        // fallback; the browser only supplies user intent (ClosureSearchSpec).
         let monthlySource = 'forecast';
         let lastMonthlyResult = null;
         let lastMonthlySpec = null;
@@ -1888,7 +1889,7 @@
             required_work_minutes:
               Math.round((Number(monthlyWorkHours.value) || 4) * 60),
             max_consecutive_start_days:
-              Math.min(7, Math.max(1, Number(monthlyMaxDays.value) || 1)),
+              Math.min(21, Math.max(1, Number(monthlyMaxDays.value) || 1)),
             // "Heldag" gives the true full-day band 00:00–24:00 (the
             // contract accepts 24:00 only as latest_end, which a
             // type="time" input cannot express).
@@ -1938,23 +1939,6 @@
             ? 'Avbryter…' : `${label}${counts}`;
         }
 
-        async function pollMonthly(onProgress) {
-          for (;;) {
-            await new Promise(r => setTimeout(r, 4000));
-            let status;
-            try {
-              status = await (await fetch('/api/monthly_search/status')).json();
-            } catch (e) {
-              continue;   // transient network hiccup — keep polling
-            }
-            if (status.status === 'running' || status.status === 'cancelling') {
-              onProgress?.(status);
-              continue;
-            }
-            return status;
-          }
-        }
-
         function scheduleLabel(schedule) {
           const intervals = schedule.intervals || [];
           const parts = intervals.slice(0, 2).map(iv =>
@@ -1966,6 +1950,7 @@
 
         function renderMonthlyResults(result) {
           lastMonthlyResult = result;
+          lastMonthlySpec = result.closure_search_spec || lastMonthlySpec;
           const screening = result.screening || {};
           monthlyResultsTitle.textContent =
             `Bästa arbetsperiod · ${screening.candidate_count ?? '?'} lagliga ` +
@@ -2077,8 +2062,21 @@
           const firstDate = intervals[0].start_time.slice(0, 10);
           const lastDate = intervals[intervals.length - 1]
             .start_time.slice(0, 10);
-          const days = Math.min(7, Math.max(1, Math.round(
-            (Date.parse(lastDate) - Date.parse(firstDate)) / 86400000) + 1));
+          const spanDays = Math.round(
+            (Date.parse(lastDate) - Date.parse(firstDate)) / 86400000) + 1;
+          // Interactive load recalibrates via the standard demand path,
+          // which is capped at 7 days. A longer winning schedule is still a
+          // valid RECOMMENDATION — it just can't be played back as an
+          // interactive scenario yet (that would need a multi-week demand
+          // build, the same cost the search already paid).
+          if (spanDays > 7) {
+            alert(`Schemat är ${spanDays} dagar långt. Sökresultatet gäller, `
+              + 'men perioder över 7 dagar kan ännu inte laddas som ett '
+              + 'interaktivt scenario på kartan (kräver ett fleraveckors '
+              + 'demand-bygge). Använd de exakta datumen/tiderna direkt.');
+            return;
+          }
+          const days = Math.min(7, Math.max(1, spanDays));
           const others = monthlyResultsBody.querySelectorAll('.sr-load-btn');
           others.forEach(b => b.disabled = true);
           try {
@@ -2099,8 +2097,13 @@
                 structural_reference_date: '2025-09-16',
               });
               recalibrationJobRunning = true;
-              await pollRecalibration();
+              const recalibration = await pollRecalibration();
               recalibrationJobRunning = false;
+              if (recalibration.status !== 'done') {
+                throw new Error(
+                  recalibration.error ||
+                  'omkalibreringen slutfördes inte; avstängningen startades inte');
+              }
             }
             const spec = await baseScenarioSpec();
             spec.scenario_id = (`close_${edges.join('_')}` +
@@ -2115,18 +2118,16 @@
             })));
             spec.objective_profile = 'closure-window';
             btn.textContent = 'Simulerar… (0s)';
-            const res = await fetch('/api/close', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ scenario_spec: spec }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            const status = await pollClose(
-              s => btn.textContent = `Simulerar… (${s}s)`);
+            const status = await runRoadClosureOperation(
+              'simulate', { scenario_spec: spec }, state => {
+                btn.textContent = state.status === 'cancelling'
+                  ? 'Avbryter…'
+                  : `Simulerar… (${state.elapsed_s || 0}s)`;
+              });
             if (status.status === 'error') throw new Error(status.error);
+            if (status.status === 'cancelled') return;
             monthlyResults.classList.remove('show');
-            exitMonthlyPicking();
+            setClosureTool(null);
             await activateClosedScenario(status);
           } catch (e) {
             alert('Kunde inte ladda schemat: ' + e.message);
@@ -2136,7 +2137,7 @@
           }
         }
 
-        btnMonthly.addEventListener('click', enterMonthlyPicking);
+        btnMonthly.addEventListener('click', () => setClosureTool('monthly'));
         btnMonthlyResultsClose.addEventListener('click',
           () => monthlyResults.classList.remove('show'));
         // Full-day band overrides (and visibly disables) the time inputs.
@@ -2199,20 +2200,30 @@
           const spec = monthlyClosureSearchSpec([...selected]);
           const problem = validateMonthlySpec(spec);
           if (problem) return alert(problem);
+          // Long durations and wide date ranges each finalist needs its own
+          // multi-day demand build plus SUMO, so the honest cost can be many
+          // hours. Make that visible before committing; the job is resumable.
+          const rangeDays = Math.round((Date.parse(spec.permitted_date_end)
+            - Date.parse(spec.permitted_date_start)) / 86400000) + 1;
+          if (spec.max_consecutive_start_days > 7 || rangeDays > 31) {
+            if (!confirm(
+                `Stor sökning: ${rangeDays} dagars intervall, upp till `
+                + `${spec.max_consecutive_start_days} dagar i följd. Varje `
+                + 'finalist byggs och simuleras separat i SUMO, så detta kan '
+                + 'ta många timmar. Perioder över 7 dagar ligger dessutom '
+                + 'bortom den 7-dagars golden-validerade kontinuiteten '
+                + '(per-dag-kontrollerna körs ändå). Jobbet är återupptagbart '
+                + '— du kan stänga fliken och starta samma sökning igen. '
+                + 'Fortsätta?')) return;
+          }
           lastMonthlySpec = spec;
           monthlyJobRunning = true;
           refreshCloseUI();
           btnMonthlyRun.disabled = true;
           btnMonthlyRun.textContent = 'Startar…';
           try {
-            const res = await fetch('/api/monthly_search', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ closure_search_spec: spec }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            const status = await pollMonthly(updateMonthlyProgress);
+            const status = await runRoadClosureOperation(
+              'monthly', { closure_search_spec: spec }, updateMonthlyProgress);
             if (status.status === 'error') throw new Error(status.error);
             if (status.status === 'cancelled') {
               monthlyProgress.hidden = false;
@@ -2232,7 +2243,7 @@
         });
 
         btnMonthlyCancel.addEventListener('click', async () => {
-          if (!monthlyJobRunning) return exitMonthlyPicking();
+          if (!monthlyJobRunning) return setClosureTool(null);
           btnMonthlyCancel.disabled = true;
           btnMonthlyCancel.textContent = 'Avbryter…';
           try {
@@ -2246,27 +2257,98 @@
           }
         });
 
-        // A monthly search started from another tab/session (or one whose
-        // tab closed) is still the server's current work — same on-load
-        // discovery as the recalibration below. Only a RUNNING job is
-        // resumed unconditionally; a finished one is left for the tab that
-        // started it (its poll loop renders the result).
+        // Recover whichever road-closing operation owns the shared SUMO
+        // resource. This is intentionally one path for simulate/suggest/
+        // monthly: after a reload or closed tab, the active job reopens the
+        // unified Vägavstängning workspace and keeps polling its own status.
+        // Finished historical jobs are left in Körhistorik; only genuinely
+        // running/cancelling server state takes over a fresh page.
         (async () => {
           try {
-            const status = await (await fetch('/api/monthly_search/status')).json();
-            if (status.status === 'running' || status.status === 'cancelling') {
-              monthlyJobRunning = true;
-              refreshCloseUI();
-              const done = await pollMonthly(updateMonthlyProgress);
-              monthlyJobRunning = false;
-              monthlyProgress.hidden = true;
-              btnMonthlyRun.textContent = 'Sök arbetsperiod';
-              refreshCloseUI();
-              if (done.status === 'done' && done.result && monthlyMode) {
+            const states = await Promise.all(
+              Object.entries(ROAD_CLOSURE_OPERATIONS).map(
+                async ([kind, operation]) => {
+                  const response = await fetch(operation.statusUrl, {
+                    cache: 'no-store',
+                  });
+                  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                  return [kind, await response.json()];
+                }));
+            const active = states.find(([, state]) =>
+              state.status === 'running' || state.status === 'cancelling');
+            if (!active) return;
+
+            const [kind, state] = active;
+            await openWorkspace('closure');
+            setClosureTool(kind);
+            const spec = state.closure_search_spec;
+            if (kind === 'monthly') lastMonthlySpec = spec || lastMonthlySpec;
+            const edges = state.edges || spec?.directed_edges || [];
+            for (const edge of edges) selected.add(edge);
+            closureJobRunning = kind === 'simulate';
+            suggestJobRunning = kind === 'suggest';
+            monthlyJobRunning = kind === 'monthly';
+            refreshCloseUI();
+
+            const onProgress = current => {
+              if (kind === 'simulate') {
+                btnRun.textContent = current.status === 'cancelling'
+                  ? 'Avbryter…'
+                  : `Simulerar… (${current.elapsed_s || 0}s)`;
+              } else if (kind === 'suggest') {
+                btnSuggestRun.textContent = current.status === 'cancelling'
+                  ? 'Avbryter…'
+                  : `Söker… (${current.elapsed_s || 0}s)`;
+              } else {
+                updateMonthlyProgress(current);
+              }
+            };
+            const done = await runRoadClosureOperation(kind, null, onProgress);
+            if (done.status === 'done') {
+              clearStudyOutcome();
+              if (kind === 'simulate') {
+                closureJobRunning = false;
+                setClosureTool(null);
+                await activateClosedScenario(done);
+              } else if (kind === 'suggest') {
+                renderSuggestResults(done.result);
+              } else {
+                lastMonthlySpec = done.closure_search_spec || lastMonthlySpec;
+                monthlyProgress.hidden = true;
                 renderMonthlyResults(done.result);
               }
+            } else if (done.status === 'cancelled') {
+              announceStudyOutcome('Avstängningsjobbet', 'cancelled',
+                                   edges.join(', '));
+              if (kind !== 'monthly') {
+                closureJobRunning = false;
+                suggestJobRunning = false;
+                setClosureTool(null);
+              } else {
+                monthlyProgress.hidden = false;
+                monthlyProgress.textContent =
+                  done.note || 'Avbruten — sökningen kan återupptas.';
+              }
+            } else if (done.status === 'error') {
+              announceStudyOutcome('Avstängningsjobbet', 'error',
+                                   edges.join(', '), done.error);
             }
-          } catch (e) { /* static hosting — ignore */ }
+            closureJobRunning = false;
+            suggestJobRunning = false;
+            monthlyJobRunning = false;
+            btnRun.textContent = 'Simulera avstängning';
+            btnSuggestRun.textContent = 'Sök bästa tid';
+            btnMonthlyRun.textContent = 'Sök arbetsperiod';
+            refreshCloseUI();
+          } catch (e) {
+            // Static hosting has no status API; a malformed live response
+            // must likewise release the local UI state instead of leaving
+            // every road-closing control permanently disabled.
+            closureJobRunning = false;
+            suggestJobRunning = false;
+            monthlyJobRunning = false;
+            refreshCloseUI();
+          }
         })();
 
         // The recalibration takes ~6 min — a single held-open fetch for
@@ -2325,7 +2407,7 @@
               clearStudyOutcome();
               await applyFinishedRecalibration(status);
             }
-            return;
+            return status;
           }
         }
 
