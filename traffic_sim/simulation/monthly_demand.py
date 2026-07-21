@@ -138,6 +138,71 @@ def _manifest_outputs(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, Any
     return result
 
 
+GENERATION_SOURCE_FILES = ("build_candidates", "pfe", "build_sumo_demand")
+
+
+def demand_generation_of(archive: Path) -> dict[str, str]:
+    """The source hashes of the code that produced one demand archive.
+
+    A demand archive is content-addressed by its CONTRACT (dates, source,
+    window), which is deliberately silent about the code that filled it. That
+    is what lets a rebuild reuse an archive — and also what would let one
+    search mix an envelope calibrated before a generator change with one
+    calibrated after it, since every envelope build is a fresh subprocess
+    importing whatever code is on disk at the time.
+
+    Stage B changes the candidate seeding, so this is no longer hypothetical:
+    a `prepare` in flight across its landing could straddle it. Reading the
+    generator hashes the archive already records makes that detectable.
+    """
+    metadata = _read(Path(archive) / "demand_meta.json")
+    source_files = (metadata.get("build_fingerprint") or {}).get(
+        "source_files") or {}
+    return {
+        name: str((source_files.get(name) or {}).get("sha256", ""))
+        for name in GENERATION_SOURCE_FILES
+    }
+
+
+def _require_one_demand_generation(
+    entries_by_key: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Refuse a release whose archives were built by different generators.
+
+    Fail closed and name the disagreement: comparing envelopes calibrated by
+    two different candidate generators is not a paired comparison, and the
+    difference would otherwise be invisible in every downstream artifact.
+    """
+    generations: dict[str, list[str]] = {}
+    for key, entry in sorted(entries_by_key.items()):
+        archive = Path(str(entry.get("archive", "")))
+        try:
+            generation = demand_generation_of(archive)
+        except (OSError, ValueError):
+            raise ValueError(
+                f"monthly demand archive has no readable build fingerprint: "
+                f"{archive}"
+            ) from None
+        if not all(generation.values()):
+            raise ValueError(
+                f"monthly demand archive does not record its generator "
+                f"source hashes: {archive}"
+            )
+        generations.setdefault(_canonical_digest(generation, length=16),
+                               []).append(key)
+    if len(generations) > 1:
+        groups = "; ".join(
+            f"{digest}: {', '.join(keys)}"
+            for digest, keys in sorted(generations.items())
+        )
+        raise ValueError(
+            "monthly demand release mixes archives built by different "
+            f"candidate/solver generations ({groups}). Rebuild the older "
+            "envelopes so every candidate is compared against demand from "
+            "one generation."
+        )
+
+
 def validate_demand_archive(
     archive: Path,
     required: DemandBuildSpec,
@@ -487,6 +552,7 @@ class MonthlyDemandResolverRunner:
         }
         if set(by_key) != set(required_by_key):
             raise ValueError("monthly demand release does not cover the shortlist")
+        _require_one_demand_generation(by_key)
 
         for key, required in required_by_key.items():
             pinned = by_key[key]

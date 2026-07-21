@@ -37,7 +37,14 @@ def _spec(*, end_date="2027-07-22", latest_end="07:00"):
     )
 
 
-def _archive(root, required, name, *, finished_at):
+GENERATION = {
+    "build_candidates": {"sha256": "a" * 64, "bytes": 1},
+    "pfe": {"sha256": "b" * 64, "bytes": 1},
+    "build_sumo_demand": {"sha256": "c" * 64, "bytes": 1},
+}
+
+
+def _archive(root, required, name, *, finished_at, generation=None):
     archive = root / name
     archive.mkdir(parents=True)
     files = {
@@ -48,6 +55,10 @@ def _archive(root, required, name, *, finished_at):
             "epoch_sim": f"{required.start_date}T00:00:00",
             "n_intervals": required.days * 96,
             "n_variants": 3,
+            # Real archives record the source hashes of the code that built
+            # them; the resolver refuses a release that mixes generations.
+            "build_fingerprint": {
+                "source_files": dict(generation or GENERATION)},
         }),
         "calibrated.rou.xml": "<routes id='q50'/>",
         "calibrated_v1.rou.xml": "<routes id='q10'/>",
@@ -380,3 +391,58 @@ def test_missing_archive_fails_closed_when_build_is_disabled(tmp_path):
     )
     with pytest.raises(FileNotFoundError, match="no succeeded immutable"):
         resolver.prepare(schedules)
+
+
+def _two_required(tmp_path):
+    resolver = MonthlyDemandResolverRunner(
+        _spec(), baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", runs_root=tmp_path / "runs",
+        release_root=tmp_path / "releases", build_missing=False)
+    schedules = generate_closure_schedules(_spec())
+    required = _required_for(resolver, schedules)
+    keys = sorted(required)
+    if len(keys) < 2:
+        pytest.skip("needs at least two distinct envelopes")
+    return [(key, required[key]) for key in keys[:2]]
+
+
+def test_release_mixing_demand_generations_is_refused(tmp_path, monkeypatch):
+    """A search must not compare envelopes built by different generators.
+
+    Every envelope build is a fresh subprocess importing whatever code is on
+    disk, so a long search that straddles a generator change silently ends up
+    with archives from both sides. That is not a paired comparison, and it is
+    invisible in every downstream artifact unless something checks.
+    """
+    entries = {}
+    for index, (key, required) in enumerate(_two_required(tmp_path)):
+        generation = dict(GENERATION)
+        if index:
+            generation["build_candidates"] = {"sha256": "z" * 64, "bytes": 1}
+        archive = _archive(
+            tmp_path, required, f"archive-{index}",
+            finished_at="2026-07-21T00:00:00Z", generation=generation)
+        entries[key] = {"archive": str(archive)}
+
+    with pytest.raises(ValueError, match="different candidate/solver"):
+        monthly_demand._require_one_demand_generation(entries)
+
+
+def test_release_of_one_generation_is_accepted(tmp_path):
+    entries = {
+        key: {"archive": str(_archive(
+            tmp_path, required, f"same-{index}",
+            finished_at="2026-07-21T00:00:00Z"))}
+        for index, (key, required) in enumerate(_two_required(tmp_path))
+    }
+    monthly_demand._require_one_demand_generation(entries)
+
+
+def test_archive_without_generator_hashes_is_refused(tmp_path):
+    key, required = _two_required(tmp_path)[0]
+    archive = _archive(tmp_path, required, "unfingerprinted",
+                       finished_at="2026-07-21T00:00:00Z",
+                       generation={"build_candidates": {"sha256": "", "bytes": 0}})
+    with pytest.raises(ValueError, match="generator source hashes"):
+        monthly_demand._require_one_demand_generation(
+            {key: {"archive": str(archive)}})
