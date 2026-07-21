@@ -553,6 +553,12 @@ def main() -> None:
                 "gravity_alpha": args.gravity_alpha,
                 "cross_fraction": args.cross_fraction,
                 "is_weekend": use_weekend_shape,
+                # Candidate departures are keyed by calendar date (stage B),
+                # so the date is part of the pool's identity. Without it two
+                # dates whose measured day-shape happens to be identical (or
+                # absent) would share a cache entry and one would silently be
+                # served the other's candidates.
+                "start_date": range_start.strftime("%Y-%m-%d"),
                 "min_per_sensor": 50,
                 "route_diversity": 2.0,
                 "seed": args.seed,
@@ -592,6 +598,11 @@ def main() -> None:
                 cmd += ["--real-day-shape-file", str(day_shape_path)]
             if day_blocks_path is not None:
                 cmd += ["--day-blocks-file", str(day_blocks_path)]
+            else:
+                # Single-day builds carry their date the same way a multi-day
+                # block does, so one day's candidates are identical whether it
+                # is built alone or inside a window (stage B).
+                cmd += ["--date", range_start.strftime("%Y-%m-%d")]
             if weight_file is not None:
                 cmd += ["--weight-file", str(weight_file),
                        "--weight-period", str(BPR_PERIOD_S)]
@@ -720,7 +731,12 @@ def main() -> None:
                         max_workers=args.pfe_workers or (os.cpu_count() or 1),
                         purpose_departure_offset_s=purpose_departure_offset_s,
                         activity_purpose_shares_by_quarter=activity_purpose_shares,
-                        through_share_target=args.through_share_target))
+                        through_share_target=args.through_share_target,
+                        # Whole-day windows restart each day's endpoint draw
+                        # ordinals, so a day's published vehicles depend only
+                        # on that day (stage B). Sub-day windows have no day
+                        # boundary to restart at.
+                        day_quarters=(96 if n_intervals % 96 == 0 else None)))
                 for suffix, key in variants:
                     variant_report = reports[suffix]
                     variant_fit_reports[key] = fit_summary(

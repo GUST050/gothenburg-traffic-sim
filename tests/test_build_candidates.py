@@ -1804,3 +1804,86 @@ class TestTripLengthFit:
 
     def test_rvu_short_bin_shares_sum_to_one(self):
         assert sum(bc.RVU_SHORT_BIN_SHARES) == pytest.approx(1.0)
+
+
+class TestCalendarDateSeeding:
+    """Stage B (SPEED_ARCHITECTURE_PLAN 2026-07-21): a day's candidates must
+    be a function of the DAY, not of where it sits in the window being built.
+
+    Departures used to be seeded ``seed + day_index`` and geometry came from
+    whichever block of a day type appeared first, so the same Tuesday drew
+    different candidates in a window starting Monday than in one starting
+    Tuesday. Nothing built per-day can be reused across windows while that is
+    true, so these tests pin the two properties the day library rests on.
+    """
+
+    @staticmethod
+    def _structure():
+        return bc.CandidateStructure(
+            G=None, edges=[], hmass=np.array([]), amass={}, entries=[],
+            exits=[], entry_ids=[], exit_ids=[], w_entry=np.array([]),
+            w_exit=np.array([]), measured=[])
+
+    @staticmethod
+    def _templates(n=40):
+        return [("from", "to", "via", "arbete", f"t{i}", "outbound")
+                for i in range(n)]
+
+    def _block(self, *, day_index, date, offset_s=0.0):
+        profile = np.full(24, 1 / 24)
+        block, _lengths, _short, _template = bc.generate_day_block(
+            self._structure(), profile, offset_s, "d_", 42, day_index,
+            len(self._templates()), .5, .3, 2.6, False, 1,
+            template_trips=self._templates(), date=date)
+        # Compare departures relative to the day, not the window offset.
+        return [round(trip[1] - offset_s, 6) for trip in block]
+
+    def test_same_date_draws_the_same_departures_at_any_window_position(self):
+        as_first_day = self._block(day_index=0, date="2027-03-09")
+        as_fourth_day = self._block(day_index=3, date="2027-03-09",
+                                    offset_s=3 * 86400)
+
+        assert as_fourth_day == as_first_day
+
+    def test_different_dates_draw_different_departures(self):
+        assert (self._block(day_index=0, date="2027-03-09")
+                != self._block(day_index=0, date="2027-03-10"))
+
+    def test_dateless_callers_keep_the_positional_stream(self):
+        # Legacy/minimal entry points and existing tests must be unaffected.
+        first = self._block(day_index=0, date=None)
+        second = self._block(day_index=1, date=None)
+        assert first != second
+        assert first == self._block(day_index=0, date=None)
+
+    def test_geometry_template_is_canonical_per_day_type(self, monkeypatch):
+        seeds = []
+
+        def fake_generate(rng, *args, **kwargs):
+            seeds.append(rng.bit_generator.state["state"]["state"])
+            return [(3 * 3600 + 100.0, "from", "to", "via")], [1.0], {}
+
+        monkeypatch.setattr(bc, "generate_sensor_anchored_trips", fake_generate)
+        profile = np.full(24, 1 / 24)
+        for day_index, date in ((0, "2027-03-09"), (5, "2027-03-15")):
+            bc.generate_day_block(
+                self._structure(), profile, 0, "d_", 42, day_index, 1,
+                .5, .3, 2.6, False, 1, date=date, pool_key="weekday")
+
+        # Whoever creates the weekday geometry, it comes from the same stream.
+        assert len(seeds) == 2 and seeds[0] == seeds[1]
+
+    def test_day_type_templates_are_independent_streams(self):
+        weekday = bc.day_type_template_seed(42, "weekday")
+        weekend = bc.day_type_template_seed(42, "weekend")
+        assert weekday != weekend
+        assert bc.day_type_template_seed(42, "weekday") == weekday
+        assert bc.day_type_template_seed(43, "weekday") != weekday
+
+    def test_date_stream_is_independent_of_the_template_stream(self):
+        # A day must not draw its departures from the same stream position
+        # that generated the geometry, or the first day of a type would
+        # differ from every later day of that type.
+        assert (bc.day_block_seed(42, "2027-03-09", 0)
+                != bc.day_type_template_seed(42, "weekday"))
+        assert bc.day_block_seed(42, None, 3) == 45

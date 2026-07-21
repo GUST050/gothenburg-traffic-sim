@@ -1283,3 +1283,52 @@ class TestPrecomputedQuarterCounts:
 
         assert xml == inline_xml
         assert agents == inline_agents
+
+
+class TestPerDayEndpointDrawOrdinals:
+    """Stage B: endpoint draw ordinals restart at each calendar-day boundary.
+
+    Carrying them across midnight made day N of a window depend on days
+    1..N-1, so the same date published different vehicles in different
+    windows — the last coupling that stops a day being built once and reused.
+    """
+
+    @staticmethod
+    def _shapes():
+        pools = {"home:E": [{"id": f"loc{i}", "kind": "building",
+                             "p": 10.0 * i, "w": 1.0}
+                            for i in range(8)]}
+        source = Candidate(0.0, ["E"], source_id="home:E",
+                           intent={"purpose": "arbete",
+                                   "origin_location_pool": "home:E",
+                                   "destination_location_pool": "home:E"},
+                           location_pools=pools)
+        return [Candidate(0.0, ["E"], location_pools=pools,
+                          source_candidates=[source])]
+
+    def _positions(self, tmp_path, name, nq, day_quarters):
+        shapes = self._shapes()
+        out = tmp_path / name
+        write_calibration_report(
+            shapes, out, [{"E": 2.0} for _ in range(nq)],
+            [np.array([2.0]) for _ in range(nq)], day_quarters=day_quarters)
+        agents = json.loads(
+            out.with_name(out.name.replace(".rou.xml", ".agents.json")).read_text()
+        )["agents"]
+        return [agent.get("origin_position_m") for agent in agents]
+
+    def test_second_day_repeats_the_first_days_draw_sequence(self, tmp_path):
+        two_days = self._positions(tmp_path, "two.rou.xml", 192, 96)
+        one_day = self._positions(tmp_path, "one.rou.xml", 96, 96)
+
+        assert two_days[:len(one_day)] == one_day
+        # The whole point: day two is the same sequence again, not a
+        # continuation of day one's counters.
+        assert two_days[len(one_day):] == one_day
+
+    def test_no_day_structure_keeps_the_continuous_sequence(self, tmp_path):
+        continuous = self._positions(tmp_path, "cont.rou.xml", 192, None)
+        one_day = self._positions(tmp_path, "cont_one.rou.xml", 96, None)
+
+        assert continuous[:len(one_day)] == one_day
+        assert continuous[len(one_day):] != one_day

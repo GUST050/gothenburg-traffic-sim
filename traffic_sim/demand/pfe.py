@@ -1857,6 +1857,7 @@ def write_calibration_report(
     edge_length_m: dict[str, float] | None = None,
     purpose_mixes_per_q: list[Counter | dict[str, int]] | None = None,
     precomputed_counts: list[tuple[np.ndarray, bool] | None] | None = None,
+    day_quarters: int | None = None,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
 
@@ -1931,15 +1932,23 @@ def write_calibration_report(
     purpose_allocation: list[dict] = []
     vid = 0
     agents: list[dict] = []
-    # Counts are deliberately shared across every quarter: a candidate used
-    # repeatedly at 08:00 and again at 17:00 should keep traversing its
-    # weighted endpoint pool instead of restarting the same sequence.
+    # Counts are deliberately shared across every quarter WITHIN A DAY: a
+    # candidate used repeatedly at 08:00 and again at 17:00 should keep
+    # traversing its weighted endpoint pool instead of restarting the same
+    # sequence. They restart at each calendar-day boundary (2026-07-21,
+    # SPEED_ARCHITECTURE_PLAN stage B) so that a day's published vehicles
+    # depend only on that day: carrying the counters across midnight made
+    # day 3 of a window depend on days 1-2, which is precisely what stops a
+    # day from being built once and reused. ``day_quarters=None`` keeps the
+    # historical continuous behaviour for callers with no day structure.
     location_draw_ordinals: Counter = Counter()
     write_path = (out_path.with_suffix(out_path.suffix + ".tmp")
                   if enforce_integer_bounds else out_path)
     with open(write_path, "w") as f:
         f.write("<routes>\n")
         for i in range(nq):
+            if day_quarters and i and i % day_quarters == 0:
+                location_draw_ordinals.clear()
             sol = solutions[i]
             if sol is None:
                 continue

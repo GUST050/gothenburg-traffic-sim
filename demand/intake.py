@@ -178,6 +178,10 @@ def multi_day_blocks(flows: dict[str, list], sensor_edges: dict[str, list[str]],
         blocks.append({
             "profile": profile.tolist(), "offset_s": day_index * 86400,
             "id_prefix": f"d{day_index}_", "is_weekend": weekend,
+            # The calendar date keys the block's departure draws, so the same
+            # day yields the same candidates in every window it appears in
+            # (SPEED_ARCHITECTURE_PLAN stage B).
+            "date": day.strftime("%Y-%m-%d"),
             # Purpose logic is the same for weekend and holiday blocks, so
             # that is the safe geometry-reuse boundary.
             "pool_key": "weekend" if weekend else "weekday",

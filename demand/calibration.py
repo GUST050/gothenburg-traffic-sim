@@ -41,6 +41,7 @@ _PFE_PAR_PREPARE_S = None
 _PFE_PAR_SOLVE_S = None
 _PFE_PAR_COUNTS = None
 _PFE_PAR_COUNTS_S = None
+_PFE_PAR_DAY_QUARTERS = None
 
 
 def apply_activity_purpose_margin(
@@ -222,6 +223,7 @@ def _write_pfe_variant_report_job(job: tuple[str, str]):
         edge_length_m=(
             load_edge_geometry()[2] if GEO_PATH.exists() else None),
         purpose_mixes_per_q=_PFE_PAR_PURPOSE_MIXES[suffix],
+        day_quarters=_PFE_PAR_DAY_QUARTERS,
         precomputed_counts=(
             _PFE_PAR_COUNTS[suffix] if _PFE_PAR_COUNTS is not None else None),
     )
@@ -242,7 +244,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
                                    purpose_departure_offset_s: float = 0.0,
                                    activity_purpose_shares_by_quarter:
                                    list[dict[str, float]] | None = None,
-                                   through_share_target: float | None = None) -> dict[str, dict]:
+                                   through_share_target: float | None = None,
+                                   day_quarters: int | None = None) -> dict[str, dict]:
     """Solve all final direction variants through one flat worker pool.
 
     This avoids nesting multiprocessing pools: the unit of parallel work is one
@@ -260,11 +263,12 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     global _PFE_PAR_VARIANT_INPUTS, _PFE_PAR_PURPOSE_MIXES
     global _PFE_PAR_SOLUTIONS, _PFE_PAR_RUNGS, _PFE_PAR_STAGED_OUTPUTS
     global _PFE_PAR_PREPARE_S, _PFE_PAR_SOLVE_S
-    global _PFE_PAR_COUNTS, _PFE_PAR_COUNTS_S
+    global _PFE_PAR_COUNTS, _PFE_PAR_COUNTS_S, _PFE_PAR_DAY_QUARTERS
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
     print(f"  timing PFE prepare: {prepare_s:.1f}s")
+    _PFE_PAR_DAY_QUARTERS = day_quarters
     _PFE_PAR_SHAPES = shapes
     _PFE_PAR_ROUTE_COST = route_cost
     # Set BEFORE the pool forks so workers inherit it, like the shape pool.
@@ -422,6 +426,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         _PFE_PAR_STRUCTURE_GROUPS = None
         _PFE_PAR_VARIANT_INPUTS = None
         _PFE_PAR_PURPOSE_MIXES = None
+        _PFE_PAR_DAY_QUARTERS = None
 
 
 def warn_unserviceable_measured_edges(report: dict, label: str) -> None:
