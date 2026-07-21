@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -446,3 +447,73 @@ def test_archive_without_generator_hashes_is_refused(tmp_path):
     with pytest.raises(ValueError, match="generator source hashes"):
         monthly_demand._require_one_demand_generation(
             {key: {"archive": str(archive)}})
+
+
+class TestLiveReleaseKillSafety:
+    """The restore lives in a finally block, which a kill skips. A marker on
+    disk is what lets the next run put the deployed release back."""
+
+    def _live(self, tmp_path):
+        root = tmp_path / "box"
+        (root / "sumo").mkdir(parents=True)
+        (root / "web" / "data" / "scenarios").mkdir(parents=True)
+        (root / "sumo" / "calibrated.rou.xml").write_text("live routes")
+        (root / "web" / "data" / "scenarios" / "baseline.json").write_text("live")
+        return root
+
+    def _snapshot(self, tmp_path, root):
+        return monthly_demand.snapshot_live_demand_release(
+            root=root,
+            products=(Path("sumo") / "calibrated.rou.xml",),
+            directories=(Path("web") / "data" / "scenarios",),
+            marker=tmp_path / "marker.json")
+
+    def test_a_killed_run_is_recovered_from_the_marker(self, tmp_path):
+        root = self._live(tmp_path)
+        self._snapshot(tmp_path, root)   # deliberately never restored
+        (root / "sumo" / "calibrated.rou.xml").write_text("envelope routes")
+        (root / "web" / "data" / "scenarios" / "baseline.json").unlink()
+
+        recovered = monthly_demand.recover_live_demand_release(
+            tmp_path / "marker.json")
+
+        assert recovered is not None
+        assert (root / "sumo" / "calibrated.rou.xml").read_text() == "live routes"
+        assert (root / "web" / "data" / "scenarios"
+                / "baseline.json").read_text() == "live"
+        assert not (tmp_path / "marker.json").exists()
+
+    def test_scenario_directory_contents_are_restored_exactly(self, tmp_path):
+        root = self._live(tmp_path)
+        snapshot = self._snapshot(tmp_path, root)
+        # A build clears stale scenarios and writes its own.
+        (root / "web" / "data" / "scenarios" / "baseline.json").unlink()
+        (root / "web" / "data" / "scenarios" / "intruder.json").write_text("new")
+
+        monthly_demand.restore_live_demand_release(snapshot)
+
+        scenarios = sorted(
+            path.name for path in (root / "web" / "data" / "scenarios").iterdir())
+        assert scenarios == ["baseline.json"]
+
+    def test_a_completed_restore_leaves_no_marker(self, tmp_path):
+        root = self._live(tmp_path)
+        snapshot = self._snapshot(tmp_path, root)
+        monthly_demand.restore_live_demand_release(snapshot)
+        assert not (tmp_path / "marker.json").exists()
+        assert monthly_demand.recover_live_demand_release(
+            tmp_path / "marker.json") is None
+
+    def test_an_unreadable_marker_is_refused_not_guessed(self, tmp_path):
+        marker = tmp_path / "marker.json"
+        marker.write_text(json.dumps({"kind": "something_else"}))
+        with pytest.raises(ValueError, match="unreadable live release"):
+            monthly_demand.recover_live_demand_release(marker)
+
+    def test_a_marker_whose_snapshot_is_gone_is_dropped(self, tmp_path):
+        root = self._live(tmp_path)
+        snapshot = self._snapshot(tmp_path, root)
+        shutil.rmtree(snapshot["directory"])
+        assert monthly_demand.recover_live_demand_release(
+            tmp_path / "marker.json") is None
+        assert not (tmp_path / "marker.json").exists()

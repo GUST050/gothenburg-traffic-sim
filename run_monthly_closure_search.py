@@ -24,7 +24,10 @@ from traffic_sim.simulation.monthly_search import (
     MonthlySearchPolicy,
     run_monthly_search,
 )
-from traffic_sim.simulation.monthly_demand import MonthlyDemandResolverRunner
+from traffic_sim.simulation.monthly_demand import (
+    MonthlyDemandResolverRunner,
+    recover_live_demand_release,
+)
 from traffic_sim.simulation.monthly_sumo import (
     ArchivedDemandSumoRunner,
     SEED_WORKER_BENCHMARK_RECORD,
@@ -177,6 +180,14 @@ def main() -> None:
             f"({SEED_WORKER_BENCHMARK_RECORD}). Run "
             "benchmark_seed_workers.py to establish identical evidence and a "
             "measured peak RSS first; parallel SUMO stays closed until then."
+        )
+    recovered = recover_live_demand_release()
+    if recovered is not None:
+        print(
+            "restored the live demand release left behind by a killed run "
+            f"({len(recovered.get('entries', []))} products, "
+            f"{len(recovered.get('trees', []))} directories)",
+            file=sys.stderr,
         )
     try:
         spec = load_closure_search_spec(args.spec)
