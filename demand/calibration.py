@@ -18,6 +18,8 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 from traffic_sim.demand import pfe
 from demand.structure import (GEO_PATH, load_edge_geometry,
                               structure_groups_for_shapes)
@@ -37,6 +39,8 @@ _PFE_PAR_RUNGS = None
 _PFE_PAR_STAGED_OUTPUTS = None
 _PFE_PAR_PREPARE_S = None
 _PFE_PAR_SOLVE_S = None
+_PFE_PAR_COUNTS = None
+_PFE_PAR_COUNTS_S = None
 
 
 def apply_activity_purpose_margin(
@@ -116,6 +120,53 @@ def _run_pfe_interval_job(job: dict):
     return suffix, key, quarter, sol, rung
 
 
+def _variant_quarter_purpose_mix(suffix: str, quarter: int):
+    """The exact purpose mix write_calibration_report would use for a quarter.
+
+    Kept in ONE place so the parallel counts phase and the writer can never
+    derive different arguments for the same quarter.
+    """
+    mixes = _PFE_PAR_PURPOSE_MIXES[suffix]
+    return mixes[quarter] if quarter < len(mixes) else Counter()
+
+
+def _run_pfe_counts_job(job: tuple[str, int]):
+    """ProcessPool worker for one quarter's integer repair (stage A1).
+
+    The repair/purpose-reconciliation MILPs are per-quarter pure functions
+    (pfe.quarter_publish_counts), so they parallelize exactly like the
+    interval solves. The sequential remainder of publishing — endpoint draw
+    ordinals, vehicle numbering, XML order — stays in the writer.
+
+    Counts are returned SPARSE (nonzero indices + their values). A dense
+    vector per (variant, quarter) would be hundreds of megabytes on a
+    multi-day build for a vector that is almost entirely zero; taking the
+    values through a nonzero mask reproduces the original array exactly,
+    dtype included.
+    """
+    from traffic_sim.demand import pfe
+    import numpy as np
+
+    suffix, quarter = job
+    data = _PFE_PAR_VARIANT_INPUTS[suffix]
+    sol = _PFE_PAR_SOLUTIONS[suffix][quarter]
+    if sol is None:
+        return suffix, quarter, None
+    purpose_mix = _variant_quarter_purpose_mix(suffix, quarter)
+    bounds_pq = data["hard_bounds_pq"]
+    counts, margin_enforced = pfe.quarter_publish_counts(
+        _PFE_PAR_SHAPES, sol, data["targets"][quarter],
+        bounds_pq[quarter] if bounds_pq is not None else None,
+        _PFE_PAR_RUNGS[suffix][quarter],
+        purpose_mix, bool(purpose_mix), True,
+        [(members, cap_share)
+         for _name, members, cap_share in (_PFE_PAR_STRUCTURE_GROUPS or [])],
+    )
+    idx = np.nonzero(counts)[0]
+    return suffix, quarter, (idx.astype(np.int64), counts[idx],
+                             counts.dtype.str, len(counts), margin_enforced)
+
+
 def _publish_worker_budget(variant_count: int) -> int:
     """Publish-pool size bounded by real memory headroom, never optimism.
 
@@ -171,11 +222,15 @@ def _write_pfe_variant_report_job(job: tuple[str, str]):
         edge_length_m=(
             load_edge_geometry()[2] if GEO_PATH.exists() else None),
         purpose_mixes_per_q=_PFE_PAR_PURPOSE_MIXES[suffix],
+        precomputed_counts=(
+            _PFE_PAR_COUNTS[suffix] if _PFE_PAR_COUNTS is not None else None),
     )
     publish_s = time.perf_counter() - started
     report["timings_s"] = {
         "prepare_shared": round(_PFE_PAR_PREPARE_S, 3),
         "interval_solving_shared": round(_PFE_PAR_SOLVE_S, 3),
+        "integer_repair_shared": (round(_PFE_PAR_COUNTS_S, 3)
+                                  if _PFE_PAR_COUNTS_S is not None else None),
         "route_publish": round(publish_s, 3),
     }
     return suffix, key, report, publish_s
@@ -205,6 +260,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     global _PFE_PAR_VARIANT_INPUTS, _PFE_PAR_PURPOSE_MIXES
     global _PFE_PAR_SOLUTIONS, _PFE_PAR_RUNGS, _PFE_PAR_STAGED_OUTPUTS
     global _PFE_PAR_PREPARE_S, _PFE_PAR_SOLVE_S
+    global _PFE_PAR_COUNTS, _PFE_PAR_COUNTS_S
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
@@ -241,11 +297,13 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         tasks = []
         solutions = {}
         rungs = {}
+        counts_by_variant = {}
         for suffix, key in variants:
             data = variant_inputs[suffix]
             nq = len(data["targets"])
             solutions[suffix] = [None] * nq
             rungs[suffix] = [pfe.RUNG_INFEASIBLE] * nq
+            counts_by_variant[suffix] = [None] * nq
             for i in range(nq):
                 tasks.append((suffix, key, i))
 
@@ -267,6 +325,30 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         _PFE_PAR_STAGED_OUTPUTS = staged_outputs
         _PFE_PAR_PREPARE_S = prepare_s
         _PFE_PAR_SOLVE_S = solve_s
+
+        # Stage A1: the integer repair + purpose reconciliation MILPs are the
+        # bulk of publishing and are per-quarter pure (pfe.quarter_publish_
+        # counts). Solve them in the same flat (variant x quarter) shape as
+        # the interval solves — one non-nested pool, results reassembled in
+        # deterministic order — so the writer that follows only has to do the
+        # genuinely sequential work. Results are IDENTICAL either way: the
+        # writer computes any quarter left unfilled inline exactly as before.
+        counts_started = time.perf_counter()
+        with mp.get_context("fork").Pool(processes=n_workers) as pool:
+            for suffix, quarter, packed in pool.imap_unordered(
+                _run_pfe_counts_job,
+                [(suffix, quarter) for suffix, _key, quarter in tasks]
+            ):
+                if packed is None:
+                    continue
+                idx, vals, dtype, length, margin_enforced = packed
+                dense = np.zeros(length, dtype=np.dtype(dtype))
+                dense[idx] = vals
+                counts_by_variant[suffix][quarter] = (dense, margin_enforced)
+        counts_s = time.perf_counter() - counts_started
+        print(f"  timing PFE integer repair: {counts_s:.1f}s")
+        _PFE_PAR_COUNTS = counts_by_variant
+        _PFE_PAR_COUNTS_S = counts_s
         reports = {}
         # Publishing materializes large XML + agent JSON artifacts. Forking
         # writers gradually duplicates the parent's shape/solution state
@@ -326,6 +408,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     finally:
         _PFE_PAR_SOLUTIONS = None
         _PFE_PAR_RUNGS = None
+        _PFE_PAR_COUNTS = None
+        _PFE_PAR_COUNTS_S = None
         _PFE_PAR_STAGED_OUTPUTS = None
         _PFE_PAR_PREPARE_S = None
         _PFE_PAR_SOLVE_S = None

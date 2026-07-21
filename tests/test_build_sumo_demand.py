@@ -906,7 +906,14 @@ class TestVariantPublication:
             def __exit__(self, *args):
                 return False
 
-            def imap_unordered(self, _worker, tasks):
+            def imap_unordered(self, worker, tasks):
+                # One fake stands in for BOTH flat pools: the interval solve
+                # and the stage-A1 integer repair, which have different task
+                # and result shapes.
+                if worker is dcal._run_pfe_counts_job:
+                    for suffix, quarter in tasks:
+                        yield suffix, quarter, None
+                    return
                 for suffix, key, quarter in tasks:
                     yield suffix, key, quarter, np.array([1.0]), pfe.RUNG_CLEAN
 
@@ -943,3 +950,88 @@ class TestVariantPublication:
             assert dcal._agent_path_for(route).read_text() == f"previous {route.name} agent"
             assert not dcal._staged_route_path(route).exists()
             assert not dcal._agent_path_for(dcal._staged_route_path(route)).exists()
+
+
+class TestParallelIntegerRepairIdentity:
+    """Stage A1: the flat (variant x quarter) integer-repair pool must be a
+    pure speed change.
+
+    The end-to-end guard — same orchestration, same inputs, once with the
+    repair pool live and once with it neutralised so the writer repairs
+    inline exactly as it did before the change — must publish byte-identical
+    route XML and agent provenance.
+    """
+
+    @staticmethod
+    def _candidates_file(path):
+        # Two purposes over a shared measured edge M, one of them also
+        # touching a separately bounded edge U so the constrained integer
+        # repair genuinely fires.
+        routes = [
+            ("t1", "through", "O_t M D_t"),
+            ("w1", "arbete", "O_w M U D_w"),
+            ("f1", "fritid", "O_f M U D_f"),
+        ]
+        path.write_text(
+            "<routes>\n" + "".join(
+                f'  <vehicle id="{vid}" depart="0.0">'
+                f'<route edges="{edges}"/></vehicle>\n'
+                for vid, _purpose, edges in routes) + "</routes>\n")
+        meta = {"candidates": {vid: {"purpose": purpose}
+                               for vid, purpose, _edges in routes}}
+        path.with_name(path.name.replace(".rou.xml", ".meta.json")).write_text(
+            json.dumps(meta))
+        return path
+
+    def _run(self, tmp_path, tag, monkeypatch, neutralise_pool):
+        out_dir = tmp_path / tag
+        out_dir.mkdir()
+        if neutralise_pool:
+            monkeypatch.setattr(dcal, "_run_pfe_counts_job",
+                                _legacy_counts_job)
+        variants = [("", "edge_shares"), ("_v1", "edge_shares_q10")]
+        nq = 4
+        inputs = {
+            suffix: {
+                "targets": [{"M": 9.0 + q} for q in range(nq)],
+                "bounds_pq": [{"U": (0.0, 4.0)} for _ in range(nq)],
+                "hard_bounds_pq": [{"U": (0.0, 4.0)} for _ in range(nq)],
+                "priors_pq": [{} for _ in range(nq)],
+                "out_path": out_dir / f"calibrated{suffix}.rou.xml",
+                "keep_achieved": True,
+            }
+            for suffix, _key in variants
+        }
+        reports = dcal.run_pfe_variants_flat_parallel(
+            self._candidates_file(tmp_path / "candidates.rou.xml"),
+            variants, inputs, max_workers=2)
+        published = {}
+        for suffix, _key in variants:
+            route = out_dir / f"calibrated{suffix}.rou.xml"
+            published[suffix] = (
+                route.read_bytes(),
+                dcal._agent_path_for(route).read_bytes(),
+                {k: v for k, v in reports[suffix].items() if k != "timings_s"},
+            )
+        return published
+
+    def test_parallel_repair_publishes_identical_artifacts(
+            self, tmp_path, monkeypatch):
+        with monkeypatch.context() as legacy_ctx:
+            legacy = self._run(tmp_path, "legacy", legacy_ctx,
+                               neutralise_pool=True)
+        parallel = self._run(tmp_path, "parallel", monkeypatch,
+                             neutralise_pool=False)
+
+        assert set(parallel) == set(legacy)
+        for suffix, (xml, agents, report) in parallel.items():
+            assert xml == legacy[suffix][0]
+            assert agents == legacy[suffix][1]
+            assert report == legacy[suffix][2]
+            assert report["vehicles"] > 0
+
+
+def _legacy_counts_job(job):
+    """Module level so the fork pool can pickle it: leaves every quarter
+    unfilled, which sends the writer down its historical inline path."""
+    return job[0], job[1], None

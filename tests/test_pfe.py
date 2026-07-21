@@ -1176,3 +1176,110 @@ class TestPurposeStratifiedCalibration:
                 [{"M": 1.0}], [None], enforce_integer_bounds=True)
 
         assert out.read_text() == "previous valid route"
+
+
+class TestPrecomputedQuarterCounts:
+    """Stage A1 (SPEED_ARCHITECTURE_PLAN 2026-07-21): the per-quarter integer
+    repair is a pure function that may run in a fork pool, while the writer
+    stays serial because vehicle ids and endpoint draw ordinals accumulate
+    across quarters.
+
+    The guarantee that makes it safe is byte identity: publishing with
+    precomputed counts must produce exactly the artifacts the inline path
+    produces. These tests hold the two paths to that, including through the
+    sparse transport the parallel orchestration actually uses.
+    """
+
+    @staticmethod
+    def _shape(edges, purpose, source_id):
+        source = Candidate(0.0, edges, source_id=source_id,
+                           intent={"purpose": purpose})
+        return Candidate(0.0, edges, source_candidates=[source])
+
+    def _case(self):
+        # A measured edge shared by two purposes, plus a separately bounded
+        # edge so round_preserving_measured's nudges actually trigger the
+        # constrained integer repair rather than a trivial rounding.
+        shapes = [
+            self._shape(["O_t", "M", "D_t"], "through", "t"),
+            self._shape(["O_w", "M", "U", "D_w"], "arbete", "w"),
+            self._shape(["O_f", "M", "U", "D_f"], "fritid", "f"),
+        ]
+        targets = [{"M": 9.0 + q} for q in range(6)]
+        bounds = [{"U": (0.0, 4.0)} for _ in range(6)]
+        mixes = [Counter({"through": 4 + q, "arbete": 3, "fritid": 2})
+                 for q in range(6)]
+        solutions, rungs = [], []
+        for q in range(6):
+            sol, rung = pfe.solve_interval_with_structure_guard(
+                shapes, targets[q], bounds[q], {}, purpose_mix=mixes[q])
+            solutions.append(sol)
+            rungs.append(rung)
+        assert all(sol is not None for sol in solutions)
+        return shapes, targets, bounds, mixes, solutions, rungs
+
+    def _write(self, tmp_path, name, precomputed=None):
+        shapes, targets, bounds, mixes, solutions, rungs = self._case()
+        out = tmp_path / name
+        report = write_calibration_report(
+            shapes, out, targets, solutions, bounds, rungs,
+            enforce_integer_bounds=True, purpose_mixes_per_q=mixes,
+            precomputed_counts=precomputed)
+        agents = out.with_name(out.name.replace(".rou.xml", ".agents.json"))
+        return report, out.read_bytes(), agents.read_bytes()
+
+    def _precompute(self, transport):
+        shapes, targets, bounds, mixes, solutions, rungs = self._case()
+        precomputed = []
+        for q, sol in enumerate(solutions):
+            counts, enforced = pfe.quarter_publish_counts(
+                shapes, sol, targets[q], bounds[q], rungs[q],
+                mixes[q], True, True, None)
+            precomputed.append(transport(counts, enforced))
+        return precomputed
+
+    def test_precomputed_counts_publish_identical_bytes(self, tmp_path):
+        inline_report, inline_xml, inline_agents = self._write(
+            tmp_path, "inline.rou.xml")
+        precomputed = self._precompute(lambda counts, enforced: (counts, enforced))
+        pre_report, pre_xml, pre_agents = self._write(
+            tmp_path, "precomputed.rou.xml", precomputed)
+
+        assert pre_xml == inline_xml
+        assert pre_agents == inline_agents
+        assert pre_report == inline_report
+        assert inline_report["vehicles"] > 0
+
+    def test_sparse_transport_round_trip_is_exact(self, tmp_path):
+        # The orchestration ships only the nonzero entries between processes
+        # (a dense vector per variant-quarter would be hundreds of MB on a
+        # multi-day build). Reconstruction must be exact, dtype included.
+        def through_sparse(counts, enforced):
+            idx = np.nonzero(counts)[0]
+            packed = (idx.astype(np.int64), counts[idx], counts.dtype.str,
+                      len(counts))
+            rebuilt = np.zeros(packed[3], dtype=np.dtype(packed[2]))
+            rebuilt[packed[0]] = packed[1]
+            assert rebuilt.dtype == counts.dtype
+            assert np.array_equal(rebuilt, counts)
+            return rebuilt, enforced
+
+        _inline_report, inline_xml, inline_agents = self._write(
+            tmp_path, "inline2.rou.xml")
+        _report, xml, agents = self._write(
+            tmp_path, "sparse.rou.xml", self._precompute(through_sparse))
+
+        assert xml == inline_xml
+        assert agents == inline_agents
+
+    def test_partially_precomputed_quarters_fall_back_inline(self, tmp_path):
+        # Fail-closed shape: a missing entry is recomputed, never skipped.
+        precomputed = self._precompute(lambda counts, enforced: (counts, enforced))
+        precomputed[2] = None
+        precomputed[4] = None
+        _inline_report, inline_xml, inline_agents = self._write(
+            tmp_path, "inline3.rou.xml")
+        _report, xml, agents = self._write(tmp_path, "mixed.rou.xml", precomputed)
+
+        assert xml == inline_xml
+        assert agents == inline_agents

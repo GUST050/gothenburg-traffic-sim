@@ -1,0 +1,43 @@
+{
+  "record": "a1_publish_identity_v1",
+  "created": "2026-07-21",
+  "plan": "SPEED_ARCHITECTURE_PLAN_2026-07.md stage A1 (proof protocol 6.1)",
+  "change": "Per-quarter integer repair + purpose reconciliation moved out of write_calibration_report's writer loop into pfe.quarter_publish_counts and solved in the same flat (variant x quarter) fork pool as the interval solves. The writer stays strictly serial (vehicle ids and endpoint draw ordinals accumulate across quarters) and computes any quarter left unfilled inline exactly as before.",
+  "why_it_cannot_change_results": [
+    "The extracted function body is TEXTUALLY identical to the block it replaced (verified mechanically: dedent + the loop-index lookups replaced by the equivalent parameters, no other edit).",
+    "It reads only that quarter's own inputs (solution, targets, bounds, rung, purpose mix, structure groups) - no accumulator, no RNG, no shared solver state (plan fact F1).",
+    "Counts cross the process boundary through a nonzero mask, which reproduces the original array exactly, dtype included."
+  ],
+  "empirical_proof": {
+    "harness": "scratchpad a1_identity.py - runs demand.calibration.run_pfe_variants_flat_parallel twice on the same real candidate pool, once with the repair pool neutralised (writer repairs inline, the pre-A1 behaviour) and once with stage A1 live",
+    "pool": "sumo/candidates_robust_smoke.rou.xml (317 candidates, 307 shape variables, 146 structure groups)",
+    "case": "12 quarters x 2 demand variants, 6 measured edges, 14 hard-bounded edges chosen so the constrained integer repair actually fires",
+    "result": "PASS",
+    "artifacts": {
+      "calibrated.rou.xml": {"identical": true, "sha256_prefix": "17a7d01e1e268b07", "bytes": 292444},
+      "calibrated.agents.json": {"identical": true, "sha256_prefix": "3cbecafb767b90de", "bytes": 46354},
+      "calibrated_v1.rou.xml": {"identical": true, "sha256_prefix": "17a7d01e1e268b07", "bytes": 292444},
+      "calibrated_v1.agents.json": {"identical": true, "sha256_prefix": "3cbecafb767b90de", "bytes": 46354}
+    },
+    "fit_reports_identical": true,
+    "fit_report_comparison_excludes": ["timings_s"],
+    "fit": {"vehicles": 199, "geh_pct": 100.0, "relaxation_summary": {"clean": 12}}
+  },
+  "regression_tests": [
+    "tests/test_pfe.py::TestPrecomputedQuarterCounts (byte identity, sparse transport exactness, partial-fill fallback)",
+    "tests/test_build_sumo_demand.py::TestParallelIntegerRepairIdentity (same orchestration, pool live vs neutralised, identical published bytes)"
+  ],
+  "speed": {
+    "small_pool_indicative_only": {
+      "publish_stage_s": {"before": 0.5, "after": 0.1},
+      "note": "317-candidate pool; the useful measurement is a real envelope build, see pending"
+    },
+    "pending_real_measurement": "The next real envelope build logs 'timing PFE integer repair' beside 'timing PFE route publish'; compare against the pre-A1 builds in runs/search_40h_3mo.log (route publish 2404.9 / 2319.9 / 2192.6 s per variant on a 103368-candidate multi-day build)."
+  },
+  "pending_gate": {
+    "item": "Plan 6.1 golden-case byte comparison (one single-day and one multi-day golden build)",
+    "blocked_by": "the running 40h/3mo closure search owns sumo/; a golden build would race its demand artifacts",
+    "when": "run immediately after that search finishes, before stage B"
+  },
+  "fork_safety_note": "The counts pool forks from a parent that has not executed the numba IPF kernel (the parent only prepares candidates and forks; the kernel runs in pool workers). A driver that solves in-process and then forks DOES hang - observed while building this proof - which is why the harness exercises the production orchestration rather than an in-process solve."
+}

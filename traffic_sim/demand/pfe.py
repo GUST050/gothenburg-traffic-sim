@@ -1607,6 +1607,244 @@ def _rung_keeps_structural_bounds(rung: int | None) -> bool:
     return rung not in (RUNG_RELAX_NOBND, RUNG_LP_FALLBACK, RUNG_INFEASIBLE)
 
 
+def quarter_publish_counts(
+    shapes: list[Candidate],
+    sol: np.ndarray,
+    targets: dict[str, float],
+    bounds: dict[str, tuple[float, float]] | None,
+    rung: int | None,
+    purpose_mix: Counter | dict[str, int],
+    strict_purpose: bool,
+    enforce_integer_bounds: bool,
+    structure_groups: list[tuple[list[int], float]] | None,
+) -> tuple[np.ndarray, bool]:
+    """One quarter's integer rounding + constrained repair, as a pure function.
+
+    Lifted verbatim out of write_calibration_report's writer loop
+    (2026-07-21, SPEED_ARCHITECTURE_PLAN stage A1) so the same code can run
+    either inline or in a fork worker. It depends only on this quarter's own
+    inputs — no accumulator, no RNG, no shared state — which is exactly why
+    the quarters are safe to solve concurrently; the writer that consumes the
+    result stays strictly serial because vehicle ids and endpoint draw
+    ordinals ARE sequential across quarters.
+
+    Returns the repaired integer route-count vector and whether an exact
+    purpose margin survived the repair.
+    """
+    counts = round_preserving_measured(sol, shapes, targets)
+    purpose_groups: list[tuple[list[int], float, float]] = []
+    # Only enforce an exact margin during integer repair when the
+    # continuous solver actually found one.  Otherwise this is the
+    # deliberate counts-first fallback: the routes keep their true
+    # source purposes and the resulting prior deviation is disclosed
+    # below, instead of rejecting a valid measured-count solution.
+    purpose_margin_enforced = (
+        strict_purpose and purpose_mix_is_exact(shapes, sol, purpose_mix))
+    if purpose_margin_enforced:
+        _purpose_target, purpose_groups = purpose_quota_groups(
+            shapes, purpose_mix, int(counts.sum()))
+    requested_purpose_groups = list(purpose_groups)
+    repair_bounds = (
+        bounds
+        if (bounds is not None and enforce_integer_bounds
+            and _rung_keeps_structural_bounds(rung))
+        else {}
+    )
+    # structure_groups (2026-07-12, structure preservation): each
+    # group cap needs an ABSOLUTE per-quarter ceiling, only known
+    # once the quarter's integer total exists. Floor of 2 vehicles
+    # keeps tiny (night) quarters integer-feasible — a 20-vehicle
+    # quarter at a 7% cap cannot meaningfully hold "1.4 vehicles".
+    # The repair is best-effort by design: a structure cap must never
+    # block a repair that is needed for a sensor count or a level-2
+    # bound.  Keep the last vector that satisfies those stronger
+    # constraints if a later optional-cap repair cannot coexist with
+    # them; calibrated_structure_report exposes the residual.
+    def overflowing_groups(current: np.ndarray) -> list[tuple[list[int], float, float]]:
+        if not structure_groups:
+            return []
+        q_total = float(current.sum())
+        # Exactly mirrors the solver's absolute cap/floor, but only
+        # forwards groups which need an integer repair. Origin-edge
+        # groups can number in the hundreds; adding every satisfied
+        # one to the MILP would make publication slower for no gain.
+        return [
+            (members, 0.0, max(2.0, cap_share * q_total))
+            for members, cap_share in structure_groups
+            if float(current[members].sum()) > max(2.0, cap_share * q_total)
+        ]
+
+    def apply_structure_repairs(
+        current: np.ndarray,
+        active_purpose_groups: list[tuple[list[int], float, float]],
+    ) -> np.ndarray:
+        """Best-effort structure repair from the current warm start."""
+        for _repair_pass in range(3):
+            quarter_groups = overflowing_groups(current)
+            if not quarter_groups:
+                break
+            repaired_structure = repair_integer_bounds(
+                current, shapes, targets, repair_bounds,
+                groups=active_purpose_groups + quarter_groups,
+                # The continuous interval may legitimately have used
+                # a wider measurement rung. Re-imposing the exact
+                # rounded target here makes a feasible structure
+                # repair look impossible (observed in forecast q79:
+                # 24 short trips stayed published although a
+                # rung-consistent repair reduces them to 2).
+                measurement_tol_mult=(
+                    _rung_measurement_tol_mult(rung)
+                    if rung in RUNG_NAMES
+                    and rung != RUNG_INFEASIBLE
+                    else None
+                ))
+            if repaired_structure is None:
+                # Deterministic exact-preserving fallback. The MILP
+                # can fail on a large active set even when the pool
+                # contains an obvious one-for-one alternative. Move
+                # only between generated shapes with identical
+                # purpose and identical incidence on every protected
+                # sensor/bound edge; this cannot change a hard count
+                # or provenance. Refuse a move that would overflow
+                # another structure group.
+                protected = set(targets) | set(repair_bounds)
+                signatures = [
+                    tuple(sorted(set(shape.edges) & protected))
+                    for shape in shapes
+                ]
+                purposes_by_shape = [
+                    tuple(sorted(_shape_purposes(shape)))
+                    for shape in shapes
+                ]
+                all_limits = [
+                    (set(members),
+                     int(np.floor(max(2.0, cap * float(current.sum()))
+                                  + 0.5)))
+                    for members, cap in (structure_groups or [])
+                ]
+                changed = False
+                for members, _lo, hi in quarter_groups:
+                    member_set = set(members)
+                    excess = int(current[members].sum()) - int(
+                        np.floor(hi + 0.5))
+                    if excess <= 0:
+                        continue
+                    donors = [
+                        j for j in members if current[j] > 0
+                    ]
+                    for donor in donors:
+                        alternatives = [
+                            k for k in range(len(shapes))
+                            if k not in member_set
+                            and signatures[k] == signatures[donor]
+                            and purposes_by_shape[k]
+                            == purposes_by_shape[donor]
+                        ]
+                        for target in alternatives:
+                            headrooms = [
+                                limit - int(current[list(group)].sum())
+                                for group, limit in all_limits
+                                if target in group and donor not in group
+                            ]
+                            if headrooms and min(headrooms) <= 0:
+                                continue
+                            moved = min(
+                                int(current[donor]),
+                                excess,
+                                min(headrooms) if headrooms else excess,
+                            )
+                            current[donor] -= moved
+                            current[target] += moved
+                            excess -= moved
+                            changed = True
+                            if excess == 0:
+                                break
+                        if excess == 0:
+                            break
+                if not changed:
+                    break
+                continue
+            current = repaired_structure
+        return current
+
+    # First repair the non-negotiable constraints on their own.  An
+    # earlier implementation mixed optional structure groups into
+    # this MILP.  If a cap could not coexist with a valid hard-bound
+    # repair, the combined problem reported infeasible and left the
+    # actual bound violation in place.  That is backwards: groups
+    # are explicitly counts-first best-effort constraints.
+    hard_repair_ok = True
+    if repair_bounds or purpose_groups:
+        repaired = repair_integer_bounds(
+            counts, shapes, targets, repair_bounds,
+            groups=purpose_groups,
+            measurement_tol_mult=_rung_measurement_tol_mult(rung))
+        if repaired is None:
+            hard_repair_ok = False
+        else:
+            counts = repaired
+    if not hard_repair_ok and purpose_groups:
+        # A joint repair starts from the directly rounded entropy
+        # solution.  On a large, dispersed route pool that vector can
+        # be a poor MILP neighbourhood even when an exact integer
+        # purpose margin exists (the live 2025 baseline exposed four
+        # such quarters).  First establish a count/bound-valid integer
+        # vector, then retry the same exact purpose groups from that
+        # much better starting point.  This is not a relaxed model:
+        # both passes retain every non-negotiable constraint.
+        exact_purpose_groups = purpose_groups
+        repaired = repair_integer_bounds(
+            counts, shapes, targets, repair_bounds,
+            measurement_tol_mult=_rung_measurement_tol_mult(rung))
+        hard_repair_ok = repaired is not None
+        if repaired is not None:
+            counts = repaired
+            purpose_repaired = repair_integer_bounds(
+                counts, shapes, targets, repair_bounds,
+                groups=exact_purpose_groups,
+                measurement_tol_mult=_rung_measurement_tol_mult(rung))
+            if purpose_repaired is not None:
+                counts = purpose_repaired
+            else:
+                purpose_groups = []
+                purpose_margin_enforced = False
+        else:
+            purpose_groups = []
+            purpose_margin_enforced = False
+
+    # Then improve only overflowing groups.  Keep repair_bounds in
+    # the optional pass so moving a vehicle to satisfy a cap cannot
+    # re-break a hard edge, but retain the already hard-valid vector
+    # when the optional cap is infeasible.  A repaired group may push
+    # another group over its cap, hence the bounded active-set loop.
+    if hard_repair_ok:
+        counts = apply_structure_repairs(counts, purpose_groups)
+
+    # The optional structure pass can itself provide the feasible
+    # integer neighbourhood the exact purpose repair needed.  The
+    # audited baseline did exactly that: all four relaxed quarters
+    # became purpose-feasible when retried from their finally
+    # published count/structure-valid vectors.  Make that last
+    # opportunity explicit before declaring a real mix relaxation.
+    if (hard_repair_ok and requested_purpose_groups
+            and not purpose_margin_enforced):
+        _purpose_target, final_purpose_groups = purpose_quota_groups(
+            shapes, purpose_mix, int(counts.sum()))
+        purpose_repaired = repair_integer_bounds(
+            counts, shapes, targets, repair_bounds,
+            groups=final_purpose_groups,
+            measurement_tol_mult=_rung_measurement_tol_mult(rung))
+        if purpose_repaired is not None:
+            counts = purpose_repaired
+            purpose_groups = final_purpose_groups
+            purpose_margin_enforced = True
+            # Purpose reconciliation can move routes back into an
+            # optional structure group. Reapply the same best-effort
+            # guard while retaining the now-exact purpose groups.
+            counts = apply_structure_repairs(counts, purpose_groups)
+    return counts, purpose_margin_enforced
+
+
 def write_calibration_report(
     shapes: list[Candidate],
     out_path: Path,
@@ -1618,8 +1856,17 @@ def write_calibration_report(
     structure_groups: list[tuple[list[int], float]] | None = None,
     edge_length_m: dict[str, float] | None = None,
     purpose_mixes_per_q: list[Counter | dict[str, int]] | None = None,
+    precomputed_counts: list[tuple[np.ndarray, bool] | None] | None = None,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
+
+    ``precomputed_counts`` is a pure speed option (2026-07-21,
+    SPEED_ARCHITECTURE_PLAN stage A1): the caller may supply each quarter's
+    already-computed ``quarter_publish_counts`` result — e.g. solved
+    concurrently in a fork pool — and this writer then does only the strictly
+    sequential work (endpoint draw ordinals, vehicle ids, XML). Any entry left
+    None is computed inline exactly as before, so the default path and every
+    existing caller are unchanged.
 
     bounds_per_q is optional. The continuous
     LP/entropy solution respects bounds by construction, but
@@ -1696,220 +1943,17 @@ def write_calibration_report(
             sol = solutions[i]
             if sol is None:
                 continue
-            counts = round_preserving_measured(sol, shapes, targets_per_q[i])
             purpose_mix = purpose_targets[i] if i < len(purpose_targets) else Counter()
             strict_purpose = purpose_mixes_per_q is not None and bool(purpose_mix)
-            purpose_groups: list[tuple[list[int], float, float]] = []
-            # Only enforce an exact margin during integer repair when the
-            # continuous solver actually found one.  Otherwise this is the
-            # deliberate counts-first fallback: the routes keep their true
-            # source purposes and the resulting prior deviation is disclosed
-            # below, instead of rejecting a valid measured-count solution.
-            purpose_margin_enforced = (
-                strict_purpose and purpose_mix_is_exact(shapes, sol, purpose_mix))
-            if purpose_margin_enforced:
-                _purpose_target, purpose_groups = purpose_quota_groups(
-                    shapes, purpose_mix, int(counts.sum()))
-            requested_purpose_groups = list(purpose_groups)
-            rung = rungs[i] if rungs is not None and i < len(rungs) else None
-            repair_bounds = (
-                bounds_per_q[i]
-                if (bounds_per_q is not None and enforce_integer_bounds
-                    and _rung_keeps_structural_bounds(rung))
-                else {}
-            )
-            # structure_groups (2026-07-12, structure preservation): each
-            # group cap needs an ABSOLUTE per-quarter ceiling, only known
-            # once the quarter's integer total exists. Floor of 2 vehicles
-            # keeps tiny (night) quarters integer-feasible — a 20-vehicle
-            # quarter at a 7% cap cannot meaningfully hold "1.4 vehicles".
-            # The repair is best-effort by design: a structure cap must never
-            # block a repair that is needed for a sensor count or a level-2
-            # bound.  Keep the last vector that satisfies those stronger
-            # constraints if a later optional-cap repair cannot coexist with
-            # them; calibrated_structure_report exposes the residual.
-            def overflowing_groups(current: np.ndarray) -> list[tuple[list[int], float, float]]:
-                if not structure_groups:
-                    return []
-                q_total = float(current.sum())
-                # Exactly mirrors the solver's absolute cap/floor, but only
-                # forwards groups which need an integer repair. Origin-edge
-                # groups can number in the hundreds; adding every satisfied
-                # one to the MILP would make publication slower for no gain.
-                return [
-                    (members, 0.0, max(2.0, cap_share * q_total))
-                    for members, cap_share in structure_groups
-                    if float(current[members].sum()) > max(2.0, cap_share * q_total)
-                ]
-
-            def apply_structure_repairs(
-                current: np.ndarray,
-                active_purpose_groups: list[tuple[list[int], float, float]],
-            ) -> np.ndarray:
-                """Best-effort structure repair from the current warm start."""
-                for _repair_pass in range(3):
-                    quarter_groups = overflowing_groups(current)
-                    if not quarter_groups:
-                        break
-                    repaired_structure = repair_integer_bounds(
-                        current, shapes, targets_per_q[i], repair_bounds,
-                        groups=active_purpose_groups + quarter_groups,
-                        # The continuous interval may legitimately have used
-                        # a wider measurement rung. Re-imposing the exact
-                        # rounded target here makes a feasible structure
-                        # repair look impossible (observed in forecast q79:
-                        # 24 short trips stayed published although a
-                        # rung-consistent repair reduces them to 2).
-                        measurement_tol_mult=(
-                            _rung_measurement_tol_mult(rung)
-                            if rung in RUNG_NAMES
-                            and rung != RUNG_INFEASIBLE
-                            else None
-                        ))
-                    if repaired_structure is None:
-                        # Deterministic exact-preserving fallback. The MILP
-                        # can fail on a large active set even when the pool
-                        # contains an obvious one-for-one alternative. Move
-                        # only between generated shapes with identical
-                        # purpose and identical incidence on every protected
-                        # sensor/bound edge; this cannot change a hard count
-                        # or provenance. Refuse a move that would overflow
-                        # another structure group.
-                        protected = set(targets_per_q[i]) | set(repair_bounds)
-                        signatures = [
-                            tuple(sorted(set(shape.edges) & protected))
-                            for shape in shapes
-                        ]
-                        purposes_by_shape = [
-                            tuple(sorted(_shape_purposes(shape)))
-                            for shape in shapes
-                        ]
-                        all_limits = [
-                            (set(members),
-                             int(np.floor(max(2.0, cap * float(current.sum()))
-                                          + 0.5)))
-                            for members, cap in (structure_groups or [])
-                        ]
-                        changed = False
-                        for members, _lo, hi in quarter_groups:
-                            member_set = set(members)
-                            excess = int(current[members].sum()) - int(
-                                np.floor(hi + 0.5))
-                            if excess <= 0:
-                                continue
-                            donors = [
-                                j for j in members if current[j] > 0
-                            ]
-                            for donor in donors:
-                                alternatives = [
-                                    k for k in range(len(shapes))
-                                    if k not in member_set
-                                    and signatures[k] == signatures[donor]
-                                    and purposes_by_shape[k]
-                                    == purposes_by_shape[donor]
-                                ]
-                                for target in alternatives:
-                                    headrooms = [
-                                        limit - int(current[list(group)].sum())
-                                        for group, limit in all_limits
-                                        if target in group and donor not in group
-                                    ]
-                                    if headrooms and min(headrooms) <= 0:
-                                        continue
-                                    moved = min(
-                                        int(current[donor]),
-                                        excess,
-                                        min(headrooms) if headrooms else excess,
-                                    )
-                                    current[donor] -= moved
-                                    current[target] += moved
-                                    excess -= moved
-                                    changed = True
-                                    if excess == 0:
-                                        break
-                                if excess == 0:
-                                    break
-                        if not changed:
-                            break
-                        continue
-                    current = repaired_structure
-                return current
-
-            # First repair the non-negotiable constraints on their own.  An
-            # earlier implementation mixed optional structure groups into
-            # this MILP.  If a cap could not coexist with a valid hard-bound
-            # repair, the combined problem reported infeasible and left the
-            # actual bound violation in place.  That is backwards: groups
-            # are explicitly counts-first best-effort constraints.
-            hard_repair_ok = True
-            if repair_bounds or purpose_groups:
-                repaired = repair_integer_bounds(
-                    counts, shapes, targets_per_q[i], repair_bounds,
-                    groups=purpose_groups,
-                    measurement_tol_mult=_rung_measurement_tol_mult(rung))
-                if repaired is None:
-                    hard_repair_ok = False
-                else:
-                    counts = repaired
-            if not hard_repair_ok and purpose_groups:
-                # A joint repair starts from the directly rounded entropy
-                # solution.  On a large, dispersed route pool that vector can
-                # be a poor MILP neighbourhood even when an exact integer
-                # purpose margin exists (the live 2025 baseline exposed four
-                # such quarters).  First establish a count/bound-valid integer
-                # vector, then retry the same exact purpose groups from that
-                # much better starting point.  This is not a relaxed model:
-                # both passes retain every non-negotiable constraint.
-                exact_purpose_groups = purpose_groups
-                repaired = repair_integer_bounds(
-                    counts, shapes, targets_per_q[i], repair_bounds,
-                    measurement_tol_mult=_rung_measurement_tol_mult(rung))
-                hard_repair_ok = repaired is not None
-                if repaired is not None:
-                    counts = repaired
-                    purpose_repaired = repair_integer_bounds(
-                        counts, shapes, targets_per_q[i], repair_bounds,
-                        groups=exact_purpose_groups,
-                        measurement_tol_mult=_rung_measurement_tol_mult(rung))
-                    if purpose_repaired is not None:
-                        counts = purpose_repaired
-                    else:
-                        purpose_groups = []
-                        purpose_margin_enforced = False
-                else:
-                    purpose_groups = []
-                    purpose_margin_enforced = False
-
-            # Then improve only overflowing groups.  Keep repair_bounds in
-            # the optional pass so moving a vehicle to satisfy a cap cannot
-            # re-break a hard edge, but retain the already hard-valid vector
-            # when the optional cap is infeasible.  A repaired group may push
-            # another group over its cap, hence the bounded active-set loop.
-            if hard_repair_ok:
-                counts = apply_structure_repairs(counts, purpose_groups)
-
-            # The optional structure pass can itself provide the feasible
-            # integer neighbourhood the exact purpose repair needed.  The
-            # audited baseline did exactly that: all four relaxed quarters
-            # became purpose-feasible when retried from their finally
-            # published count/structure-valid vectors.  Make that last
-            # opportunity explicit before declaring a real mix relaxation.
-            if (hard_repair_ok and requested_purpose_groups
-                    and not purpose_margin_enforced):
-                _purpose_target, final_purpose_groups = purpose_quota_groups(
-                    shapes, purpose_mix, int(counts.sum()))
-                purpose_repaired = repair_integer_bounds(
-                    counts, shapes, targets_per_q[i], repair_bounds,
-                    groups=final_purpose_groups,
-                    measurement_tol_mult=_rung_measurement_tol_mult(rung))
-                if purpose_repaired is not None:
-                    counts = purpose_repaired
-                    purpose_groups = final_purpose_groups
-                    purpose_margin_enforced = True
-                    # Purpose reconciliation can move routes back into an
-                    # optional structure group. Reapply the same best-effort
-                    # guard while retaining the now-exact purpose groups.
-                    counts = apply_structure_repairs(counts, purpose_groups)
+            counts, purpose_margin_enforced = (
+                precomputed_counts[i] if precomputed_counts is not None
+                and precomputed_counts[i] is not None
+                else quarter_publish_counts(
+                    shapes, sol, targets_per_q[i],
+                    bounds_per_q[i] if bounds_per_q is not None else None,
+                    rungs[i] if rungs is not None and i < len(rungs) else None,
+                    purpose_mix, strict_purpose, enforce_integer_bounds,
+                    structure_groups))
             # Spread ALL vehicles in this quarter across its full 15-minute
             # interval. The old per-route schedule put every one-vehicle
             # route at exactly :07:30, so thousands of independent routes
