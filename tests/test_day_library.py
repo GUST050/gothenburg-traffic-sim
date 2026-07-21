@@ -168,14 +168,22 @@ class TestStoreFailsClosed:
             source_hashes={"pfe": "x"})
         assert library.get(other) is None
 
+    @staticmethod
+    def _stored_artifact(library, identity):
+        # Address the artifact by what the manifest actually recorded, so
+        # these tests hold whichever encoding the store chooses.
+        manifest = library.get(identity)
+        assert manifest is not None
+        return library.path_for(identity) / next(iter(manifest["artifacts"]))
+
     def test_altered_artifact_is_treated_as_absent(self, tmp_path):
         library, identity = self._stored(tmp_path)
-        (library.path_for(identity) / "calibrated.rou.xml").write_text("edited")
+        self._stored_artifact(library, identity).write_text("edited")
         assert library.get(identity) is None
 
     def test_deleted_artifact_is_treated_as_absent(self, tmp_path):
         library, identity = self._stored(tmp_path)
-        (library.path_for(identity) / "calibrated.rou.xml").unlink()
+        self._stored_artifact(library, identity).unlink()
         assert library.get(identity) is None
 
     def test_manifest_for_a_different_identity_is_rejected(self, tmp_path):
@@ -195,8 +203,10 @@ class TestStoreFailsClosed:
         assert manifest is not None
         assert not library.path_for(identity).with_name(
             library.path_for(identity).name + ".staging").exists()
-        assert (library.path_for(identity)
-                / "calibrated.rou.xml").read_text().count("v2") == 1
+        import gzip
+        with gzip.open(library.path_for(identity)
+                       / "calibrated.rou.xml.gz", "rt") as handle:
+            assert handle.read().count("v2") == 1
 
     def test_artifact_names_cannot_escape_the_entry(self, tmp_path):
         library, identity = self._stored(tmp_path)
@@ -333,3 +343,74 @@ class TestWarmHorizonPlan:
         # ~365 mixed + ~260 weekday + ~105 weekend day-slots
         assert 720 <= total_days <= 740
         assert len(items) == pytest.approx(3 * 53, abs=4)
+
+
+class TestCompressedStorage:
+    """Storage may gzip the big artifacts; nothing downstream may notice.
+
+    The window a consumer assembles must be byte-identical whether its days
+    are stored plain (pre-compression entries) or gzipped, and the manifest
+    must always describe the bytes actually on disk.
+    """
+
+    def _store_day(self, tmp_path, day_dir):
+        library = dl.DayLibrary(tmp_path / "library")
+        identity = dl.DayIdentity(
+            date="2027-03-09", source="forecast",
+            pool_composition=("weekday",), inputs={"n": 1},
+            source_hashes={"pfe": "x"})
+        artifacts = {
+            "calibrated.rou.xml": day_dir / "calibrated.rou.xml",
+            "calibrated.agents.json": day_dir / "calibrated.agents.json",
+            "fit.json": day_dir / "fit.json",
+        }
+        (day_dir / "fit.json").write_text("{\"geh_pct\": 100.0}")
+        library.put(identity, artifacts)
+        return library, identity
+
+    def _calibrated_day(self, tmp_path):
+        targets, solutions, mixes = _window(8, day=0)
+        directory = tmp_path / "day"
+        directory.mkdir()
+        _write(directory / "calibrated.rou.xml", targets, solutions, mixes, 8)
+        return directory
+
+    def test_large_artifacts_are_stored_gzipped(self, tmp_path):
+        day = self._calibrated_day(tmp_path)
+        library, identity = self._store_day(tmp_path, day)
+        entry = library.path_for(identity)
+        assert (entry / "calibrated.rou.xml.gz").is_file()
+        assert not (entry / "calibrated.rou.xml").exists()
+        assert (entry / "fit.json").is_file()          # small files stay plain
+        manifest = library.get(identity)
+        assert manifest is not None
+        assert "calibrated.rou.xml.gz" in manifest["artifacts"]
+
+    def test_assembly_from_gzipped_days_is_byte_identical_to_plain(self, tmp_path):
+        day = self._calibrated_day(tmp_path)
+        library, identity = self._store_day(tmp_path, day)
+
+        dl.assemble_window([day], tmp_path / "plain.rou.xml",
+                           tmp_path / "plain.agents.json")
+        dl.assemble_window([library.path_for(identity)],
+                           tmp_path / "gz.rou.xml", tmp_path / "gz.agents.json")
+
+        assert (tmp_path / "gz.rou.xml").read_bytes() == (
+            tmp_path / "plain.rou.xml").read_bytes()
+        assert (tmp_path / "gz.agents.json").read_bytes() == (
+            tmp_path / "plain.agents.json").read_bytes()
+
+    def test_tampered_gzip_entry_is_treated_as_absent(self, tmp_path):
+        day = self._calibrated_day(tmp_path)
+        library, identity = self._store_day(tmp_path, day)
+        target = library.path_for(identity) / "calibrated.rou.xml.gz"
+        target.write_bytes(target.read_bytes()[:-4] + b"XXXX")
+        assert library.get(identity) is None
+
+    def test_compression_actually_compresses(self, tmp_path):
+        day = self._calibrated_day(tmp_path)
+        library, identity = self._store_day(tmp_path, day)
+        plain = (day / "calibrated.rou.xml").stat().st_size
+        stored = (library.path_for(identity)
+                  / "calibrated.rou.xml.gz").stat().st_size
+        assert stored < plain / 4

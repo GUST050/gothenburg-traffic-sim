@@ -22,6 +22,7 @@ input or a changed line of solver code simply never matches an old entry.
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import os
@@ -35,6 +36,28 @@ from typing import Any, Iterable, Mapping
 SCHEMA_VERSION = 1
 DEFAULT_ROOT = Path("runs") / "demand-days"
 DAY_SECONDS = 86400
+# Route XML and agent JSON are highly repetitive text; stored gzipped they
+# shrink ~10x, which is what makes warming a whole year ~13 GB instead of
+# ~150 GB. Entries written before compression existed remain readable: every
+# reader falls back to the plain name when the .gz is absent, and the
+# manifest always records whichever bytes are actually on disk.
+COMPRESSED_SUFFIXES = (".rou.xml", ".agents.json")
+
+
+def _day_file(directory: Path, name: str) -> Path:
+    """The stored path for a day artifact, whichever encoding it has."""
+    compressed = Path(directory) / (name + ".gz")
+    return compressed if compressed.is_file() else Path(directory) / name
+
+
+def _open_day_text(directory: Path, name: str):
+    """Open a stored day artifact for text reading, transparently."""
+    path = _day_file(directory, name)
+    if path.suffix == ".gz":
+        return gzip.open(path, "rt")
+    return open(path)
+
+
 VEHICLE_LINE = re.compile(
     r'^(?P<head>\s*<vehicle id=")(?P<id>[^"]*)(?P<mid>" depart=")'
     r'(?P<depart>[^"]*)(?P<tail>".*)$'
@@ -159,9 +182,15 @@ class DayLibrary:
         for name, path in sorted(artifacts.items()):
             if "/" in name or name in {".", ".."}:
                 raise ValueError(f"invalid artifact name: {name!r}")
-            target = staging / name
-            shutil.copyfile(path, target)
-            records[name] = {
+            if name.endswith(COMPRESSED_SUFFIXES):
+                target = staging / (name + ".gz")
+                with open(path, "rb") as source, gzip.open(
+                        target, "wb", compresslevel=6) as sink:
+                    shutil.copyfileobj(source, sink)
+            else:
+                target = staging / name
+                shutil.copyfile(path, target)
+            records[target.name] = {
                 "sha256": sha256_bytes(target),
                 "bytes": target.stat().st_size,
             }
@@ -218,16 +247,15 @@ def assemble_window(
         out.write("<routes>\n")
         for day_index, day in enumerate(day_paths):
             offset_s = day_index * DAY_SECONDS
-            with open(day / names[0]) as handle:
+            with _open_day_text(day, names[0]) as handle:
                 for line in handle:
                     stripped = line.strip()
                     if not stripped or stripped in {"<routes>", "</routes>"}:
                         continue
                     out.write(_shift_route_line(line, offset_s, vehicle_id))
                     vehicle_id += 1
-            day_agents = json.loads(
-                (day / names[1]).read_text(encoding="utf-8")
-            )["agents"]
+            with _open_day_text(day, names[1]) as handle:
+                day_agents = json.load(handle)["agents"]
             for agent in day_agents:
                 shifted = dict(agent)
                 shifted["vehicle_id"] = f"pfe{len(agents)}"
