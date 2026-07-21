@@ -27,6 +27,7 @@ import json
 import os
 import re
 import shutil
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -199,6 +200,7 @@ def assemble_window(
     days: Iterable[Path],
     route_out: Path,
     agents_out: Path,
+    names: tuple[str, str] = ("calibrated.rou.xml", "calibrated.agents.json"),
 ) -> dict[str, Any]:
     """Concatenate day-local route/agent files into one window.
 
@@ -216,7 +218,7 @@ def assemble_window(
         out.write("<routes>\n")
         for day_index, day in enumerate(day_paths):
             offset_s = day_index * DAY_SECONDS
-            with open(day / "calibrated.rou.xml") as handle:
+            with open(day / names[0]) as handle:
                 for line in handle:
                     stripped = line.strip()
                     if not stripped or stripped in {"<routes>", "</routes>"}:
@@ -224,7 +226,7 @@ def assemble_window(
                     out.write(_shift_route_line(line, offset_s, vehicle_id))
                     vehicle_id += 1
             day_agents = json.loads(
-                (day / "calibrated.agents.json").read_text(encoding="utf-8")
+                (day / names[1]).read_text(encoding="utf-8")
             )["agents"]
             for agent in day_agents:
                 shifted = dict(agent)
@@ -245,3 +247,103 @@ def assemble_window(
                   separators=(",", ":"))
     os.replace(agents_tmp, agents_out)
     return {"vehicles": vehicle_id, "days": len(day_paths)}
+
+
+def merge_day_reports(
+    day_reports: list[Mapping[str, Any]],
+    *,
+    quarters_per_day: int = 96,
+) -> dict[str, Any]:
+    """Combine per-day fit reports into the window report the writer returns.
+
+    Every field a calibration report carries is either a per-quarter record or
+    a sum over quarters, so merging is exact rather than approximate: quarter
+    indices shift by the day's offset, counts add, edge sets union. The one
+    pool-level field (protected signature coverage) is a property of the
+    shared candidate pool and must therefore already agree across the days.
+    """
+    if not day_reports:
+        raise ValueError("a window needs at least one day report")
+    days = len(day_reports)
+    total_quarters = days * quarters_per_day
+    achieved: dict[str, list[float]] = {}
+    violations: list[dict] = []
+    relaxed: list[dict] = []
+    allocation: list[dict] = []
+    unserviceable: set[str] = set()
+    summary_counters = (
+        "quarters_with_incompatible_routes", "quarters_with_relaxed_mix",
+        "mix_reallocation_vehicles", "replaced_routes",
+    )
+    summary_maps = (
+        "incompatible_routes_by_purpose", "mix_shortfall_by_purpose",
+        "mix_excess_by_purpose",
+    )
+    merged_summary: dict[str, Any] = {name: 0 for name in summary_counters}
+    merged_maps: dict[str, Counter] = {name: Counter() for name in summary_maps}
+    relaxation: Counter = Counter()
+    vehicles = infeasible = geh_ok = geh_total = 0
+    coverage_by_day: list[Any] = []
+
+    for day_index, report in enumerate(day_reports):
+        offset = day_index * quarters_per_day
+        vehicles += int(report.get("vehicles", 0))
+        infeasible += int(report.get("infeasible_intervals", 0))
+        geh_ok += int(report.get("geh_ok", 0))
+        geh_total += int(report.get("geh_total", 0))
+        unserviceable.update(report.get("unserviceable_edges", ()))
+        relaxation.update(report.get("relaxation_summary", {}))
+        for edge, values in (report.get("achieved") or {}).items():
+            if len(values) != quarters_per_day:
+                raise ValueError(
+                    f"day {day_index} reports {len(values)} quarters for "
+                    f"{edge}, expected {quarters_per_day}")
+            row = achieved.setdefault(edge, [0.0] * total_quarters)
+            row[offset:offset + quarters_per_day] = [float(v) for v in values]
+        for source, target in ((report.get("bound_violations", ()), violations),
+                               (report.get("relaxed_bound_violations", ()),
+                                relaxed),
+                               (report.get("purpose_allocation", ()),
+                                allocation)):
+            for entry in source:
+                shifted = dict(entry)
+                if "quarter" in shifted:
+                    shifted["quarter"] = int(shifted["quarter"]) + offset
+                target.append(shifted)
+        day_summary = report.get("purpose_allocation_summary") or {}
+        for name in summary_counters:
+            merged_summary[name] += int(day_summary.get(name, 0) or 0)
+        for name in summary_maps:
+            merged_maps[name].update(day_summary.get(name, {}) or {})
+        coverage_by_day.append(
+            day_summary.get("protected_signature_coverage"))
+
+    for name in summary_maps:
+        merged_summary[name] = dict(sorted(merged_maps[name].items()))
+    present = [value for value in coverage_by_day if isinstance(value, Mapping)]
+    if present:
+        missing: Counter = Counter()
+        for value in present:
+            for purpose, count in (value.get("missing_by_purpose") or {}).items():
+                missing[purpose] = max(missing[purpose], int(count))
+        merged_summary["protected_signature_coverage"] = {
+            "signatures": min(int(value.get("signatures", 0))
+                              for value in present),
+            "missing_by_purpose": dict(sorted(missing.items())),
+        }
+        if len(present) > 1:
+            merged_summary["protected_signature_coverage_by_day"] = present
+    return {
+        "vehicles": vehicles,
+        "infeasible_intervals": infeasible,
+        "geh_ok": geh_ok,
+        "geh_total": geh_total,
+        "geh_pct": round(100 * geh_ok / max(1, geh_total), 1),
+        "achieved": achieved,
+        "unserviceable_edges": sorted(unserviceable),
+        "bound_violations": violations,
+        "relaxed_bound_violations": relaxed,
+        "purpose_allocation": allocation,
+        "purpose_allocation_summary": merged_summary,
+        "relaxation_summary": dict(relaxation),
+    }

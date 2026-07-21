@@ -203,3 +203,95 @@ class TestStoreFailsClosed:
         artifact = tmp_path / "calibrated.rou.xml"
         with pytest.raises(ValueError, match="invalid artifact name"):
             library.put(identity, {"../escape.xml": artifact})
+
+
+class TestMergeDayReports:
+    """Per-day fit reports must combine into exactly the window report the
+    monolithic writer would have returned: every field is a per-quarter
+    record or a sum over quarters."""
+
+    def _day(self, *, quarters=4, vehicles=10, geh_ok=3, geh_total=4,
+             achieved=None, **extra):
+        report = {
+            "vehicles": vehicles,
+            "infeasible_intervals": 0,
+            "geh_ok": geh_ok, "geh_total": geh_total,
+            "achieved": achieved or {"E": [1.0] * quarters},
+            "unserviceable_edges": [],
+            "bound_violations": [],
+            "relaxed_bound_violations": [],
+            "purpose_allocation": [{"quarter": q, "target": {}}
+                                   for q in range(quarters)],
+            "purpose_allocation_summary": {
+                "quarters_with_incompatible_routes": 1,
+                "incompatible_routes_by_purpose": {"arbete": 2},
+                "quarters_with_relaxed_mix": 0,
+                "mix_shortfall_by_purpose": {},
+                "mix_excess_by_purpose": {},
+                "mix_reallocation_vehicles": 3,
+                "replaced_routes": 1,
+                "protected_signature_coverage": 0.75,
+            },
+            "relaxation_summary": {"clean": quarters},
+        }
+        report.update(extra)
+        return report
+
+    def test_counts_add_and_quarters_shift(self):
+        merged = dl.merge_day_reports(
+            [self._day(), self._day(vehicles=6, geh_ok=4, geh_total=4)],
+            quarters_per_day=4)
+
+        assert merged["vehicles"] == 16
+        assert merged["geh_ok"] == 7 and merged["geh_total"] == 8
+        assert merged["geh_pct"] == 87.5
+        assert merged["achieved"]["E"] == [1.0] * 8
+        assert [entry["quarter"] for entry in merged["purpose_allocation"]] == list(range(8))
+        assert merged["relaxation_summary"] == {"clean": 8}
+        assert merged["purpose_allocation_summary"]["replaced_routes"] == 2
+        assert merged["purpose_allocation_summary"][
+            "incompatible_routes_by_purpose"] == {"arbete": 4}
+
+    def test_edges_missing_from_a_day_are_zero_not_absent(self):
+        # pfe_fit_by_day indexes the window array by absolute quarter, so a
+        # short row would silently shift every later day's GEH.
+        merged = dl.merge_day_reports(
+            [self._day(achieved={"E": [2.0] * 4}),
+             self._day(achieved={"F": [5.0] * 4})],
+            quarters_per_day=4)
+
+        assert merged["achieved"]["E"] == [2.0] * 4 + [0.0] * 4
+        assert merged["achieved"]["F"] == [0.0] * 4 + [5.0] * 4
+
+    def test_violations_are_reported_at_their_window_quarter(self):
+        day = self._day(bound_violations=[{"edge": "U", "quarter": 2}])
+        merged = dl.merge_day_reports([self._day(), day], quarters_per_day=4)
+        assert merged["bound_violations"] == [{"edge": "U", "quarter": 6}]
+
+    def test_short_day_row_is_refused(self):
+        with pytest.raises(ValueError, match="expected 4"):
+            dl.merge_day_reports([self._day(achieved={"E": [1.0]})],
+                                 quarters_per_day=4)
+
+    def test_coverage_reports_the_conservative_envelope_across_days(self):
+        # Days resample their own tour templates, so their pools differ
+        # slightly. Coverage is a diagnostic: report the worst case seen and
+        # keep the per-day values rather than inventing one pool-wide number.
+        first = self._day()
+        first["purpose_allocation_summary"]["protected_signature_coverage"] = {
+            "signatures": 108, "missing_by_purpose": {"arbete": 31, "fritid": 47}}
+        second = self._day()
+        second["purpose_allocation_summary"]["protected_signature_coverage"] = {
+            "signatures": 109, "missing_by_purpose": {"arbete": 28, "fritid": 51}}
+
+        merged = dl.merge_day_reports([first, second], quarters_per_day=4)
+        summary = merged["purpose_allocation_summary"]
+
+        assert summary["protected_signature_coverage"] == {
+            "signatures": 108,
+            "missing_by_purpose": {"arbete": 31, "fritid": 51}}
+        assert len(summary["protected_signature_coverage_by_day"]) == 2
+
+    def test_empty_window_is_refused(self):
+        with pytest.raises(ValueError, match="at least one day"):
+            dl.merge_day_reports([])
