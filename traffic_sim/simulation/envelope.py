@@ -29,7 +29,10 @@ from traffic_sim.core.contracts import (
 )
 
 
-MAX_CLOSURE_ENVELOPE_DAYS = 9
+# A closure schedule plus warm-up and recovery must fit one demand archive.
+# 24 covers a 21-consecutive-day (3-week) closure; kept in step with
+# contracts._DEMAND_PURPOSE_MAX_DAYS["closure_envelope"].
+MAX_CLOSURE_ENVELOPE_DAYS = 24
 
 
 @dataclass(frozen=True)
@@ -131,7 +134,8 @@ class SimulationEnvelope:
             or not 1 <= self.demand_days <= MAX_CLOSURE_ENVELOPE_DAYS
         ):
             raise ValueError(
-                "simulation_envelope demand_days must match a 1–9 day range")
+                "simulation_envelope demand_days must match a "
+                f"1–{MAX_CLOSURE_ENVELOPE_DAYS} day range")
         expected_warmup = int(
             (values["closure_start"] - values["scenario_start"]).total_seconds())
         expected_recovery = int(
@@ -249,7 +253,7 @@ def envelope_demand_spec(
     *,
     structural_reference_date: str = "2025-09-16",
 ) -> DemandBuildSpec:
-    """Demand contract for an isolated closure envelope, including days 8–9."""
+    """Demand contract for an isolated closure envelope (up to 3 weeks)."""
     return DemandBuildSpec(
         start_date=envelope.scenario_start[:10],
         source=search.source,

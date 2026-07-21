@@ -310,7 +310,7 @@ def test_full_day_is_allowed_once_but_not_as_back_to_back_shifts():
         ({"timezone": "UTC"}, "Europe/Stockholm"),
         ({"required_work_minutes": True}, "integer"),
         ({"required_work_minutes": 0}, "positive"),
-        ({"max_consecutive_start_days": 8}, "1 through 7"),
+        ({"max_consecutive_start_days": 22}, "1 through 21"),
         ({"allowed_weekdays": ()}, "0 through 6"),
         ({"same_daily_window": False}, "must be true"),
         ({"resolution_minutes": 5}, "must be 15"),

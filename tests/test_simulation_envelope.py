@@ -98,7 +98,7 @@ def test_seven_workdays_can_stay_inside_seven_calendar_demand_days():
     assert envelope.closure_end == "2027-04-11T14:00:00"
 
 
-def test_long_daily_shifts_can_require_validated_nine_day_envelope():
+def test_long_daily_shifts_can_require_a_nine_day_envelope():
     search = _search(
         permitted_date_start="2027-01-02",
         permitted_date_end="2027-01-08",
@@ -118,7 +118,26 @@ def test_long_daily_shifts_can_require_validated_nine_day_envelope():
     assert demand.purpose == "closure_envelope"
 
 
-def test_envelope_fails_closed_beyond_validated_nine_days():
+def test_three_week_closure_generates_and_fits_the_demand_archive():
+    # A 21-consecutive-day (3-week) closure is now expressible; its envelope
+    # (warm-up + closure + recovery) must still fit one demand archive.
+    search = _search(
+        permitted_date_start="2027-07-01",
+        permitted_date_end="2027-07-25",
+        required_work_minutes=21 * 8 * 60,
+        max_consecutive_start_days=21,
+        permitted_daily_band=DailyTimeBand("06:00", "18:00"),
+    )
+    schedule = _schedule(search, 21)
+    assert schedule.day_count == 21
+    envelope = build_simulation_envelope(
+        search, schedule, baseline_trip_duration_p99_s=3600)
+    demand = envelope_demand_spec(search, envelope)
+    assert 1 <= demand.days <= 24
+    assert demand.purpose == "closure_envelope"
+
+
+def test_envelope_fails_closed_beyond_the_demand_archive_maximum():
     search = _search(
         permitted_date_start="2027-01-10",
         permitted_date_end="2027-01-16",
@@ -127,11 +146,14 @@ def test_envelope_fails_closed_beyond_validated_nine_days():
         permitted_daily_band=DailyTimeBand("08:00", "14:00"),
     )
 
-    with pytest.raises(ValueError, match="validated maximum is 9"):
+    # An absurd warm-up (p99 ~ 25 days) pushes the envelope past the 24-day
+    # demand-archive ceiling; the guard must reject it rather than request a
+    # demand build the archive cannot cover.
+    with pytest.raises(ValueError, match="validated maximum is 24"):
         build_simulation_envelope(
             search,
             _schedule(search, 7),
-            baseline_trip_duration_p99_s=4 * 24 * 3600,
+            baseline_trip_duration_p99_s=25 * 24 * 3600,
         )
 
 
@@ -154,20 +176,22 @@ def test_envelope_rejects_dst_transition_even_outside_work_interval():
         )
 
 
-def test_standard_demand_stays_at_seven_days_but_envelope_allows_nine():
+def test_standard_demand_stays_at_seven_days_but_envelope_allows_three_weeks():
+    # Interactive standard builds keep the validated 7-day ceiling.
     with pytest.raises(ValueError, match="1 through 7"):
         DemandBuildSpec(start_date="2027-01-01", source="forecast", days=8)
+    # Closure envelopes cover up to a 3-week (21-day) closure -> 24 demand days.
     assert DemandBuildSpec(
         start_date="2027-01-01",
         source="forecast",
-        days=9,
+        days=24,
         purpose="closure_envelope",
-    ).days == 9
-    with pytest.raises(ValueError, match="1 through 9"):
+    ).days == 24
+    with pytest.raises(ValueError, match="1 through 24"):
         DemandBuildSpec(
             start_date="2027-01-01",
             source="forecast",
-            days=10,
+            days=25,
             purpose="closure_envelope",
         )
 

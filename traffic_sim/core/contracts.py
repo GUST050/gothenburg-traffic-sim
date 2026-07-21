@@ -31,9 +31,16 @@ _DST_POLICIES = frozenset({"exclude_transition_dates"})
 _DURATION_BASES = frozenset({"required_work_time"})
 _WORK_TO_CLOSURE_ASSUMPTIONS = frozenset({"one_to_one"})
 _POLICY_STATUSES = frozenset({"user_supplied_unverified"})
+# "standard" (interactive Simulera datum) stays at the validated 7-day
+# ceiling. "closure_envelope" covers a closure-search schedule plus its
+# warm-up and recovery: a 21-consecutive-day closure (3 weeks) needs at
+# most 23 demand days, so 24 gives one day of headroom. Closures beyond the
+# golden 7-day continuity freeze run the same per-day integrity checks but
+# are longer than the frozen validation — the search labels them
+# accordingly and they cost proportionally more to build and simulate.
 _DEMAND_PURPOSE_MAX_DAYS = {
     "standard": 7,
-    "closure_envelope": 9,
+    "closure_envelope": 24,
 }
 
 
@@ -353,9 +360,9 @@ class ClosureSearchSpec:
             self.max_consecutive_start_days,
             "closure_search.max_consecutive_start_days",
         )
-        if not 1 <= maximum_days <= 7:
+        if not 1 <= maximum_days <= 21:
             raise ValueError(
-                "closure_search.max_consecutive_start_days must be from 1 through 7")
+                "closure_search.max_consecutive_start_days must be from 1 through 21")
         resolution = _strict_int(
             self.resolution_minutes, "closure_search.resolution_minutes")
         if resolution != 15:
