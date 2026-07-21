@@ -446,7 +446,7 @@ from demand.feedback import (BPR_PERIOD_S, FEEDBACK_SIM_TIMEOUT_S,
 
 # PFE calibration orchestration — moved to demand/calibration.py (H1,
 # 2026-07-14). The _PFE_PAR_* pool globals live there.
-from demand.calibration import (_agent_path_for,
+from demand.calibration import (_agent_path_for, _report_is_publishable,
                                 run_pfe_variants_flat_parallel,
                                 warn_bound_violations,
                                 warn_relaxed_bound_violations,
@@ -538,7 +538,8 @@ def main() -> None:
 
     cand_path = SUMO_DIR / "candidates.rou.xml"
 
-    def generate_candidates(weight_file: Path | None = None) -> None:
+    def generate_candidates(weight_file: Path | None = None,
+                            cache_date: str | None = None) -> None:
         started = time.perf_counter()
         if args.legacy_random_pool:
             print("\nGenerating candidate route pool (LEGACY: uniform randomTrips) …")
@@ -605,7 +606,11 @@ def main() -> None:
                 # dates whose measured day-shape happens to be identical (or
                 # absent) would share a cache entry and one would silently be
                 # served the other's candidates.
-                "start_date": range_start.strftime("%Y-%m-%d"),
+                # In day-library mode each day generates its own pool, and
+                # the same calendar day must hit the same cache entry from
+                # ANY window - keying on the window start would regenerate an
+                # identical pool per envelope (cache_date is the day's date).
+                "start_date": cache_date or range_start.strftime("%Y-%m-%d"),
                 "min_per_sensor": 50,
                 "route_diversity": 2.0,
                 "seed": args.seed,
@@ -808,7 +813,8 @@ def main() -> None:
                 day_blocks_path.write_text(json.dumps(day_pool_blocks(
                     flows, sensor_edges, day, qi_start + day_index * 96,
                     composition)))
-                generate_candidates(weight_file)
+                generate_candidates(weight_file,
+                                    cache_date=day.strftime("%Y-%m-%d"))
                 identity = day_identity(day, day_index, variant_inputs)
                 entry = library.get(identity)
                 if entry is None:
@@ -829,18 +835,41 @@ def main() -> None:
                          / f"fit{suffix}.json").read_text()))
             print(f"  demand day library: {reused}/{args.days} day(s) reused, "
                   f"{args.days - reused} calibrated")
+            # The direction variants form one demand contract, exactly as in
+            # the direct path: assemble every variant to a staged sibling,
+            # verify every merged report against the same publication gate,
+            # and only then flip the complete set. Without this, a crash
+            # after q50's assembly leaves a hybrid on disk - the failure mode
+            # the staged flow in run_pfe_variants_flat_parallel exists to
+            # prevent, which the library path must not quietly reintroduce.
             reports = {}
-            for suffix, _key in variants:
-                out_path = Path(variant_inputs[suffix]["out_path"])
-                assemble_window(
-                    day_directories, out_path,
-                    _agent_path_for(out_path),
-                    names=(f"calibrated{suffix}.rou.xml",
-                           f"calibrated{suffix}.agents.json"))
-                report = merge_day_reports(per_variant_reports[suffix])
-                if not variant_inputs[suffix].get("keep_achieved", False):
-                    report.pop("achieved", None)
-                reports[suffix] = report
+            staged: list[tuple[Path, Path]] = []
+            try:
+                for suffix, _key in variants:
+                    out_path = Path(variant_inputs[suffix]["out_path"])
+                    staged_path = out_path.with_name(out_path.name + ".staged")
+                    assemble_window(
+                        day_directories, staged_path,
+                        _agent_path_for(staged_path),
+                        names=(f"calibrated{suffix}.rou.xml",
+                               f"calibrated{suffix}.agents.json"))
+                    staged.append((staged_path, out_path))
+                    report = merge_day_reports(per_variant_reports[suffix])
+                    if not _report_is_publishable(report):
+                        raise RuntimeError(
+                            f"assembled window failed the publication gate "
+                            f"for calibrated{suffix}; no variants published")
+                    if not variant_inputs[suffix].get("keep_achieved", False):
+                        report.pop("achieved", None)
+                    reports[suffix] = report
+                for staged_path, out_path in staged:
+                    os.replace(staged_path, out_path)
+                    os.replace(_agent_path_for(staged_path),
+                               _agent_path_for(out_path))
+            finally:
+                for staged_path, _out_path in staged:
+                    staged_path.unlink(missing_ok=True)
+                    _agent_path_for(staged_path).unlink(missing_ok=True)
             return reports
 
         def _calibrate_one_day(library, identity, day_index, variants,
