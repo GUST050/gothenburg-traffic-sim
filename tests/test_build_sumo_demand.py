@@ -22,6 +22,7 @@ from demand import publication as dpub
 from demand import priors as dpriors
 from demand import structure as dstructure
 from demand import calibration as dcal
+from traffic_sim.core.fingerprint import fingerprint_files
 from traffic_sim.demand import cache as candidate_cache
 
 
@@ -1101,3 +1102,45 @@ class TestDayPoolBlocks:
         # classify_day already treats a holiday as weekend-shaped; the pool
         # key must follow it, or a holiday would demand its own template.
         assert dintake.pool_key_for(pd.Timestamp("2025-12-25")) == "weekend"
+
+
+class TestStartupSourceHashes:
+    """A build's provenance must describe the code that actually ran.
+
+    Demand builds run for hours. Hashing the sources when the metadata is
+    written records whatever is on disk by then — after a mid-build edit,
+    code that never ran. Found live 2026-07-21 on a running search.
+    """
+
+    def test_fingerprint_uses_hashes_captured_before_the_build(self, tmp_path):
+        from traffic_sim.core.fingerprint import make_fingerprint
+
+        source = tmp_path / "generator.py"
+        source.write_text("original\n")
+        captured = fingerprint_files({"generator": source})
+        source.write_text("edited mid-build\n")
+
+        record = make_fingerprint(
+            contract={"kind": "test"}, artifacts={},
+            source_files={"generator": source},
+            source_file_records=captured)
+
+        assert record["source_files"] == captured
+        assert record["source_files"]["generator"]["sha256"] != (
+            fingerprint_files({"generator": source})["generator"]["sha256"])
+
+    def test_without_captured_hashes_the_current_files_are_used(self, tmp_path):
+        from traffic_sim.core.fingerprint import make_fingerprint
+
+        source = tmp_path / "generator.py"
+        source.write_text("original\n")
+        record = make_fingerprint(
+            contract={"kind": "test"}, artifacts={},
+            source_files={"generator": source})
+
+        assert record["source_files"] == fingerprint_files({"generator": source})
+
+    def test_the_demand_builder_captures_its_generators_at_import(self):
+        assert "build_candidates" in bsd.STARTUP_SOURCE_HASHES
+        assert "pfe" in bsd.STARTUP_SOURCE_HASHES
+        assert bsd.STARTUP_SOURCE_HASHES["build_candidates"]["sha256"]

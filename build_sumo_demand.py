@@ -43,7 +43,8 @@ import numpy as np
 import pandas as pd
 
 from traffic_sim.simulation.runtime import sumo_home
-from traffic_sim.core.fingerprint import make_fingerprint, sha256_file
+from traffic_sim.core.fingerprint import (fingerprint_files, make_fingerprint,
+                                           sha256_file)
 from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
                                          write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
@@ -70,6 +71,39 @@ STRUCTURAL_REFERENCE_DATE = "2025-09-16"
 # Candidate-pool density: one random trip every N seconds of the window.
 # The pool needs route DIVERSITY, not volume — routeSampler repeats routes.
 CANDIDATE_PERIOD_S = 2.0
+
+
+def _source_files() -> dict[str, Path]:
+    """Every source file whose content defines a demand build's identity."""
+    files = {
+        "build_sumo_demand": Path(__file__),
+        "build_data": Path("build_data.py"),
+        "sensor_registry": Path("traffic_sim/intake/sensors.py"),
+        "sensor_registry_data": Path("data_in/sensors.json"),
+        "build_candidates": Path("build_candidates.py"),
+        "build_sumo_net": Path("build_sumo_net.py"),
+        "pfe": Path("traffic_sim/demand/pfe.py"),
+        "pfe_kernel": Path("traffic_sim/demand/pfe_kernel.py"),
+        "candidate_cache": Path("traffic_sim/demand/cache.py"),
+        "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
+        "assignment_priors": Path("assignment_priors.py"),
+        "prior_flows": Path("prior_flows.py"),
+        "observability": Path("observability.py"),
+    }
+    for module_path in sorted(Path("demand").glob("*.py")):
+        files[f"demand/{module_path.name}"] = module_path
+    return files
+
+
+SOURCE_FILES = _source_files()
+# Captured at STARTUP, not when the metadata is written. A demand build runs
+# for hours; hashing the sources at the end records whatever is on disk by
+# then, which after a mid-build edit is code that never ran. Found 2026-07-21:
+# an envelope whose candidates were generated at 14:24 was fingerprinted at
+# 17:35 against an edited build_candidates.py, so its provenance named a
+# generator it had not used - and the release guard that reads exactly this
+# record would then refuse a perfectly consistent search.
+STARTUP_SOURCE_HASHES = fingerprint_files(SOURCE_FILES)
 
 
 def candidate_routing_weight_cache_input(weight_file: Path | None) -> Path:
@@ -937,28 +971,13 @@ def main() -> None:
         if suffix:
             fingerprint_artifacts[f"calibrated{suffix}"] = (
                 SUMO_DIR / f"calibrated{suffix}.rou.xml")
-    source_files = {
-        "build_sumo_demand": Path(__file__),
-        "build_data": Path("build_data.py"),
-        "sensor_registry": Path("traffic_sim/intake/sensors.py"),
-        "sensor_registry_data": Path("data_in/sensors.json"),
-        "build_candidates": Path("build_candidates.py"),
-        "build_sumo_net": Path("build_sumo_net.py"),
-        "pfe": Path("traffic_sim/demand/pfe.py"),
-        "pfe_kernel": Path("traffic_sim/demand/pfe_kernel.py"),
-        "candidate_cache": Path("traffic_sim/demand/cache.py"),
-        "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
-        "assignment_priors": Path("assignment_priors.py"),
-        "prior_flows": Path("prior_flows.py"),
-        "observability": Path("observability.py"),
-    }
-    for module_path in sorted(Path("demand").glob("*.py")):
-        source_files[f"demand/{module_path.name}"] = module_path
+    source_files = SOURCE_FILES
     # The exact contract is written only after all expensive calibration and
     # structure gates have completed, immediately before the matching metadata
     # fingerprint is created.
     write_demand_build_spec(demand_spec_path, demand_spec)
     meta["build_fingerprint"] = make_fingerprint(
+        source_file_records=STARTUP_SOURCE_HASHES,
         contract={k: v for k, v in meta.items()
                   if k not in {"timings_s", "pfe_timing_s",
                                "build_fingerprint"}},
