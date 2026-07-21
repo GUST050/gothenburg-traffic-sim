@@ -1,0 +1,33 @@
+{
+  "approved_seed_workers": 3,
+  "created": "2026-07-21T20:05:23Z",
+  "evidence_identical": true,
+  "gate_status": "pass",
+  "golden": {
+    "demand_archive": "/Users/gt/Documents/gs-project/runs/demand-20260716-122536-3920501b-4aa5",
+    "policy_sha256": "cd18b2a4d4ec9149e2d4191eebb76738ca5c9a6871f0fe84b6a1ffacd4666298",
+    "spec_sha256": "093c7e92bc0b471ae56a2711e6cab99e20ab9c6d4abc2a2ded5be3d81b1ec0b9"
+  },
+  "kind": "monthly_seed_worker_benchmark_record",
+  "measurements": {
+    "parallel": {
+      "peak_rss_bytes": 1090027520,
+      "result_path": "runs/a2-seed-benchmark/parallel/golden-monthly-search-2025-09-16-v6/artifacts/result.json",
+      "result_sha256": "5e0be4126ea01246b664702ff5d35589145e51f1c1c539ac7abfab870938a0e9",
+      "seed_workers": 3,
+      "wall_time_s": 113.03
+    },
+    "serial": {
+      "peak_rss_bytes": 597671936,
+      "result_path": "runs/a2-seed-benchmark/serial/golden-monthly-search-2025-09-16-v6/artifacts/result.json",
+      "result_sha256": "5e0be4126ea01246b664702ff5d35589145e51f1c1c539ac7abfab870938a0e9",
+      "seed_workers": 1,
+      "wall_time_s": 169.32
+    }
+  },
+  "peak_rss_within_budget": true,
+  "plan": "SPEED_ARCHITECTURE_PLAN_2026-07.md stage A2",
+  "rss_budget_bytes": 8589934592,
+  "schema_version": 1,
+  "speedup": 1.5
+}

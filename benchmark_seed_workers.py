@@ -70,15 +70,17 @@ class RssSampler(threading.Thread):
         super().__init__(daemon=True)
         self.interval_s = interval_s
         self.peak = 0
-        self._stop = threading.Event()
+        # NOT _stop: threading.Thread.join() calls its own self._stop(), so an
+        # attribute of that name shadows a method the runtime needs.
+        self._done = threading.Event()
 
     def run(self) -> None:
-        while not self._stop.is_set():
+        while not self._done.is_set():
             self.peak = max(self.peak, _tree_rss_bytes())
-            self._stop.wait(self.interval_s)
+            self._done.wait(self.interval_s)
 
     def stop(self) -> int:
-        self._stop.set()
+        self._done.set()
         self.join(timeout=10)
         return self.peak
 
