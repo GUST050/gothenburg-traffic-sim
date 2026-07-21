@@ -158,6 +158,92 @@ def real_day_shape(flows: dict[str, list], sensor_edges: dict[str, list[str]],
     return hourly / hourly.sum()
 
 
+POOL_KEYS = ("weekday", "weekend")
+
+
+def pool_key_for(day: pd.Timestamp) -> str:
+    """The geometry-reuse class of one calendar day."""
+    weekend, _kind = classify_day(day.strftime("%Y-%m-%d"), day.dayofweek)
+    # Purpose logic is the same for weekend and holiday blocks, so that is
+    # the safe geometry-reuse boundary.
+    return "weekend" if weekend else "weekday"
+
+
+def window_pool_composition(start: pd.Timestamp, days: int) -> tuple[str, ...]:
+    """The set of day-type geometry pools a window's candidates draw from."""
+    return tuple(sorted({
+        pool_key_for(start + pd.Timedelta(days=offset)) for offset in range(days)
+    }))
+
+
+def day_pool_blocks(
+    flows: dict[str, list],
+    sensor_edges: dict[str, list[str]],
+    day: pd.Timestamp,
+    qi_start: int,
+    composition: tuple[str, ...],
+) -> list[dict]:
+    """Candidate blocks for calibrating ONE calendar day inside a composition.
+
+    Two things have to be true at once for a day calibrated alone to mean the
+    same as that day inside a window (SPEED_ARCHITECTURE_PLAN stage B):
+
+    * the PFE must see the same VARIABLE SET, which is the union of the
+      day-type geometries the window draws from — the pool composition; and
+    * the day's own quarters must receive only the day's own candidates,
+      because the per-quarter purpose mix is read off candidate departures.
+
+    So the day gets its real block at offset zero, and every other day type in
+    the composition contributes one canonical template block parked a whole
+    day BEYOND the calibrated window: far enough that
+    ``_purpose_targets_per_quarter`` ignores it (it bins only quarters inside
+    the window), close enough that it still carries geometry into the shape
+    pool and its share into the structure guards.
+
+    Exactly ONE block per day type is deliberate. Structure-guard caps are
+    computed from each group's share of the candidate POOL
+    (demand/structure.py), so repeating a day type once per calendar day —
+    which is what a monolithic window does — makes a day's own guards depend
+    on how many weekdays and weekend days happened to share its window. One
+    block per type removes that: the guard reflects the day types in play,
+    not the calendar arithmetic of the envelope.
+    """
+    from build_candidates import blend_day_shape, daily_shape
+
+    own_key = pool_key_for(day)
+    if own_key not in composition:
+        raise ValueError(
+            f"day {day:%Y-%m-%d} is {own_key} but the composition is "
+            f"{composition}")
+    weekend, kind = classify_day(day.strftime("%Y-%m-%d"), day.dayofweek)
+    real = real_day_shape(flows, sensor_edges, qi_start)
+    fallback = daily_shape(weekend)
+    profile = blend_day_shape(real, fallback) if real is not None else fallback
+    blocks = [{
+        "profile": profile.tolist(), "offset_s": 0,
+        "id_prefix": "d0_", "is_weekend": weekend,
+        "date": day.strftime("%Y-%m-%d"), "pool_key": own_key,
+    }]
+    for index, key in enumerate(
+            k for k in sorted(composition) if k != own_key):
+        is_weekend = key == "weekend"
+        blocks.append({
+            "profile": daily_shape(is_weekend).tolist(),
+            # One whole day past the calibrated 24 h window.
+            "offset_s": (index + 1) * 86400,
+            "id_prefix": f"pool{index}_", "is_weekend": is_weekend,
+            # A canonical label, not a calendar date: this block exists to
+            # carry a day type's geometry, so its draws must depend on the
+            # day type alone.
+            "date": f"pool-template:{key}", "pool_key": key,
+            "shape_carrier": True,
+        })
+    origin = "real" if real is not None else "fallback"
+    print(f"  day {day.strftime('%Y-%m-%d')} ({kind}): {origin} departure "
+          f"shape, pool composition {'+'.join(sorted(composition))}")
+    return blocks
+
+
 def multi_day_blocks(flows: dict[str, list], sensor_edges: dict[str, list[str]],
                      start: pd.Timestamp, days: int, qi_start: int) -> list[dict]:
     """Candidate-generator blocks with each calendar day's own profile.
@@ -182,9 +268,7 @@ def multi_day_blocks(flows: dict[str, list], sensor_edges: dict[str, list[str]],
             # day yields the same candidates in every window it appears in
             # (SPEED_ARCHITECTURE_PLAN stage B).
             "date": day.strftime("%Y-%m-%d"),
-            # Purpose logic is the same for weekend and holiday blocks, so
-            # that is the safe geometry-reuse boundary.
-            "pool_key": "weekend" if weekend else "weekday",
+            "pool_key": pool_key_for(day),
         })
         origin = "real" if real is not None else "fallback"
         print(f"  day {day.strftime('%Y-%m-%d')} ({kind}): {origin} departure shape")
