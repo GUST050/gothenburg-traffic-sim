@@ -5,7 +5,7 @@ MASTER_MODEL="${MASTER_MODEL:-gpt-5.6-sol}"
 WORKER_MODEL="${WORKER_MODEL:-gpt-5.6-luna}"
 APPROVAL_POLICY="${APPROVAL_POLICY:-on-request}"
 SANDBOX_MODE="${SANDBOX_MODE:-workspace-write}"
-MAX_ROUNDS="${MAX_ROUNDS:-3}"
+MAX_ROUNDS="${MAX_ROUNDS:-1}"
 
 echo "======================================"
 echo " CODEX SOL/LUNA AUTO ORCHESTRATOR"
@@ -36,17 +36,23 @@ codex exec \
   "
 You are Sol High, the master agent.
 
-Read:
+IMPORTANT OUTPUT RULES:
+- Do not print long file excerpts.
+- Do not use sed/cat to dump large files.
+- Do not read more than 120 lines from any file.
+- Prefer grep/find for headings and targeted facts.
+- Edit only TASKS.md and AGENT_NOTES.md.
+- Do not change implementation code.
+
+Read only:
 - AGENTS.md
 - TASKS.md
 - AGENT_NOTES.md
+
+Use targeted search only if needed in:
 - ARCHITECTURE.md
 - IMPROVEMENT_PLAN.md
 - SPEED_ARCHITECTURE_PLAN_2026-07.md
-
-Use PROJECT_CONTEXT_OLD_AGENTS.md and CLAUDE.md only if more history is needed.
-
-Do not implement code.
 
 Tasks:
 1. Read ACTIVE_GOAL in TASKS.md.
@@ -74,14 +80,22 @@ for ROUND in $(seq 1 "$MAX_ROUNDS"); do
     "
 You are Luna High, the worker agent.
 
+IMPORTANT OUTPUT RULES:
+- Do not print long file excerpts.
+- Do not use sed/cat to dump large files.
+- Do not read more than 120 lines from any file.
+- Work only on the ACTIVE_TASK in TASKS.md.
+- Make the smallest useful change.
+- Do not change unrelated code.
+- Update AGENT_NOTES.md.
+- Stop if architecture, provenance, validation gates, data loss, or publication semantics are affected.
+
 Read:
 - AGENTS.md
 - TASKS.md
 - AGENT_NOTES.md
-- ARCHITECTURE.md
-- IMPROVEMENT_PLAN.md
 
-Perform only the current ACTIVE_TASK in TASKS.md.
+Then read only the specific files listed in ACTIVE_TASK.
 
 Rules:
 - Make the smallest useful change.
@@ -106,13 +120,17 @@ End with changed files, tests run, result, blockers, and next step.
     "
 You are Sol High, the reviewer.
 
+IMPORTANT OUTPUT RULES:
+- Review only the current git diff.
+- Do not print full files.
+- Do not do bulk implementation.
+- Edit only TASKS.md or AGENT_NOTES.md if needed.
+
 Read:
 - AGENTS.md
 - TASKS.md
 - AGENT_NOTES.md
 - REVIEW_CHECKLIST.md
-- ARCHITECTURE.md
-- IMPROVEMENT_PLAN.md
 
 Review the current git diff only.
 
