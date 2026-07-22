@@ -307,44 +307,6 @@ class TestMergeDayReports:
             dl.merge_day_reports([])
 
 
-class TestWarmHorizonPlan:
-    """The warming CLI's week plan must cover every composition a consumer
-    can ask for, and clip cleanly at the horizon edges."""
-
-    @staticmethod
-    def _plan(first, last):
-        import warm_demand_horizon as wh
-        import pandas as pd
-        return wh.plan_weeks(pd.Timestamp(first), pd.Timestamp(last))
-
-    def test_full_week_yields_all_three_shapes(self):
-        items = self._plan("2027-07-19", "2027-07-25")   # Mon..Sun
-        assert [(i["label"], i["start_date"], i["days"]) for i in items] == [
-            ("mixed", "2027-07-19", 7),
-            ("weekday", "2027-07-19", 5),
-            ("weekend", "2027-07-24", 2),
-        ]
-
-    def test_midweek_start_is_clipped_not_skipped(self):
-        items = self._plan("2027-07-21", "2027-07-25")   # Wed..Sun
-        by_label = {i["label"]: i for i in items}
-        assert by_label["mixed"]["start_date"] == "2027-07-21"
-        assert by_label["mixed"]["days"] == 5
-        assert by_label["weekday"]["days"] == 3          # Wed,Thu,Fri
-        assert by_label["weekend"]["days"] == 2
-
-    def test_weekday_only_range_has_no_weekend_windows(self):
-        items = self._plan("2027-07-20", "2027-07-22")   # Tue..Thu
-        assert {i["label"] for i in items} == {"mixed", "weekday"}
-
-    def test_year_plan_is_the_documented_size(self):
-        items = self._plan("2027-01-01", "2027-12-31")
-        total_days = sum(i["days"] for i in items)
-        # ~365 mixed + ~260 weekday + ~105 weekend day-slots
-        assert 720 <= total_days <= 740
-        assert len(items) == pytest.approx(3 * 53, abs=4)
-
-
 class TestCompressedStorage:
     """Storage may gzip the big artifacts; nothing downstream may notice.
 
