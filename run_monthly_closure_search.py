@@ -20,6 +20,7 @@ from traffic_sim.core.contracts import (
     load_closure_search_spec,
 )
 from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.simulation.workspace import WorkspaceLock
 from traffic_sim.simulation.monthly_search import (
     MonthlySearchPolicy,
     run_monthly_search,
@@ -151,6 +152,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--baseline-cache", type=Path)
     parser.add_argument("--seed-workers", type=int, default=1)
+    parser.add_argument("--workspace-wait-s", type=float, default=3600.0,
+                        help="Seconds to wait for the shared demand "
+                             "workspace (a horizon pre-warm or the web "
+                             "app may hold it) before giving up.")
     return parser.parse_args()
 
 
@@ -189,6 +194,16 @@ def main() -> None:
             f"{len(recovered.get('trees', []))} directories)",
             file=sys.stderr,
         )
+    # A search owns the shared demand workspace for hours: it rebuilds
+    # envelopes into sumo/ and snapshots the live release around them. The
+    # web app and a horizon pre-warm run take the same lock, so this waits
+    # for whichever of them is mid-build instead of interleaving files with
+    # it - and says whose job it is waiting for.
+    workspace = WorkspaceLock(f"run_monthly_closure_search {os.getpid()}")
+    if not workspace.acquire(timeout=args.workspace_wait_s, poll_s=10.0):
+        raise SystemExit(
+            f"demand workspace busy: {workspace.holder_description()}; "
+            "wait for it, stop it, or raise --workspace-wait-s")
     try:
         spec = load_closure_search_spec(args.spec)
         policy = MonthlySearchPolicy.from_dict(_read(args.policy))
@@ -247,6 +262,8 @@ def main() -> None:
         )
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
         raise SystemExit(str(exc)) from exc
+    finally:
+        workspace.release()
 
     boundary = result.get("claim_boundary", {})
     print(

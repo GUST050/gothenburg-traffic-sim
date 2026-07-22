@@ -129,6 +129,29 @@ class TestWorkspaceLock:
     def test_holder_is_none_when_the_file_never_existed(self, tmp_path):
         assert ws.workspace_holder(tmp_path / "absent") is None
 
+    def test_a_cli_search_waits_for_the_workspace_and_says_whose_it_is(
+            self, monkeypatch):
+        """A search rebuilds envelopes into sumo/ for hours; starting one
+        beside a running horizon warm must refuse, not interleave."""
+        import run_monthly_closure_search as search
+
+        monkeypatch.setattr(search, "WorkspaceLock",
+                            lambda owner: ws.WorkspaceLock(owner, path=LOCK))
+        monkeypatch.setattr(search, "recover_live_demand_release",
+                            lambda: None)
+        monkeypatch.setattr(sys, "argv", [
+            "run_monthly_closure_search.py", "--spec", "does-not-exist.json",
+            "--policy", "validation/monthly_search_policy_v1.json",
+            "--baseline-trip-duration-p99-s", "3600",
+            "--workspace-wait-s", "0"])
+        outsider = ws.WorkspaceLock("warm_demand_horizon 777", path=LOCK)
+        assert outsider.acquire()
+        try:
+            with pytest.raises(SystemExit, match="warm_demand_horizon 777"):
+                search.main()
+        finally:
+            outsider.release()
+
     def test_serve_refuses_a_job_while_another_process_holds_it(self,
                                                                monkeypatch):
         import serve

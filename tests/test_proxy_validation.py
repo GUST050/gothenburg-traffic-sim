@@ -203,6 +203,12 @@ def test_gate_passes_only_complete_held_out_evidence():
         "median_spearman": 1.0,
         "spearman_case_fraction": 1.0,
         "ranking_case_fraction": 1.0,
+        # Without a gate there is no practical-equivalence band, so no case
+        # counts as discriminating and the spread is reported raw.
+        "discriminating_case_fraction": 0.0,
+        "discriminating_practical_winner_recall": None,
+        "median_spearman_discriminating": None,
+        "median_objective_spread_s": 100.0,
         "failure_disqualification_recall": 1.0,
         "total_disqualified_schedules": 2,
     }
@@ -339,7 +345,7 @@ def test_gate_object_is_content_keyed_and_validated():
     plain = _manifest()
     gated = _gated_manifest()
     assert gated["content_key"] != plain["content_key"]
-    with pytest.raises(ValueError, match="gate must define exactly"):
+    with pytest.raises(ValueError, match="gate must define at least"):
         _gated_manifest(lambda raw: raw["gate"].pop("practical_equivalence_s"))
     with pytest.raises(ValueError, match="must be positive"):
         _gated_manifest(
@@ -459,3 +465,131 @@ def test_tracked_v1_gate_record_matches_frozen_manifest_and_stays_closed():
     assert gate["gate_status"] == "fail"
     assert gate["ui_exposure_allowed"] is False
     assert gate["global_best_claim_allowed"] is False
+
+
+def _discriminating_manifest(**gate_extra):
+    """A gate that also demands the set actually discriminate (held-out v3).
+
+    v2 passed on cases whose eligible objectives were all within the
+    indifference zone of one another; a set that claims to test RANKING has
+    to declare how much of it genuinely can, and be scored on those cases.
+    """
+    manifest = _manifest()
+    raw = {key: value for key, value in manifest.items() if key != "content_key"}
+    raw["gate"] = {
+        "practical_equivalence_s": 15.0,
+        "practical_winner_recall_minimum": 0.9,
+        "p90_normalized_shortlist_regret_maximum": 0.1,
+        "failure_disqualification_recall_minimum": 0.6,
+        **gate_extra,
+    }
+    return validate_validation_manifest(raw)
+
+
+def test_objective_spread_is_reported_per_case():
+    manifest = _gated_manifest()
+    schedules = {case["case_id"]: case["schedule_ids"]
+                 for case in manifest["cases"]}
+    outcomes = _outcomes(manifest, **{
+        "case-b": _case_outcome("case-b", schedules["case-b"],
+                                objectives=[0.0, 1.0, 2.0, 3.0, 4.0]),
+    })
+    report = evaluate_validation_set(manifest, outcomes)
+    spreads = {case["case_id"]: case["objective_spread_s"]
+               for case in report["case_reports"]}
+    assert spreads["case-a"] == 100.0        # 0..100 over eligible schedules
+    assert spreads["case-b"] == 3.0          # inside the 15 s band
+    assert report["metrics"]["discriminating_case_fraction"] == 0.5
+    assert report["metrics"]["median_objective_spread_s"] == 51.5
+
+
+def test_near_tied_case_set_fails_the_discrimination_coverage_check():
+    """The exact v2 weakness, now catchable: every case near-tied."""
+    manifest = _discriminating_manifest(
+        minimum_discriminating_case_fraction=0.5)
+    schedules = {case["case_id"]: case["schedule_ids"]
+                 for case in manifest["cases"]}
+    outcomes = _outcomes(manifest, **{
+        case_id: _case_outcome(case_id, ids,
+                               objectives=[0.0, 1.0, 2.0, 3.0, 4.0])
+        for case_id, ids in schedules.items()
+    })
+    report = evaluate_validation_set(manifest, outcomes)
+    assert report["metrics"]["discriminating_case_fraction"] == 0.0
+    assert report["gate_checks"]["discriminating_case_coverage"] is False
+    assert report["gate_status"] == "fail"
+    assert report["global_best_claim_allowed"] is False
+
+
+def test_discriminating_recall_is_scored_only_on_cases_with_real_spread():
+    manifest = _discriminating_manifest(
+        minimum_discriminating_case_fraction=0.5,
+        discriminating_practical_winner_recall_minimum=0.9)
+    schedules = {case["case_id"]: case["schedule_ids"]
+                 for case in manifest["cases"]}
+    # case-a genuinely spreads and the shortlist misses the good end of it;
+    # case-b is near-tied, so its automatic "hit" must not rescue the set.
+    outcomes = _outcomes(manifest, **{
+        "case-a": _case_outcome("case-a", schedules["case-a"],
+                                objectives=[0.0, 10.0, 20.0, 100.0, 200.0],
+                                shortlist=(3,)),
+        "case-b": _case_outcome("case-b", schedules["case-b"],
+                                objectives=[0.0, 1.0, 2.0, 3.0, 4.0],
+                                shortlist=(0, 1)),
+    })
+    report = evaluate_validation_set(manifest, outcomes)
+    assert report["metrics"]["discriminating_case_fraction"] == 0.5
+    assert report["metrics"]["discriminating_practical_winner_recall"] == 0.0
+    assert report["gate_checks"]["discriminating_practical_winner_recall"] is False
+    # The set-wide practical recall is the metric that would have hidden it.
+    assert report["metrics"]["practical_winner_recall"] == 0.5
+
+
+def test_a_discriminating_set_the_proxy_ranks_well_passes():
+    manifest = _discriminating_manifest(
+        minimum_discriminating_case_fraction=0.5,
+        discriminating_practical_winner_recall_minimum=0.9)
+    schedules = {case["case_id"]: case["schedule_ids"]
+                 for case in manifest["cases"]}
+    outcomes = _outcomes(manifest, **{
+        case_id: _case_outcome(case_id, ids,
+                               objectives=[0.0, 10.0, 20.0, 100.0, 200.0])
+        for case_id, ids in schedules.items()
+    })
+    report = evaluate_validation_set(manifest, outcomes)
+    assert report["metrics"]["discriminating_case_fraction"] == 1.0
+    assert report["metrics"]["discriminating_practical_winner_recall"] == 1.0
+    assert report["metrics"]["median_spearman_discriminating"] == 1.0
+    assert report["gate_status"] == "pass"
+
+
+def test_earlier_frozen_manifests_are_unaffected_by_the_v3_fields():
+    """Adding optional gate fields may not move a frozen content key."""
+    for path in ("validation/monthly_proxy_manifest.json",
+                 "validation/monthly_proxy_manifest_v2.json"):
+        stored = json.loads(Path(path).read_text())
+        normalized = validate_validation_manifest(stored)
+        if "content_key" in stored:
+            assert normalized["content_key"] == stored["content_key"]
+        gate = normalized.get("gate")
+        if gate is not None:
+            assert set(gate) == {
+                "practical_equivalence_s",
+                "practical_winner_recall_minimum",
+                "p90_normalized_shortlist_regret_maximum",
+                "failure_disqualification_recall_minimum",
+            }
+
+
+def test_unknown_gate_fields_are_still_refused():
+    manifest = _manifest()
+    raw = {key: value for key, value in manifest.items() if key != "content_key"}
+    raw["gate"] = {
+        "practical_equivalence_s": 15.0,
+        "practical_winner_recall_minimum": 0.9,
+        "p90_normalized_shortlist_regret_maximum": 0.1,
+        "failure_disqualification_recall_minimum": 0.6,
+        "invented_threshold": 0.5,
+    }
+    with pytest.raises(ValueError, match="unknown fields"):
+        validate_validation_manifest(raw)

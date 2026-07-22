@@ -58,10 +58,13 @@ class WorkspaceLock:
     timeout it is given, and reports the current holder when it gives up.
     """
 
-    def __init__(self, owner: str, *, path: Path = LOCK_PATH,
+    def __init__(self, owner: str, *, path: Path | None = None,
                  timeout: float = 0.0) -> None:
         self.owner = owner
-        self.path = Path(path)
+        # Resolved at construction, not bound as a default argument: the
+        # module attribute is what a test suite redirects so it never
+        # contends with a real background job's lock file.
+        self.path = Path(LOCK_PATH if path is None else path)
         # How long ``with lock:`` waits before refusing. Zero means "refuse
         # immediately", which is what an interactive request wants; a batch
         # job that can afford to queue passes a real wait here.
@@ -133,7 +136,7 @@ class WorkspaceLock:
         self.release()
 
 
-def workspace_holder(path: Path = LOCK_PATH) -> dict[str, Any] | None:
+def workspace_holder(path: Path | None = None) -> dict[str, Any] | None:
     """Who holds the workspace right now, or None if it is free.
 
     Probed by trying to take the lock on a separate handle: an flock is tied
@@ -141,7 +144,7 @@ def workspace_holder(path: Path = LOCK_PATH) -> dict[str, Any] | None:
     the holder is this same process (that is exactly what the web app needs
     to tell the user, and never a reason to proceed).
     """
-    path = Path(path)
+    path = Path(LOCK_PATH if path is None else path)
     if not path.is_file():
         return None
     try:

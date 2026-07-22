@@ -36,6 +36,20 @@ _GATE_FIELDS = (
     "p90_normalized_shortlist_regret_maximum",
     "failure_disqualification_recall_minimum",
 )
+# Held-out v3 additions, and why they exist.  The v2 set passed its gate on
+# cases whose eligible schedules were all within the practical-equivalence
+# band of each other: six of its seven ranking cases had no real objective
+# spread, so "the proxy picked a practical winner" was true by construction
+# and the set could not test ranking DISCRIMINATION at all (recorded in
+# validation/b_heldout_v3_campaign.json).  A case set may therefore declare
+# how much of it must genuinely discriminate, and how well the proxy must do
+# on exactly those cases.  Both are OPTIONAL: a manifest frozen without them
+# validates, normalizes and keys precisely as before, so earlier evidence is
+# untouched.
+_OPTIONAL_GATE_FIELDS = (
+    "minimum_discriminating_case_fraction",
+    "discriminating_practical_winner_recall_minimum",
+)
 
 
 def _canonical_key(payload: Mapping[str, Any]) -> str:
@@ -164,18 +178,26 @@ def validate_validation_manifest(
     gate_raw = raw.get("gate")
     gate: dict[str, float] | None = None
     if gate_raw is not None:
-        if not isinstance(gate_raw, Mapping) or set(gate_raw) != set(_GATE_FIELDS):
+        if not isinstance(gate_raw, Mapping) or set(_GATE_FIELDS) - set(gate_raw):
             raise ValueError(
-                "validation manifest gate must define exactly "
+                "validation manifest gate must define at least "
                 + ", ".join(_GATE_FIELDS)
+            )
+        unknown = set(gate_raw) - set(_GATE_FIELDS) - set(_OPTIONAL_GATE_FIELDS)
+        if unknown:
+            raise ValueError(
+                "validation manifest gate has unknown fields: "
+                + ", ".join(sorted(unknown))
             )
         gate = {
             field: _number(gate_raw[field], f"gate.{field}")
             for field in _GATE_FIELDS
+            + tuple(field for field in _OPTIONAL_GATE_FIELDS
+                    if field in gate_raw)
         }
         if gate["practical_equivalence_s"] <= 0:
             raise ValueError("gate.practical_equivalence_s must be positive")
-        for field in _GATE_FIELDS[1:]:
+        for field in sorted(set(gate) - {"practical_equivalence_s"}):
             if not 0 < gate[field] <= 1:
                 raise ValueError(
                     f"gate.{field} must be above zero and at most one"
@@ -443,6 +465,7 @@ def evaluate_validation_case(
             "normalized_shortlist_regret": None,
             "spearman_rho": None,
             "spearman_n": 0,
+            "objective_spread_s": None,
             "failure_disqualification_recall": failure_recall,
             "provenance": provenance,
         }
@@ -531,6 +554,15 @@ def evaluate_validation_case(
         "normalized_shortlist_regret": regret,
         "spearman_rho": spearman,
         "spearman_n": len(correlated),
+        # How much decision there was to get right: the span of the eligible
+        # schedules' exhaustive objectives.  A case whose span sits inside
+        # the practical-equivalence band cannot distinguish a good ranking
+        # from a lucky one, and is counted as such rather than averaged in
+        # as if it were evidence of discrimination.
+        "objective_spread_s": (
+            max(float(candidate["sumo_objective"]) for candidate in eligible)
+            - best_objective
+        ),
         "failure_disqualification_recall": failure_recall,
         "provenance": provenance,
     }
@@ -617,6 +649,34 @@ def evaluate_validation_set(
     )
     spearman_case_fraction = len(spearmans) / len(ranking_reports)
     ranking_case_fraction = len(ranking_reports) / len(case_reports)
+    # Discriminating cases: those whose eligible schedules really do differ by
+    # more than the pre-registered indifference zone. Recall over THEM is the
+    # number that says whether the proxy can choose, as opposed to whether
+    # everything it could have chosen happened to be equally good.
+    discriminating = [
+        report for report in ranking_reports
+        if tolerance is not None
+        and report["objective_spread_s"] is not None
+        and report["objective_spread_s"] > tolerance
+    ]
+    discriminating_case_fraction = len(discriminating) / len(ranking_reports)
+    discriminating_practical_winner_recall = (
+        sum(bool(report["practical_winner_recalled"])
+            for report in discriminating) / len(discriminating)
+        if discriminating
+        else None
+    )
+    discriminating_spearmans = [
+        report["spearman_rho"] for report in discriminating
+        if report["spearman_rho"] is not None
+    ]
+    median_objective_spread_s = (
+        median([report["objective_spread_s"] for report in ranking_reports
+                if report["objective_spread_s"] is not None])
+        if any(report["objective_spread_s"] is not None
+               for report in ranking_reports)
+        else None
+    )
     if gate:
         # Held-out v2 contract (step-4 recovery decision): gate on
         # practical-winner recall, regret and failure recall; Spearman and
@@ -650,6 +710,20 @@ def evaluate_validation_set(
                 len(regrets) == len(ranking_reports)
             ),
         }
+        # v3-style checks, present only when the frozen manifest asked for
+        # them. A set that claims to test discrimination must contain enough
+        # cases that actually do, and must be judged on those cases.
+        if "minimum_discriminating_case_fraction" in gate:
+            gate_checks["discriminating_case_coverage"] = (
+                discriminating_case_fraction
+                >= gate["minimum_discriminating_case_fraction"]
+            )
+        if "discriminating_practical_winner_recall_minimum" in gate:
+            gate_checks["discriminating_practical_winner_recall"] = (
+                discriminating_practical_winner_recall is not None
+                and discriminating_practical_winner_recall
+                >= gate["discriminating_practical_winner_recall_minimum"]
+            )
     else:
         gate_checks = {
             "winner_recall": winner_recall >= WINNER_RECALL_GATE,
@@ -697,6 +771,23 @@ def evaluate_validation_set(
             ),
             "spearman_case_fraction": round(spearman_case_fraction, 6),
             "ranking_case_fraction": round(ranking_case_fraction, 6),
+            "discriminating_case_fraction": round(
+                discriminating_case_fraction, 6),
+            "discriminating_practical_winner_recall": (
+                round(discriminating_practical_winner_recall, 6)
+                if discriminating_practical_winner_recall is not None
+                else None
+            ),
+            "median_spearman_discriminating": (
+                round(median(discriminating_spearmans), 6)
+                if discriminating_spearmans
+                else None
+            ),
+            "median_objective_spread_s": (
+                round(median_objective_spread_s, 3)
+                if median_objective_spread_s is not None
+                else None
+            ),
             "failure_disqualification_recall": (
                 round(failure_recall, 6)
                 if failure_recall is not None
@@ -706,7 +797,7 @@ def evaluate_validation_set(
         },
         "thresholds": (
             {
-                **{field: gate[field] for field in _GATE_FIELDS},
+                **{field: gate[field] for field in sorted(gate)},
                 "minimum_ranking_case_fraction":
                     manifest["minimum_ranking_case_fraction"],
             }
