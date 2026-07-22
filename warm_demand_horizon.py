@@ -26,6 +26,14 @@ is coverage, never a correctness requirement — an uncovered day simply builds
 cold when it is first needed, at a few minutes, because the library rebuilds
 any missing or stale day by construction.
 
+Warming's product is the day library. Each window build also writes a full
+uncompressed archive of itself under ``runs/demand-*`` (~100 MB per day-slot,
+~75 GB over a year) under a build key no consumer ever looks up — a warm
+window is not a window anyone asks for, only the days inside it are. Those
+archives are therefore discarded as each build completes unless
+``--keep-archives`` says otherwise; per-day provenance lives in the library
+manifests (fit report, source hashes) and the per-window build logs.
+
 Built to survive a year-long run: every build is a fresh subprocess of the
 tracked builder writing to its own log, the live release is snapshotted and
 restored around each one, a failed window is recorded and the run CONTINUES
@@ -358,11 +366,12 @@ def parse_args() -> argparse.Namespace:
                         help="Seconds to wait for the shared demand workspace "
                              "(the web app's simulations hold it too) before "
                              "stopping, resumably.")
-    parser.add_argument("--discard-archives", action="store_true",
-                        help="Delete each build's runs/demand-* archive once "
-                             "its days are in the library (~100 MB per "
-                             "day-slot of duplicated, uncompressed demand). "
-                             "Only archives this run created are removed.")
+    parser.add_argument("--keep-archives", action="store_true",
+                        help="Keep each build's runs/demand-* archive. Off by "
+                             "default: warming's product is the day library, "
+                             "and a warm window's archive carries a build key "
+                             "no consumer ever looks up while costing ~100 MB "
+                             "per day-slot (~75 GB over a year).")
     parser.add_argument("--min-free-gb", type=float, default=DEFAULT_MIN_FREE_GB,
                         help="Stop cleanly before a build that would leave "
                              "less than this much disk free.")
@@ -415,7 +424,7 @@ def main() -> None:
     total_slots = sum(item["days"] for item in items)
     gaps = uncovered(items, first, last)
     per_slot = DAY_SLOT_ESTIMATE_MB - (
-        ARCHIVE_MB_PER_DAY_SLOT if args.discard_archives else 0.0)
+        0.0 if args.keep_archives else ARCHIVE_MB_PER_DAY_SLOT)
     projected_gb = total_slots * per_slot / 1000.0
     # flush everything: a year-long run is normally watched through a
     # redirected log, where buffered output can sit invisible for an hour.
@@ -423,11 +432,17 @@ def main() -> None:
           f"{len(items)} window builds, {total_slots} day-slots, "
           f"~{projected_gb:.0f} GB projected, {_free_gb():.0f} GB free",
           flush=True)
-    if not args.discard_archives:
+    if args.keep_archives:
         print(f"  of that, ~{total_slots * ARCHIVE_MB_PER_DAY_SLOT / 1000:.0f}"
-              f" GB is per-build run archives (runs/demand-*), a full "
-              f"uncompressed copy of demand the library also holds gzipped — "
-              f"--discard-archives skips keeping them", flush=True)
+              f" GB is per-build run archives (runs/demand-*) you asked to "
+              f"keep — the day library holds the same demand gzipped",
+              flush=True)
+    else:
+        print(f"  each build's own run archive is discarded once its days are "
+              f"stored (~{total_slots * ARCHIVE_MB_PER_DAY_SLOT / 1000:.0f} GB "
+              f"not written; --keep-archives to retain them). Per-day "
+              f"provenance stays in the library manifests and the build logs.",
+              flush=True)
     if projected_gb > _free_gb() - args.min_free_gb:
         print(f"  WARNING: that does not fit above the "
               f"{args.min_free_gb:.0f} GB floor — the run will stop partway "
@@ -522,7 +537,7 @@ def main() -> None:
                 with open(log_path, "w") as log:
                     completed = subprocess.run(item_command(item, args.source),
                                                stdout=log, stderr=subprocess.STDOUT)
-                if args.discard_archives:
+                if not args.keep_archives:
                     freed_bytes += discard_new_archives(archives_before)
             finally:
                 restore_live_demand_release(snapshot)
@@ -568,8 +583,8 @@ def main() -> None:
 
     total = time.perf_counter() - started_all
     if freed_bytes:
-        print(f"  discarded {freed_bytes / 1e9:.1f} GB of run archives this "
-              f"run kept nothing else alive on")
+        print(f"  discarded {freed_bytes / 1e9:.1f} GB of this run's own "
+              f"build archives")
     print(f"warm horizon: {built} built, {skipped} already warm, "
           f"{failed} failed, {len(items) - built - skipped - failed} not "
           f"reached, in {_hms(total)}")

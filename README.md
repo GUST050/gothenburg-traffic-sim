@@ -93,8 +93,11 @@ day (file size); pass `--trajectories` to force it on.
 in a content-addressed day library (`runs/demand-days/`), so a window that
 already has its days is assembled in seconds instead of solved again.
 `make warm-horizon FROM=2027-01-01 TO=2027-12-31` fills that library ahead of
-time — measured ~100–150 s per day-slot, about 30 h and ~12 GB for a full
-year, run as a background job. It is safe to stop with ^C and rerun (it
+time — measured ~100–150 s per day-slot, about 30 h and ~24 GB for a full
+year, run as a background job. Each build's own `runs/demand-*` archive is
+discarded once its days are stored (it is a ~100 MB-per-day-slot uncompressed
+duplicate under a build key nothing looks up; `--keep-archives` retains
+them). It is safe to stop with ^C and rerun (it
 resumes from `runs/warm-horizon/…/progress.json`), a window that fails is
 recorded and the rest still build, and it takes the shared workspace lock
 around each build, so the web app refuses a simultaneous simulation with a

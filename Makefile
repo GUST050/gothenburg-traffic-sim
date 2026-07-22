@@ -42,8 +42,9 @@ demand-morning:
 
 # Pre-warm the demand day library so viewing a date and searching over it
 # stop paying for calibration. FROM/TO default to the 2027 forecast year;
-# measured cost is ~100-150 s per day-slot, so a whole year is a background
-# job of roughly 30 h that is safe to interrupt and rerun (it resumes).
+# measured cost is ~100-150 s and ~32 MB per day-slot, so a whole year is a
+# background job of roughly 30 h and ~24 GB that is safe to interrupt and
+# rerun (it resumes).
 FROM ?= 2027-01-01
 TO   ?= 2027-12-31
 SOURCE ?= forecast

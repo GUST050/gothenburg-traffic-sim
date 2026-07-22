@@ -196,8 +196,11 @@ class TestRunSurvivesFailures:
         monkeypatch.setattr(wh.subprocess, "run", fake_run)
         monkeypatch.setattr(wh, "snapshot_live_demand_release", lambda: {})
         monkeypatch.setattr(wh, "restore_live_demand_release", lambda _s: None)
-        # Never touch the machine's real kill-recovery marker from a test.
+        # Never touch the machine's real kill-recovery marker, or its real
+        # run archives, from a test: main() now discards build archives by
+        # default, and a background job's directory must not be collateral.
         monkeypatch.setattr(wh, "recover_live_demand_release", lambda: None)
+        monkeypatch.setattr(wh, "discard_new_archives", lambda _before: 0)
         monkeypatch.setattr(wh, "library_has_dates", lambda item: True)
         monkeypatch.setattr(wh, "WorkspaceLock",
                             lambda owner: ws.WorkspaceLock(owner, path=LOCK))
@@ -380,7 +383,7 @@ class TestArchiveDiscard:
         wh.main()
         out = capsys.readouterr().out
         assert "GB projected" in out
-        assert "run archives" in out          # the 8x-optimistic projection bug
+        assert "run archive is discarded" in out   # the 8x-projection bug
 
 
 class TestResumeChecksTheRightEntry:
