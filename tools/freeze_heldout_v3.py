@@ -9,12 +9,13 @@ inside a 300 s indifference band — so "the proxy shortlisted a practical
 winner" was true no matter what the proxy did. This set fixes that, and the
 gate now says so out loud:
 
-* cases are built on edges whose closure is MEASURED (tools/
-  pilot_heldout_v3_candidates.py, before freezing, without consulting the
-  proxy) to move the objective by more than the practical-equivalence band
-  between a morning-peak and an evening start;
-* their permitted daily bands span peak and off-peak hours instead of
-  sitting inside one morning, so start time has something to be right about;
+* ranking cases are built on edges whose closure is MEASURED (tools/
+  pilot_heldout_v3_candidates.py, before freezing, without ever consulting
+  the proxy) to move the objective by more than the practical-equivalence
+  band between two of the schedules the case will contain;
+* they vary the DATE across a five-day envelope rather than the hour within
+  one day, because the pilot showed the hour axis cannot separate an
+  eligible 4 h closure on this network while the calendar axis can;
 * the manifest declares `minimum_discriminating_case_fraction` and
   `discriminating_practical_winner_recall_minimum`, so a set that turns out
   degenerate FAILS instead of passing vacuously.
@@ -44,7 +45,11 @@ from traffic_sim.simulation.proxy_validation import (  # noqa: E402
     validate_validation_manifest,
 )
 
-PILOT = Path("runs") / "heldout-v3-pilot" / "probes.json"
+# Every pilot round contributes; a case may only take an edge some round
+# actually confirmed. Later files win when an edge appears twice.
+PILOTS = (Path("runs") / "heldout-v3-pilot" / "probes.json",
+          Path("runs") / "heldout-v3-pilot-round2" / "probes.json",
+          Path("runs") / "heldout-v3-pilot-daytype" / "probes.json")
 V1_MANIFEST = Path("validation/monthly_proxy_manifest.json")
 V2_MANIFEST = Path("validation/monthly_proxy_manifest_v2.json")
 POLICY = Path("validation/monthly_search_policy_v1.json")
@@ -56,26 +61,44 @@ SELECTION_RECORD = Path("validation/heldout_v3_selection.json")
 #  (earliest_start, latest_end), work_minutes, resolution_minutes,
 #  day_type, duration, (demand_start, demand_days))
 #
-# The wide bands are the point: 05:00-21:00 with four hours of work puts the
-# same closure in the morning peak, the midday trough and the evening peak.
+# The ranking cases vary the DATE, not the hour, and that is a measured
+# choice rather than a preference. Probing 25 edges through the campaign's
+# own machinery (runs/heldout-v3-pilot*) showed that for a 4 h closure the
+# hour axis cannot produce a ranking case on this network: the five edges
+# that stayed eligible at both a 07:00 and a 12:00 start spread only
+# 5.8-88 s, inside the 300 s indifference band, while every edge that spread
+# more was disqualified at one of the two starts for teleports or truncated
+# vehicles. The calendar axis does work - the same closure on Thursday,
+# Saturday and Sunday inside one 5-day envelope stayed eligible on all three
+# and spread 509 s - because weekend demand is genuinely lower, not because
+# the network broke. So ranking cases hold the hour band narrow and let the
+# permitted date range span day types; hour-band cases remain as strata
+# fillers, where their near-tied objectives are honestly what they are.
 CASE_TEMPLATES = [
-    ("v3-secondary-far-weekday-4h-wide", "secondary", "far_over_750m", None,
-     True, ("2027-09-15", "2027-09-15", 1), ("05:00", "21:00"), 240, 60,
+    # Ranking cases: one 5-day envelope (Thu-Mon, two weekend days), a narrow
+    # daily band, one closure per day. Schedules differ by DATE.
+    ("v3-secondary-daytype-4h", "secondary", None, None,
+     True, ("2027-07-15", "2027-07-19", 1), ("08:00", "14:00"), 240, 120,
+     "mixed_weekday_weekend", "single_4h", ("2027-07-15", 5)),
+    ("v3-tertiary-daytype-4h", "tertiary", None, None,
+     True, ("2027-07-15", "2027-07-19", 1), ("08:00", "14:00"), 240, 120,
+     "mixed_weekday_weekend", "single_4h", ("2027-07-15", 5)),
+    ("v3-secondary-daytype-8h", "secondary", None, None,
+     True, ("2027-07-15", "2027-07-19", 1), ("07:00", "17:00"), 480, 120,
+     "mixed_weekday_weekend", "single_8h", ("2027-07-15", 5)),
+    ("v3-tertiary-daytype-8h", "tertiary", None, None,
+     True, ("2027-07-15", "2027-07-19", 1), ("07:00", "17:00"), 480, 120,
+     "mixed_weekday_weekend", "single_8h", ("2027-07-15", 5)),
+    ("v3-unclassified-daytype-4h", "unclassified", None, None,
+     True, ("2027-07-15", "2027-07-19", 1), ("08:00", "14:00"), 240, 120,
+     "mixed_weekday_weekend", "single_4h", ("2027-07-15", 5)),
+    # Strata fillers: single dates and hour bands, kept honest about being
+    # near-tied rather than dressed up as ranking evidence.
+    ("v3-primary-far-weekday-4h", "primary", "far_over_750m", None,
+     False, ("2027-09-15", "2027-09-15", 1), ("06:00", "14:00"), 240, 120,
      "weekday", "single_4h", ("2027-09-15", 1)),
-    ("v3-secondary-medium-weekday-8h-wide", "secondary", "medium_250_750m",
-     None, True, ("2027-09-15", "2027-09-15", 1), ("05:00", "23:00"), 480, 120,
-     "weekday", "single_8h", ("2027-09-15", 1)),
-    ("v3-tertiary-far-weekday-4h-wide", "tertiary", "far_over_750m", None,
-     True, ("2027-09-15", "2027-09-15", 1), ("05:00", "21:00"), 240, 120,
-     "weekday", "single_4h", ("2027-09-15", 1)),
-    ("v3-primary-far-weekday-4h-wide", "primary", "far_over_750m", None,
-     True, ("2027-09-15", "2027-09-15", 1), ("05:00", "21:00"), 240, 120,
-     "weekday", "single_4h", ("2027-09-15", 1)),
-    ("v3-tertiary-near-weekday-4h-wide", "tertiary", "near_0_250m", None,
-     True, ("2027-09-15", "2027-09-15", 1), ("05:00", "21:00"), 240, 120,
-     "weekday", "single_4h", ("2027-09-15", 1)),
-    ("v3-secondary-far-weekend-8h-wide", "secondary", "far_over_750m", None,
-     True, ("2027-07-17", "2027-07-17", 1), ("05:00", "23:00"), 480, 120,
+    ("v3-secondary-near-weekend-8h", "secondary", "near_0_250m", None,
+     False, ("2027-07-17", "2027-07-17", 1), ("06:00", "18:00"), 480, 120,
      "weekend", "single_8h", ("2027-07-17", 1)),
     ("v3-tertiary-medium-holiday-4h", "tertiary", "medium_250_750m", None,
      False, ("2027-12-24", "2027-12-24", 1), ("06:00", "20:00"), 240, 120,
@@ -99,7 +122,7 @@ CASE_TEMPLATES = [
 
 # Fraction of RANKING cases that must genuinely separate start times, and how
 # often the shortlist must hold a practical winner among exactly those.
-# Six of the twelve templates above are pilot-confirmed discriminating; the
+# Five of the thirteen templates above are the pilot-confirmed ones; the
 # floor is set below that so a case that degenerates on the campaign's own
 # demand does not automatically fail the set, but a mostly-degenerate set does.
 MINIMUM_DISCRIMINATING_CASE_FRACTION = 0.4
@@ -108,17 +131,22 @@ DISCRIMINATING_PRACTICAL_WINNER_RECALL_MINIMUM = 0.9
 
 def _pilot_edges() -> dict[str, list[dict]]:
     """Probed edges that separated start times, best structural load first."""
-    if not PILOT.is_file():
+    available = [path for path in PILOTS if path.is_file()]
+    if not available:
         raise SystemExit(
-            f"{PILOT} is missing — run tools/pilot_heldout_v3_candidates.py "
+            "no pilot probes found — run tools/pilot_heldout_v3_candidates.py "
             "first; a discriminating case set may not be guessed at")
-    probes = json.loads(PILOT.read_text())
+    records: dict[str, dict] = {}
+    for path in available:
+        probes = json.loads(path.read_text())
+        for edge_id, record in probes["candidates"].items():
+            records[edge_id] = {**record, "edge_id": edge_id,
+                                "pilot": str(path)}
     by_class: dict[str, list[dict]] = {}
-    for edge_id, record in sorted(probes["candidates"].items()):
+    for edge_id, record in sorted(records.items()):
         if not record.get("discriminating"):
             continue
-        by_class.setdefault(record["road_class"], []).append(
-            {**record, "edge_id": edge_id})
+        by_class.setdefault(record["road_class"], []).append(record)
     for rows in by_class.values():
         rows.sort(key=lambda row: (-row["probe_spread_s"], row["edge_id"]))
     return by_class
@@ -250,7 +278,7 @@ def main() -> None:
         "manifest_content_key": normalized["content_key"],
         "frozen_at": normalized["frozen_at"],
         "selection_inputs": input_hashes(),
-        "pilot": str(PILOT),
+        "pilots": [str(path) for path in PILOTS if path.is_file()],
         "cases": selection,
     }, indent=2, sort_keys=True) + "\n")
     total = sum(len(case["schedule_ids"]) for case in normalized["cases"])

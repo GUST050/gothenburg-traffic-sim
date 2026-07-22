@@ -16,7 +16,37 @@ worse.***
 | A1 per-quarter parallel publish | **LANDED** `6045d34`. Byte-identity proven through the production orchestration on a real pool (`validation/a1_publish_identity_v1.json`) + regression tests in both suites. The running 40h/3mo search picks it up from its next envelope build. Golden-build byte comparison (§6.1) still owed once `sumo/` frees. |
 | A2 parallel SUMO seeds | **CODE LANDED, GATE OPEN to 3** `f054ed0`/`4e657f4`. The monthly runner overlaps a candidate's observations but yields them in canonical order and truncates at the first hard failure, so evidence cannot change; equivalence is unit-tested. `benchmark_seed_workers.py` ran on an idle machine — serial vs 3 workers byte-identical `result.json`, 1.50×, peak 1.02 GiB — and `validation/a2_parallel_seed_benchmark_v1.json` now approves `--seed-workers` up to 3. |
 | B calendar-date seeding + day library | **BUILT, PROVEN, HELD-OUT-VALIDATED on branch `speed-stage-b`; OWNER CHOSE NOT TO MERGE YET (2026-07-22).** All code in: four day-local streams + per-day pools, L1/L2 library as the only multi-day path (now gzip-stored, ~10×, year ≈ 13 GB), generation guard, kill-safe live-release guard covering `web/data/scenarios`. §6.2 golden A/B **PASSED at full scale** (`validation/b_golden_ab_v1.json`: Mon–Sun, cold 1580 s vs warm 32 s, six artifacts byte-identical). §6.3 first failed by the letter, so a **held-out v3 on B demand was run and PASSED all five gate checks with margin** (`validation/b_heldout_v3_campaign.json`: recall 1.0, regret 0.0, failure-recall 0.722 ≥ 0.6). BUT it re-used the weak v2 set: `median_spearman` +0.894→−0.976 is noise inside the 300 s band (only 1/7 cases has any objective spread), which re-confirms the set cannot test ranking discrimination. **Owner decision: do NOT merge, do NOT warm, until a STRONGER v3 set — cases with true objective spread > 300 s — is designed, frozen, and passed.** That design is the next work item. |
-| C pre-warm job + horizon UI | **`warm_demand_horizon.py` written + tested** (3 window shapes/ISO week cover every composition; resumable; live-release guarded). Not run — gated behind the merge decision above. Serve.py `/api/horizon` + L4 view artifacts still to do. |
+| C pre-warm job + horizon UI | **`warm_demand_horizon.py` REWRITTEN AND RUN FOR REAL (2026-07-22, `e6ab657`).** The 3-shapes-per-ISO-week plan was wrong: a weekday holiday makes the Mon–Fri window MIXED, so 30 dates of 2027 (and 3 at the year's start) never received the entry a one-day view asks for — caught live warming the week of Good Friday, where the "weekday" window reported 5/5 reused because it *was* the mixed window. Plan is now maximal same-type runs + weekly/edge mixed windows; a full 2027 or 2025 horizon has zero uncovered date/composition pairs, and what a short horizon cannot cover is printed. Also: failures no longer abort the run, per-window logs stream, progress resumes (0.6 s to re-verify a warm week vs 9 min to build it), disk floor, `--prune` for entries whose code fingerprint is superseded, and a cross-process `flock` shared with serve.py and the CLI monthly search so a browser action cannot interleave with a warm build. Measured: **~100–150 s per cold day-slot, 13 MB per stored day gzipped → a full 2027 horizon ≈ 736 day-slots, ~30 h, ~12 GB.** Serve.py `/api/horizon` + L4 view artifacts still to do. |
+
+### v3 case-set finding (2026-07-22)
+
+The "stronger v3" the owner asked for cannot be built by picking busier
+edges, and now there is evidence rather than an opinion (`d5f13ad`;
+`runs/heldout-v3-pilot*`, 25 probed edges through the campaign's own
+machinery, matched baseline clean at 0 teleports / 0 unfinished of 22 376):
+
+* re-scored with the new `objective_spread_s` metric, **six of the v2 set's
+  seven ranking cases have a spread of exactly 0.0 s**, the seventh 71 s —
+  `discriminating_case_fraction = 0.0`;
+* for 4 h closures the two properties needed for a ranking case are close to
+  mutually exclusive: the five probed edges eligible at both start times
+  spread only 5.8–88 s, while every edge spreading more than 300 s
+  (1 148 / 3 320 / 1 459 / 1 244 278 s) was disqualified at one or both
+  starts for teleports or truncation;
+* detour score 0 predicts truncation failures exactly (6 of 6);
+* a closure still active near the end of the simulated day is disqualified
+  for teleports that a 07:00 closure of the same edge does not produce —
+  an end-of-horizon drain effect, not a traffic finding;
+* **the calendar axis does work**: the same 4 h closure on Thursday /
+  Saturday / Sunday inside one 5-day envelope stayed eligible on all three
+  days and spread 508.9 s (first probed edge). A discriminating v3 should
+  therefore vary the DATE, not the hour.
+
+The gate can now hold a set to this: `minimum_discriminating_case_fraction`
+and `discriminating_practical_winner_recall_minimum` are optional manifest
+fields (earlier frozen manifests key identically), and
+`tools/freeze_heldout_v3.py` refuses to fill a ranking case with an edge no
+pilot confirmed.
 
 ## 0. Goal, stated precisely
 
