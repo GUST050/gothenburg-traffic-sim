@@ -5,6 +5,8 @@ separately calibrated days is byte-identical to the same window calibrated
 monolithically. Everything else in the library is bookkeeping around it.
 """
 import json
+import os
+import time
 import sys
 from collections import Counter
 from pathlib import Path
@@ -376,3 +378,70 @@ class TestCompressedStorage:
         stored = (library.path_for(identity)
                   / "calibrated.rou.xml.gz").stat().st_size
         assert stored < plain / 4
+
+
+class TestStorageHousekeeping:
+    """A horizon-long warming run stores thousands of days; what it leaves
+    behind matters as much as what it writes."""
+
+    def _identity(self, date="2027-06-01"):
+        return dl.DayIdentity(date=date, source="forecast",
+                              pool_composition=("weekday",), inputs={"n": 1},
+                              source_hashes={"pfe": "x"})
+
+    def _artifacts(self, tmp_path, text="a"):
+        path = tmp_path / "fit.json"
+        path.write_text(f'{{"geh_pct": 100.0, "t": "{text}"}}')
+        return {"fit.json": path}
+
+    def test_staging_left_by_a_killed_build_is_swept(self, tmp_path):
+        library = dl.DayLibrary(tmp_path / "library")
+        identity = self._identity()
+        abandoned = (library.path_for(identity).parent
+                     / "deadbeef.staging")
+        abandoned.mkdir(parents=True)
+        (abandoned / "half-written.gz").write_bytes(b"x" * 64)
+        old = time.time() - dl.DayLibrary.ABANDONED_STAGING_AGE_S - 60
+        os.utime(abandoned, (old, old))
+
+        library.put(identity, self._artifacts(tmp_path))
+
+        assert not abandoned.exists()
+
+    def test_a_concurrent_builds_fresh_staging_is_left_alone(self, tmp_path):
+        library = dl.DayLibrary(tmp_path / "library")
+        identity = self._identity()
+        other = library.path_for(identity).parent / "otherkey.staging"
+        other.mkdir(parents=True)
+
+        library.put(identity, self._artifacts(tmp_path))
+
+        assert other.is_dir()
+
+    def test_replacing_an_entry_never_leaves_the_path_empty(self, tmp_path):
+        """Re-storing a day must not delete-then-move: a reader that just
+        verified the entry would find its files gone mid-assembly."""
+        library = dl.DayLibrary(tmp_path / "library")
+        identity = self._identity()
+        library.put(identity, self._artifacts(tmp_path, "first"))
+        entry = library.path_for(identity)
+        seen = []
+
+        real_replace = os.replace
+
+        def watching_replace(src, dst):
+            seen.append((entry / "manifest.json").is_file())
+            return real_replace(src, dst)
+
+        os.replace = watching_replace
+        try:
+            library.put(identity, self._artifacts(tmp_path, "second"))
+        finally:
+            os.replace = real_replace
+
+        # The manifest is present before and after every rename step except
+        # the instant the new entry lands, and is complete at the end.
+        assert seen and seen[0] is True
+        assert library.get(identity) is not None
+        assert "second" in (entry / "fit.json").read_text()
+        assert not (entry.with_name(entry.name + ".replaced")).exists()

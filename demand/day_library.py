@@ -28,6 +28,7 @@ import json
 import os
 import re
 import shutil
+import time
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -178,6 +179,7 @@ class DayLibrary:
         staging = directory.with_name(directory.name + ".staging")
         shutil.rmtree(staging, ignore_errors=True)
         staging.mkdir(parents=True)
+        self._sweep_abandoned_staging(directory.parent, keep=staging)
         records: dict[str, Any] = {}
         for name, path in sorted(artifacts.items()):
             if "/" in name or name in {".", ".."}:
@@ -206,9 +208,47 @@ class DayLibrary:
             json.dumps(manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8")
         directory.parent.mkdir(parents=True, exist_ok=True)
-        shutil.rmtree(directory, ignore_errors=True)
-        os.replace(staging, directory)
+        # Swap, don't delete-then-move: a reader that has just verified this
+        # entry would otherwise find its files gone half-way through
+        # assembling a window. Renaming the old copy aside keeps exactly one
+        # complete entry visible at the path at every instant.
+        replaced = directory.with_name(directory.name + ".replaced")
+        shutil.rmtree(replaced, ignore_errors=True)
+        if directory.exists():
+            os.replace(directory, replaced)
+        try:
+            os.replace(staging, directory)
+        except OSError:
+            if replaced.exists() and not directory.exists():
+                os.replace(replaced, directory)      # put the old one back
+            raise
+        shutil.rmtree(replaced, ignore_errors=True)
         return manifest
+
+    # A day is stored in minutes; anything abandoned for this long belongs to
+    # a build that was killed, not to one still running. Deliberately not
+    # "any staging directory": two builders may legitimately be storing
+    # different days under the same date at the same time.
+    ABANDONED_STAGING_AGE_S = 6 * 3600
+
+    def _sweep_abandoned_staging(self, date_directory: Path, *,
+                                 keep: Path) -> None:
+        """Remove staging directories left behind by killed builds.
+
+        Nothing else ever cleans them: a kill between mkdir and the atomic
+        rename leaves a directory no reader looks at and no writer revisits
+        unless that exact day is rebuilt. Over a horizon-long warming run
+        they simply accumulate.
+        """
+        cutoff = time.time() - self.ABANDONED_STAGING_AGE_S
+        for candidate in Path(date_directory).glob("*.staging"):
+            if candidate == keep:
+                continue
+            try:
+                if candidate.stat().st_mtime < cutoff:
+                    shutil.rmtree(candidate, ignore_errors=True)
+            except OSError:
+                continue
 
 
 def _shift_route_line(line: str, offset_s: float, vehicle_id: int) -> str:

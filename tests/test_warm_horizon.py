@@ -196,6 +196,8 @@ class TestRunSurvivesFailures:
         monkeypatch.setattr(wh.subprocess, "run", fake_run)
         monkeypatch.setattr(wh, "snapshot_live_demand_release", lambda: {})
         monkeypatch.setattr(wh, "restore_live_demand_release", lambda _s: None)
+        # Never touch the machine's real kill-recovery marker from a test.
+        monkeypatch.setattr(wh, "recover_live_demand_release", lambda: None)
         monkeypatch.setattr(wh, "library_has_dates", lambda item: True)
         monkeypatch.setattr(wh, "WorkspaceLock",
                             lambda owner: ws.WorkspaceLock(owner, path=LOCK))
@@ -345,3 +347,55 @@ class TestPruneStaleEntries:
         assert "--prune --yes" in capsys.readouterr().out
         wh.prune(delete=True)
         assert not dead.exists()
+
+
+class TestArchiveDiscard:
+    """Warming writes ~100 MB of duplicated demand per day-slot into runs/.
+    Reclaiming it may never touch an archive this run did not create."""
+
+    def test_only_archives_created_during_the_build_are_removed(self, tmp_path,
+                                                                monkeypatch):
+        runs = tmp_path / "runs"
+        (runs / "demand-old").mkdir(parents=True)
+        (runs / "demand-old" / "calibrated.rou.xml").write_bytes(b"x" * 100)
+        monkeypatch.setattr(wh, "_demand_archives",
+                            lambda root=runs: {p for p in runs.glob("demand-*")
+                                               if p.is_dir()})
+        before = wh._demand_archives()
+        fresh = runs / "demand-new"
+        fresh.mkdir()
+        (fresh / "calibrated.rou.xml").write_bytes(b"y" * 2048)
+
+        freed = wh.discard_new_archives(before)
+
+        assert freed == 2048
+        assert not fresh.exists()
+        assert (runs / "demand-old").is_dir()      # untouched evidence
+
+    def test_projection_names_the_archive_share(self, monkeypatch, capsys):
+        monkeypatch.setattr(wh, "_source_year", lambda source: 2027)
+        monkeypatch.setattr(sys, "argv", [
+            "warm_demand_horizon.py", "--source", "forecast",
+            "--from", "2027-01-01", "--to", "2027-12-31", "--dry-run"])
+        wh.main()
+        out = capsys.readouterr().out
+        assert "GB projected" in out
+        assert "run archives" in out          # the 8x-optimistic projection bug
+
+
+class TestResumeChecksTheRightEntry:
+
+    def test_a_date_with_only_the_other_composition_is_not_counted_warm(
+            self, tmp_path):
+        """A date normally holds two entries. Resume must check the one this
+        window produced, not merely that the date directory exists."""
+        entry = tmp_path / "2027-05-05" / "key"
+        entry.mkdir(parents=True)
+        (entry / "manifest.json").write_text(json.dumps({
+            "identity": {"pool_composition": ["weekday", "weekend"]}}))
+        item = {"start_date": "2027-05-05", "days": 1,
+                "composition": ["weekday"]}
+        assert not wh.library_has_dates(item, root=tmp_path)
+        item_mixed = {"start_date": "2027-05-05", "days": 1,
+                      "composition": ["weekday", "weekend"]}
+        assert wh.library_has_dates(item_mixed, root=tmp_path)

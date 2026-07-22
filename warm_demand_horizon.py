@@ -39,6 +39,7 @@ import argparse
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -50,6 +51,7 @@ from demand.day_library import DEFAULT_ROOT as LIBRARY_ROOT
 from demand.intake import pool_key_for
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.monthly_demand import (
+    recover_live_demand_release,
     restore_live_demand_release,
     snapshot_live_demand_release,
 )
@@ -71,10 +73,25 @@ IDENTITY_SOURCE_FILES = {
 FLOWS_PATH = {"historical": Path("web/data/flows.json"),
               "forecast": Path("web/data/flows_forecast.json")}
 
-# Measured on this network: one stored day is ~95 MB of route XML and agent
-# JSON raw, ~10 MB gzipped, plus ~4 MB of plain fit reports. Used only to
-# project disk use up front — the hard guard is the free-space floor.
-DAY_SLOT_ESTIMATE_MB = 16.0
+# What a warmed day-slot ACTUALLY costs on disk, measured on this machine
+# (2026-07-22, three real windows of 4, 7 and 3 days). Warming writes three
+# things, not one, and only the first is the product:
+#
+#   day library entry   13.1 MB  gzipped route/agent files + fit reports
+#   run archive        101.8 MB  runs/demand-*/ — the tracked builder copies
+#                                every product of every build, uncompressed
+#   candidate pool      19.3 MB  sumo/candidate_cache/ — what makes a warm
+#                                rebuild seconds instead of minutes
+#
+# The first projection here counted only the library and was 8x optimistic:
+# a 2027 horizon is ~99 GB, not ~12 GB. The archive is the only redundant
+# part (the library holds the same demand, gzipped, and a window is
+# reassembled from it in seconds) — hence --discard-archives.
+LIBRARY_MB_PER_DAY_SLOT = 13.1
+ARCHIVE_MB_PER_DAY_SLOT = 101.8
+CANDIDATE_POOL_MB_PER_DAY_SLOT = 19.3
+DAY_SLOT_ESTIMATE_MB = (LIBRARY_MB_PER_DAY_SLOT + ARCHIVE_MB_PER_DAY_SLOT
+                        + CANDIDATE_POOL_MB_PER_DAY_SLOT)
 DEFAULT_MIN_FREE_GB = 15.0
 PROGRESS_SCHEMA_VERSION = 1
 
@@ -183,17 +200,57 @@ def source_fingerprint() -> dict[str, str | None]:
 
 
 def library_has_dates(item: dict, root: Path = LIBRARY_ROOT) -> bool:
-    """Cheap check that a recorded item's dates still exist in the library.
+    """Cheap check that a recorded item's OWN entries still exist.
 
-    Not a verification — ``DayLibrary.get`` verifies bytes when a build asks
-    for the entry. This only stops a progress file from claiming a horizon is
-    warm after the library was deleted underneath it.
+    Not a byte verification — ``DayLibrary.get`` does that when a build asks
+    for an entry. This stops a progress file from claiming a horizon is warm
+    after the library was pruned or deleted underneath it, and it checks the
+    entry for THIS window's composition rather than merely that the date has
+    some entry: a date usually holds two, and the one this item produced is
+    the one that would otherwise be silently missing.
     """
     start = pd.Timestamp(item["start_date"])
-    return all(
-        (Path(root) / (start + pd.Timedelta(days=offset)).strftime("%Y-%m-%d")
-         ).is_dir()
-        for offset in range(item["days"]))
+    composition = list(item.get("composition")
+                       or composition_of(start, item["days"]))
+    for offset in range(item["days"]):
+        date = (start + pd.Timedelta(days=offset)).strftime("%Y-%m-%d")
+        directory = Path(root) / date
+        if not directory.is_dir():
+            return False
+        found = False
+        for manifest_path in directory.glob("*/manifest.json"):
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if (manifest.get("identity") or {}).get(
+                    "pool_composition") == composition:
+                found = True
+                break
+        if not found:
+            return False
+    return True
+
+
+def _demand_archives(root: Path = Path("runs")) -> set[Path]:
+    return {path for path in Path(root).glob("demand-*") if path.is_dir()}
+
+
+def discard_new_archives(before: set[Path]) -> int:
+    """Delete the run archive this build just wrote, and report its bytes.
+
+    The tracked builder copies every product of every build into runs/ —
+    ~100 MB per day-slot, uncompressed, which is a full duplicate of demand
+    the library already stores gzipped and can reassemble in seconds. Only
+    directories that appeared during THIS build are touched: anything that
+    existed before the build is another run's evidence and is never removed.
+    """
+    freed = 0
+    for directory in sorted(_demand_archives() - before):
+        freed += sum(path.stat().st_size
+                     for path in directory.rglob("*") if path.is_file())
+        shutil.rmtree(directory, ignore_errors=True)
+    return freed
 
 
 def stale_entries(root: Path = LIBRARY_ROOT) -> list[dict]:
@@ -301,6 +358,11 @@ def parse_args() -> argparse.Namespace:
                         help="Seconds to wait for the shared demand workspace "
                              "(the web app's simulations hold it too) before "
                              "stopping, resumably.")
+    parser.add_argument("--discard-archives", action="store_true",
+                        help="Delete each build's runs/demand-* archive once "
+                             "its days are in the library (~100 MB per "
+                             "day-slot of duplicated, uncompressed demand). "
+                             "Only archives this run created are removed.")
     parser.add_argument("--min-free-gb", type=float, default=DEFAULT_MIN_FREE_GB,
                         help="Stop cleanly before a build that would leave "
                              "less than this much disk free.")
@@ -319,6 +381,8 @@ def prune(delete: bool) -> None:
     for entry in entries[:10]:
         print(f"  {entry['date']}  {entry['bytes'] / 1e6:7.1f} MB  "
               f"superseded: {', '.join(entry['superseded'])}")
+    print("  (entries built on another branch or checkout look superseded "
+          "too — they are rebuilt if you switch back)")
     if not delete:
         print("  rerun with --prune --yes to delete them")
         return
@@ -350,13 +414,24 @@ def main() -> None:
     items = plan_windows(first, last)
     total_slots = sum(item["days"] for item in items)
     gaps = uncovered(items, first, last)
-    projected_gb = total_slots * DAY_SLOT_ESTIMATE_MB / 1000.0
+    per_slot = DAY_SLOT_ESTIMATE_MB - (
+        ARCHIVE_MB_PER_DAY_SLOT if args.discard_archives else 0.0)
+    projected_gb = total_slots * per_slot / 1000.0
     # flush everything: a year-long run is normally watched through a
     # redirected log, where buffered output can sit invisible for an hour.
     print(f"warming {first.date()}..{last.date()} ({args.source}): "
           f"{len(items)} window builds, {total_slots} day-slots, "
-          f"~{projected_gb:.1f} GB projected, {_free_gb():.0f} GB free",
+          f"~{projected_gb:.0f} GB projected, {_free_gb():.0f} GB free",
           flush=True)
+    if not args.discard_archives:
+        print(f"  of that, ~{total_slots * ARCHIVE_MB_PER_DAY_SLOT / 1000:.0f}"
+              f" GB is per-build run archives (runs/demand-*), a full "
+              f"uncompressed copy of demand the library also holds gzipped — "
+              f"--discard-archives skips keeping them", flush=True)
+    if projected_gb > _free_gb() - args.min_free_gb:
+        print(f"  WARNING: that does not fit above the "
+              f"{args.min_free_gb:.0f} GB floor — the run will stop partway "
+              f"and can be resumed after freeing space", flush=True)
     if gaps:
         print(f"  NOT covered by this plan: {len(gaps)} date/composition "
               f"gap(s) — those windows build cold when first asked for; a "
@@ -370,6 +445,22 @@ def main() -> None:
             print(f"  {item['label']:16s} {item['start_date']} "
                   f"+{item['days']}d")
         return
+
+    # A 30 h background job is exactly what gets killed by a laptop
+    # shutdown, an OOM or an impatient `kill`. The per-item restore lives in
+    # a finally block, which SIGKILL skips and SIGTERM would skip too - so
+    # recover any live release a previous run left snapshotted, and turn
+    # SIGTERM into the same orderly stop as ^C.
+    recovered = recover_live_demand_release()
+    if recovered is not None:
+        print(f"  restored the live demand release left behind by a killed "
+              f"run ({len(recovered.get('entries', []))} products, "
+              f"{len(recovered.get('trees', []))} directories)", flush=True)
+
+    def _stop(signum, _frame):
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    signal.signal(signal.SIGTERM, _stop)
 
     log_dir = Path(args.log_dir) if args.log_dir else (
         Path("runs") / "warm-horizon"
@@ -391,6 +482,7 @@ def main() -> None:
     done: dict[str, dict] = progress.setdefault("items", {})
 
     built = skipped = failed = 0
+    freed_bytes = 0            # run-archive bytes reclaimed by --discard-archives
     slots_built = 0            # day-slots this run actually put through a build
     build_wall = 0.0           # wall time those slots cost
     pending_slots = total_slots
@@ -424,11 +516,14 @@ def main() -> None:
                 stopped_early = f"workspace held by another job — {holder}"
                 break
             snapshot = snapshot_live_demand_release()
+            archives_before = _demand_archives()
             started = time.perf_counter()
             try:
                 with open(log_path, "w") as log:
                     completed = subprocess.run(item_command(item, args.source),
                                                stdout=log, stderr=subprocess.STDOUT)
+                if args.discard_archives:
+                    freed_bytes += discard_new_archives(archives_before)
             finally:
                 restore_live_demand_release(snapshot)
                 workspace.release()
@@ -472,6 +567,9 @@ def main() -> None:
         _write_json(progress_path, progress)
 
     total = time.perf_counter() - started_all
+    if freed_bytes:
+        print(f"  discarded {freed_bytes / 1e9:.1f} GB of run archives this "
+              f"run kept nothing else alive on")
     print(f"warm horizon: {built} built, {skipped} already warm, "
           f"{failed} failed, {len(items) - built - skipped - failed} not "
           f"reached, in {_hms(total)}")
