@@ -51,6 +51,70 @@ Luna High should:
 4. update AGENT_NOTES.md
 5. stop for review
 
+## Standard workflow format
+
+### Default context
+
+At the start of every non-trivial task, read `AGENTS.md`, `TASKS.md`, and
+`AGENT_NOTES.md`, and inspect the current git diff. Use targeted reads only;
+do not dump large files or print long file excerpts.
+
+### Sol format
+
+- Sol plans and reviews only.
+- Sol updates `TASKS.md` when creating, closing, or changing tasks.
+- Sol updates `AGENT_NOTES.md` when recording planning or review decisions.
+- During review, Sol writes exactly one of `REVIEW_STATUS: APPROVED`,
+  `REVIEW_STATUS: FIX_REQUIRED`, or `REVIEW_STATUS: BLOCKED` in
+  `AGENT_NOTES.md`.
+- Sol stops after planning or review.
+
+### Luna format
+
+- Luna implements `ACTIVE_TASK` only.
+- Luna inspects the current git diff before editing.
+- Luna keeps changes minimal and does not broaden scope beyond `ACTIVE_TASK`.
+- Luna updates `AGENT_NOTES.md` with files changed, tests run, evidence,
+  blockers, and the next step.
+- Luna stops for Sol review.
+
+### Safety gates
+
+- Do not run SUMO unless `ACTIVE_TASK` explicitly says so and the user has
+  approved it.
+- Do not start horizon warming unless `ACTIVE_TASK` explicitly says so and the
+  user has approved it.
+- Do not merge Stage B unless Sol review says it is approved.
+- Do not weaken validation, provenance, recall, regret, failure-recall,
+  release, or publication gates.
+- Do not use diagnostic replay as release evidence.
+
+### Copy-paste prompts
+
+Sol planning:
+
+```text
+Plan the next task from ACTIVE_GOAL. Update TASKS.md and AGENT_NOTES.md. Stop.
+```
+
+Luna implementation:
+
+```text
+Perform ACTIVE_TASK only. Update AGENT_NOTES.md. Stop for Sol review.
+```
+
+Sol review:
+
+```text
+Review the current work. Write REVIEW_STATUS in AGENT_NOTES.md. Stop.
+```
+
+Luna fix after `FIX_REQUIRED`:
+
+```text
+Perform only the FIX_REQUIRED work from Sol review. Update AGENT_NOTES.md. Stop for Sol review.
+```
+
 ## Escalation
 
 Luna High must stop and escalate to Sol High if:
