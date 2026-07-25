@@ -1,0 +1,433 @@
+{
+  "authorizes": "nothing: a read-only boundary record for Sol review. It grants no execution, outcome-inspection, commit, merge, release, publication or deployment authority.",
+  "git": {
+    "branch": "main",
+    "head": "b99e9e7e41ca7919dd5058ee66508d9548f475ff"
+  },
+  "goal_position": {
+    "note": "no campaign outcome, report value or performance metric is restated in this record",
+    "statement": "Per the priority authority, synchronous closure latency remains unresolved and the asynchronous path remains the supported product path."
+  },
+  "immutable_release_candidates": [
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "run_scenario.py",
+      "provenance": "LUNA-PERF-03/12/14/19 (Sol-reviewed)",
+      "role": "product simulation runtime",
+      "sha256": "04cfed5f5b0f922898e4f387fde51a3c1b08edbd36e79ff49f82d7ff20334303"
+    },
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "run_monthly_closure_search.py",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "monthly closure-search entrypoint",
+      "sha256": "74a123f4e3d65faecb191a6925d51a180a602a24e92d743e1ed55099e691f821"
+    },
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "run_monthly_proxy_validation.py",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "monthly proxy-validation entrypoint",
+      "sha256": "997fe79b8b6b6cc03cc498b8d783326c36b4dbb3c9a406083c4fca793457111e"
+    },
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "traffic_sim/simulation/monthly_proxy.py",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "monthly proxy library",
+      "sha256": "495df1aeed262183bb878605a4811a24d702f67b23bde81a659778d3b3a0af82"
+    },
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "traffic_sim/simulation/monthly_search.py",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "monthly search library",
+      "sha256": "2ae5c7a89c934f216f1db8023d0c696eb9f58e05734a15989581593e63730bf0"
+    },
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "traffic_sim/simulation/proxy_validation.py",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "proxy validation library",
+      "sha256": "f3dd836a116f74f0a9e5f3e75848f0fed64c88d0c85242cbc2b7e521765bbfc7"
+    },
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "tools/benchmark_speed.py",
+      "provenance": "LUNA-PERF-04/06/10/12/15 (Sol-reviewed)",
+      "role": "verification harness (not product runtime)",
+      "sha256": "0c7401bee9be3adfc5f6369d550a32ec2406744bec95bdc885bb1bb8df216c1c"
+    },
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "tools/benchmark_online_latency.py",
+      "provenance": "LUNA-PERF-01/02 (Sol-reviewed)",
+      "role": "verification harness (not product runtime)",
+      "sha256": "feb4d5c5a3109bdbe75b16c3277e24ef3bdefe45aa6d888b134f6693f3c5c810"
+    },
+    {
+      "classification": "production_or_verification_source",
+      "disposition": "include_in_release_candidate",
+      "path": "tools/benchmark_persistent_sumo.py",
+      "provenance": "LUNA-PERF-19/21 (Sol-reviewed)",
+      "role": "verification harness (not product runtime)",
+      "sha256": "31582b4543145db9bf476a446b1808b87cee488385f7a320066ae6ac9a0b0870"
+    },
+    {
+      "classification": "test",
+      "disposition": "include_in_release_candidate",
+      "path": "tests/test_scenario.py",
+      "provenance": "LUNA-PERF-14/19",
+      "role": "covers run_scenario.py",
+      "sha256": "54440971345de7ddf1bbf7c3f2a8e48d725982ef4a952d4a6d345369b38ce227"
+    },
+    {
+      "classification": "test",
+      "disposition": "include_in_release_candidate",
+      "path": "tests/test_scenario_timing.py",
+      "provenance": "LUNA-PERF-03/12/14",
+      "role": "covers run_scenario.py timing seam",
+      "sha256": "41560530c19aca43675c3f4ba0aa6e2a35539d6b5812e149d4614c0e91666b60"
+    },
+    {
+      "classification": "test",
+      "disposition": "include_in_release_candidate",
+      "path": "tests/test_benchmark_speed.py",
+      "provenance": "LUNA-PERF-04/06/10/12/15 (Sol-reviewed)",
+      "role": "covers tools/benchmark_speed.py",
+      "sha256": "a30cab7281de9b15ea7a547f4c6af0ac795c57edc26efab11c618d410edf10f8"
+    },
+    {
+      "classification": "test",
+      "disposition": "include_in_release_candidate",
+      "path": "tests/test_benchmark_online_latency.py",
+      "provenance": "LUNA-PERF-01/02 (Sol-reviewed)",
+      "role": "covers tools/benchmark_online_latency.py",
+      "sha256": "6d90fc5668adb2a75a1628cd00eef6ca6e63945ba889e0e62df2d6305b5b883d"
+    },
+    {
+      "classification": "test",
+      "disposition": "include_in_release_candidate",
+      "path": "tests/test_benchmark_persistent_sumo.py",
+      "provenance": "LUNA-PERF-19/21 (Sol-reviewed)",
+      "role": "covers tools/benchmark_persistent_sumo.py",
+      "sha256": "b0519f43cbf979fe58c590ee87e3befe38c7a913dc8160265b0d5d9b6e83a6d4"
+    },
+    {
+      "classification": "test",
+      "disposition": "include_in_release_candidate",
+      "path": "tests/test_monthly_search.py",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "covers monthly_search.py, monthly_proxy.py and the closure-search entrypoint",
+      "sha256": "8c4c4e909c2d49e29d3d848c10695deca4871b705062b8e6b03830ae2af713a7"
+    },
+    {
+      "classification": "test",
+      "disposition": "include_in_release_candidate",
+      "path": "tests/test_proxy_validation.py",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "covers proxy_validation.py, monthly_proxy.py and the proxy entrypoint",
+      "sha256": "3e806e25b90fdc50166c758318dd22fccdbe60cdb931435f144bcf0e3a73eb87"
+    },
+    {
+      "classification": "test",
+      "disposition": "include_in_release_candidate",
+      "path": "tests/test_heldout_v4_freeze.py",
+      "provenance": "LUNA-V4-02",
+      "role": "covers the v4 held-out freeze contracts",
+      "sha256": "19f655cc043c41f0d95428561e86016dc54de5ac3e0f506cc38a1cac49ccc108"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/online_latency_benchmark_v1.json",
+      "provenance": "LUNA-PERF-01",
+      "role": "online latency benchmark contract",
+      "sha256": "035d249454172cf244e480852b8668b3b857fe5ca80538bce9bde2bdc9e59578"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/scenario_phase_profile_campaign_v1.json",
+      "provenance": "LUNA-PERF-04",
+      "role": "phase-profile campaign identity",
+      "sha256": "79f9e7e66ba4553a48e34241f56c58ab8cbb1adbb97b75c4fe7344730135362a"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/scenario_phase_profile_campaign_v2.json",
+      "provenance": "LUNA-PERF-06",
+      "role": "phase-profile campaign identity",
+      "sha256": "95ec7b72eb5d85628b7375d7d64f16de51c9b4dd2a517b907ad1dc0289328923"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/scenario_phase_profile_campaign_v3.json",
+      "provenance": "LUNA-PERF-08",
+      "role": "phase-profile campaign identity",
+      "sha256": "a9cf630cae5365ef354878d3f55f1cf28d899c7e44d44a61600c385bc29fd25e"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/scenario_phase_profile_campaign_v4.json",
+      "provenance": "LUNA-PERF-10",
+      "role": "phase-profile campaign identity",
+      "sha256": "c3aaa27e4c3ff88211122fffe146c9dae1ff21152398eee4fb0df602dec5f3cd"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/scenario_phase_profile_campaign_v5.json",
+      "provenance": "LUNA-PERF-12",
+      "role": "phase-profile campaign identity",
+      "sha256": "0bc1a0a494dc0cd071354b43d8e2aaabbddde58992ef9c575206ff84ddd4d769"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/scenario_phase_profile_campaign_v6.json",
+      "provenance": "LUNA-PERF-15",
+      "role": "phase-profile campaign identity",
+      "sha256": "1c006119cc001f4167fe836f1cd2f899b84ba07c1ea361cbdcda1147bc9af880"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/persistent_sumo_campaign_v1.json",
+      "provenance": "LUNA-PERF-19",
+      "role": "retired identity retained as lineage",
+      "sha256": "3dff8444bbfe2c8b213463263eeda4df1d40b2e26a692dcd09bfa18b0f0bc587"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/persistent_sumo_campaign_v2.json",
+      "provenance": "LUNA-PERF-21",
+      "role": "current canonical identity",
+      "sha256": "017aa8d010e45c439a81c16e71d54824a6c7c320696d266f1a089977cfe0deb5"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/heldout_v4_selection.json",
+      "provenance": "LUNA-V4-02",
+      "role": "held-out v4 selection",
+      "sha256": "591dabdd90d3c03ed14b0a03e63eb0af3ece80449ab73dbe86e5204f9dcfa035"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/monthly_proxy_policy_v4.json",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "monthly proxy policy v4",
+      "sha256": "ac085efc30d765b2897f37db20dafb6ea7ad52b0ea43f048021e7954a6ebae5d"
+    },
+    {
+      "classification": "static_contract",
+      "disposition": "include_in_release_candidate",
+      "path": "validation/monthly_proxy_manifest_v4.json",
+      "provenance": "LUNA-V4-01/02 (Sol-reviewed)",
+      "role": "monthly proxy manifest v4",
+      "sha256": "7e4469401ed026b225ff8761ba3e6f5afbf2c5012528a17397c8c57635b6a488"
+    }
+  ],
+  "kind": "release_candidate_boundary",
+  "mutable_workflow_documents": [
+    {
+      "classification": "workflow_document",
+      "disposition": "review_by_scoped_diff_not_hash",
+      "hash_omitted_reason": "every workflow transition rewrites this file, so any recorded hash is stale on write; verify by scoped diff and marker/field checks instead",
+      "path": "AGENTS.md",
+      "role": "Sol/Luna protocol"
+    },
+    {
+      "classification": "workflow_document",
+      "disposition": "review_by_scoped_diff_not_hash",
+      "hash_omitted_reason": "every workflow transition rewrites this file, so any recorded hash is stale on write; verify by scoped diff and marker/field checks instead",
+      "path": "TASKS.md",
+      "role": "workflow control block and task contract"
+    },
+    {
+      "classification": "workflow_document",
+      "disposition": "review_by_scoped_diff_not_hash",
+      "hash_omitted_reason": "every workflow transition rewrites this file, so any recorded hash is stale on write; verify by scoped diff and marker/field checks instead",
+      "path": "AGENT_NOTES.md",
+      "role": "current handoff and dated evidence ledger"
+    },
+    {
+      "classification": "workflow_document",
+      "disposition": "review_by_scoped_diff_not_hash",
+      "hash_omitted_reason": "every workflow transition rewrites this file, so any recorded hash is stale on write; verify by scoped diff and marker/field checks instead",
+      "path": "IMPROVEMENT_PLAN.md",
+      "role": "priority authority incl. Phase 7 conclusion"
+    }
+  ],
+  "opaque_exclusion_patterns": {
+    "patterns": [
+      "validation/scenario_phase_profile_report_*.json",
+      "validation/*_outcome/",
+      "validation/online_latency_baseline_v1/",
+      "runs/",
+      "sumo/",
+      "scenario staging"
+    ],
+    "rule": "excluded from any release candidate. Never opened, hashed, stat-ed, enumerated, counted or summarized. This record deliberately contains no member list, member count, existence assertion, attribution or derived fact for any pattern."
+  },
+  "recommended_next_task": {
+    "authority_boundary": "branch commits only. NOT authorized: push, tag, release activation, Stage-B merge, deployment, publication, demand or horizon warming, SUMO execution, or any outcome inspection.",
+    "gitignore_requirement": "add rules covering every opaque exclusion pattern above so campaign/runtime material can never be staged",
+    "immutable_hash_rule": "each of the 29 immutable files must still match its sha256 in this record at staging time; a mismatch stops the integration for re-review rather than being re-hashed silently",
+    "mutable_file_rule": "the four workflow documents are verified by scoped diff and marker/field checks at staging time, never against a stale hash, because transitions rewrite them",
+    "proposed_allowed_files": [
+      ".gitignore",
+      "TASKS.md",
+      "AGENT_NOTES.md"
+    ],
+    "proposed_checks": [
+      "git status --short shows only intended paths staged",
+      "re-verify the 29 immutable sha256 values against this record",
+      "confirm no path matching an opaque exclusion pattern is staged",
+      "scoped marker/field check on the four workflow documents"
+    ],
+    "proposed_scope": "Stage and commit ONLY the 29 hash-bound immutable candidates above, the four reviewed mutable workflow documents, and a new .gitignore, in coherent per-concern commits on a branch.",
+    "proposed_task_id": "LUNA-REL-02",
+    "proposed_title": "Integrate the bounded release candidate on a branch"
+  },
+  "record_id": "release_candidate_boundary_v2",
+  "recorded_direction": {
+    "grants": "authority to discard v1 and build this opaque-only record only; NO campaign-report or outcome inspection is approved",
+    "message_verbatim_json_escaped": "\"I direct Sol to discard the LUNA-REL-01 boundary evidence and create a fresh opaque-only revision. Do not open, hash, count, or inspect campaign reports\\n    > or outcome directories. No outcome inspection is approved\"",
+    "recorder": "Sol High / 2026-07-25",
+    "user_message_date": "2026-07-25"
+  },
+  "revision": 2,
+  "schema_version": 2,
+  "self_reference": {
+    "path": "validation/release_candidate_boundary_v2.json",
+    "sha256_omitted_reason": "a record cannot contain its own hash"
+  },
+  "supersedes": "release_candidate_boundary_v1 (discarded unread under the recorded direction; none of its content was reused)",
+  "task": "LUNA-REL-01",
+  "verification": {
+    "checks": [
+      {
+        "command": "PYTHONPATH=/private/tmp/claude-501/-Users-gt-Documents-gs-project/52520b25-363f-446f-991d-524c7f6c630e/scratchpad/guard python3 -c \"import sys\nfor probe in ('sumo/net.net.xml', 'web/data/scenarios_staging/x.json'):\n    try:\n        open(probe, 'rb'); print('FAIL-ALLOWED', probe); sys.exit(1)\n    except PermissionError: print('BLOCKED', probe)\n    except FileNotFoundError: print('FAIL-FILESYSTEM', probe); sys.exit(1)\nprint('SELF_TEST_PASS')\"",
+        "id": "hook_self_test",
+        "returncode": 0,
+        "stdout_tail": [
+          "BLOCKED sumo/net.net.xml",
+          "BLOCKED web/data/scenarios_staging/x.json",
+          "SELF_TEST_PASS"
+        ]
+      },
+      {
+        "command": "cd /Users/gt/Documents/gs-project && PYTHONPATH=/private/tmp/claude-501/-Users-gt-Documents-gs-project/52520b25-363f-446f-991d-524c7f6c630e/scratchpad/guard:/Users/gt/Documents/gs-project python3 -c \"from tools import benchmark_persistent_sumo as h\ntry:\n    h.file_fingerprints(); print('FAIL-ALLOWED')\nexcept PermissionError: print('CONTROL_PASS_BLOCKED')\"",
+        "id": "negative_control_fingerprints",
+        "returncode": 0,
+        "stdout_tail": [
+          "CONTROL_PASS_BLOCKED"
+        ]
+      },
+      {
+        "command": "cd /Users/gt/Documents/gs-project && MPLCONFIGDIR=/tmp/gs-mpl PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/claude-501/-Users-gt-Documents-gs-project/52520b25-363f-446f-991d-524c7f6c630e/scratchpad/guard python3 -m pytest -q tests/test_scenario.py tests/test_scenario_timing.py tests/test_benchmark_online_latency.py tests/test_monthly_search.py tests/test_proxy_validation.py tests/test_heldout_v4_freeze.py",
+        "id": "focused_suite",
+        "returncode": 0,
+        "stdout_tail": [
+          "........................................................................ [ 85%]",
+          ".....................................                                    [100%]",
+          "253 passed in 1.79s"
+        ]
+      },
+      {
+        "command": "cd /Users/gt/Documents/gs-project && PYTHONPATH=/private/tmp/claude-501/-Users-gt-Documents-gs-project/52520b25-363f-446f-991d-524c7f6c630e/scratchpad/guard:/Users/gt/Documents/gs-project MPLCONFIGDIR=/tmp/gs-mpl python3 -c \"from tools import benchmark_speed as bs\na = bs.canonical_digest({'b': 2, 'a': [1, {'z': 1, 'y': 2}], 'generated_at': 'X', 'path': '/p'})\nb = bs.canonical_digest({'a': [1, {'y': 2, 'z': 1}], 'b': 2, 'generated_at': 'Y', 'path': '/q'})\nc = bs.canonical_digest({'a': [1, {'y': 2, 'z': 1}], 'b': 3})\nassert a == b, 'key order and volatile fields must not change the digest'\nassert a != c, 'a real value change must change the digest'\nassert len(a) == 64 and all(ch in '0123456789abcdef' for ch in a)\nprint('PURE_DIGEST_PASS')\"",
+        "id": "pure_canonical_digest",
+        "returncode": 0,
+        "stdout_tail": [
+          "PURE_DIGEST_PASS"
+        ]
+      },
+      {
+        "command": "cd /Users/gt/Documents/gs-project && MPLCONFIGDIR=/tmp/gs-mpl PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/private/tmp/claude-501/-Users-gt-Documents-gs-project/52520b25-363f-446f-991d-524c7f6c630e/scratchpad/guard python3 -m pytest -q tests/test_benchmark_persistent_sumo.py::test_faster_identical_healthy_passes",
+        "id": "pure_gate_evaluation",
+        "returncode": 0,
+        "stdout_tail": [
+          ".                                                                        [100%]",
+          "1 passed in 0.07s"
+        ]
+      }
+    ],
+    "checks_note": "each 'command' below is the exact string that was executed, recorded from the same file the runner consumed; there are no placeholders or ellipses",
+    "deny_hook": {
+      "covers_all_six_exclusion_patterns": true,
+      "forbidden_substrings": [
+        "/sumo/",
+        "/runs/",
+        "_outcome/",
+        "online_latency_baseline_v1/",
+        "scenario_phase_profile_report_",
+        "/scenarios_staging/"
+      ],
+      "hook_sha256": "bf45f028231fefeb947957552dc71fa08b0df8ef930c1bf24548d7f2b5d63db2",
+      "hook_source": "\"\"\"LUNA-REL-01 rev2 deny hook: block any read inside a forbidden pattern.\"\"\"\nimport os\nimport sys\n\nFORBIDDEN = (\"/sumo/\", \"/runs/\", \"_outcome/\",\n             \"online_latency_baseline_v1/\", \"scenario_phase_profile_report_\",\n             \"/scenarios_staging/\")\n\n\ndef _hook(event, args):\n    if event == \"open\" and args:\n        try:\n            path = os.fspath(args[0])\n        except TypeError:\n            return\n        if isinstance(path, bytes):\n            path = path.decode(\"utf-8\", \"replace\")\n        ap = os.path.abspath(str(path))\n        for pat in FORBIDDEN:\n            if pat in ap:\n                raise PermissionError(f\"BLOCKED forbidden-pattern access: {ap}\")\n\n\nsys.addaudithook(_hook)\n",
+      "installed_as": "sitecustomize.py on PYTHONPATH, so it loads at interpreter start before any module or test import",
+      "mechanism": "sys.addaudithook on the 'open' audit event; any path whose absolute form contains a forbidden substring raises PermissionError BEFORE the read occurs",
+      "purpose": "enforce, not assert, that no forbidden pattern is read during any check in this task"
+    },
+    "not_run": [
+      {
+        "path": "tests/test_benchmark_speed.py (full module)",
+        "reason": "its fingerprint helper reads under the forbidden 'sumo/' pattern",
+        "status": "NOT_RUN"
+      },
+      {
+        "path": "tests/test_benchmark_persistent_sumo.py (full module)",
+        "reason": "its environment-identity path reads under the forbidden 'sumo/' pattern",
+        "status": "NOT_RUN"
+      }
+    ],
+    "source_coverage": {
+      "coverage_map": {
+        "focused_suite": [
+          "run_scenario.py",
+          "run_monthly_closure_search.py",
+          "run_monthly_proxy_validation.py",
+          "traffic_sim/simulation/monthly_proxy.py",
+          "traffic_sim/simulation/monthly_search.py",
+          "traffic_sim/simulation/proxy_validation.py",
+          "tools/benchmark_online_latency.py"
+        ],
+        "pure_canonical_digest": [
+          "tools/benchmark_speed.py"
+        ],
+        "pure_gate_evaluation": [
+          "tools/benchmark_persistent_sumo.py"
+        ]
+      },
+      "scope_note": "all nine allowlisted source paths have at least one check that ran to completion under the deny hook. The two harness paths are covered by targeted PURE checks, not by their full modules: their fingerprint/environment-identity paths were deliberately never exercised because they read build state under a forbidden pattern. This is focused verification only, not a full-suite or release verification claim.",
+      "status": "complete",
+      "unverified_this_task": [],
+      "verified_this_task": [
+        "run_scenario.py",
+        "run_monthly_closure_search.py",
+        "run_monthly_proxy_validation.py",
+        "traffic_sim/simulation/monthly_proxy.py",
+        "traffic_sim/simulation/monthly_search.py",
+        "traffic_sim/simulation/proxy_validation.py",
+        "tools/benchmark_online_latency.py",
+        "tools/benchmark_speed.py",
+        "tools/benchmark_persistent_sumo.py"
+      ]
+    }
+  }
+}

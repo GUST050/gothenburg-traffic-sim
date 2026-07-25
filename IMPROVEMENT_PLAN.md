@@ -838,11 +838,15 @@ Ranked levers (largest first, all result-neutral by construction):
    parameter/date changes.
 4. serve.py recalibration inherits (1): ~6 min → ~4–4.5 min cache-hit.
 
-Measured and REJECTED as not worth it: `--seed-workers >1` for
-run_scenario (whole stage is 14 s; flag exists for multi-day),
-vehroute/JSON parsing optimizations (0.6 s), further meso flags
-(--no-step-log/--no-warnings already set).  FORBIDDEN by the
-results-must-not-change constraint: numba fastmath, micro `--threads`
+Measured and REJECTED as not worth it: vehroute/JSON parsing optimizations
+(0.6 s), further meso flags (--no-step-log/--no-warnings already set).
+`--seed-workers >1` for run_scenario was ALSO listed here as "not worth it"
+on the early single-day numbers; that rationale is SUPERSEDED — the v4–v6
+campaigns measured it as a large, result-preserving speed-up (43.8% baseline,
+40.8% closure) and it was rejected for a different, harder reason: the closure
+whole-window arm still misses the 10-second gate. See "Seed-parallel campaign
+line — measured and closed" in Phase 7 for the final decision.  FORBIDDEN by
+the results-must-not-change constraint: numba fastmath, micro `--threads`
 (nondeterministic ordering), any solver approximation or tolerance
 loosening.  Protocol for every implementation:
 tools/benchmark_speed.py before/after + semantic digest + one golden-case
@@ -2573,12 +2577,44 @@ The performance policy is result preservation first.
 4. Use isolated workspaces and a single process budget for candidate/seed
    batches. Do not overlap PFE workers with SUMO workers.
 5. Promote parallel seed or candidate execution only after repeated measured
-   trials show a material wall-time improvement with identical results.
+   trials show a material wall-time improvement with identical results — AND it
+   clears the user-facing latency contract for the case it targets. Parallel
+   seed execution was measured this way and NOT adopted: see "Seed-parallel
+   campaign line — measured and closed" below.
 6. Keep detailed vehicle, lane, and queue output limited to the selected
    signal study so citywide runs do not produce unnecessary I/O.
 
 Do not reduce seed count, uncertainty variants, solver iterations, closure
 rerouter coverage, or simulation step fidelity as a speed shortcut.
+
+### Seed-parallel campaign line — measured and closed (2026-07-23)
+
+The paired serial/parallel seed-worker campaign line (phase-profile v4–v6,
+`--seed-workers 3` over the frozen baseline and whole-window closure) was
+executed under recorded approval and is now CLOSED. Final reviewed evidence
+from the v6 verification run (three seeds q50/q10/q90, five trials per arm,
+mesoscopic, result-preserving with identical scenario/trajectory digests):
+
+- baseline: p95 wall **5.883 s** at three workers, a **43.8%** improvement over
+  the serial arm — comfortably under the 10 s validated-completion gate.
+- closure whole-window: p95 wall **10.4234 s** at three workers, a **40.8%**
+  improvement — but it **misses the 10 s gate by 0.4234 s**.
+
+Three consecutive campaigns (v4, v5, v6) all landed the closure whole-window
+parallel arm just over the ceiling; the case is dominated by `sumo_execution`,
+which seed-parallelism at three workers does not shrink enough. The result is
+faster and result-preserving but does not satisfy the latency promise for the
+one case it needed to.
+
+DECISION: seed parallelism is **not adopted** as a production default, **not
+retried**, and **not mechanically refrozen as a v7**. The production
+seed-worker default is unchanged, the phase-profile campaign harness has no
+current executable campaign (`CURRENT_CAMPAIGN_ID = None`; v1–v6 all retired),
+and the honest product path for a closure query that cannot finish inside the
+budget is the ALREADY-IMPLEMENTED asynchronous `/api/close` start/poll/cancel
+workflow (serve.py + web/app.js) — no new async work is created or claimed
+here. A materially different architecture, not a fourth seed-parallel campaign,
+is the only path that would reopen this.
 
 One measured performance boundary to respect (2026-07-14): the dominant demand
 cost is the deliberately sequential per-edge IPF update, already
@@ -2592,6 +2628,446 @@ scheduling, and I/O discipline, not touching the solver.
   case AND an identical semantic hash (or a documented, reviewed reason
   the results changed).
 - No cache is keyed on anything less than the full build fingerprint.
+
+### Architecture boundary for closure latency — static study (2026-07-24)
+
+Static, non-SUMO boundary discovery after the v4–v6 seed-parallel line closed.
+No SUMO/libsumo/TraCI was invoked, no outcome or state snapshot was inspected,
+and nothing here is a measurement: every number is either a source fact or an
+ESTIMATE derived only from the reviewed PERF-16/17 summaries.
+
+**1. The supported new-closure control path (source symbols, not inference).**
+`serve.py::_run_close()` writes a `ScenarioSpec` under `SPEC_DIR`, then shells
+`run_scenario.py --scenario-spec` (or `--closure` JSON per window, or legacy
+`--close`) through `run_in_new_session(..., timeout=600)`. It never blocks the
+HTTP request: `_close_state` under `_close_lock` drives `GET /api/close/status`
+(`idle|running|done|error|cancelled`) and `POST /api/cancel?kind=close` stops
+the job by process group. `runs/jobs/<id>.json` records each job and, at
+startup, `simulation_recovery_block()` marks a surviving pgid
+`orphaned_running` (cancellable) or a dead one `orphaned` — that is **orphan
+detection, visibility and cancellation, NOT resumption**: an interrupted close
+job is never continued, only reported and stopped. `run_scenario.main()` then
+runs the frozen `PHASE_NAMES` sequence:
+
+| phase | source | work |
+|---|---|---|
+| `input_validation` | `main()` | spec/window/demand validation |
+| `job_preparation` | `main()` | window, variant and seed resolution (`demand_variants`, `variant_path`) |
+| `closure_preparation` | `main()` | `edges_near(close_edges, REROUTER_RADIUS_M=400)` → `write_closure_additional()` (`<rerouter>`/`closingReroute` per `grouped_closure_intervals`), `build_edge_graph(set(close_edges))`, `edge_freeflow_times()`, then `prepare_closure_variants(prep_jobs)` → serial `prepare_variant_job` → `truncate_stranded_vehicles` per demand variant |
+| `job_preparation` | `main()` | per-seed `scratch_dir/seed-<seed>` isolation + `write_edgedata_additional` |
+| `sumo_execution` | `run_seed_job` → `run_sumo` | one SUMO **subprocess per seed** (`--seed <seed>`, `--mesosim true`, private `work_dir`) |
+| `aggregation_validation` | `parse_edgedata`, `aggregate_flows`, `closure_integrity_status` | flows, Monte-Carlo confidence, integrity/health gates |
+| `trajectory_publication` | `publish_trajectories_from_vehroute` | trajectory product |
+| `scenario_publication` | `atomic_write_json` | `web/data/scenarios/<name>.json` + `index.json` manifest entry |
+| `cleanup` | `cleanup_scenario_workspace` | scratch removal, only after successful publication |
+
+Artifact lifecycle. **Staged/mutable** — everything under
+`create_scenario_workspace()` (`runs/<run-id>/scratch` or a private temp dir):
+`closure_<name>.add.xml`, the filtered `<stem>_<name>.rou.xml` variants,
+per-seed dirs, edgedata additionals, vehroute XML. **Published/durable**, and
+these carry DIFFERENT fields — the scenario JSON and its `index.json` entry
+carry `scenario_spec`, `closures`, `closure_integrity`, `demand_signature`,
+`build_id`, `demand_build_key`; the trajectory JSON carries only
+`n_vehicles`, `n_unfinished`, `inserted_in_run`, `sampling`,
+`displayed_share`, `edges`, `vehicles`, i.e. no ScenarioSpec/build/closure
+identity of its own. **Reusable/immutable inputs** — `sumo/net.net.xml`, the
+calibrated q50/q10/q90 route variants, `sumo/demand_meta.json`.
+
+**2. Identity/key matrix, by layer.** No single existing structure covers the
+whole thing; reuse must be keyed at the layer it actually applies to.
+
+| layer | required key | what exists today |
+|---|---|---|
+| network-derived indices | `net_sha256`, `schema_version` | `metadata.load_metadata()` refuses a stale `sumo/network_metadata.json` |
+| simulator state snapshot | demand build id, network build id, demand variant, seed, simulation mode, warmup end, input + source fingerprints, git commit, Python/SUMO version, platform, `save_state_rng`, `save_state_precision` | `WarmStateIdentity` encodes exactly these **and only these** — it does not carry ScenarioSpec/closure intervals, output configuration, validation rules or publication identity |
+| closure-input preparation | closed edge set, closure intervals, demand variant content, network build | no cache exists |
+| whole-query result | everything above **plus** output configuration, validation rules and publication identity (scenario name, manifest entry) | no cache exists |
+
+Missing identity must invalidate reuse, never silently widen a key.
+
+**3–4. Candidate classes.**
+
+*A. Exact-query result reuse.* **Not implemented today.** The manifest is not
+consulted before a run: `index_for_current_demand()` is called once, inside
+`scenario_publication`, purely to drop entries from a different demand
+calibration before writing `index.json`; neither `/api/close` nor
+`run_scenario.main()` performs a pre-run lookup. Removable phase: on a hit, the
+ENTIRE `PHASE_NAMES` pipeline (input validation through publication). Remaining floor:
+a manifest read plus the HTTP response. But a
+correct key must include the full whole-query layer above, so a genuinely NEW
+closure can never hit — it answers repeats only. Concurrency/restart: a lookup
+is a read of the published manifest, so it adds no concurrency of its own, but
+it must not observe a half-published run — `scenario_publication` writes the
+scenario JSON and `index.json` with `atomic_write_json`, and a lookup would
+have to treat an entry as valid only once both writes have landed; a server
+restart loses nothing because the manifest is on disk. Invalidation: any
+demand, network, source, SUMO or output-configuration change. Provenance: a
+served result must carry the original run's identity, never be re-attributed to
+the new request. Deterministic-output risk: serving a stored result is exact by
+construction (no simulation re-runs), so the risk is not numerical drift but
+MIS-ATTRIBUTION — a key any coarser than the whole-query layer would return a
+different query's bytes, which is why the key cannot be narrowed to make it hit
+more often. **Rejected as a new-query speed-up** (it would serve the
+already-fast cached-render case, not validated completion of a new closure).
+
+*B. Fully keyed closure-input preparation reuse.* Removable phase:
+`closure_preparation`, ≈1.15–1.25 s (ESTIMATE from the reviewed summaries).
+Its network-only component is **already cached** —
+`edge_freeflow_times()` and `build_edge_graph()` both take the
+`load_metadata(NET_PATH, sumo/network_metadata.json)` fast path. What remains
+is `truncate_stranded_vehicles` per demand variant, keyed on closed edges +
+closure intervals + variant content, so a new closure cannot hit and a repeat
+degenerates to class A. Remaining floor: `sumo_execution`. Concurrency/restart:
+pure per-variant work writing distinct staged files (`prepare_variant_job`
+returns counts only), so it parallelises safely in principle; but a cache would
+move those files OUT of `create_scenario_workspace()`, which today guarantees
+`cleanup_scenario_workspace()` removes them only after successful publication —
+a restart mid-write would leave a cached artifact no run tree owns, so the
+cache would need its own atomic publish and staleness sweep. Invalidation:
+variant content, network build, or any change to `truncate_stranded_vehicles`
+itself (its filtering rules are part of the key, not just its inputs).
+Provenance: filtered routes are staged inputs, never published. Deterministic-
+output risk: `truncate_stranded_vehicles` is deterministic given
+(routes, closed edges, adjacency, free-flow times), so a correctly keyed hit
+reproduces the same bytes; the risk is a key that omits one of those inputs —
+notably the closure INTERVALS, since the same edge closed over a different
+window yields different truncation. **Rejected**: no new-query benefit remains.
+
+*C1. Persistent EXTERNAL sumo controlled over TraCI.* A long-lived `sumo`
+process driven by the TraCI socket protocol. Removable phase: **only per-seed
+process spawn and teardown**, NOT network load. Official SUMO docs are explicit
+that TraCI `simulation.load` reloads the simulation *with command-line options*
+— it re-reads the net and additionals for a new scenario; the distinct
+`loadState` operation is the one that retains the network/additional objects,
+and that is class D, not this. A new closure changes the rerouter additional and
+the truncated routes, so it needs a full `load` and re-parses the network anyway.
+Remaining floor: the simulated 24 h itself with the closure active PLUS the
+network reload on every new query. IPC is NOT a per-simulated-second cost: SUMO
+documents `simulationStep(t)` as advancing to a target time in a single call,
+so a batch closure using SUMO's own `<rerouter>`/`closingReroute` runs to the
+end with a small constant number of socket round-trips, not one per second — the
+earlier "per-step IPC net cost" claim was wrong and is withdrawn.
+Concurrency/restart — a genuinely NEW ownership boundary, not the current one.
+Today each request is a short-lived `run_scenario.py` process group that
+serve.py reaps with `killpg`; a SUMO process that must survive to serve the NEXT
+request cannot be owned by that exiting group. A persistent pool therefore needs
+its own longer-lived supervisor (serve.py itself, or a dedicated pool manager)
+with an explicitly different model: (i) LIFECYCLE — the pool is spawned at
+server start or lazily on first close and retired wholesale on any net/demand/
+SUMO-version/configuration change; (ii) CANCELLATION — a per-request cancel must
+abort the in-flight `load`/`simulationStep` on the borrowed member and return or
+discard THAT member, not `killpg` the pool, so serve.py's current per-request
+pgid cancellation no longer covers it and must be extended; (iii) CRASH/ORPHAN —
+a member that crashes or hangs mid-query is discarded (never reused), and pool
+members orphaned by a server crash must be detectable and reapable the way
+`runs/jobs/<id>.json` makes subprocess jobs recoverable today; (iv) COLD
+FALLBACK — a query that cannot get a healthy member falls back to the current
+fresh-subprocess path rather than blocking. None of this exists yet; it is part
+of what any adoption after the experiment would have to build and have reviewed. Invalidation: net, demand, SUMO version or
+configuration change must retire the process. Provenance: `source_fingerprints`
+and the phase profile currently describe a fresh process per seed; a reused
+process must bind and re-verify that identity per query. Deterministic-output
+risk: LOW here — a per-query `simulation.load` re-reads command-line options
+including `--seed`, so each query is re-seeded exactly as a fresh process would
+be; the risk reduces to proving no simulation state leaks across a `load`, which
+is what the paired digest check below verifies.
+
+*C2. In-process libsumo.* Removable phase: per-seed process spawn and teardown
+plus TraCI socket setup — but, as in C1, NOT network load (only
+`loadState`/class D retains it). Process boundary, corrected: libsumo would run
+inside `run_scenario.py`, which `serve.py::_run_close` already launches as a
+job CHILD via `run_in_new_session`; a libsumo crash therefore takes down that
+job child, not `serve.py`, and the existing job-gate/orphan-recovery machinery
+still applies. Concurrency/restart: SUMO documents that concurrent libsumo
+instances require Python `multiprocessing` (one interpreter cannot host
+concurrent simulations), so keeping the parallel-seed capability is a design
+obligation — one worker process per concurrent seed, which also RESTORES the
+per-seed cwd isolation `run_sumo` needs for relative edgeData paths — not a
+capability proved impossible; a crashed worker is discarded and respawned.
+Remaining floor: the same simulated 24 h plus per-query network reload.
+Invalidation: as C1. Provenance: as C1, and each worker must bind and
+re-verify identity per query. Deterministic-output risk: with per-query
+`load` re-applying `--seed` the RNG hazard is the same LOW one as C1; the
+in-process specifics to prove are that no module-level state leaks between a
+worker's successive queries and that each worker keeps its own cwd, both
+verifiable by the paired digest check.
+
+*D. Per-seed/variant save-load checkpoint replay before the earliest closure.*
+Machinery exists and is keyed: `save_state_arguments()` /
+`load_state_arguments()` (`--save-state.rng true`, `--save-state.precision 16`),
+`WarmStateIdentity`, `store_warm_state` / `restore_warm_state`,
+`certify_warm_state_equivalence`, and `run_sumo()`'s `save_state_path` /
+`save_state_time_s` / `load_state_path` — but `main()` never passes them, so the
+`/api/close` path does not use it. Removable phase: simulated time before the
+earliest closure. **Decisive limit for the failing case**: the frozen
+`closure_whole_window` case has `start_offset_s: 0`, so there is nothing before
+the closure to skip and the mechanism removes zero. For time-windowed closures
+(`--closure` JSON with a later `begin`) one warm state per (demand, network,
+seed, variant, warmup_end_s) would serve many different closure edges, which is
+a genuine new-query benefit — for a different case. Remaining floor: simulated
+time from the warm point to the end. Concurrency/restart: per-seed states are
+independent files, so seeds parallelise unchanged; `store_warm_state` ALREADY
+publishes atomically (writes a `.{content_key}.tmp` directory and `os.replace`s
+it into place), so a crash mid-write leaves no half-published entry, and
+`restore_warm_state` already refuses an entry whose identity does not verify —
+the remaining obligation is only that a verification miss falls back to a cold
+t=0 run rather than loading a partial snapshot, which the existing
+`CacheLookup` miss path already does.
+Invalidation: any field of `WarmStateIdentity`. Provenance: the
+published run must record that it resumed from a certified state, not claim a
+cold run. Deterministic-output risks to prove first: RNG continuity across the
+seam, incrementally loaded vehicles at the load boundary, edgeData/vehroute
+output continuity, state precision and SUMO version compatibility, and closure
+timing alignment. Note `CACHE_FIELD_TOLERANCES = {"travel_time_s": 1.0}` is a
+**decision-metric** policy, not an exact-flow equivalence, and must not be
+repurposed as one.
+
+**5. Decision: select ONE bounded, future approval-gated experiment — a
+persistent-process (C1) arm proven result-equivalent to the current subprocess
+arm.** Criterion 5 asks for a candidate that could *plausibly* affect the hard
+ceiling with paired before/after cases and semantic + health equivalence proof.
+Producing the SAME scenario and trajectory as today is exactly what that proof
+checks, so it is the target, not a disqualifier. Ruling the field down:
+
+- **A, B**: remove no work from a NEW closure query (rejected above).
+- **D (save/load checkpoint)**: removes ZERO for the failing case, whose closure
+  is active from `start_offset_s: 0`; it helps only time-windowed closures, a
+  different case.
+- **C2 (in-process libsumo)**: removes the same process-creation cost as C1 plus
+  socket setup, but requires a `multiprocessing` redesign to keep parallel seeds
+  and per-seed cwd isolation, a larger change for a marginal additional saving
+  over C1. Not selected; kept as a fallback only if C1 proves the lever real but
+  socket cost material.
+- **C1 (persistent EXTERNAL sumo over TraCI)**: SELECTED. It keeps SUMO in
+  external processes, so external isolation is retained — but, per the
+  Concurrency/restart clause above, a pool that spans requests is a NEW
+  ownership boundary: serve.py's current per-request `killpg` cannot own it and
+  must be EXTENDED with member-level cancellation and pool orphan-reaping. A
+  per-query `simulation.load` re-applies `--seed`, so determinism is preserved by
+  construction; and its output is identical to the subprocess arm by design, so
+  paired digest/health/integrity equality is directly provable. Its removable
+  work is per-seed process creation only (the net is reloaded on each `load`), an
+  **unmeasured** quantity — NOT assumed small — and whether it reaches the
+  ≈0.42 s p95 gap is precisely what the experiment measures.
+
+**The one bounded experiment (defined here, NOT authorized or executed).**
+
+- *Question*: does a persistent-process closure arm reduce the p95 PARALLEL wall
+  time of the failing case below the 10 s ceiling — and below the current
+  subprocess arm — while producing a semantically identical result?
+- *Proposed files*: a new benchmark harness under `tools/` that drives a fixed
+  pool of three reused, TraCI-controlled `sumo` processes (one per concurrent
+  seed), plus focused tests. No change to
+  `run_scenario.py`, `serve.py`, production defaults or any contract; production
+  keeps the subprocess path until and unless a separate adoption task passes.
+- *Immutable key*: the canonical scheme in the note below.
+- *Arms and query sequence, exact*: two arms — `arm_subprocess` (today's fresh
+  process per seed) and `arm_persistent`, a fixed pool of **three** reused
+  TraCI-driven `sumo` processes, one dedicated member per seed slot (member_0 →
+  seed 1000/q50, member_1 → seed 1001/q10, member_2 → seed 1002/q90), each in its
+  own private `work_dir` so the per-seed cwd isolation `run_sumo` relies on is
+  preserved. Every query runs its three seeds concurrently across the three
+  members, each member serving its seed via `simulation.load` (which re-applies
+  that seed) and never crossing to another seed's slot; a member that faults on
+  any query is retired and, on the cold-fallback path, that seed for that query
+  runs as a fresh subprocess. Because a stale or no-op reload could silently
+  return the PREVIOUS query's result and still "match" a same-query reference,
+  the persistent arm must run a sequence of DISTINCT queries that exercises both
+  transition directions and both scenarios, not five reloads of one closure:
+  `baseline → closure → baseline → closure → …` for ten queries (five
+  `closure_whole_window` on `26842525_26355153_0` 00:00–24:00 interleaved with
+  five `baseline`), all seeds 1000/1001/1002 → q50/q10/q90, meso, same net and
+  demand build. The five closure queries are the latency gate; the interleaved
+  baseline queries are the isolation control.
+- *Equivalence proof (semantic, hard gates, any miss fails the experiment)*: for
+  EACH query in the sequence, that query's `scenario_digest` AND
+  `trajectory_digest` must equal a fresh-subprocess reference of THAT SAME query
+  — so a reload that returns the wrong scenario (baseline digest where a closure
+  is expected, or vice versa) fails immediately. These are the harness's
+  `canonical_digest()` values, i.e. SEMANTIC equality (it strips
+  `generated_at`/`created_at`/`finished_at` and `path`/`source_path`/`workspace`
+  before hashing), not raw byte identity; the claim is exact semantic
+  equivalence, not byte-for-byte files. Every seed-health record must stay 0
+  collisions, 0 teleports, 0 running_at_end, 0 waiting_at_end and
+  loaded == inserted; every closure query must stay `verified_clean`.
+- *Latency gate, frozen numerically*: the statistic is the p95 of the five
+  closure queries' PARALLEL wall time with `seed_workers = 3` (the deployed count,
+  one seed per pool member), never a sum or median of per-seed spawn times.
+  TIMER BOUNDARY, frozen: the measured wall time is per-query and EXCLUDES the
+  one-time pool startup/warm-up — that is amortized across queries and is exactly
+  what the persistent arm exists to remove — but INCLUDES the per-query
+  `simulation.load` (net reload) on every query, since that recurs per closure.
+  The one-time pool bring-up (`pool_warmup_queries = 0` billable warm-up queries;
+  the pool is ready before the timed sequence begins) is measured and reported
+  separately, never folded into the gate. PASS requires BOTH
+  `parallel_p95_wall_s ≤ 10.0` (the hard ceiling) AND
+  `parallel_p95_wall_s < arm_subprocess_p95` by at least
+  `min_p95_improvement_fraction = 0.04` (≈ the 0.42 s / 10.4 s crossing the
+  failing case needs); an identical-or-slower persistent arm is a no-go, not a
+  tie.
+- *Failure cleanup*: on success, failure OR interruption the harness closes every
+  TraCI socket and terminates and reaps all three resident `sumo` members (no
+  orphaned simulator may outlive the run), publishes no scenario, manifest entry
+  or state, preserves its run tree, and spends the attempt. A per-query
+  `timeout_seconds = 600` bounds any single query (matching serve.py's current
+  close timeout); a member that exceeds it is killed and reaped, not left
+  resident.
+- *Approval boundary*: it invokes SUMO, so it requires its own Sol task and fresh
+  exact-key user approval before execution. Nothing here authorizes it, and no
+  key or value is computed or frozen.
+- *Pre-committed reading*: if the closure p95 is ≤ 10.0 s AND ≥ 4% below the
+  subprocess arm with EVERY query semantically identical and healthy, it advances
+  to a separate adoption task (production change and the C1 supervisor model
+  still gated). If every query is semantically identical but the closure p95
+  stays over 10.0 s (or the improvement is below 4%), process-lifecycle
+  amortization is a definitive NO-GO for this case and the line closes for good.
+  Any digest/health/integrity miss on ANY query fails the experiment outright —
+  a faster but different result is never adopted.
+
+**Frozen experiment contract (LUNA-PERF-19, UNEXECUTED / UNAPPROVED).** The C1
+experiment defined above is now built as a fail-closed, non-production harness
+(`tools/benchmark_persistent_sumo.py`) and frozen as
+`validation/persistent_sumo_campaign_v1.json`, experiment id
+`persistent_sumo_v1`, content key
+`72108df6b3ec61de33e5006181d38abc3aba3292bcb8b907643dd9d7f431f588`. It has NOT
+been executed: no SUMO/TraCI ran, no socket opened, no outcome exists, and the
+contract carries no measured value or approval. Importing the harness, validating
+the contract, or running its focused tests never imports TraCI or starts SUMO;
+TraCI is imported lazily only after an explicit `--execute` passes the full
+contract + environment preflight. This freeze is NOT adoption authority and NOT a
+performance claim. The prior seed-parallel PERF-16 key/approval is spent and
+invalid for this experiment. Actually running it — preflight, execution or any
+outcome inspection — requires a SEPARATE Sol task and fresh exact-key user
+approval matching the frozen key above, and a real TraCI driver that is
+deliberately out of this pre-outcome build. Until then the asynchronous
+`/api/close` path remains the product path.
+
+**RESULT (LUNA-PERF-20, 2026-07-24): FAILED EXPERIMENT — C1 REMAINS UNTESTED.**
+The one authorized invocation ran at key `72108df6…` into
+`validation/persistent_sumo_campaign_v1_outcome` (264 files preserved; the
+attempt is spent and must not be rerun). Verdict `eligible_and_passed: false`,
+failed gates `member_fault`, `fallback_used`, `seed_health:{1,3,5,7,9}`,
+`parallel_latency_ceiling`, `p95_improvement_floor`. This is NOT a C1 no-go:
+the persistent arm never existed, so nothing about persistent SUMO was
+measured. Two defects in the never-executed `--execute` path caused it, both
+invisible to the fake-driven suite:
+(1) FATAL — `_TraciConnector._default_spawn` launches `sumo --remote-port <p>
+--num-clients 1` with NO network file, so SUMO exits at once ("Quitting (on
+error)"); all three pool members died during warm-up and all 30 persistent
+seed-runs faulted with "Connection closed by SUMO" and took the cold
+fallback. Reproduced independently with a bare launch. The reported
+`persistent_p95_wall_s` 19.28 s vs `subprocess_p95_wall_s` 11.38 s
+(-69.3%) therefore measures dead-pool retry plus cold-child overhead, NOT
+process reuse, and must never be quoted as a persistent-SUMO measurement.
+(2) `_variant_family` does not recognise the real filtered-route filename
+`calibrated.rou_close_<edge>.rou.xml` (`Path("calibrated.rou.xml").stem`
+keeps `.rou`), so seed health failed on all five closure queries even though
+the telemetry itself was perfect.
+What the run DOES establish, because both arms degenerated to fresh
+subprocesses: the shared production payload/assembly path is sound end to end
+— 10/10 scenario digests and 10/10 trajectory digests identical across arms,
+5/5 closures `verified_clean`, every seed `loaded == inserted` with zero
+teleports/collisions/running/waiting, and no orphaned process after the run.
+The frozen key is spent; retesting C1 needs a repaired harness, a NEW frozen
+identity and fresh exact-key user approval. No adoption, deployment, release
+or publication follows, and `/api/close` remains the product path.
+
+**REPAIRED AND RE-FROZEN (LUNA-PERF-21, 2026-07-24): `persistent_sumo_v2`,
+content key
+`fa07c8b8b356d8cd938f22a9e8b27f2b5fbc98d5deaff963bf12a838ed215e70`,
+UNEXECUTED and UNAPPROVED.** Both proven v1 execute-path defects are fixed
+process-free: (1) a pure `build_bootstrap_args` now starts each pool member as
+`sumo -n <net> --remote-port <port> --num-clients 1` in its own work directory
+and session, so a member can actually reach a TraCI client; the v2 contract
+binds that bootstrap template exactly and refuses a re-keyed mutation of it.
+Every TIMED query still `simulation.load`s the full fresh-subprocess argument
+set — the bootstrap network is scaffolding only and no bootstrap-only option
+ever enters a timed load. (2) `_variant_family` now maps production's real
+filtered-route names (`calibrated.rou_close_<edge>.rou.xml` and the q10/q90
+equivalents), so clean three-seed closure telemetry passes seed health while
+cross-bound or malformed evidence still fails closed. v2 preserves v1's matrix,
+seed/member map, ten-query order, timer boundary, report schema, shared
+production builders and every strict gate, binds the finalized harness plus the
+current `run_scenario.py`/network/demand/route fingerprints, sets
+`outcomes_present_at_freeze:false`, and names v1 as its failed/spent
+predecessor. `persistent_sumo_v1` is RETIRED in the harness and refused before
+any executable boundary; its spent attempt and 264-file outcome tree are
+preserved read-only and may never be rerun. There is still NO measured C1
+result and no adoption authority. Any v2 preflight, execution or outcome
+inspection requires a separate task and fresh exact-key user approval naming
+`fa07c8b8…`. `/api/close` remains the product path.
+
+**RESULT (LUNA-PERF-22, 2026-07-24): C1 IS A DEFINITIVE NO-GO — VALID
+EXPERIMENT, HYPOTHESIS REJECTED.** The repaired campaign ran once at key
+`fa07c8b8…` into `validation/persistent_sumo_campaign_v2_outcome`; the run tree
+is preserved and the attempt is spent and never rerunnable. Unlike the failed
+v1 attempt this run was fully ELIGIBLE, on the preserved report's own evidence:
+`member_faults: 0`, `fallbacks: 0`, `pool_warmup_queries: 0` with a reported
+one-time `pool_warmup_wall_s` of 3.03 s excluded from every query wall, 10/10
+scenario digests and 10/10 trajectory digests equal between the persistent and
+paired fresh-subprocess arms, 5/5 closures `verified_clean`, every seed
+`loaded == inserted` with zero teleports/collisions/running/waiting, the frozen
+alternating query order, and a report envelope matching the contract schema.
+The repaired seed-health path was exercised on production's real
+`calibrated*.rou_close_<edge>.rou.xml` names.
+It failed exactly the two performance gates: `parallel_latency_ceiling` and
+`p95_improvement_floor`. Persistent closure p95 **11.3904355838 s** vs paired
+subprocess p95 **11.0998385168 s** — improvement **-0.0261802968**, i.e.
+process reuse is marginally SLOWER, and both arms sit above the 10.0 s ceiling.
+Baseline queries show the same pattern (persistent 6.10-6.66 s vs subprocess
+6.07-6.35 s).
+INTERPRETATION, per the pre-committed reading "equivalent but slow/insufficient
+improvement is a definitive C1 no-go": persistent SUMO process reuse does NOT
+deliver the required speed-up. What this experiment establishes is narrow and
+exact — ELIMINATING PER-QUERY PROCESS CREATION DID NOT IMPROVE p95. It carries
+NO phase-profile evidence, so it must not be read as showing which remaining
+phase dominates a query; that would need a separate profiling task. C1 is
+CLOSED — do not re-open persistent pooling as a latency lever without a new
+hypothesis. Equivalence is positively demonstrated in the exact sense the gate
+defines: TraCI-driven reuse reproduces artifacts that are equal under the
+frozen CANONICAL SEMANTIC DIGEST, which deliberately excludes volatile
+timestamps (`generated_at`/`created_at`/`finished_at`) and
+path/`source_path`/`workspace` fields. That is semantic equivalence, NOT a
+byte-identity claim. No adoption, production default, API, deployment, release
+or publication follows; `/api/close` remains the product path, and the
+10-second goal must be pursued elsewhere in Phase 7.
+
+**Reusable identity scheme (used by the experiment above; defined, not
+instantiated).** The immutable key is hex
+`sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode())`
+with the contract's own `content_key` removed — identical to
+`campaign_content_key()` in `tools/benchmark_speed.py`, so identity semantics do
+not fork. `payload` must carry every identity-bearing field: schema/experiment
+id and freeze timestamp; `net_sha256` and network build id; demand build id,
+`demand_build_key` and calibrated variant fingerprints; source and harness
+fingerprints; SUMO version and the exact argument template (`--mesosim true`,
+`--meso-junction-control true`, `--meso-junction-control.limited true`, `-n`,
+`-r`, `-a`, `--seed`, `--begin`/`--end`, `--no-step-log`, `--no-warnings`); the
+two-arm, ten-query sequence with its exact `baseline`/`closure` ORDER, and per
+query the seed↔demand-variant mapping
+(`{"1000": "q50", "1001": "q10", "1002": "q90"}`), simulated window and (for
+closure queries) the closed edge `26842525_26355153_0`; the deployed
+`seed_workers = 3` used for the parallel p95 and the matching three-member pool
+size; the per-query `timeout_seconds = 600`; the frozen gate values
+(`max_parallel_p95_wall_s = 10.0`, `min_p95_improvement_fraction = 0.04`, the
+health and closure-integrity requirements); the timer boundary
+(per-query timing EXCLUDES one-time pool warm-up, INCLUDES the per-query
+`simulation.load`) and `pool_warmup_queries = 0`; the persistent-arm lifecycle
+and restart policy (seed↔member binding, cold-fallback rule, retire-on-fault
+rule, terminate-and-reap-on-exit rule); trial count; and platform id. Missing any field
+invalidates the key rather than widening it. No key or value is computed or
+frozen here.
+
+Until and unless that experiment is approved, executed and passes BOTH its
+equivalence and its latency gate, **the product path stays the already-implemented
+asynchronous validated completion**: `/api/close` starts the job and returns
+immediately, `/api/close/status` polls, `/api/cancel` cancels, and orphaned jobs
+are detected and cancellable at startup (not resumed). No new async work is
+created or claimed here.
+
+**6.** This study adopts no mechanism, freezes no v7, reopens no v1–v6
+identity, and changes no code, test, contract, production default or
+architecture.
 
 ## External Data Requests — CLOSED, no further data coming (decided 2026-07-20)
 

@@ -35,3 +35,8 @@ runs/
 # E2 recalibration staging (serve.py builds the new scenario set here,
 # validates, then atomically publishes into web/data/scenarios/)
 web/data/scenarios_staging/
+
+# Local measured campaign evidence — preserved on disk, never committed
+validation/scenario_phase_profile_report_*.json
+validation/*_outcome/
+validation/online_latency_baseline_v1/
