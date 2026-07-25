@@ -3,57 +3,110 @@
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Task: `LUNA-REL-02`
+- Task: `LUNA-REL-03`
 - Revision: `1`
 - State: `READY_FOR_SOL_REVIEW`
 - Transition: `Luna High / LUNA DO / 2026-07-25`
 - Owner: `Luna High`
-- Review status: `LUNA DO complete — three local commits on integration/luna-rel-02`
-- Files changed: `.gitignore` (three rules appended), `TASKS.md`,
-  `AGENT_NOTES.md`. No immutable candidate, `AGENTS.md`, `IMPROVEMENT_PLAN.md`
-  or v2 content was edited — those were staged only.
+- Review status: `LUNA DO complete — candidate landed on local main by fast-forward`
+- Files changed: `TASKS.md`, `AGENT_NOTES.md` (terminal workflow/handoff only).
+  No product, test, contract, `.gitignore`, `AGENTS.md`, `IMPROVEMENT_PLAN.md`
+  or v2 content was edited; the approved candidate is preserved byte-for-byte.
 - Checks (all passed, in order):
-  - preconditions — branch `main`, `HEAD` == approved base
-    `b99e9e7e41ca7919dd5058ee66508d9548f475ff`, `integration/luna-rel-02` absent
-  - 29-file SHA-256 verifier vs v2 — `PASS` before edits, after guarded checks,
-    and again before every commit; zero drift throughout
+  - preconditions — branch `integration/luna-rel-02`, `HEAD` `ba3aea2d…`,
+    local `main` at approved base `b99e9e7e…`, ordinary status exactly
+    `TASKS.md` + `AGENT_NOTES.md`
+  - approved candidate re-verified — 3 non-merge commits, subjects
+    `Integrate monthly validation V4` / `Integrate guarded performance tooling`
+    / `Record release boundary and repository guards`, path sets 11 / 18 / 6
+  - `python3 -m json.tool validation/release_candidate_boundary_v2.json` — `PASS`
+  - v2 29-file SHA-256 verifier — `PASS` 29/29 before the commit and again
+    after the fast-forward
   - six ignore rules via SYNTHETIC nonexistent probes only — `PASS`
-    (three new rules at .gitignore:40-42; existing `sumo/`, `runs/`,
-    `web/data/scenarios_staging/` retained at lines 23, 34, 37)
-  - v2 deny hook materialised FROM v2 and sha-matched, then: self-test both
-    blocked locations — `PASS`; fingerprint negative control — `PASS` (blocked);
-    guarded focused suite — `PASS` (253); pure canonical digest — `PASS`;
-    pure persistent-gate test — `PASS` (1)
-  - per-commit staging audit — cached set equalled the exact list for each
-    commit (11, 18, 6 paths) with no opaque-pattern path — `PASS`
-  - `git diff --cached --check` before each commit — `PASS`
+  - `git diff --check -- TASKS.md AGENT_NOTES.md` and `git diff --cached --check` — `PASS`
+  - cached set for the workflow commit — exactly `TASKS.md`, `AGENT_NOTES.md`
+  - `git merge --ff-only integration/luna-rel-02` — `PASS` (true fast-forward)
 - Evidence:
-  1. Branch `integration/luna-rel-02` created once from the approved base; no
-     amend, rebase, reset, cherry-pick, merge, branch deletion or switch back
-     to `main`.
-  2. Commit 1 `e527670` — `Integrate monthly validation V4` (11 paths).
-     Commit 2 `10d99b0` — `Integrate guarded performance tooling` (18 paths).
-     Commit 3 is this self-referential documentation commit, identified by its
-     exact message `Record release boundary and repository guards` (6 paths);
-     its SHA and the final `HEAD` are reported to Sol in the handoff response
-     and verifiable with `git log --oneline --decorate -3`.
-  3. Every stage used one explicit `git add -- <paths>`; `git add -A`, `git add .`
-     and staging globs were never used. No path matching any of the six opaque
-     patterns was read, enumerated, counted or staged — only synthetic
-     nonexistent probes were used for boundary checks.
-  4. The three new ignore rules protect the local campaign evidence so it stays
-     on disk but can never be committed; all six rules were proven by probe.
-  5. TRANSPARENCY: each commit message carries the standing
+  1. One local commit `Land approved release candidate locally` records this
+     terminal handoff on `integration/luna-rel-02`, staged with a single
+     `git add -- TASKS.md AGENT_NOTES.md`. No `git add -A`, `.`, glob, amend,
+     rebase, reset, cherry-pick, force move or branch deletion was used.
+  2. `main` was advanced ONLY by `git merge --ff-only`, so the history is
+     linear and the first three approved commits are unchanged and unrewritten.
+  3. `main` and `integration/luna-rel-02` now point at the same tip, exactly
+     four non-merge commits ahead of the approved base.
+  4. All 29 immutable v2 hashes still match after landing, and ordinary status
+     is clean. No path matching any of the six opaque patterns was read,
+     enumerated, counted or staged — only synthetic probes were used.
+  5. This repository fast-forward is NOT product Stage-B activation. No push,
+     tag, PR, release, deployment, publication, demand/horizon warming, SUMO
+     run or live job occurred, and the direction's denial of outcome inspection
+     was preserved.
+  6. TRANSPARENCY: the commit carries the standing
      `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` trailer required by
-     my operator instructions. The subject lines are exactly the three specified
-     messages, in the specified order.
-- Approval: `NOT_REQUIRED`. Local branch creation, explicit staging and three
-  local commits were the complete authorized side effect. No push, PR, tag,
-  release, deployment, publication, merge, warming, SUMO or live job occurred,
-  and the direction's denial of outcome inspection was preserved and enforced.
-- Blockers: none.
+     my operator instructions; the subject is exactly
+     `Land approved release candidate locally`.
+- Approval: `NOT_REQUIRED`. A local fast-forward plus one workflow commit were
+  the complete authorized side effect.
+- Blockers: none. The exact final tip is reported to Sol in the handoff
+  response and verifiable with `git rev-parse main integration/luna-rel-02`.
 - Next action: `SOL REVIEW`
 <!-- CURRENT_HANDOFF_END -->
+
+## Luna High LUNA-REL-03 local landing — 2026-07-25
+
+Preserved the Sol-approved candidate byte-for-byte, recorded this terminal
+handoff in one commit `Land approved release candidate locally` on
+`integration/luna-rel-02` (staged with a single explicit
+`git add -- TASKS.md AGENT_NOTES.md`), then switched to `main` and advanced it
+with `git merge --ff-only`. History stays linear: the three approved commits are
+unchanged, both refs now point at the same tip four non-merge commits ahead of
+the approved base. Re-verified 29/29 immutable v2 hashes before the commit and
+after the fast-forward, checked all six ignore rules with synthetic nonexistent
+probes only, and confirmed ordinary status is clean. No amend, rebase, reset,
+force move, push, tag, release, Stage-B merge, SUMO run or outcome inspection.
+
+
+<!-- SOL_REVIEW_LUNA_REL_02_HISTORY_START -->
+## PRIOR SOL REVIEW HANDOFF
+
+- Task: `LUNA-REL-02`
+- Revision: `1`
+- State: `READY_FOR_SOL_PLAN`
+- Transition: `Sol High / SOL REVIEW / 2026-07-25`
+- Owner: `Luna High`
+- REVIEW_STATUS: APPROVED
+- Files changed: `TASKS.md`, `AGENT_NOTES.md` (Sol review state and handoff
+  only); reviewed commits remain `e527670`, `10d99b0`, and `ba3aea2`.
+- Checks:
+  - `git rev-list --count b99e9e7e41ca7919dd5058ee66508d9548f475ff..HEAD`
+    and `git rev-list --merges
+    b99e9e7e41ca7919dd5058ee66508d9548f475ff..HEAD` — `PASS` (3, no merges)
+  - `git diff-tree --no-commit-id --name-only -r e527670`, repeated for
+    `10d99b0` and `ba3aea2` — `PASS` (exact 11/18/6 contract path sets)
+  - `python3 -m json.tool validation/release_candidate_boundary_v2.json` and
+    the v2 29-file SHA-256 verifier — `PASS` (29/29)
+  - `git check-ignore -v validation/scenario_phase_profile_report_probe.json
+    validation/probe_outcome/x validation/online_latency_baseline_v1/probe
+    runs/probe sumo/probe web/data/scenarios_staging/probe` — `PASS`
+  - `git diff --check` and pre-review `git status --short` — `PASS`
+- Evidence:
+  1. Current markers agree on `LUNA-REL-02` revision 1 and the legal Sol review
+     transition; the active task is concluded and non-executable.
+  2. `integration/luna-rel-02` is exactly three linear commits ahead of the
+     approved base, with the required subjects in the required order.
+  3. All 35 committed paths equal the three contract lists; all 29 immutable
+     candidate hashes still match v2.
+  4. The only `.gitignore` delta is the three required rules; all six rules
+     match synthetic nonexistent probes.
+  5. Luna's recorded deny-hook self-tests, negative control, guarded 253-test
+     suite, pure digest check and pure persistent-gate test all passed.
+- Approval: `NOT_REQUIRED`; no outcome/report inspection, SUMO, warming,
+  merge, push, PR, tag, release, deployment or publication was authorized or
+  performed.
+- Blockers: none.
+- Next action: `SOL PLAN`
+<!-- SOL_REVIEW_LUNA_REL_02_HISTORY_END -->
 
 ## Luna High LUNA-REL-02 branch integration — 2026-07-25
 

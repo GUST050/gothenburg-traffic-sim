@@ -4,15 +4,15 @@
 ## WORKFLOW_CONTROL
 
 - State: `READY_FOR_SOL_REVIEW`
-- Active task: `LUNA-REL-02`
+- Active task: `LUNA-REL-03`
 - Task revision: `1`
 - Owner: `Luna High`
 - Next action: `SOL REVIEW`
 - Approval gate: `NOT_REQUIRED`
-- Allowed side effects: create local branch `integration/luna-rel-02`; edit
-  `.gitignore`; stage only explicit task paths; create exactly three local
-  commits; update Luna's terminal workflow triple and handoff. No remote or
-  product/runtime side effect.
+- Allowed side effects: edit `TASKS.md` and `AGENT_NOTES.md`; explicitly stage
+  those two paths; create exactly one local workflow commit on
+  `integration/luna-rel-02`; switch to local `main`; fast-forward `main` to
+  that branch. No remote or product/runtime side effect.
 - Transition: `Luna High / LUNA DO / 2026-07-25`
 <!-- WORKFLOW_CONTROL_END -->
 
@@ -437,12 +437,107 @@ Terminal handoff conditions:
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
+### LUNA-REL-03 — Land the approved release candidate on local main
+
+- Task ID: `LUNA-REL-03`
+- Revision: `1`
+- Owner: `Luna High`
+- Status: `PLANNED — Sol-owned; Luna must not edit this field`
+- Delivery size: `STANDARD`
+- Scope: Preserve the Sol-approved LUNA-REL-02 candidate byte-for-byte. Record
+  this task's terminal workflow handoff in one local commit on
+  `integration/luna-rel-02`, then switch to `main` and fast-forward it to the
+  branch. Verify the exact linear graph, immutable v2 hashes, synthetic ignore
+  probes and clean ordinary status. This is repository landing only: do not
+  edit product or contract content, inspect excluded material, run tests that
+  can touch excluded paths, merge product Stage B, push, tag, release, deploy,
+  warm demand, run SUMO or publish anything.
+- Completion outcome: local `main` and `integration/luna-rel-02` point to the
+  same reviewed tip, exactly four linear commits ahead of approved base
+  `b99e9e7e41ca7919dd5058ee66508d9548f475ff`; the final commit records the
+  terminal Luna handoff, all 29 immutable hashes match v2, and ordinary status
+  is clean.
+- Internal checkpoints: `NOT_APPLICABLE`
+- Allowed files:
+  - `TASKS.md`, `AGENT_NOTES.md` (terminal workflow/handoff only)
+  - Local branches `integration/luna-rel-02` and `main`, the index, and exactly
+    one new local commit named `Land approved release candidate locally`
+  - Read-only verification of `validation/release_candidate_boundary_v2.json`,
+    its 29 immutable allowlisted paths, `.gitignore`, and Git metadata
+- Forbidden work:
+  - Do not read, parse, hash, stat, enumerate, count, summarize, diff, stage or
+    inspect any member matching v2's six opaque patterns; boundary checks use
+    only the patterns and synthetic nonexistent probes.
+  - Do not edit product, test, immutable candidate, `.gitignore`, `AGENTS.md`,
+    `IMPROVEMENT_PLAN.md`, or v2 content.
+  - Do not use `git add -A`, `git add .`, staging globs, amend, rebase, reset,
+    cherry-pick, non-fast-forward merge, branch deletion or force movement.
+  - Do not push, tag, open a PR, release, deploy, publish, merge product Stage
+    B, warm demand/horizons, run SUMO/TraCI/libsumo or start a live API job.
+  - Do not weaken or reinterpret any evidence, health, integrity, latency,
+    release or publication gate.
+- Acceptance criteria:
+  1. Revalidate unique markers and matching LUNA-REL-03 revision 1 control
+     fields. Require current branch `integration/luna-rel-02`, current `HEAD`
+     `ba3aea2d999763da4170a0880374facd3357f957`, local `main` at approved base,
+     and ordinary status containing only `TASKS.md` and `AGENT_NOTES.md`.
+  2. Require `ba3aea2` to be exactly three non-merge commits ahead of the base
+     with the already-approved subjects and exact 11/18/6 path sets.
+  3. Recompute exactly the 29 v2 allowlisted hashes and require 29/29 matches.
+     Verify all six ignore rules only with synthetic nonexistent probes.
+  4. Write the legal terminal `READY_FOR_SOL_REVIEW` triple and bounded Luna
+     handoff without editing `ACTIVE_TASK`; stage only `TASKS.md` and
+     `AGENT_NOTES.md` using `git add -- TASKS.md AGENT_NOTES.md`.
+  5. Require the cached path set to be exactly those two files and
+     `git diff --cached --check` to pass. Commit once with exact subject
+     `Land approved release candidate locally`; do not amend or retry
+     destructively.
+  6. Switch to `main` and run only
+     `git merge --ff-only integration/luna-rel-02`. This repository
+     fast-forward is not approval to activate or merge product Stage B.
+  7. Require `main` and `integration/luna-rel-02` to equal the same final
+     commit, four non-merge commits ahead of the approved base, with the first
+     three commits unchanged and the exact fourth subject/path set.
+  8. Reverify 29/29 hashes, scoped diff hygiene and empty ordinary status.
+     Do not enumerate ignored content. Stop without remote or runtime action.
+- Focused checks:
+  - `python3 -m json.tool validation/release_candidate_boundary_v2.json`
+  - v2 29-file SHA-256 verifier
+  - `git check-ignore -v <six synthetic nonexistent probes>`
+  - `git diff --check -- TASKS.md AGENT_NOTES.md`
+  - `git diff --cached --check`
+  - `git diff --cached --name-only`
+  - `git rev-list --count <base>..HEAD`
+  - `git rev-list --merges <base>..HEAD`
+  - `git log --reverse --format=%s <base>..HEAD`
+  - `git diff-tree --no-commit-id --name-only -r <each commit>`
+  - `git rev-parse main integration/luna-rel-02`
+  - `git status --short`
+- Approval gate:
+  - `NOT_REQUIRED`
+  - Sol review already approved the exact candidate. This task permits only a
+    local fast-forward and one workflow commit; it grants no product Stage B,
+    remote, release, publication, runtime or excluded-evidence authority.
+  - The user's `2026-07-25` direction still forbids report/outcome inspection.
+- Terminal handoff conditions:
+  - Hand off once in `READY_FOR_SOL_REVIEW` only after the exact commit,
+    fast-forward, graph/hash checks and clean ordinary status all pass.
+  - Any marker, branch, base, hash, path, commit, fast-forward or status
+    mismatch; forbidden access; need to edit non-workflow content; or broader
+    authority need is terminal. Preserve state and report the exact blocker;
+    do not amend, reset, force, delete, retry destructively or broaden.
+
+<!-- ACTIVE_TASK_END -->
+
+<!-- COMPLETED_TASK_LUNA_REL_02_START -->
+## ACTIVE_TASK
+
 ### LUNA-REL-02 — Integrate the bounded release candidate on a local branch
 
 - Task ID: `LUNA-REL-02`
 - Revision: `1`
 - Owner: `Luna High`
-- Status: `PLANNED — Sol-owned; Luna must not edit this field`
+- Status: `CONCLUDED — Sol review approved; non-executable`
 - Delivery size: `STANDARD`
 - Scope: Create local branch `integration/luna-rel-02` from approved base
   `b99e9e7e41ca7919dd5058ee66508d9548f475ff`. Preserve the 29 immutable v2
@@ -606,7 +701,7 @@ Terminal handoff conditions:
   commits already made; do not amend, reset, delete, retry destructively or
   broaden.
 
-<!-- ACTIVE_TASK_END -->
+<!-- COMPLETED_TASK_LUNA_REL_02_END -->
 
 <!-- LUNA_PERF_21_TASK_START -->
 ## ACTIVE_TASK
