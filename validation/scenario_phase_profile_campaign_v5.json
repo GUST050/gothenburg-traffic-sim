@@ -1,0 +1,148 @@
+{
+  "adoption_gates": {
+    "authorizes": "nothing: clearing these gates is diagnostic evidence for considering the parallel arm only. It authorizes no deployment, production default change, release, publication, or relaxation of any existing gate.",
+    "max_parallel_p95_wall_seconds": 10.0,
+    "max_reference_mismatches": 0,
+    "max_semantic_mismatches": 0,
+    "min_p95_wall_improvement_fraction": 0.2,
+    "parallel_arm_workers": 3,
+    "required_existing_gates": [
+      "closure_integrity",
+      "hard_failure_refusal",
+      "phase_profile_binding",
+      "report_provenance",
+      "seed_health",
+      "semantic_digest_equivalence"
+    ],
+    "serial_arm_workers": 1
+  },
+  "campaign_id": "scenario_phase_profile_v5",
+  "cases": [
+    {
+      "case": "baseline",
+      "closed_edges": [],
+      "closure_window": {
+        "end_offset_s": null,
+        "kind": "none",
+        "start_offset_s": null
+      },
+      "description": "No closure: the citywide validated baseline over the frozen demand window.",
+      "name": "baseline_whole_day",
+      "scenario_name": "baseline"
+    },
+    {
+      "case": "closure",
+      "closed_edges": [
+        "26842525_26355153_0"
+      ],
+      "closure_window": {
+        "end_offset_s": 86400,
+        "kind": "whole_simulated_window",
+        "start_offset_s": 0
+      },
+      "description": "The known exact directed edge closed for the entire simulated window.",
+      "name": "closure_whole_window",
+      "scenario_name": "close_26842525_26355153_0"
+    }
+  ],
+  "content_key": "1578d3506291011ff88d4edfb12fd291935171950914feb97e64d0b2d0726f14",
+  "demand_identity": {
+    "build_id": "57e3fd904e32776bc481",
+    "demand_build_key": "f59ea19f882259b4",
+    "n_variants": 3
+  },
+  "demand_window": {
+    "begin": "00:00",
+    "date": "2025-09-16",
+    "days": 1,
+    "end": "24:00",
+    "n_intervals": 96,
+    "source": "historical"
+  },
+  "evidence_class": "diagnostic performance evidence only",
+  "excluded_by_design": [
+    "the microscopic smoke case \u2014 a different model, not this question",
+    "any seed-worker arm other than the frozen [1, 3]",
+    "warm-up trials and cache substitution \u2014 every trial is fresh"
+  ],
+  "execution": {
+    "cache_substitution": false,
+    "demand_variant_mapping": {
+      "1000": "q50",
+      "1001": "q10",
+      "1002": "q90"
+    },
+    "seeds": [
+      1000,
+      1001,
+      1002
+    ],
+    "simulation_mode": "meso",
+    "timeout_seconds": 1800,
+    "trials": 5,
+    "warmup_trials": 0,
+    "worker_arms": [
+      1,
+      3
+    ]
+  },
+  "frozen_at": "2026-07-23T19:24:58Z",
+  "frozen_fingerprints": {
+    "calibrated_q10": "30472d6a3aadde5ba31893e2be1277f3f5abaa962f08870cfbffdcb3afcb12a0",
+    "calibrated_q50": "0a0cdad78d06245be71d716bf23ea7dee804496c96e36919d7c5027c0979039b",
+    "calibrated_q90": "2a4124f5795f6b425a01dda45581c5f844a1c5b830a1b0f5357affff476b4239",
+    "demand_meta": "7496115dafd026ae9f15b0ea8380b1be1a0e5a16b59afe6ff6a5db9d15c7a710",
+    "harness:benchmark_speed.py": "d4540ced3c5ed3c77915fac4fcda619d1506abdc2d7e3a0a8ac4f952247d2903",
+    "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "source:run_scenario.py": "a2c2261618b74edaa69179f19288cb82f378eb929bc6e0726ffbb2ec95ee14f4"
+  },
+  "kind": "scenario_phase_profile_campaign",
+  "lineage": {
+    "change_from_v4": "no execution, case, seed, arm, demand, gate or evidence value changed; only the code under test moved \u2014 run_scenario.py now prepares the closure-filtered demand variants concurrently under the existing --seed-workers bound (worker 1 keeps the exact serial path), so run_scenario.py and the harness fingerprints are the only inputs that differ from v4",
+    "harness_change": "load_campaign() retires v4 by name and recognizes only v5; the adoption evaluator and pinned gates are unchanged",
+    "outcome_access": "no v1-v4 report file, sidecar or run tree was opened while freezing this contract, and no observed value from any of them was copied into it or used as release evidence. The approved v4 diagnostic conclusion \u2014 result-preserving but not adoptable, the closure whole-window parallel arm over the validated-completion ceiling \u2014 motivated parallelizing closure preparation; that conclusion is diagnostic evidence only.",
+    "supersedes_campaign_id": "scenario_phase_profile_v4",
+    "supersedes_content_key": "feeed57cb38a0c189aa9002c3e3611cb7233c467c9ff8cc1906d1c0daf712fa6",
+    "v1_content_key": "60188b6cdba0c62d7258c53f2d306dd11dff7d29fa134151a584cd80134d1912",
+    "v1_disposition": "failed: its run aborted on the first of ten trials with ModuleNotFoundError: No module named 'run_scenario' \u2014 the harness could not import the production phase validator when launched as a script. Immutable failed history.",
+    "v2_content_key": "8557b6f54e4b53db7dc68d57583dd5939d78b0b8836cc1a5ea89b59ef48d1ddd",
+    "v2_disposition": "retired_consumed: the identity was executed once on 2026-07-23 and is spent \u2014 a campaign identity is single-use and may never be executed again. The execution proceeded without the Sol-recorded exact-key approval entry (exact user message, message date, Sol recorder and date) that the active task is required to carry, so its outcomes are invalid audit history and are not evidence for any gate.",
+    "v3_content_key": "28402170953b8908b4abc9afb9328699e12c98a3183cd24bdfefdd23cb31dd16",
+    "v3_disposition": "retired_spent: executed once under recorded exact-key approval on 2026-07-23. Its single-worker report is diagnostic baseline evidence only and no observed value from it is copied into this contract.",
+    "v4_disposition": "retired_spent: executed once under recorded exact-key approval on 2026-07-23; result-preserving but not adoptable, because the closure whole-window parallel arm exceeded the validated-completion ceiling. Diagnostic evidence only; the identity may never run again."
+  },
+  "measurement_design": {
+    "arms": [
+      {
+        "role": "serial reference",
+        "workers": 1
+      },
+      {
+        "role": "parallel candidate",
+        "workers": 3
+      }
+    ],
+    "equivalence_test": "per case and trial, the parallel arm's scenario and trajectory semantic digests must equal the serial arm's; any mismatch is reported and returns non-zero",
+    "kind": "paired_serial_parallel_seed_arms",
+    "pairing": "each case runs both arms with identical demand, seeds, variants, mode, timeout and fresh-cache state, so the only declared difference between paired rows is the seed-worker count",
+    "rows": 20
+  },
+  "not_evidence_for": [
+    "adoption of the parallel arm, a production default change, release, gate promotion, or publication \u2014 clearing the adoption gates authorizes none of these",
+    "any speed-up beyond the exact paired arms, cases, closure, demand and hardware measured here",
+    "simulation, closure or calibration accuracy",
+    "worker counts other than the frozen [1, 3], caching, or any other optimization lever"
+  ],
+  "outcomes_present_at_freeze": false,
+  "purpose": "Measure the same paired 1-worker/3-worker baseline and exact road-closure workflow as v4, now that closure preparation filters its demand variants concurrently under the same --seed-workers bound. Diagnostic evidence for CONSIDERING the parallel arm, not authority to adopt it.",
+  "required_report_fields": [
+    "platform",
+    "cpu_count",
+    "python",
+    "sumo_version",
+    "git_commit",
+    "git_dirty",
+    "campaign"
+  ],
+  "schema_version": 1
+}

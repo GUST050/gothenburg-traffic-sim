@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "kind": "online_latency_benchmark_contract",
+  "contract_version": "online_latency_v1",
+  "frozen_at": "2026-07-22T00:00:00Z",
+  "purpose": "Define what the seconds-level online goal measures, before any optimization, so a later speed claim is comparable and cannot be met by answering a different question faster.",
+  "measurements": {
+    "cached_render": {
+      "description": "A cached or precomputed scenario is served to the map. No demand build, no SUMO, no job creation.",
+      "p95_seconds_maximum": 2.0,
+      "method": "http_get_or_fixture",
+      "safe_in_default_mode": true,
+      "requires_explicit_approval": false
+    },
+    "async_acknowledgement": {
+      "description": "A request that cannot be answered inside its budget is acknowledged honestly: running, inconclusive or no_viable, returned immediately while full-fidelity verification continues.",
+      "p95_seconds_maximum": 1.0,
+      "method": "http_get_or_fixture",
+      "safe_in_default_mode": true,
+      "requires_explicit_approval": false
+    },
+    "validated_completion": {
+      "description": "A supported new scenario or closure decision returns a VALIDATED result once its demand inputs exist. Measuring this for real can start SUMO and create outcomes, so it is out of scope for the safe default mode and needs its own approved task.",
+      "p95_seconds_maximum": 10.0,
+      "method": "http_get_or_fixture",
+      "safe_in_default_mode": false,
+      "requires_explicit_approval": true
+    }
+  },
+  "required_provenance": [
+    "platform",
+    "cpu_count",
+    "python",
+    "git_commit",
+    "git_dirty",
+    "measurement",
+    "endpoint_identity",
+    "cache_state",
+    "candidate_count",
+    "seeds",
+    "model_version",
+    "warmup_trials",
+    "measured_trials"
+  ],
+  "required_measured_fields": [
+    "p50_seconds",
+    "p95_seconds",
+    "max_seconds",
+    "response_bytes",
+    "errors",
+    "semantic_digest"
+  ],
+  "percentile_method": "linear interpolation between closest ranks of the sorted per-trial latencies",
+  "semantic_digest": {
+    "description": "sha256 over the response payload with only these keys removed recursively, so a re-measurement compares MEANING and not wall-clock noise. Same principle as tools/benchmark_speed.py canonical_digest: a changed result is never a speed improvement.",
+    "volatile_keys": [
+      "generated_at",
+      "created_at",
+      "started_at",
+      "finished_at",
+      "timestamp",
+      "elapsed_s",
+      "elapsed_seconds",
+      "server_time",
+      "path",
+      "source_path",
+      "workspace"
+    ]
+  },
+  "safe_default_mode": {
+    "http_methods_allowed": [
+      "GET"
+    ],
+    "hosts_allowed": [
+      "127.0.0.1",
+      "localhost",
+      "::1"
+    ],
+    "must_not": [
+      "start serve.py",
+      "invoke mutating endpoints",
+      "launch SUMO",
+      "create or modify outcomes",
+      "warm or build demand data"
+    ],
+    "mutating_path_markers": [
+      "/api/close",
+      "/api/recalibrate",
+      "/api/suggest",
+      "/api/optimize",
+      "/api/monthly",
+      "/api/signal",
+      "/api/publish",
+      "/api/cancel"
+    ],
+    "read_only_endpoints": [
+      "/api/ping",
+      "/api/jobs",
+      "/api/close/status",
+      "/api/recalibrate/status",
+      "/api/suggest_closure/status",
+      "/api/optimize_signals/status",
+      "/api/monthly_search/status"
+    ],
+    "endpoint_rules": "An exact match in read_only_endpoints is allowed: those GETs report state and start nothing. Otherwise any path containing a mutating marker is refused. Marker matching is substring, so the allow-list must be checked first - every status path contains its own job-start path."
+  },
+  "comparison_rules": {
+    "description": "Rules for comparing a new report against a reference. Every one of these is a FAILED comparison, never a speed result.",
+    "fail_on": [
+      "contract_version_mismatch",
+      "measurement_mismatch",
+      "endpoint_identity_mismatch",
+      "semantic_digest_change",
+      "http_or_sampler_errors_present",
+      "missing_required_provenance",
+      "non_deterministic_response_within_a_run",
+      "missing_or_invalid_measured_values"
+    ],
+    "speed_claim_requires": "identical identity and semantic digest on both sides, no errors, complete provenance, and the new p95 within the measurement threshold"
+  },
+  "not_established_by_this_contract": [
+    "that any measured path is faster than before",
+    "that a fast path is accurate",
+    "that SUMO may be bypassed for release evidence"
+  ],
+  "timed_boundary": {
+    "description": "The timer starts immediately before the sampler is invoked and stops as soon as the full response body has been received (HTTP) or the file bytes have been read (fixture). JSON parsing, semantic digesting and bookkeeping happen AFTER the timer stops and are not part of any reported latency.",
+    "excludes": [
+      "json parsing",
+      "semantic digest computation",
+      "report writing",
+      "browser rendering",
+      "network beyond loopback"
+    ]
+  },
+  "required_measured_values": {
+    "semantic_digest": "64-character lowercase hex; null means the answers were not proven identical",
+    "distinct_semantic_digests": "exactly 1",
+    "measured_trials": "at least 1",
+    "response_bytes": "positive integer",
+    "p50_seconds": "finite, >= 0, <= p95_seconds",
+    "p95_seconds": "finite, >= 0, <= max_seconds",
+    "max_seconds": "finite, >= 0",
+    "errors": "empty list"
+  }
+}

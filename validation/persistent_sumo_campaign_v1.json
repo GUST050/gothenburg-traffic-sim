@@ -1,0 +1,186 @@
+{
+  "content_key": "72108df6b3ec61de33e5006181d38abc3aba3292bcb8b907643dd9d7f431f588",
+  "demand_identity": {
+    "build_id": "57e3fd904e32776bc481",
+    "demand_build_key": "f59ea19f882259b4"
+  },
+  "execution": {
+    "begin_s": 0,
+    "known_closure": "26842525_26355153_0",
+    "lifecycle": {
+      "cleanup": "try/finally closes sockets and terminates+reaps every member on success, failure, exception, timeout, keyboard interruption and partial startup; construction kills a spawned-but-unconnected member; graceful-close timeout kills then reaps",
+      "cold_fallback": "a faulted seed/query may run once as a fresh child; any fallback makes the run ineligible",
+      "reference_arm": "exactly three fresh per-seed run_sumo children once per query, never a full run_scenario.py orchestration",
+      "retire_on_fault": "retire, terminate and reap a faulted member",
+      "seed_member_binding": "member 0->1000/q50, 1->1001/q10, 2->1002/q90; no member crosses slots"
+    },
+    "n_intervals": 96,
+    "option_template": [
+      "--mesosim true",
+      "--meso-junction-control true",
+      "--meso-junction-control.limited true",
+      "-n <net>",
+      "-r <route>",
+      "-a <additionals>",
+      "--seed <seed>",
+      "--begin 0",
+      "--end 90000",
+      "--no-step-log true",
+      "--no-warnings true",
+      "--ignore-route-errors true",
+      "--statistic-output <stats>",
+      "--vehroute-output <vehroutes> (trajectory seed only)"
+    ],
+    "per_query_timeout_s": 600,
+    "persistent_arm_only_options": [
+      "--remote-port 0",
+      "--num-clients 1"
+    ],
+    "pool_size": 3,
+    "pool_warmup_queries": 0,
+    "seed_workers": 3,
+    "shared_production_builders": [
+      "run_scenario.build_scenario_payload",
+      "run_scenario.build_trajectory_payload"
+    ],
+    "sim_end_s": 90000,
+    "simulation_mode": "meso",
+    "timer_semantics": {
+      "excludes_one_time_pool_warmup": true,
+      "parallel_wall_method": "real concurrent span across the three slots, including assemble+digest, identical for both arms",
+      "per_query_includes_finalization_reload": true,
+      "per_query_includes_parse_validate": true,
+      "per_query_includes_payload_build": true
+    },
+    "trials": 1
+  },
+  "expected_platform": "macOS-15.6.1-arm64-arm-64bit",
+  "expected_sumo_version": "Eclipse SUMO sumo 1.27.1\n Build features: Darwin-23.6.0 arm64 AppleClang 15.0.0.15000309 Release FMI Proj GUI FMT Intl SWIG Parquet Eigen GDAL GL2PS JuPedSim\n Copyright (C) 2001-2026 German Aerospace Center (DLR) and others; https://sumo.dlr.de\n\nEclipse SUMO sumo 1.27.1 is part of SUMO.\nThis program and the accompanying materials\nare made available under the terms of the Eclipse Public License v2.0\nwhich accompanies this distribution, and is available at\nhttp://www.eclipse.org/legal/epl-v20.html\nThis program may also be made available under the following Secondary\nLicenses when the conditions for such availability set forth in the Eclipse\nPublic License 2.0 are satisfied: GNU General Public License, version 2\nor later which is available at\nhttps://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html\nSPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later",
+  "experiment_id": "persistent_sumo_v1",
+  "frozen_at": "2026-07-24T13:20:59Z",
+  "frozen_fingerprints": {
+    "calibrated_q10": "30472d6a3aadde5ba31893e2be1277f3f5abaa962f08870cfbffdcb3afcb12a0",
+    "calibrated_q50": "0a0cdad78d06245be71d716bf23ea7dee804496c96e36919d7c5027c0979039b",
+    "calibrated_q90": "2a4124f5795f6b425a01dda45581c5f844a1c5b830a1b0f5357affff476b4239",
+    "demand_meta": "7496115dafd026ae9f15b0ea8380b1be1a0e5a16b59afe6ff6a5db9d15c7a710",
+    "harness:benchmark_persistent_sumo.py": "4460070df3ad7f64f2f877026ffee5d0ffda5e499c3fc277275d6e21259b0b2d",
+    "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "source:run_scenario.py": "04cfed5f5b0f922898e4f387fde51a3c1b08edbd36e79ff49f82d7ff20334303"
+  },
+  "gates": {
+    "any_fault_or_fallback_is_ineligible": true,
+    "authorizes": "nothing: a passing run is diagnostic evidence for CONSIDERING the persistent-process arm only. It authorizes no production default change, API change, deployment, release, publication, or relaxation of any gate.",
+    "latency_sample": "five_persistent_closure_queries",
+    "max_parallel_p95_wall_s": 10.0,
+    "min_p95_improvement_fraction": 0.04,
+    "required_closure_integrity": "verified_clean",
+    "required_seed_health": {
+      "collisions": 0,
+      "loaded_equals_inserted": true,
+      "running_at_end": 0,
+      "teleports": 0,
+      "waiting_at_end": 0
+    }
+  },
+  "kind": "persistent_sumo_experiment",
+  "lineage": {
+    "outcome_access": "no report/sidecar/run tree/state snapshot opened; no observed value used.",
+    "selected_by": "IMPROVEMENT_PLAN.md Phase 7 C1 (LUNA-PERF-18); rev2 adds shared production payload builders (LUNA-PERF-19 rev2)",
+    "supersedes": "revision-1 content key (stale; harness incomplete)"
+  },
+  "matrix": {
+    "arms": [
+      "arm_subprocess",
+      "arm_persistent"
+    ],
+    "closure": {
+      "begin": "00:00",
+      "edge": "26842525_26355153_0",
+      "end": "24:00"
+    },
+    "query_order": [
+      "baseline",
+      "closure",
+      "baseline",
+      "closure",
+      "baseline",
+      "closure",
+      "baseline",
+      "closure",
+      "baseline",
+      "closure"
+    ],
+    "seed_member_map": [
+      {
+        "member": 0,
+        "seed": 1000,
+        "variant": "q50"
+      },
+      {
+        "member": 1,
+        "seed": 1001,
+        "variant": "q10"
+      },
+      {
+        "member": 2,
+        "seed": 1002,
+        "variant": "q90"
+      }
+    ]
+  },
+  "not_evidence_for": [
+    "adoption of the persistent arm, a production default/API change, deployment, release, publication, or gate relaxation",
+    "any speed-up beyond the exact frozen closure/seed/window measured here",
+    "the seed-parallel v1-v6 line, which is closed"
+  ],
+  "outcomes_present_at_freeze": false,
+  "purpose": "Measure whether a fixed pool of three reused, TraCI-controlled sumo processes returns the frozen whole-window closure result below the 10 s ceiling and faster than the fresh-subprocess path, producing a semantically identical result assembled through run_scenario's SHARED build_scenario_payload / build_trajectory_payload seams. Diagnostic evidence only.",
+  "report_schema": {
+    "member_event": [
+      "index",
+      "case",
+      "fallbacks",
+      "events"
+    ],
+    "member_event_entry": [
+      "member",
+      "seed",
+      "error"
+    ],
+    "per_query": [
+      "index",
+      "case",
+      "parallel_wall_s",
+      "scenario_digest",
+      "trajectory_digest",
+      "closure_integrity",
+      "seed_health",
+      "fallbacks",
+      "member_events"
+    ],
+    "top_level": [
+      "schema_version",
+      "experiment_id",
+      "content_key",
+      "pool_warmup_wall_s",
+      "pool_warmup_queries",
+      "member_faults",
+      "member_events",
+      "persistent_queries",
+      "subprocess_queries",
+      "verdict",
+      "note"
+    ],
+    "verdict": [
+      "persistent_p95_wall_s",
+      "subprocess_p95_wall_s",
+      "p95_improvement_fraction",
+      "member_faults",
+      "fallbacks",
+      "failed_gates",
+      "eligible_and_passed",
+      "authorizes"
+    ]
+  },
+  "schema_version": 1
+}

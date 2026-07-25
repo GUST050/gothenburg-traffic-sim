@@ -1512,3 +1512,368 @@ class TestHealthFailsClosed:
             flags.append(f"hälsotelemetri saknas för {n_seeds - n_records} av "
                          f"{n_seeds} frön — omätt är inte friskt")
         assert any("saknas" in f for f in flags)
+
+
+class TestParseEdgedataOptimization:
+    """The edgeData parser was rewritten (LUNA-PERF-14) from
+    ET.parse().findall() to a streaming XMLParser target. The optimization is
+    only sound if it returns exactly what the tree version did, so every test
+    here compares it against a test-local reference of the pre-optimization
+    behavior across the shapes real SUMO output takes."""
+
+    @staticmethod
+    def _reference(path, n_intervals, measured_empty_edges=()):
+        """The exact pre-optimization implementation, kept here as the oracle."""
+        flows = {}
+        root = ET.parse(path).getroot()
+        for interval in root.findall("interval"):
+            i = int(float(interval.get("begin")) // 900)
+            if i >= n_intervals:
+                continue
+            for edge in interval.findall("edge"):
+                eid = edge.get("id")
+                entered = float(edge.get("entered") or 0)
+                if eid not in flows:
+                    flows[eid] = np.zeros(n_intervals)
+                flows[eid][i] = entered
+        for edge_id in measured_empty_edges:
+            flows.setdefault(edge_id, np.zeros(n_intervals))
+        return flows
+
+    @staticmethod
+    def _assert_equivalent(a, b):
+        assert a.keys() == b.keys()
+        for key in a:
+            assert a[key].dtype == b[key].dtype == np.float64, key
+            assert np.array_equal(a[key], b[key]), key
+
+    def _write(self, tmp_path, body):
+        path = tmp_path / "edgedata.xml"
+        path.write_text("<meandata>\n" + body + "\n</meandata>\n")
+        return path
+
+    def test_multiple_intervals_and_absent_and_zero_entries(self, tmp_path):
+        path = self._write(tmp_path, """
+          <interval begin="0" end="900">
+            <edge id="a" entered="5"/>
+            <edge id="b" entered="0"/>
+          </interval>
+          <interval begin="900" end="1800">
+            <edge id="a" entered="7"/>
+          </interval>""")
+        for empties in ((), ("a", "closed_measured")):
+            expect = self._reference(path, 4, empties)
+            got = run_scenario.parse_edgedata(path, 4, empties)
+            self._assert_equivalent(expect, got)
+        # spot-check the actual values, not just cross-equivalence
+        got = run_scenario.parse_edgedata(path, 4)
+        assert list(got["a"]) == [5.0, 7.0, 0.0, 0.0]
+        assert list(got["b"]) == [0.0, 0.0, 0.0, 0.0]
+
+    def test_required_measured_empty_edges_are_zero_filled(self, tmp_path):
+        path = self._write(tmp_path, """
+          <interval begin="0" end="900"><edge id="a" entered="3"/></interval>""")
+        empties = ("closed_1", "closed_2", "a")   # "a" already present
+        expect = self._reference(path, 4, empties)
+        got = run_scenario.parse_edgedata(path, 4, empties)
+        self._assert_equivalent(expect, got)
+        assert set(got) == {"a", "closed_1", "closed_2"}
+        assert list(got["closed_1"]) == [0.0, 0.0, 0.0, 0.0]
+        assert list(got["a"]) == [3.0, 0.0, 0.0, 0.0]     # not overwritten
+
+    def test_duplicate_edge_records_last_write_wins(self, tmp_path):
+        path = self._write(tmp_path, """
+          <interval begin="0" end="900">
+            <edge id="a" entered="3"/>
+            <edge id="a" entered="9"/>
+          </interval>""")
+        expect = self._reference(path, 4)
+        got = run_scenario.parse_edgedata(path, 4)
+        self._assert_equivalent(expect, got)
+        assert got["a"][0] == 9.0
+
+    def test_out_of_range_intervals_are_skipped(self, tmp_path):
+        path = self._write(tmp_path, """
+          <interval begin="0" end="900"><edge id="a" entered="2"/></interval>
+          <interval begin="3600" end="4500"><edge id="only_late" entered="8"/></interval>""")
+        expect = self._reference(path, 2)          # interval index 4 is dropped
+        got = run_scenario.parse_edgedata(path, 2)
+        self._assert_equivalent(expect, got)
+        assert "only_late" not in got               # never materialized
+
+    def test_missing_begin_raises_like_the_reference(self, tmp_path):
+        path = self._write(tmp_path, """
+          <interval end="900"><edge id="a" entered="2"/></interval>""")
+        with pytest.raises(TypeError):
+            self._reference(path, 4)
+        with pytest.raises(TypeError):
+            run_scenario.parse_edgedata(path, 4)
+
+    def test_non_numeric_entered_raises_like_the_reference(self, tmp_path):
+        path = self._write(tmp_path, """
+          <interval begin="0" end="900"><edge id="a" entered="NaNaN?"/></interval>""")
+        with pytest.raises(ValueError):
+            self._reference(path, 4)
+        with pytest.raises(ValueError):
+            run_scenario.parse_edgedata(path, 4)
+
+    def test_malformed_xml_raises_parse_error_like_the_reference(self, tmp_path):
+        path = tmp_path / "bad.xml"
+        path.write_text("<meandata><interval begin='0'><edge id='a' entered='1'>")
+        with pytest.raises(ET.ParseError):
+            self._reference(path, 4)
+        with pytest.raises(ET.ParseError):
+            run_scenario.parse_edgedata(path, 4)
+
+    def test_missing_file_raises_like_the_reference(self, tmp_path):
+        path = tmp_path / "does_not_exist.xml"
+        with pytest.raises((FileNotFoundError, OSError)):
+            self._reference(path, 4)
+        with pytest.raises((FileNotFoundError, OSError)):
+            run_scenario.parse_edgedata(path, 4)
+
+    def test_an_interval_nested_below_the_root_is_ignored(self, tmp_path):
+        """The tree version used root.findall('interval') — direct children
+        only. An interval wrapped in another element is not a direct child, so
+        neither parser may return its edges."""
+        path = self._write(tmp_path, """
+          <wrapper>
+            <interval begin="0" end="900">
+              <edge id="nested_interval_edge" entered="5"/>
+            </interval>
+          </wrapper>
+          <interval begin="0" end="900"><edge id="real" entered="3"/></interval>""")
+        expect = self._reference(path, 4)
+        got = run_scenario.parse_edgedata(path, 4)
+        self._assert_equivalent(expect, got)
+        assert set(got) == {"real"}                 # the wrapped one is invisible
+        assert "nested_interval_edge" not in got
+
+    def test_an_edge_nested_below_an_interval_is_ignored(self, tmp_path):
+        """interval.findall('edge') was direct children only, so an edge under
+        an intermediate element inside the interval must not be counted."""
+        path = self._write(tmp_path, """
+          <interval begin="0" end="900">
+            <edge id="direct" entered="4"/>
+            <lane>
+              <edge id="nested_edge" entered="9"/>
+            </lane>
+          </interval>""")
+        expect = self._reference(path, 4)
+        got = run_scenario.parse_edgedata(path, 4)
+        self._assert_equivalent(expect, got)
+        assert set(got) == {"direct"}
+        assert "nested_edge" not in got
+
+    def test_a_non_interval_direct_child_of_root_is_ignored(self, tmp_path):
+        path = self._write(tmp_path, """
+          <meta><edge id="meta_edge" entered="1"/></meta>
+          <interval begin="0" end="900"><edge id="real" entered="2"/></interval>""")
+        expect = self._reference(path, 4)
+        got = run_scenario.parse_edgedata(path, 4)
+        self._assert_equivalent(expect, got)
+        assert set(got) == {"real"}
+
+    def test_representative_whole_day_shape_is_equivalent(self, tmp_path):
+        # 96 intervals x 200 edges with ~10% excludeEmpty gaps and duplicates.
+        n_int, n_edge, val = 96, 200, 1
+        body = []
+        for iv in range(n_int):
+            body.append(f'<interval begin="{iv*900}" end="{(iv+1)*900}">')
+            for e in range(n_edge):
+                if (iv * 7 + e) % 10 == 0:
+                    continue
+                val = (val * 1103515245 + 12345) & 0x7fffffff
+                body.append(f'<edge id="e{e}" entered="{val % 500}"/>')
+            body.append("</interval>")
+        path = self._write(tmp_path, "\n".join(body))
+        expect = self._reference(path, n_int, ("mZERO",))
+        got = run_scenario.parse_edgedata(path, n_int, ("mZERO",))
+        self._assert_equivalent(expect, got)
+        assert len(got) == n_edge + 1               # every edge + the empty one
+
+
+def _benchmark_parse_edgedata(n_int=96, n_edge=4000, trials=9):
+    """Reproduce the LUNA-PERF-14 parse_edgedata timing evidence, end to end.
+
+    Exact reproducible command (no arguments, no external inputs)::
+
+        python3 tests/test_scenario.py
+
+    Generates a deterministic edgeData fixture in a temp dir, asserts the
+    streaming parser is byte-exact against the pre-optimization oracle
+    (``TestParseEdgedataOptimization._reference``), then times ``trials``
+    ALTERNATING old/new runs and reports medians against the retain gate
+    (>= 25% AND >= 0.15 s). This is diagnostic development timing only — never
+    release evidence or a 10-second-completion claim. The retain gate is
+    machine-dependent; the equivalence assertions are not.
+    """
+    import shutil
+    import statistics as st
+    import tempfile
+    import time
+
+    reference = TestParseEdgedataOptimization._reference    # the old code
+    tmp = Path(tempfile.mkdtemp(prefix="bench_edgedata_"))
+    try:
+        fixture = tmp / "edgedata_fixture.xml"
+        val, lines = 1, ["<meandata>"]
+        for iv in range(n_int):
+            lines.append(f'  <interval begin="{iv * 900}" end="{(iv + 1) * 900}">')
+            for e in range(n_edge):
+                if (iv * 7 + e) % 10 == 0:          # ~10% excludeEmpty gaps
+                    continue
+                val = (val * 1103515245 + 12345) & 0x7FFFFFFF
+                lines.append(f'    <edge id="e{e}" entered="{val % 500}"/>')
+            lines.append("  </interval>")
+        lines.append("</meandata>")
+        fixture.write_text("\n".join(lines))
+
+        old = reference(fixture, n_int, ("mZERO",))
+        new = run_scenario.parse_edgedata(fixture, n_int, ("mZERO",))
+        assert old.keys() == new.keys()
+        for key in old:
+            assert old[key].dtype == new[key].dtype == np.float64
+            assert np.array_equal(old[key], new[key])
+
+        old_t, new_t = [], []
+        for _ in range(trials):
+            t0 = time.perf_counter(); reference(fixture, n_int); old_t.append(time.perf_counter() - t0)
+            t0 = time.perf_counter(); run_scenario.parse_edgedata(fixture, n_int); new_t.append(time.perf_counter() - t0)
+        old_med, new_med = st.median(old_t), st.median(new_t)
+        saving, ratio = old_med - new_med, (old_med - new_med) / old_med
+        print(f"fixture: {n_int} intervals x {n_edge} edges, "
+              f"{fixture.stat().st_size} bytes; equivalence OK ({len(new)} keys)")
+        print(f"trials={trials} alternating | old median {old_med * 1000:.1f} ms | "
+              f"new median {new_med * 1000:.1f} ms")
+        print(f"saving {saving:.4f} s | ratio {ratio * 100:.1f}% | "
+              f"gate>=25%&>=0.15s: {'PASS' if ratio >= 0.25 and saving >= 0.15 else 'FAIL'}")
+        return {"old_median_s": old_med, "new_median_s": new_med,
+                "saving_s": saving, "ratio": ratio}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    _benchmark_parse_edgedata()
+
+
+class TestSharedPayloadBuildersMatchLegacyProduction:
+    """LUNA-PERF-19 rev2 extracted `build_scenario_payload` and
+    `build_trajectory_payload` from run_scenario so production AND the persistent-
+    SUMO benchmark build the byte-identical artifact from one seam. These tests
+    pin the builders against the exact legacy inline shapes for baseline,
+    closure, trajectory and multi-day cases, so a future edit that changes the
+    published payload fails here."""
+
+    class _Spec:
+        scenario_id = "close_26842525_26355153_0"
+        simulation_mode = "meso"
+        network_build_id = "netbuild123"
+
+        def to_dict(self):
+            return {"scenario_id": self.scenario_id, "closures": [],
+                    "simulation_mode": self.simulation_mode}
+
+    def _legacy_scenario(self, *, meta, n_intervals, generated_at, spec,
+                         traj_name, name, label, close_edges, closures,
+                         window_label, n_truncated, n_dropped,
+                         active_closure_entries, active_entries_by_seed,
+                         closure_integrity, seed_count, seed_values, sig,
+                         seed_health, health_flags, multi_day_validation,
+                         sensor_audit, flows_out, conf_out):
+        # A copy of the pre-extraction inline dict, kept here as the oracle.
+        return {
+            "epoch": meta["epoch_sim"], "interval_minutes": 15,
+            "n_quarters": n_intervals, "generated_at": generated_at,
+            "scenario_spec": spec.to_dict(), "trajectories": traj_name,
+            "scenario": {
+                "name": name, "scenario_id": spec.scenario_id, "label": label,
+                "closed_edges": close_edges, "closures": closures,
+                "window": window_label,
+                "source": meta.get("source", "historical"),
+                "agent_demand": meta.get("agent_demand"),
+                "truncated_vehicles": n_truncated, "dropped_vehicles": n_dropped,
+                "active_closure_edge_entries": active_closure_entries,
+                "active_closure_edge_entries_by_seed": active_entries_by_seed,
+                "closure_integrity": closure_integrity,
+                **({"date": meta["date"], "begin": meta["begin"],
+                    "end": meta["end"]} if "date" in meta else
+                   {"start_date": meta["start_date"],
+                    "end_date_exclusive": meta["end_date_exclusive"],
+                    "days": meta["days"]}),
+                "seeds": seed_count, "seed_set": seed_values,
+                "simulation_mode": spec.simulation_mode,
+                "network_build_id": spec.network_build_id,
+                "demand_signature": sig, "build_id": meta.get("build_id"),
+                "demand_build_key": meta.get("demand_build_key")},
+            "seed_health": seed_health, "seed_health_flags": health_flags,
+            **({"multi_day_validation": multi_day_validation}
+               if multi_day_validation is not None else {}),
+            "sensor_audit": sensor_audit, "flows": flows_out,
+            "confidence": conf_out}
+
+    def _kwargs(self, *, case, multi_day=False):
+        base = {"epoch_sim": "2025-09-16T00:00:00", "source": "historical",
+                "agent_demand": None, "build_id": "b1", "demand_build_key": "k1"}
+        if multi_day:
+            base.update({"start_date": "2025-09-16",
+                         "end_date_exclusive": "2025-09-19", "days": 3})
+        else:
+            base.update({"date": "2025-09-16", "begin": "00:00", "end": "24:00"})
+        closure = case == "closure"
+        return dict(
+            meta=base, n_intervals=96, generated_at="2025-09-16T12:00:00",
+            spec=self._Spec(),
+            traj_name="close_x_traj.json" if closure else "baseline_traj.json",
+            name="close_x" if closure else "baseline",
+            label="Closure" if closure else "Baseline",
+            close_edges=["26842525_26355153_0"] if closure else [],
+            closures=[{"edge_id": "26842525_26355153_0"}] if closure else [],
+            window_label="00:00–24:00",
+            n_truncated=12 if closure else 0, n_dropped=3 if closure else 0,
+            active_closure_entries=0 if closure else None,
+            active_entries_by_seed=[0, 0, 0] if closure else [None, None, None],
+            closure_integrity="verified_clean" if closure else None,
+            seed_count=3, seed_values=[1000, 1001, 1002], sig="sig-abc",
+            seed_health=[{"seed": 1000, "loaded": 5, "inserted": 5}],
+            health_flags=[],
+            multi_day_validation={"ok": True} if multi_day else None,
+            sensor_audit={"summary": "audit"},
+            flows_out={"e0": [1, 2]}, conf_out={"e0": 0.5})
+
+    @pytest.mark.parametrize("case", ["baseline", "closure"])
+    def test_scenario_payload_matches_legacy(self, case):
+        kw = self._kwargs(case=case)
+        assert run_scenario.build_scenario_payload(**kw) == self._legacy(kw)
+
+    def test_scenario_payload_matches_legacy_multi_day(self):
+        kw = self._kwargs(case="closure", multi_day=True)
+        got = run_scenario.build_scenario_payload(**kw)
+        assert got == self._legacy(kw)
+        assert got["scenario"]["days"] == 3 and "date" not in got["scenario"]
+        assert got["multi_day_validation"] == {"ok": True}
+
+    def test_scenario_payload_omits_multi_day_when_absent(self):
+        got = run_scenario.build_scenario_payload(**self._kwargs(case="baseline"))
+        assert "multi_day_validation" not in got
+
+    def _legacy(self, kw):
+        return self._legacy_scenario(**kw)
+
+    def test_trajectory_payload_matches_legacy(self):
+        vehicles = [{"d": 0, "id": "v1"}, {"d": 1, "id": "v2"}]
+        inv = ["e0", "e1"]
+        got = run_scenario.build_trajectory_payload(
+            1000, "calibrated.rou.xml", vehicles, 1, 4, {"rate": 0.5}, inv)
+        legacy = {"seed": 1000, "variant": "calibrated.rou.xml",
+                  "n_vehicles": 2, "n_unfinished": 1, "inserted_in_run": 4,
+                  "sampling": {"rate": 0.5},
+                  "displayed_share": round(2 / 4, 4),
+                  "edges": inv, "vehicles": vehicles}
+        assert got == legacy
+
+    def test_trajectory_displayed_share_is_none_when_nothing_inserted(self):
+        got = run_scenario.build_trajectory_payload(
+            1000, "r.rou.xml", [], 0, 0, {}, [])
+        assert got["displayed_share"] is None

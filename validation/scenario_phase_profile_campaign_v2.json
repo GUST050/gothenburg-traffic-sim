@@ -1,0 +1,105 @@
+{
+  "campaign_id": "scenario_phase_profile_v2",
+  "cases": [
+    {
+      "case": "baseline",
+      "closed_edges": [],
+      "closure_window": {
+        "end_offset_s": null,
+        "kind": "none",
+        "start_offset_s": null
+      },
+      "description": "No closure: the citywide validated baseline over the frozen demand window.",
+      "name": "baseline_whole_day",
+      "scenario_name": "baseline"
+    },
+    {
+      "case": "closure",
+      "closed_edges": [
+        "26842525_26355153_0"
+      ],
+      "closure_window": {
+        "end_offset_s": 86400,
+        "kind": "whole_simulated_window",
+        "start_offset_s": 0
+      },
+      "description": "The known exact directed edge closed for the entire simulated window.",
+      "name": "closure_whole_window",
+      "scenario_name": "close_26842525_26355153_0"
+    }
+  ],
+  "content_key": "8557b6f54e4b53db7dc68d57583dd5939d78b0b8836cc1a5ea89b59ef48d1ddd",
+  "demand_identity": {
+    "build_id": "57e3fd904e32776bc481",
+    "demand_build_key": "f59ea19f882259b4",
+    "n_variants": 3
+  },
+  "demand_window": {
+    "begin": "00:00",
+    "date": "2025-09-16",
+    "days": 1,
+    "end": "24:00",
+    "n_intervals": 96,
+    "source": "historical"
+  },
+  "evidence_class": "diagnostic performance evidence only",
+  "excluded_by_design": [
+    "the microscopic smoke case \u2014 a different model, not this question",
+    "worker-count comparison \u2014 an already-rejected lever",
+    "warm-up trials and cache substitution \u2014 every trial is fresh"
+  ],
+  "execution": {
+    "cache_substitution": false,
+    "demand_variant_mapping": {
+      "1000": "q50",
+      "1001": "q10",
+      "1002": "q90"
+    },
+    "seed_workers": 1,
+    "seeds": [
+      1000,
+      1001,
+      1002
+    ],
+    "simulation_mode": "meso",
+    "timeout_seconds": 1800,
+    "trials": 5,
+    "warmup_trials": 0
+  },
+  "frozen_at": "2026-07-23T09:59:09Z",
+  "frozen_fingerprints": {
+    "calibrated_q10": "30472d6a3aadde5ba31893e2be1277f3f5abaa962f08870cfbffdcb3afcb12a0",
+    "calibrated_q50": "0a0cdad78d06245be71d716bf23ea7dee804496c96e36919d7c5027c0979039b",
+    "calibrated_q90": "2a4124f5795f6b425a01dda45581c5f844a1c5b830a1b0f5357affff476b4239",
+    "demand_meta": "7496115dafd026ae9f15b0ea8380b1be1a0e5a16b59afe6ff6a5db9d15c7a710",
+    "harness:benchmark_speed.py": "2c94479901bcb2f790dc2ddf434a068ea4007d988777e0f355682693ebecbcdd",
+    "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "source:run_scenario.py": "f7e7e424b39410a8b7adaaa2161cf279d2bbd8bec91b8598156aa8fe69d48b81"
+  },
+  "kind": "scenario_phase_profile_campaign",
+  "lineage": {
+    "harness_change": "repository root made resolvable in the script import context; the production validator is unchanged and still authoritative",
+    "reason": "The v1 run aborted on its first of ten trials with ModuleNotFoundError: No module named 'run_scenario' \u2014 tools/benchmark_speed.py could not import the production phase validator when launched as a script. v1 remains immutable failed history; its lone sidecar is abort diagnostics, never timing evidence.",
+    "supersedes_campaign_id": "scenario_phase_profile_v1",
+    "supersedes_content_key": "60188b6cdba0c62d7258c53f2d306dd11dff7d29fa134151a584cd80134d1912",
+    "v1_outcomes": "one partial trial preserved at runs/scenario-phase-profile/60188b6cdba0c62d7258c53f2d306dd11dff7d29fa134151a584cd80134d1912; no v1 report was ever written"
+  },
+  "not_evidence_for": [
+    "any speed-up claim \u2014 no prior phase profile exists to compare against",
+    "release readiness, gate promotion or publication",
+    "simulation, closure or calibration accuracy",
+    "worker-count tuning, caching or any other optimization lever"
+  ],
+  "outcomes_present_at_freeze": false,
+  "purpose": "Locate which validated scenario phase dominates the baseline and exact road-closure workflow on the supported citywide path, using the approved timing sidecar.",
+  "required_report_fields": [
+    "platform",
+    "cpu_count",
+    "python",
+    "sumo_version",
+    "git_commit",
+    "git_dirty",
+    "campaign"
+  ],
+  "schema_version": 1
+}

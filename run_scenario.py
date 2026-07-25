@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import contextlib
 import hashlib
 import heapq
 import json
@@ -40,6 +41,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -286,6 +288,69 @@ def demand_window_label(meta: dict) -> str:
             f"({meta['days']} days)")
 
 
+def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
+                           spec, traj_name, name: str, label: str,
+                           close_edges: list, closures: list, window_label: str,
+                           n_truncated: int, n_dropped: int,
+                           active_closure_entries, active_entries_by_seed,
+                           closure_integrity, seed_count: int, seed_values: list,
+                           sig: str, seed_health: list, health_flags: list,
+                           multi_day_validation, sensor_audit, flows_out: dict,
+                           conf_out: dict) -> dict:
+    """The published scenario JSON payload, factored out so the benchmark harness
+    can build the byte-identical artifact from the same inputs.
+
+    Behavior-preserving: this is exactly the dict ``main()`` assembled inline
+    before publication — same keys, values, ordering, the date-vs-multi-day and
+    multi_day_validation omission rules, and the ``generated_at`` field (passed
+    in so the caller controls the timestamp; it is a non-semantic field the
+    digest strips). Nothing about production output changed. The literal is kept
+    as ``payload = { "epoch": ... }`` so the published-payload no-timing-keys
+    guard in tests/test_scenario_timing.py continues to inspect it here.
+    """
+    payload = {
+        "epoch":            meta["epoch_sim"],
+        "interval_minutes": 15,
+        "n_quarters":       n_intervals,
+        "generated_at":     generated_at,
+        "scenario_spec":    spec.to_dict(),
+        "trajectories":     traj_name,
+        "scenario": {
+            "name": name, "scenario_id": spec.scenario_id, "label": label,
+            "closed_edges": close_edges,
+            "closures": closures,
+            "window": window_label,
+            "source": meta.get("source", "historical"),
+            "agent_demand": meta.get("agent_demand"),
+            "truncated_vehicles": n_truncated,
+            "dropped_vehicles":   n_dropped,
+            "active_closure_edge_entries": active_closure_entries,
+            "active_closure_edge_entries_by_seed": active_entries_by_seed,
+            "closure_integrity": closure_integrity,
+            **({"date": meta["date"], "begin": meta["begin"], "end": meta["end"]}
+               if "date" in meta else
+               {"start_date": meta["start_date"],
+                "end_date_exclusive": meta["end_date_exclusive"],
+                "days": meta["days"]}),
+            "seeds": seed_count,
+            "seed_set": seed_values,
+            "simulation_mode": spec.simulation_mode,
+            "network_build_id": spec.network_build_id,
+            "demand_signature": sig,
+            "build_id": meta.get("build_id"),
+            "demand_build_key": meta.get("demand_build_key"),
+        },
+        "seed_health":       seed_health,
+        "seed_health_flags": health_flags,
+        **({"multi_day_validation": multi_day_validation}
+           if multi_day_validation is not None else {}),
+        "sensor_audit":      sensor_audit,
+        "flows":      flows_out,
+        "confidence": conf_out,
+    }
+    return payload
+
+
 def index_for_current_demand(index: dict, signature: str) -> dict:
     """Drop manifest entries generated from another demand calibration."""
     scenarios = [
@@ -293,6 +358,251 @@ def index_for_current_demand(index: dict, signature: str) -> dict:
         if s.get("demand_signature") == signature
     ]
     return {"demand_signature": signature, "scenarios": scenarios}
+
+
+# ── Optional phase timing (LUNA-PERF-03) ──────────────────────────────────────
+# Where the seconds-level budget actually goes cannot be guessed from a single
+# wall time: the same 13.8 s run may be dominated by SUMO, by aggregation or by
+# publication, and optimizing the wrong one is how a "faster" system quietly
+# gets worse. These phases are wall-clock, non-overlapping and opt-in: with no
+# --timing-sidecar the timer is inert and every output, error and side effect
+# is byte-for-byte what it was before.
+PHASE_SCHEMA_VERSION = 1
+# The demand variants a scenario may legitimately map a seed to, and the
+# inputs whose digests must appear in every profile. Both are checked so a
+# sidecar cannot claim an identity it does not have.
+DEMAND_VARIANT_VALUES = frozenset({"q10", "q50", "q90", "edge_shares"})
+REQUIRED_PROFILE_FINGERPRINTS = ("run_scenario", "network", "demand_meta")
+PHASE_NAMES = (
+    "input_validation",
+    "closure_preparation",
+    "job_preparation",
+    "sumo_execution",
+    "aggregation_validation",
+    "trajectory_publication",
+    "scenario_publication",
+    "cleanup",
+)
+
+
+class PhaseTimer:
+    """Accumulate non-overlapping wall time per phase for one scenario run.
+
+    Only one phase may be open at a time, enforced rather than documented: a
+    nested phase would double-count and make the profile a fiction. Per-seed
+    SUMO times are recorded separately and deliberately NOT added to the phase
+    sum, because seeds may run concurrently and would otherwise exceed the
+    total.
+    """
+
+    def __init__(self, enabled: bool = False) -> None:
+        self.enabled = bool(enabled)
+        self._elapsed = {name: 0.0 for name in PHASE_NAMES}
+        self._active: str | None = None
+        self._seed_seconds: dict[int, float] = {}
+        self._seed_job_seconds: dict[int, float] = {}
+        self._started = time.perf_counter()
+        self._frozen: float | None = None
+
+    @contextlib.contextmanager
+    def phase(self, name: str):
+        if not self.enabled:
+            yield
+            return
+        if name not in self._elapsed:
+            raise ValueError(f"unknown timing phase: {name!r}")
+        if self._active is not None:
+            raise RuntimeError(
+                f"timing phase {name!r} opened inside {self._active!r}; "
+                "phases must not overlap")
+        self._active = name
+        started = time.perf_counter()
+        try:
+            yield
+        finally:
+            self._elapsed[name] += time.perf_counter() - started
+            self._active = None
+
+    def record_seed(self, seed: int, sumo_seconds: float,
+                    job_seconds: float | None = None) -> None:
+        """Record one seed's SUMO time, and optionally its whole job span."""
+        if self.enabled:
+            self._seed_seconds[int(seed)] = float(sumo_seconds)
+            self._seed_job_seconds[int(seed)] = float(
+                sumo_seconds if job_seconds is None else job_seconds)
+
+    def freeze(self) -> None:
+        """Stop the clock before hashing, validating or writing the sidecar.
+
+        Python evaluates arguments before the call, so building the profile
+        would otherwise fold the profiler's own SHA-256 work into `total` and
+        `unattributed` — the reported total must measure the scenario path,
+        not the cost of measuring it.
+        """
+        if self._frozen is None:
+            self._frozen = time.perf_counter() - self._started
+
+    def timings(self) -> dict:
+        total = (self._frozen if self._frozen is not None
+                 else time.perf_counter() - self._started)
+        phases = {name: round(value, 6) for name, value in self._elapsed.items()}
+        return {
+            "phases": phases,
+            "total": round(total, 6),
+            "unattributed": round(total - sum(self._elapsed.values()), 6),
+            # SUMO process time per seed, and the wider per-seed job span
+            # (SUMO plus that seed's own edgedata/health/summary parsing).
+            # Both are reported because they answer different questions and
+            # neither belongs in the non-overlapping phase sum.
+            "sumo_seconds_by_seed": {str(seed): round(value, 6)
+                                     for seed, value in
+                                     sorted(self._seed_seconds.items())},
+            "seed_job_seconds_by_seed": {str(seed): round(value, 6)
+                                         for seed, value in
+                                         sorted(self._seed_job_seconds.items())},
+        }
+
+
+def phase_profile(timer: PhaseTimer, *, scenario_id: str, closures: list,
+                  simulation_mode: str, seed_set: list, variant_mapping: dict,
+                  demand_signature_value: str, demand_build_key,
+                  network_build_id: str, source_fingerprints: dict,
+                  status: str = "succeeded") -> dict:
+    """Build and VALIDATE the timing sidecar for a finished run.
+
+    Timing that cannot be tied to the exact scenario, closures, seeds, demand
+    and network it came from is not evidence, and neither is timing that does
+    not add up. Both failures raise instead of producing a sidecar, so a
+    profiler defect can never be read later as a measurement.
+    """
+    timings = timer.timings()
+    profile = {
+        "schema_version": PHASE_SCHEMA_VERSION,
+        "kind": "scenario_phase_profile",
+        "status": status,
+        "scenario_id": scenario_id,
+        "closures": closures,
+        "simulation_mode": simulation_mode,
+        "seed_set": list(seed_set),
+        "demand_variant_mapping": {str(seed): variant
+                                   for seed, variant in sorted(variant_mapping.items())},
+        "demand_signature": demand_signature_value,
+        "demand_build_key": demand_build_key,
+        "network_build_id": network_build_id,
+        "source_fingerprints": dict(source_fingerprints),
+        "phase_schema": list(PHASE_NAMES),
+        **timings,
+    }
+    validate_phase_profile(profile)
+    return profile
+
+
+def validate_phase_profile(profile: dict) -> None:
+    """Raise ValueError unless the profile is complete, bound and consistent.
+
+    Every identity here is one a later optimization could otherwise be judged
+    against wrongly: a profile that names the right scenario but a different
+    seed set, demand build, network or source generation describes a run
+    nobody asked about. Structure is checked, not merely presence.
+    """
+    def finite(value) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) \
+            and math.isfinite(float(value))
+
+    def is_digest(value) -> bool:
+        return (isinstance(value, str) and len(value) == 64
+                and set(value) <= set("0123456789abcdef"))
+
+    if profile.get("schema_version") != PHASE_SCHEMA_VERSION:
+        raise ValueError("phase profile schema version is not current")
+    if profile.get("kind") != "scenario_phase_profile":
+        raise ValueError("phase profile kind is invalid")
+    if profile.get("status") != "succeeded":
+        raise ValueError("only a succeeded run may produce a phase profile")
+    for field in ("scenario_id", "simulation_mode", "demand_signature",
+                  "demand_build_key"):
+        if not isinstance(profile.get(field), str) or not profile[field]:
+            raise ValueError(f"phase profile is missing identity: {field}")
+    if profile["simulation_mode"] not in {"meso", "micro"}:
+        raise ValueError("phase profile simulation_mode is not meso or micro")
+    if not is_digest(profile.get("network_build_id")):
+        raise ValueError("phase profile is missing identity: network_build_id")
+    if profile.get("phase_schema") != list(PHASE_NAMES):
+        raise ValueError("phase profile schema does not match the frozen phases")
+
+    closures = profile.get("closures")
+    if not isinstance(closures, list):
+        raise ValueError("phase profile is missing identity: closures")
+    for closure in closures:
+        if (not isinstance(closure, dict)
+                or not isinstance(closure.get("edge_id"), str)
+                or not closure["edge_id"]
+                or not isinstance(closure.get("start_time"), str)
+                or not isinstance(closure.get("end_time"), str)):
+            raise ValueError("phase profile closure record is malformed")
+        try:
+            if pd.Timestamp(closure["start_time"]) >= pd.Timestamp(closure["end_time"]):
+                raise ValueError
+        except (ValueError, TypeError):
+            raise ValueError(
+                "phase profile closure window is not a valid ordered "
+                "start/end datetime pair") from None
+
+    seed_set = profile.get("seed_set")
+    if (not isinstance(seed_set, list) or not seed_set
+            or any(isinstance(seed, bool) or not isinstance(seed, int)
+                   for seed in seed_set)):
+        raise ValueError("phase profile is missing identity: seed_set")
+    if len(set(seed_set)) != len(seed_set):
+        raise ValueError("phase profile seed_set contains duplicate seeds")
+    mapping = profile.get("demand_variant_mapping")
+    if not isinstance(mapping, dict) or {str(seed) for seed in seed_set} != set(mapping):
+        raise ValueError("phase profile seed/demand-variant mapping is incomplete")
+    if any(variant not in DEMAND_VARIANT_VALUES for variant in mapping.values()):
+        raise ValueError(
+            "phase profile demand variant must be one of "
+            + ", ".join(sorted(DEMAND_VARIANT_VALUES)))
+
+    sources = profile.get("source_fingerprints")
+    if not isinstance(sources, dict):
+        raise ValueError("phase profile is missing identity: source_fingerprints")
+    missing = set(REQUIRED_PROFILE_FINGERPRINTS) - set(sources)
+    if missing:
+        raise ValueError(
+            "phase profile is missing source fingerprints: "
+            + ", ".join(sorted(missing)))
+    for name, digest in sources.items():
+        if not is_digest(digest):
+            raise ValueError(f"source fingerprint {name} is not a sha256 digest")
+
+    phases = profile.get("phases")
+    if not isinstance(phases, dict) or set(phases) != set(PHASE_NAMES):
+        raise ValueError("phase profile does not carry exactly the frozen phases")
+    for name, value in phases.items():
+        if not finite(value) or value < 0:
+            raise ValueError(f"phase {name} is not a finite non-negative time")
+    total, unattributed = profile.get("total"), profile.get("unattributed")
+    if not finite(total) or total <= 0:
+        raise ValueError("phase profile total is not a positive finite time")
+    if not finite(unattributed) or unattributed < 0:
+        raise ValueError("phases overlap or exceed the total run time")
+    if abs((sum(phases.values()) + unattributed) - total) > 1e-3:
+        raise ValueError("phases plus unattributed time do not equal the total")
+
+    expected_seeds = {str(seed) for seed in seed_set}
+    for field in ("sumo_seconds_by_seed", "seed_job_seconds_by_seed"):
+        by_seed = profile.get(field)
+        if not isinstance(by_seed, dict) or expected_seeds != set(by_seed):
+            raise ValueError(f"{field} does not cover exactly the seed set")
+        for seed, value in by_seed.items():
+            if not finite(value) or value < 0:
+                raise ValueError(f"seed {seed} time in {field} is not finite "
+                                 "non-negative")
+    for seed in expected_seeds:
+        if profile["seed_job_seconds_by_seed"][seed] + 1e-6 < \
+                profile["sumo_seconds_by_seed"][seed]:
+            raise ValueError(
+                f"seed {seed} job span is shorter than its SUMO span")
 
 
 def parse_args() -> argparse.Namespace:
@@ -331,6 +641,11 @@ def parse_args() -> argparse.Namespace:
                         "(IMPROVEMENT_PLAN.md E2): build the complete new set aside, "
                         "validate it, then atomically switch. Default: the "
                         "live directory, unchanged behaviour.")
+    p.add_argument("--timing-sidecar", default=None, metavar="PATH",
+                   help="Write an optional result-neutral phase-timing "
+                        "sidecar for this run. Omit it and nothing about the "
+                        "run changes; the sidecar is never part of the "
+                        "scenario or trajectory payload.")
     p.add_argument("--keep-scratch", action="store_true",
                    help="Keep this run's isolated SUMO workspace for diagnosis "
                         "instead of deleting it after successful publication.")
@@ -1568,6 +1883,26 @@ def parse_vehroute_file(vr_file: Path, web_edges: set[str],
     return (*result, sampling) if return_sampling else result
 
 
+def build_trajectory_payload(seed: int, variant: str, vehicles: list,
+                             n_unfinished: int, inserted, sampling,
+                             inv: list) -> dict:
+    """The trajectory JSON payload, factored out so the benchmark harness can
+    build the byte-identical artifact from the same inputs.
+
+    Behavior-preserving: this is exactly the dict
+    ``publish_trajectories_from_vehroute`` writes; nothing about keys, values,
+    ordering or the ``displayed_share`` rounding/omission rule changed.
+    """
+    return {"seed": seed, "variant": variant,
+            "n_vehicles": len(vehicles),
+            "n_unfinished": n_unfinished,
+            "inserted_in_run": inserted,
+            "sampling": sampling,
+            "displayed_share": (round(len(vehicles) / inserted, 4)
+                                if inserted else None),
+            "edges": inv, "vehicles": vehicles}
+
+
 def publish_trajectories_from_vehroute(
         name: str, route_path: Path, vr_file: Path, stats_path: Path,
         web_edges: set[str], seed: int = 1000,
@@ -1609,14 +1944,9 @@ def publish_trajectories_from_vehroute(
 
     traj_name = f"{name}_traj.json"
     atomic_write_json(OUT_DIR / traj_name,
-                      {"seed": seed, "variant": route_path.name,
-                       "n_vehicles": len(vehicles),
-                       "n_unfinished": n_unfinished,
-                       "inserted_in_run": inserted,
-                       "sampling": sampling,
-                       "displayed_share": (round(len(vehicles) / inserted, 4)
-                                           if inserted else None),
-                       "edges": inv, "vehicles": vehicles},
+                      build_trajectory_payload(seed, route_path.name, vehicles,
+                                               n_unfinished, inserted, sampling,
+                                               inv),
                       separators=(",", ":"))
     size_mb = (OUT_DIR / traj_name).stat().st_size / 1e6
     print(f"  trajectories: {len(vehicles)} of {inserted or '?'} vehicles "
@@ -1683,6 +2013,61 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
         web_edges, seed=1000)
 
 
+class _EdgeDataTarget:
+    """Streaming XMLParser target for SUMO edgeData — the parse_edgedata hot
+    path without materializing an ElementTree.
+
+    ``ET.parse().findall()`` builds an Element for every interval and edge,
+    then walks child lists twice; on a whole-day file (96 intervals x thousands
+    of edges) that Element construction dominates. Reading attributes straight
+    off the parser's ``start`` events keeps the identical result — same keys,
+    same float64 arrays, same last-write-wins on duplicates, same
+    out-of-range-interval skipping — with none of the tree overhead. The
+    numeric/None/missing-attribute error paths mirror the tree version exactly
+    (``float(None)`` -> TypeError on a missing ``begin``; a non-numeric
+    ``entered`` -> ValueError; malformed XML -> ParseError from the feed loop).
+
+    Depth matters: the tree version used ``root.findall("interval")`` and
+    ``interval.findall("edge")`` — DIRECT children only. A depth counter here
+    reproduces that exactly, so an ``interval`` nested inside a wrapper (not a
+    direct child of the root) and an ``edge`` nested below an interval (not its
+    direct child) are both ignored, just as ``findall`` ignored them. Matching
+    tags at any depth would have invented flows the tree parser never returned.
+    """
+
+    def __init__(self, n_intervals: int):
+        self.n_intervals = n_intervals
+        self.flows: dict[str, np.ndarray] = {}
+        self._depth = 0
+        self._i: int | None = None      # set only while a direct-child interval
+
+    def start(self, tag, attrib):
+        self._depth += 1
+        if self._depth == 2 and tag == "interval":
+            # A direct child of the root, like root.findall("interval").
+            # Matches int(float(begin)//900): missing begin -> float(None) ->
+            # TypeError, exactly as the tree version raised.
+            self._i = int(float(attrib.get("begin")) // 900)
+        elif (self._depth == 3 and tag == "edge"
+                and self._i is not None and self._i < self.n_intervals):
+            # A direct child of a matched interval, like interval.findall("edge").
+            eid = attrib.get("id")
+            entered = float(attrib.get("entered") or 0)
+            arr = self.flows.get(eid)
+            if arr is None:
+                arr = np.zeros(self.n_intervals)
+                self.flows[eid] = arr
+            arr[self._i] = entered
+
+    def end(self, tag):
+        if self._depth == 2 and tag == "interval":
+            self._i = None
+        self._depth -= 1
+
+    def close(self):
+        return self.flows
+
+
 def parse_edgedata(
     path: Path,
     n_intervals: int,
@@ -1696,18 +2081,11 @@ def parse_edgedata(
     same distinction explicitly for closed edges so a successful zero-flow
     closure is not mislabeled "not measurable".
     """
-    flows: dict[str, np.ndarray] = {}
-    root = ET.parse(path).getroot()
-    for interval in root.findall("interval"):
-        i = int(float(interval.get("begin")) // 900)
-        if i >= n_intervals:
-            continue
-        for edge in interval.findall("edge"):
-            eid = edge.get("id")
-            entered = float(edge.get("entered") or 0)
-            if eid not in flows:
-                flows[eid] = np.zeros(n_intervals)
-            flows[eid][i] = entered
+    parser = ET.XMLParser(target=_EdgeDataTarget(n_intervals))
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 16), b""):
+            parser.feed(chunk)
+    flows: dict[str, np.ndarray] = parser.close()
     for edge_id in measured_empty_edges:
         flows.setdefault(edge_id, np.zeros(n_intervals))
     return flows
@@ -1774,13 +2152,65 @@ def cleanup_scenario_workspace(workspace: Path, keep: bool = False) -> None:
     shutil.rmtree(workspace, ignore_errors=False)
 
 
+def prepare_variant_job(job: dict) -> dict:
+    """Filter one demand variant for a closure.
+
+    Pure per-variant work: it reads ``job["route_path"]`` and the shared
+    read-only graph/free-flow inputs, writes its own ``job["out_path"]``, and
+    returns that variant's truncated/dropped counts. ``prepare_closure_variants``
+    calls it serially in ``job["index"]`` order (the threaded variant was a
+    measured regression — PERF-13 measured closure preparation at 1.1644 s
+    serial versus 1.4596 s threaded). ``index`` is retained on the result so the
+    caller keeps the deterministic variant order explicit.
+    """
+    truncated, dropped = truncate_stranded_vehicles(
+        job["route_path"], job["close_edges"], job["out_path"], job["adj"],
+        closures=job["closures"], edge_travel_s=job["edge_travel_s"])
+    return {"index": job["index"], "out_path": job["out_path"],
+            "truncated": truncated, "dropped": dropped}
+
+
+def prepare_closure_variants(prep_jobs: list[dict]) -> tuple[list[Path], int, int]:
+    """Filter every demand variant for a closure, in deterministic serial order.
+
+    Preparation is intentionally serial regardless of ``--seed-workers``.
+    LUNA-PERF-12 tried filtering the variants concurrently under the same
+    worker bound; the LUNA-PERF-13 v5 campaign measured that threaded path as a
+    REGRESSION (closure preparation 1.1644 s serial versus 1.4596 s threaded) —
+    it is a short, three-variant XML-parsing workload where thread setup/GIL
+    overhead outweighs any gain, and the closure budget is dominated by SUMO
+    execution, not preparation. The multi-seed SUMO executor is a separate,
+    independently approved concurrency and is untouched.
+
+    A raised filtering call propagates immediately, so a partial filter never
+    reaches the caller — the caller must not publish a scenario or cache from a
+    raised preparation.
+    """
+    results = [prepare_variant_job(job) for job in prep_jobs]
+    filtered = [result["out_path"] for result in results]
+    truncated = sum(result["truncated"] for result in results)
+    dropped = sum(result["dropped"] for result in results)
+    return filtered, truncated, dropped
+
+
 def run_seed_job(job: dict) -> dict:
     """Run and parse one independent SUMO seed.
 
     All paths in job are seed-specific. The function is intentionally free of
     publication or aggregation side effects so a bounded executor can run it
     concurrently while the parent retains deterministic seed ordering.
+
+    When the caller asks for timing (``job["timing"]``), two spans are
+    measured here because only the worker knows them: ``sumo_seconds`` covers
+    the SUMO process alone, and ``seed_job_seconds`` covers that plus this
+    seed's own edgedata/health/summary parsing. Reporting the wider span as
+    SUMO time would have blamed the simulator for parsing. Without the flag
+    no clock is read and no timing field is returned, so the default path is
+    exactly as before.
     """
+    timing = bool(job.get("timing"))
+    job_started = time.perf_counter() if timing else None
+    sumo_started = time.perf_counter() if timing else None
     run_sumo(
         job["seed"], job["route_path"], job["add_paths"], job["duration_s"],
         job["home"], micro=job["micro"], stats_path=job["stats_file"],
@@ -1788,6 +2218,7 @@ def run_seed_job(job: dict) -> dict:
         vehroute_write_unfinished=job.get("vehroute_write_unfinished", False),
         summary_output=job.get("summary_file"),
         work_dir=job["work_dir"])
+    sumo_seconds = (time.perf_counter() - sumo_started) if timing else None
     flows = parse_edgedata(
         job["edge_file"], job["n_intervals"],
         measured_empty_edges=job.get("closure_edges", ()))
@@ -1802,7 +2233,7 @@ def run_seed_job(job: dict) -> dict:
         )
         if health is not None:
             health["multi_day"] = daily
-    return {
+    result = {
         "seed": job["seed"],
         "route_path": job["route_path"],
         "demand_variant": job.get("demand_variant"),
@@ -1811,6 +2242,11 @@ def run_seed_job(job: dict) -> dict:
         "health": health,
         "multi_day": daily,
     }
+    if timing:
+        # Diagnostic only: never published, never part of any digest.
+        result["sumo_seconds"] = sumo_seconds
+        result["seed_job_seconds"] = time.perf_counter() - job_started
+    return result
 
 
 def main() -> None:
@@ -1818,6 +2254,9 @@ def main() -> None:
     _LAST_SCENARIO_OUTPUT = None
     _LAST_TRAJECTORY_OUTPUT = None
     args = parse_args()
+    timer = PhaseTimer(enabled=bool(args.timing_sidecar))
+    validation = timer.phase("input_validation")
+    validation.__enter__()
     if args.out_dir:
         OUT_DIR = Path(args.out_dir)
     home = sumo_home()
@@ -1900,6 +2339,10 @@ def main() -> None:
     else:
         label = "Baslinje (ingen avstängning)"
 
+    validation.__exit__(None, None, None)
+
+    job_preparation = timer.phase("job_preparation")
+    job_preparation.__enter__()
     scratch_dir = create_scenario_workspace(name)
 
     variants = demand_variants(meta)
@@ -1943,8 +2386,12 @@ def main() -> None:
     if len(variants) > 1:
         print(f"  {len(variants)} demand variants (q50 + direction-split bounds)")
 
+    job_preparation.__exit__(None, None, None)
+
     closure_add: list[Path] = []
     n_truncated = n_dropped = 0   # stay 0 for a baseline (no-closure) run
+    closure_preparation = timer.phase("closure_preparation")
+    closure_preparation.__enter__()
     if close_edges:
         rerouter_edges = edges_near(close_edges, REROUTER_RADIUS_M)
         print(f"  rerouter on {len(rerouter_edges)} edges within "
@@ -1960,17 +2407,27 @@ def main() -> None:
         # hide them after the fact.
         adj = build_edge_graph(set(close_edges))
         freeflow = edge_freeflow_times()
-        filtered_variants = []
-        for vp in variants:
-            fp = scratch_dir / f"{vp.stem}_{name}.rou.xml"
-            t, d = truncate_stranded_vehicles(
-                vp, close_edges, fp, adj,
-                # Preserve the exact tested function path for legacy --close.
-                closures=closures if windowed_closure else None,
-                edge_travel_s=freeflow)
-            n_truncated += t
-            n_dropped += d
-            filtered_variants.append(fp)
+        # One independent filtering job per demand variant, sharing the
+        # read-only graph/free-flow inputs and each writing its own staged
+        # output. `adj` and `freeflow` are computed once here, not per job.
+        prep_jobs = [{
+            "index": index,
+            "route_path": vp,
+            "close_edges": close_edges,
+            "out_path": scratch_dir / f"{vp.stem}_{name}.rou.xml",
+            "adj": adj,
+            # Preserve the exact tested function path for legacy --close.
+            "closures": closures if windowed_closure else None,
+            "edge_travel_s": freeflow,
+        } for index, vp in enumerate(variants)]
+
+        # Preparation is serial regardless of --seed-workers (the threaded
+        # variant was a measured regression). A raised filter propagates before
+        # `variants` is replaced or anything is published, so a partial filter
+        # can never reach a scenario or the cache.
+        filtered_variants, t_total, d_total = prepare_closure_variants(prep_jobs)
+        n_truncated += t_total
+        n_dropped += d_total
         if n_truncated:
             print(f"  truncated {n_truncated} vehicle(s) with no detour around "
                   f"the closure to end just short of it (parked there instead "
@@ -1981,6 +2438,10 @@ def main() -> None:
                   f"depart with the closure in place")
         variants = filtered_variants
 
+    closure_preparation.__exit__(None, None, None)
+
+    job_preparation = timer.phase("job_preparation")
+    job_preparation.__enter__()
     trajectory_enabled = want_trajectories(args, n_intervals)
     trajectory_stats_file = None
     trajectory_seed = seed_values[0]
@@ -2025,8 +2486,13 @@ def main() -> None:
             "vehroute_output": trajectory_vr_file,
             "vehroute_write_unfinished": (seed == trajectory_seed and trajectory_enabled),
             "work_dir": seed_dir,
+            "timing": timer.enabled,
         })
 
+    job_preparation.__exit__(None, None, None)
+
+    sumo_execution = timer.phase("sumo_execution")
+    sumo_execution.__enter__()
     if args.seed_workers == 1 or len(jobs) == 1:
         results = [run_seed_job(job) for job in jobs]
     else:
@@ -2044,6 +2510,13 @@ def main() -> None:
         else:
             executor.shutdown(wait=True)
 
+    sumo_execution.__exit__(None, None, None)
+    for result in results:
+        timer.record_seed(result["seed"], result.get("sumo_seconds", 0.0),
+                          result.get("seed_job_seconds"))
+
+    aggregation = timer.phase("aggregation_validation")
+    aggregation.__enter__()
     # Completion order is intentionally discarded. Confidence and JSON output
     # must use the same seed order for serial and parallel execution.
     results.sort(key=lambda item: item["seed"])
@@ -2139,6 +2612,10 @@ def main() -> None:
     window_label = demand_window_label(meta)
 
     traj_name = None
+    aggregation.__exit__(None, None, None)
+
+    trajectory_publication = timer.phase("trajectory_publication")
+    trajectory_publication.__enter__()
     if trajectory_enabled and trajectory_stats_file is not None and trajectory_route_path is not None:
         traj_name = publish_trajectories_from_vehroute(
             name, trajectory_route_path,
@@ -2148,50 +2625,22 @@ def main() -> None:
             max_vehicles_per_day=trajectory_sample_cap(n_intervals))
         _LAST_TRAJECTORY_OUTPUT = OUT_DIR / traj_name
 
-    payload = {
-        "epoch":            meta["epoch_sim"],
-        "interval_minutes": 15,
-        "n_quarters":       n_intervals,
-        "generated_at":     pd.Timestamp.now().isoformat(timespec="seconds"),
-        "scenario_spec":    spec.to_dict(),
-        "trajectories":     traj_name,
-        "scenario": {
-            "name": name, "scenario_id": spec.scenario_id, "label": label,
-            "closed_edges": close_edges,
-            "closures": closures,
-            "window": window_label,
-            "source": meta.get("source", "historical"),
-            "agent_demand": meta.get("agent_demand"),
-            # Disruption-quality signal, previously only printed to the
-            # build log and lost — a closure with a high truncated/dropped
-            # count is a lower-confidence scenario and the UI/API consumer
-            # has no other way to see that (found in review 2026-07-10).
-            "truncated_vehicles": n_truncated,
-            "dropped_vehicles":   n_dropped,
-            "active_closure_edge_entries": active_closure_entries,
-            "active_closure_edge_entries_by_seed": active_entries_by_seed,
-            "closure_integrity": closure_integrity,
-            **({"date": meta["date"], "begin": meta["begin"], "end": meta["end"]}
-               if "date" in meta else
-               {"start_date": meta["start_date"],
-                "end_date_exclusive": meta["end_date_exclusive"],
-                "days": meta["days"]}),
-            "seeds": seed_count,
-            "seed_set": seed_values,
-            "simulation_mode": spec.simulation_mode,
-            "network_build_id": spec.network_build_id,
-            "demand_signature": sig,
-            "build_id": meta.get("build_id"),
-            "demand_build_key": meta.get("demand_build_key"),
-        },
-        "seed_health":       seed_health,
-        "seed_health_flags": health_flags,
-        **({"multi_day_validation": multi_day_validation}
-           if multi_day_validation is not None else {}),
-        "sensor_audit":      sensor_audit,
-        "flows":      flows_out,
-        "confidence": conf_out,
-    }
+    trajectory_publication.__exit__(None, None, None)
+
+    scenario_publication = timer.phase("scenario_publication")
+    scenario_publication.__enter__()
+    payload = build_scenario_payload(
+        meta=meta, n_intervals=n_intervals,
+        generated_at=pd.Timestamp.now().isoformat(timespec="seconds"),
+        spec=spec, traj_name=traj_name, name=name, label=label,
+        close_edges=close_edges, closures=closures, window_label=window_label,
+        n_truncated=n_truncated, n_dropped=n_dropped,
+        active_closure_entries=active_closure_entries,
+        active_entries_by_seed=active_entries_by_seed,
+        closure_integrity=closure_integrity, seed_count=seed_count,
+        seed_values=seed_values, sig=sig, seed_health=seed_health,
+        health_flags=health_flags, multi_day_validation=multi_day_validation,
+        sensor_audit=sensor_audit, flows_out=flows_out, conf_out=conf_out)
     out_path = OUT_DIR / f"{name}.json"
     atomic_write_json(out_path, payload, separators=(",", ":"))
     _LAST_SCENARIO_OUTPUT = out_path
@@ -2217,13 +2666,43 @@ def main() -> None:
     index["scenarios"].sort(key=lambda s: s["name"])
     atomic_write_json(index_path, index, indent=2)
     print(f"Updated {index_path}  ({len(index['scenarios'])} scenarios)")
-    try:
-        cleanup_scenario_workspace(scratch_dir, keep=args.keep_scratch)
-    except OSError as exc:
-        # Publication is complete. Keep the result visible but record cleanup
-        # failure instead of turning a successful simulation into a false
-        # failed run.
-        print(f"  WARNING could not remove scratch {scratch_dir}: {exc}")
+    scenario_publication.__exit__(None, None, None)
+
+    with timer.phase("cleanup"):
+        try:
+            cleanup_scenario_workspace(scratch_dir, keep=args.keep_scratch)
+        except OSError as exc:
+            # Publication is complete. Keep the result visible but record
+            # cleanup failure instead of turning a successful simulation into
+            # a false failed run.
+            print(f"  WARNING could not remove scratch {scratch_dir}: {exc}")
+
+    timer.freeze()   # the scenario path ends here; profiler work is not it
+
+    if args.timing_sidecar:
+        # Written last, only for a run that fully succeeded, and only after
+        # validation: a profile that cannot be tied to this exact scenario or
+        # whose times do not add up must fail the profiler rather than become
+        # a measurement someone later optimizes against.
+        profile = phase_profile(
+            timer,
+            scenario_id=name,
+            closures=contract_closures(closures, meta["epoch_sim"], duration_s),
+            simulation_mode="micro" if args.micro else "meso",
+            seed_set=seed_values,
+            variant_mapping=variant_by_seed,
+            demand_signature_value=sig,
+            demand_build_key=meta.get("demand_build_key"),
+            network_build_id=str(sha256_file(NET_PATH)),
+            source_fingerprints={
+                name_: str(digest) for name_, digest in (
+                    ("run_scenario", sha256_file(Path(__file__))),
+                    ("network", sha256_file(NET_PATH)),
+                    ("demand_meta", sha256_file(SUMO_DIR / "demand_meta.json")),
+                ) if digest},
+        )
+        atomic_write_json(Path(args.timing_sidecar), profile, indent=2)
+        print(f"Wrote phase profile {args.timing_sidecar}")
 
 
 def _tracked_main() -> None:
