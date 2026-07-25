@@ -16,7 +16,11 @@ from typing import Any, Mapping, Sequence
 
 from traffic_sim.core.closure_calendar import generate_closure_schedules
 from traffic_sim.core.contracts import ClosureSearchSpec
-from traffic_sim.simulation.monthly_proxy import PROXY_VERSION
+from traffic_sim.simulation.monthly_proxy import (
+    HELD_OUT_VALIDATED_SHORTLIST_POLICY,
+    PROXY_VERSION,
+    SHORTLIST_VERSION,
+)
 
 
 SCHEMA_VERSION = 1
@@ -35,6 +39,12 @@ _GATE_FIELDS = (
     "practical_winner_recall_minimum",
     "p90_normalized_shortlist_regret_maximum",
     "failure_disqualification_recall_minimum",
+)
+# Additive discrimination checks used by v3/v4. Earlier manifests do not
+# contain these fields and retain their original gate semantics unchanged.
+_OPTIONAL_GATE_FIELDS = (
+    "minimum_discriminating_case_fraction",
+    "discriminating_practical_winner_recall_minimum",
 )
 
 
@@ -164,18 +174,25 @@ def validate_validation_manifest(
     gate_raw = raw.get("gate")
     gate: dict[str, float] | None = None
     if gate_raw is not None:
-        if not isinstance(gate_raw, Mapping) or set(gate_raw) != set(_GATE_FIELDS):
+        if not isinstance(gate_raw, Mapping) or set(_GATE_FIELDS) - set(gate_raw):
             raise ValueError(
-                "validation manifest gate must define exactly "
+                "validation manifest gate must define at least "
                 + ", ".join(_GATE_FIELDS)
+            )
+        unknown = set(gate_raw) - set(_GATE_FIELDS) - set(_OPTIONAL_GATE_FIELDS)
+        if unknown:
+            raise ValueError(
+                "validation manifest gate has unknown fields: "
+                + ", ".join(sorted(unknown))
             )
         gate = {
             field: _number(gate_raw[field], f"gate.{field}")
             for field in _GATE_FIELDS
+            + tuple(field for field in _OPTIONAL_GATE_FIELDS if field in gate_raw)
         }
         if gate["practical_equivalence_s"] <= 0:
             raise ValueError("gate.practical_equivalence_s must be positive")
-        for field in _GATE_FIELDS[1:]:
+        for field in sorted(set(gate) - {"practical_equivalence_s"}):
             if not 0 < gate[field] <= 1:
                 raise ValueError(
                     f"gate.{field} must be above zero and at most one"
@@ -281,6 +298,47 @@ def validate_validation_manifest(
             + json.dumps(coverage_missing, sort_keys=True)
         )
 
+    if "campaign_version" in raw and (
+        not isinstance(raw["campaign_version"], str) or not raw["campaign_version"]
+    ):
+        raise ValueError("validation manifest campaign_version is invalid")
+    if "shortlist_version" in raw and (
+        not isinstance(raw["shortlist_version"], str) or not raw["shortlist_version"]
+    ):
+        raise ValueError("validation manifest shortlist_version is invalid")
+    if raw.get("shortlist_version") not in (None, SHORTLIST_VERSION):
+        raise ValueError("validation manifest shortlist_version is not current")
+    if "shortlist_policy_content_key" in raw and (
+        not isinstance(raw["shortlist_policy_content_key"], str)
+        or raw["shortlist_policy_content_key"]
+        != HELD_OUT_VALIDATED_SHORTLIST_POLICY.content_key
+    ):
+        raise ValueError(
+            "validation manifest shortlist_policy_content_key is not current"
+        )
+    if "status" in raw and (
+        not isinstance(raw["status"], str) or not raw["status"]
+    ):
+        raise ValueError("validation manifest status is invalid")
+    if "outcomes_present_at_freeze" in raw and raw["outcomes_present_at_freeze"] is not False:
+        raise ValueError("validation manifest cannot contain outcomes at freeze")
+    if "outcomes_path" in raw and raw["outcomes_path"] is not None and not isinstance(raw["outcomes_path"], str):
+        raise ValueError("validation manifest outcomes_path is invalid")
+    for field in ("policy_content_key", "selection_content_key", "source_identity"):
+        if field in raw and (not isinstance(raw[field], str) or not raw[field]):
+            raise ValueError(f"validation manifest {field} is invalid")
+    fingerprints = raw.get("source_fingerprints")
+    if fingerprints is not None:
+        if not isinstance(fingerprints, Mapping) or not fingerprints:
+            raise ValueError("validation manifest source_fingerprints is invalid")
+        for name, digest in fingerprints.items():
+            if (
+                not isinstance(name, str) or not name
+                or not isinstance(digest, str) or len(digest) != 64
+                or any(char not in "0123456789abcdef" for char in digest)
+            ):
+                raise ValueError("validation manifest source_fingerprints is invalid")
+
     normalized_manifest = {
         "schema_version": SCHEMA_VERSION,
         "kind": "monthly_proxy_validation_manifest",
@@ -293,6 +351,24 @@ def validate_validation_manifest(
         "required_strata": required,
         "cases": sorted(cases, key=lambda case: case["case_id"]),
     }
+    # Preserve the frozen V4 provenance envelope in the canonical identity.
+    # These fields are optional so V1/V2 manifests normalize byte-for-byte as
+    # before, while a V4 refreeze cannot silently lose its source identity.
+    optional_fields = (
+        "campaign_version",
+        "shortlist_version",
+        "shortlist_policy_content_key",
+        "status",
+        "outcomes_present_at_freeze",
+        "outcomes_path",
+        "policy_content_key",
+        "selection_content_key",
+        "source_identity",
+        "source_fingerprints",
+    )
+    for field in optional_fields:
+        if field in raw:
+            normalized_manifest[field] = raw[field]
     if gate is not None:
         normalized_manifest["gate"] = gate
     supplied_key = raw.get("content_key")
@@ -443,6 +519,7 @@ def evaluate_validation_case(
             "normalized_shortlist_regret": None,
             "spearman_rho": None,
             "spearman_n": 0,
+            "objective_spread_s": None,
             "failure_disqualification_recall": failure_recall,
             "provenance": provenance,
         }
@@ -531,6 +608,10 @@ def evaluate_validation_case(
         "normalized_shortlist_regret": regret,
         "spearman_rho": spearman,
         "spearman_n": len(correlated),
+        "objective_spread_s": (
+            max(float(candidate["sumo_objective"]) for candidate in eligible)
+            - best_objective
+        ),
         "failure_disqualification_recall": failure_recall,
         "provenance": provenance,
     }
@@ -617,6 +698,27 @@ def evaluate_validation_set(
     )
     spearman_case_fraction = len(spearmans) / len(ranking_reports)
     ranking_case_fraction = len(ranking_reports) / len(case_reports)
+    discriminating = [
+        report for report in ranking_reports
+        if tolerance is not None
+        and report["objective_spread_s"] is not None
+        and report["objective_spread_s"] > tolerance
+    ]
+    discriminating_case_fraction = len(discriminating) / len(ranking_reports)
+    discriminating_practical_winner_recall = (
+        sum(bool(report["practical_winner_recalled"]) for report in discriminating)
+        / len(discriminating)
+        if discriminating
+        else None
+    )
+    discriminating_spearmans = [
+        report["spearman_rho"] for report in discriminating
+        if report["spearman_rho"] is not None
+    ]
+    spreads = [
+        report["objective_spread_s"] for report in ranking_reports
+        if report["objective_spread_s"] is not None
+    ]
     if gate:
         # Held-out v2 contract (step-4 recovery decision): gate on
         # practical-winner recall, regret and failure recall; Spearman and
@@ -650,6 +752,17 @@ def evaluate_validation_set(
                 len(regrets) == len(ranking_reports)
             ),
         }
+        if "minimum_discriminating_case_fraction" in gate:
+            gate_checks["discriminating_case_coverage"] = (
+                discriminating_case_fraction
+                >= gate["minimum_discriminating_case_fraction"]
+            )
+        if "discriminating_practical_winner_recall_minimum" in gate:
+            gate_checks["discriminating_practical_winner_recall"] = (
+                discriminating_practical_winner_recall is not None
+                and discriminating_practical_winner_recall
+                >= gate["discriminating_practical_winner_recall_minimum"]
+            )
     else:
         gate_checks = {
             "winner_recall": winner_recall >= WINNER_RECALL_GATE,
@@ -678,6 +791,10 @@ def evaluate_validation_set(
         "schema_version": SCHEMA_VERSION,
         "kind": "monthly_proxy_validation_report",
         "proxy_version": PROXY_VERSION,
+        "shortlist_version": manifest.get("shortlist_version"),
+        "shortlist_policy_content_key": manifest.get(
+            "shortlist_policy_content_key"
+        ),
         "manifest_content_key": manifest["content_key"],
         "case_count": len(case_reports),
         "metrics": {
@@ -697,6 +814,22 @@ def evaluate_validation_set(
             ),
             "spearman_case_fraction": round(spearman_case_fraction, 6),
             "ranking_case_fraction": round(ranking_case_fraction, 6),
+            "discriminating_case_fraction": round(
+                discriminating_case_fraction, 6
+            ),
+            "discriminating_practical_winner_recall": (
+                round(discriminating_practical_winner_recall, 6)
+                if discriminating_practical_winner_recall is not None
+                else None
+            ),
+            "median_spearman_discriminating": (
+                round(median(discriminating_spearmans), 6)
+                if discriminating_spearmans
+                else None
+            ),
+            "median_objective_spread_s": (
+                round(median(spreads), 3) if spreads else None
+            ),
             "failure_disqualification_recall": (
                 round(failure_recall, 6)
                 if failure_recall is not None
@@ -706,7 +839,7 @@ def evaluate_validation_set(
         },
         "thresholds": (
             {
-                **{field: gate[field] for field in _GATE_FIELDS},
+                **{field: gate[field] for field in sorted(gate)},
                 "minimum_ranking_case_fraction":
                     manifest["minimum_ranking_case_fraction"],
             }
@@ -843,6 +976,10 @@ def evaluate_partial_validation_set(
         "schema_version": SCHEMA_VERSION,
         "kind": "monthly_proxy_validation_report",
         "proxy_version": PROXY_VERSION,
+        "shortlist_version": manifest.get("shortlist_version"),
+        "shortlist_policy_content_key": manifest.get(
+            "shortlist_policy_content_key"
+        ),
         "manifest_content_key": manifest["content_key"],
         "case_count": len(reports),
         "required_case_count": len(manifest["cases"]),

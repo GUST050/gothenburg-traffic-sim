@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "kind": "heldout_v4_selection",
+  "campaign_version": "v4",
+  "status": "selection_frozen_pre_outcome",
+  "selection_method": "pilot_backed_structural_candidate_pool",
+  "pilot_selection_does_not_read_proxy": true,
+  "practical_equivalence_s": 300.0,
+  "selected_edge_count": 5,
+  "expected_discriminating_case_count": 2,
+  "selected_edges": [
+    {
+      "case_id": "v4-discriminating-secondary-a",
+      "edge_id": "30453237_30453238_0",
+      "expected_discriminating": true,
+      "structural": {
+        "road_class": "secondary",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "multiple_detours",
+        "length_m": 70.6,
+        "structural_daily_load": 10117.8,
+        "structural_peak_quarter_load": 208.5,
+        "strands_downstream": false
+      },
+      "pilot": {
+        "source": "runs/heldout-v3-pilot-8h/probes.json",
+        "demand_build_key": "2ac04275daabe93c",
+        "probe_minutes": 480,
+        "probe_spread_s": 629.9,
+        "both_probe_starts_eligible": true,
+        "hard_failures": []
+      }
+    },
+    {
+      "case_id": "v4-discriminating-secondary-b",
+      "edge_id": "311887170_33072008_0",
+      "expected_discriminating": true,
+      "structural": {
+        "road_class": "secondary",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "multiple_detours",
+        "length_m": 77.6,
+        "structural_daily_load": 12485.0,
+        "structural_peak_quarter_load": 257.3,
+        "strands_downstream": false
+      },
+      "pilot": {
+        "source": "runs/heldout-v3-pilot-8h/probes.json",
+        "demand_build_key": "2ac04275daabe93c",
+        "probe_minutes": 480,
+        "probe_spread_s": 457.9,
+        "both_probe_starts_eligible": true,
+        "hard_failures": []
+      }
+    },
+    {
+      "case_id": "v4-control-tertiary-near-tie",
+      "edge_id": "140582455_30440876_0",
+      "expected_discriminating": false,
+      "structural": {
+        "road_class": "tertiary",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "dense_alternatives",
+        "length_m": 69.2,
+        "structural_daily_load": 13355.9,
+        "structural_peak_quarter_load": 275.3,
+        "strands_downstream": false
+      },
+      "pilot": {
+        "source": "runs/heldout-v3-pilot-8h/probes.json",
+        "demand_build_key": "2ac04275daabe93c",
+        "probe_minutes": 480,
+        "probe_spread_s": 0.7,
+        "both_probe_starts_eligible": true,
+        "hard_failures": []
+      }
+    },
+    {
+      "case_id": "v4-control-tertiary-failure",
+      "edge_id": "314759711_312999711_0",
+      "expected_discriminating": false,
+      "expected_case_type": "failure_only",
+      "structural": {
+        "road_class": "tertiary",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "multiple_detours",
+        "length_m": 81.5,
+        "structural_daily_load": 12429.6,
+        "structural_peak_quarter_load": 256.2,
+        "strands_downstream": false
+      },
+      "pilot": {
+        "source": "runs/heldout-v3-pilot-8h/probes.json",
+        "demand_build_key": "2ac04275daabe93c",
+        "probe_minutes": 480,
+        "probe_spread_s": 197.2,
+        "both_probe_starts_eligible": false,
+        "hard_failures": ["active_closure_edge_throughput", "teleports"]
+      }
+    },
+    {
+      "case_id": "v4-control-secondary-failure",
+      "edge_id": "314759948_30480010_0",
+      "expected_discriminating": false,
+      "expected_case_type": "failure_only",
+      "structural": {
+        "road_class": "secondary",
+        "sensor_distance_band": "far_over_750m",
+        "topology": "multiple_detours",
+        "length_m": 153.8,
+        "structural_daily_load": 15548.9,
+        "structural_peak_quarter_load": 320.5,
+        "strands_downstream": false
+      },
+      "pilot": {
+        "source": "runs/heldout-v3-pilot-8h/probes.json",
+        "demand_build_key": "2ac04275daabe93c",
+        "probe_minutes": 480,
+        "probe_spread_s": 705.9,
+        "both_probe_starts_eligible": false,
+        "hard_failures": ["dropped_unreachable_vehicles", "truncated_unreachable_vehicles"]
+      }
+    }
+  ],
+  "disjointness": {
+    "v1_manifest_sha256": "6664e4b90228130c35b00dbd20bf9c53562cfe37dd008e993a7b870ba241f90a",
+    "v2_manifest_sha256": "c75710c3508e83f760e74deddf7e0a853bdd50f98cbd015d2d965294d08c03c9",
+    "v3_manifest_content_key": "b7b81a7a5f25709556239d0636edd4a876bb5ee0a0506a10567fc6bf441aeb3c",
+    "v1_edge_count": 12,
+    "v2_edge_count": 12,
+    "v3_edge_count": 13,
+    "v3_edges": [
+      "1913168786_1913168799_0",
+      "2330517042_8314649744_0",
+      "272522980_272522984_0",
+      "30479524_30479525_0",
+      "30479534_30482790_0",
+      "316821206_94232943_0",
+      "480080091_4731104418_0",
+      "6137877040_6137877005_0",
+      "6855062287_8314649744_0",
+      "7532496129_7532496152_0",
+      "83541163_199206152_0",
+      "8706000431_25658728_0",
+      "973134717_96523439_0"
+    ],
+    "selected_edges_disjoint_from_v1_v2_v3": true
+  },
+  "source_fingerprints": {
+    "sumo/assignment_priors.json": "ee75ac8350de4b25deebae273411422448dfdda6af0f86dfbe9aadc287e09874",
+    "web/data/network.geojson": "59493f1bffa1b0d278eca9803bf6ed19142b892111fff5c01e245e63a7528aef",
+    "runs/heldout-v3-pilot-8h/probes.json": "d4b8f35f68b4e7a4ac0727c248ebd41559350de56b55a1e13463cf5bb36d6472",
+    "runs/heldout-v3-pilot-daytype/probes.json": "1763bcb698defdd07434611de8c6568d0535e2228249135aeba887e09791190f"
+  },
+  "selection_content_key": "886aca871332d41ee5a4d2ed02bdf3ca9106164a62c766a1ef1b2885b705474d"
+}

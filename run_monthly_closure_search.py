@@ -212,9 +212,9 @@ def main() -> None:
                 **runner_options,
             )
         if args.screening_mode == "proxy":
-            # Screen with EXACTLY the policy the held-out v2 gate validated,
-            # so the shortlist the operator sees is the one whose recall/
-            # regret were measured. road_domain_status matches the
+            # Screen with EXACTLY the frozen v4 campaign policy. Until the
+            # fresh gate passes, the new shortlist remains release-blocked;
+            # road_domain_status matches the
             # validation runner (in_domain); per-worksite coverage scoring
             # is a future refinement the gate did not cover.
             screen_builder = lambda path: build_screening_artifact(

@@ -27,7 +27,7 @@ from traffic_sim.core.contracts import ClosureSchedule
 
 SCHEMA_VERSION = 1
 PROXY_VERSION = "monthly_proxy_v1"
-SHORTLIST_VERSION = "stratified_shortlist_v2"
+SHORTLIST_VERSION = "stratified_shortlist_v3"
 _STRUCTURAL_SOURCES = frozenset({
     "forecast_sensor",
     "learned_direction_prior",
@@ -131,6 +131,7 @@ class ShortlistPolicy:
     best_per_date_block: int = 1
     date_block_days: int = 7
     validation_quantiles: tuple[float, ...] = (0.25, 0.5, 0.75, 1.0)
+    exact_date_quantiles: tuple[float, ...] = ()
     low_support_multiplier: float = 2.0
     unavailable_multiplier: float = 2.5
     bounded_exhaustive_limit: int = 120
@@ -160,24 +161,40 @@ class ShortlistPolicy:
             or any(not 0 <= value <= 1 for value in self.validation_quantiles)
         ):
             raise ValueError("validation quantiles must be from zero through one")
+        if any(not 0 <= value <= 1 for value in self.exact_date_quantiles):
+            raise ValueError("exact-date quantiles must be from zero through one")
+
+    @property
+    def content_key(self) -> str:
+        """Stable identity of the exact shortlist policy being executed."""
+        return _canonical_key({
+            "best_overall": self.best_overall,
+            "best_per_day_count": self.best_per_day_count,
+            "best_per_date_block": self.best_per_date_block,
+            "date_block_days": self.date_block_days,
+            "validation_quantiles": list(self.validation_quantiles),
+            "exact_date_quantiles": list(self.exact_date_quantiles),
+            "low_support_multiplier": self.low_support_multiplier,
+            "unavailable_multiplier": self.unavailable_multiplier,
+            "bounded_exhaustive_limit": self.bounded_exhaustive_limit,
+            "maximum_shortlist": self.maximum_shortlist,
+        }, length=32)
 
 
-# The screening policy the held-out v2 gate actually validated (practical-
-# winner recall 1.0, regret 0.0).  Deployment MUST screen with exactly this
-# policy, or the "held-out validated" claim would not cover the shortlist
-# the operator sees.  `run_monthly_proxy_validation.VALIDATION_POLICY` keeps
-# its own copy (that file is on the frozen held-out path and stays
-# byte-identical); an equality test guards the two against silent drift.
+# The screening policy for the fresh v4 campaign. Deployment and the
+# validation runner must use exactly this policy; the old v2 gate is not
+# allowed to authorize this new shortlist identity.
 HELD_OUT_VALIDATED_SHORTLIST_POLICY = ShortlistPolicy(
     best_overall=2,
     best_per_day_count=1,
     best_per_date_block=1,
     date_block_days=7,
     validation_quantiles=(0.5, 1.0),
+    exact_date_quantiles=(0.0, 1.0),
     low_support_multiplier=2.0,
     unavailable_multiplier=2.5,
     bounded_exhaustive_limit=1,
-    maximum_shortlist=32,
+    maximum_shortlist=96,
 )
 
 
@@ -672,6 +689,7 @@ def stratified_shortlist(
             "schema_version": SCHEMA_VERSION,
             "proxy_version": PROXY_VERSION,
             "shortlist_version": SHORTLIST_VERSION,
+            "shortlist_policy_content_key": policy.content_key,
             "selection_mode": "bounded_exhaustive_fallback",
             "entries": entries,
             "scoreable_candidate_count": len(ranked_copy),
@@ -706,6 +724,7 @@ def stratified_shortlist(
             "schema_version": SCHEMA_VERSION,
             "proxy_version": PROXY_VERSION,
             "shortlist_version": SHORTLIST_VERSION,
+            "shortlist_policy_content_key": policy.content_key,
             "selection_mode": "no_scoreable_candidates",
             "entries": entries,
             "scoreable_candidate_count": 0,
@@ -778,6 +797,22 @@ def stratified_shortlist(
     for block, group in sorted(by_block.items()):
         for candidate in group[: policy.best_per_date_block]:
             choose(candidate, f"best_date_block:{block}")
+
+    # Keep both ends of the proxy ordering for every exact first-work date.
+    # Quantiles 0.0 and 1.0 are the frozen minimum/maximum endpoints.
+    if policy.exact_date_quantiles:
+        by_date: dict[str, list[Mapping[str, Any]]] = {}
+        for candidate in ranked_copy:
+            by_date.setdefault(str(candidate["first_work_date"]), []).append(
+                candidate
+            )
+        for date, group in sorted(by_date.items()):
+            for fraction in policy.exact_date_quantiles:
+                position = round(fraction * (len(group) - 1))
+                choose(
+                    group[position],
+                    f"exact_date_control:{date}:q{fraction:.2f}",
+                )
 
     for fraction in policy.validation_quantiles:
         position = round(fraction * (len(ranked_copy) - 1))
@@ -855,6 +890,7 @@ def stratified_shortlist(
         "schema_version": SCHEMA_VERSION,
         "proxy_version": PROXY_VERSION,
         "shortlist_version": SHORTLIST_VERSION,
+        "shortlist_policy_content_key": policy.content_key,
         "selection_mode": mode,
         "entries": entries,
         "scoreable_candidate_count": len(ranked_copy),

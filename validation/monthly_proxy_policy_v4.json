@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "kind": "monthly_proxy_v4_policy_design",
+  "campaign_version": "v4",
+  "shortlist_version": "stratified_shortlist_v3",
+  "status": "design_frozen_pre_outcome",
+  "selection_rule": {
+    "best_overall": 2,
+    "best_per_day_count": 1,
+    "best_per_date_block": 1,
+    "date_block_days": 7,
+    "exact_first_work_date_endpoints": {
+      "enabled": true,
+      "directions": ["proxy_minimum", "proxy_maximum"],
+      "per_exact_date": 2
+    },
+    "validation_quantiles": [0.5, 1.0],
+    "low_support_multiplier": 2.0,
+    "unavailable_multiplier": 2.5,
+    "bounded_exhaustive_limit": 1,
+    "maximum_shortlist": 96,
+    "missing_evidence_policy": "fail_closed"
+  },
+  "thresholds": {
+    "practical_equivalence_s": 300.0,
+    "practical_winner_recall_minimum": 0.9,
+    "p90_normalized_shortlist_regret_maximum": 0.1,
+    "failure_disqualification_recall_minimum": 0.6,
+    "minimum_discriminating_case_fraction": 0.4,
+    "discriminating_practical_winner_recall_minimum": 0.9
+  },
+  "identity": {
+    "policy_content_key_algorithm": "sha256-canonical-selection-rule-and-thresholds",
+    "policy_content_key": "65798d8f1a8f1ec69c6bcaae5947c1ddcbfe9c9335b1d5ce4a28c0ff06153daa",
+    "source_identity": "monthly-proxy-v4-stratified-shortlist-v3",
+    "outcome_identity": "untouched-v4-only",
+    "v3_replay_status": "diagnostic_only_not_release_evidence"
+  }
+}

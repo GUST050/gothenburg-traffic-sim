@@ -25,7 +25,7 @@ from traffic_sim.core.contracts import (
 )
 from traffic_sim.core.fingerprint import sha256_file, sumo_version
 from traffic_sim.simulation import metrics as closure_metrics
-from traffic_sim.simulation.monthly_proxy import ShortlistPolicy
+from traffic_sim.simulation.monthly_proxy import ShortlistPolicy, SHORTLIST_VERSION
 from traffic_sim.simulation.proxy_validation import (
     evaluate_partial_validation_set,
     evaluate_validation_set,
@@ -41,11 +41,56 @@ VALIDATION_POLICY = ShortlistPolicy(
     best_per_date_block=1,
     date_block_days=7,
     validation_quantiles=(0.5, 1.0),
+    exact_date_quantiles=(0.0, 1.0),
     low_support_multiplier=2.0,
     unavailable_multiplier=2.5,
     bounded_exhaustive_limit=1,
-    maximum_shortlist=32,
+    maximum_shortlist=96,
 )
+
+
+def gate_record_for(
+    report: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    completed_cases: int,
+) -> dict[str, Any] | None:
+    """Return local evidence for a passing run; publication remains gated.
+
+    The record must name the campaign it came from. An unlabelled campaign is
+    refused instead of being defaulted to the current one, a report built
+    against a different manifest is refused, and an incomplete run is refused:
+    each of those would otherwise produce a record the loader could mistake
+    for untouched evidence of the frozen campaign.
+    """
+    campaign_version = manifest.get("campaign_version")
+    manifest_content_key = manifest.get("content_key")
+    if (
+        report.get("gate_status") != "pass"
+        or manifest.get("shortlist_version") != SHORTLIST_VERSION
+        or manifest.get("shortlist_policy_content_key")
+        != VALIDATION_POLICY.content_key
+        or not isinstance(campaign_version, str)
+        or not campaign_version
+        or not isinstance(manifest_content_key, str)
+        or not manifest_content_key
+        or report.get("manifest_content_key") != manifest_content_key
+        or completed_cases != len(manifest["cases"])
+    ):
+        return None
+    return {
+        **{
+            key: value
+            for key, value in report.items()
+            if key != "case_reports"
+        },
+        "kind": "monthly_proxy_validation_gate_record",
+        "heldout_set": campaign_version,
+        "manifest_content_key": manifest_content_key,
+        "required_cases": len(manifest["cases"]),
+        "completed_cases": completed_cases,
+        "shortlist_version": SHORTLIST_VERSION,
+        "shortlist_policy_content_key": VALIDATION_POLICY.content_key,
+    }
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -459,6 +504,10 @@ def main() -> None:
         "schema_version": 1,
         "kind": "monthly_proxy_validation_outcomes",
         "proxy_version": manifest["proxy_version"],
+        "shortlist_version": manifest.get("shortlist_version"),
+        "shortlist_policy_content_key": manifest.get(
+            "shortlist_policy_content_key"
+        ),
         "manifest_content_key": manifest["content_key"],
         "cases": outcomes,
         "missing_cases": [
@@ -473,6 +522,9 @@ def main() -> None:
         _atomic_json(run_root / "outcomes.json", complete)
         report = evaluate_validation_set(manifest, complete)
         _atomic_json(run_root / "report.json", report)
+        gate_record = gate_record_for(report, manifest, len(outcomes))
+        if gate_record is not None:
+            _atomic_json(run_root / "gate_record.json", gate_record)
         print(
             f"Validation {report['gate_status']}: {report['metrics']}; "
             f"UI exposure={report['ui_exposure_allowed']}"

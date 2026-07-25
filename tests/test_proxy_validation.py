@@ -203,6 +203,10 @@ def test_gate_passes_only_complete_held_out_evidence():
         "median_spearman": 1.0,
         "spearman_case_fraction": 1.0,
         "ranking_case_fraction": 1.0,
+        "discriminating_case_fraction": 0.0,
+        "discriminating_practical_winner_recall": None,
+        "median_spearman_discriminating": None,
+        "median_objective_spread_s": 100.0,
         "failure_disqualification_recall": 1.0,
         "total_disqualified_schedules": 2,
     }
@@ -339,11 +343,39 @@ def test_gate_object_is_content_keyed_and_validated():
     plain = _manifest()
     gated = _gated_manifest()
     assert gated["content_key"] != plain["content_key"]
-    with pytest.raises(ValueError, match="gate must define exactly"):
+    with pytest.raises(ValueError, match="gate must define at least"):
         _gated_manifest(lambda raw: raw["gate"].pop("practical_equivalence_s"))
     with pytest.raises(ValueError, match="must be positive"):
         _gated_manifest(
             lambda raw: raw["gate"].update(practical_equivalence_s=0))
+
+
+def test_discriminating_fraction_uses_ranking_cases_only():
+    manifest = _gated_manifest(lambda raw: raw["gate"].update(
+        minimum_discriminating_case_fraction=0.5,
+        discriminating_practical_winner_recall_minimum=0.9,
+    ))
+    schedules = {
+        case["case_id"]: case["schedule_ids"] for case in manifest["cases"]
+    }
+    outcomes = _outcomes(
+        manifest,
+        **{
+            "case-a": _case_outcome(
+                "case-a", schedules["case-a"],
+                objectives=[0.0, 10.0, 20.0, 100.0, 200.0],
+                failing=(),
+            ),
+            "case-b": _case_outcome(
+                "case-b", schedules["case-b"],
+                failing=(0, 1, 2, 3, 4),
+            ),
+        },
+    )
+    report = evaluate_validation_set(manifest, outcomes)
+    assert report["metrics"]["ranking_case_fraction"] == 0.5
+    assert report["metrics"]["discriminating_case_fraction"] == 1.0
+    assert report["gate_checks"]["discriminating_case_coverage"] is True
     with pytest.raises(ValueError, match="at most one"):
         _gated_manifest(
             lambda raw: raw["gate"].update(practical_winner_recall_minimum=1.5))

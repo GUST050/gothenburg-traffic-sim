@@ -59,6 +59,33 @@ def _policy(status="provisional"):
     )
 
 
+V4_MANIFEST = Path("validation/monthly_proxy_manifest_v4.json")
+
+
+def _frozen_campaign_gate_record(**overrides):
+    """A gate record for the frozen campaign, as the runner would write it.
+
+    Built from the frozen manifest rather than hardcoded, so a record can only
+    look valid while it names the campaign and manifest actually frozen.
+    """
+    manifest = json.loads(V4_MANIFEST.read_text())
+    record = {
+        "kind": "monthly_proxy_validation_gate_record",
+        "heldout_set": manifest["campaign_version"],
+        "manifest_content_key": manifest["content_key"],
+        "required_cases": len(manifest["cases"]),
+        "completed_cases": len(manifest["cases"]),
+        "proxy_version": manifest["proxy_version"],
+        "shortlist_version": manifest["shortlist_version"],
+        "shortlist_policy_content_key": manifest["shortlist_policy_content_key"],
+        "gate_status": "pass",
+        "ui_exposure_allowed": True,
+        "global_best_claim_allowed": True,
+    }
+    record.update(overrides)
+    return record
+
+
 def _screen_builder(spec_path):
     spec = load_closure_search_spec(spec_path)
     schedules = generate_closure_schedules(spec)
@@ -214,15 +241,7 @@ def test_bounded_exhaustive_result_is_ui_exposable_and_gate_aware(
     assert boundary["best_result_scope"] == "sumo_verified_bounded_exhaustive"
 
     passing = tmp_path / "gate.json"
-    passing.write_text(json.dumps({
-        "kind": "monthly_proxy_validation_gate_record",
-        "heldout_set": "v2",
-        "proxy_version": "monthly_proxy_v1",
-        "manifest_content_key": "m" * 64,
-        "gate_status": "pass",
-        "ui_exposure_allowed": True,
-        "global_best_claim_allowed": True,
-    }))
+    passing.write_text(json.dumps(_frozen_campaign_gate_record()))
     monkeypatch.setattr(monthly_search, "HELDOUT_GATE_RECORD", passing)
     released = run_monthly_search(
         _spec("monthly-exhaustive-released"),
@@ -242,15 +261,7 @@ def test_validated_proxy_screening_is_released_but_others_stay_closed(
     import traffic_sim.simulation.monthly_search as monthly_search
 
     passing = tmp_path / "gate.json"
-    passing.write_text(json.dumps({
-        "kind": "monthly_proxy_validation_gate_record",
-        "heldout_set": "v2",
-        "proxy_version": "monthly_proxy_v1",
-        "manifest_content_key": "m" * 64,
-        "gate_status": "pass",
-        "ui_exposure_allowed": True,
-        "global_best_claim_allowed": True,
-    }))
+    passing.write_text(json.dumps(_frozen_campaign_gate_record()))
     monkeypatch.setattr(monthly_search, "HELDOUT_GATE_RECORD", passing)
 
     def proxy_builder(version):
@@ -301,21 +312,10 @@ def test_failed_or_malformed_gate_record_fails_closed(tmp_path):
     assert load_passing_heldout_gate(malformed) is None
 
 
-def test_tracked_v2_gate_record_is_a_valid_passing_release_record():
+def test_tracked_v2_gate_record_fails_closed_after_shortlist_policy_change():
     from traffic_sim.simulation.monthly_search import load_passing_heldout_gate
     record = load_passing_heldout_gate()
-    assert record is not None
-    assert record["heldout_set"] == "v2"
-    assert record["proxy_version"] == "monthly_proxy_v1"
-    metrics = record["metrics"]
-    thresholds = record["thresholds"]
-    assert metrics["practical_winner_recall"] >= (
-        thresholds["practical_winner_recall_minimum"])
-    assert metrics["p90_normalized_shortlist_regret"] <= (
-        thresholds["p90_normalized_shortlist_regret_maximum"])
-    assert metrics["failure_disqualification_recall"] >= (
-        thresholds["failure_disqualification_recall_minimum"])
-    assert record["completed_cases"] == record["required_cases"] == 12
+    assert record is None
 
 
 def test_runs_full_resumable_pipeline_and_remains_fail_closed(tmp_path):
@@ -522,3 +522,95 @@ def test_tracked_golden_monthly_search_passes_but_keeps_release_gate_closed():
         Path("validation/monthly_search_policy_v1.json").read_text()
     ))
     assert policy.content_key == record["policy"]["content_key"]
+
+
+def test_only_the_frozen_campaign_record_opens_the_release_gate(tmp_path):
+    """The relabelling hole Sol found: a v1-v3 or diagnostic record carrying
+    the CURRENT shortlist identity must not license the frozen campaign."""
+    from traffic_sim.simulation.monthly_search import (
+        frozen_campaign_identity,
+        load_passing_heldout_gate,
+    )
+
+    identity = frozen_campaign_identity()
+    assert identity is not None
+    frozen = tmp_path / "v4-gate.json"
+    frozen.write_text(json.dumps(_frozen_campaign_gate_record()))
+    accepted = load_passing_heldout_gate(frozen)
+    assert accepted is not None
+    assert accepted["heldout_set"] == identity["campaign_version"]
+    assert accepted["manifest_content_key"] == identity["manifest_content_key"]
+
+    rejected = {
+        "earlier_campaign_label": {"heldout_set": "v3"},
+        "another_campaigns_manifest": {"manifest_content_key": "m" * 64},
+        "diagnostic_replay": {"heldout_set": "v3-replay"},
+        "incomplete_run": {"completed_cases": identity["required_cases"] - 1},
+        "case_count_from_another_set": {
+            "required_cases": identity["required_cases"] + 1},
+        "missing_manifest_identity": {"manifest_content_key": None},
+        "missing_case_counts": {"completed_cases": None},
+    }
+    for name, override in rejected.items():
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(_frozen_campaign_gate_record(**override)))
+        assert load_passing_heldout_gate(path) is None, name
+
+
+def test_gate_loading_fails_closed_without_a_readable_frozen_campaign(
+        tmp_path, monkeypatch):
+    import traffic_sim.simulation.monthly_search as monthly_search
+
+    frozen = tmp_path / "gate.json"
+    frozen.write_text(json.dumps(_frozen_campaign_gate_record()))
+    assert monthly_search.load_passing_heldout_gate(frozen) is not None
+
+    monkeypatch.setattr(monthly_search, "HELDOUT_CAMPAIGN_MANIFEST",
+                        tmp_path / "absent-manifest.json")
+    assert monthly_search.frozen_campaign_identity() is None
+    assert monthly_search.load_passing_heldout_gate(frozen) is None
+
+
+def test_a_tampered_frozen_manifest_closes_the_gate(tmp_path, monkeypatch):
+    """Binding is only meaningful if the manifest is verified, not read."""
+    import traffic_sim.simulation.monthly_search as monthly_search
+
+    manifest = json.loads(V4_MANIFEST.read_text())
+    manifest["cases"] = manifest["cases"][:-1]        # content key no longer recomputes
+    tampered = tmp_path / "manifest.json"
+    tampered.write_text(json.dumps(manifest))
+    monkeypatch.setattr(monthly_search, "HELDOUT_CAMPAIGN_MANIFEST", tampered)
+    assert monthly_search.frozen_campaign_identity() is None
+
+
+def test_gate_record_creation_refuses_records_it_cannot_bind():
+    """Creation side of the same rule: no campaign label, a report from
+    another manifest, or an incomplete run must not become a gate record."""
+    import run_monthly_proxy_validation as runner
+
+    manifest = json.loads(V4_MANIFEST.read_text())
+    report = {
+        "gate_status": "pass",
+        "manifest_content_key": manifest["content_key"],
+        "ui_exposure_allowed": True,
+        "global_best_claim_allowed": True,
+        "case_reports": [{"case_id": "dropped-from-the-record"}],
+    }
+    complete = len(manifest["cases"])
+
+    record = runner.gate_record_for(report, manifest, complete)
+    assert record is not None
+    assert record["heldout_set"] == manifest["campaign_version"]
+    assert record["manifest_content_key"] == manifest["content_key"]
+    assert record["required_cases"] == record["completed_cases"] == complete
+    assert "case_reports" not in record
+
+    unlabelled = {key: value for key, value in manifest.items()
+                  if key != "campaign_version"}
+    assert runner.gate_record_for(report, unlabelled, complete) is None
+    other_manifest_report = {**report, "manifest_content_key": "m" * 64}
+    assert runner.gate_record_for(other_manifest_report, manifest,
+                                  complete) is None
+    assert runner.gate_record_for(report, manifest, complete - 1) is None
+    assert runner.gate_record_for({**report, "gate_status": "unbound"},
+                                  manifest, complete) is None

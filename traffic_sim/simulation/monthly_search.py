@@ -33,6 +33,10 @@ from traffic_sim.simulation.pilot_selection import (
     PilotPolicy,
     select_pilot_finalists,
 )
+from traffic_sim.simulation.monthly_proxy import (
+    HELD_OUT_VALIDATED_SHORTLIST_POLICY,
+    SHORTLIST_VERSION,
+)
 from traffic_sim.simulation.search_workspace import (
     DEFAULT_ROOT,
     SearchWorkspace,
@@ -48,13 +52,65 @@ POLICY_STATUSES = frozenset({"provisional", "golden_frozen"})
 # AND an untouched held-out set passed practical-winner recall, regret and
 # failure recall.  Any problem with the record fails closed to the
 # pre-release claim boundary.
-HELDOUT_GATE_RECORD = Path("validation") / "monthly_proxy_v2_gate.json"
+HELDOUT_GATE_RECORD = Path("validation") / "monthly_proxy_v4_gate.json"
+# The frozen campaign a passing record must belong to. Kept beside the gate
+# path so the loader can bind a record to the exact untouched campaign and
+# manifest identity rather than to the shortlist policy alone.
+HELDOUT_CAMPAIGN_MANIFEST = (
+    Path("validation") / "monthly_proxy_manifest_v4.json"
+)
+
+
+def frozen_campaign_identity(
+    path: Path | None = None,
+) -> dict[str, Any] | None:
+    """Identity of the frozen held-out campaign, or None (fail closed).
+
+    Read through the production manifest validator, so a manifest whose
+    recorded content key no longer recomputes is refused rather than trusted.
+    """
+    from traffic_sim.simulation.proxy_validation import (
+        validate_validation_manifest,
+    )
+
+    try:
+        manifest = validate_validation_manifest(json.loads(
+            Path(path if path is not None else HELDOUT_CAMPAIGN_MANIFEST)
+            .read_text(encoding="utf-8")
+        ))
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return None
+    campaign_version = manifest.get("campaign_version")
+    content_key = manifest.get("content_key")
+    if (
+        not isinstance(campaign_version, str)
+        or not campaign_version
+        or not isinstance(content_key, str)
+        or not content_key
+        or not manifest.get("cases")
+    ):
+        return None
+    return {
+        "campaign_version": campaign_version,
+        "manifest_content_key": content_key,
+        "required_cases": len(manifest["cases"]),
+    }
 
 
 def load_passing_heldout_gate(
     path: Path | None = None,
 ) -> dict[str, Any] | None:
-    """Return the passing held-out gate record, or None (fail closed)."""
+    """Return the passing held-out gate record, or None (fail closed).
+
+    A gate record licenses claims for ONE campaign. Checking only the
+    shortlist identity left a relabelling hole: any earlier (v1-v3) or
+    diagnostic record carrying the current shortlist version and key would
+    open the release gate. The record must therefore also name the frozen
+    campaign, its exact manifest content key, and a complete case set.
+    """
+    identity = frozen_campaign_identity()
+    if identity is None:
+        return None
     try:
         record = json.loads(
             Path(path if path is not None else HELDOUT_GATE_RECORD)
@@ -69,6 +125,14 @@ def load_passing_heldout_gate(
         or record.get("ui_exposure_allowed") is not True
         or record.get("global_best_claim_allowed") is not True
         or not isinstance(record.get("proxy_version"), str)
+        or record.get("shortlist_version") != SHORTLIST_VERSION
+        or record.get("shortlist_policy_content_key")
+        != HELD_OUT_VALIDATED_SHORTLIST_POLICY.content_key
+        or record.get("heldout_set") != identity["campaign_version"]
+        or record.get("manifest_content_key")
+        != identity["manifest_content_key"]
+        or record.get("required_cases") != identity["required_cases"]
+        or record.get("completed_cases") != identity["required_cases"]
     ):
         return None
     return record
