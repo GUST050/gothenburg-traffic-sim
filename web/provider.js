@@ -176,3 +176,148 @@ class NormalProfile {
     return (v !== null && v !== undefined) ? v : null;
   }
 }
+
+
+// DeltaProvider — the comparison seam: "what did closing this road change?"
+//
+// It wraps two ALREADY-LOADED providers (a baseline and a closure scenario)
+// rather than fetching anything, so it plugs in behind the same flowAt()
+// interface the renderer already speaks and needs no new pipeline artifact.
+//
+// Three honesty rules are built in, because a raw subtraction would overstate
+// what the simulation can support:
+//
+//  1. Seed noise. Scenario flows are Monte Carlo means over seeds. Measured on
+//     the checked-in baseline, busy edges carry a 6-19% coefficient of
+//     variation BETWEEN seeds. A change smaller than that is what re-running
+//     with different seeds would produce anyway, so it is reported as
+//     'within_noise' and drawn neutral instead of coloured.
+//  2. The accuracy gradient. run_scenario writes
+//     confidence = spatial_prior * exp(-CV). Where the spatial prior is 0 the
+//     CV cannot be recovered and no claim is supportable; those edges are
+//     still shown (hiding them would hide real redistribution) but marked
+//     unclaimable so the UI can say so.
+//  3. Low volumes. A street going 0 -> 2 vehicles is +200% and means nothing.
+//     A minimum baseline volume gates the relative view.
+class DeltaProvider {
+  // spatialPrior: {edgeId -> network.geojson confidence} (the exp(-d^2/2s^2)
+  // prior), needed to invert the published confidence formula.
+  constructor(baseline, closure, spatialPrior) {
+    this.baseline     = baseline;
+    this.closure      = closure;
+    this._prior       = spatialPrior || {};
+    this.isDelta      = true;
+    this.isScenario   = false;   // delta styling, not confidence styling
+    this.numQuarters  = Math.min(baseline.numQuarters, closure.numQuarters);
+    this.epoch        = closure.epoch;
+    this.closedEdges  = closure.closedEdges || [];
+    this.closures     = closure.closures ?? null;
+    this.label        = closure.label;
+    this.source       = closure.source;
+    // Fields the renderer and app read straight off the active provider. A
+    // wrapper that omits any of them silently degrades a panel or throws
+    // mid-redraw, so they are forwarded explicitly rather than by chance.
+    this.confidence   = closure.confidence;
+    this.trajectories = closure.trajectories;
+    this.sensorAudit  = closure.sensorAudit;
+    this.agentDemand  = closure.agentDemand;
+    this._cv          = {};      // edgeId -> recovered CV, or null
+  }
+
+  // Renderer contract: an edge is comparable only when BOTH arms carry it.
+  // Reporting an edge the baseline lacks would present "appeared from
+  // nothing" as a redistribution effect.
+  hasEdge(edgeId) {
+    return this.closure.hasEdge(edgeId) && this.baseline.hasEdge(edgeId);
+  }
+
+  isEdgeClosed(edgeId, qi) {
+    return this.closure.isEdgeClosed
+      ? this.closure.isEdgeClosed(edgeId, qi) : false;
+  }
+
+  // Delegate the plain flow question to the closure arm so any existing
+  // caller of flowAt() keeps getting a real, unmodified flow value.
+  flowAt(edgeId, qi)      { return this.closure.flowAt(edgeId, qi); }
+  maxFlow(edgeId)         { return this.closure.maxFlow(edgeId); }
+  calmFlow(edgeId)        { return this.closure.calmFlow ? this.closure.calmFlow(edgeId) : null; }
+  dateFromQI(qi)          { return this.closure.dateFromQI(qi); }
+  closureWindowText(id)   { return this.closure.closureWindowText?.(id); }
+
+  baselineAt(edgeId, qi)  { return this.baseline.flowAt(edgeId, qi); }
+
+  // closure - baseline for one quarter. null when either side has no data:
+  // a missing value is a gap, never a zero (project rule).
+  deltaAt(edgeId, qi) {
+    const after  = this.closure.flowAt(edgeId, qi);
+    const before = this.baseline.flowAt(edgeId, qi);
+    if (after === null || after === undefined) return null;
+    if (before === null || before === undefined) return null;
+    return after - before;
+  }
+
+  // Invert confidence = spatial_prior * exp(-CV). Returns null where the
+  // inversion is undefined rather than guessing a noise level.
+  cvFor(edgeId) {
+    if (edgeId in this._cv) return this._cv[edgeId];
+    let cv = null;
+    const prior = this._prior[edgeId];
+    const cb = this.baseline.confidence ? this.baseline.confidence[edgeId] : null;
+    const cc = this.closure.confidence  ? this.closure.confidence[edgeId]  : null;
+    if (typeof prior === 'number' && prior > 0 &&
+        typeof cb === 'number' && cb > 0 &&
+        typeof cc === 'number' && cc > 0) {
+      const rb = Math.min(cb / prior, 1);
+      const rc = Math.min(cc / prior, 1);
+      if (rb > 0 && rc > 0) {
+        // Combine both arms: the delta inherits noise from each side.
+        cv = Math.sqrt(Math.pow(-Math.log(rb), 2) + Math.pow(-Math.log(rc), 2));
+      }
+    }
+    this._cv[edgeId] = cv;
+    return cv;
+  }
+
+  // The full comparison for one edge at one quarter.
+  //   status: 'closed' | 'no_data' | 'unclaimable' | 'within_noise' | 'changed'
+  //   rel:    signed relative change, clamped to [-1, 1]; null when unusable
+  compare(edgeId, qi, minBaseline = 5) {
+    if (this.closedEdges.includes(edgeId)) {
+      return { status: 'closed', delta: null, rel: null, cv: null };
+    }
+    const before = this.baselineAt(edgeId, qi);
+    const after  = this.closure.flowAt(edgeId, qi);
+    if (before === null || before === undefined ||
+        after === null || after === undefined) {
+      return { status: 'no_data', delta: null, rel: null, cv: null };
+    }
+    const delta = after - before;
+    const cv = this.cvFor(edgeId);
+    // Below the volume floor a relative change is arithmetic noise.
+    if (before < minBaseline && after < minBaseline) {
+      return { status: 'within_noise', delta, rel: 0, cv };
+    }
+    const rel = delta / Math.max(before, minBaseline);
+    if (cv === null) {
+      return { status: 'unclaimable', delta, rel: Math.max(-1, Math.min(1, rel)), cv: null };
+    }
+    // Two combined sigma: below this, re-seeding alone explains the change.
+    if (Math.abs(rel) <= 2 * cv) {
+      return { status: 'within_noise', delta, rel: 0, cv };
+    }
+    return { status: 'changed', delta, rel: Math.max(-1, Math.min(1, rel)), cv };
+  }
+
+  // Whole-window totals for one edge — what a tooltip should quote.
+  totals(edgeId) {
+    let before = 0, after = 0, n = 0;
+    for (let qi = 0; qi < this.numQuarters; qi++) {
+      const b = this.baselineAt(edgeId, qi);
+      const a = this.closure.flowAt(edgeId, qi);
+      if (b === null || b === undefined || a === null || a === undefined) continue;
+      before += b; after += a; n++;
+    }
+    if (!n) return null;
+    return { before, after, delta: after - before, quarters: n };
+  }
+}

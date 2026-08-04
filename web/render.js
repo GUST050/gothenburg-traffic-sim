@@ -44,6 +44,26 @@ const Render = (() => {
     return Math.max(d, 10);
   }
 
+  // Diverging ramp for the COMPARISON view: green = less traffic than the
+  // baseline, red = more. Deliberately a separate function from rampColor(),
+  // which means "how busy is this street" — the two must never be confused,
+  // because green means "quiet" in one and "improved" in the other.
+  //
+  // Endpoints reuse the validated palette (#1f9d55 green, #dc2626 red) so the
+  // colours stay legible on the light CARTO basemap. The midpoint is a neutral
+  // slate rather than amber: amber reads as "moderately busy" from the other
+  // ramp, while no change should read as no signal at all.
+  //   r = -1 → all traffic gone, 0 → unchanged, +1 → doubled or more
+  function deltaColor(r) {
+    const MID = [100, 116, 139];   // slate-500, the "no change" anchor
+    const DOWN = [31, 157, 85];    // #1f9d55
+    const UP   = [220, 38, 38];    // #dc2626
+    const s = Math.min(Math.abs(r), 1);
+    const to = r < 0 ? DOWN : UP;
+    const c = MID.map((m, i) => Math.round(m + (to[i] - m) * s));
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
+  }
+
   // Anchors: #1f9d55 → #d97706 → #dc2626 (validated against light basemap)
   function rampColor(t) {
     let r, g, b;
@@ -118,6 +138,39 @@ const Render = (() => {
     // Because confidence = f(distance to nearest sensor), this renders as
     // visible certainty zones around the sensor clusters. Per-scenario
     // confidence (Monte Carlo spread) beats the static prior when present.
+    // Comparison view: colour by CHANGE against the baseline, not by volume.
+    // Placed before the scenario branch because a DeltaProvider is a scenario
+    // comparison, not a confidence display.
+    if (_provider.isDelta) {
+      const cmp = _provider.compare(edgeId, qi);
+      e.t = null; e.activeCars = 0;
+      e.cmp = cmp;
+      if (cmp.status === 'closed') {
+        e.line.setStyle({
+          color: '#111827', weight: 5, opacity: 0.95, dashArray: '6 5',
+        });
+        return;
+      }
+      if (cmp.status === 'no_data') {
+        // A gap is drawn as a gap — never as "no change".
+        e.line.setStyle({
+          color: '#cbd5e1', weight: 2, opacity: 0.25, dashArray: '2 4',
+        });
+        return;
+      }
+      // Unclaimable edges are shown but visibly weaker: the redistribution is
+      // real, the confidence to assert its size is not.
+      const claimable = cmp.status !== 'unclaimable';
+      e.line.setStyle({
+        color: deltaColor(cmp.rel ?? 0),
+        weight: e.isSensor ? 4 : 3,
+        opacity: cmp.status === 'within_noise' ? 0.35
+               : (claimable ? 0.9 : 0.5),
+        dashArray: claimable ? '' : '4 3',
+      });
+      return;
+    }
+
     if (_provider.isScenario) {
       const conf = (_provider.confidence && _provider.confidence[edgeId] != null)
         ? _provider.confidence[edgeId] : (e.conf ?? 0);
@@ -454,10 +507,47 @@ const Render = (() => {
           (_provider.confidence && _provider.confidence[id] != null)
             ? _provider.confidence[id] : confidence;
 
+        // Comparison tooltip: the numbers behind the colour. Always states
+        // WHY an edge is neutral, so "grey" is never ambiguous between
+        // "no change", "too little traffic to tell" and "no evidence".
+        const deltaHtml = () => {
+          if (!_provider.isDelta) return null;
+          const qi = typeof State !== 'undefined' ? State.qi : 0;
+          const cmp = _provider.compare(id, qi);
+          if (cmp.status === 'closed') {
+            return `<br><span style="color:#dc2626;font-weight:600">AVSTÄNGD i scenariot</span>`;
+          }
+          if (cmp.status === 'no_data') return `<br><small>Ingen data</small>`;
+          const before = _provider.baselineAt(id, qi);
+          const after  = _provider.flowAt(id, qi);
+          const sign   = cmp.delta > 0 ? '+' : '';
+          const col    = cmp.status === 'changed'
+            ? (cmp.delta < 0 ? '#1f9d55' : '#dc2626') : '#64748b';
+          let html = `<br>${before} → ${after} fordon / 15 min`
+            + `<br><b style="color:${col};font-size:1.15em">${sign}${cmp.delta}</b>`;
+          if (cmp.status === 'within_noise') {
+            html += `<br><small>Inom seed-bruset — ingen påvisbar förändring</small>`;
+          } else if (cmp.status === 'unclaimable') {
+            html += `<br><small>För långt från sensor för att styrka storleken</small>`;
+          } else if (cmp.cv !== null) {
+            html += ` <small>(brusgräns ±${Math.round(2 * cmp.cv * 100)}%)</small>`;
+          }
+          const tot = _provider.totals(id);
+          if (tot) {
+            const ts = tot.delta > 0 ? '+' : '';
+            html += `<br><small>Hela dygnet: ${ts}${Math.round(tot.delta)} fordon</small>`;
+          }
+          return html;
+        };
+
         if (!isSensor) {
           line.bindTooltip(() => {
             const qi = typeof State !== 'undefined' ? State.qi : 0;
             let html = `<b>${name ?? 'Okänd väg'}</b>`;
+            const cmpHtml = deltaHtml();
+            if (cmpHtml !== null) {
+              return html + cmpHtml + confHtml(edgeConf());
+            }
             if (_provider.hasEdge(id)) {
               const cnt = _provider.flowAt(id, qi);
               if (_provider.isEdgeClosed && _provider.isEdgeClosed(id, qi)) {

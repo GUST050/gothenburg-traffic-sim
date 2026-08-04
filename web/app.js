@@ -415,6 +415,76 @@
           }
         }
 
+        // ── Comparison view (baseline vs closure) ─────────────────────────
+        // Colours the map by CHANGE rather than volume. It wraps the two
+        // already-loaded providers instead of fetching anything, so it costs
+        // no extra request and works for any closure the user simulates.
+        const BASELINE_FILE = 'baseline.json';
+        let activeScenarioFile = null;
+        // Static per-edge spatial prior from network.geojson. DeltaProvider
+        // needs it to invert confidence = prior * exp(-CV) and recover the
+        // seed noise, which is what decides whether a change is claimable.
+        const spatialPrior = {};
+        for (const f of (networkPayload.features || [])) {
+          if (f.geometry?.type !== 'LineString') continue;
+          const p = f.properties || {};
+          if (typeof p.confidence === 'number') spatialPrior[p.id] = p.confidence;
+        }
+
+        const deltaToggle = document.getElementById('delta-toggle');
+        const deltaToggleWrap = document.getElementById('delta-toggle-wrap');
+        const deltaLegend = document.getElementById('delta-legend');
+
+        // A comparison needs a closure to compare AND a loaded baseline.
+        function comparisonAvailable() {
+          return !!(activeScenarioFile
+                    && activeScenarioFile !== BASELINE_FILE
+                    && scenProviders[BASELINE_FILE]
+                    && scenProviders[activeScenarioFile]);
+        }
+
+        function wrapForComparison(provider) {
+          if (!deltaToggle?.checked || !comparisonAvailable()) return provider;
+          return new DeltaProvider(
+            scenProviders[BASELINE_FILE], provider, spatialPrior);
+        }
+
+        function updateDeltaToggleVisibility() {
+          const usable = comparisonAvailable();
+          if (deltaToggleWrap) deltaToggleWrap.hidden = !usable;
+          if (!usable && deltaToggle) deltaToggle.checked = false;
+          if (deltaLegend) {
+            const on = usable && deltaToggle?.checked;
+            deltaLegend.hidden = !on;
+            if (on) {
+              deltaLegend.innerHTML =
+                '<span style="color:#1f9d55;font-weight:600">grön = mindre trafik</span> · ' +
+                '<span style="color:#64748b">grå = inom bruset</span> · ' +
+                '<span style="color:#dc2626;font-weight:600">röd = mer trafik</span>';
+            }
+          }
+        }
+
+        // Ensure the baseline is in memory so a comparison is possible without
+        // the user having to visit it first. Failure is non-fatal: the toggle
+        // simply stays hidden rather than the app breaking.
+        async function ensureBaselineLoaded() {
+          if (scenProviders[BASELINE_FILE]) return;
+          try {
+            scenProviders[BASELINE_FILE] = await new HistoricalProvider()
+              .load('data/scenarios/' + BASELINE_FILE + '?t=' + Date.now());
+          } catch (e) {
+            console.warn('baseline.json could not be loaded — comparison view unavailable', e);
+          }
+          updateDeltaToggleVisibility();
+        }
+
+        deltaToggle?.addEventListener('change', () => {
+          if (!activeScenarioFile || !scenProviders[activeScenarioFile]) return;
+          setMode(btnScen, wrapForComparison(scenProviders[activeScenarioFile]));
+          updateDeltaToggleVisibility();
+        });
+
         // Guards against rapid scenario-dropdown switching: an earlier,
         // slower fetch resolving after a later one would otherwise silently
         // revert the map to the previously-selected scenario even though
@@ -446,7 +516,15 @@
             }
           }
           if (token !== scenarioToken) return;   // a newer scenario switch happened meanwhile
-          setMode(btnScen, scenProviders[file]);
+          activeScenarioFile = file;
+          // Load the baseline alongside, so the comparison toggle is usable
+          // immediately instead of only after the user visits the baseline.
+          if (file !== BASELINE_FILE && !scenProviders[BASELINE_FILE]) {
+            await ensureBaselineLoaded();
+            if (token !== scenarioToken) return;   // superseded while loading
+          }
+          setMode(btnScen, wrapForComparison(scenProviders[file]));
+          updateDeltaToggleVisibility();
           // Scenario files start at their own epoch (window start)
           State.setQI(params.get('qi') ? Number(params.get('qi')) : 0);
         }
@@ -1889,7 +1967,7 @@
             required_work_minutes:
               Math.round((Number(monthlyWorkHours.value) || 4) * 60),
             max_consecutive_start_days:
-              Math.min(21, Math.max(1, Number(monthlyMaxDays.value) || 1)),
+              Math.min(10, Math.max(1, Number(monthlyMaxDays.value) || 1)),
             // "Heldag" gives the true full-day band 00:00–24:00 (the
             // contract accepts 24:00 only as latest_end, which a
             // type="time" input cannot express).
@@ -1907,6 +1985,12 @@
             work_to_closure_assumption: 'one_to_one',
             objective_profile: 'robust_time_loss',
             policy_status: 'user_supplied_unverified',
+            // Long searches are evaluated as exact date-specific daily SUMO
+            // units. Traffic is reset between work days (the explicit fast
+            // approximation), while every day's downloaded demand, road,
+            // closure, variant and seed identity remains distinct.
+            interday_policy: 'independent_daily_reset_v1',
+            work_allocation_policy: 'exact_balanced_daily_v1',
           };
           const key = monthlyStableKey(JSON.stringify(body));
           return {
@@ -2200,19 +2284,19 @@
           const spec = monthlyClosureSearchSpec([...selected]);
           const problem = validateMonthlySpec(spec);
           if (problem) return alert(problem);
-          // Long durations and wide date ranges each finalist needs its own
-          // multi-day demand build plus SUMO, so the honest cost can be many
-          // hours. Make that visible before committing; the job is resumable.
+          // The independent-day engine reuses exact daily SUMO evidence across
+          // overlapping schedules. A first search may still need uncached
+          // daily runs; repeating or widening it can be much faster.
           const rangeDays = Math.round((Date.parse(spec.permitted_date_end)
             - Date.parse(spec.permitted_date_start)) / 86400000) + 1;
           if (spec.max_consecutive_start_days > 7 || rangeDays > 31) {
             if (!confirm(
                 `Stor sökning: ${rangeDays} dagars intervall, upp till `
-                + `${spec.max_consecutive_start_days} dagar i följd. Varje `
-                + 'finalist byggs och simuleras separat i SUMO, så detta kan '
-                + 'ta många timmar. Perioder över 7 dagar ligger dessutom '
-                + 'bortom den 7-dagars golden-validerade kontinuiteten '
-                + '(per-dag-kontrollerna körs ändå). Jobbet är återupptagbart '
+                + `${spec.max_consecutive_start_days} arbetsdagar. Sökningen `
+                + 'använder datumriktig trafik och återanvänder identiska '
+                + 'dag/resultat, men en helt ny period kan fortfarande ta tid '
+                + 'att köra i SUMO. Trafikläget återställs mellan arbetsdagar '
+                + 'enligt det valda snabbläget. Jobbet är återupptagbart '
                 + '— du kan stänga fliken och starta samma sökning igen. '
                 + 'Fortsätta?')) return;
           }

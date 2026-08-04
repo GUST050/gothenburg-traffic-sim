@@ -683,6 +683,15 @@
            instead of letting the animation imply it equals the mean. -->
       <span class="hint" id="traj-provenance" hidden></span>
       <div class="v-divider"></div>
+      <!-- Comparison view: colour by CHANGE against the baseline instead of
+           by volume. Green = less traffic than without the closure, red =
+           more. Hidden until a closure scenario is selected, because there
+           is nothing to compare the baseline against. -->
+      <label id="delta-toggle-wrap" class="action-btn" hidden
+             title="Färglägg vägarna efter hur trafiken ändras jämfört med baslinjen: grönt = mindre trafik, rött = mer">
+        <input type="checkbox" id="delta-toggle"> ⇄ Jämför med baslinje
+      </label>
+      <span class="hint" id="delta-legend" hidden></span>
       <button id="close-mode-btn" class="action-btn"
               title="Klicka på vägar i kartan för att simulera en avstängning">Simulera vald tid</button>
       <button id="change-day-btn" class="action-btn"
@@ -753,9 +762,9 @@
         <label class="hint" for="monthly-work-hours">arbetstimmar</label>
         <input type="number" id="monthly-work-hours" value="4" min="0.25" max="504" step="0.25"
                title="Totalt begärd arbets-/avstängningstid (fördelas jämnt över dagarna i följd; upp till ~3 veckor)">
-        <label class="hint" for="monthly-max-days">dagar i följd max</label>
-        <input type="number" id="monthly-max-days" value="1" min="1" max="21"
-               title="Sammanhängande dagar en stängning varar (upp till 21 = 3 veckor). Långa perioder är dyra att bygga och ligger bortom den 7-dagars golden-validerade kontinuiteten.">
+        <label class="hint" for="monthly-max-days">arbetsdagar max</label>
+        <input type="number" id="monthly-max-days" value="1" min="1" max="10"
+               title="Högst 10 arbetsdagar. Varje dag använder datumriktig trafik och SUMO-resultat, men trafikläget återställs mellan arbetsdagarna i snabbläget.">
         <div class="seg" id="monthly-weekdays"
              title="Tillåtna veckodagar (arbetsdagar markerade)">
           <button data-day="0" class="active">Må</button>
@@ -887,10 +896,10 @@
        bump the number whenever the JS files change, or stale cached JS
        can run against new HTML and crash on missing elements -->
   <script src="state.js?v=11"></script>
-  <script src="provider.js?v=12"></script>
-  <script src="render.js?v=14"></script>
+  <script src="provider.js?v=14"></script>
+  <script src="render.js?v=15"></script>
   <script src="controls.js?v=11"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
