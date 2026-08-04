@@ -1,0 +1,44 @@
+{
+  "artifact_count": 3,
+  "artifacts": [
+    {
+      "artifact_content_key": "d8f7d2fc2ce51084565d00ea570c633f172a8900b181ce51b9dd57ff08d5e6a1",
+      "logical_content_bytes": 121814426,
+      "seed": 1000,
+      "source_warm_key": "2f5cac99bfde034da115564904cd3e8f",
+      "unit_id": "storage-pilot-2f5cac99bfde034da115564904cd3e8f",
+      "variant": "q10"
+    },
+    {
+      "artifact_content_key": "6c08604fba810741326e655529837764fbaf74d743d5e2ece921dfbf6a9157f2",
+      "logical_content_bytes": 125928570,
+      "seed": 1001,
+      "source_warm_key": "ae68f4c5b0d5837a3f813818fe05d269",
+      "unit_id": "storage-pilot-ae68f4c5b0d5837a3f813818fe05d269",
+      "variant": "q50"
+    },
+    {
+      "artifact_content_key": "4442041f6b248b3cb0c4900cd4fd4d821045bed524daf0838ea097a1b7118361",
+      "logical_content_bytes": 129439743,
+      "seed": 1002,
+      "source_warm_key": "e8fbfa3aa652bd13bd6b6e2cf1815375",
+      "unit_id": "storage-pilot-e8fbfa3aa652bd13bd6b6e2cf1815375",
+      "variant": "q90"
+    }
+  ],
+  "blob_count": 12,
+  "claim": "storage_compression_and_restore_only",
+  "content_key": "3a424c4c6ff7957089e062eec64352b0d2308b96e85e4e6925e996e32de6af24",
+  "persistent_store_created": false,
+  "physical_ratio": 0.08868569767105003,
+  "physical_stored_bytes": 33316391,
+  "plan_content_key": "b89e4a5e617ebe11ba6d448a6ccb5a1afa9af13eaac29ace3ed152292105a542",
+  "restore_digest_mismatches": 0,
+  "schema": "annual_warm_storage_pilot_v1",
+  "source_demand_archive": "runs/demand-20260721-222017-41bc682a-bbe1",
+  "source_warm_root": "runs/warm-state",
+  "status": "pass",
+  "sumo_executed": false,
+  "traci_imported_or_connected": false,
+  "unique_original_bytes": 375668139
+}

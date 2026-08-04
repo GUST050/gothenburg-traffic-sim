@@ -1,0 +1,202 @@
+{
+  "approval_mechanism": "--approval-token must equal this manifest's content_key; no approval is stored in the manifest itself",
+  "archive_files_sha256": {
+    "calibrated.rou.xml": "56000bc43a8fb00a6f6dd9b47db70a1cf214a8fc95edaade70e3e6e2cbc523ca",
+    "calibrated_v1.rou.xml": "4201008a778ec699c55a7fd90aa96c393b914ec48197c5a4d9fd8e1795687a0c",
+    "calibrated_v2.rou.xml": "8f8bdacf8bcd772a01cd3899b5b81b3351274a232e1a11ecf5d9cb7aebf3a259",
+    "demand_meta.json": "3c6c61040c01236cd52223cdab7e0262af64fcb31ed047885a57bba9c36d6026",
+    "manifest.json": "dd54e26fcb63809d3a904c24dddc3c3b0b8fc919b964737f8a2367e48c04e0e9"
+  },
+  "artifact_root": "runs/monthly-warm-state-validation",
+  "baseline_trip_duration_p99_s": 1800,
+  "boundary_accounting": {
+    "hypothesis": "v2's residual objective gap is caused by boundary-active vehicles whose pre-warm time loss is excluded from the completed-only prefix and absent from their resumed tripinfo",
+    "known_residual": {
+      "bound_s_per_boundary_vehicle": 0.01,
+      "consequence": "warm argv is byte-identical to cold argv and the comparison stays exact with no tolerance, so this residual can make the campaign FAIL rather than silently passing",
+      "mechanism": "the post-warm half of a boundary vehicle reaches the reconstruction through a file SUMO writes at its reported precision, so the sum of halves can cross a rounding boundary the whole value does not",
+      "why_not_fixed_by_more_digits": "no finite output precision suffices: for any precision the true sum can sit closer to a rounding boundary than the serialization error, proven for 2..12 decimals in tests/test_warm_state_boundary.py; and SUMO's --precision is global, so raising it also perturbs recovery and waiting semantics the contract requires to stay unchanged"
+    },
+    "mechanism": "capture a per-vehicle ledger at exactly the saved step; reconcile it against resumed tripinfo by vehicle identity, applying each boundary offset exactly once",
+    "refutation_condition": "if the objective still differs after reconciliation, boundary-active accounting is NOT the cause and the campaign fails honestly",
+    "v2_residual_gap_s": {
+      "q10": -7.73,
+      "q50": -80.62,
+      "q90": -138.97
+    }
+  },
+  "boundary_ledger_schema": "warm_boundary_active_ledger_v1",
+  "campaign_version": "v3",
+  "cases": [
+    {
+      "case_id": "warm-v3-paired-equivalence",
+      "closure_begin_s": 25200,
+      "closure_bound_warm_point_s": 24300,
+      "closure_end_s": 54000,
+      "directed_edges": [
+        "26354420_60476786_0"
+      ],
+      "rationale": "the v2 case unchanged, so the residual objective gap is measured against directly comparable evidence rather than a new case that could differ for unrelated reasons"
+    }
+  ],
+  "claim_scope": "proves or refutes cold/warm production-observation equivalence for the frozen cases only; it establishes no product behaviour and no adoption",
+  "comparison_policy": {
+    "compares": "the canonical production observation from each arm, excluding execution-only fields",
+    "excluded_from_comparison": [
+      "execution_arm",
+      "peak_rss_bytes",
+      "phase_runtime_s",
+      "runtime_s",
+      "split_diagnostics",
+      "warm_point_s"
+    ],
+    "on_mismatch": "record honest fail evidence and publish no cache material",
+    "tolerance": "exact equality of the semantic payload"
+  },
+  "content_key": "238f6858428ba092a7eb4096738890157fb040ff1e744c47b82c2bb8f646403c",
+  "demand_requirement": {
+    "archive_path": "runs/demand-20260721-222017-41bc682a-bbe1",
+    "demand_build_key": "2ac04275daabe93c",
+    "n_intervals": 480,
+    "note": "the campaign must bind this exact archive; resolving the key alone is ambiguous across successful archives"
+  },
+  "demand_variants": [
+    "q10",
+    "q50",
+    "q90"
+  ],
+  "frozen_at": "2026-07-29",
+  "frozen_schedule_ids": [
+    "closure-8bcf7829ae545dffd8ce"
+  ],
+  "inherited_from": {
+    "content_key": "c2c904655d59c48374d81fe4f9fe42540b2fb05e229faaae28a17030ffbd64e6",
+    "fields": [
+      "route_safety",
+      "archive_files_sha256",
+      "demand_requirement"
+    ],
+    "manifest": "validation/monthly_warm_state_manifest_v2.json",
+    "reason": "physical facts about the same frozen archive and the same frozen closure; re-deriving them would require reading the archive and could yield different values for an identical case"
+  },
+  "kind": "monthly_warm_state_validation_manifest",
+  "minimum_prefix_s": 1800,
+  "network_requirement": {
+    "path": "sumo/net.net.xml",
+    "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "observation_schema": "monthly_production_observation_v1",
+  "performance_reporting": {
+    "claim_policy": "speedup is REPORTED, never claimed as proven until an approved paired run passes",
+    "records": [
+      "phase_runtime_s",
+      "peak_rss_bytes"
+    ]
+  },
+  "prefix_evidence_schema": "monthly_prefix_evidence_v2",
+  "repetitions_per_variant": 1,
+  "route_audit_schema": "warm_route_mutation_audit_v1",
+  "route_safety": {
+    "q10": {
+      "audit": {
+        "changed_vehicles": 38,
+        "dropped_vehicles": 0,
+        "earliest_affected_depart_s": 24958.8,
+        "filtered_sha256": "7b4896a203ed972abff638aae7f436f7b08bfa53270977c01a2f83073d0d96fc",
+        "filtered_vehicles": 84065,
+        "original_sha256": "4201008a778ec699c55a7fd90aa96c393b914ec48197c5a4d9fd8e1795687a0c",
+        "original_vehicles": 84065,
+        "schema": "warm_route_mutation_audit_v1"
+      },
+      "safe_warm_point_s": 24300
+    },
+    "q50": {
+      "audit": {
+        "changed_vehicles": 23,
+        "dropped_vehicles": 0,
+        "earliest_affected_depart_s": 24898.9,
+        "filtered_sha256": "0833eac2e572db963a12c3b85397e9df29c5d335b73817b8a75a005b587428c6",
+        "filtered_vehicles": 86754,
+        "original_sha256": "56000bc43a8fb00a6f6dd9b47db70a1cf214a8fc95edaade70e3e6e2cbc523ca",
+        "original_vehicles": 86754,
+        "schema": "warm_route_mutation_audit_v1"
+      },
+      "safe_warm_point_s": 24300
+    },
+    "q90": {
+      "audit": {
+        "changed_vehicles": 33,
+        "dropped_vehicles": 0,
+        "earliest_affected_depart_s": 24935.1,
+        "filtered_sha256": "58fb89f81d517a80a1028a33a40c7c07d0f63bca132b718347be1698828ed73d",
+        "filtered_vehicles": 89482,
+        "original_sha256": "8f8bdacf8bcd772a01cd3899b5b81b3351274a232e1a11ecf5d9cb7aebf3a259",
+        "original_vehicles": 89482,
+        "schema": "warm_route_mutation_audit_v1"
+      },
+      "safe_warm_point_s": 24300
+    }
+  },
+  "schedules_per_case": 1,
+  "schema_version": 1,
+  "seeds": [
+    1000,
+    1001,
+    1002
+  ],
+  "simulation_mode": "meso",
+  "source_fingerprints": {
+    "run_monthly_warm_state_validation.py": "75b7454351a98491a0e96195e7aabbb9a6f1aece9e310997bf0f9ca83a27bd8d",
+    "run_scenario.py": "5c61d421af8146b75084dd8c015ce1a5dca5dca8dd1490c68fe94dc201fd8b7f",
+    "suggest_closure_time.py": "6eaf562e82c4b67785a1c31e678bc6e7fb5b6e49c14673f1383867eb027c860c",
+    "tools/freeze_monthly_warm_state_v3.py": "a0fd21906e11975d75ab2ab33966d57139c3e59251abb0f663a40c197f379e4e",
+    "traffic_sim/core/closure_calendar.py": "852b6f5d763d3a89473345c88b66cb3fa7aac8076e6baefc64f0fd6534ff828f",
+    "traffic_sim/core/contracts.py": "8874dfddd1ded86f1b8e2b65c800a93309479cd9cf4faa54c7836ae65c855d1e",
+    "traffic_sim/simulation/envelope.py": "8203caae3019daebedd222b6d4365ce46fed1e6c27460058e89db69bec8d341f",
+    "traffic_sim/simulation/finalist_decision.py": "e5848247b87c4654aa073bd7c88ce46de9ce74cb13c3d1ea56fc72092be21981",
+    "traffic_sim/simulation/metrics.py": "3edf71b82933601b5084229eac0ca63f8bd83a87fef946e23cb14b572d120134",
+    "traffic_sim/simulation/monthly_search.py": "ec83b0615a752d50976c79f719503adc80804c90e15c2b3a505882fc242804cc",
+    "traffic_sim/simulation/monthly_sumo.py": "30775674998151e0cd31602618a87eb6cac4068832b887adf2a435673f53f7f1",
+    "traffic_sim/simulation/monthly_warm_state.py": "296396b425ed7f678989bd6f1525b9df6079a815069ca22e9a5e193bc6ff86c3",
+    "traffic_sim/simulation/warm_state_boundary.py": "fbc53e8dbf7250ebe133bf8d7e2c360c57edcbb9415dd3a033cd022e504a0f9d",
+    "traffic_sim/simulation/warm_state_cache.py": "5b6dd885231d6f79acf269806433f6a83b8ebc265bc53832dd30ec4c87207a6e"
+  },
+  "spec_template": {
+    "allowed_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "blackout_dates": [],
+    "closure_type": "full",
+    "dst_policy": "exclude_transition_dates",
+    "duration_basis": "required_work_time",
+    "max_consecutive_start_days": 1,
+    "objective_profile": "robust_time_loss",
+    "permitted_daily_band": {
+      "earliest_start": "07:00",
+      "latest_end": "15:30"
+    },
+    "permitted_date_end": "2027-07-19",
+    "permitted_date_start": "2027-07-15",
+    "policy_status": "user_supplied_unverified",
+    "required_work_minutes": 480,
+    "resolution_minutes": 15,
+    "same_daily_window": true,
+    "source": "forecast",
+    "timezone": "Europe/Stockholm",
+    "work_to_closure_assumption": "one_to_one"
+  },
+  "status": "frozen_unapproved_unexecuted",
+  "supersedes": {
+    "campaign": "v2",
+    "content_key": "c2c904655d59c48374d81fe4f9fe42540b2fb05e229faaae28a17030ffbd64e6",
+    "outcome": "executed and failed on total_time_loss_s only; 16 of 18 semantic groups matched exactly"
+  },
+  "tripinfo_precision": 2,
+  "warm_alignment_s": 900
+}

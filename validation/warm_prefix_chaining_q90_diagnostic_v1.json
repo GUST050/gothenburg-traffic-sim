@@ -1,0 +1,107 @@
+{
+  "active_accumulator_comparison": {
+    "chained_count": 47,
+    "cold_count": 47,
+    "extra_in_chained": [],
+    "missing_from_chained": [],
+    "population_digest_equal": true,
+    "value_delta_sum_s": 0,
+    "value_max_absolute_delta_s": 0.0,
+    "value_mismatch_count": 0
+  },
+  "cache_hit_speedup_vs_direct_cold": 1.052393,
+  "chained_segment_s": 86400,
+  "chained_state": {
+    "compressed_bytes": 226827,
+    "compressed_sha256": "d95f2c14d9519a4fb9f5f240991e58516ef9fa1ceddbe716309fd7f9ba29ae3d",
+    "expanded_bytes": 2227265,
+    "expanded_sha256": "5334ede3faf9a959ce3af94bb91d3ff66f4f028ff015945ce8c057a8a5aa43fe"
+  },
+  "closure_schedule_id": "closure-fe1729e7f80cc2b7a6c1",
+  "cold_state": {
+    "compressed_bytes": 102631,
+    "compressed_sha256": "53cdad1a40dcc36dd2d0f7c828e7d7b6d95dbe87e76259d7b5aa159135d84c0c",
+    "expanded_bytes": 720306,
+    "expanded_sha256": "1fa9c756b3a02cf9543232cbe76c79c693b840f4486a96dc664cc017ea32be4d"
+  },
+  "diagnostic_only": true,
+  "expanded_state_bytes_are_release_gate": false,
+  "expanded_state_equal": false,
+  "from_s": 24300,
+  "identical_closure_suffix": true,
+  "prefix_evidence_equal": true,
+  "prefix_evidence_sections": {
+    "active_accumulator": {
+      "chained_sha256": "715422bab41fc3706e07a57f88dbaba92712142509c2c41a56c5fbb36d62f9d7",
+      "cold_sha256": "715422bab41fc3706e07a57f88dbaba92712142509c2c41a56c5fbb36d62f9d7",
+      "equal": true
+    },
+    "completed_record_order": {
+      "chained_sha256": "756e78b1da02090757d8afa905d5f0b7ea50f1d92bfc955e35c8e1f01bd4aae4",
+      "cold_sha256": "756e78b1da02090757d8afa905d5f0b7ea50f1d92bfc955e35c8e1f01bd4aae4",
+      "equal": true
+    },
+    "completed_records": {
+      "chained_sha256": "f0a11ab378425b3bbcfeb2cbfa6d084380a4577b13f244914c76505b7cc341d3",
+      "cold_sha256": "f0a11ab378425b3bbcfeb2cbfa6d084380a4577b13f244914c76505b7cc341d3",
+      "equal": true
+    },
+    "completed_trips": {
+      "chained_sha256": "f4295fb08b833f9c02d5cd8fd08fadb385d30b823930a88af20001edb054bbab",
+      "cold_sha256": "f4295fb08b833f9c02d5cd8fd08fadb385d30b823930a88af20001edb054bbab",
+      "equal": true
+    },
+    "counters": {
+      "chained_sha256": "f7d84542f53992b7fa209737d5046f632118c54558c52aa5a8e58141ed9b9f9c",
+      "cold_sha256": "f7d84542f53992b7fa209737d5046f632118c54558c52aa5a8e58141ed9b9f9c",
+      "equal": true
+    },
+    "queue_maximum": {
+      "chained_sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+      "cold_sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+      "equal": true
+    },
+    "recovery_buckets": {
+      "chained_sha256": "da242a680e84ff4235a0b68101edfd9626e6cd6e8bb7a49441d7e2b24a14f91d",
+      "cold_sha256": "da242a680e84ff4235a0b68101edfd9626e6cd6e8bb7a49441d7e2b24a14f91d",
+      "equal": true
+    },
+    "schema": {
+      "chained_sha256": "36e466a8e3022e1a53e016c07225910b5b6b8f481cf307c15b9b7f4121b7a722",
+      "cold_sha256": "36e466a8e3022e1a53e016c07225910b5b6b8f481cf307c15b9b7f4121b7a722",
+      "equal": true
+    },
+    "snapshot_facts": {
+      "chained_sha256": "08e08c49f718bb42df60de522654910d44a5f07678e26af82d8f0cef2e839ac2",
+      "cold_sha256": "08e08c49f718bb42df60de522654910d44a5f07678e26af82d8f0cef2e839ac2",
+      "equal": true
+    },
+    "teleport_reasons": {
+      "chained_sha256": "3d1d1a85fb89d1de1955f59c9e3e6018a9abd90b5de418509c46d0ede03f83ee",
+      "cold_sha256": "3d1d1a85fb89d1de1955f59c9e3e6018a9abd90b5de418509c46d0ede03f83ee",
+      "equal": true
+    },
+    "warm_point_s": {
+      "chained_sha256": "14011c061f91f2f31d1b598ec68d23cd57b5c6d59770478865dbdb706e699043",
+      "cold_sha256": "14011c061f91f2f31d1b598ec68d23cd57b5c6d59770478865dbdb706e699043",
+      "equal": true
+    }
+  },
+  "replayed_prefix_s": 110700,
+  "runtime_s": {
+    "chained": 6.396425,
+    "chained_closure_suffix": 17.237669,
+    "cold": 5.34786,
+    "cold_prefix_closure_suffix": 17.514279,
+    "direct_cold_candidate": 18.140807
+  },
+  "schema": "warm_prefix_chaining_diagnostic_v1",
+  "seed": 1002,
+  "source_cache_entry": "runs/warm-state/e8fbfa3aa652bd13bd6b6e2cf1815375",
+  "source_cache_manifest_sha256": "d7a9576aa2075c7146e312b7c8c38b165bb12dc413a328c246191b83f70ae5fc",
+  "speedup": 0.83607,
+  "status": "pass",
+  "target_s": 110700,
+  "variant": "q90",
+  "warm_metrics_equal_direct_cold": true
+}

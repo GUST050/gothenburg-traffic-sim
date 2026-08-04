@@ -164,6 +164,7 @@ from traffic_sim.simulation.trajectory_contract import (
     MULTIDAY_MAX_ARTIFACT_BYTES,
     validate_multiday_trajectory,
 )
+from traffic_sim.demand.route_support import combined_route_edges
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -216,6 +217,20 @@ MONTHLY_BOUNDED_EXHAUSTIVE_CAP = 12
 # generous without risking an unbounded server job.
 MONTHLY_TIMEOUT_S = 4 * 3600
 PORT     = 8000
+
+
+def monthly_screening_cli_args(spec: ClosureSearchSpec) -> list[str]:
+    """Choose the safe server-side screening path for one search contract."""
+    if spec.interday_policy == "independent_daily_reset_v1":
+        return ["--screening-mode", "independent-exhaustive"]
+    if load_passing_heldout_gate() is not None:
+        return ["--screening-mode", "proxy"]
+    return [
+        "--screening-mode",
+        "bounded-exhaustive",
+        "--bounded-exhaustive-cap",
+        str(MONTHLY_BOUNDED_EXHAUSTIVE_CAP),
+    ]
 
 
 def _signal_window_from_spec(spec: ScenarioSpec) -> tuple[str, str]:
@@ -502,6 +517,19 @@ def known_edges() -> frozenset[str]:
     with open(WEB_DIR / "data" / "network.geojson") as f:
         geo = json.load(f)
     return frozenset(feat["properties"]["id"] for feat in geo["features"])
+
+
+def supported_closure_edges() -> frozenset[str]:
+    """Exact live demand support, cache-invalidated by route artifact stats."""
+    metadata = json.loads((SUMO_DIR / "demand_meta.json").read_text())
+    n_variants = int(metadata.get("n_variants", 1))
+    if n_variants not in (1, 3):
+        raise ValueError(f"unsupported demand metadata n_variants={n_variants}")
+    paths = [SUMO_DIR / "calibrated.rou.xml"]
+    if n_variants == 3:
+        paths.extend((SUMO_DIR / "calibrated_v1.rou.xml",
+                      SUMO_DIR / "calibrated_v2.rou.xml"))
+    return combined_route_edges(paths)
 
 
 def current_sensor_edges() -> dict[str, list[str]]:
@@ -1046,6 +1074,24 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _require_supported_closure_edges(self, edges: list[str]) -> bool:
+        """Reject studies whose live demand cannot represent the road effect."""
+        try:
+            unsupported = sorted(set(edges) - supported_closure_edges())
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            self._json(503, {
+                "error": "den aktiva efterfrågans vägstödsgräns kunde inte verifieras",
+                "detail": str(exc)[:200],
+            })
+            return False
+        if unsupported:
+            self._json(422, {
+                "error": "stängningen kan inte mätas med aktiv efterfrågan",
+                "unsupported_edges": unsupported,
+            })
+            return False
+        return True
+
     def _json_body(self) -> dict:
         """Read one bounded JSON object from a POST body.
 
@@ -1204,6 +1250,8 @@ class Handler(SimpleHTTPRequestHandler):
         unknown = [e for e in edges if e not in known_edges()]
         if unknown:
             return self._json(400, {"error": f"okända kanter: {unknown}"})
+        if not self._require_supported_closure_edges(edges):
+            return
 
         # Optional time window (2026-07-11, for C5's "load this suggested
         # window as a real scenario" action): when given, runs a
@@ -1588,6 +1636,8 @@ class Handler(SimpleHTTPRequestHandler):
         unknown = [e for e in edges if e not in known_edges()]
         if unknown:
             return self._json(400, {"error": f"okända kanter: {unknown}"})
+        if not self._require_supported_closure_edges(edges):
+            return
 
         try:
             duration_hours = float(value("duration_hours", ""))
@@ -1778,6 +1828,8 @@ class Handler(SimpleHTTPRequestHandler):
         unknown = [e for e in edges if e not in known_edges()]
         if unknown:
             return self._json(400, {"error": f"okända kanter: {unknown}"})
+        if edges and not self._require_supported_closure_edges(edges):
+            return
 
         blocked = simulation_recovery_block()
         if blocked:
@@ -1905,6 +1957,9 @@ class Handler(SimpleHTTPRequestHandler):
         unknown = [e for e in spec.directed_edges if e not in known_edges()]
         if unknown:
             return self._json(400, {"error": f"okända kanter: {unknown}"})
+        if not self._require_supported_closure_edges(
+                list(spec.directed_edges)):
+            return
         try:
             policy = MonthlySearchPolicy.from_dict(
                 json.loads(MONTHLY_POLICY_PATH.read_text(encoding="utf-8")))
@@ -1957,20 +2012,21 @@ class Handler(SimpleHTTPRequestHandler):
                    "--policy", str(MONTHLY_POLICY_PATH.resolve()),
                    "--baseline-trip-duration-p99-s",
                    str(MONTHLY_BASELINE_TRIP_P99_S)]
-            # Screening mode follows the held-out gate: with a passing v2
-            # record the proxy IS validated (practical-winner recall 1.0),
+            # Screening mode follows the ADOPTED held-out gate (record +
+            # post-review adoption certificate). No gate is adopted today: v4
+            # was audited but its adoption was REJECTED, and v5 is frozen yet
+            # unexecuted, so this path takes the bounded-exhaustive branch.
             # so use it — it screens hundreds/thousands of legal schedules
             # down to a bounded shortlist that only THEN gets SUMO. Without
             # a passing record, fall back to bounded-exhaustive (every
             # candidate SUMO-verified, hard cap) — the pre-gate safe mode
             # that could only handle a tiny search. This is the same gate
             # the claim boundary checks, so mode and claim stay consistent.
-            if load_passing_heldout_gate() is not None:
-                cmd += ["--screening-mode", "proxy"]
-            else:
-                cmd += ["--screening-mode", "bounded-exhaustive",
-                        "--bounded-exhaustive-cap",
-                        str(MONTHLY_BOUNDED_EXHAUSTIVE_CAP)]
+            # Independent daily evidence is additive by the explicit user
+            # contract. Its exhaustive path runs every parent while executing
+            # each exact unit once; an unvalidated proxy cannot select the
+            # supposed global best.
+            cmd += monthly_screening_cli_args(spec)
             res = run_in_new_session(cmd, cwd=str(ROOT),
                                      timeout=MONTHLY_TIMEOUT_S)
             if active_job_cancelled("monthly"):

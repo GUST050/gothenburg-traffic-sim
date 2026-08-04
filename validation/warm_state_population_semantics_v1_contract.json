@@ -1,0 +1,732 @@
+{
+  "arms": {
+    "cold": {
+      "begin_s": 0.0,
+      "end_s": 400.0,
+      "loads_state": false,
+      "precision": 2,
+      "role": "uninterrupted reference at production precision",
+      "saves_state": false,
+      "write_unfinished": true
+    },
+    "cold_control": {
+      "begin_s": 0.0,
+      "end_s": 400.0,
+      "loads_state": false,
+      "precision": 12,
+      "role": "the cold arm at raised precision; isolates reporting quantization from a real difference",
+      "saves_state": false,
+      "write_unfinished": true
+    },
+    "prefix": {
+      "begin_s": 0.0,
+      "end_s": 31.0,
+      "loads_state": false,
+      "precision": 2,
+      "role": "runs to the boundary and captures the snapshot",
+      "saves_state": true,
+      "write_unfinished": false
+    },
+    "prefix_control": {
+      "begin_s": 0.0,
+      "end_s": 31.0,
+      "loads_state": false,
+      "precision": 12,
+      "role": "prefix at raised precision, feeding resumed_control",
+      "saves_state": true,
+      "write_unfinished": false
+    },
+    "resumed": {
+      "begin_s": 30.0,
+      "end_s": 400.0,
+      "loads_state": true,
+      "precision": 2,
+      "role": "loads the snapshot and finishes the run",
+      "saves_state": false,
+      "write_unfinished": true
+    },
+    "resumed_control": {
+      "begin_s": 30.0,
+      "end_s": 400.0,
+      "loads_state": true,
+      "precision": 12,
+      "role": "the resumed arm at raised precision; if deltas survive here the cause is not rounding",
+      "saves_state": false,
+      "write_unfinished": true
+    }
+  },
+  "claim_scope": "a synthetic single-edge mechanism probe. It is NOT equivalence evidence, NOT performance evidence, and NOT grounds for adoption, release or enabling warming. Product-default warming stays OFF whatever this returns",
+  "classification_contract": {
+    "classifications": [
+      "population_partition_error",
+      "output_quantization",
+      "save_load_integration_drift",
+      "exact_agreement",
+      "inconclusive"
+    ],
+    "control_precision": 12,
+    "default": "inconclusive",
+    "drift_epsilon_s": 1e-06,
+    "exact_agreement_rule": "requires zero delta in the production AND the raised-precision control. Production alone is not sufficient: two-decimal reporting can round a real difference away, which is the quantization case rather than agreement",
+    "mutually_exclusive": true,
+    "production_precision": 2,
+    "quantization_bound_rationale": "the observed delta is a difference of TWO independently rounded reports, so one vehicle can contribute two half-ULPs; the conservative per-vehicle bound is a full ULP",
+    "quantization_half_ulp_s": 0.005,
+    "quantization_per_vehicle_bound_s": 0.01,
+    "recommendation_rule": "a correction is recommended only when the observations uniquely establish its mechanism",
+    "rule": "partition and cohort population first; then exact agreement; then quantization only if deltas vanish at control precision AND the production residual fits the vehicle-count-scaled rounding envelope; then drift only if deltas survive control precision AND the residual exceeds that envelope; otherwise inconclusive"
+  },
+  "command_contract": {
+    "argv_placeholders": {
+      "load_state_path": "<state.xml.gz>",
+      "network_path": "<net.net.xml>",
+      "remote_port": "<free-port>",
+      "route_path": "<population.rou.xml>",
+      "sumo_binary": "<sumo>"
+    },
+    "end_is_exclusive_rule": "SUMO's --end is exclusive and a state requested exactly at it is never written, so every prefix arm ends at save_time + prefix_flush_s; this mirrors production's flush_s=1",
+    "exact_argv": {
+      "cold": [
+        "<sumo>",
+        "--net-file",
+        "<net.net.xml>",
+        "--route-files",
+        "<population.rou.xml>",
+        "--mesosim",
+        "true",
+        "--meso-junction-control",
+        "true",
+        "--meso-junction-control.limited",
+        "true",
+        "--begin",
+        "0.00",
+        "--end",
+        "400.00",
+        "--step-length",
+        "1.00",
+        "--seed",
+        "1000",
+        "--tripinfo-output",
+        "<cold_tripinfo.xml>",
+        "--tripinfo-output.write-unfinished",
+        "true",
+        "--no-step-log",
+        "true",
+        "--no-warnings",
+        "true",
+        "--time-to-teleport",
+        "-1",
+        "--random",
+        "false"
+      ],
+      "cold_control": [
+        "<sumo>",
+        "--net-file",
+        "<net.net.xml>",
+        "--route-files",
+        "<population.rou.xml>",
+        "--mesosim",
+        "true",
+        "--meso-junction-control",
+        "true",
+        "--meso-junction-control.limited",
+        "true",
+        "--begin",
+        "0.00",
+        "--end",
+        "400.00",
+        "--step-length",
+        "1.00",
+        "--seed",
+        "1000",
+        "--tripinfo-output",
+        "<cold_control_tripinfo.xml>",
+        "--tripinfo-output.write-unfinished",
+        "true",
+        "--no-step-log",
+        "true",
+        "--no-warnings",
+        "true",
+        "--time-to-teleport",
+        "-1",
+        "--random",
+        "false",
+        "--precision",
+        "12"
+      ],
+      "prefix": [
+        "<sumo>",
+        "--net-file",
+        "<net.net.xml>",
+        "--route-files",
+        "<population.rou.xml>",
+        "--mesosim",
+        "true",
+        "--meso-junction-control",
+        "true",
+        "--meso-junction-control.limited",
+        "true",
+        "--begin",
+        "0.00",
+        "--end",
+        "31.00",
+        "--step-length",
+        "1.00",
+        "--seed",
+        "1000",
+        "--tripinfo-output",
+        "<prefix_tripinfo.xml>",
+        "--tripinfo-output.write-unfinished",
+        "false",
+        "--no-step-log",
+        "true",
+        "--no-warnings",
+        "true",
+        "--time-to-teleport",
+        "-1",
+        "--random",
+        "false",
+        "--save-state.rng",
+        "true",
+        "--save-state.precision",
+        "16",
+        "--remote-port",
+        "<free-port>"
+      ],
+      "prefix_control": [
+        "<sumo>",
+        "--net-file",
+        "<net.net.xml>",
+        "--route-files",
+        "<population.rou.xml>",
+        "--mesosim",
+        "true",
+        "--meso-junction-control",
+        "true",
+        "--meso-junction-control.limited",
+        "true",
+        "--begin",
+        "0.00",
+        "--end",
+        "31.00",
+        "--step-length",
+        "1.00",
+        "--seed",
+        "1000",
+        "--tripinfo-output",
+        "<prefix_control_tripinfo.xml>",
+        "--tripinfo-output.write-unfinished",
+        "false",
+        "--no-step-log",
+        "true",
+        "--no-warnings",
+        "true",
+        "--time-to-teleport",
+        "-1",
+        "--random",
+        "false",
+        "--precision",
+        "12",
+        "--save-state.rng",
+        "true",
+        "--save-state.precision",
+        "16",
+        "--remote-port",
+        "<free-port>"
+      ],
+      "resumed": [
+        "<sumo>",
+        "--net-file",
+        "<net.net.xml>",
+        "--route-files",
+        "<population.rou.xml>",
+        "--mesosim",
+        "true",
+        "--meso-junction-control",
+        "true",
+        "--meso-junction-control.limited",
+        "true",
+        "--begin",
+        "30.00",
+        "--end",
+        "400.00",
+        "--step-length",
+        "1.00",
+        "--seed",
+        "1000",
+        "--tripinfo-output",
+        "<resumed_tripinfo.xml>",
+        "--tripinfo-output.write-unfinished",
+        "true",
+        "--no-step-log",
+        "true",
+        "--no-warnings",
+        "true",
+        "--time-to-teleport",
+        "-1",
+        "--random",
+        "false",
+        "--load-state",
+        "<state.xml.gz>"
+      ],
+      "resumed_control": [
+        "<sumo>",
+        "--net-file",
+        "<net.net.xml>",
+        "--route-files",
+        "<population.rou.xml>",
+        "--mesosim",
+        "true",
+        "--meso-junction-control",
+        "true",
+        "--meso-junction-control.limited",
+        "true",
+        "--begin",
+        "30.00",
+        "--end",
+        "400.00",
+        "--step-length",
+        "1.00",
+        "--seed",
+        "1000",
+        "--tripinfo-output",
+        "<resumed_control_tripinfo.xml>",
+        "--tripinfo-output.write-unfinished",
+        "true",
+        "--no-step-log",
+        "true",
+        "--no-warnings",
+        "true",
+        "--time-to-teleport",
+        "-1",
+        "--random",
+        "false",
+        "--precision",
+        "12",
+        "--load-state",
+        "<state.xml.gz>"
+      ]
+    },
+    "meso_arguments": [
+      "--mesosim",
+      "true",
+      "--meso-junction-control",
+      "true",
+      "--meso-junction-control.limited",
+      "true"
+    ],
+    "permitted_differences": [
+      "begin",
+      "end",
+      "save-state",
+      "load-state",
+      "precision",
+      "tripinfo output path",
+      "prefix-only write-unfinished"
+    ],
+    "prefix_atomicity_rule": "the prefix arm is terminated AT the boundary by a controller that steps, saves and closes in one process \u2014 never by letting the batch run on to its exclusive end. A vehicle that completed in the extra step would appear in the prefix tripinfo AND remain in the state resumed from the boundary, counting it twice and breaking the partition silently",
+    "prefix_flush_s": 1.0,
+    "remote_port_rule": "controller-owned prefix arms carry --remote-port, allocated per run by binding to port 0 as production does. Without it SUMO opens no TraCI server and the connection can never be made; a fixed port would make concurrent runs collide",
+    "run_timeout_s": 600,
+    "shared": "network, route file, seed, MESOSCOPIC core with limited junction control matching production, step length, teleporting disabled, randomness disabled",
+    "snapshot_arguments": [
+      "--save-state.rng",
+      "true",
+      "--save-state.precision",
+      "16"
+    ],
+    "snapshot_arguments_source": "derived from the production cache constants via warm_state_boundary.snapshot_settings_arguments(); never duplicated as literals here",
+    "write_unfinished_rule": "true on every arm except the prefix arms, exactly as production does it: a vehicle still driving at the snapshot continues in the resumed arm, and counting it in both would count one vehicle twice \u2014 while dropping unfinished trips from a cold or resumed arm would break the partition silently instead of failing loudly"
+  },
+  "content_key": "191c07264f3aed4ceccce0580c03b2fc29d7e9591f7422d24852181914466f9e",
+  "diagnostic_id": "warm_state_population_semantics_v1",
+  "execution_authority": "NONE from this contract. The runner is COMPLETE and GATED: it requires an approval token equal to this manifest's content_key, so an approval can only ever authorize the exact fixture, commands and classifier reviewed here \u2014 changing any of them changes the key and voids it. No approval is stored. Execution needs a new Sol task/revision and exact user approval; simulator imports are lazy and happen only after that gate",
+  "fixture": {
+    "cohort_sizes": {
+      "active_at_boundary": 24,
+      "completed_before_boundary": 8,
+      "depart_after_boundary": 8
+    },
+    "end_time_s": 400.0,
+    "fast_speed_mps": 20.0,
+    "invariants": [
+      "every vehicle belongs to exactly one cohort, assigned by the fixture rather than inferred from a result",
+      "the fast cohort completes strictly before the boundary",
+      "the slow cohort departs before and is still driving at it",
+      "the post cohort departs strictly after it",
+      "every vehicle completes before the end instant, so no trip is excluded as unfinished"
+    ],
+    "population": [
+      {
+        "cohort": "completed_before_boundary",
+        "depart_s": 0.0,
+        "id": "pre-000",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "completed_before_boundary",
+        "depart_s": 1.0,
+        "id": "pre-001",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "completed_before_boundary",
+        "depart_s": 2.0,
+        "id": "pre-002",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "completed_before_boundary",
+        "depart_s": 3.0,
+        "id": "pre-003",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "completed_before_boundary",
+        "depart_s": 4.0,
+        "id": "pre-004",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "completed_before_boundary",
+        "depart_s": 5.0,
+        "id": "pre-005",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "completed_before_boundary",
+        "depart_s": 6.0,
+        "id": "pre-006",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "completed_before_boundary",
+        "depart_s": 7.0,
+        "id": "pre-007",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 0.0,
+        "id": "act-000",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 1.0,
+        "id": "act-001",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 2.0,
+        "id": "act-002",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 3.0,
+        "id": "act-003",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 4.0,
+        "id": "act-004",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 5.0,
+        "id": "act-005",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 6.0,
+        "id": "act-006",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 7.0,
+        "id": "act-007",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 8.0,
+        "id": "act-008",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 9.0,
+        "id": "act-009",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 10.0,
+        "id": "act-010",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 11.0,
+        "id": "act-011",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 12.0,
+        "id": "act-012",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 13.0,
+        "id": "act-013",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 14.0,
+        "id": "act-014",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 15.0,
+        "id": "act-015",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 16.0,
+        "id": "act-016",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 17.0,
+        "id": "act-017",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 18.0,
+        "id": "act-018",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 19.0,
+        "id": "act-019",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 20.0,
+        "id": "act-020",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 21.0,
+        "id": "act-021",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 22.0,
+        "id": "act-022",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "active_at_boundary",
+        "depart_s": 23.0,
+        "id": "act-023",
+        "max_speed_mps": 2.0
+      },
+      {
+        "cohort": "depart_after_boundary",
+        "depart_s": 40.0,
+        "id": "post-000",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "depart_after_boundary",
+        "depart_s": 41.0,
+        "id": "post-001",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "depart_after_boundary",
+        "depart_s": 42.0,
+        "id": "post-002",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "depart_after_boundary",
+        "depart_s": 43.0,
+        "id": "post-003",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "depart_after_boundary",
+        "depart_s": 44.0,
+        "id": "post-004",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "depart_after_boundary",
+        "depart_s": 45.0,
+        "id": "post-005",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "depart_after_boundary",
+        "depart_s": 46.0,
+        "id": "post-006",
+        "max_speed_mps": 20.0
+      },
+      {
+        "cohort": "depart_after_boundary",
+        "depart_s": 47.0,
+        "id": "post-007",
+        "max_speed_mps": 20.0
+      }
+    ],
+    "probe_edge": {
+      "candidate_count": 4,
+      "edge_id": "147433_1679061604_0",
+      "fast_travel_s": 15.121,
+      "length_m": 302.42,
+      "selection_rule": "lexicographically smallest non-internal passenger-capable edge between 200.0 m and 400.0 m with a limit above 20.0 m/s",
+      "slow_travel_s": 151.21,
+      "speed_limit_mps": 22.22
+    },
+    "save_time_s": 30.0,
+    "seed": 1000,
+    "slow_speed_mps": 2.0,
+    "step_length_s": 1.0
+  },
+  "network_requirement": {
+    "path": "sumo/net.net.xml",
+    "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "output_root": "validation/warm_state_population_semantics_v1_outcome",
+  "publication_contract": {
+    "digest_manifest": "members.json",
+    "members": [
+      "contract.json",
+      "population.rou.xml",
+      "cold_tripinfo.xml",
+      "prefix_tripinfo.xml",
+      "resumed_tripinfo.xml",
+      "cold_control_tripinfo.xml",
+      "prefix_control_tripinfo.xml",
+      "resumed_control_tripinfo.xml",
+      "observations.json",
+      "verdict.json"
+    ],
+    "post_publication_verification": "every published member is re-hashed FROM DISK and the member list re-checked after the rename, so the result describes what actually landed rather than what was believed to be written",
+    "preflight_rule": "the frozen contract, every bound source and the network are verified BEFORE any simulator import, while the program is still pure",
+    "root_is_not_an_argument": "the destination is derived from this contract, never supplied by a caller: the content key binds ONE root, so a valid approval token must not be able to authorize writes anywhere else",
+    "rule": "the outcome root must be ABSENT and is written all-or-nothing via a staging directory; the digest manifest is written last, so a root without one is visibly incomplete. A half-written root indexed by a content key would otherwise read as evidence"
+  },
+  "question": "the v9 campaign's warm-versus-cold objective residual is bit-identical to v2's (-7.73/-80.62/-138.97 s), always negative, and scales with demand. Is that a population partition error, two-decimal output quantization, or real save/load integration drift?",
+  "refuted_hypothesis": "state serialization: v9 applied --save-state.rng true and --save-state.precision 16 and the residual did not move by a single cent, so those settings are not the cause",
+  "result_contract": {
+    "arm_exit_rule": "all 6 arms must record exit status zero",
+    "arm_membership_rule": "a vehicle that COMPLETED before the boundary may only be reported by the prefix; anything still driving at it or departing after it may only be reported by the resumed arm. Set identities alone are not enough \u2014 two vehicles can trade arms and preserve every union while both are attributed to the wrong side",
+    "boundary_evidence_rule": "each controller-owned arm must record the capture instant, the exact vehicle ids seen in flight (which must equal the cold records' active-at-boundary cohort), their count, and a digest of a state file that exists. A boundary nobody can show did not happen",
+    "cohort_population_rule": "all three observed cohorts must be non-empty or the fixture did not exercise the boundary it claims to and the verdict is a partition error",
+    "cohort_rule": "membership is OBSERVED from each vehicle's own depart/arrival against the boundary, never inferred from ideal length-over-speed arithmetic, which cannot see insertion queuing or car-following. The fixture's declared cohort is recorded as intent and any disagreement is reported, not silently resolved",
+    "exit_status_rule": "a killed or unreaped process must never be recorded as a normal exit; a missing return code is an error, not a zero",
+    "member_order": [
+      "contract.json",
+      "population.rou.xml",
+      "cold_tripinfo.xml",
+      "prefix_tripinfo.xml",
+      "resumed_tripinfo.xml",
+      "cold_control_tripinfo.xml",
+      "prefix_control_tripinfo.xml",
+      "resumed_control_tripinfo.xml",
+      "observations.json",
+      "verdict.json"
+    ],
+    "partition_rule": "the prefix and resumed vehicle sets must be disjoint and their union must equal the cold set exactly; checked before any delta arithmetic",
+    "per_vehicle_fields": [
+      "id",
+      "declared_cohort",
+      "observed_cohort",
+      "arm",
+      "cold_time_loss_s",
+      "split_time_loss_s",
+      "delta_s",
+      "cold_depart",
+      "cold_arrival",
+      "cold_duration",
+      "cold_routeLength",
+      "cold_waitingTime",
+      "cold_waitingCount",
+      "cold_timeLoss",
+      "split_depart",
+      "split_arrival",
+      "split_duration",
+      "split_routeLength",
+      "split_waitingTime",
+      "split_waitingCount",
+      "split_timeLoss"
+    ],
+    "raw_records_completeness_rule": "arm_records must cover exactly all six arms and the whole rebuilt comparison must equal the stored one; an empty map previously skipped reconstruction entirely, and comparing a chosen subset of fields left the rest trusted",
+    "raw_records_required": true,
+    "reconstruction_rule": "every stored comparison is RECONSTRUCTED from the raw per-arm tripinfo records \u2014 partition, cohort counts, misplaced vehicles and totals \u2014 not merely re-summed. Recomputing only the totals left the findings that decide whether the deltas mean anything at all in the trusted column",
+    "required_arms": [
+      "cold",
+      "prefix",
+      "resumed",
+      "cold_control",
+      "prefix_control",
+      "resumed_control"
+    ],
+    "required_exit_status": 0,
+    "required_result_keys": [
+      "schema",
+      "diagnostic_id",
+      "contract_content_key",
+      "arm_exit_status",
+      "arm_records",
+      "boundary_facts",
+      "production",
+      "control",
+      "verdict"
+    ],
+    "result_schema": "warm_state_population_semantics_result_v1",
+    "totals_rule": "cold and split totals are RECOMPUTED from the per-vehicle records; an aggregate supplied without them is rejected",
+    "tripinfo_fields": [
+      "depart",
+      "arrival",
+      "duration",
+      "routeLength",
+      "waitingTime",
+      "waitingCount",
+      "timeLoss"
+    ],
+    "verdict_recomputation_rule": "a stored verdict must RECOMPUTE from its own observations; a transcribed conclusion can be edited, a recomputed one cannot"
+  },
+  "schema": "warm_state_population_semantics_v1",
+  "source_fingerprints": {
+    "run_scenario.py": "5c61d421af8146b75084dd8c015ce1a5dca5dca8dd1490c68fe94dc201fd8b7f",
+    "tests/test_warm_state_population_semantics.py": "ae613e02999deb6cda97011bf6b797a9664e51bf5bebdd3f723ae76a90b4313b",
+    "tools/diagnose_warm_state_population_semantics.py": "327ec4be6df0f039a008a669b0923b44dc637447acc35b68a0bd50be3528b43c",
+    "traffic_sim/simulation/metrics.py": "3edf71b82933601b5084229eac0ca63f8bd83a87fef946e23cb14b572d120134",
+    "traffic_sim/simulation/monthly_sumo.py": "c926ffadd6f766c83f721c06243806dfba3bbfdc860035df9d11d1a5f05f47c3",
+    "traffic_sim/simulation/monthly_warm_state.py": "37d31d9893e137f984605a9093bb808b0810cb98d9254ca941f2fe450c2c70a6",
+    "traffic_sim/simulation/warm_state_boundary.py": "86d549285d39097555f831eb8e7be16ba64ffb17343ecfc69bac11b423eb7316"
+  },
+  "status": "frozen_unapproved_unexecuted",
+  "why_the_v2_diagnostic_could_not_answer_it": "it probed ONE vehicle. A residual that scales with the number of vehicles crossing the boundary cannot appear in a one-vehicle fixture, so its correct finding \u2014 the accumulator is preserved \u2014 left this question untouched"
+}

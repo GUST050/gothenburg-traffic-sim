@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "kind": "closure_search",
+  "search_id": "independent-daily-bounded-benchmark-v1",
+  "directed_edges": [
+    "26842526_96527131_0"
+  ],
+  "demand_build_id": "independent-daily-bounded-benchmark-demand-v1",
+  "permitted_date_start": "2027-07-15",
+  "permitted_date_end": "2027-07-16",
+  "required_work_minutes": 240,
+  "max_consecutive_start_days": 1,
+  "permitted_daily_band": {
+    "earliest_start": "15:00",
+    "latest_end": "19:00"
+  },
+  "source": "forecast",
+  "timezone": "Europe/Stockholm",
+  "dst_policy": "exclude_transition_dates",
+  "allowed_weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "blackout_dates": [],
+  "same_daily_window": true,
+  "resolution_minutes": 15,
+  "closure_type": "full",
+  "duration_basis": "required_work_time",
+  "work_to_closure_assumption": "one_to_one",
+  "objective_profile": "robust_time_loss",
+  "policy_status": "user_supplied_unverified",
+  "interday_policy": "independent_daily_reset_v1",
+  "work_allocation_policy": "exact_balanced_daily_v1"
+}

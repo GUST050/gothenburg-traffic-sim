@@ -9,7 +9,9 @@ the user's work-time request.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
+import math
 from datetime import date, datetime, time, timedelta
 from typing import Mapping, Sequence
 from zoneinfo import ZoneInfo
@@ -112,20 +114,92 @@ def generate_closure_schedules(
 
     permitted_start = _calendar_date(spec.permitted_date_start)
     permitted_end = _calendar_date(spec.permitted_date_end)
+    search_content_key = spec.content_key
     schedules: list[ClosureSchedule] = []
+    blackout_dates = set(spec.blackout_dates)
+    allowed_dates: set[date] = set()
+    candidate_date = permitted_start
+    while candidate_date <= permitted_end:
+        if (
+            candidate_date.weekday() in spec.allowed_weekdays
+            and candidate_date.isoformat() not in blackout_dates
+            and not (
+                spec.dst_policy == "exclude_transition_dates"
+                and is_dst_transition_date(candidate_date, spec.timezone)
+            )
+        ):
+            allowed_dates.add(candidate_date)
+        candidate_date += timedelta(days=1)
+    eligible_dates = tuple(sorted(allowed_dates))
+    eligible_date_index = {
+        item: index for index, item in enumerate(eligible_dates)
+    }
 
     first_work_date = permitted_start
     while first_work_date <= permitted_end:
         for day_count in range(1, spec.max_consecutive_start_days + 1):
-            final_start_date = first_work_date + timedelta(days=day_count - 1)
-            if final_start_date > permitted_end:
-                break
+            if spec.work_allocation_policy == "exact_balanced_daily_v1":
+                first_index = eligible_date_index.get(first_work_date)
+                if first_index is None:
+                    continue
+                work_dates = eligible_dates[
+                    first_index:first_index + day_count
+                ]
+                if len(work_dates) != day_count:
+                    break
+            else:
+                final_start_date = (
+                    first_work_date + timedelta(days=day_count - 1)
+                )
+                if final_start_date > permitted_end:
+                    break
+                work_dates = tuple(
+                    first_work_date + timedelta(days=offset)
+                    for offset in range(day_count)
+                )
 
-            denominator = spec.resolution_minutes * day_count
-            quarters_per_day = (
-                spec.required_work_minutes + denominator - 1
-            ) // denominator
-            daily_duration = quarters_per_day * spec.resolution_minutes
+            if spec.work_allocation_policy == "exact_balanced_daily_v1":
+                total_blocks = (
+                    spec.required_work_minutes // spec.resolution_minutes
+                )
+                short_blocks, longer_days = divmod(total_blocks, day_count)
+                if short_blocks <= 0:
+                    continue
+                pattern_count = math.comb(day_count, longer_days)
+                if pattern_count > 4096:
+                    raise ValueError(
+                        "exact balanced work allocation creates "
+                        f"{pattern_count} daily-duration patterns for "
+                        f"{day_count} days; narrow max days or use an "
+                        "explicit fixed allocation"
+                    )
+                patterns = tuple(
+                    frozenset(indices)
+                    for indices in itertools.combinations(
+                        range(day_count), longer_days
+                    )
+                )
+                # divmod(..., day_count) yields zero remainder for the common
+                # exact case. itertools.combinations(..., 0) already returns
+                # one empty allocation pattern.
+                durations_by_pattern = tuple(
+                    tuple(
+                        (short_blocks + (index in longer))
+                        * spec.resolution_minutes
+                        for index in range(day_count)
+                    )
+                    for longer in patterns
+                )
+                daily_duration = max(durations_by_pattern[0])
+            else:
+                denominator = spec.resolution_minutes * day_count
+                quarters_per_day = (
+                    spec.required_work_minutes + denominator - 1
+                ) // denominator
+                daily_duration = quarters_per_day * spec.resolution_minutes
+                durations_by_pattern = (
+                    (daily_duration,) * day_count,
+                )
             if daily_duration <= 0:
                 continue
             # More than one 24-hour shift would leave no opening between
@@ -133,68 +207,86 @@ def generate_closure_schedules(
             if day_count > 1 and daily_duration >= 24 * 60:
                 continue
 
-            for start_minute in _start_offsets(
-                spec, daily_duration_minutes=daily_duration
-            ):
-                intervals: list[ClosureInterval] = []
-                valid = True
-                for day_offset in range(day_count):
-                    work_date = first_work_date + timedelta(days=day_offset)
-                    start_time = datetime.combine(
-                        work_date,
-                        time(hour=start_minute // 60, minute=start_minute % 60),
+            for durations in durations_by_pattern:
+                maximum_duration = max(durations)
+                for start_minute in _start_offsets(
+                    spec, daily_duration_minutes=maximum_duration
+                ):
+                    intervals: list[ClosureInterval] = []
+                    valid = True
+                    for work_date, duration in zip(work_dates, durations):
+                        start_time = datetime.combine(
+                            work_date,
+                            time(
+                                hour=start_minute // 60,
+                                minute=start_minute % 60,
+                            ),
+                        )
+                        end_time = start_time + timedelta(minutes=duration)
+                        if not all(
+                            occupied in allowed_dates
+                            for occupied in _occupied_dates(start_time, end_time)
+                        ):
+                            valid = False
+                            break
+                        intervals.append(
+                            ClosureInterval(
+                                work_date=work_date.isoformat(),
+                                start_time=start_time.isoformat(timespec="seconds"),
+                                end_time=end_time.isoformat(timespec="seconds"),
+                            )
+                        )
+                    if not valid:
+                        continue
+
+                    scheduled_work = sum(durations)
+                    daily_start = (
+                        f"{start_minute // 60:02d}:"
+                        f"{start_minute % 60:02d}"
                     )
-                    end_time = start_time + timedelta(minutes=daily_duration)
-                    if not all(
-                        _date_is_allowed(spec, occupied)
-                        for occupied in _occupied_dates(start_time, end_time)
-                    ):
-                        valid = False
-                        break
-                    intervals.append(
-                        ClosureInterval(
-                            work_date=work_date.isoformat(),
-                            start_time=start_time.isoformat(timespec="seconds"),
-                            end_time=end_time.isoformat(timespec="seconds"),
+                    daily_end_minutes = (
+                        start_minute + maximum_duration
+                    ) % (24 * 60)
+                    daily_end = (
+                        "24:00"
+                        if start_minute + maximum_duration == 24 * 60
+                        else f"{daily_end_minutes // 60:02d}:"
+                        f"{daily_end_minutes % 60:02d}"
+                    )
+                    identity = {
+                        "search_content_key": search_content_key,
+                        "first_work_date": first_work_date.isoformat(),
+                        "day_count": day_count,
+                        "daily_start": daily_start,
+                        "daily_end": daily_end,
+                        "scheduled_work_minutes": scheduled_work,
+                    }
+                    if spec.work_allocation_policy != "equal_daily_rounded_v1":
+                        identity.update({
+                            "allocation_policy": spec.work_allocation_policy,
+                            "interval_durations_minutes": list(durations),
+                            "work_dates": [
+                                item.isoformat() for item in work_dates
+                            ],
+                        })
+                    schedules.append(
+                        ClosureSchedule(
+                            schedule_id=_schedule_id(identity),
+                            search_content_key=search_content_key,
+                            first_work_date=first_work_date.isoformat(),
+                            day_count=day_count,
+                            daily_start=daily_start,
+                            daily_end=daily_end,
+                            required_work_minutes=spec.required_work_minutes,
+                            scheduled_work_minutes=scheduled_work,
+                            actual_closed_minutes=scheduled_work,
+                            rounding_overshoot_minutes=(
+                                scheduled_work - spec.required_work_minutes
+                            ),
+                            intervals=tuple(intervals),
+                            allocation_policy=spec.work_allocation_policy,
                         )
                     )
-                if not valid:
-                    continue
-
-                scheduled_work = day_count * daily_duration
-                end = datetime.fromisoformat(intervals[0].end_time)
-                start = datetime.fromisoformat(intervals[0].start_time)
-                daily_end = (
-                    "24:00"
-                    if end.date() > start.date()
-                    and end.strftime("%H:%M") == "00:00"
-                    else end.strftime("%H:%M")
-                )
-                identity = {
-                    "search_content_key": spec.content_key,
-                    "first_work_date": first_work_date.isoformat(),
-                    "day_count": day_count,
-                    "daily_start": start.strftime("%H:%M"),
-                    "daily_end": daily_end,
-                    "scheduled_work_minutes": scheduled_work,
-                }
-                schedules.append(
-                    ClosureSchedule(
-                        schedule_id=_schedule_id(identity),
-                        search_content_key=spec.content_key,
-                        first_work_date=first_work_date.isoformat(),
-                        day_count=day_count,
-                        daily_start=start.strftime("%H:%M"),
-                        daily_end=daily_end,
-                        required_work_minutes=spec.required_work_minutes,
-                        scheduled_work_minutes=scheduled_work,
-                        actual_closed_minutes=scheduled_work,
-                        rounding_overshoot_minutes=(
-                            scheduled_work - spec.required_work_minutes
-                        ),
-                        intervals=tuple(intervals),
-                    )
-                )
         first_work_date += timedelta(days=1)
 
     return tuple(schedules)

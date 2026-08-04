@@ -1,0 +1,102 @@
+{
+  "active_accumulator_comparison": {
+    "chained_count": 61,
+    "cold_count": 61,
+    "extra_in_chained": [],
+    "missing_from_chained": [],
+    "population_digest_equal": true,
+    "value_delta_sum_s": 0,
+    "value_max_absolute_delta_s": 0.0,
+    "value_mismatch_count": 0
+  },
+  "chained_segment_s": 900,
+  "chained_state": {
+    "compressed_bytes": 182289,
+    "compressed_sha256": "34d9981208c8fbd68917ece196ffeb6d72586f3ee9d23d8c9757d274fe434a42",
+    "expanded_bytes": 1863048,
+    "expanded_sha256": "b0a12d5dfbb4fb5e9979f28551c3b74b13a46a2d2d1bae2c44cd47a4ec24452c"
+  },
+  "closure_schedule_id": "closure-3519a4b97eb7ca669386",
+  "cold_state": {
+    "compressed_bytes": 77059,
+    "compressed_sha256": "f1507476669d309ced877eb99d8dca940a83e73b3184df19fd460c4ee55aa2e7",
+    "expanded_bytes": 560162,
+    "expanded_sha256": "df6c4f0dfe7fe38c418fdf568c689bbd87264f7edaadf8ba203afec45bc8859c"
+  },
+  "diagnostic_only": true,
+  "expanded_state_bytes_are_release_gate": false,
+  "expanded_state_equal": false,
+  "from_s": 24300,
+  "identical_closure_suffix": true,
+  "prefix_evidence_equal": true,
+  "prefix_evidence_sections": {
+    "active_accumulator": {
+      "chained_sha256": "1fd716e04df7054222a985fa11c2fbca2d1da47070c18f8ff781b5fe47d11dec",
+      "cold_sha256": "1fd716e04df7054222a985fa11c2fbca2d1da47070c18f8ff781b5fe47d11dec",
+      "equal": true
+    },
+    "completed_record_order": {
+      "chained_sha256": "5ad6a5abaf8a1b78eafe6be8586a3fab04bf6df785c39fd7653dba63b7151e16",
+      "cold_sha256": "5ad6a5abaf8a1b78eafe6be8586a3fab04bf6df785c39fd7653dba63b7151e16",
+      "equal": true
+    },
+    "completed_records": {
+      "chained_sha256": "a2a04c091046c46bcdb0df9dcf207cc321f8216bc933eb51442fe6f062a5cbcc",
+      "cold_sha256": "a2a04c091046c46bcdb0df9dcf207cc321f8216bc933eb51442fe6f062a5cbcc",
+      "equal": true
+    },
+    "completed_trips": {
+      "chained_sha256": "5df3685780574ac726ab85d0adbfe2d4b12487a0b09628c239ed94e03224bb5f",
+      "cold_sha256": "5df3685780574ac726ab85d0adbfe2d4b12487a0b09628c239ed94e03224bb5f",
+      "equal": true
+    },
+    "counters": {
+      "chained_sha256": "6d8d5c933a4716c6a8d349e84007bfa5660526ebb15dced40be3edf8d87d0d62",
+      "cold_sha256": "6d8d5c933a4716c6a8d349e84007bfa5660526ebb15dced40be3edf8d87d0d62",
+      "equal": true
+    },
+    "queue_maximum": {
+      "chained_sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+      "cold_sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+      "equal": true
+    },
+    "recovery_buckets": {
+      "chained_sha256": "f1fe6d751e77e8f34028e00a5fd6f1f83fe5bf36eb3b88ced7f9025b17aed70b",
+      "cold_sha256": "f1fe6d751e77e8f34028e00a5fd6f1f83fe5bf36eb3b88ced7f9025b17aed70b",
+      "equal": true
+    },
+    "schema": {
+      "chained_sha256": "36e466a8e3022e1a53e016c07225910b5b6b8f481cf307c15b9b7f4121b7a722",
+      "cold_sha256": "36e466a8e3022e1a53e016c07225910b5b6b8f481cf307c15b9b7f4121b7a722",
+      "equal": true
+    },
+    "snapshot_facts": {
+      "chained_sha256": "41ea53940559122e018ed5d3ed3232f26365cb195d1124e4cfdeec86940bb006",
+      "cold_sha256": "41ea53940559122e018ed5d3ed3232f26365cb195d1124e4cfdeec86940bb006",
+      "equal": true
+    },
+    "teleport_reasons": {
+      "chained_sha256": "3d1d1a85fb89d1de1955f59c9e3e6018a9abd90b5de418509c46d0ede03f83ee",
+      "cold_sha256": "3d1d1a85fb89d1de1955f59c9e3e6018a9abd90b5de418509c46d0ede03f83ee",
+      "equal": true
+    },
+    "warm_point_s": {
+      "chained_sha256": "b8f77066618dafac1d69537c4da80d0dbbeca0cbccaea8392179946bdc2ceac5",
+      "cold_sha256": "b8f77066618dafac1d69537c4da80d0dbbeca0cbccaea8392179946bdc2ceac5",
+      "equal": true
+    }
+  },
+  "replayed_prefix_s": 25200,
+  "runtime_s": {
+    "chained": 1.663049,
+    "cold": 1.840944
+  },
+  "schema": "warm_prefix_chaining_diagnostic_v1",
+  "seed": 1000,
+  "source_cache_entry": "runs/warm-state/2f5cac99bfde034da115564904cd3e8f",
+  "source_cache_manifest_sha256": "b991f61b1dcad2f64aee90363a1fa8357b68c56dc11b157840b6848be292f710",
+  "speedup": 1.106969,
+  "status": "pass",
+  "target_s": 25200,
+  "variant": "q10"
+}

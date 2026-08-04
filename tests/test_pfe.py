@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pfe
 from pfe import (Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
                  RUNG_LP_FALLBACK, RUNG_RELAX_TOL4X, calibrate,
-                 largest_remainder_round, path_size_weights,
+                 build_touch_index, largest_remainder_round, path_size_weights,
                  solve_calibration_intervals, solve_interval,
                  solve_interval_entropy, solve_interval_with_relaxation,
                  solve_interval_with_structure_guard, write_calibration_report)
@@ -43,6 +43,21 @@ class TestSolveIntervalEntropy:
         cands = [cand("a", "b"), cand("c")]
         x = solve_interval_entropy(cands, {"a": 100.0}, {}, {})
         assert served(x, cands, "a") == pytest.approx(100, rel=0.06)
+
+    def test_precomputed_touch_index_is_bitwise_equivalent(self):
+        cands = [cand("a", "b"), cand("a", "c"), cand("d")]
+        expected = solve_interval_entropy(
+            cands, {"a": 17.0}, {"b": (0.0, 12.0)},
+            {"c": (5.0, 0.5)})
+        actual = solve_interval_entropy(
+            cands, {"a": 17.0}, {"b": (0.0, 12.0)},
+            {"c": (5.0, 0.5)}, touch_index=build_touch_index(cands))
+        assert np.array_equal(actual, expected)
+
+    def test_touch_index_preserves_candidate_order_and_deduplicates_edges(self):
+        assert build_touch_index([
+            cand("a", "a", "b"), cand("b", "a"), cand("c")
+        ]) == {"a": [0, 1], "b": [0, 1], "c": [2]}
 
     def test_prior_is_pulled_toward(self):
         cands = [cand("p"), cand("q")]

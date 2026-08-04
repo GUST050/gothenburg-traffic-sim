@@ -1,0 +1,35 @@
+{
+  "benchmark_id": "independent-daily-bounded-benchmark-v1",
+  "command": "python3 run_monthly_closure_search.py --spec validation/independent_daily_benchmark_spec_v1.json --policy validation/independent_daily_benchmark_policy_v1.json --baseline-trip-duration-p99-s 3600 --screening-mode independent-exhaustive --root runs/independent-daily-benchmark-search-v1 --daily-result-cache runs/independent-daily-benchmark-cache-v1 --baseline-cache runs/independent-daily-benchmark-baselines-v1 --daily-workers 3",
+  "diagnostic_only": true,
+  "elapsed_seconds": 605.78,
+  "inputs": {
+    "policy_sha256": "e9b7c1f3c9357be73c9be6695a0fd57c568e0be4142e8446ff46095126b633f0",
+    "spec_sha256": "ef5792d224183bbbfe637157cd703c56d052ff11e46057c03c3aad0ba5c3bed7"
+  },
+  "kind": "independent_daily_benchmark_record",
+  "observations": {
+    "candidate_count": 2,
+    "daily_unit_count": 2,
+    "demand_archives_built": 2,
+    "global_best_claim_allowed": false,
+    "hard_failure": "teleports",
+    "result_status": "no_viable",
+    "scoreable_candidate_count": 2,
+    "ui_exposure_allowed": true,
+    "warm_cache_hits": 0
+  },
+  "outputs": {
+    "candidate_ledger_sha256": "7ece9363f12aa5266c6092c985c9044b1689b065c52996d72c63a40e433029f4",
+    "daily_cache_sha256": [
+      "558d72ba1e43af9b856f3028765125a19c3f418f4a75e2caaf19edae2ef3f5cf",
+      "c3cc464025d870ca06c4d216675345df3afd282778b79d6f1bbfac712352abd3"
+    ],
+    "manifest_sha256": "2aafcc0f98da9eb7cc4c860d440612e03c7a3955f8a28e42dfb652856eff3954",
+    "result_sha256": "4d74c40d7149d8afcd907b54b830ae4d809d961a6bd034947674cde184ab650c",
+    "root": "runs/independent-daily-benchmark-search-v1/independent-daily-bounded-benchmark-v1"
+  },
+  "schema_version": 1,
+  "status": "completed_no_viable",
+  "use": "Runtime and cache-miss planning evidence only; not release, proxy-validation, or global-best evidence."
+}

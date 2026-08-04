@@ -19,6 +19,19 @@ from traffic_sim.simulation.warm_state_cache import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _process_free(monkeypatch):
+    """These checks must start no process.
+
+    `sumo_version` shells out, so a fixed stand-in keeps the suite process-free.
+    `git_commit` remains a compatibility attribute but warm identity v3 must
+    neither call it nor include it in the key.
+    """
+    import traffic_sim.simulation.warm_state_cache as wsc
+    monkeypatch.setattr(wsc, "sumo_version", lambda home: "Eclipse SUMO 1.27.1")
+    monkeypatch.setattr(wsc, "git_commit", lambda: "a" * 40)
+
+
 def _inputs(tmp_path):
     tmp_path.mkdir(parents=True, exist_ok=True)
     network = tmp_path / "net.net.xml"
@@ -84,6 +97,22 @@ def test_identity_covers_every_required_provenance_dimension(tmp_path):
         identity.content_key)
 
 
+def test_repository_commit_is_not_part_of_warm_identity(tmp_path, monkeypatch):
+    import traffic_sim.simulation.warm_state_cache as wsc
+
+    monkeypatch.setattr(wsc, "git_commit", lambda: "a" * 40)
+    first, network, route, source = _identity(tmp_path)
+    monkeypatch.setattr(wsc, "git_commit", lambda: "b" * 40)
+    second = create_warm_state_identity(
+        demand_build_id="demand-a", demand_variant="q50", seed=1000,
+        simulation_mode="meso", warmup_end_s=3600,
+        network_path=network, route_path=route,
+        source_files={"runner": source}, sumo_home=sumo_home())
+
+    assert first.content_key == second.content_key
+    assert "git_commit" not in first.to_dict()
+
+
 def test_cache_store_and_restore_are_atomic_and_content_addressed(tmp_path):
     identity, _, _, _ = _identity(tmp_path / "inputs")
     state = tmp_path / "warm.xml.gz"
@@ -103,6 +132,22 @@ def test_cache_store_and_restore_are_atomic_and_content_addressed(tmp_path):
     # Storing the same immutable identity again is idempotent.
     assert store_warm_state(
         cache, identity, state, _certificate(identity)) == entry
+
+
+def test_v1_warm_entries_are_fail_closed_misses(tmp_path):
+    """The v12 cache schema cannot be reinterpreted under v13 accounting."""
+    identity, _, _, _ = _identity(tmp_path / "inputs")
+    state = tmp_path / "warm.xml.gz"
+    state.write_bytes(b"sumo-state")
+    cache = tmp_path / "cache"
+    entry = store_warm_state(cache, identity, state, _certificate(identity))
+    manifest_path = entry / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["schema_version"] = 1
+    manifest_path.write_text(json.dumps(manifest))
+    lookup = restore_warm_state(cache, identity, tmp_path / "restored.gz")
+    assert lookup.hit is False
+    assert lookup.reason == "schema_mismatch"
 
 
 def test_cache_rejects_semantic_mismatch_before_storing(tmp_path):
@@ -381,3 +426,70 @@ def test_baseline_metric_schema_must_match_equivalence_certificate(tmp_path):
         store_baseline_evidence(
             tmp_path / "cache", baseline, {"time_loss_s": 1},
             _certificate(identity))
+
+
+# ── LUNA-WARM-01: cold-fallback, no-overwrite and per-seed isolation ─────────
+def test_a_partial_entry_is_a_cache_miss_not_a_restore(tmp_path):
+    """A manifest with no state file must fall back cold, never half-restore."""
+    identity, _net, _route, _source = _identity(tmp_path / "inputs")
+    state = tmp_path / "state.xml.gz"
+    state.write_bytes(b"STATE")
+    root = tmp_path / "cache"
+    entry = store_warm_state(root, identity, state, _certificate(identity))
+    (entry / STATE_FILENAME).unlink()             # entry is now partial
+
+    destination = tmp_path / "restored.xml.gz"
+    lookup = restore_warm_state(root, identity, destination)
+    assert lookup.hit is False
+    assert lookup.reason == "state_digest_mismatch"
+    assert not destination.exists(), "a partial entry must not produce output"
+
+
+def test_a_corrupt_manifest_is_a_cache_miss(tmp_path):
+    identity, _net, _route, _source = _identity(tmp_path / "inputs")
+    state = tmp_path / "state.xml.gz"
+    state.write_bytes(b"STATE")
+    root = tmp_path / "cache"
+    entry = store_warm_state(root, identity, state, _certificate(identity))
+    (entry / "manifest.json").write_text("{ not json")
+
+    lookup = restore_warm_state(root, identity, tmp_path / "out.xml.gz")
+    assert lookup.hit is False and lookup.reason == "manifest_missing_or_invalid"
+
+
+def test_an_invalid_existing_entry_is_never_overwritten_or_repaired(tmp_path):
+    """Storing over a broken entry must refuse, not silently fix it."""
+    identity, _net, _route, _source = _identity(tmp_path / "inputs")
+    state = tmp_path / "state.xml.gz"
+    state.write_bytes(b"STATE")
+    root = tmp_path / "cache"
+    entry = store_warm_state(root, identity, state, _certificate(identity))
+    (entry / STATE_FILENAME).write_bytes(b"TAMPERED")
+    tampered = (entry / STATE_FILENAME).read_bytes()
+
+    with pytest.raises(ValueError, match="existing warm-state cache entry is invalid"):
+        store_warm_state(root, identity, state, _certificate(identity))
+    assert (entry / STATE_FILENAME).read_bytes() == tampered, "entry was repaired"
+
+
+def test_each_seed_gets_an_isolated_entry(tmp_path):
+    """Per-seed isolation: one seed's state can never satisfy another's."""
+    root = tmp_path / "cache"
+    entries = {}
+    for seed in (1000, 1001, 1002):
+        identity, _n, _r, _s = _identity(tmp_path / "inputs", seed=seed)
+        state = tmp_path / f"state-{seed}.xml.gz"
+        state.write_bytes(f"STATE-{seed}".encode())
+        entries[seed] = (identity, store_warm_state(
+            root, identity, state, _certificate(identity)))
+
+    keys = {identity.content_key for identity, _ in entries.values()}
+    assert len(keys) == 3, "seeds must not share a cache key"
+    paths = {str(path) for _, path in entries.values()}
+    assert len(paths) == 3, "seeds must not share a cache entry"
+
+    for seed, (identity, _path) in entries.items():
+        destination = tmp_path / f"restored-{seed}.xml.gz"
+        lookup = restore_warm_state(root, identity, destination)
+        assert lookup.hit is True
+        assert destination.read_bytes() == f"STATE-{seed}".encode()

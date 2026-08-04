@@ -1,0 +1,829 @@
+{
+  "all_links_restored_and_semantically_valid": true,
+  "archive": {
+    "archive": "/Users/gt/Documents/gs-project/runs/demand-20260804-100926-c6316856-7efa",
+    "archive_content_key": "49d7e782e2ebcf5d0d33331c8414a292f09d2f8976c99207f9781d5adde492c0",
+    "archive_manifest_sha256": "20239d25afb1d1b1ec5a057320ba066ee37a933d18ee94714e064869ddbe8fcb",
+    "demand_build_spec": {
+      "begin": "00:00",
+      "build_key": "e10c3d87e23e8b32",
+      "days": 3,
+      "end": "24:00",
+      "kind": "demand_build",
+      "purpose": "closure_envelope",
+      "schema_version": 1,
+      "source": "forecast",
+      "start_date": "2027-07-14",
+      "structural_reference_date": "2025-09-16"
+    },
+    "finished_at": "2026-08-04T10:18:19Z",
+    "outputs": [
+      {
+        "bytes": 1253592,
+        "name": "demand_meta.json",
+        "sha256": "92e84b2badcf135051e533dad4e9a0336e4a2199e7b3c9e37ae979040b766b5e"
+      },
+      {
+        "bytes": 270,
+        "name": "demand_build_spec.json",
+        "sha256": "47112a9d653902dea80758307f3b72e8222cdc431dec3b222dd65e7c2f69911e"
+      },
+      {
+        "bytes": 44160425,
+        "name": "candidates.rou.xml",
+        "sha256": "119ec1f6825e21cd77e531520d9613b76ce7a9acf5642569cc2a8bd790439a15"
+      },
+      {
+        "bytes": 10783725,
+        "name": "candidates.meta.json",
+        "sha256": "815e7b5bec65e11aa48053f6bc4990b434ce90b1988c9e8ce168a7be98f77314"
+      },
+      {
+        "bytes": 73041459,
+        "name": "calibrated.rou.xml",
+        "sha256": "be07b98737bd531b81a233099cae7040b8837ef7cd850605feb8e4b72a4d0da5"
+      },
+      {
+        "bytes": 22564595,
+        "name": "calibrated.agents.json",
+        "sha256": "4f959aca161104444553a68fb9643a56ea363f6889583d1dfc6a21513b934b97"
+      },
+      {
+        "bytes": 68903243,
+        "name": "calibrated_v1.rou.xml",
+        "sha256": "157c70f385435380ffb78fb983eeef5a6eb939956dfc931f79b97794e4b2c18c"
+      },
+      {
+        "bytes": 21430551,
+        "name": "calibrated_v1.agents.json",
+        "sha256": "f0c69b29c2b34bdf5b6a54f3798836efddf96a16cf55b22622cc2d10a4577d99"
+      },
+      {
+        "bytes": 75885685,
+        "name": "calibrated_v2.rou.xml",
+        "sha256": "b1cbaf246bffd844949fd6c2986a4c9a53ea5655d5b40741e2249e4f03164f70"
+      },
+      {
+        "bytes": 23543177,
+        "name": "calibrated_v2.agents.json",
+        "sha256": "07a47c4477af5464037e280f06016e79515aae0131d8d423ae51681cbd8ad03e"
+      }
+    ],
+    "run_id": "demand-20260804-100926-c6316856-7efa"
+  },
+  "audited_positions": [
+    2,
+    48,
+    96
+  ],
+  "chain_length": 96,
+  "chain_profile": [
+    {
+      "checkpoint_s": 85500,
+      "link": 1,
+      "state_compressed_bytes": 173326,
+      "state_expanded_bytes": 1286390,
+      "unit_id": "annual-unit-8c6b406feff9d5651c38"
+    },
+    {
+      "checkpoint_s": 86400,
+      "link": 2,
+      "state_compressed_bytes": 2086221,
+      "state_expanded_bytes": 23431258,
+      "unit_id": "annual-unit-157719273f522f3ac9ba"
+    },
+    {
+      "checkpoint_s": 87300,
+      "link": 3,
+      "state_compressed_bytes": 2091378,
+      "state_expanded_bytes": 23483451,
+      "unit_id": "annual-unit-34d873871b56a0a18771"
+    },
+    {
+      "checkpoint_s": 88200,
+      "link": 4,
+      "state_compressed_bytes": 2098267,
+      "state_expanded_bytes": 23565909,
+      "unit_id": "annual-unit-8726173c187c0d1284ea"
+    },
+    {
+      "checkpoint_s": 89100,
+      "link": 5,
+      "state_compressed_bytes": 2100777,
+      "state_expanded_bytes": 23595894,
+      "unit_id": "annual-unit-da73b3388cd53a26453e"
+    },
+    {
+      "checkpoint_s": 90000,
+      "link": 6,
+      "state_compressed_bytes": 2106523,
+      "state_expanded_bytes": 23664801,
+      "unit_id": "annual-unit-ee385dbd7ddc6a70d7de"
+    },
+    {
+      "checkpoint_s": 90900,
+      "link": 7,
+      "state_compressed_bytes": 2109428,
+      "state_expanded_bytes": 23704704,
+      "unit_id": "annual-unit-ddd995acaf9776f335e9"
+    },
+    {
+      "checkpoint_s": 91800,
+      "link": 8,
+      "state_compressed_bytes": 2113655,
+      "state_expanded_bytes": 23740982,
+      "unit_id": "annual-unit-6febb1aa83027f2f24f7"
+    },
+    {
+      "checkpoint_s": 92700,
+      "link": 9,
+      "state_compressed_bytes": 2117440,
+      "state_expanded_bytes": 23787216,
+      "unit_id": "annual-unit-024e4be204ba4d070777"
+    },
+    {
+      "checkpoint_s": 93600,
+      "link": 10,
+      "state_compressed_bytes": 2122960,
+      "state_expanded_bytes": 23837793,
+      "unit_id": "annual-unit-6f17f5b6ae4e0862d5dc"
+    },
+    {
+      "checkpoint_s": 94500,
+      "link": 11,
+      "state_compressed_bytes": 2125865,
+      "state_expanded_bytes": 23866851,
+      "unit_id": "annual-unit-c9f7ee9228537567a5f1"
+    },
+    {
+      "checkpoint_s": 95400,
+      "link": 12,
+      "state_compressed_bytes": 2128653,
+      "state_expanded_bytes": 23900843,
+      "unit_id": "annual-unit-15b0edbe54360ed88d95"
+    },
+    {
+      "checkpoint_s": 96300,
+      "link": 13,
+      "state_compressed_bytes": 2131794,
+      "state_expanded_bytes": 23934357,
+      "unit_id": "annual-unit-983b06e9634d84c5f9f1"
+    },
+    {
+      "checkpoint_s": 97200,
+      "link": 14,
+      "state_compressed_bytes": 2133197,
+      "state_expanded_bytes": 23957083,
+      "unit_id": "annual-unit-90e7ae4807f20d833b7b"
+    },
+    {
+      "checkpoint_s": 98100,
+      "link": 15,
+      "state_compressed_bytes": 2135938,
+      "state_expanded_bytes": 23988099,
+      "unit_id": "annual-unit-b863647bd503bd18a8e5"
+    },
+    {
+      "checkpoint_s": 99000,
+      "link": 16,
+      "state_compressed_bytes": 2139936,
+      "state_expanded_bytes": 24038337,
+      "unit_id": "annual-unit-8ce37aae435ced542fa4"
+    },
+    {
+      "checkpoint_s": 99900,
+      "link": 17,
+      "state_compressed_bytes": 2141603,
+      "state_expanded_bytes": 24052238,
+      "unit_id": "annual-unit-e0ea7cfd59ab448abc10"
+    },
+    {
+      "checkpoint_s": 100800,
+      "link": 18,
+      "state_compressed_bytes": 2144258,
+      "state_expanded_bytes": 24089648,
+      "unit_id": "annual-unit-852db2679d78c67ead92"
+    },
+    {
+      "checkpoint_s": 101700,
+      "link": 19,
+      "state_compressed_bytes": 2146579,
+      "state_expanded_bytes": 24106434,
+      "unit_id": "annual-unit-9d93b5e8b08fd9e9e640"
+    },
+    {
+      "checkpoint_s": 102600,
+      "link": 20,
+      "state_compressed_bytes": 2149066,
+      "state_expanded_bytes": 24132245,
+      "unit_id": "annual-unit-4af603bc7abe672ff179"
+    },
+    {
+      "checkpoint_s": 103500,
+      "link": 21,
+      "state_compressed_bytes": 2152244,
+      "state_expanded_bytes": 24162428,
+      "unit_id": "annual-unit-3e1ae27f2f7e1df44566"
+    },
+    {
+      "checkpoint_s": 104400,
+      "link": 22,
+      "state_compressed_bytes": 2154510,
+      "state_expanded_bytes": 24181849,
+      "unit_id": "annual-unit-a62e71c548e1f38c9976"
+    },
+    {
+      "checkpoint_s": 105300,
+      "link": 23,
+      "state_compressed_bytes": 2157911,
+      "state_expanded_bytes": 24215218,
+      "unit_id": "annual-unit-c8671b2eb107f9c505fb"
+    },
+    {
+      "checkpoint_s": 106200,
+      "link": 24,
+      "state_compressed_bytes": 2160873,
+      "state_expanded_bytes": 24249237,
+      "unit_id": "annual-unit-8c9d69f3c68d73a0e84c"
+    },
+    {
+      "checkpoint_s": 107100,
+      "link": 25,
+      "state_compressed_bytes": 2164285,
+      "state_expanded_bytes": 24291903,
+      "unit_id": "annual-unit-2b188776d3817b052522"
+    },
+    {
+      "checkpoint_s": 108000,
+      "link": 26,
+      "state_compressed_bytes": 2173597,
+      "state_expanded_bytes": 24371404,
+      "unit_id": "annual-unit-1e94afa8e800b8f5ee74"
+    },
+    {
+      "checkpoint_s": 108900,
+      "link": 27,
+      "state_compressed_bytes": 2178268,
+      "state_expanded_bytes": 24422583,
+      "unit_id": "annual-unit-0b4e81489599012a1dd1"
+    },
+    {
+      "checkpoint_s": 109800,
+      "link": 28,
+      "state_compressed_bytes": 2187271,
+      "state_expanded_bytes": 24516958,
+      "unit_id": "annual-unit-380e882b1a828eb54988"
+    },
+    {
+      "checkpoint_s": 110700,
+      "link": 29,
+      "state_compressed_bytes": 2198424,
+      "state_expanded_bytes": 24630782,
+      "unit_id": "annual-unit-0cc48bab4d3ab7b33a6e"
+    },
+    {
+      "checkpoint_s": 111600,
+      "link": 30,
+      "state_compressed_bytes": 2213503,
+      "state_expanded_bytes": 24801518,
+      "unit_id": "annual-unit-5a34d916a6359bc463d7"
+    },
+    {
+      "checkpoint_s": 112500,
+      "link": 31,
+      "state_compressed_bytes": 2229277,
+      "state_expanded_bytes": 24957410,
+      "unit_id": "annual-unit-4903dff6e7a70d4e2b91"
+    },
+    {
+      "checkpoint_s": 113400,
+      "link": 32,
+      "state_compressed_bytes": 2245844,
+      "state_expanded_bytes": 25161271,
+      "unit_id": "annual-unit-7344036b49c88b5b732b"
+    },
+    {
+      "checkpoint_s": 114300,
+      "link": 33,
+      "state_compressed_bytes": 2269687,
+      "state_expanded_bytes": 25394684,
+      "unit_id": "annual-unit-9f0b58804767b5470678"
+    },
+    {
+      "checkpoint_s": 115200,
+      "link": 34,
+      "state_compressed_bytes": 2286658,
+      "state_expanded_bytes": 25584734,
+      "unit_id": "annual-unit-7aae531e900e51e38023"
+    },
+    {
+      "checkpoint_s": 116100,
+      "link": 35,
+      "state_compressed_bytes": 2311679,
+      "state_expanded_bytes": 25864136,
+      "unit_id": "annual-unit-7fa266adebdcc559f0cf"
+    },
+    {
+      "checkpoint_s": 117000,
+      "link": 36,
+      "state_compressed_bytes": 2333763,
+      "state_expanded_bytes": 26126519,
+      "unit_id": "annual-unit-8f9ccfcc87d484bce679"
+    },
+    {
+      "checkpoint_s": 117900,
+      "link": 37,
+      "state_compressed_bytes": 2359597,
+      "state_expanded_bytes": 26394093,
+      "unit_id": "annual-unit-59d0e6585d14c3d3510c"
+    },
+    {
+      "checkpoint_s": 118800,
+      "link": 38,
+      "state_compressed_bytes": 2384897,
+      "state_expanded_bytes": 26678819,
+      "unit_id": "annual-unit-a7e548dac00a40857f7f"
+    },
+    {
+      "checkpoint_s": 119700,
+      "link": 39,
+      "state_compressed_bytes": 2405987,
+      "state_expanded_bytes": 26925264,
+      "unit_id": "annual-unit-2279a5b9775233a2f609"
+    },
+    {
+      "checkpoint_s": 120600,
+      "link": 40,
+      "state_compressed_bytes": 2431015,
+      "state_expanded_bytes": 27228788,
+      "unit_id": "annual-unit-39cbfffe95553cff0b6d"
+    },
+    {
+      "checkpoint_s": 121500,
+      "link": 41,
+      "state_compressed_bytes": 2454446,
+      "state_expanded_bytes": 27514888,
+      "unit_id": "annual-unit-ba83260c0560691d839d"
+    },
+    {
+      "checkpoint_s": 122400,
+      "link": 42,
+      "state_compressed_bytes": 2483085,
+      "state_expanded_bytes": 27841185,
+      "unit_id": "annual-unit-b39febf4c6cffbae9835"
+    },
+    {
+      "checkpoint_s": 123300,
+      "link": 43,
+      "state_compressed_bytes": 2502942,
+      "state_expanded_bytes": 28075965,
+      "unit_id": "annual-unit-fcc61ceee228c1675602"
+    },
+    {
+      "checkpoint_s": 124200,
+      "link": 44,
+      "state_compressed_bytes": 2536797,
+      "state_expanded_bytes": 28475494,
+      "unit_id": "annual-unit-44dbc18b249725a38205"
+    },
+    {
+      "checkpoint_s": 125100,
+      "link": 45,
+      "state_compressed_bytes": 2565939,
+      "state_expanded_bytes": 28828685,
+      "unit_id": "annual-unit-de66086486add8a45433"
+    },
+    {
+      "checkpoint_s": 126000,
+      "link": 46,
+      "state_compressed_bytes": 2597816,
+      "state_expanded_bytes": 29209068,
+      "unit_id": "annual-unit-0feaf8bfefcc24ce113c"
+    },
+    {
+      "checkpoint_s": 126900,
+      "link": 47,
+      "state_compressed_bytes": 2632567,
+      "state_expanded_bytes": 29613997,
+      "unit_id": "annual-unit-7ff9b0d9549627a4d5cb"
+    },
+    {
+      "checkpoint_s": 127800,
+      "link": 48,
+      "state_compressed_bytes": 2659208,
+      "state_expanded_bytes": 29950102,
+      "unit_id": "annual-unit-480ba222f8e8c11ce848"
+    },
+    {
+      "checkpoint_s": 128700,
+      "link": 49,
+      "state_compressed_bytes": 2687209,
+      "state_expanded_bytes": 30313498,
+      "unit_id": "annual-unit-a0efe432d77883678a6b"
+    },
+    {
+      "checkpoint_s": 129600,
+      "link": 50,
+      "state_compressed_bytes": 2720500,
+      "state_expanded_bytes": 30683937,
+      "unit_id": "annual-unit-3055c4b0f60379664c6d"
+    },
+    {
+      "checkpoint_s": 130500,
+      "link": 51,
+      "state_compressed_bytes": 2751654,
+      "state_expanded_bytes": 31092797,
+      "unit_id": "annual-unit-79206ab69bacd3434f75"
+    },
+    {
+      "checkpoint_s": 131400,
+      "link": 52,
+      "state_compressed_bytes": 2779440,
+      "state_expanded_bytes": 31410961,
+      "unit_id": "annual-unit-ab194e48b9d24756979b"
+    },
+    {
+      "checkpoint_s": 132300,
+      "link": 53,
+      "state_compressed_bytes": 2812417,
+      "state_expanded_bytes": 31837597,
+      "unit_id": "annual-unit-e625a488b49ca611e3fb"
+    },
+    {
+      "checkpoint_s": 133200,
+      "link": 54,
+      "state_compressed_bytes": 2836633,
+      "state_expanded_bytes": 32112511,
+      "unit_id": "annual-unit-48c1d1a2d1248e4500b8"
+    },
+    {
+      "checkpoint_s": 134100,
+      "link": 55,
+      "state_compressed_bytes": 2866910,
+      "state_expanded_bytes": 32495826,
+      "unit_id": "annual-unit-da751af32dd62e40591f"
+    },
+    {
+      "checkpoint_s": 135000,
+      "link": 56,
+      "state_compressed_bytes": 2899367,
+      "state_expanded_bytes": 32870586,
+      "unit_id": "annual-unit-2c03bd58502eb8a0afe2"
+    },
+    {
+      "checkpoint_s": 135900,
+      "link": 57,
+      "state_compressed_bytes": 2934884,
+      "state_expanded_bytes": 33271548,
+      "unit_id": "annual-unit-4a69506aee830d71a9c5"
+    },
+    {
+      "checkpoint_s": 136800,
+      "link": 58,
+      "state_compressed_bytes": 2957801,
+      "state_expanded_bytes": 33586210,
+      "unit_id": "annual-unit-a279ca06bd3a47719065"
+    },
+    {
+      "checkpoint_s": 137700,
+      "link": 59,
+      "state_compressed_bytes": 2996264,
+      "state_expanded_bytes": 34014097,
+      "unit_id": "annual-unit-c6f9afa6a5c4ad8dc0b3"
+    },
+    {
+      "checkpoint_s": 138600,
+      "link": 60,
+      "state_compressed_bytes": 3022421,
+      "state_expanded_bytes": 34342234,
+      "unit_id": "annual-unit-32e67ef4768e25b11101"
+    },
+    {
+      "checkpoint_s": 139500,
+      "link": 61,
+      "state_compressed_bytes": 3053586,
+      "state_expanded_bytes": 34724961,
+      "unit_id": "annual-unit-2497d19346c93bdbd542"
+    },
+    {
+      "checkpoint_s": 140400,
+      "link": 62,
+      "state_compressed_bytes": 3090462,
+      "state_expanded_bytes": 35161622,
+      "unit_id": "annual-unit-512477326b8b404734c1"
+    },
+    {
+      "checkpoint_s": 141300,
+      "link": 63,
+      "state_compressed_bytes": 3120017,
+      "state_expanded_bytes": 35513133,
+      "unit_id": "annual-unit-ecb92ac1825275f324bd"
+    },
+    {
+      "checkpoint_s": 142200,
+      "link": 64,
+      "state_compressed_bytes": 3147910,
+      "state_expanded_bytes": 35894586,
+      "unit_id": "annual-unit-91cef928741c654ae666"
+    },
+    {
+      "checkpoint_s": 143100,
+      "link": 65,
+      "state_compressed_bytes": 3186106,
+      "state_expanded_bytes": 36322417,
+      "unit_id": "annual-unit-38914114ee4e26ad81e2"
+    },
+    {
+      "checkpoint_s": 144000,
+      "link": 66,
+      "state_compressed_bytes": 3217927,
+      "state_expanded_bytes": 36726569,
+      "unit_id": "annual-unit-dfc8ea879c2b27406a46"
+    },
+    {
+      "checkpoint_s": 144900,
+      "link": 67,
+      "state_compressed_bytes": 3243189,
+      "state_expanded_bytes": 37001736,
+      "unit_id": "annual-unit-5f0e332bc9706f0c7f8f"
+    },
+    {
+      "checkpoint_s": 145800,
+      "link": 68,
+      "state_compressed_bytes": 3282729,
+      "state_expanded_bytes": 37479095,
+      "unit_id": "annual-unit-b97f7a43255aaa833ef6"
+    },
+    {
+      "checkpoint_s": 146700,
+      "link": 69,
+      "state_compressed_bytes": 3315947,
+      "state_expanded_bytes": 37881316,
+      "unit_id": "annual-unit-c191314a82847fcff18d"
+    },
+    {
+      "checkpoint_s": 147600,
+      "link": 70,
+      "state_compressed_bytes": 3355117,
+      "state_expanded_bytes": 38369429,
+      "unit_id": "annual-unit-6cca5f33791708e326f4"
+    },
+    {
+      "checkpoint_s": 148500,
+      "link": 71,
+      "state_compressed_bytes": 3396319,
+      "state_expanded_bytes": 38816528,
+      "unit_id": "annual-unit-3e76a895f26397824a66"
+    },
+    {
+      "checkpoint_s": 149400,
+      "link": 72,
+      "state_compressed_bytes": 3428749,
+      "state_expanded_bytes": 39228147,
+      "unit_id": "annual-unit-a2aedbeb1d23fd4a6b4a"
+    },
+    {
+      "checkpoint_s": 150300,
+      "link": 73,
+      "state_compressed_bytes": 3464119,
+      "state_expanded_bytes": 39649067,
+      "unit_id": "annual-unit-e22beacbaff59b9be069"
+    },
+    {
+      "checkpoint_s": 151200,
+      "link": 74,
+      "state_compressed_bytes": 3503203,
+      "state_expanded_bytes": 40094188,
+      "unit_id": "annual-unit-abe6e73fcefc52409497"
+    },
+    {
+      "checkpoint_s": 152100,
+      "link": 75,
+      "state_compressed_bytes": 3533521,
+      "state_expanded_bytes": 40447075,
+      "unit_id": "annual-unit-858e0d983fec9c3bc8ae"
+    },
+    {
+      "checkpoint_s": 153000,
+      "link": 76,
+      "state_compressed_bytes": 3561107,
+      "state_expanded_bytes": 40799763,
+      "unit_id": "annual-unit-f4c46ca884908364092a"
+    },
+    {
+      "checkpoint_s": 153900,
+      "link": 77,
+      "state_compressed_bytes": 3593320,
+      "state_expanded_bytes": 41160505,
+      "unit_id": "annual-unit-2cbc8c99eb16f7219c21"
+    },
+    {
+      "checkpoint_s": 154800,
+      "link": 78,
+      "state_compressed_bytes": 3620867,
+      "state_expanded_bytes": 41476162,
+      "unit_id": "annual-unit-bd6c1a6b47a6d1d33023"
+    },
+    {
+      "checkpoint_s": 155700,
+      "link": 79,
+      "state_compressed_bytes": 3647741,
+      "state_expanded_bytes": 41803366,
+      "unit_id": "annual-unit-c6e611a3220a2c62740b"
+    },
+    {
+      "checkpoint_s": 156600,
+      "link": 80,
+      "state_compressed_bytes": 3666877,
+      "state_expanded_bytes": 42006163,
+      "unit_id": "annual-unit-82a8a19ed5da6ad75e7a"
+    },
+    {
+      "checkpoint_s": 157500,
+      "link": 81,
+      "state_compressed_bytes": 3692806,
+      "state_expanded_bytes": 42329010,
+      "unit_id": "annual-unit-e5e27b09e1281a6c8055"
+    },
+    {
+      "checkpoint_s": 158400,
+      "link": 82,
+      "state_compressed_bytes": 3715967,
+      "state_expanded_bytes": 42594273,
+      "unit_id": "annual-unit-978669d12f05b2a20ba7"
+    },
+    {
+      "checkpoint_s": 159300,
+      "link": 83,
+      "state_compressed_bytes": 3741927,
+      "state_expanded_bytes": 42872073,
+      "unit_id": "annual-unit-08942f12ed079e267d27"
+    },
+    {
+      "checkpoint_s": 160200,
+      "link": 84,
+      "state_compressed_bytes": 3763295,
+      "state_expanded_bytes": 43124000,
+      "unit_id": "annual-unit-6d14221cfa4f8f1515ad"
+    },
+    {
+      "checkpoint_s": 161100,
+      "link": 85,
+      "state_compressed_bytes": 3783573,
+      "state_expanded_bytes": 43364378,
+      "unit_id": "annual-unit-7295a9d99545784fd26d"
+    },
+    {
+      "checkpoint_s": 162000,
+      "link": 86,
+      "state_compressed_bytes": 3804155,
+      "state_expanded_bytes": 43607791,
+      "unit_id": "annual-unit-03bc66828690ba5a8811"
+    },
+    {
+      "checkpoint_s": 162900,
+      "link": 87,
+      "state_compressed_bytes": 3817907,
+      "state_expanded_bytes": 43768693,
+      "unit_id": "annual-unit-6ec44ff8f4a4757a3c6c"
+    },
+    {
+      "checkpoint_s": 163800,
+      "link": 88,
+      "state_compressed_bytes": 3837050,
+      "state_expanded_bytes": 43986165,
+      "unit_id": "annual-unit-0d034e3d0fd422772524"
+    },
+    {
+      "checkpoint_s": 164700,
+      "link": 89,
+      "state_compressed_bytes": 3853659,
+      "state_expanded_bytes": 44162665,
+      "unit_id": "annual-unit-5b40355988a29d62d9a0"
+    },
+    {
+      "checkpoint_s": 165600,
+      "link": 90,
+      "state_compressed_bytes": 3872344,
+      "state_expanded_bytes": 44370413,
+      "unit_id": "annual-unit-4f1266b6d87a6853f38b"
+    },
+    {
+      "checkpoint_s": 166500,
+      "link": 91,
+      "state_compressed_bytes": 3885228,
+      "state_expanded_bytes": 44532423,
+      "unit_id": "annual-unit-6106a6e7402ec46f6c5e"
+    },
+    {
+      "checkpoint_s": 167400,
+      "link": 92,
+      "state_compressed_bytes": 3899811,
+      "state_expanded_bytes": 44689909,
+      "unit_id": "annual-unit-5771cd00ec6a5d4a7e5f"
+    },
+    {
+      "checkpoint_s": 168300,
+      "link": 93,
+      "state_compressed_bytes": 3910435,
+      "state_expanded_bytes": 44820343,
+      "unit_id": "annual-unit-99c5fd0c0ce76396150b"
+    },
+    {
+      "checkpoint_s": 169200,
+      "link": 94,
+      "state_compressed_bytes": 3920830,
+      "state_expanded_bytes": 44938463,
+      "unit_id": "annual-unit-1c3cff10f41b2b63e17a"
+    },
+    {
+      "checkpoint_s": 170100,
+      "link": 95,
+      "state_compressed_bytes": 3930210,
+      "state_expanded_bytes": 45050326,
+      "unit_id": "annual-unit-0658d57c78a1b0219117"
+    },
+    {
+      "checkpoint_s": 171000,
+      "link": 96,
+      "state_compressed_bytes": 3937926,
+      "state_expanded_bytes": 45153059,
+      "unit_id": "annual-unit-be295526c373fe7097bc"
+    }
+  ],
+  "cold_comparisons": [
+    {
+      "chained_state": {
+        "compressed_bytes": 2086221,
+        "compressed_sha256": "a84508763d2fe630f69e5d794723f7caec871983976a2d98dbe1c1048889be73",
+        "expanded_bytes": 23431258,
+        "expanded_sha256": "be6737106b6f34e390a4ee5cac5d640b3b3765784b08c91379d15b9b86870438"
+      },
+      "checkpoint_s": 86400,
+      "cold_runtime_s": 4.749296,
+      "cold_state": {
+        "compressed_bytes": 173368,
+        "compressed_sha256": "59baa47a826a0a541e0a2fc153abb5a8bdcfc687f7c0bee4370af24341626181",
+        "expanded_bytes": 1278559,
+        "expanded_sha256": "dc7bc202ca0099f2ae17ad210339ad6a151c4f8d7b41b17431adf6436c5709bb"
+      },
+      "expanded_state_bytes_are_release_gate": false,
+      "expanded_state_equal": false,
+      "link": 2,
+      "prefix_evidence_equal": true,
+      "state_inflation_vs_cold": 18.326302
+    },
+    {
+      "chained_state": {
+        "compressed_bytes": 2659208,
+        "compressed_sha256": "9530aa9200aa2a0d7991d3931ebdf684002d7562c117d45e501a4a96027f1157",
+        "expanded_bytes": 29950102,
+        "expanded_sha256": "4a271180af44d2ee1efaf71a90880faef74698162519ed042c2ff2c0defb8497"
+      },
+      "checkpoint_s": 127800,
+      "cold_runtime_s": 5.792705,
+      "cold_state": {
+        "compressed_bytes": 200789,
+        "compressed_sha256": "4d1ebd0d5253b82896ca3a84393e193210f91f9053947f97e268c5ecc4d49b8c",
+        "expanded_bytes": 1562597,
+        "expanded_sha256": "0af0fa9de164243059ddda8e93562aa7d06e2a2e2982e1f7b55c961eb6ae46ff"
+      },
+      "expanded_state_bytes_are_release_gate": false,
+      "expanded_state_equal": false,
+      "link": 48,
+      "prefix_evidence_equal": false,
+      "state_inflation_vs_cold": 19.166875
+    },
+    {
+      "chained_state": {
+        "compressed_bytes": 3937926,
+        "compressed_sha256": "19954fcf1802b4dad00537cab07048c1a71ce15d0853a0b804a67211543b6d33",
+        "expanded_bytes": 45153059,
+        "expanded_sha256": "969efc7c05b7454f0aeeffcda28a52370a9a08450a0441269aca0128dd54bb62"
+      },
+      "checkpoint_s": 171000,
+      "cold_runtime_s": 7.831991,
+      "cold_state": {
+        "compressed_bytes": 176927,
+        "compressed_sha256": "fa95aa7878d153b854d4a6c2237838d253ae6341f492363e486d636a29d33bd0",
+        "expanded_bytes": 1333106,
+        "expanded_sha256": "d05954fc2ae5c20b633519de71280a38f664150f451d04b7e7e4affa6eddb99f"
+      },
+      "expanded_state_bytes_are_release_gate": false,
+      "expanded_state_equal": false,
+      "link": 96,
+      "prefix_evidence_equal": false,
+      "state_inflation_vs_cold": 33.870569
+    }
+  ],
+  "demand_build_key": "e10c3d87e23e8b32",
+  "diagnostic_only": true,
+  "plan_content_key": "424baad36951fcbb13183e0d09cbfe2daa35afe2ae615623b9a8960e11b37ca5",
+  "schema": "annual_warm_chain_pilot_v1",
+  "selected_prefix_evidence_exact": false,
+  "state_expanded_limit_bytes": 16777216,
+  "state_growth_bounded": false,
+  "state_inflation_limit": 4.0,
+  "status": "fail",
+  "variant": "q10"
+}

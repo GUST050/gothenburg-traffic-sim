@@ -5,6 +5,14 @@ for Gothenburg's inner city. Six real traffic sensors, 15-minute vehicle
 counts for all of 2025, provided by Göteborgs Stad. Summer project at
 Chalmers (supervisor: Prof. Miroslaw Staron).
 
+## Working with AI models
+
+The repository supports Codex, Claude and other models as interchangeable
+actors. Any capable actor may plan, implement, test or review; there is no fixed
+Sol/Luna routing or mandatory state machine. Start with `AGENTS.md`, then use
+the marked current blocks in `TASKS.md` and `AGENT_NOTES.md` for context.
+Historical role labels remain only for traceability.
+
 ## What it does
 
 1. **Animate** historical traffic on a real map of Gothenburg (done)

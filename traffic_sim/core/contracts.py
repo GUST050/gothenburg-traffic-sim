@@ -14,7 +14,7 @@ import hashlib
 import os
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Mapping
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -31,6 +31,14 @@ _DST_POLICIES = frozenset({"exclude_transition_dates"})
 _DURATION_BASES = frozenset({"required_work_time"})
 _WORK_TO_CLOSURE_ASSUMPTIONS = frozenset({"one_to_one"})
 _POLICY_STATUSES = frozenset({"user_supplied_unverified"})
+_INTERDAY_POLICIES = frozenset({
+    "continuous_v1",
+    "independent_daily_reset_v1",
+})
+_WORK_ALLOCATION_POLICIES = frozenset({
+    "equal_daily_rounded_v1",
+    "exact_balanced_daily_v1",
+})
 # "standard" (interactive Simulera datum) stays at the validated 7-day
 # ceiling. "closure_envelope" covers a closure-search schedule plus its
 # warm-up and recovery: a 21-consecutive-day closure (3 weeks) needs at
@@ -48,7 +56,7 @@ def _date(value: str, label: str) -> str:
     if not isinstance(value, str) or not _DATE.fullmatch(value):
         raise ValueError(f"{label} must be YYYY-MM-DD")
     try:
-        datetime.strptime(value, "%Y-%m-%d")
+        date.fromisoformat(value)
     except ValueError as exc:
         raise ValueError(f"{label} must be a real calendar date") from exc
     return value
@@ -63,6 +71,11 @@ def _clock(value: str, label: str) -> str:
 def _clock_minutes(value: str) -> int:
     hour, minute = (int(part) for part in value.split(":"))
     return hour * 60 + minute
+
+
+def _datetime_clock(value: datetime) -> str:
+    """Fast locale-independent HH:MM formatting for validated datetimes."""
+    return f"{value.hour:02d}:{value.minute:02d}"
 
 
 def _parse_time(value: str, label: str) -> datetime:
@@ -315,6 +328,8 @@ class ClosureSearchSpec:
     work_to_closure_assumption: str = "one_to_one"
     objective_profile: str = "robust_time_loss"
     policy_status: str = "user_supplied_unverified"
+    interday_policy: str = "continuous_v1"
+    work_allocation_policy: str = "equal_daily_rounded_v1"
 
     def __post_init__(self) -> None:
         if (not isinstance(self.search_id, str) or not self.search_id
@@ -417,9 +432,38 @@ class ClosureSearchSpec:
         if self.policy_status not in _POLICY_STATUSES:
             raise ValueError(
                 f"closure_search.policy_status must be one of {sorted(_POLICY_STATUSES)}")
+        if self.interday_policy not in _INTERDAY_POLICIES:
+            raise ValueError(
+                "closure_search.interday_policy must be continuous_v1 or "
+                "independent_daily_reset_v1")
+        if self.work_allocation_policy not in _WORK_ALLOCATION_POLICIES:
+            raise ValueError(
+                "closure_search.work_allocation_policy must be "
+                "equal_daily_rounded_v1 or exact_balanced_daily_v1")
+        if (
+            self.work_allocation_policy == "exact_balanced_daily_v1"
+            and self.interday_policy != "independent_daily_reset_v1"
+        ):
+            raise ValueError(
+                "exact balanced work allocation requires the independent "
+                "daily reset policy")
+        if (
+            self.work_allocation_policy == "exact_balanced_daily_v1"
+            and self.required_work_minutes % self.resolution_minutes
+        ):
+            raise ValueError(
+                "exact balanced work must align to the 15-minute resolution")
+        if self.interday_policy == "independent_daily_reset_v1":
+            band_start = _clock_minutes(
+                self.permitted_daily_band.earliest_start
+            )
+            band_end = _clock_minutes(self.permitted_daily_band.latest_end)
+            if band_end <= band_start:
+                raise ValueError(
+                    "independent daily reset requires a same-day permitted band")
 
     def _content_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "directed_edges": sorted(self.directed_edges),
             "demand_build_id": self.demand_build_id,
             "source": self.source,
@@ -440,6 +484,14 @@ class ClosureSearchSpec:
             "objective_profile": self.objective_profile,
             "policy_status": self.policy_status,
         }
+        # Preserve every legacy content key.  These fields were introduced as
+        # explicit opt-ins; serializing their defaults would relabel all
+        # frozen continuous-search evidence despite identical semantics.
+        if self.interday_policy != "continuous_v1":
+            payload["interday_policy"] = self.interday_policy
+        if self.work_allocation_policy != "equal_daily_rounded_v1":
+            payload["work_allocation_policy"] = self.work_allocation_policy
+        return payload
 
     @property
     def content_key(self) -> str:
@@ -476,6 +528,10 @@ class ClosureSearchSpec:
                 "objective_profile", "robust_time_loss")),
             policy_status=str(raw.get(
                 "policy_status", "user_supplied_unverified")),
+            interday_policy=str(raw.get(
+                "interday_policy", "continuous_v1")),
+            work_allocation_policy=str(raw.get(
+                "work_allocation_policy", "equal_daily_rounded_v1")),
         )
         supplied_key = raw.get("content_key")
         if supplied_key is not None and str(supplied_key) != spec.content_key:
@@ -553,6 +609,7 @@ class ClosureSchedule:
     actual_closed_minutes: int
     rounding_overshoot_minutes: int
     intervals: tuple[ClosureInterval, ...]
+    allocation_policy: str = "equal_daily_rounded_v1"
 
     def __post_init__(self) -> None:
         if (not isinstance(self.schedule_id, str) or not self.schedule_id
@@ -599,49 +656,99 @@ class ClosureSchedule:
             raise ValueError(
                 "closure_schedule work and closure must align to 15 minutes")
 
-        expected_schedule_id = "closure-" + _content_key({
+        if self.allocation_policy not in _WORK_ALLOCATION_POLICIES:
+            raise ValueError("closure_schedule allocation policy is unsupported")
+        identity = {
             "search_content_key": self.search_content_key,
             "first_work_date": self.first_work_date,
             "day_count": self.day_count,
             "daily_start": self.daily_start,
             "daily_end": self.daily_end,
             "scheduled_work_minutes": self.scheduled_work_minutes,
-        })
+        }
+        if self.allocation_policy != "equal_daily_rounded_v1":
+            identity.update({
+                "allocation_policy": self.allocation_policy,
+                "interval_durations_minutes": [
+                    item.duration_minutes for item in self.intervals
+                ],
+                "work_dates": [item.work_date for item in self.intervals],
+            })
+        expected_schedule_id = "closure-" + _content_key(identity)
         if self.schedule_id != expected_schedule_id:
             raise ValueError(
                 "closure_schedule.schedule_id does not match the schedule contents")
 
-        first = datetime.strptime(self.first_work_date, "%Y-%m-%d").date()
+        first = date.fromisoformat(self.first_work_date)
+        previous_date = None
         durations: set[int] = set()
+        duration_total = 0
+        end_labels: list[str] = []
         for index, interval in enumerate(self.intervals):
-            expected_date = first.fromordinal(first.toordinal() + index)
-            if interval.work_date != expected_date.isoformat():
+            interval_date = date.fromisoformat(interval.work_date)
+            if self.allocation_policy == "equal_daily_rounded_v1":
+                expected_date = first.fromordinal(first.toordinal() + index)
+                if interval_date != expected_date:
+                    raise ValueError(
+                        "closure_schedule work dates must be consecutive")
+            elif (
+                (index == 0 and interval_date != first)
+                or (previous_date is not None and interval_date <= previous_date)
+            ):
                 raise ValueError(
-                    "closure_schedule work dates must be consecutive")
+                    "exact balanced work dates must be strictly increasing "
+                    "from first_work_date"
+                )
+            previous_date = interval_date
             start = _parse_time(
                 interval.start_time, "closure_schedule.interval.start_time")
             end = _parse_time(
                 interval.end_time, "closure_schedule.interval.end_time")
-            if start.strftime("%H:%M") != self.daily_start:
+            if _datetime_clock(start) != self.daily_start:
                 raise ValueError(
                     "closure_schedule intervals must use the same daily start")
             end_label = (
                 "24:00"
                 if end.date() > start.date()
-                and end.strftime("%H:%M") == "00:00"
-                else end.strftime("%H:%M")
+                and _datetime_clock(end) == "00:00"
+                else _datetime_clock(end)
             )
-            if end_label != self.daily_end:
+            if (
+                self.allocation_policy == "equal_daily_rounded_v1"
+                and end_label != self.daily_end
+            ):
                 raise ValueError(
                     "closure_schedule intervals must use the same daily end")
-            if interval.duration_minutes % 15:
+            duration = int((end - start).total_seconds()) // 60
+            if duration % 15:
                 raise ValueError(
                     "closure_schedule interval durations must align to 15 minutes")
-            durations.add(interval.duration_minutes)
-        if len(durations) != 1 or sum(
-                interval.duration_minutes for interval in self.intervals) != closed:
+            durations.add(duration)
+            duration_total += duration
+            end_labels.append(end_label)
+        if duration_total != closed:
+            raise ValueError(
+                "closure_schedule intervals must match total closure minutes")
+        if (
+            self.allocation_policy == "equal_daily_rounded_v1"
+            and len(durations) != 1
+        ):
             raise ValueError(
                 "closure_schedule intervals must have equal durations matching closure")
+        if self.allocation_policy == "exact_balanced_daily_v1":
+            if scheduled != required or overshoot != 0:
+                raise ValueError(
+                    "exact balanced schedules cannot overshoot required work")
+            if max(durations) - min(durations) > 15:
+                raise ValueError(
+                    "exact balanced daily durations may differ by at most 15 minutes")
+            # Compare clock labels, not absolute datetimes, because intervals
+            # span consecutive work dates. Independent-day schedules are
+            # contractually same-day, so ordinary HH:MM ordering is sound.
+            latest_label = max(end_labels)
+            if latest_label != self.daily_end:
+                raise ValueError(
+                    "exact balanced schedule daily_end must be its latest daily end")
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "ClosureSchedule":
@@ -661,10 +768,12 @@ class ClosureSchedule:
                 "rounding_overshoot_minutes"),
             intervals=tuple(ClosureInterval.from_dict(item)
                             for item in raw.get("intervals", ())),
+            allocation_policy=str(raw.get(
+                "allocation_policy", "equal_daily_rounded_v1")),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schema_version": SCHEMA_VERSION,
             "kind": "closure_schedule",
             "schedule_id": self.schedule_id,
@@ -679,6 +788,9 @@ class ClosureSchedule:
             "rounding_overshoot_minutes": self.rounding_overshoot_minutes,
             "intervals": [interval.to_dict() for interval in self.intervals],
         }
+        if self.allocation_policy != "equal_daily_rounded_v1":
+            payload["allocation_policy"] = self.allocation_policy
+        return payload
 
 
 @dataclass(frozen=True)

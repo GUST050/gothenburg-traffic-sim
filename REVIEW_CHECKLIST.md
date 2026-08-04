@@ -1,16 +1,18 @@
 # Review Checklist
 
-Sol High must check:
+Any reviewer—human or model—should check:
 
-- Does the diff satisfy the active task?
-- Is the change minimal?
-- Are unrelated files changed?
-- Are tests present?
-- Were tests run?
-- Are validation gates preserved?
-- Are provenance and publication rules preserved?
-- Is there regression risk?
-- Is there data loss risk?
-- Is there safety/auth/provenance risk?
-- Should Luna High fix something?
-- Can the work be approved?
+- Does the result satisfy the user's current goal and the active task?
+- Is the approach technically sound and proportionate?
+- Are unrelated or user-owned changes preserved?
+- Are important edge cases and regressions covered?
+- Were relevant checks run, and are failures explained honestly?
+- Are validation, provenance and publication gates preserved?
+- Is there data-loss, security, safety, scientific-claim or operational risk?
+- Do documentation and current coordination blocks match the implementation?
+- Can issues be fixed safely within the requested scope, or is user input
+  genuinely required?
+- Is the result ready to use, or are remaining limitations clearly stated?
+
+An independent reviewer is recommended for consequential releases and evidence
+claims, but no model name owns review.

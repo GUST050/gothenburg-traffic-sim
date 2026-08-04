@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import os
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
@@ -52,12 +53,19 @@ POLICY_STATUSES = frozenset({"provisional", "golden_frozen"})
 # AND an untouched held-out set passed practical-winner recall, regret and
 # failure recall.  Any problem with the record fails closed to the
 # pre-release claim boundary.
-HELDOUT_GATE_RECORD = Path("validation") / "monthly_proxy_v4_gate.json"
+HELDOUT_GATE_RECORD = Path("validation") / "monthly_gate_record.json"
+# LUNA-V5-01: adoption now needs a SECOND, independent post-review artifact
+# binding the record's exact bytes. Neither alone opens the gate.
+HELDOUT_GATE_CERTIFICATE = (
+    Path("validation") / "monthly_gate_adoption_certificate.json")
 # The frozen campaign a passing record must belong to. Kept beside the gate
 # path so the loader can bind a record to the exact untouched campaign and
 # manifest identity rather than to the shortlist policy alone.
+# The CURRENT frozen campaign. The adoption loader no longer consults this —
+# an adoption certificate names its own manifest — but keeping it pointed at
+# the live frozen campaign stops `frozen_campaign_identity()` going stale.
 HELDOUT_CAMPAIGN_MANIFEST = (
-    Path("validation") / "monthly_proxy_manifest_v4.json"
+    Path("validation") / "monthly_proxy_manifest_v6.json"
 )
 
 
@@ -99,43 +107,26 @@ def frozen_campaign_identity(
 
 def load_passing_heldout_gate(
     path: Path | None = None,
+    certificate_path: Path | None = None,
 ) -> dict[str, Any] | None:
-    """Return the passing held-out gate record, or None (fail closed).
+    """Return the adopted passing held-out gate record, or None (fail closed).
 
-    A gate record licenses claims for ONE campaign. Checking only the
-    shortlist identity left a relabelling hole: any earlier (v1-v3) or
-    diagnostic record carrying the current shortlist version and key would
-    open the release gate. The record must therefore also name the frozen
-    campaign, its exact manifest content key, and a complete case set.
+    A gate record licenses claims for ONE campaign. Checking only the record's
+    own fields was self-certifying: any byte edited inside it still validated
+    against itself. Adoption therefore requires the record AND a post-review
+    adoption certificate that independently binds its exact bytes, the frozen
+    manifest identity and the bounded claim scope — see
+    `traffic_sim.simulation.heldout_gate`. Missing or altered artifacts,
+    earlier campaigns and incomplete runs all fail closed.
     """
-    identity = frozen_campaign_identity()
-    if identity is None:
-        return None
-    try:
-        record = json.loads(
-            Path(path if path is not None else HELDOUT_GATE_RECORD)
-            .read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError, json.JSONDecodeError):
-        return None
-    if (
-        not isinstance(record, dict)
-        or record.get("kind") != "monthly_proxy_validation_gate_record"
-        or record.get("gate_status") != "pass"
-        or record.get("ui_exposure_allowed") is not True
-        or record.get("global_best_claim_allowed") is not True
-        or not isinstance(record.get("proxy_version"), str)
-        or record.get("shortlist_version") != SHORTLIST_VERSION
-        or record.get("shortlist_policy_content_key")
-        != HELD_OUT_VALIDATED_SHORTLIST_POLICY.content_key
-        or record.get("heldout_set") != identity["campaign_version"]
-        or record.get("manifest_content_key")
-        != identity["manifest_content_key"]
-        or record.get("required_cases") != identity["required_cases"]
-        or record.get("completed_cases") != identity["required_cases"]
-    ):
-        return None
-    return record
+    from traffic_sim.simulation.heldout_gate import (  # noqa: PLC0415
+        load_adopted_gate)
+
+    return load_adopted_gate(
+        path if path is not None else HELDOUT_GATE_RECORD,
+        certificate_path if certificate_path is not None
+        else HELDOUT_GATE_CERTIFICATE,
+    )
 
 
 def _canonical_digest(value: Any, *, length: int = 24) -> str:
@@ -151,9 +142,12 @@ def _canonical_digest(value: Any, *, length: int = 24) -> str:
 def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
+    descriptor, raw_temporary = tempfile.mkstemp(
+        prefix=path.name + ".", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(raw_temporary)
     try:
-        with temporary.open("w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             json.dump(
                 payload,
                 handle,
@@ -646,6 +640,33 @@ def _final_result(
         str(item["schedule_id"])
         for item in screening["shortlist"]["entries"]
     ]
+    independent_exhaustive = (
+        screening.get("proxy_version")
+        == "independent_daily_exhaustive_sumo_v1"
+    )
+    response_schedule_ids = shortlist_ids
+    response_pilot_selection = dict(pilot_selection)
+    if independent_exhaustive:
+        # The immutable workspace already contains the complete schedule
+        # ledger and pilot-selection statistics. Copying tens of thousands of
+        # interval-heavy schedules into the API result would make a cache hit
+        # slow and memory-heavy. The response needs only the bounded finalists;
+        # the total exhaustive population remains explicit in screening.
+        finalist_ids = [
+            str(item) for item in pilot_selection.get("selected_ids", ())
+        ]
+        finalist_id_set = set(finalist_ids)
+        response_schedule_ids = list(dict.fromkeys([
+            *selected,
+            *finalist_ids,
+        ]))
+        response_pilot_selection["candidate_count"] = len(
+            pilot_selection.get("candidates", ())
+        )
+        response_pilot_selection["candidates"] = [
+            item for item in pilot_selection.get("candidates", ())
+            if item.get("candidate_id") in finalist_id_set
+        ]
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "monthly_closure_search_result",
@@ -661,13 +682,12 @@ def _final_result(
             schedules[candidate_id].to_dict()
             for candidate_id in selected
         ],
-        # Every SHORTLISTED schedule's exact intervals, so a reader can map
-        # the per-candidate statistics in robust_decision back to real
-        # dates/times without re-deriving the calendar (at most the
-        # shortlist cap of schedules; each is a few intervals).
+        # Proxy/legacy mode includes every bounded shortlist schedule. Broad
+        # independent exhaustive mode includes only its bounded finalists;
+        # its complete immutable schedule ledger stays in the workspace.
         "shortlisted_schedules": [
             schedules[candidate_id].to_dict()
-            for candidate_id in shortlist_ids
+            for candidate_id in response_schedule_ids
         ],
         "screening": {
             "candidate_count": screening.get("candidate_count"),
@@ -675,9 +695,12 @@ def _final_result(
                 "scoreable_candidate_count"
             ),
             "shortlist_count": len(screening["shortlist"]["entries"]),
+            "unavailable_count": len(
+                screening.get("unavailable_candidates") or ()
+            ),
             "proxy_version": screening.get("proxy_version"),
         },
-        "pilot_selection": dict(pilot_selection),
+        "pilot_selection": response_pilot_selection,
         "robust_decision": dict(decision) if decision is not None else None,
         "claim_boundary": _claim_boundary(
             screening,
@@ -710,25 +733,73 @@ def _claim_boundary(
       shortlist.
     """
     proxy_version = str(screening.get("proxy_version", ""))
-    exhaustive = proxy_version == "bounded_exhaustive_sumo_v1"
+    exhaustive = proxy_version in {
+        "bounded_exhaustive_sumo_v1",
+        "independent_daily_exhaustive_sumo_v1",
+    }
+    independent_exhaustive = (
+        proxy_version == "independent_daily_exhaustive_sumo_v1"
+    )
+    unavailable_count = len(screening.get("unavailable_candidates") or ())
+    independent_complete = (
+        not independent_exhaustive or unavailable_count == 0
+    )
     validated_proxy = (
         heldout_gate is not None
+        and not exhaustive
         and proxy_version == heldout_gate.get("proxy_version")
     )
-    released = exhaustive and heldout_gate is not None or validated_proxy
+    independent_gate = (
+        heldout_gate is not None
+        and heldout_gate.get("interday_policy")
+        == "independent_daily_reset_v1"
+    )
+    released = (
+        exhaustive
+        and heldout_gate is not None
+        and (not independent_exhaustive or (
+            independent_gate and independent_complete
+        ))
+    ) or validated_proxy
     if exhaustive:
-        scope = "sumo_verified_bounded_exhaustive"
-        if heldout_gate is not None:
+        scope = (
+            (
+                "sumo_verified_independent_daily_exhaustive"
+                if independent_complete
+                else "sumo_verified_independent_daily_available_schedules"
+            )
+            if independent_exhaustive
+            else "sumo_verified_bounded_exhaustive"
+        )
+        exhaustive_label = (
+            "independent-day exhaustive screening"
+            if independent_exhaustive
+            else "bounded exhaustive screening"
+        )
+        if heldout_gate is not None and (
+            not independent_exhaustive
+            or (independent_gate and independent_complete)
+        ):
             reason = (
-                "bounded exhaustive screening: every ranked candidate is "
+                f"{exhaustive_label}: every ranked candidate is "
                 "SUMO-verified and the held-out release gate "
                 f"({heldout_gate.get('heldout_set', 'v2')}) has passed"
             )
         else:
+            gate_requirement = (
+                (
+                    f"coverage for {unavailable_count} unavailable schedule(s)"
+                    if independent_exhaustive and not independent_complete
+                    else "a passing untouched held-out release gate covering "
+                    "this inter-day policy"
+                )
+                if independent_exhaustive
+                else "a passing untouched monthly held-out release gate"
+            )
             reason = (
-                "bounded exhaustive screening: every ranked candidate is "
-                "SUMO-verified; the global-best claim still awaits a "
-                "passing untouched monthly held-out release gate"
+                f"{exhaustive_label}: every ranked candidate is "
+                "SUMO-verified; the global-best claim still awaits "
+                + gate_requirement
             )
     elif validated_proxy:
         scope = "sumo_verified_monthly_shortlist_heldout_validated"
@@ -834,20 +905,45 @@ def run_monthly_search(
             workspace,
             kind="monthly_pilot_candidate",
         )
+        compact_pilot = (
+            getattr(runner, "compact_pilot_artifacts", False) is True
+        )
+        if compact_pilot and pilot_records:
+            raise ValueError(
+                "compact independent pilot cannot mix per-parent pilot artifacts"
+            )
         pilot_evidence: list[CandidateEvidence] = []
         pilot_targets = {
             variant: policy.pilot.repetitions_per_variant
             for variant in DEMAND_VARIANTS
         }
         for index, candidate_id in enumerate(shortlist_ids):
-            workspace.update_progress(
-                phase,
-                completed=index,
-                total=len(shortlist_ids),
-            )
+            # A broad independent search can contain tens of thousands of
+            # parents. Updating the workspace manifest for every additive
+            # in-memory reconstruction turns cache hits into a filesystem
+            # benchmark, so retain bounded progress writes instead.
+            progress_stride = max(1, len(shortlist_ids) // 100)
+            if not compact_pilot or index % progress_stride == 0:
+                workspace.update_progress(
+                    phase,
+                    completed=index,
+                    total=len(shortlist_ids),
+                )
             existing = pilot_records.get(candidate_id, [])
             if existing:
                 evidence = existing[-1][1]
+                _validate_evidence_target(
+                    evidence,
+                    schedule_id=candidate_id,
+                    targets=pilot_targets,
+                )
+            elif compact_pilot:
+                evidence = runner.run_candidate(
+                    schedules[candidate_id],
+                    target_repetitions=pilot_targets,
+                    existing=None,
+                    stage="pilot",
+                )
                 _validate_evidence_target(
                     evidence,
                     schedule_id=candidate_id,

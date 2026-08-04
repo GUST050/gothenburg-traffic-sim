@@ -47,7 +47,7 @@ import os
 import hashlib
 import json
 import math
-from typing import Iterable
+from typing import Iterable, Mapping, Sequence
 import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import dataclass, field
@@ -139,6 +139,23 @@ def path_size_weights(shapes: list[Candidate]) -> np.ndarray:
         if cand.edges:
             ps[i] = sum(1.0 / edge_route_count[e] for e in cand.edges) / len(cand.edges)
     return EPS_PARSIMONY / np.clip(ps, PATH_SIZE_FLOOR, 1.0)
+
+
+TouchIndex = Mapping[str, Sequence[int]]
+
+
+def build_touch_index(cands: Sequence[Candidate]) -> dict[str, list[int]]:
+    """Build the invariant edge -> route-index relation once per shape pool.
+
+    Candidate order and per-edge route order are part of the solver's exact
+    floating-point contract. Lists retain the same NumPy fancy-indexing
+    semantics and increasing candidate order as the former reconstruction.
+    """
+    mutable: dict[str, list[int]] = {}
+    for index, candidate in enumerate(cands):
+        for edge in set(candidate.edges):
+            mutable.setdefault(edge, []).append(index)
+    return mutable
 
 
 def solve_interval(
@@ -258,6 +275,7 @@ def solve_interval_entropy(
     tol_mult: float = 1.0,
     max_iterations: int = IPF_MAX_ITERATIONS,
     groups: list[tuple[list[int], float, float]] | None = None,
+    touch_index: TouchIndex | None = None,
 ) -> np.ndarray | None:
     """Entropy-maximising route flow via Iterative Proportional Fitting
     (Bregman/Sinkhorn balancing) — 2026-07-10, replacing solve_interval's
@@ -310,11 +328,19 @@ def solve_interval_entropy(
     if n == 0:
         return None
 
-    touch: dict[str, list[int]] = {}
-    for j, cand in enumerate(cands):
-        for e in set(cand.edges):
-            if e in measured or e in bounds or e in priors:
-                touch.setdefault(e, []).append(j)
+    if touch_index is None:
+        touch: dict[str, Sequence[int]] = {}
+        for j, cand in enumerate(cands):
+            for e in set(cand.edges):
+                if e in measured or e in bounds or e in priors:
+                    touch.setdefault(e, []).append(j)
+    else:
+        edges_of_interest = set(measured) | set(bounds) | set(priors)
+        touch = {
+            edge: touch_index[edge]
+            for edge in edges_of_interest
+            if edge in touch_index
+        }
 
     measured = {e: v for e, v in measured.items() if touch.get(e)}
     for e, (lo, hi) in bounds.items():
@@ -856,6 +882,7 @@ def solve_interval_with_relaxation(
     groups: list[tuple[list[int], float, float]] | None = None,
     required_groups: list[tuple[list[int], float, float]] | None = None,
     allow_structural_relaxation: bool = True,
+    touch_index: TouchIndex | None = None,
 ) -> tuple[np.ndarray | None, int]:
     """Solve one interval using calibrate()'s exact relaxation ladder.
 
@@ -887,7 +914,8 @@ def solve_interval_with_relaxation(
 
     sol = solve_interval_entropy(shapes, targets, bounds, priors,
                                  route_cost=route_cost,
-                                 groups=active_groups(True))
+                                 groups=active_groups(True),
+                                 touch_index=touch_index)
     if sol is not None:
         return sol, RUNG_CLEAN
     for rung, (tol_mult, use_bounds) in zip(
@@ -899,7 +927,7 @@ def solve_interval_with_relaxation(
         sol = solve_interval_entropy(
             shapes, targets, bounds if use_bounds else {}, priors,
             tol_mult=tol_mult, route_cost=route_cost,
-            groups=active_groups(use_bounds))
+            groups=active_groups(use_bounds), touch_index=touch_index)
         if sol is not None:
             return sol, rung
     if not allow_structural_relaxation:
@@ -981,6 +1009,7 @@ def solve_interval_with_structure_guard(
     route_cost: np.ndarray | None = None,
     structure_groups: list[tuple[str, list[int], float]] | None = None,
     purpose_mix: Counter | dict[str, int] | None = None,
+    touch_index: TouchIndex | None = None,
 ) -> tuple[np.ndarray | None, int]:
     """Two-pass structure preservation around the relaxation ladder.
 
@@ -1000,7 +1029,8 @@ def solve_interval_with_structure_guard(
     system that ships (the validated-vs-shipped mismatch class this
     project has already had to fix twice)."""
     sol, rung = solve_interval_with_relaxation(
-        shapes, targets, bounds, priors, route_cost=route_cost)
+        shapes, targets, bounds, priors, route_cost=route_cost,
+        touch_index=touch_index)
     purpose_groups: list[tuple[list[int], float, float]] = []
     if sol is not None and purpose_mix:
         # The count-only solution reveals the interval's vehicle total.  Use
@@ -1013,7 +1043,7 @@ def solve_interval_with_structure_guard(
             shapes, purpose_mix, int(round(float(sol.sum()))))
         purpose_sol, purpose_rung = solve_interval_with_relaxation(
             shapes, targets, bounds, priors, route_cost=route_cost,
-            required_groups=purpose_groups)
+            required_groups=purpose_groups, touch_index=touch_index)
         if purpose_sol is not None:
             sol, rung = purpose_sol, purpose_rung
         else:
@@ -1056,7 +1086,8 @@ def solve_interval_with_structure_guard(
                 groups=[(members, 0.0, cap_share * total)
                         for members, cap_share in active.values()],
                 required_groups=purpose_groups,
-                allow_structural_relaxation=allow_structural_relaxation)
+                allow_structural_relaxation=allow_structural_relaxation,
+                touch_index=touch_index)
             if capped_sol is None or capped_rung > rung:
                 break       # counts-first fallback: retain last valid solution
             sol, rung = capped_sol, capped_rung
@@ -1088,6 +1119,8 @@ def _purpose_targets_per_quarter(
     targets = [Counter() for _ in range(nq)]
     for shape in shapes:
         for source in shape.source_candidates or [shape]:
+            if source.intent.get("support_only") is True:
+                continue
             qi = int((source.depart - departure_offset_s) // 900)
             if 0 <= qi < nq:
                 targets[qi][_purpose(source)] += 1
@@ -1107,6 +1140,8 @@ def purpose_length_means(shapes: list[Candidate],
     weighted: dict[str, float] = {}
     for shape, km in zip(shapes, shape_km):
         for source in shape.source_candidates or [shape]:
+            if source.intent.get("support_only") is True:
+                continue
             p = _purpose(source)
             tot[p] += 1
             weighted[p] = weighted.get(p, 0.0) + km
@@ -1503,6 +1538,7 @@ def solve_calibration_intervals(
     bounds_per_q: list[dict[str, tuple[float, float]]],
     priors_per_q: list[dict[str, tuple[float, float]]],
     purpose_mixes_per_q: list[Counter | dict[str, int]] | None = None,
+    touch_index: TouchIndex | None = None,
 ) -> tuple[list[np.ndarray | None], list[int]]:
     """Sequentially solve every interval for one variant.
 
@@ -1511,10 +1547,12 @@ def solve_calibration_intervals(
     relaxation_summary diagnostic."""
     solutions: list[np.ndarray | None] = []
     rungs: list[int] = []
+    if touch_index is None:
+        touch_index = build_touch_index(shapes)
     for i in range(len(targets_per_q)):
         sol, rung = solve_interval_with_relaxation(
             shapes, targets_per_q[i], bounds_per_q[i], priors_per_q[i],
-            route_cost=route_cost)
+            route_cost=route_cost, touch_index=touch_index)
         if (sol is not None and purpose_mixes_per_q is not None
                 and purpose_mixes_per_q[i]):
             # The flat production worker uses the same two-stage procedure:
@@ -1525,7 +1563,8 @@ def solve_calibration_intervals(
                 shapes, purpose_mixes_per_q[i], int(round(float(sol.sum()))))
             purpose_sol, purpose_rung = solve_interval_with_relaxation(
                 shapes, targets_per_q[i], bounds_per_q[i], priors_per_q[i],
-                route_cost=route_cost, required_groups=purpose_groups)
+                route_cost=route_cost, required_groups=purpose_groups,
+                touch_index=touch_index)
             if purpose_sol is not None:
                 sol, rung = purpose_sol, purpose_rung
         solutions.append(sol)

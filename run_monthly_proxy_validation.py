@@ -35,6 +35,27 @@ from traffic_sim.simulation.proxy_validation import (
 
 DEFAULT_MANIFEST = Path("validation/monthly_proxy_manifest.json")
 DEFAULT_ROOT = Path("runs") / "closure-proxy-validation"
+REPO_ROOT = Path(__file__).resolve().parent
+
+# Campaigns that must bind ONE exact archive instead of resolving a demand key.
+# `_demand_archives()` resolves by key alone, and the key `2ac04275daabe93c` is
+# claimed by several successful archives with DIFFERENT input bytes — so key
+# resolution silently depends on which copy sorts last. These campaigns are
+# bound to the exact archive their frozen selection artifact recorded.
+EXACT_DEMAND_BINDING_CAMPAIGNS = frozenset({"v6"})
+
+# The exact command shape a future, separately approved v6 run must use.
+APPROVED_V6_COMMAND = (
+    "python3 run_monthly_proxy_validation.py "
+    "--manifest validation/monthly_proxy_manifest_v6.json "
+    "--selection validation/heldout_v6_selection.json "
+    "--seed-workers 3"
+)
+
+CANONICAL_DEMAND_FIELDS = frozenset({
+    "path", "demand_build_key", "build_id", "epoch_sim", "n_intervals",
+    "git_commit", "file_sha256", "designation",
+})
 VALIDATION_POLICY = ShortlistPolicy(
     best_overall=2,
     best_per_day_count=1,
@@ -147,6 +168,108 @@ def _demand_archives() -> dict[str, Path]:
         if isinstance(key, str) and manifest.get("status") == "succeeded":
             found[key] = meta_path.parent
     return found
+
+
+def _repo_confined(relative: str) -> Path:
+    """Resolve a recorded repository-relative path, refusing any escape."""
+    if not isinstance(relative, str) or not relative:
+        raise SystemExit("canonical demand path must be a non-empty string")
+    candidate = Path(relative)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise SystemExit(
+            f"canonical demand path must be repository-relative: {relative!r}")
+    # Refuse a symlink at ANY component before resolving. `resolve()` would
+    # silently follow one, so the recorded path could name a link that is
+    # repointed later while the artifact still reads as canonical: the frozen
+    # path must BE the archive, not a redirection to whatever it points at now.
+    probe = REPO_ROOT
+    for part in candidate.parts:
+        probe = probe / part
+        if probe.is_symlink():
+            raise SystemExit(
+                f"canonical demand path traverses a symlink at {probe.name!r}: "
+                f"{relative!r}")
+    resolved = (REPO_ROOT / candidate).resolve()
+    if REPO_ROOT not in resolved.parents:
+        raise SystemExit(
+            f"canonical demand path escapes the repository: {relative!r}")
+    return resolved
+
+
+def bind_exact_demand(manifest: Mapping[str, Any],
+                      selection_path: Path | None) -> tuple[str, Path]:
+    """Bind the ONE archive this campaign's frozen selection recorded.
+
+    Every identity is checked here, BEFORE a run root is created and before the
+    SUMO executable is resolved, so a mismatch cannot leave a half-started
+    campaign behind. Nothing is globbed and no sibling archive is read: the path
+    comes from the frozen artifact, and `bind_canonical_archive` verifies it by
+    exact path plus five file digests.
+    """
+    from traffic_sim.simulation.heldout_selection import (
+        CanonicalBindingError, bind_canonical_archive)
+
+    campaign = manifest.get("campaign_version")
+    if selection_path is None:
+        raise SystemExit(
+            f"campaign {campaign} requires --selection: it must bind its exact "
+            f"frozen demand archive, not resolve a demand key. Approved form:\n"
+            f"  {APPROVED_V6_COMMAND}")
+    selection_path = Path(selection_path)
+    if selection_path.is_symlink() or not selection_path.is_file():
+        raise SystemExit(
+            f"selection artifact must be a regular file: {selection_path}")
+
+    selection = _read(selection_path)
+    recorded_key = selection.get("content_key")
+    body = {key: value for key, value in selection.items() if key != "content_key"}
+    if not isinstance(recorded_key, str) or _canonical_digest(body) != recorded_key:
+        raise SystemExit(
+            f"selection artifact content key does not recompute: {selection_path}")
+    expected_key = manifest.get("selection_content_key")
+    if recorded_key != expected_key:
+        raise SystemExit(
+            f"selection artifact does not belong to this manifest: expected "
+            f"{expected_key}, got {recorded_key}")
+    if selection.get("campaign_version") != campaign:
+        raise SystemExit(
+            f"selection campaign {selection.get('campaign_version')!r} does not "
+            f"match manifest campaign {campaign!r}")
+
+    demand = selection.get("canonical_demand")
+    if not isinstance(demand, dict) or set(demand) != CANONICAL_DEMAND_FIELDS:
+        raise SystemExit(
+            "selection artifact has no complete canonical_demand record "
+            f"(expected exactly {sorted(CANONICAL_DEMAND_FIELDS)})")
+    digests = demand["file_sha256"]
+    if not isinstance(digests, dict):
+        raise SystemExit("canonical_demand.file_sha256 must be an object")
+
+    archive = _repo_confined(demand["path"])
+    identity = {
+        "demand_build_key": demand["demand_build_key"],
+        "build_id": demand["build_id"],
+        "epoch_sim": demand["epoch_sim"],
+        "n_intervals": demand["n_intervals"],
+        "git_commit": demand["git_commit"],
+        "file_digests": digests,
+    }
+    try:
+        bound = bind_canonical_archive(archive, identity)
+    except CanonicalBindingError as error:
+        raise SystemExit(f"canonical demand archive is not bindable: {error}")
+
+    # Every case must be the SAME bound demand; otherwise some case would still
+    # need key resolution, which is exactly what this binding removes.
+    mismatched = sorted(
+        case["case_id"] for case in manifest["cases"]
+        if case["closure_search_spec"]["demand_build_id"] != bound.demand_build_key
+    )
+    if mismatched:
+        raise SystemExit(
+            f"cases do not use the bound demand {bound.demand_build_key}: "
+            + ", ".join(mismatched))
+    return bound.demand_build_key, bound.path
 
 
 def _variants(archive: Path, metadata: Mapping[str, Any]) -> list[Path]:
@@ -452,6 +575,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument(
+        "--selection", type=Path, default=None,
+        help=("Frozen selection artifact binding the exact demand archive. "
+              "REQUIRED for campaigns that bind demand exactly (v6); refused "
+              "for campaigns that do not."),
+    )
+    parser.add_argument(
         "--case", action="append", default=[],
         help="Run only this frozen case ID (repeatable).",
     )
@@ -467,13 +596,29 @@ def main() -> None:
     if args.seed_workers < 1:
         raise SystemExit("--seed-workers must be at least 1")
     manifest = validate_validation_manifest(_read(args.manifest))
+
+    # Bind exact demand FIRST: before the run root exists and before SUMO is
+    # resolved, so a bad identity cannot leave a started campaign behind.
+    bound_demand: tuple[str, Path] | None = None
+    if manifest.get("campaign_version") in EXACT_DEMAND_BINDING_CAMPAIGNS:
+        bound_demand = bind_exact_demand(manifest, args.selection)
+    elif args.selection is not None:
+        raise SystemExit(
+            f"--selection applies only to campaigns that bind demand exactly "
+            f"({', '.join(sorted(EXACT_DEMAND_BINDING_CAMPAIGNS))}); campaign "
+            f"{manifest.get('campaign_version')!r} does not")
+
     run_root = DEFAULT_ROOT / manifest["content_key"]
     run_root.mkdir(parents=True, exist_ok=True)
     selected = set(args.case)
     unknown = selected - {case["case_id"] for case in manifest["cases"]}
     if unknown:
         raise SystemExit("unknown validation cases: " + ", ".join(sorted(unknown)))
-    archives = _demand_archives()
+    if bound_demand is not None:
+        # Exactly one archive, already verified. No discovery, no fallback.
+        archives = {bound_demand[0]: bound_demand[1]}
+    else:
+        archives = _demand_archives()
     sumo_home = rs.sumo_home()
     outcomes = []
     missing = []

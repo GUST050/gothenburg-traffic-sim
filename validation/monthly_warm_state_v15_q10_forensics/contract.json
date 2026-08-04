@@ -1,0 +1,16 @@
+{
+  "cache_publication": false,
+  "claim_scope": "one q10 localization run; diagnostic only, never cache or release evidence",
+  "content_key": "39d27d42866e5bb70fa33e3cd7d612df84186d56c619e878407b5615815b6306",
+  "diagnostic_id": "monthly_warm_state_v15_q10_forensics",
+  "identities": [
+    {
+      "demand_variant": "q10",
+      "schedule_id": "closure-8bcf7829ae545dffd8ce",
+      "seed": 1000,
+      "warm_point_s": 24300
+    }
+  ],
+  "schema": "monthly_warm_state_v15_q10_forensics_v1",
+  "source_state": "v15 boundary-transport implementation at manifest b8af525102482bf29a4e64bf80d962ee6e6014c37f9d07ae04ee082112910700"
+}

@@ -31,6 +31,7 @@ from demand.structure import (GEO_PATH, load_edge_geometry,
 # the first call).
 _PFE_PAR_SHAPES = None
 _PFE_PAR_ROUTE_COST = None
+_PFE_PAR_TOUCH_INDEX = None
 _PFE_PAR_STRUCTURE_GROUPS = None
 _PFE_PAR_VARIANT_INPUTS = None
 _PFE_PAR_PURPOSE_MIXES = None
@@ -104,6 +105,7 @@ def _run_pfe_interval_job(job: dict):
     from traffic_sim.demand import pfe
 
     if (_PFE_PAR_SHAPES is None or _PFE_PAR_ROUTE_COST is None or
+            _PFE_PAR_TOUCH_INDEX is None or
             _PFE_PAR_VARIANT_INPUTS is None or _PFE_PAR_PURPOSE_MIXES is None):
         raise RuntimeError("PFE interval worker was not initialized")
     suffix, key, quarter = job
@@ -116,6 +118,7 @@ def _run_pfe_interval_job(job: dict):
         route_cost=_PFE_PAR_ROUTE_COST,
         structure_groups=_PFE_PAR_STRUCTURE_GROUPS,
         purpose_mix=_PFE_PAR_PURPOSE_MIXES[suffix][quarter],
+        touch_index=_PFE_PAR_TOUCH_INDEX,
     )
     return suffix, key, quarter, sol, rung
 
@@ -256,7 +259,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     """
     from traffic_sim.demand import pfe
 
-    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_STRUCTURE_GROUPS
+    global _PFE_PAR_SHAPES, _PFE_PAR_ROUTE_COST, _PFE_PAR_TOUCH_INDEX
+    global _PFE_PAR_STRUCTURE_GROUPS
     global _PFE_PAR_VARIANT_INPUTS, _PFE_PAR_PURPOSE_MIXES
     global _PFE_PAR_SOLUTIONS, _PFE_PAR_RUNGS, _PFE_PAR_STAGED_OUTPUTS
     global _PFE_PAR_PREPARE_S, _PFE_PAR_SOLVE_S
@@ -267,6 +271,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     print(f"  timing PFE prepare: {prepare_s:.1f}s")
     _PFE_PAR_SHAPES = shapes
     _PFE_PAR_ROUTE_COST = route_cost
+    _PFE_PAR_TOUCH_INDEX = pfe.build_touch_index(shapes)
     # Set BEFORE the pool forks so workers inherit it, like the shape pool.
     _PFE_PAR_STRUCTURE_GROUPS = structure_groups_for_shapes(shapes)
     # Set before fork.  Each task now carries only a small tuple instead of
@@ -419,6 +424,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             staged.with_suffix(staged.suffix + ".tmp").unlink(missing_ok=True)
         _PFE_PAR_SHAPES = None
         _PFE_PAR_ROUTE_COST = None
+        _PFE_PAR_TOUCH_INDEX = None
         _PFE_PAR_STRUCTURE_GROUPS = None
         _PFE_PAR_VARIANT_INPUTS = None
         _PFE_PAR_PURPOSE_MIXES = None

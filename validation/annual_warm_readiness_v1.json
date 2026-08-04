@@ -1,0 +1,148 @@
+{
+  "commands": {
+    "execute_full": "python3 tools/populate_annual_warming.py --execute --plan-key b89e4a5e617ebe11ba6d448a6ccb5a1afa9af13eaac29ace3ed152292105a542 --state-workers 3",
+    "preflight": "python3 tools/populate_annual_warming.py --preflight --state-workers 3",
+    "resume_after_interruption": "rerun execute_full unchanged; succeeded units are skipped, running/failed units retry with incremented attempts",
+    "status": "python3 tools/populate_annual_warming.py --status"
+  },
+  "content_key": "e2d2e4f59d7d39e1238453a80c7e67533bb39456f1b70fa7a0da28ed30f5e6e8",
+  "execution_boundary": {
+    "annual_artifacts_are_candidate_free_and_uncertified_for_product_reuse": true,
+    "full_sumo_remains_accuracy_authority": true,
+    "population_only": true,
+    "product_activation": false,
+    "release_or_deployment": false,
+    "two_dst_transition_dates_excluded": [
+      "2027-03-28",
+      "2027-10-31"
+    ]
+  },
+  "focused_check": "python3 -m pytest -q tests/test_annual_warm_plan.py tests/test_annual_warm_store.py tests/test_annual_warm_population.py tests/test_populate_annual_warming.py tests/test_annual_warm_readiness.py",
+  "initialized_population": {
+    "artifacts": [],
+    "ledger_sha256": "862247845937b437a6146c4c7698191ae36b5534151ff3f3879410ddf14a34cb",
+    "physical_blob_bytes": 0,
+    "plan_sha256": "f57cf0e0d43a5df2107c25a9c99829fdf8d4b5c2672f7cfe5d93f4bd499b0550",
+    "root": "runs/annual-warm-2027/b89e4a5e617ebe11ba6d448a6ccb5a1afa9af13eaac29ace3ed152292105a542",
+    "summary": {
+      "complete": false,
+      "failed": 0,
+      "ledger_content_key": "d2cdfd37c5c7b08664fb50fc28ae8ab33d41b78788175ebcd08e2a9fc003177e",
+      "ledger_revision": 0,
+      "pending": 3267,
+      "plan_content_key": "b89e4a5e617ebe11ba6d448a6ccb5a1afa9af13eaac29ace3ed152292105a542",
+      "running": 0,
+      "succeeded": 0,
+      "total": 3267
+    }
+  },
+  "plan": {
+    "content_key": "b89e4a5e617ebe11ba6d448a6ccb5a1afa9af13eaac29ace3ed152292105a542",
+    "coverage": {
+      "calendar_days": 365,
+      "closure_slots": 1089,
+      "demand_builds": 363,
+      "eligible_dates": 363,
+      "excluded_dates": [
+        "2027-03-28",
+        "2027-10-31"
+      ],
+      "state_requests": 3267
+    },
+    "path": "validation/annual_warm_plan_2027.json",
+    "seed_variants": [
+      {
+        "seed": 1000,
+        "variant": "q10"
+      },
+      {
+        "seed": 1001,
+        "variant": "q50"
+      },
+      {
+        "seed": 1002,
+        "variant": "q90"
+      }
+    ],
+    "sha256": "f57cf0e0d43a5df2107c25a9c99829fdf8d4b5c2672f7cfe5d93f4bd499b0550"
+  },
+  "population_pilot": {
+    "artifacts": [
+      {
+        "artifact_content_key": "c0e48f25eedfe5d10bb7e63a5dd5f8b0ccea468f9aef7e1c291a7d6ac93c9259",
+        "checkpoint_s": 24300,
+        "first_work_date": "2027-07-15",
+        "seed": 1002,
+        "unit_id": "annual-unit-9fce03782ac4e35432eb",
+        "variant": "q90"
+      },
+      {
+        "artifact_content_key": "03e0b9f0481078bf31a29deef3a6759a5a144c09494ab0072212faba4fd4dec0",
+        "checkpoint_s": 24300,
+        "first_work_date": "2027-07-15",
+        "seed": 1001,
+        "unit_id": "annual-unit-c1505dcade9cff4268cf",
+        "variant": "q50"
+      },
+      {
+        "artifact_content_key": "ec37f7105993f50b94d9ec5fc0d09ca438ebe1750e553d6f299bbd280c6d7b84",
+        "checkpoint_s": 24300,
+        "first_work_date": "2027-07-15",
+        "seed": 1000,
+        "unit_id": "annual-unit-ffc487f7a2b654442ec9",
+        "variant": "q10"
+      }
+    ],
+    "ledger_sha256": "69d6cc0d3642923701eed8480e708c5e0c5d090dd06161a221542d02f881904d",
+    "physical_blob_bytes": 7099706,
+    "plan_sha256": "f57cf0e0d43a5df2107c25a9c99829fdf8d4b5c2672f7cfe5d93f4bd499b0550",
+    "root": "validation/annual_warm_population_pilot_v1",
+    "summary": {
+      "complete": false,
+      "failed": 0,
+      "ledger_content_key": "c8130158e34f8221d5fa316251c71aa97f6548b7e2678592f26f5f3b89693275",
+      "ledger_revision": 6,
+      "pending": 3264,
+      "plan_content_key": "b89e4a5e617ebe11ba6d448a6ccb5a1afa9af13eaac29ace3ed152292105a542",
+      "running": 0,
+      "succeeded": 3,
+      "total": 3267
+    }
+  },
+  "preflight": {
+    "approved_state_workers": 3,
+    "content_key": "235d9a7bb75e97d0183d5f2c5473d6cf1a0c0b5bd77afbbe503a5f6b7f19cd4b",
+    "disk_gate_passed": true,
+    "localhost_ipv4_tcp_bind": true,
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "path": "validation/annual_warm_preflight_v1.json",
+    "sumo_version_first_line": "Eclipse SUMO sumo 1.27.1",
+    "traci_origin": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/tools/traci/__init__.py"
+  },
+  "recorded_date": "2026-08-03",
+  "schema": "annual_warm_readiness_v1",
+  "source_fingerprints": {
+    "tests/test_annual_warm_plan.py": "600c312e1d86cad41a9119ca20041b7fb9bf3930cc04ff3ee8583cd75a3ba036",
+    "tests/test_annual_warm_population.py": "e63ab9b5afea2b9a685d40c3d636c26976052dfd2a6cd1eb9cb81924e2bc772f",
+    "tests/test_annual_warm_readiness.py": "b442a5a2d80ab967607bd705efed9a9f9f266fc439a7dc6f104cdf92538725b0",
+    "tests/test_annual_warm_store.py": "57eab231e989ca7b396efb9545b3b4e809ba88200c8860b5b263b49bdecfb89e",
+    "tests/test_populate_annual_warming.py": "517fff16dc86cf06181e3589344924f2e0117c96c37399ca7902749e38733b07",
+    "tools/freeze_annual_warm_readiness.py": "799fa5b0eb77ae382f57b3655a09090606432b2eca25ff42e710795bd4929d61",
+    "tools/pilot_annual_warm_storage.py": "07a6aee8d75a458abe429fabe53efb35c44607f4df30c75d95d2c609d9f06edf",
+    "tools/plan_annual_warming.py": "aaadd97640a333ef665ec2ffbd86592c022e8ee4c923b0ef327be055b504fb23",
+    "tools/populate_annual_warming.py": "284544735aa1e1cfb465d96e8137b81173203e57945f40236e81b80a1947a176",
+    "tools/record_annual_warm_preflight.py": "923ce95d6600f34c6c9d01340bbf7cd0a7fe9cda60e0dfdaa68af12ba3f11ab6",
+    "traffic_sim/simulation/annual_warm_plan.py": "bcf2f6edb8b37a267ffedf50bb3b3b6d0180861f5b647ec514412c1b48a6f3e3",
+    "traffic_sim/simulation/annual_warm_population.py": "a5d28e15172c0c1be6457a83daa0fdcd4e246db12dd21f8f9f801967d0bcfeef",
+    "traffic_sim/simulation/annual_warm_store.py": "d358cd101e2eeea4d763bab68c60a316106438c825c2fb52425adc74b27ff9dd"
+  },
+  "status": "ready_for_full_population",
+  "storage_pilot": {
+    "artifact_count": 3,
+    "content_key": "3a424c4c6ff7957089e062eec64352b0d2308b96e85e4e6925e996e32de6af24",
+    "path": "validation/annual_warm_storage_pilot_v1.json",
+    "physical_ratio": 0.08868569767105003,
+    "physical_stored_bytes": 33316391,
+    "unique_original_bytes": 375668139
+  }
+}

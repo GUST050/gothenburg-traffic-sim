@@ -25,6 +25,20 @@ from traffic_sim.simulation.pilot_selection import PilotPolicy
 from traffic_sim.simulation.search_workspace import load_search_workspace
 
 
+@pytest.fixture(autouse=True)
+def _unit_adoption_source_identity(monkeypatch):
+    """Exercise adoption mechanics independently of retired tracked evidence.
+
+    The live v6 certificate is intentionally stale after production source
+    changes. These unit tests synthesize record/certificate mutations and need
+    one accepted control pair; source-drift behavior is covered exhaustively in
+    ``test_heldout_gate.py`` against the real fingerprint checker.
+    """
+    import traffic_sim.simulation.heldout_gate as heldout_gate
+    monkeypatch.setattr(
+        heldout_gate, "_source_fingerprints_match", lambda _manifest: True)
+
+
 def _spec(search_id="monthly-resume"):
     return ClosureSearchSpec(
         search_id=search_id,
@@ -212,6 +226,81 @@ def test_backend_prepares_only_screened_shortlist_before_provenance(tmp_path):
     )
 
 
+def _write_adopted_pair(tmp_path, name="adopted", **record_overrides):
+    """Write a gate record AND its binding adoption certificate.
+
+    LUNA-V5-01: adoption needs two artifacts; a record alone never opens the
+    gate. The exhaustive mutation matrix lives in tests/test_heldout_gate.py.
+    """
+    import hashlib
+    from traffic_sim.simulation.heldout_gate import (
+        BOUNDED_CLAIM_SCOPE, CERTIFICATE_KIND, CERTIFICATE_SCHEMA_VERSION,
+        canonical_content_key)
+    man = json.loads(Path("validation/monthly_proxy_manifest_v6.json").read_text())
+    record = _frozen_campaign_gate_record(**record_overrides)
+    # Rebind identity to the ADOPTABLE campaign: v4 is explicitly rejected.
+    for field in ("heldout_set", "manifest_content_key", "required_cases",
+                  "completed_cases", "proxy_version", "shortlist_version",
+                  "shortlist_policy_content_key"):
+        if field not in record_overrides:
+            record[field] = {
+                "heldout_set": man["campaign_version"],
+                "manifest_content_key": man["content_key"],
+                "required_cases": len(man["cases"]),
+                "completed_cases": len(man["cases"]),
+                "proxy_version": man["proxy_version"],
+                "shortlist_version": man["shortlist_version"],
+                "shortlist_policy_content_key": man["shortlist_policy_content_key"],
+            }[field]
+    record.setdefault("schema_version", 1)
+    record.setdefault("case_count", len(man["cases"]))
+    record.setdefault("gate_checks", {
+        "practical_winner_recall": True, "p90_normalized_shortlist_regret": True,
+        "failure_disqualification_recall": True, "ranking_case_coverage": True,
+        "all_shortlists_contain_eligible_candidate": True,
+        "discriminating_case_coverage": True,
+        "discriminating_practical_winner_recall": True})
+    # EXACTLY the metric set the production evaluator emits.
+    record.setdefault("metrics", {
+        "winner_recall": 1.0, "practical_winner_recall": 1.0,
+        "p90_normalized_shortlist_regret": 0.0, "median_spearman": -0.371429,
+        "spearman_case_fraction": 1.0, "ranking_case_fraction": 1.0,
+        "discriminating_case_fraction": 0.6,
+        "discriminating_practical_winner_recall": 1.0,
+        "median_spearman_discriminating": -0.637363,
+        "median_objective_spread_s": 436.1,
+        "failure_disqualification_recall": 0.681944,
+        "total_disqualified_schedules": 25})
+    # Production thresholds = manifest gate + the ranking-coverage minimum.
+    record.setdefault("thresholds", {
+        **man["gate"],
+        "minimum_ranking_case_fraction": man["minimum_ranking_case_fraction"]})
+    record.setdefault("practical_winner_definition", "within the band")
+    record.setdefault("regret_definition", "normalised regret")
+    record.setdefault("failure_recall_definition", "disqualifications caught")
+    gate_bytes = json.dumps(record, indent=2, sort_keys=True).encode()
+    gp = tmp_path / f"{name}-gate.json"
+    gp.write_bytes(gate_bytes)
+    cert = {
+        "schema_version": CERTIFICATE_SCHEMA_VERSION,
+        "kind": CERTIFICATE_KIND,
+        "gate_record_sha256": hashlib.sha256(gate_bytes).hexdigest(),
+        "gate_record_bytes": len(gate_bytes),
+        "manifest_path": "validation/monthly_proxy_manifest_v6.json",
+        "manifest_content_key": man["content_key"],
+        "campaign_version": man["campaign_version"],
+        "required_cases": len(man["cases"]),
+        "proxy_version": man["proxy_version"],
+        "shortlist_version": man["shortlist_version"],
+        "shortlist_policy_content_key": man["shortlist_policy_content_key"],
+        "claim_scope": BOUNDED_CLAIM_SCOPE,
+    }
+    cert["content_key"] = canonical_content_key(cert)
+    cp = tmp_path / f"{name}-cert.json"
+    cp.write_text(json.dumps(cert, indent=2, sort_keys=True))
+    return gp, cp
+
+
 def test_bounded_exhaustive_result_is_ui_exposable_and_gate_aware(
         tmp_path, monkeypatch):
     """No proxy is involved in bounded-exhaustive screening: every ranked
@@ -227,6 +316,8 @@ def test_bounded_exhaustive_result_is_ui_exposable_and_gate_aware(
 
     monkeypatch.setattr(
         monthly_search, "HELDOUT_GATE_RECORD", tmp_path / "missing.json")
+    monkeypatch.setattr(
+        monthly_search, "HELDOUT_GATE_CERTIFICATE", tmp_path / "missing-cert.json")
     result = run_monthly_search(
         _spec("monthly-exhaustive-claims"),
         _policy(),
@@ -240,9 +331,9 @@ def test_bounded_exhaustive_result_is_ui_exposable_and_gate_aware(
     assert boundary["global_best_claim_allowed"] is False
     assert boundary["best_result_scope"] == "sumo_verified_bounded_exhaustive"
 
-    passing = tmp_path / "gate.json"
-    passing.write_text(json.dumps(_frozen_campaign_gate_record()))
+    passing, cert = _write_adopted_pair(tmp_path)
     monkeypatch.setattr(monthly_search, "HELDOUT_GATE_RECORD", passing)
+    monkeypatch.setattr(monthly_search, "HELDOUT_GATE_CERTIFICATE", cert)
     released = run_monthly_search(
         _spec("monthly-exhaustive-released"),
         _policy(),
@@ -260,9 +351,9 @@ def test_validated_proxy_screening_is_released_but_others_stay_closed(
         tmp_path, monkeypatch):
     import traffic_sim.simulation.monthly_search as monthly_search
 
-    passing = tmp_path / "gate.json"
-    passing.write_text(json.dumps(_frozen_campaign_gate_record()))
+    passing, cert = _write_adopted_pair(tmp_path)
     monkeypatch.setattr(monthly_search, "HELDOUT_GATE_RECORD", passing)
+    monkeypatch.setattr(monthly_search, "HELDOUT_GATE_CERTIFICATE", cert)
 
     def proxy_builder(version):
         def build(spec_path):
@@ -312,10 +403,57 @@ def test_failed_or_malformed_gate_record_fails_closed(tmp_path):
     assert load_passing_heldout_gate(malformed) is None
 
 
-def test_tracked_v2_gate_record_fails_closed_after_shortlist_policy_change():
+def test_v4_adoption_was_rejected_and_the_default_path_is_closed():
+    """LUNA-V4-04 was concluded REJECTED; LUNA-V5-01 removed its candidate.
+
+    Adoption of a lone gate record was self-certifying. The product ships with
+    neither artifact, so the gate is closed by default.
+    """
+    from traffic_sim.simulation.monthly_search import (
+        HELDOUT_GATE_CERTIFICATE, HELDOUT_GATE_RECORD, load_passing_heldout_gate)
+    assert not Path("validation/monthly_proxy_v4_gate.json").exists()
+    assert not HELDOUT_GATE_RECORD.exists()
+    assert not HELDOUT_GATE_CERTIFICATE.exists()
+    assert load_passing_heldout_gate() is None
+
+
+def test_a_record_without_its_certificate_never_adopts(tmp_path):
+    """The exact v4 failure mode: a passing record with no post-review binding."""
     from traffic_sim.simulation.monthly_search import load_passing_heldout_gate
-    record = load_passing_heldout_gate()
-    assert record is None
+    gp, cp = _write_adopted_pair(tmp_path)
+    assert load_passing_heldout_gate(gp, cp) is not None
+    cp.unlink()
+    assert load_passing_heldout_gate(gp, cp) is None
+
+
+@pytest.mark.parametrize("overrides, why", [
+    ({"heldout_set": "v2"}, "an earlier campaign label"),
+    ({"heldout_set": "v3"}, "a relabelled earlier campaign"),
+    ({"manifest_content_key": "0" * 64}, "a different frozen manifest"),
+    ({"completed_cases": 4}, "an incomplete case set"),
+    ({"required_cases": 4}, "a shrunken required-case count"),
+    ({"gate_status": "fail"}, "a failing gate"),
+    ({"ui_exposure_allowed": False}, "withheld UI exposure"),
+    ({"global_best_claim_allowed": False}, "withheld global-best claim"),
+    ({"shortlist_policy_content_key": "deadbeef"}, "a shortlist policy change"),
+    ({"shortlist_version": "stratified_shortlist_v2"}, "an older shortlist version"),
+    ({"kind": "something_else"}, "a wrong record kind"),
+])
+def test_tampered_or_earlier_gate_records_fail_closed(tmp_path, overrides, why):
+    """No relabelled, incomplete, downgraded or tampered record opens the gate."""
+    from traffic_sim.simulation.monthly_search import load_passing_heldout_gate
+    path = tmp_path / "gate.json"
+    path.write_text(json.dumps(_frozen_campaign_gate_record(**overrides)))
+    assert load_passing_heldout_gate(path) is None, why
+
+
+def test_corrupted_gate_bytes_fail_against_the_certificate(tmp_path):
+    """Any byte edited in the record breaks its certificate binding."""
+    from traffic_sim.simulation.monthly_search import load_passing_heldout_gate
+    gp, cp = _write_adopted_pair(tmp_path)
+    assert load_passing_heldout_gate(gp, cp) is not None
+    gp.write_bytes(gp.read_bytes() + b" ")
+    assert load_passing_heldout_gate(gp, cp) is None
 
 
 def test_runs_full_resumable_pipeline_and_remains_fail_closed(tmp_path):
@@ -534,9 +672,8 @@ def test_only_the_frozen_campaign_record_opens_the_release_gate(tmp_path):
 
     identity = frozen_campaign_identity()
     assert identity is not None
-    frozen = tmp_path / "v4-gate.json"
-    frozen.write_text(json.dumps(_frozen_campaign_gate_record()))
-    accepted = load_passing_heldout_gate(frozen)
+    frozen, frozen_cert = _write_adopted_pair(tmp_path, name="frozen")
+    accepted = load_passing_heldout_gate(frozen, frozen_cert)
     assert accepted is not None
     assert accepted["heldout_set"] == identity["campaign_version"]
     assert accepted["manifest_content_key"] == identity["manifest_content_key"]
@@ -552,23 +689,25 @@ def test_only_the_frozen_campaign_record_opens_the_release_gate(tmp_path):
         "missing_case_counts": {"completed_cases": None},
     }
     for name, override in rejected.items():
-        path = tmp_path / f"{name}.json"
-        path.write_text(json.dumps(_frozen_campaign_gate_record(**override)))
-        assert load_passing_heldout_gate(path) is None, name
+        path, cert = _write_adopted_pair(tmp_path, name=name, **override)
+        assert load_passing_heldout_gate(path, cert) is None, name
 
 
-def test_gate_loading_fails_closed_without_a_readable_frozen_campaign(
+def test_gate_closes_when_the_certificate_names_an_unreadable_manifest(
         tmp_path, monkeypatch):
+    """The certificate names the manifest; an absent one fails closed."""
+    import json as _json
     import traffic_sim.simulation.monthly_search as monthly_search
 
-    frozen = tmp_path / "gate.json"
-    frozen.write_text(json.dumps(_frozen_campaign_gate_record()))
-    assert monthly_search.load_passing_heldout_gate(frozen) is not None
+    gp, cp = _write_adopted_pair(tmp_path)
+    assert monthly_search.load_passing_heldout_gate(gp, cp) is not None
 
-    monkeypatch.setattr(monthly_search, "HELDOUT_CAMPAIGN_MANIFEST",
-                        tmp_path / "absent-manifest.json")
-    assert monthly_search.frozen_campaign_identity() is None
-    assert monthly_search.load_passing_heldout_gate(frozen) is None
+    cert = _json.loads(cp.read_text())
+    cert["manifest_path"] = str(tmp_path / "absent-manifest.json")
+    from traffic_sim.simulation.heldout_gate import canonical_content_key
+    cert["content_key"] = canonical_content_key(cert)
+    cp.write_text(_json.dumps(cert))
+    assert monthly_search.load_passing_heldout_gate(gp, cp) is None
 
 
 def test_a_tampered_frozen_manifest_closes_the_gate(tmp_path, monkeypatch):

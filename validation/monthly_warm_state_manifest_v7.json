@@ -1,0 +1,304 @@
+{
+  "accounting": {
+    "measured_evidence": {
+      "boundary_capture_s": 15.718389417064149,
+      "classification": "full_accumulator_preserved",
+      "observed_return_codes": {
+        "cold": 0,
+        "prefix": 0,
+        "resumed": 0
+      },
+      "outcome": "validation/warm_state_time_loss_semantics_v2_outcome",
+      "post_boundary_only_would_be_s": 94.18,
+      "post_load_accumulator_s": 15.72,
+      "resumed_final_s": 109.9,
+      "uninterrupted_final_s": 109.9
+    },
+    "no_serialization_residual": "aggregates are whole values, so nothing is rounded twice; the bounded skew v3 had to declare does not arise",
+    "rule": "the objective is the completed-prefix aggregate plus the resumed aggregate; each vehicle is counted once and whole, and NO boundary offset is applied",
+    "why_v3_is_rejected": "v3 added a per-vehicle boundary offset on the theory that resumed tripinfo reports only post-boundary delay. The approved LUNA-WARM-08 diagnostic measured the opposite: the saved state preserves the accumulator and the resumed tripinfo reports 109.90 s against an uninterrupted 109.90 s, so the offset double counts"
+  },
+  "approval_mechanism": "--approval-token must equal this manifest's content_key; no approval is stored in the manifest itself",
+  "archive_files_sha256": {
+    "calibrated.rou.xml": "56000bc43a8fb00a6f6dd9b47db70a1cf214a8fc95edaade70e3e6e2cbc523ca",
+    "calibrated_v1.rou.xml": "4201008a778ec699c55a7fd90aa96c393b914ec48197c5a4d9fd8e1795687a0c",
+    "calibrated_v2.rou.xml": "8f8bdacf8bcd772a01cd3899b5b81b3351274a232e1a11ecf5d9cb7aebf3a259",
+    "demand_meta.json": "3c6c61040c01236cd52223cdab7e0262af64fcb31ed047885a57bba9c36d6026",
+    "manifest.json": "dd54e26fcb63809d3a904c24dddc3c3b0b8fc919b964737f8a2367e48c04e0e9"
+  },
+  "artifact_root": "runs/monthly-warm-state-validation",
+  "baseline_trip_duration_p99_s": 1800,
+  "campaign_version": "v7",
+  "cases": [
+    {
+      "case_id": "warm-v7-paired-equivalence",
+      "closure_begin_s": 25200,
+      "closure_bound_warm_point_s": 24300,
+      "closure_end_s": 54000,
+      "directed_edges": [
+        "26354420_60476786_0"
+      ],
+      "rationale": "the same physical closure every earlier campaign ran, so the residual objective gap is measured against directly comparable evidence rather than a new case that could differ for unrelated reasons"
+    }
+  ],
+  "claim_scope": "proves or refutes cold/warm production-observation equivalence for the frozen cases only; it establishes no product behaviour and no adoption",
+  "comparison_policy": {
+    "compares": "the canonical production observation from each arm, excluding execution-only fields",
+    "excluded_from_comparison": [
+      "execution_arm",
+      "peak_rss_bytes",
+      "phase_runtime_s",
+      "runtime_s",
+      "split_diagnostics",
+      "warm_point_s"
+    ],
+    "on_mismatch": "record honest fail evidence and publish no cache material",
+    "tolerance": "exact equality of the semantic payload"
+  },
+  "content_key": "e6734a2029995fc86092572ee396b6057bf3a1e9351d6ba4876731092050c666",
+  "demand_requirement": {
+    "archive_path": "runs/demand-20260721-222017-41bc682a-bbe1",
+    "demand_build_key": "2ac04275daabe93c",
+    "n_intervals": 480,
+    "note": "the campaign must bind this exact archive; resolving the key alone is ambiguous across successful archives"
+  },
+  "demand_variants": [
+    "q10",
+    "q50",
+    "q90"
+  ],
+  "frozen_at": "2026-07-31",
+  "frozen_schedule_ids": [
+    "closure-8bcf7829ae545dffd8ce"
+  ],
+  "hypothesis": {
+    "claim": "LUNA-WARM-07's residual was caused by DEFAULT state serialization: v2's identity recorded save-state.rng and 16-digit precision while its command applied neither, so the resumed run began from a lower-fidelity state than its key described",
+    "mechanism_under_test": "the prefix snapshot command now carries exactly one --save-state.rng true and one --save-state.precision 16, derived from the cache constants the identity records",
+    "note": "LUNA-WARM-07's gap is currently UNEXPLAINED rather than explained; the boundary-active explanation was refuted by measurement, not confirmed",
+    "refutation_condition": "if the objective still differs after preserved-accumulator aggregation with these settings applied, the hypothesis is REFUTED, the residual has a third cause, and the campaign fails honestly",
+    "status": "UNPROVEN \u2014 this campaign is what would test it",
+    "v2_residual_gap_s": {
+      "q10": -7.73,
+      "q50": -80.62,
+      "q90": -138.97
+    }
+  },
+  "inherited_from": {
+    "content_key": "df96224408d700e2e20d218a84c4e798c6a4a33ca837288d2f02f0b185052ca8",
+    "fields": [
+      "route_safety",
+      "archive_files_sha256",
+      "demand_requirement",
+      "network_requirement"
+    ],
+    "manifest": "validation/monthly_warm_state_manifest_v6.json",
+    "reason": "physical facts about the same frozen archive and the same frozen closure; re-deriving them would require reading the archive and could yield different values for an identical case"
+  },
+  "kind": "monthly_warm_state_validation_manifest",
+  "minimum_prefix_s": 1800,
+  "network_requirement": {
+    "path": "sumo/net.net.xml",
+    "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+  },
+  "observation_schema": "monthly_production_observation_v1",
+  "performance_reporting": {
+    "claim_policy": "speedup is REPORTED, never claimed as proven until an approved paired run passes",
+    "records": [
+      "phase_runtime_s",
+      "peak_rss_bytes"
+    ]
+  },
+  "prefix_evidence_schema": "monthly_prefix_evidence_v3",
+  "repetitions_per_variant": 1,
+  "route_audit_schema": "warm_route_mutation_audit_v1",
+  "route_safety": {
+    "q10": {
+      "audit": {
+        "changed_vehicles": 38,
+        "dropped_vehicles": 0,
+        "earliest_affected_depart_s": 24958.8,
+        "filtered_sha256": "7b4896a203ed972abff638aae7f436f7b08bfa53270977c01a2f83073d0d96fc",
+        "filtered_vehicles": 84065,
+        "original_sha256": "4201008a778ec699c55a7fd90aa96c393b914ec48197c5a4d9fd8e1795687a0c",
+        "original_vehicles": 84065,
+        "schema": "warm_route_mutation_audit_v1"
+      },
+      "safe_warm_point_s": 24300
+    },
+    "q50": {
+      "audit": {
+        "changed_vehicles": 23,
+        "dropped_vehicles": 0,
+        "earliest_affected_depart_s": 24898.9,
+        "filtered_sha256": "0833eac2e572db963a12c3b85397e9df29c5d335b73817b8a75a005b587428c6",
+        "filtered_vehicles": 86754,
+        "original_sha256": "56000bc43a8fb00a6f6dd9b47db70a1cf214a8fc95edaade70e3e6e2cbc523ca",
+        "original_vehicles": 86754,
+        "schema": "warm_route_mutation_audit_v1"
+      },
+      "safe_warm_point_s": 24300
+    },
+    "q90": {
+      "audit": {
+        "changed_vehicles": 33,
+        "dropped_vehicles": 0,
+        "earliest_affected_depart_s": 24935.1,
+        "filtered_sha256": "58fb89f81d517a80a1028a33a40c7c07d0f63bca132b718347be1698828ed73d",
+        "filtered_vehicles": 89482,
+        "original_sha256": "8f8bdacf8bcd772a01cd3899b5b81b3351274a232e1a11ecf5d9cb7aebf3a259",
+        "original_vehicles": 89482,
+        "schema": "warm_route_mutation_audit_v1"
+      },
+      "safe_warm_point_s": 24300
+    }
+  },
+  "schedules_per_case": 1,
+  "schema_version": 1,
+  "seeds": [
+    1000,
+    1001,
+    1002
+  ],
+  "simulation_mode": "meso",
+  "snapshot_facts_schema": "warm_snapshot_facts_v1",
+  "source_fingerprints": {
+    "run_monthly_warm_state_validation.py": "a52c66d99d2bd246f4758ef7816e7aafceceadc5e0d4755193184cb9fd7896d9",
+    "run_scenario.py": "5c61d421af8146b75084dd8c015ce1a5dca5dca8dd1490c68fe94dc201fd8b7f",
+    "suggest_closure_time.py": "6eaf562e82c4b67785a1c31e678bc6e7fb5b6e49c14673f1383867eb027c860c",
+    "tests/test_monthly_sumo.py": "b1fdbcd5623f08d10ad456ed4fbd27c072a95e731ef8139a2f92547b05f3a944",
+    "tests/test_monthly_warm_state_v7_freeze.py": "1c6272dba01e30bfb3cb705888e0c564a22a0287267ffc90030d256b23bf83c6",
+    "tests/test_sumo_runtime.py": "a2441aac015c5073ac2627e3d171b7254829d2c6df7354888fea701c24d5d88b",
+    "tools/freeze_monthly_warm_state_v7.py": "6aea802198ff8f51176d1aad9efad22fb48bdc24ebe86b635a9203d1302ea468",
+    "traffic_sim/core/closure_calendar.py": "852b6f5d763d3a89473345c88b66cb3fa7aac8076e6baefc64f0fd6534ff828f",
+    "traffic_sim/core/contracts.py": "8874dfddd1ded86f1b8e2b65c800a93309479cd9cf4faa54c7836ae65c855d1e",
+    "traffic_sim/simulation/envelope.py": "8203caae3019daebedd222b6d4365ce46fed1e6c27460058e89db69bec8d341f",
+    "traffic_sim/simulation/finalist_decision.py": "e5848247b87c4654aa073bd7c88ce46de9ce74cb13c3d1ea56fc72092be21981",
+    "traffic_sim/simulation/metrics.py": "3edf71b82933601b5084229eac0ca63f8bd83a87fef946e23cb14b572d120134",
+    "traffic_sim/simulation/monthly_search.py": "ec83b0615a752d50976c79f719503adc80804c90e15c2b3a505882fc242804cc",
+    "traffic_sim/simulation/monthly_sumo.py": "c926ffadd6f766c83f721c06243806dfba3bbfdc860035df9d11d1a5f05f47c3",
+    "traffic_sim/simulation/monthly_warm_state.py": "37d31d9893e137f984605a9093bb808b0810cb98d9254ca941f2fe450c2c70a6",
+    "traffic_sim/simulation/runtime.py": "5402430b6bcf92ef41e916b2d3000f5fdbf3f7680596a289248469e694a68356",
+    "traffic_sim/simulation/warm_state_boundary.py": "86d549285d39097555f831eb8e7be16ba64ffb17343ecfc69bac11b423eb7316",
+    "traffic_sim/simulation/warm_state_cache.py": "5b6dd885231d6f79acf269806433f6a83b8ebc265bc53832dd30ec4c87207a6e"
+  },
+  "spec_template": {
+    "allowed_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "blackout_dates": [],
+    "closure_type": "full",
+    "dst_policy": "exclude_transition_dates",
+    "duration_basis": "required_work_time",
+    "max_consecutive_start_days": 1,
+    "objective_profile": "robust_time_loss",
+    "permitted_daily_band": {
+      "earliest_start": "07:00",
+      "latest_end": "15:30"
+    },
+    "permitted_date_end": "2027-07-19",
+    "permitted_date_start": "2027-07-15",
+    "policy_status": "user_supplied_unverified",
+    "required_work_minutes": 480,
+    "resolution_minutes": 15,
+    "same_daily_window": true,
+    "source": "forecast",
+    "timezone": "Europe/Stockholm",
+    "work_to_closure_assumption": "one_to_one"
+  },
+  "state_settings": {
+    "save_state_precision": 16,
+    "save_state_rng": true,
+    "snapshot_arguments": [
+      "--save-state.rng",
+      "true",
+      "--save-state.precision",
+      "16"
+    ]
+  },
+  "status": "frozen_unapproved_unexecuted",
+  "supersedes": {
+    "also_spent": [
+      "v1",
+      "v2",
+      "v3",
+      "v4",
+      "v5"
+    ],
+    "campaign": "v6",
+    "content_key": "df96224408d700e2e20d218a84c4e798c6a4a33ca837288d2f02f0b185052ca8",
+    "outcome": "EXECUTED by LUNA-WARM-14 and failed honestly with the cause NAMED: snapshot_failed[No module named 'traci'] on all three identities. Zero warm executions"
+  },
+  "traci_resolution": {
+    "controller_rule": "the controller resolves before the launcher and before any port, so an unusable TraCI starts no process",
+    "home_rule": "a non-empty SUMO_HOME wins deterministically; a declared-but-unusable home is an error, never a silent fallback to a different installation",
+    "package": "traci",
+    "preflight_order": "approval token -> TraCI resolve/API check -> artifact-root absence -> campaign; a resolver failure creates no root and runs no campaign",
+    "required_api": [
+      "init",
+      "close",
+      "simulationStep"
+    ],
+    "required_namespaces": {
+      "simulation": [
+        "getTime",
+        "saveState"
+      ],
+      "vehicle": [
+        "getIDList"
+      ]
+    },
+    "rule": "TraCI is imported from the exact active <sumo_home>/tools and the imported module's origin MUST resolve inside that installation's traci package; a module from anywhere else is refused",
+    "tools_dirname": "tools"
+  },
+  "tripinfo_precision": 2,
+  "v6_diagnosis": {
+    "campaign": "v6",
+    "campaigns_spent_narrowing_it": [
+      "v4",
+      "v5",
+      "v6"
+    ],
+    "cause": "production did a bare `import traci`; the package ships inside the installation at <sumo_home>/tools/traci and is not on sys.path",
+    "consequence": "warm execution never started once: every warm arm since the controller was introduced was a cold fallback caused by an import error",
+    "observed": "cache_miss -> bootstrap_started -> snapshot_failed[No module named 'traci', ModuleNotFoundError] -> bootstrap_failed, on all three identities",
+    "warm_executions": 0
+  },
+  "warm_alignment_s": 900,
+  "warm_attempt_contract": {
+    "coverage_rule": "exactly one FINALIZED attempt per requested warm identity; coverage counts identity attempts, never events",
+    "informational_codes": [
+      "bootstrap_started",
+      "cache_miss",
+      "state_restored"
+    ],
+    "on_gap": "a missing, duplicated, unexpected, malformed or self-contradictory attempt fails the record and forbids cache publication",
+    "outcomes": [
+      "cold_fallback",
+      "warm_executed"
+    ],
+    "required_attempts": 3,
+    "schema": "monthly_warm_attempt_v1",
+    "terminal_codes": [
+      "bootstrap_failed",
+      "controller_absent",
+      "identity_unavailable",
+      "ineligible",
+      "invoker_declined",
+      "invoker_failed",
+      "no_route_safe_warm_point",
+      "route_audit_failed",
+      "snapshot_failed",
+      "state_file_missing",
+      "unexpected_error",
+      "warm_completed",
+      "warm_evidence_invalid"
+    ]
+  },
+  "warming_default": "OFF. This manifest authorizes nothing; warming stays opt-in until one fresh approved paired campaign passes"
+}

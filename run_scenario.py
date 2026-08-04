@@ -65,6 +65,7 @@ from traffic_sim.simulation.warm_state_cache import (
     load_state_arguments,
     save_state_arguments,
 )
+from traffic_sim.demand.route_support import combined_route_edges
 
 SUMO_DIR  = Path("sumo")
 NET_PATH  = SUMO_DIR / "net.net.xml"
@@ -1445,7 +1446,7 @@ def demand_variants(meta: dict) -> list[Path]:
     return paths
 
 
-def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
+def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
              duration_s: int, home: Path, micro: bool = False,
              metrics: bool = False, begin_s: int = 0,
              net_path: Path | None = None,
@@ -1458,12 +1459,26 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              save_state_path: Path | None = None,
              save_state_time_s: int | None = None,
              load_state_path: Path | None = None,
-             work_dir: Path | None = None) -> dict[str, Path] | None:
+             tripinfo_write_unfinished: bool = True,
+             output_precision: int | None = None,
+             keep_after_arrival_s: int | None = None,
+             work_dir: Path | None = None) -> tuple[list[str], dict, Path]:
+    """Build the exact SUMO argv, metric paths and cwd — and run nothing.
+
+    Extracted verbatim from `run_sumo` so the ordinary cold path and the
+    injectable boundary runner construct commands through ONE function.
+    Two builders would drift, and a warm arm whose argv differed from the
+    cold arm would be comparing two different simulations.
+
+    Pure: no subprocess, no TraCI, and NO filesystem writes at all. The caller
+    creates the run directory — a builder that made one could not be called to
+    inspect a command without leaving a directory behind, which is exactly what
+    the boundary controller needs to do.
+    """
     # EdgeData's file attribute is relative to the SUMO cwd. A private
     # work_dir therefore isolates every generated XML while all input paths
     # remain absolute. The default keeps direct diagnostic callers working.
     run_cwd = Path(work_dir or SUMO_DIR)
-    run_cwd.mkdir(parents=True, exist_ok=True)
     # Mesoscopic by default: our product is 15-min edge flows, which does not
     # need microscopic car-following — meso is ~20x faster (whole-day seed:
     # minutes → seconds), which is what makes interactive closures possible.
@@ -1558,6 +1573,16 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
             raise ValueError(
                 "loading a warm state requires its positive saved time as begin_s")
         cmd.extend(load_state_arguments(load_state_path))
+    if keep_after_arrival_s is not None:
+        if isinstance(keep_after_arrival_s, bool) or \
+                not isinstance(keep_after_arrival_s, int) or \
+                keep_after_arrival_s <= 0:
+            raise ValueError("keep_after_arrival_s must be a positive integer")
+        # Default-neutral. Only the validation warm arm opts in so vehicles
+        # that were active at the snapshot remain queryable through TraCI at
+        # the terminal instant. This changes retention in memory, not their
+        # movement or the raw SUMO output files.
+        cmd.extend(["--keep-after-arrival", str(keep_after_arrival_s)])
     if metrics:
         # Deliberately opt-in: interactive closures only need edgeData and
         # retain their current fast command path. The stem makes per-seed,
@@ -1577,13 +1602,28 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         })
         cmd.extend([
             "--tripinfo-output", str(metric_paths["tripinfo"].resolve()),
-            "--tripinfo-output.write-unfinished", "true",
+            # DEFAULT true, unchanged for ordinary callers: a whole-run
+            # measurement must still see vehicles that never finished, as the
+            # unfinished_trips guard metric. V13 also requests true explicitly
+            # for its prefix because unfinished meso tripinfo is the public
+            # output that carries the private accumulator omitted by save/load;
+            # its accounting parser partitions those records by captured ID.
+            "--tripinfo-output.write-unfinished",
+            "true" if tripinfo_write_unfinished else "false",
             "--statistic-output", str(metric_paths["statistics"].resolve()),
             # Summary's waiting count is supporting diagnostics, not a queue
             # metric; SUMO's queue-output remains experimental.
             "--summary-output", str(metric_paths["summary"].resolve()),
             "--summary-output.period", "900",
         ])
+    if output_precision is not None:
+        # Warm arm ONLY. A split reconstructs a boundary vehicle from two
+        # segments, so neither segment may be rounded to 2 decimals on disk
+        # before the whole is formed. Cold runs never pass this, so their argv
+        # stays byte-for-byte unchanged. Because SUMO exposes only a global
+        # precision flag, the warm caller normalizes supporting edgeData back
+        # to ordinary production precision before recovery aggregation.
+        cmd += ["--precision", str(int(output_precision))]
     elif summary_output is not None:
         # Multi-day continuity evidence without the expensive per-vehicle
         # tripinfo/vehroute products.  End-of-run statistics remain separate
@@ -1611,6 +1651,41 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
                    "--vehroute-output.exit-times", "true"])
         if vehroute_write_unfinished:
             cmd.extend(["--vehroute-output.write-unfinished", "true"])
+    return cmd, metric_paths, run_cwd
+
+def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
+             duration_s: int, home: Path, micro: bool = False,
+             metrics: bool = False, begin_s: int = 0,
+             net_path: Path | None = None,
+             flush_s: int = 3600,
+             vehroute_output: Path | None = None,
+             vehroute_write_unfinished: bool = False,
+             run_label: str | None = None,
+             stats_path: Path | None = None,
+             summary_output: Path | None = None,
+             save_state_path: Path | None = None,
+             save_state_time_s: int | None = None,
+             load_state_path: Path | None = None,
+             tripinfo_write_unfinished: bool = True,
+             output_precision: int | None = None,
+             keep_after_arrival_s: int | None = None,
+             work_dir: Path | None = None) -> dict[str, Path] | None:
+    # Delegates construction to the shared pure builder; this function
+    # remains the only place that EXECUTES.
+    cmd, metric_paths, run_cwd = build_sumo_invocation(
+        seed, route_path, add_paths, duration_s, home, micro=micro,
+        metrics=metrics, begin_s=begin_s, net_path=net_path,
+        flush_s=flush_s, vehroute_output=vehroute_output,
+        vehroute_write_unfinished=vehroute_write_unfinished,
+        run_label=run_label, stats_path=stats_path,
+        summary_output=summary_output, save_state_path=save_state_path,
+        save_state_time_s=save_state_time_s,
+        load_state_path=load_state_path,
+        tripinfo_write_unfinished=tripinfo_write_unfinished,
+        output_precision=output_precision,
+        keep_after_arrival_s=keep_after_arrival_s,
+        work_dir=work_dir)
+    run_cwd.mkdir(parents=True, exist_ok=True)
     try:
         res = subprocess.run(cmd, capture_output=True, text=True,
                              cwd=str(run_cwd), env={"SUMO_HOME": str(home)},
@@ -2094,6 +2169,8 @@ def parse_edgedata(
 def aggregate_flows(
     per_seed: list[dict[str, np.ndarray]], web_edges: set[str],
     prior: dict[str, float], n_intervals: int,
+    supported_edges: set[str] | frozenset[str] | None = None,
+    low_evidence_edges: set[str] | frozenset[str] | None = None,
 ) -> tuple[dict[str, list[int]], dict[str, float]]:
     """Mean flows + Monte Carlo confidence, for EVERY edge the map can draw.
 
@@ -2115,9 +2192,23 @@ def aggregate_flows(
         mean  = stack.mean(axis=0)
         flows_out[eid] = [int(round(v)) for v in mean]
 
+        # Sensor proximity is only a confidence prior. An edge absent from
+        # every calibrated route is structurally unsupported by this exact
+        # demand release; stable zero output there is not high-confidence
+        # evidence of zero traffic. Keep legacy direct callers unchanged when
+        # no explicit support contract is supplied.
+        if supported_edges is not None and eid not in supported_edges:
+            conf_out[eid] = 0.0
+            continue
         busy = mean > 2           # CV is meaningless for near-zero flows
         cv   = float((stack.std(axis=0)[busy] / mean[busy]).mean()) if busy.any() else 0.0
-        conf_out[eid] = round(prior[eid] * float(np.exp(-cv)), 3)
+        confidence = prior[eid] * float(np.exp(-cv))
+        if low_evidence_edges is not None and eid in low_evidence_edges:
+            # Explicit full-edge support is backed by the weak assignment
+            # prior, not a local observation. Its model weight is 0.15, so
+            # the displayed confidence must never claim more than that.
+            confidence = min(confidence, 0.15)
+        conf_out[eid] = round(confidence, 3)
     return flows_out, conf_out
 
 
@@ -2307,6 +2398,24 @@ def main() -> None:
     for ce in close_edges:
         if ce not in prior:
             sys.exit(f"closure {ce}: not an edge in network.geojson")
+    variants = demand_variants(meta)
+    calibrated_support = combined_route_edges(variants)
+    augmentation_variants = (
+        (meta.get("edge_support_augmentation") or {}).get("variants") or {})
+    support_only_sets = [
+        set(report.get("newly_supported_edge_ids") or ())
+        for report in augmentation_variants.values()
+        if isinstance(report, dict)
+    ]
+    low_evidence_edges = (
+        set.intersection(*support_only_sets) if support_only_sets else set())
+    unsupported_closures = sorted(set(close_edges) - calibrated_support)
+    if unsupported_closures:
+        sys.exit(
+            "closure demand support is absent for edge(s) "
+            f"{unsupported_closures}; this calibrated release contains no "
+            "vehicle route using them, so a closure effect cannot be measured"
+        )
 
     if args.name:
         if not valid_scenario_name(args.name):
@@ -2345,13 +2454,16 @@ def main() -> None:
     job_preparation.__enter__()
     scratch_dir = create_scenario_workspace(name)
 
-    variants = demand_variants(meta)
     if spec is not None:
         seed_values = list(spec.seed_set)
         variant_by_seed = dict(spec.demand_variant_mapping)
     else:
         seed_values = [1000 + s for s in range(args.seeds)]
-        default_variants = ("q50", "q10", "q90")
+        # Keep the same canonical seed/variant identity used by monthly search
+        # and the annual warm bank. A state is seed-specific; swapping q10 and
+        # q50 here made otherwise exact annual artifacts unusable by the
+        # interactive time-window path.
+        default_variants = ("q10", "q50", "q90")
         variant_by_seed = {
             seed: default_variants[i % min(len(variants), len(default_variants))]
             for i, seed in enumerate(seed_values)
@@ -2444,7 +2556,12 @@ def main() -> None:
     job_preparation.__enter__()
     trajectory_enabled = want_trajectories(args, n_intervals)
     trajectory_stats_file = None
-    trajectory_seed = seed_values[0]
+    # Animate the median q50 demand when it is present, independently of the
+    # canonical seed ordering above.
+    trajectory_seed = next(
+        (seed for seed in seed_values if variant_by_seed[seed] == "q50"),
+        seed_values[0],
+    )
     trajectory_route_path = None
 
     jobs = []
@@ -2558,7 +2675,10 @@ def main() -> None:
 
     # ── Aggregate: mean flows + Monte Carlo confidence ─────────────────────────
     web_edges = set(prior)   # only edges the map can draw
-    flows_out, conf_out = aggregate_flows(per_seed, web_edges, prior, n_intervals)
+    flows_out, conf_out = aggregate_flows(
+        per_seed, web_edges, prior, n_intervals,
+        supported_edges=calibrated_support,
+        low_evidence_edges=low_evidence_edges)
     # Only the audited sensor edges need the pre-rounding ensemble mean; the
     # map keeps its rounded display value.  Computing it citywide would be
     # ~7 000 edges × quarters × seeds of pure-Python work for values nothing

@@ -1,0 +1,107 @@
+{
+  "active_accumulator_comparison": {
+    "chained_count": 63,
+    "cold_count": 63,
+    "extra_in_chained": [],
+    "missing_from_chained": [],
+    "population_digest_equal": true,
+    "value_delta_sum_s": 0,
+    "value_max_absolute_delta_s": 0.0,
+    "value_mismatch_count": 0
+  },
+  "cache_hit_speedup_vs_direct_cold": 2.469458,
+  "chained_segment_s": 347400,
+  "chained_state": {
+    "compressed_bytes": 223845,
+    "compressed_sha256": "4832fefc846a328ae48238d60c8d726efe38cc96115843c3b6f64ecd425d99fb",
+    "expanded_bytes": 2134847,
+    "expanded_sha256": "e674c64447d2b30be6fff454a34e7249228aff06c1cd7af68b1b0e2c1e734911"
+  },
+  "closure_schedule_id": "closure-79ae17ee6dea68c4bf59",
+  "cold_state": {
+    "compressed_bytes": 117769,
+    "compressed_sha256": "f7722b83aa0f297c5977afbbb8b54cd69c192dacf3e6a4008dc47b4c5166e71d",
+    "expanded_bytes": 831961,
+    "expanded_sha256": "f8490e9830a2d1695bfb49c81481f6dc16639cfa73525d03f025f93708dd9f1a"
+  },
+  "diagnostic_only": true,
+  "expanded_state_bytes_are_release_gate": false,
+  "expanded_state_equal": false,
+  "from_s": 24300,
+  "identical_closure_suffix": true,
+  "prefix_evidence_equal": true,
+  "prefix_evidence_sections": {
+    "active_accumulator": {
+      "chained_sha256": "e716e99dbd8abce71b18a4ad00d76ec0d6429d5c8372598d829e7fe07fd23407",
+      "cold_sha256": "e716e99dbd8abce71b18a4ad00d76ec0d6429d5c8372598d829e7fe07fd23407",
+      "equal": true
+    },
+    "completed_record_order": {
+      "chained_sha256": "3038eeb81a885de797edb4682e44f30b64eda1a6d44be9699cdb55b98b85920d",
+      "cold_sha256": "3038eeb81a885de797edb4682e44f30b64eda1a6d44be9699cdb55b98b85920d",
+      "equal": true
+    },
+    "completed_records": {
+      "chained_sha256": "68b69c1e600404149797aef548542434773dae6fdbdae232390199acf47ac930",
+      "cold_sha256": "68b69c1e600404149797aef548542434773dae6fdbdae232390199acf47ac930",
+      "equal": true
+    },
+    "completed_trips": {
+      "chained_sha256": "07b4c51fd879b6cf421e6e3ca95608468f0ab94df348354081545836e6b54927",
+      "cold_sha256": "07b4c51fd879b6cf421e6e3ca95608468f0ab94df348354081545836e6b54927",
+      "equal": true
+    },
+    "counters": {
+      "chained_sha256": "bd2a1460ce962c8eba97afbdc3226b8cd78adffe2a51e3dd0f94cc4a269a5ef0",
+      "cold_sha256": "bd2a1460ce962c8eba97afbdc3226b8cd78adffe2a51e3dd0f94cc4a269a5ef0",
+      "equal": true
+    },
+    "queue_maximum": {
+      "chained_sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+      "cold_sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+      "equal": true
+    },
+    "recovery_buckets": {
+      "chained_sha256": "6a59bbd366e29a5dc5edd42bb93be03d5f09ec8e6c480fb02a6c71735abaf5a1",
+      "cold_sha256": "6a59bbd366e29a5dc5edd42bb93be03d5f09ec8e6c480fb02a6c71735abaf5a1",
+      "equal": true
+    },
+    "schema": {
+      "chained_sha256": "36e466a8e3022e1a53e016c07225910b5b6b8f481cf307c15b9b7f4121b7a722",
+      "cold_sha256": "36e466a8e3022e1a53e016c07225910b5b6b8f481cf307c15b9b7f4121b7a722",
+      "equal": true
+    },
+    "snapshot_facts": {
+      "chained_sha256": "141cf3a650f3da7c86d39daf46375c0540c427ce61871ca98a8f9efadde7f782",
+      "cold_sha256": "141cf3a650f3da7c86d39daf46375c0540c427ce61871ca98a8f9efadde7f782",
+      "equal": true
+    },
+    "teleport_reasons": {
+      "chained_sha256": "3d1d1a85fb89d1de1955f59c9e3e6018a9abd90b5de418509c46d0ede03f83ee",
+      "cold_sha256": "3d1d1a85fb89d1de1955f59c9e3e6018a9abd90b5de418509c46d0ede03f83ee",
+      "equal": true
+    },
+    "warm_point_s": {
+      "chained_sha256": "1390bd146e382332956bf6c327144a82556b88d2d444df6b24fc31292ae3dc3e",
+      "cold_sha256": "1390bd146e382332956bf6c327144a82556b88d2d444df6b24fc31292ae3dc3e",
+      "equal": true
+    }
+  },
+  "replayed_prefix_s": 371700,
+  "runtime_s": {
+    "chained": 16.605717,
+    "chained_closure_suffix": 6.773204,
+    "cold": 14.581621,
+    "cold_prefix_closure_suffix": 6.738787,
+    "direct_cold_candidate": 16.726146
+  },
+  "schema": "warm_prefix_chaining_diagnostic_v1",
+  "seed": 1000,
+  "source_cache_entry": "runs/warm-state/2f5cac99bfde034da115564904cd3e8f",
+  "source_cache_manifest_sha256": "b991f61b1dcad2f64aee90363a1fa8357b68c56dc11b157840b6848be292f710",
+  "speedup": 0.878109,
+  "status": "pass",
+  "target_s": 371700,
+  "variant": "q10",
+  "warm_metrics_equal_direct_cold": true
+}

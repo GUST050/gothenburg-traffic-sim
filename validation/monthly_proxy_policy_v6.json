@@ -1,0 +1,42 @@
+{
+  "campaign_version": "v6",
+  "content_key": "d9cc00fa7abcda02bb5ffdd871a92fc34ff6be30529840a8bbc00b9a567de973",
+  "identity": {
+    "gate_semantics": "identical to v4/v5; no threshold moved",
+    "outcome_identity": "untouched-v6-only",
+    "policy_content_key_algorithm": "sha256-canonical-policy-body",
+    "source_identity": "monthly-proxy-v6-stratified-shortlist-v3"
+  },
+  "kind": "monthly_proxy_validation_policy",
+  "schema_version": 1,
+  "selection_formula": {
+    "eligibility": "strictly positive exposure in every variant and window",
+    "expected_discriminating": "the top two by that ranking",
+    "inputs": "canonical archived demand routes and tracked topology only",
+    "not_a_prediction": "a selection signal only; it does not guarantee a 300-second SUMO objective spread",
+    "ranking": "mean relative temporal range, then median support, then edge id",
+    "raw_evidence": "each selected case records schedule_ids and the q10/q50/q90 vehicle exposure for every one of those windows, in the same order",
+    "reads_outcomes": false,
+    "recomputation": "per variant let low=min(window_exposure) and high=max(window_exposure); temporal_variation = mean over q50,q10,q90 of (high-low)/high, rounded to 6dp; median_support = median over variants of median(window_exposure), rounded to 3dp; min_support = min over variants of low; eligibility requires low>0 everywhere",
+    "version": "demand_exposure_v1"
+  },
+  "shortlist_version": "stratified_shortlist_v3",
+  "status": "design_frozen_pre_outcome",
+  "thresholds": {
+    "discriminating_practical_winner_recall_minimum": 0.9,
+    "failure_disqualification_recall_minimum": 0.6,
+    "minimum_discriminating_case_fraction": 0.4,
+    "p90_normalized_shortlist_regret_maximum": 0.1,
+    "practical_equivalence_s": 300.0,
+    "practical_winner_recall_minimum": 0.9
+  },
+  "topology_rules": {
+    "excludes": "every v1-v5 edge, its reverse and shared-junction neighbours",
+    "min_edge_length_m": 30.0,
+    "min_sensor_distance_m": 750.0,
+    "road_class": [
+      "secondary",
+      "tertiary"
+    ]
+  }
+}

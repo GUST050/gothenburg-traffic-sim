@@ -1,0 +1,37 @@
+{
+  "campaign_version": "v5",
+  "content_key": "4d20c722e1ee29f33ee70e7eda9962c491e321370f30e6a215f72f2d11be8526",
+  "identity": {
+    "gate_semantics": "identical to v4; adoption hardening changed no threshold",
+    "outcome_identity": "untouched-v5-only",
+    "policy_content_key_algorithm": "sha256-canonical-selection-rule-and-thresholds",
+    "source_identity": "monthly-proxy-v5-stratified-shortlist-v3"
+  },
+  "kind": "monthly_proxy_validation_policy",
+  "schema_version": 1,
+  "selection_rule": {
+    "order": "road_class, then descending dist_sensor_m, then edge_id",
+    "reads_outcomes": false,
+    "reads_proxy_scores": false,
+    "road_class": [
+      "secondary",
+      "tertiary"
+    ],
+    "sensor_distance_band": "far_over_750m",
+    "source": "tracked web/data/network.geojson structural attributes only",
+    "take": {
+      "secondary": 2,
+      "tertiary": 3
+    }
+  },
+  "shortlist_version": "stratified_shortlist_v3",
+  "status": "design_frozen_pre_outcome",
+  "thresholds": {
+    "discriminating_practical_winner_recall_minimum": 0.9,
+    "failure_disqualification_recall_minimum": 0.6,
+    "minimum_discriminating_case_fraction": 0.4,
+    "p90_normalized_shortlist_regret_maximum": 0.1,
+    "practical_equivalence_s": 300.0,
+    "practical_winner_recall_minimum": 0.9
+  }
+}

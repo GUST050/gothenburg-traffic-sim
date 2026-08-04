@@ -302,6 +302,8 @@ def test_calibrated_agent_summary_reports_real_purpose_counts(tmp_path):
     assert bsd.calibrated_agent_summary(route, 2) == {
         "agent_file": "calibrated.agents.json",
         "n_agents": 3,
+        "n_behavioural_agents": 3,
+        "n_edge_support_agents": 0,
         "purpose_counts": {"arbete": 2, "service": 1},
         "purpose_counts_by_quarter": [{"arbete": 2}, {"service": 1}],
     }
@@ -888,6 +890,7 @@ class TestVariantPublication:
 
         monkeypatch.setattr(dcal.pfe, "prepare_calibration",
                             lambda _path: ([object()], np.array([1.0])))
+        monkeypatch.setattr(dcal.pfe, "build_touch_index", lambda _shapes: {})
         monkeypatch.setattr(dcal.pfe, "_purpose_targets_per_quarter",
                             lambda _shapes, n, _offset=0.0: [{} for _ in range(n)])
         monkeypatch.setattr(dcal, "structure_groups_for_shapes", lambda _shapes: [])

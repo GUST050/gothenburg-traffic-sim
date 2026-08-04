@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "kind": "sensor_placement_screen",
+  "candidates": [
+    {
+      "edge_id": "1546141900_29373375_0",
+      "score": 8.382701,
+      "confidence": 0.0,
+      "dist_sensor_m": 4369.8,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "29373375_1546141900_0",
+      "score": 8.382701,
+      "confidence": 0.0,
+      "dist_sensor_m": 4369.8,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "1546141900_9766621220_0",
+      "score": 8.376413,
+      "confidence": 0.0,
+      "dist_sensor_m": 4342.4,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "9766621220_1546141900_0",
+      "score": 8.376413,
+      "confidence": 0.0,
+      "dist_sensor_m": 4342.4,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "159065674_9766621220_0",
+      "score": 8.359744,
+      "confidence": 0.0,
+      "dist_sensor_m": 4270.6,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "9766621220_159065674_0",
+      "score": 8.359744,
+      "confidence": 0.0,
+      "dist_sensor_m": 4270.6,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "159065505_159065550_0",
+      "score": 8.356484,
+      "confidence": 0.0,
+      "dist_sensor_m": 4256.7,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "159065550_159065505_0",
+      "score": 8.356484,
+      "confidence": 0.0,
+      "dist_sensor_m": 4256.7,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "159065674_623030089_0",
+      "score": 8.352979,
+      "confidence": 0.0,
+      "dist_sensor_m": 4241.8,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "623030089_159065674_0",
+      "score": 8.352979,
+      "confidence": 0.0,
+      "dist_sensor_m": 4241.8,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "171252846_286424410_0",
+      "score": 8.351327,
+      "confidence": 0.0,
+      "dist_sensor_m": 4234.8,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "286424410_171252846_0",
+      "score": 8.351327,
+      "confidence": 0.0,
+      "dist_sensor_m": 4234.8,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "171244580_171252846_0",
+      "score": 8.348443,
+      "confidence": 0.0,
+      "dist_sensor_m": 4222.6,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "171252846_171244580_0",
+      "score": 8.348443,
+      "confidence": 0.0,
+      "dist_sensor_m": 4222.6,
+      "reason": "low measured confidence / spatial gap"
+    },
+    {
+      "edge_id": "286424410_294705546_0",
+      "score": 8.344339,
+      "confidence": 0.0,
+      "dist_sensor_m": 4205.3,
+      "reason": "low measured confidence / spatial gap"
+    }
+  ]
+}

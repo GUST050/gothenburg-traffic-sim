@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -262,6 +262,76 @@ def envelope_demand_spec(
         end="24:00",
         structural_reference_date=structural_reference_date,
         purpose="closure_envelope",
+    )
+
+
+def independent_daily_demand_spec(
+    search: ClosureSearchSpec,
+    schedule: ClosureSchedule,
+    envelope: SimulationEnvelope,
+    *,
+    structural_reference_date: str = "2025-09-16",
+) -> DemandBuildSpec:
+    """Return the canonical reusable archive for one independent work day.
+
+    Ordinary dates use the three-day ``previous/current/next`` archive.  That
+    single route identity contains every legal full-day closure envelope for
+    the work date, so changing only the closure start/end no longer triggers a
+    fresh demand calibration.  At source-year and excluded-DST boundaries the
+    canonical range may be unavailable; there we retain the exact minimal
+    envelope rather than inventing demand or unnecessarily rejecting a valid
+    schedule.
+    """
+    if search.interday_policy != "independent_daily_reset_v1":
+        raise ValueError(
+            "canonical daily demand requires independent_daily_reset_v1"
+        )
+    if schedule.day_count != 1 or len(schedule.intervals) != 1:
+        raise ValueError("canonical daily demand requires one daily interval")
+    if schedule.schedule_id != envelope.schedule_id:
+        raise ValueError("daily demand envelope belongs to another schedule")
+
+    work_date = date.fromisoformat(schedule.intervals[0].work_date)
+    source_year = 2027 if search.source == "forecast" else 2025
+    source_start = date(source_year, 1, 1)
+    source_end = date(source_year + 1, 1, 1)
+    envelope_start = date.fromisoformat(envelope.scenario_start[:10])
+    envelope_end = date.fromisoformat(envelope.scenario_end[:10])
+    if envelope_start < source_start or envelope_end > source_end:
+        raise ValueError(
+            "exact independent daily envelope lies outside the downloaded "
+            f"{source_year} {search.source} demand year"
+        )
+
+    canonical_start = max(source_start, work_date - timedelta(days=1))
+    canonical_end = min(source_end, work_date + timedelta(days=2))
+    canonical_dates = (
+        canonical_start + timedelta(days=offset)
+        for offset in range((canonical_end - canonical_start).days)
+    )
+    canonical_crosses_dst = any(
+        search.dst_policy == "exclude_transition_dates"
+        and is_dst_transition_date(day, search.timezone)
+        for day in canonical_dates
+    )
+    if (
+        canonical_start <= envelope_start
+        and canonical_end >= envelope_end
+        and not canonical_crosses_dst
+    ):
+        return DemandBuildSpec(
+            start_date=canonical_start.isoformat(),
+            source=search.source,
+            days=(canonical_end - canonical_start).days,
+            begin="00:00",
+            end="24:00",
+            structural_reference_date=structural_reference_date,
+            purpose="closure_envelope",
+        )
+    return envelope_demand_spec(
+        search,
+        envelope,
+        structural_reference_date=structural_reference_date,
     )
 
 

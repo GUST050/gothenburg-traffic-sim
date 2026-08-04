@@ -1,66 +1,67 @@
 {
  "schema_version": 1,
- "generated_at": "2026-07-18T10:26:23Z",
+ "generated_at": "2026-08-04T10:05:57Z",
  "demand_window": "2025-09-16",
  "demand_source": "historical",
+ "demand_build_id": "b123dbe527df5b1f99ec",
  "overall": "pass",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 21656,
+   "vehicles": 22179,
    "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
   },
   "structure": {
    "status": "pass",
    "flags": [],
-   "dest_within_200m_pct": 3.5,
+   "dest_within_200m_pct": 4.5,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0118,
-    0.7799,
-    0.2083
+    0.1787,
+    0.5985,
+    0.2227
    ],
-   "trip_length_l1_vs_rvu": 0.509,
-   "onward_after_sensor_median_m": 2863.2,
-   "onward_under_200m_pct": 1.6,
+   "trip_length_l1_vs_rvu": 0.1986,
+   "onward_after_sensor_median_m": 2873.5,
+   "onward_under_200m_pct": 1.5,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
   },
   "purposes": {
    "status": "pass",
    "purpose_counts": {
-    "arbete": 7962,
-    "external": 1311,
-    "fritid": 2397,
-    "service": 4528,
-    "through": 5458
+    "arbete": 7375,
+    "external": 1228,
+    "fritid": 2248,
+    "service": 4198,
+    "through": 5117
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 7962,
+     "n": 7375,
      "mean_km": 2.74,
-     "median_km": 2.51
+     "median_km": 2.49
     },
     "external": {
-     "n": 1311,
-     "mean_km": 3.62,
-     "median_km": 3.38
+     "n": 1228,
+     "mean_km": 3.68,
+     "median_km": 3.62
     },
     "fritid": {
-     "n": 2397,
-     "mean_km": 3.01,
-     "median_km": 2.98
-    },
-    "service": {
-     "n": 4528,
-     "mean_km": 2.99,
+     "n": 2248,
+     "mean_km": 2.55,
      "median_km": 2.78
     },
+    "service": {
+     "n": 4198,
+     "mean_km": 3.14,
+     "median_km": 2.83
+    },
     "through": {
-     "n": 5458,
-     "mean_km": 5.57,
-     "median_km": 5.9
+     "n": 5117,
+     "mean_km": 5.09,
+     "median_km": 5.48
     }
    },
    "ordering_violated": false,
@@ -94,22 +95,22 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 21656,
-     "loaded": 21656,
+     "inserted": 19764,
+     "loaded": 19764,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 20879,
-     "loaded": 20879,
+     "inserted": 22179,
+     "loaded": 22179,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 22235,
-     "loaded": 22235,
+     "inserted": 23607,
+     "loaded": 23607,
      "unfinished": 0,
      "teleports": 0
     }
@@ -118,14 +119,15 @@
   },
   "sensor_output": {
    "status": "pass",
-   "contract": "raw_edgeData_ensemble_vs_frozen_targets",
+   "contract": "raw_edgeData_hourly_ensemble_vs_frozen_15min_targets",
    "uses_raw_ensemble_mean": true,
-   "edge_quarters": 671,
+   "aggregation_minutes": 60,
+   "edge_quarters": 168,
    "geh_lt_5_pct": 100.0,
-   "mean_abs_error": 2.623405,
-   "max_abs_error": 14.548667,
-   "station_edge_quarters": 575,
-   "station_max_abs_error": 18.0,
+   "mean_abs_error": 3.383738,
+   "max_abs_error": 17.333333,
+   "station_edge_quarters": 144,
+   "station_max_abs_error": 27.999999,
    "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "multi_day": {
@@ -150,37 +152,8 @@
    "note": "utel\u00e4mnad-station-\u00e5terskapande; karakterisering, inte grind \u2014 extrema veck kan spegla sensorns informationsisolering, inte modellfel"
   },
   "temporal_holdout": {
-   "status": "info",
-   "protocol": "temporal_loso_pfe_meso_v1",
-   "reference_window": {
-    "start": "2025-09-16T00:00:00",
-    "end": "2025-09-17T00:00:00"
-   },
-   "evaluation_window": {
-    "start": "2025-09-17T00:00:00",
-    "end": "2025-09-18T00:00:00"
-   },
-   "minimum_coverage": 0.9,
-   "observed_quarters": {
-    "107:60786979_3575001205_0": 96,
-    "107:1455801464_18241874_0": 96,
-    "1074:60790252_60790253_0": 96,
-    "1076:30420757_30421744_0": 96,
-    "133:26842525_26355153_0": 95,
-    "134:26355153_96523321_0": 96,
-    "2276:26355153_91615277_0": 96
-   },
-   "ratios": {
-    "107:60786979_3575001205_0": 0.86,
-    "107:1455801464_18241874_0": 1.965,
-    "1074:60790252_60790253_0": 0.757,
-    "1076:30420757_30421744_0": 0.881,
-    "133:26842525_26355153_0": 0.878,
-    "134:26355153_96523321_0": 2.511,
-    "2276:26355153_91615277_0": 2.536
-   },
-   "median_ratio": 0.881,
-   "note": "fryst kandidatpool/n\u00e4t/priorer utv\u00e4rderade p\u00e5 en annan historisk dag; utel\u00e4mnad stations egna v\u00e4rden anv\u00e4nds endast f\u00f6r j\u00e4mf\u00f6relse"
+   "status": "missing",
+   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='523622c006c1a6b20bf7e81b6564d0aaa43863e378c5fa27fc9a2187cdc252b1', current='22057f97e02b458c05e2ea4cc9cfed667b953c23de0b4e81f1599318fc5cb65c'"
   }
  }
 }

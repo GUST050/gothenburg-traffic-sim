@@ -1089,6 +1089,27 @@ class TestScenarioManifestDemandScope:
         assert flows_out["quiet_edge"] == [0, 0]
         assert conf_out["quiet_edge"] == 0.7   # pure spatial prior, no CV to penalize it
 
+    def test_aggregate_flows_zeroes_confidence_without_calibrated_route_support(self):
+        per_seed = [{"supported": np.array([3.0, 2.0])}]
+        prior = {"supported": 0.8, "unsupported": 0.9}
+
+        _flows, confidence = run_scenario.aggregate_flows(
+            per_seed, set(prior), prior, 1, supported_edges={"supported"})
+
+        assert confidence["supported"] == 0.8
+        assert confidence["unsupported"] == 0.0
+
+    def test_aggregate_flows_caps_explicit_support_only_edges(self):
+        per_seed = [{"core": np.array([3.0]), "support": np.array([1.0])}]
+        prior = {"core": 0.8, "support": 0.9}
+
+        _flows, confidence = run_scenario.aggregate_flows(
+            per_seed, set(prior), prior, 1,
+            supported_edges=set(prior), low_evidence_edges={"support"})
+
+        assert confidence["core"] == 0.8
+        assert confidence["support"] == 0.15
+
     def test_manifest_keeps_only_current_demand_entries(self):
         current = "abc123"
         old = "old999"

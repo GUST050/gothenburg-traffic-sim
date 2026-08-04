@@ -154,31 +154,50 @@ REQUIRED_BOUND_SOURCES = {
 }
 
 
-def test_v4_manifest_source_fingerprints_bind_the_executable_inputs():
+def test_v4_recorded_enforcement_hashes_remain_frozen():
+    """V4's recorded fingerprints are IMMUTABLE history, never re-synced.
+
+    LUNA-V5-01 hardened the gate loader, so the live enforcement source no
+    longer matches what v4 recorded. That drift is the POINT: v4's evidence was
+    produced under the old self-certifying loader and must not silently inherit
+    a licence under the new one. The recorded hashes stay exactly as frozen.
+    """
     manifest = _read(MANIFEST)
     recorded = manifest["source_fingerprints"]
-    # Required by name, not merely "whatever is listed": a check that only
-    # verifies the entries present cannot notice a missing one.
     assert REQUIRED_BOUND_SOURCES <= set(recorded)
+    # Every recorded value is still a well-formed frozen digest...
     for relative, expected in recorded.items():
-        digest = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
-        assert digest == expected
+        assert isinstance(expected, str) and len(expected) == 64
+
+    drifted = {
+        relative for relative, digest in recorded.items()
+        if hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() != digest
+    }
+    assert drifted == {
+        "traffic_sim/core/closure_calendar.py",
+        "run_monthly_proxy_validation.py",
+        "traffic_sim/simulation/monthly_search.py",
+    }
 
 
-def test_v4_manifest_binds_the_deployed_release_enforcement_source():
-    """The gate loader is part of the frozen identity, so a later change to
-    it invalidates the manifest instead of silently inheriting its licence."""
+def test_v4_is_not_adoptable_against_the_hardened_loader():
+    """V4 audit passed, but adoption was REJECTED and cannot be reinstated.
+
+    No default artifact path can adopt v4: the product ships with neither a
+    gate record nor an adoption certificate, so the loader returns None and the
+    monthly path stays bounded-exhaustive.
+    """
     import traffic_sim.simulation.monthly_search as monthly_search
 
-    manifest = _read(MANIFEST)
     enforcement = "traffic_sim/simulation/monthly_search.py"
     assert Path(monthly_search.__file__).resolve() == (ROOT / enforcement)
-    assert manifest["source_fingerprints"][enforcement] == hashlib.sha256(
-        (ROOT / enforcement).read_bytes()).hexdigest()
-    # ... and the manifest the loader binds records is this frozen one.
-    identity = monthly_search.frozen_campaign_identity()
-    assert identity is not None
-    assert identity["manifest_content_key"] == manifest["content_key"]
+
+    # The rejected v4 product candidate is gone and is not recreated.
+    assert not (ROOT / "validation" / "monthly_proxy_v4_gate.json").exists()
+    # Neither default adoption artifact exists, so the gate is closed.
+    assert not monthly_search.HELDOUT_GATE_RECORD.exists()
+    assert not monthly_search.HELDOUT_GATE_CERTIFICATE.exists()
+    assert monthly_search.load_passing_heldout_gate() is None
 
 
 def _ranked_candidates(count=120):

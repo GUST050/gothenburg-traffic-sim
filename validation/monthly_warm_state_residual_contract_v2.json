@@ -1,0 +1,226 @@
+{
+  "claim_scope": "diagnostic localization only; not equivalence, performance, warming readiness, cache adoption or release evidence",
+  "classifier": {
+    "boundary_rule": "cold arrival <= warm_point_s is completed_prefix; cold arrival > warm_point_s is resumed",
+    "classifications": [
+      "population_partition_error",
+      "time_loss_only_drift",
+      "kinematic_output_drift",
+      "aggregate_reporting_inconsistency",
+      "exact_agreement"
+    ],
+    "exemplar_limit": 12,
+    "explicit_aggregate_deltas": [
+      "split_minus_cold_time_loss_s",
+      "warm_minus_cold_time_loss_s"
+    ],
+    "priority": [
+      "population_partition_error",
+      "aggregate_reporting_inconsistency",
+      "exact_agreement_or_field_drift"
+    ],
+    "raw_rule": "reports and verdict recompute from raw vehicle records; aggregate claims are never authority",
+    "reporting_precision": 2,
+    "schema": "monthly_warm_state_forensic_report_v2"
+  },
+  "content_key": "03f5260af470a4c29b17216129c145e06e39df6b3fe35b6f38f85a07c946f908",
+  "diagnostic_id": "monthly_warm_state_residual_v2",
+  "execution_contract": {
+    "approval": "exact token equal to content_key",
+    "cache_publication": false,
+    "invocations": 1,
+    "output_root": "validation/monthly_warm_state_residual_v2_outcome",
+    "preflight_order": [
+      "approval token",
+      "live source/network/v1/v9 bytes",
+      "root and staging absence",
+      "SUMO/TraCI origin and API",
+      "five exact archive hashes",
+      "single execution"
+    ],
+    "rerun": false,
+    "resume": false,
+    "staging_suffix": ".partial",
+    "timeout_s_per_arm": 600
+  },
+  "frozen_at": "2026-08-01",
+  "identities": [
+    {
+      "demand_variant": "q10",
+      "schedule_id": "closure-8bcf7829ae545dffd8ce",
+      "seed": 1000,
+      "warm_point_s": 24300
+    },
+    {
+      "demand_variant": "q50",
+      "schedule_id": "closure-8bcf7829ae545dffd8ce",
+      "seed": 1001,
+      "warm_point_s": 24300
+    },
+    {
+      "demand_variant": "q90",
+      "schedule_id": "closure-8bcf7829ae545dffd8ce",
+      "seed": 1002,
+      "warm_point_s": 24300
+    }
+  ],
+  "ordered_arms": [
+    "cold_candidate",
+    "completed_prefix",
+    "resumed"
+  ],
+  "question": "at which exact boundary-aware per-vehicle layer does the deterministic v9 warm-minus-cold residual first appear?",
+  "schema": "monthly_warm_state_residual_contract_v2",
+  "source_fingerprints": {
+    "run_monthly_warm_state_validation.py": "2b192c2b9ddd5546cbb6eeb314f9480594ec99b1aa4813aff7642884f8b4ad28",
+    "tests/test_monthly_sumo.py": "b1fdbcd5623f08d10ad456ed4fbd27c072a95e731ef8139a2f92547b05f3a944",
+    "tests/test_monthly_warm_state.py": "d69ad46195315d1756487bd82aa50807cde26f3dfb3a2d205f420e938eceaa45",
+    "tests/test_monthly_warm_state_residual_v2.py": "89722c1b5b342337a79947c5a06d326bd47541d8d3c41384f12e452b290e8fff",
+    "tests/test_warm_state_forensics_v2.py": "29c7da391ad36c2ee61499bcbaa6b411b5f7e5de4dba3811ded2c3776e549253",
+    "tools/diagnose_monthly_warm_state_residual_v2.py": "4ec7284dc3e0a507fab5552f23f43b3c9fa2c425695523490d1f0fa668367995",
+    "traffic_sim/simulation/metrics.py": "3edf71b82933601b5084229eac0ca63f8bd83a87fef946e23cb14b572d120134",
+    "traffic_sim/simulation/monthly_sumo.py": "8af0ce87a34c8343661afbb8162552e5c8dec31836353a086e28f32fae6023be",
+    "traffic_sim/simulation/monthly_warm_state.py": "37d31d9893e137f984605a9093bb808b0810cb98d9254ca941f2fe450c2c70a6",
+    "traffic_sim/simulation/runtime.py": "5402430b6bcf92ef41e916b2d3000f5fdbf3f7680596a289248469e694a68356",
+    "traffic_sim/simulation/warm_state_boundary.py": "86d549285d39097555f831eb8e7be16ba64ffb17343ecfc69bac11b423eb7316",
+    "traffic_sim/simulation/warm_state_cache.py": "5b6dd885231d6f79acf269806433f6a83b8ebc265bc53832dd30ec4c87207a6e",
+    "traffic_sim/simulation/warm_state_forensics.py": "b12ac2d21233e4139ff49bdce0c862d598d87ad2440586bea8deed65f3c7c6ab"
+  },
+  "status": "frozen_unapproved_unexecuted",
+  "supersedes": {
+    "content_key": "7a14758130f3dcbfd09f437bbf50c860992f7611dbbb9ad0362c0ecf82583831",
+    "preserved_files_sha256": {
+      "tests/test_monthly_warm_state_residual.py": "c9a722c24444839f99a22acf45fc0eaaf430a8da004e4b9363af43e0c2d382db",
+      "tests/test_warm_state_forensics.py": "0a41d2b6b330d89f87128e1c9959d514da78fb6078ecc2514b69e209661c649c",
+      "tools/diagnose_monthly_warm_state_residual.py": "a982020883d9976ca752cf76b84fb1f56561e9a0c37690632c87c9f1d8305f31",
+      "validation/monthly_warm_state_residual_contract_v1.json": "2f554ed73e654c82586025706b920fbf053f1415bd3e796e9523c6063b1cf007"
+    },
+    "reason": "v1 omitted warm_point_s from raw identity and could classify swapped prefix/resumed membership as exact agreement"
+  },
+  "terminal_contract": {
+    "commit": "verify in staging and rename the root last",
+    "failure": "contract, completed-arm ledger, original error and digest manifest; never a success-shaped partial root",
+    "member_type": "regular non-symlink files only",
+    "no_clobber": true,
+    "success": "contract, execution ledger, three v2 raw payloads, three v2 reports, global verdict and digest manifest"
+  },
+  "v9_physical_case": {
+    "archive_files_sha256": {
+      "calibrated.rou.xml": "56000bc43a8fb00a6f6dd9b47db70a1cf214a8fc95edaade70e3e6e2cbc523ca",
+      "calibrated_v1.rou.xml": "4201008a778ec699c55a7fd90aa96c393b914ec48197c5a4d9fd8e1795687a0c",
+      "calibrated_v2.rou.xml": "8f8bdacf8bcd772a01cd3899b5b81b3351274a232e1a11ecf5d9cb7aebf3a259",
+      "demand_meta.json": "3c6c61040c01236cd52223cdab7e0262af64fcb31ed047885a57bba9c36d6026",
+      "manifest.json": "dd54e26fcb63809d3a904c24dddc3c3b0b8fc919b964737f8a2367e48c04e0e9"
+    },
+    "baseline_trip_duration_p99_s": 1800,
+    "case": {
+      "case_id": "warm-v9-paired-equivalence",
+      "closure_begin_s": 25200,
+      "closure_bound_warm_point_s": 24300,
+      "closure_end_s": 54000,
+      "directed_edges": [
+        "26354420_60476786_0"
+      ],
+      "rationale": "the same physical closure every earlier campaign ran, so the residual objective gap is measured against directly comparable evidence rather than a new case that could differ for unrelated reasons"
+    },
+    "demand_requirement": {
+      "archive_path": "runs/demand-20260721-222017-41bc682a-bbe1",
+      "demand_build_key": "2ac04275daabe93c",
+      "n_intervals": 480,
+      "note": "the campaign must bind this exact archive; resolving the key alone is ambiguous across successful archives"
+    },
+    "manifest": "validation/monthly_warm_state_manifest_v9.json",
+    "manifest_content_key": "cad9c072a0ca6f90b11bd6342a603337eeaceacc457cd0016a16a3d9fa04e7b2",
+    "manifest_sha256": "556e6a6fd489b4b7d0527970bb7d2bfa713b313cf0d261c4c0c26bf892afa8a2",
+    "network_requirement": {
+      "path": "sumo/net.net.xml",
+      "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+    },
+    "preserved_files_sha256": {
+      "tests/test_monthly_warm_state_v9_freeze.py": "997a93dd822d35eb8749263003f17a4f6eee809835c854822c53a1a2740fc813",
+      "tools/freeze_monthly_warm_state_v9.py": "23bfb8c0118bb1580f7c128411fa6e2471e6262086bbd9e5cb02758ff291ab4b",
+      "validation/monthly_warm_state_manifest_v9.json": "556e6a6fd489b4b7d0527970bb7d2bfa713b313cf0d261c4c0c26bf892afa8a2"
+    },
+    "route_safety": {
+      "q10": {
+        "audit": {
+          "changed_vehicles": 38,
+          "dropped_vehicles": 0,
+          "earliest_affected_depart_s": 24958.8,
+          "filtered_sha256": "7b4896a203ed972abff638aae7f436f7b08bfa53270977c01a2f83073d0d96fc",
+          "filtered_vehicles": 84065,
+          "original_sha256": "4201008a778ec699c55a7fd90aa96c393b914ec48197c5a4d9fd8e1795687a0c",
+          "original_vehicles": 84065,
+          "schema": "warm_route_mutation_audit_v1"
+        },
+        "safe_warm_point_s": 24300
+      },
+      "q50": {
+        "audit": {
+          "changed_vehicles": 23,
+          "dropped_vehicles": 0,
+          "earliest_affected_depart_s": 24898.9,
+          "filtered_sha256": "0833eac2e572db963a12c3b85397e9df29c5d335b73817b8a75a005b587428c6",
+          "filtered_vehicles": 86754,
+          "original_sha256": "56000bc43a8fb00a6f6dd9b47db70a1cf214a8fc95edaade70e3e6e2cbc523ca",
+          "original_vehicles": 86754,
+          "schema": "warm_route_mutation_audit_v1"
+        },
+        "safe_warm_point_s": 24300
+      },
+      "q90": {
+        "audit": {
+          "changed_vehicles": 33,
+          "dropped_vehicles": 0,
+          "earliest_affected_depart_s": 24935.1,
+          "filtered_sha256": "58fb89f81d517a80a1028a33a40c7c07d0f63bca132b718347be1698828ed73d",
+          "filtered_vehicles": 89482,
+          "original_sha256": "8f8bdacf8bcd772a01cd3899b5b81b3351274a232e1a11ecf5d9cb7aebf3a259",
+          "original_vehicles": 89482,
+          "schema": "warm_route_mutation_audit_v1"
+        },
+        "safe_warm_point_s": 24300
+      }
+    },
+    "spec_template": {
+      "allowed_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "blackout_dates": [],
+      "closure_type": "full",
+      "dst_policy": "exclude_transition_dates",
+      "duration_basis": "required_work_time",
+      "max_consecutive_start_days": 1,
+      "objective_profile": "robust_time_loss",
+      "permitted_daily_band": {
+        "earliest_start": "07:00",
+        "latest_end": "15:30"
+      },
+      "permitted_date_end": "2027-07-19",
+      "permitted_date_start": "2027-07-15",
+      "policy_status": "user_supplied_unverified",
+      "required_work_minutes": 480,
+      "resolution_minutes": 15,
+      "same_daily_window": true,
+      "source": "forecast",
+      "timezone": "Europe/Stockholm",
+      "work_to_closure_assumption": "one_to_one"
+    },
+    "state_settings": {
+      "save_state_precision": 16,
+      "save_state_rng": true,
+      "snapshot_arguments": [
+        "--save-state.rng",
+        "true",
+        "--save-state.precision",
+        "16"
+      ]
+    }
+  }
+}

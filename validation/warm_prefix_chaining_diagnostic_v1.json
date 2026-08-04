@@ -1,0 +1,102 @@
+{
+  "active_accumulator_comparison": {
+    "chained_count": 45,
+    "cold_count": 45,
+    "extra_in_chained": [],
+    "missing_from_chained": [],
+    "population_digest_equal": true,
+    "value_delta_sum_s": 0,
+    "value_max_absolute_delta_s": 0.0,
+    "value_mismatch_count": 0
+  },
+  "chained_segment_s": 86400,
+  "chained_state": {
+    "compressed_bytes": 212874,
+    "compressed_sha256": "ac200dd3b08e4d0092731ec111c794055af1d45dd5e51eedfdb3f28520367efb",
+    "expanded_bytes": 2061404,
+    "expanded_sha256": "1cacb02aac12bf7ce5664da77eb6ff40ab3529e8ed88f83dee1ae638c3333858"
+  },
+  "closure_schedule_id": "closure-fe1729e7f80cc2b7a6c1",
+  "cold_state": {
+    "compressed_bytes": 106755,
+    "compressed_sha256": "625700d79bf9257cf73057f2787737f36024e069bc55e35b484491a88d708e73",
+    "expanded_bytes": 758518,
+    "expanded_sha256": "13b54ac17bc7115e12a91da1e71838bbd7c773a75ba51cb574432ac7ea53a06c"
+  },
+  "diagnostic_only": true,
+  "expanded_state_bytes_are_release_gate": false,
+  "expanded_state_equal": false,
+  "from_s": 24300,
+  "identical_closure_suffix": true,
+  "prefix_evidence_equal": true,
+  "prefix_evidence_sections": {
+    "active_accumulator": {
+      "chained_sha256": "da886fe8486dbab835dab4c616e327d9bb7eee951d2f1fa63921de99bee258a7",
+      "cold_sha256": "da886fe8486dbab835dab4c616e327d9bb7eee951d2f1fa63921de99bee258a7",
+      "equal": true
+    },
+    "completed_record_order": {
+      "chained_sha256": "f5e8d9b514c7f7d172f85487ef01b4cc8f1ee12142242e65a0f637062258a9a0",
+      "cold_sha256": "f5e8d9b514c7f7d172f85487ef01b4cc8f1ee12142242e65a0f637062258a9a0",
+      "equal": true
+    },
+    "completed_records": {
+      "chained_sha256": "691c80a784453ca8ea9b54fa12adb43d918cc37097f3bca5c3368fcfaf9ccdbc",
+      "cold_sha256": "691c80a784453ca8ea9b54fa12adb43d918cc37097f3bca5c3368fcfaf9ccdbc",
+      "equal": true
+    },
+    "completed_trips": {
+      "chained_sha256": "f2e2e3b4e412787f439fe0f9f31dd41abdc49a18e4ffe4cacc4ced6f6fa81ba0",
+      "cold_sha256": "f2e2e3b4e412787f439fe0f9f31dd41abdc49a18e4ffe4cacc4ced6f6fa81ba0",
+      "equal": true
+    },
+    "counters": {
+      "chained_sha256": "1fc26d07fd8b53202a030cfd9f92a208daf65252db4fc3ada5e201551bf99097",
+      "cold_sha256": "1fc26d07fd8b53202a030cfd9f92a208daf65252db4fc3ada5e201551bf99097",
+      "equal": true
+    },
+    "queue_maximum": {
+      "chained_sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+      "cold_sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+      "equal": true
+    },
+    "recovery_buckets": {
+      "chained_sha256": "3db49e36ece45f245b442693a37e441dfcdc0bc78208a78641ab996970c709dc",
+      "cold_sha256": "3db49e36ece45f245b442693a37e441dfcdc0bc78208a78641ab996970c709dc",
+      "equal": true
+    },
+    "schema": {
+      "chained_sha256": "36e466a8e3022e1a53e016c07225910b5b6b8f481cf307c15b9b7f4121b7a722",
+      "cold_sha256": "36e466a8e3022e1a53e016c07225910b5b6b8f481cf307c15b9b7f4121b7a722",
+      "equal": true
+    },
+    "snapshot_facts": {
+      "chained_sha256": "b7b04a2a7e0fb119fee2aca228feac06dbf22f05ba44e95c5200542225ea3b78",
+      "cold_sha256": "b7b04a2a7e0fb119fee2aca228feac06dbf22f05ba44e95c5200542225ea3b78",
+      "equal": true
+    },
+    "teleport_reasons": {
+      "chained_sha256": "3d1d1a85fb89d1de1955f59c9e3e6018a9abd90b5de418509c46d0ede03f83ee",
+      "cold_sha256": "3d1d1a85fb89d1de1955f59c9e3e6018a9abd90b5de418509c46d0ede03f83ee",
+      "equal": true
+    },
+    "warm_point_s": {
+      "chained_sha256": "14011c061f91f2f31d1b598ec68d23cd57b5c6d59770478865dbdb706e699043",
+      "cold_sha256": "14011c061f91f2f31d1b598ec68d23cd57b5c6d59770478865dbdb706e699043",
+      "equal": true
+    }
+  },
+  "replayed_prefix_s": 110700,
+  "runtime_s": {
+    "chained": 5.290033,
+    "cold": 4.762195
+  },
+  "schema": "warm_prefix_chaining_diagnostic_v1",
+  "seed": 1000,
+  "source_cache_entry": "runs/warm-state/2f5cac99bfde034da115564904cd3e8f",
+  "source_cache_manifest_sha256": "b991f61b1dcad2f64aee90363a1fa8357b68c56dc11b157840b6848be292f710",
+  "speedup": 0.90022,
+  "status": "pass",
+  "target_s": 110700,
+  "variant": "q10"
+}

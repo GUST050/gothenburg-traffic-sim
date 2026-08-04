@@ -158,9 +158,21 @@ def export_od(calib_path: Path, sensor_edges: dict[str, list[str]], meta: dict) 
         ang = math.degrees(math.atan2(mid[0] - net_cx, mid[1] - net_cy)) % 360
         return f"Infart {SECTORS[int((ang + 22.5) // 45) % 8]}"
 
+    support_vehicle_ids: set[str] = set()
+    agent_path = calib_path.with_name(
+        calib_path.name.replace(".rou.xml", ".agents.json"))
+    if agent_path.exists():
+        with open(agent_path) as handle:
+            support_vehicle_ids = {
+                str(agent.get("vehicle_id"))
+                for agent in json.load(handle).get("agents", [])
+                if agent.get("support_only") is True
+            }
     od: dict[tuple[str, str], int] = {}
     n_trips = 0
     for veh in ET.parse(calib_path).getroot().findall("vehicle"):
+        if veh.get("id") in support_vehicle_ids:
+            continue
         edges = veh.find("route").get("edges").split()
         key = (zone_of(edges[0]), zone_of(edges[-1]))
         od[key] = od.get(key, 0) + 1
@@ -180,11 +192,14 @@ def export_od(calib_path: Path, sensor_edges: dict[str, list[str]], meta: dict) 
         json.dump({
             "window":  window,
             "n_trips": n_trips,
+            "edge_support_routes_excluded": len(support_vehicle_ids),
             "zones":   zones,
             "matrix":  matrix,
             "note":    "ESTIMATED OD — one plausible matrix consistent with the "
                        "6 sensor counts and the estimated direction split; the "
-                       "true OD is not identifiable from 6 counting points.",
+                       "true OD is not identifiable from 6 counting points. "
+                       "Explicit full-edge support routes are simulated but "
+                       "excluded from this behavioural OD estimate.",
         }, f, ensure_ascii=False, indent=1)
 
     out_csv = Path("web/data/od_matrix.csv")

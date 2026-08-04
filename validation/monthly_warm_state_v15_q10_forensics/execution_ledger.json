@@ -1,0 +1,35 @@
+{
+  "cache_published": false,
+  "completed_identities": [
+    "closure-8bcf7829ae545dffd8ce__q10__1000"
+  ],
+  "contract_content_key": "39d27d42866e5bb70fa33e3cd7d612df84186d56c619e878407b5615815b6306",
+  "schema": "monthly_warm_state_residual_execution_v2",
+  "warm_attempts": [
+    {
+      "demand_variant": "q10",
+      "events": [
+        {
+          "code": "cache_miss",
+          "details": {
+            "reason": "manifest_missing_or_invalid"
+          }
+        },
+        {
+          "code": "bootstrap_started",
+          "details": {}
+        },
+        {
+          "code": "warm_completed",
+          "details": {
+            "warm_point_s": 24300
+          }
+        }
+      ],
+      "outcome": "warm_executed",
+      "schedule_id": "closure-8bcf7829ae545dffd8ce",
+      "schema": "monthly_warm_attempt_v1",
+      "seed": 1000
+    }
+  ]
+}

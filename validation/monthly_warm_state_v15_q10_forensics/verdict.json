@@ -1,0 +1,23 @@
+{
+  "all_exact": false,
+  "claim_scope": "diagnostic localization only; not equivalence, performance, warming readiness, cache adoption or release evidence",
+  "classification_counts": {
+    "aggregate_reporting_inconsistency": 1,
+    "exact_agreement": 0,
+    "kinematic_output_drift": 0,
+    "population_partition_error": 0,
+    "time_loss_only_drift": 0
+  },
+  "content_digest": "071d14083381fd2c86b47947821a87ada4770dca2578e677d54d9348a4885de7",
+  "first_non_exact_identity": {
+    "demand_variant": "q10",
+    "schedule_id": "closure-8bcf7829ae545dffd8ce",
+    "seed": 1000,
+    "warm_point_s": 24300
+  },
+  "identity_count": 1,
+  "report_digests": {
+    "closure-8bcf7829ae545dffd8ce__q10__1000": "3c58a5eba03613c629657ff3650df79a6d0bfece25d91366984eca8b6eb6198a"
+  },
+  "schema": "monthly_warm_state_forensic_verdict_v2"
+}

@@ -148,6 +148,12 @@ def base_url(tmp_path, monkeypatch):
         return frozenset({"a_b_0", "b_a_0"})
     fake_known_edges.cache_clear = lambda: None   # _run_recalibrate calls this on success
     monkeypatch.setattr(serve, "known_edges", fake_known_edges)
+    # Endpoint lifecycle tests use a deliberately tiny synthetic demand
+    # release. Keep the new calibrated-support guard aligned with that same
+    # fixture; dedicated tests below still prove an unsupported edge fails.
+    fake_supported_edges = lambda: fake_known_edges()
+    fake_supported_edges.cache_clear = lambda: None
+    monkeypatch.setattr(serve, "supported_closure_edges", fake_supported_edges)
 
     serve._recal_state.clear()
     serve._recal_state.update(status="idle")
@@ -239,6 +245,14 @@ class TestClose:
         status, body = post_json_or_error(f"{base_url}/api/close?edges=nonexistent_0")
         assert status == 400
         assert "nonexistent_0" in body["error"]
+
+    def test_known_but_uncalibrated_edge_is_422(self, base_url, monkeypatch):
+        monkeypatch.setattr(
+            serve, "supported_closure_edges", lambda: frozenset({"b_a_0"}))
+        status, body = post_json_or_error(
+            f"{base_url}/api/close?edges=a_b_0")
+        assert status == 422
+        assert body["unsupported_edges"] == ["a_b_0"]
 
     def test_busy_lock_returns_409(self, base_url):
         serve._sim_lock.acquire()

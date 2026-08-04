@@ -11,6 +11,7 @@ manifest, and routes every candidate to its matched SUMO backend.
 from __future__ import annotations
 
 import dataclasses
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -27,17 +28,22 @@ from traffic_sim.core.contracts import (
     DemandBuildSpec,
     write_demand_build_spec,
 )
-from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.core.fingerprint import sha256_file, sumo_version
+from traffic_sim.demand.build_lock import child_environment, demand_build_lock
+from traffic_sim.demand.source_identity import demand_source_fingerprints
 from traffic_sim.simulation.envelope import (
     EnvelopePolicy,
     build_simulation_envelope,
     envelope_demand_spec,
+    independent_daily_demand_spec,
 )
 from traffic_sim.simulation.finalist_decision import CandidateEvidence
 from traffic_sim.simulation.monthly_sumo import (
     DEFAULT_BASELINE_CACHE,
     ArchivedDemandSumoRunner,
 )
+from traffic_sim.demand.route_support import route_edges
+from traffic_sim.simulation.runtime import sumo_home
 
 
 SCHEMA_VERSION = 1
@@ -47,9 +53,14 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _REQUIRED_ARCHIVE_FILES = (
     "demand_meta.json",
     "demand_build_spec.json",
+    "candidates.rou.xml",
+    "candidates.meta.json",
     "calibrated.rou.xml",
+    "calibrated.agents.json",
     "calibrated_v1.rou.xml",
+    "calibrated_v1.agents.json",
     "calibrated_v2.rou.xml",
+    "calibrated_v2.agents.json",
 )
 # The tracked demand builder writes THROUGH the live release paths (sumo/
 # demand products, web/data OD export) even when it is only materializing a
@@ -109,9 +120,12 @@ def _canonical_digest(payload: Any, *, length: int = 64) -> str:
 def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
+    descriptor, raw_temporary = tempfile.mkstemp(
+        prefix=path.name + ".", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(raw_temporary)
     try:
-        with temporary.open("w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             json.dump(
                 payload,
                 handle,
@@ -138,6 +152,12 @@ def _manifest_outputs(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, Any
     return result
 
 
+@lru_cache(maxsize=1)
+def _current_demand_runtime() -> tuple[str, str | None]:
+    """Runtime fields recorded by ``make_fingerprint`` for reuse validation."""
+    return sys.version.split()[0], sumo_version(sumo_home())
+
+
 def validate_demand_archive(
     archive: Path,
     required: DemandBuildSpec,
@@ -152,6 +172,19 @@ def validate_demand_archive(
         _read(archive / "demand_build_spec.json")
     )
     metadata = _read(archive / "demand_meta.json")
+    build_fingerprint = metadata.get("build_fingerprint")
+    if not isinstance(build_fingerprint, Mapping) \
+            or build_fingerprint.get("schema_version") != 1:
+        raise ValueError(f"demand archive lacks a build fingerprint: {archive}")
+    if build_fingerprint.get("source_files") != demand_source_fingerprints(
+            _PROJECT_ROOT):
+        raise ValueError(
+            f"demand archive was produced by different source code: {archive}")
+    current_python, current_sumo = _current_demand_runtime()
+    if build_fingerprint.get("python") != current_python \
+            or build_fingerprint.get("sumo_version") != current_sumo:
+        raise ValueError(
+            f"demand archive was produced by a different runtime: {archive}")
     metadata_spec = DemandBuildSpec.from_dict(metadata.get("demand_spec", {}))
     if archived_spec != required or metadata_spec != required:
         raise ValueError(f"demand archive has another build contract: {archive}")
@@ -184,6 +217,63 @@ def validate_demand_archive(
             "bytes": path.stat().st_size,
             "sha256": digest,
         })
+    provenance = metadata.get("candidate_provenance")
+    if not isinstance(provenance, Mapping) \
+            or provenance.get("schema_version") != 1 \
+            or provenance.get("status") != "pass":
+        raise ValueError(
+            f"demand archive lacks passing candidate provenance: {archive}")
+    augmentation = metadata.get("edge_support_augmentation")
+    augmentation_variants = (
+        augmentation.get("variants")
+        if isinstance(augmentation, Mapping) else None
+    )
+    if not isinstance(augmentation, Mapping) \
+            or augmentation.get("schema_version") != 1 \
+            or augmentation.get("status") != "pass" \
+            or not isinstance(augmentation_variants, Mapping) \
+            or set(augmentation_variants) != {
+                "edge_shares", "edge_shares_q10", "edge_shares_q90"}:
+        raise ValueError(
+            f"demand archive lacks passing full-edge support: {archive}")
+    candidate_edges = route_edges(archive / "candidates.rou.xml")
+    if not candidate_edges:
+        raise ValueError(f"demand archive candidate pool has no edges: {archive}")
+    variant_routes = {
+        "edge_shares": archive / "calibrated.rou.xml",
+        "edge_shares_q10": archive / "calibrated_v1.rou.xml",
+        "edge_shares_q90": archive / "calibrated_v2.rou.xml",
+    }
+    for label, support_report in augmentation_variants.items():
+        if not isinstance(support_report, Mapping) \
+                or support_report.get("status") != "pass" \
+                or int(support_report.get("required_edges", 0)) \
+                != len(candidate_edges) \
+                or route_edges(variant_routes[label]) != candidate_edges:
+            raise ValueError(
+                f"demand archive has invalid full-edge support for {label}: "
+                f"{archive}")
+    fingerprints = build_fingerprint.get("artifacts") or {}
+    artifact_names = {
+        "candidates.rou.xml": "candidate_routes",
+        "candidates.meta.json": "candidate_metadata",
+        "calibrated.rou.xml": "calibrated_q50",
+        "calibrated.agents.json": "calibrated_q50_agents",
+        "calibrated_v1.rou.xml": "calibrated_v1",
+        "calibrated_v1.agents.json": "calibrated_v1_agents",
+        "calibrated_v2.rou.xml": "calibrated_v2",
+        "calibrated_v2.agents.json": "calibrated_v2_agents",
+    }
+    by_name = {record["name"]: record for record in records}
+    for filename, label in artifact_names.items():
+        expected = fingerprints.get(label)
+        actual = by_name[filename]
+        if not isinstance(expected, Mapping) or (
+            expected.get("sha256") != actual["sha256"]
+            or int(expected.get("bytes", -1)) != actual["bytes"]
+        ):
+            raise ValueError(
+                f"demand archive fingerprint does not bind {filename}: {archive}")
     return {
         "run_id": str(manifest.get("run_id", archive.name)),
         "archive": str(archive),
@@ -276,20 +366,22 @@ def restore_live_demand_release(snapshot: Mapping[str, Any]) -> None:
 
 def build_demand_archive(required: DemandBuildSpec) -> None:
     """Run the tracked demand builder for one missing envelope."""
-    with tempfile.TemporaryDirectory(prefix="monthly-demand-spec-") as raw:
-        spec_path = Path(raw) / f"{required.build_key}.json"
-        write_demand_build_spec(spec_path, required)
-        completed = subprocess.run(
-            [
-                sys.executable,
-                "build_sumo_demand.py",
-                "--demand-spec",
-                str(spec_path),
-                "--keep-scenarios",
-            ],
-            check=False,
-            cwd=_PROJECT_ROOT,
-        )
+    with demand_build_lock():
+        with tempfile.TemporaryDirectory(prefix="monthly-demand-spec-") as raw:
+            spec_path = Path(raw) / f"{required.build_key}.json"
+            write_demand_build_spec(spec_path, required)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "build_sumo_demand.py",
+                    "--demand-spec",
+                    str(spec_path),
+                    "--keep-scenarios",
+                ],
+                check=False,
+                cwd=_PROJECT_ROOT,
+                env=child_environment(),
+            )
     if completed.returncode != 0:
         raise RuntimeError(
             f"demand build {required.build_key} failed with exit code "
@@ -316,6 +408,8 @@ class MonthlyDemandResolverRunner:
         seed_workers: int = 1,
         envelope_policy: EnvelopePolicy = EnvelopePolicy(),
         build_missing: bool = True,
+        warm_execution: bool = False,
+        boundary_controller=None,
         demand_builder: DemandBuilder = build_demand_archive,
         runner_factory: RunnerFactory = ArchivedDemandSumoRunner,
         live_release_root: Path = _PROJECT_ROOT,
@@ -338,6 +432,13 @@ class MonthlyDemandResolverRunner:
         self.seed_workers = seed_workers
         self.envelope_policy = envelope_policy
         self.build_missing = bool(build_missing)
+        if warm_execution is not False and warm_execution is not True:
+            raise ValueError("warm_execution must be a bool")
+        if warm_execution and boundary_controller is None:
+            raise ValueError(
+                "warm execution requires an explicit boundary controller")
+        self.warm_execution = bool(warm_execution)
+        self.boundary_controller = boundary_controller
         self.demand_builder = demand_builder
         self.runner_factory = runner_factory
         self.live_release_root = Path(live_release_root)
@@ -357,6 +458,10 @@ class MonthlyDemandResolverRunner:
             baseline_trip_duration_p99_s=self.baseline_trip_duration_p99_s,
             policy=self.envelope_policy,
         )
+        if self.spec.interday_policy == "independent_daily_reset_v1":
+            return independent_daily_demand_spec(
+                self.spec, schedule, envelope
+            )
         return envelope_demand_spec(self.spec, envelope)
 
     def _request(
@@ -411,31 +516,34 @@ class MonthlyDemandResolverRunner:
         required_by_key: Mapping[str, DemandBuildSpec],
     ) -> dict[str, Any]:
         entries = []
-        live_snapshot: dict[str, Any] | None = None
-        try:
-            for key in sorted(required_by_key):
-                required = required_by_key[key]
-                matches = find_demand_archives(self.runs_root, required)
-                if not matches and self.build_missing:
-                    if live_snapshot is None:
-                        live_snapshot = snapshot_live_demand_release(
-                            root=self.live_release_root,
-                            products=self.live_release_products,
-                        )
-                    self.demand_builder(required)
+        with demand_build_lock():
+            live_snapshot: dict[str, Any] | None = None
+            try:
+                # Recheck under the inter-process lock: another search may have
+                # completed the same immutable archive while this one waited.
+                for key in sorted(required_by_key):
+                    required = required_by_key[key]
                     matches = find_demand_archives(self.runs_root, required)
-                if not matches:
-                    raise FileNotFoundError(
-                        f"no succeeded immutable demand archive for "
-                        f"{required.build_key} ({required.start_date}, "
-                        f"{required.days} day(s), {required.source}); run "
-                        f"build_sumo_demand.py with this closure-envelope "
-                        f"DemandBuildSpec or allow automatic builds"
-                    )
-                entries.append(matches[0])
-        finally:
-            if live_snapshot is not None:
-                restore_live_demand_release(live_snapshot)
+                    if not matches and self.build_missing:
+                        if live_snapshot is None:
+                            live_snapshot = snapshot_live_demand_release(
+                                root=self.live_release_root,
+                                products=self.live_release_products,
+                            )
+                        self.demand_builder(required)
+                        matches = find_demand_archives(self.runs_root, required)
+                    if not matches:
+                        raise FileNotFoundError(
+                            f"no succeeded immutable demand archive for "
+                            f"{required.build_key} ({required.start_date}, "
+                            f"{required.days} day(s), {required.source}); run "
+                            f"build_sumo_demand.py with this closure-envelope "
+                            f"DemandBuildSpec or allow automatic builds"
+                        )
+                    entries.append(matches[0])
+            finally:
+                if live_snapshot is not None:
+                    restore_live_demand_release(live_snapshot)
         release = {
             "schema_version": SCHEMA_VERSION,
             "kind": "monthly_demand_release",
@@ -514,6 +622,8 @@ class MonthlyDemandResolverRunner:
                 seed_workers=self.seed_workers,
                 envelope_policy=self.envelope_policy,
                 expected_demand_spec=required,
+                warm_execution=self.warm_execution,
+                boundary_controller=self.boundary_controller,
             )
             self._runners[key] = runner
 
@@ -569,6 +679,63 @@ class MonthlyDemandResolverRunner:
                 for field in common_fields
             },
         }
+
+    def candidate_provenance(
+        self, schedule: ClosureSchedule
+    ) -> Mapping[str, Any]:
+        """Return the exact child backend identity for one prepared unit.
+
+        Independent-day result caching uses this narrower identity so an
+        unrelated change to the parent shortlist cannot invalidate exact daily
+        SUMO evidence. The child record still binds demand, network, runtime,
+        source and metric semantics.
+        """
+        if self._prepared_schedule_ids is None:
+            raise RuntimeError("monthly demand resolver is not prepared")
+        key = self._schedule_build_keys.get(schedule.schedule_id)
+        if key is None:
+            raise ValueError("candidate was not part of the frozen shortlist")
+        return self._runners[key].provenance()
+
+    def candidate_execution_contract(
+        self, schedule: ClosureSchedule
+    ) -> Mapping[str, Any]:
+        """Describe one child so it can run in an isolated interpreter.
+
+        This is an execution contract, not evidence. It contains only the
+        already-prepared archive and the exact constructor inputs needed to
+        rebuild the same :class:`ArchivedDemandSumoRunner` with a private TraCI
+        connection. No demand resolution or mutable release lookup occurs in
+        the worker.
+        """
+        if self._prepared_schedule_ids is None:
+            raise RuntimeError("monthly demand resolver is not prepared")
+        key = self._schedule_build_keys.get(schedule.schedule_id)
+        if key is None:
+            raise ValueError("candidate was not part of the frozen shortlist")
+        child = self._runners[key]
+        expected = child.expected_demand_spec
+        if expected is None:
+            raise ValueError("isolated daily execution requires exact demand")
+        return {
+            "spec": self.spec.to_dict(),
+            "archive": str(child.archive),
+            "baseline_trip_duration_p99_s": (
+                child.baseline_trip_duration_p99_s
+            ),
+            "study_provenance_key": child.study_provenance_key,
+            "cache_root": str(child.cache_root),
+            "envelope_policy": dataclasses.asdict(child.envelope_policy),
+            "expected_demand_spec": expected.to_dict(),
+            "warm_execution": child.warm_execution,
+        }
+
+    def cleanup(self) -> None:
+        """Release provisional resources owned by all prepared children."""
+        for runner in self._runners.values():
+            cleanup = getattr(runner, "cleanup", None)
+            if callable(cleanup):
+                cleanup()
 
     def run_candidate(
         self,

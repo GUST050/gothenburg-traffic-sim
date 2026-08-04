@@ -15,6 +15,11 @@ from traffic_sim.simulation.monthly_demand import (
     find_demand_archives,
     validate_demand_archive,
 )
+from traffic_sim.simulation.independent_daily import (
+    INDEPENDENT_DAILY_ENVELOPE_POLICY,
+    decompose_schedules,
+)
+from traffic_sim.demand.source_identity import demand_source_paths
 import traffic_sim.simulation.monthly_demand as monthly_demand
 
 
@@ -42,19 +47,70 @@ def _archive(root, required, name, *, finished_at):
     archive.mkdir(parents=True)
     files = {
         "demand_build_spec.json": json.dumps(required.to_dict()),
-        "demand_meta.json": json.dumps({
-            "demand_build_key": required.build_key,
-            "demand_spec": required.to_dict(),
-            "epoch_sim": f"{required.start_date}T00:00:00",
-            "n_intervals": required.days * 96,
-            "n_variants": 3,
+        "candidates.rou.xml": (
+            "<routes><vehicle id='candidate' depart='0'>"
+            "<route edges='edge-a'/></vehicle></routes>"),
+        "candidates.meta.json": json.dumps({
+            "schema_version": 1,
+            "candidates": {"candidate": {}},
         }),
-        "calibrated.rou.xml": "<routes id='q50'/>",
-        "calibrated_v1.rou.xml": "<routes id='q10'/>",
-        "calibrated_v2.rou.xml": "<routes id='q90'/>",
+        "calibrated.rou.xml": (
+            "<routes><vehicle id='q50' depart='0'>"
+            "<route edges='edge-a'/></vehicle></routes>"),
+        "calibrated.agents.json": json.dumps({"schema_version": 1}),
+        "calibrated_v1.rou.xml": (
+            "<routes><vehicle id='q10' depart='0'>"
+            "<route edges='edge-a'/></vehicle></routes>"),
+        "calibrated_v1.agents.json": json.dumps({"schema_version": 1}),
+        "calibrated_v2.rou.xml": (
+            "<routes><vehicle id='q90' depart='0'>"
+            "<route edges='edge-a'/></vehicle></routes>"),
+        "calibrated_v2.agents.json": json.dumps({"schema_version": 1}),
     }
     for filename, content in files.items():
         (archive / filename).write_text(content)
+    labels = {
+        "candidates.rou.xml": "candidate_routes",
+        "candidates.meta.json": "candidate_metadata",
+        "calibrated.rou.xml": "calibrated_q50",
+        "calibrated.agents.json": "calibrated_q50_agents",
+        "calibrated_v1.rou.xml": "calibrated_v1",
+        "calibrated_v1.agents.json": "calibrated_v1_agents",
+        "calibrated_v2.rou.xml": "calibrated_v2",
+        "calibrated_v2.agents.json": "calibrated_v2_agents",
+    }
+    metadata = {
+        "demand_build_key": required.build_key,
+        "demand_spec": required.to_dict(),
+        "epoch_sim": f"{required.start_date}T00:00:00",
+        "n_intervals": required.days * 96,
+        "n_variants": 3,
+        "candidate_provenance": {"schema_version": 1, "status": "pass"},
+        "edge_support_augmentation": {
+            "schema_version": 1,
+            "status": "pass",
+            "variants": {
+                key: {"status": "pass", "required_edges": 1}
+                for key in ("edge_shares", "edge_shares_q10", "edge_shares_q90")
+            },
+        },
+        "build_fingerprint": {
+            "schema_version": 1,
+            "source_files": monthly_demand.demand_source_fingerprints(
+                monthly_demand._PROJECT_ROOT),
+            "python": monthly_demand._current_demand_runtime()[0],
+            "sumo_version": monthly_demand._current_demand_runtime()[1],
+            "artifacts": {
+                label: {
+                    "bytes": (archive / filename).stat().st_size,
+                    "sha256": _sha(archive / filename),
+                }
+                for filename, label in labels.items()
+            },
+        },
+    }
+    files["demand_meta.json"] = json.dumps(metadata)
+    (archive / "demand_meta.json").write_text(files["demand_meta.json"])
     manifest = {
         "schema_version": 1,
         "run_id": name,
@@ -131,6 +187,7 @@ def test_demand_builder_is_independent_of_process_working_directory(monkeypatch,
     monkeypatch.setattr(monthly_demand.subprocess, "run", fake_run)
     monthly_demand.build_demand_archive(required)
     assert seen["cwd"] == monthly_demand._PROJECT_ROOT
+    assert seen["env"]["GS_PROJECT_DEMAND_BUILD_LOCK_HELD_BY_PARENT"] == "1"
 
 
 def test_archive_validation_checks_contract_and_manifest_hashes(tmp_path):
@@ -153,6 +210,42 @@ def test_archive_validation_checks_contract_and_manifest_hashes(tmp_path):
     (archive / "calibrated_v1.rou.xml").write_text("<tampered/>")
     with pytest.raises(ValueError, match="changed"):
         validate_demand_archive(archive, required)
+
+
+def test_archive_validation_rejects_another_demand_source_identity(tmp_path):
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(
+        tmp_path, required, "demand-stale-source",
+        finished_at="2027-01-01T00:00:00Z")
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["build_fingerprint"]["source_files"]["pfe"]["sha256"] = "0" * 64
+    (archive / "demand_meta.json").write_text(json.dumps(metadata))
+
+    with pytest.raises(ValueError, match="different source code"):
+        validate_demand_archive(archive, required)
+
+
+def test_demand_source_identity_covers_every_demand_module():
+    paths = {
+        path.resolve()
+        for path in demand_source_paths(monthly_demand._PROJECT_ROOT).values()
+    }
+    expected = {
+        path.resolve()
+        for package in ("demand", "traffic_sim/demand")
+        for path in (monthly_demand._PROJECT_ROOT / package).glob("*.py")
+    }
+    assert expected <= paths
 
 
 def test_multi_envelope_resolution_is_frozen_and_routes_by_date(tmp_path):
@@ -243,6 +336,110 @@ def test_equal_envelopes_share_one_archive_and_one_child(tmp_path):
         finished_at="2027-01-01T00:00:00Z")
     resolver.prepare(schedules)
     assert len(FakeChildRunner.created) == 1
+
+
+def test_independent_daily_units_keep_exact_dates_and_full_recovery(tmp_path):
+    FakeChildRunner.created = []
+    spec = ClosureSearchSpec(
+        search_id="independent-demand",
+        directed_edges=("edge-a",),
+        demand_build_id="forecast-daily-release-v1",
+        source="forecast",
+        permitted_date_start="2027-07-15",
+        permitted_date_end="2027-07-16",
+        allowed_weekdays=(3, 4),
+        required_work_minutes=8 * 60,
+        max_consecutive_start_days=2,
+        permitted_daily_band=DailyTimeBand("15:00", "22:00"),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_balanced_daily_v1",
+    )
+    parent = next(
+        item for item in generate_closure_schedules(spec)
+        if item.day_count == 2 and item.daily_start == "15:00"
+    )
+    units, _ = decompose_schedules(spec, (parent,))
+    resolver = MonthlyDemandResolverRunner(
+        spec,
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+        envelope_policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
+    )
+    required = _required_for(resolver, [item.schedule for item in units])
+    assert len(required) == 2
+    assert all(item.days == 3 for item in required.values())
+    for index, item in enumerate(required.values()):
+        _archive(
+            tmp_path,
+            item,
+            f"demand-independent-{index}",
+            finished_at=f"2027-01-0{index + 1}T00:00:00Z",
+        )
+
+    resolver.prepare([item.schedule for item in units])
+
+    assert sorted(
+        child.expected.start_date for child in FakeChildRunner.created
+    ) == ["2027-07-14", "2027-07-15"]
+
+
+def test_independent_windows_on_one_date_share_the_canonical_three_day_archive():
+    spec = ClosureSearchSpec(
+        search_id="independent-full-day",
+        directed_edges=("edge-a",),
+        demand_build_id="forecast-daily-release-v2",
+        source="forecast",
+        permitted_date_start="2027-07-15",
+        permitted_date_end="2027-07-15",
+        allowed_weekdays=(3,),
+        required_work_minutes=15,
+        max_consecutive_start_days=1,
+        permitted_daily_band=DailyTimeBand("00:00", "24:00"),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_balanced_daily_v1",
+    )
+    resolver = MonthlyDemandResolverRunner(
+        spec,
+        baseline_trip_duration_p99_s=3600,
+        study_provenance_key="study",
+    )
+    schedules = generate_closure_schedules(spec)
+    required = {resolver._required(item) for item in schedules}
+    assert len(required) == 1
+    only = required.pop()
+    assert (only.start_date, only.days) == ("2027-07-14", 3)
+
+
+def test_independent_source_year_boundary_stays_fail_closed():
+    spec = ClosureSearchSpec(
+        search_id="independent-year-boundary",
+        directed_edges=("edge-a",),
+        demand_build_id="forecast-daily-release-v3",
+        source="forecast",
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-01",
+        allowed_weekdays=(4,),
+        required_work_minutes=15,
+        max_consecutive_start_days=1,
+        permitted_daily_band=DailyTimeBand("00:00", "02:00"),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_balanced_daily_v1",
+    )
+    resolver = MonthlyDemandResolverRunner(
+        spec,
+        baseline_trip_duration_p99_s=3600,
+        study_provenance_key="study",
+    )
+    schedules = generate_closure_schedules(spec)
+    early = next(item for item in schedules if item.daily_start == "00:00")
+    late = next(item for item in schedules if item.daily_start == "01:15")
+    with pytest.raises(ValueError, match="outside the downloaded 2027"):
+        resolver._required(early)
+    assert resolver._required(late).start_date == "2027-01-01"
 
 
 def test_missing_archive_is_built_once_then_resolved(tmp_path):

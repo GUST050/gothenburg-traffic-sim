@@ -1,4 +1,5 @@
 from datetime import date
+import itertools
 
 import pytest
 
@@ -145,6 +146,104 @@ def test_rounding_is_per_equal_daily_shift_and_is_reported():
     assert schedule.scheduled_work_minutes == 60
     assert schedule.actual_closed_minutes == 60
     assert schedule.rounding_overshoot_minutes == 29
+
+
+def test_independent_daily_exact_allocation_never_overshoots_work():
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-10",
+        required_work_minutes=50 * 60,
+        max_consecutive_start_days=10,
+        permitted_daily_band=DailyTimeBand("15:00", "22:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_balanced_daily_v1",
+    )
+
+    schedules = generate_closure_schedules(spec)
+
+    assert {item.day_count for item in schedules} == {8, 9, 10}
+    assert all(item.scheduled_work_minutes == 50 * 60 for item in schedules)
+    assert all(item.rounding_overshoot_minutes == 0 for item in schedules)
+    nine_day = [
+        item for item in schedules
+        if item.day_count == 9 and item.first_work_date == "2027-01-01"
+    ]
+    assert len(nine_day) == 36 * 6
+    assert {
+        tuple(interval.duration_minutes for interval in item.intervals)
+        for item in nine_day
+    } == {
+        tuple(345 if index in longer else 330 for index in range(9))
+        for longer in itertools.combinations(range(9), 2)
+    }
+    assert all(item.daily_end == "20:45" for item in nine_day
+               if item.daily_start == "15:00")
+    assert ClosureSchedule.from_dict(nine_day[0].to_dict()) == nine_day[0]
+
+
+def test_independent_daily_policy_rejects_overnight_or_unaligned_work():
+    with pytest.raises(ValueError, match="same-day permitted band"):
+        _spec(
+            permitted_daily_band=DailyTimeBand("22:00", "06:00"),
+            interday_policy="independent_daily_reset_v1",
+        )
+    with pytest.raises(ValueError, match="align to the 15-minute"):
+        _spec(
+            required_work_minutes=61,
+            interday_policy="independent_daily_reset_v1",
+            work_allocation_policy="exact_balanced_daily_v1",
+        )
+
+
+def test_independent_daily_policy_accepts_a_full_local_day_band():
+    spec = _spec(
+        permitted_daily_band=DailyTimeBand("00:00", "24:00"),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_balanced_daily_v1",
+    )
+    assert spec.permitted_daily_band.latest_end == "24:00"
+
+
+def test_independent_daily_exact_allocation_skips_non_workdays():
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-15",
+        required_work_minutes=50 * 60,
+        max_consecutive_start_days=10,
+        permitted_daily_band=DailyTimeBand("15:00", "22:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_balanced_daily_v1",
+    )
+
+    schedule = next(
+        item for item in generate_closure_schedules(spec)
+        if item.day_count == 10
+        and item.first_work_date == "2027-01-01"
+        and item.daily_start == "15:00"
+    )
+
+    assert [item.work_date for item in schedule.intervals] == [
+        "2027-01-01",
+        "2027-01-04",
+        "2027-01-05",
+        "2027-01-06",
+        "2027-01-07",
+        "2027-01-08",
+        "2027-01-11",
+        "2027-01-12",
+        "2027-01-13",
+        "2027-01-14",
+    ]
+    assert ClosureSchedule.from_dict(schedule.to_dict()) == schedule
+
+    forged = schedule.to_dict()
+    forged["intervals"][1]["work_date"] = "2027-01-03"
+    forged["intervals"][1]["start_time"] = "2027-01-03T15:00:00"
+    forged["intervals"][1]["end_time"] = "2027-01-03T20:00:00"
+    with pytest.raises(ValueError, match="schedule contents"):
+        ClosureSchedule.from_dict(forged)
 
 
 def test_month_end_may_be_crossed_only_when_both_dates_are_permitted():

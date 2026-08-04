@@ -1,0 +1,99 @@
+{
+  "campaign_version": "v5",
+  "content_key": "5b5b91301fa5499732ad1a61bd9e71eb7d3c8485b2346dd490914999c170bd2a",
+  "disjointness": {
+    "intersection_with_v1_v4": [],
+    "prior_heldout_edge_count": 29,
+    "prior_sources": [
+      "monthly_proxy_manifest.json",
+      "monthly_proxy_manifest_v2.json",
+      "monthly_proxy_manifest_v4.json",
+      "heldout_v4_selection.json"
+    ]
+  },
+  "expected_discriminating_case_count": 2,
+  "kind": "monthly_heldout_selection",
+  "physical_independence": {
+    "min_edge_length_m": 30.0,
+    "reverse_pairs": 0,
+    "rule": "no reverse direction of a chosen segment and no edge sharing a junction with one; minimum length 30.0 m",
+    "shared_junctions": 0
+  },
+  "pilot_selection_does_not_read_proxy": true,
+  "practical_equivalence_s": 300.0,
+  "schema_version": 1,
+  "selected_edge_count": 5,
+  "selected_edges": [
+    {
+      "case_id": "v5-discriminating-secondary-a",
+      "edge_id": "171240192_1793744624_0",
+      "expected_discriminating": true,
+      "structural": {
+        "dist_sensor_m": 3916.9,
+        "junction_u": "171240192",
+        "junction_v": "1793744624",
+        "length_m": 405.8,
+        "road_class": "secondary",
+        "sensor_distance_band": "far_over_750m"
+      }
+    },
+    {
+      "case_id": "v5-discriminating-secondary-b",
+      "edge_id": "9203753665_1027776730_0",
+      "expected_discriminating": true,
+      "structural": {
+        "dist_sensor_m": 3901.5,
+        "junction_u": "9203753665",
+        "junction_v": "1027776730",
+        "length_m": 436.5,
+        "road_class": "secondary",
+        "sensor_distance_band": "far_over_750m"
+      }
+    },
+    {
+      "case_id": "v5-control-tertiary-near-tie",
+      "edge_id": "12456140251_12456140258_0",
+      "expected_discriminating": false,
+      "structural": {
+        "dist_sensor_m": 4041.1,
+        "junction_u": "12456140251",
+        "junction_v": "12456140258",
+        "length_m": 51.9,
+        "road_class": "tertiary",
+        "sensor_distance_band": "far_over_750m"
+      }
+    },
+    {
+      "case_id": "v5-control-tertiary-failure",
+      "edge_id": "28397704_28397705_0",
+      "expected_discriminating": false,
+      "structural": {
+        "dist_sensor_m": 3851.9,
+        "junction_u": "28397704",
+        "junction_v": "28397705",
+        "length_m": 102.4,
+        "road_class": "tertiary",
+        "sensor_distance_band": "far_over_750m"
+      }
+    },
+    {
+      "case_id": "v5-control-tertiary-control",
+      "edge_id": "282724092_310989699_0",
+      "expected_discriminating": false,
+      "structural": {
+        "dist_sensor_m": 3765.0,
+        "junction_u": "282724092",
+        "junction_v": "310989699",
+        "length_m": 330.7,
+        "road_class": "tertiary",
+        "sensor_distance_band": "far_over_750m"
+      }
+    }
+  ],
+  "selection_method": "deterministic_structural_pre_outcome",
+  "selection_reads_outcomes": false,
+  "source_fingerprints": {
+    "web/data/network.geojson": "59493f1bffa1b0d278eca9803bf6ed19142b892111fff5c01e245e63a7528aef"
+  },
+  "status": "selection_frozen_pre_outcome"
+}

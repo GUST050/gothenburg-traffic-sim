@@ -1,0 +1,229 @@
+{
+  "aggregate_deltas": {
+    "split_minus_cold_time_loss_s": -21.729999999981374,
+    "warm_minus_cold_time_loss_s": -21.729999999981374
+  },
+  "aggregate_mismatches": [
+    "cold_total_s: raw 558026.99 rounds to 558026.99, recorded 558026.990000004",
+    "prefix_total_s: raw 1268.5 rounds to 1268.5, recorded 1268.4999999999998",
+    "resumed_total_s: raw 556736.76 rounds to 556736.76, recorded 556736.7600000034",
+    "warm_total_s: raw 558005.26 rounds to 558005.26, recorded 558005.260000004"
+  ],
+  "bounded_exemplars": [
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 151.55,
+      "delta_s": -0.010000000000019327,
+      "id": "pfe49322",
+      "phase": "resumed",
+      "split_time_loss_s": 151.54
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 36.56,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe10151",
+      "phase": "resumed",
+      "split_time_loss_s": 36.55
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 37.63,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe10167",
+      "phase": "resumed",
+      "split_time_loss_s": 37.62
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 66.2,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe11029",
+      "phase": "resumed",
+      "split_time_loss_s": 66.19
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 62.13,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe12562",
+      "phase": "resumed",
+      "split_time_loss_s": 62.12
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 43.17,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe12757",
+      "phase": "resumed",
+      "split_time_loss_s": 43.16
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 39.81,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe14172",
+      "phase": "resumed",
+      "split_time_loss_s": 39.8
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 41.42,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe14443",
+      "phase": "resumed",
+      "split_time_loss_s": 41.41
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 65.09,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe14658",
+      "phase": "resumed",
+      "split_time_loss_s": 65.08
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 45.06,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe21773",
+      "phase": "resumed",
+      "split_time_loss_s": 45.05
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 51.74,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe22919",
+      "phase": "resumed",
+      "split_time_loss_s": 51.73
+    },
+    {
+      "changed_fields": [
+        "timeLoss",
+        "routeLength",
+        "waitingTime"
+      ],
+      "cold_time_loss_s": 75.76,
+      "delta_s": -0.010000000000005116,
+      "id": "pfe25061",
+      "phase": "resumed",
+      "split_time_loss_s": 75.75
+    }
+  ],
+  "classification": "aggregate_reporting_inconsistency",
+  "content_digest": "3c58a5eba03613c629657ff3650df79a6d0bfece25d91366984eca8b6eb6198a",
+  "differing_vehicle_count": 68883,
+  "field_mismatch_counts": {
+    "arrival": 0,
+    "depart": 0,
+    "duration": 0,
+    "routeLength": 59639,
+    "timeLoss": 2173,
+    "waitingCount": 0,
+    "waitingTime": 31093
+  },
+  "identity": {
+    "demand_variant": "q10",
+    "schedule_id": "closure-8bcf7829ae545dffd8ce",
+    "seed": 1000,
+    "warm_point_s": 24300
+  },
+  "population": {
+    "boundary_rule": "cold arrival <= warm_point_s is completed_prefix; cold arrival > warm_point_s is resumed",
+    "cold_count": 84065,
+    "expected_prefix_count": 1021,
+    "expected_resumed_count": 83044,
+    "extra_in_split": [],
+    "misplaced_in_prefix": [],
+    "misplaced_in_resumed": [],
+    "missing_from_split": [],
+    "overlap": [],
+    "prefix_count": 1021,
+    "resumed_count": 83044,
+    "split_count": 84065
+  },
+  "raw_content_digest": "6e19ed5ed052863a7cd0688581ce9418b053737e40c283ec5c0eb4b3b2d3e4ed",
+  "raw_totals": {
+    "cold_total_s": 558026.99,
+    "cold_trip_count": 84065,
+    "prefix_total_s": 1268.5,
+    "prefix_trip_count": 1021,
+    "resumed_total_s": 556736.76,
+    "resumed_trip_count": 83044,
+    "split_total_s": 558005.26,
+    "split_trip_count": 84065
+  },
+  "record_digests": {
+    "cold_candidate": "1451594e59182973935575dca7bb5009494938a9804cda3181ae0d1455854aea",
+    "completed_prefix": "7a8240bc107553d7fb69183f9ee176948337b924de20c9d43d60751d7e65da61",
+    "resumed": "640baf27ef80bc599cecc8c6b0d36ccd3e5f965e84cd6d60f31439c074dec6be"
+  },
+  "recorded_totals": {
+    "cold_total_s": 558026.990000004,
+    "cold_trip_count": 84065,
+    "prefix_total_s": 1268.4999999999998,
+    "prefix_trip_count": 1021,
+    "resumed_total_s": 556736.7600000034,
+    "resumed_trip_count": 83044,
+    "warm_total_s": 558005.260000004,
+    "warm_trip_count": 84065
+  },
+  "reporting_precision": 2,
+  "schema": "monthly_warm_state_forensic_report_v2",
+  "time_loss_delta_distribution": {
+    "count": 84065,
+    "max_s": 0.0,
+    "method": "nearest_rank_index=ceil(p*n)-1",
+    "min_s": -0.010000000000019327,
+    "negative_count": 2173,
+    "nonzero_count": 2173,
+    "positive_count": 0,
+    "q10_s": 0.0,
+    "q50_s": 0.0,
+    "q90_s": 0.0,
+    "sum_s": -21.729999999999908,
+    "zero_count": 81892
+  }
+}

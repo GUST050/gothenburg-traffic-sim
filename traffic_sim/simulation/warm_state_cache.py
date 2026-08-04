@@ -25,6 +25,8 @@ from typing import Any, Mapping, Sequence
 
 from traffic_sim.core.fingerprint import (
     fingerprint_files,
+    # Kept as a module attribute for old process-free fixtures. It is
+    # deliberately not called or included in warm-state identity v3.
     git_commit,
     sha256_file,
     sumo_version,
@@ -32,6 +34,12 @@ from traffic_sim.core.fingerprint import (
 
 
 SCHEMA_VERSION = 1
+# Warm entries v1 carried TraCI ledger evidence that did not reproduce the
+# mesoscopic tripinfo accumulator through save/load; v2 binds unfinished-
+# tripinfo reconstruction. v3 removes the repository-wide commit from identity:
+# the exact interpreting-source fingerprints already invalidate semantic code
+# changes, while a documentation-only commit must not discard valid states.
+WARM_STATE_SCHEMA_VERSION = 3
 DEFAULT_ROOT = Path("runs") / "closure-search-cache" / "warm-state"
 DEFAULT_BASELINE_ROOT = Path("runs") / "closure-search-cache" / "baseline"
 STATE_FILENAME = "state.xml.gz"
@@ -84,7 +92,6 @@ class WarmStateIdentity:
     warmup_end_s: int
     inputs: Mapping[str, Mapping[str, Any]]
     source_files: Mapping[str, Mapping[str, Any]]
-    git_commit: str | None
     python_version: str
     sumo_version: str
     platform_id: str
@@ -117,11 +124,6 @@ class WarmStateIdentity:
         if self.save_state_precision != STATE_PRECISION:
             raise ValueError(
                 f"warm-state cache requires precision {STATE_PRECISION}")
-        if self.git_commit is not None and (
-            not isinstance(self.git_commit, str) or not self.git_commit.strip()
-        ):
-            raise ValueError(
-                "warm_state_identity.git_commit must be a string or null")
         for group_name in ("inputs", "source_files"):
             group = getattr(self, group_name)
             if not isinstance(group, Mapping) or not group:
@@ -159,7 +161,7 @@ class WarmStateIdentity:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": WARM_STATE_SCHEMA_VERSION,
             "demand_build_id": self.demand_build_id,
             "network_build_id": self.network_build_id,
             "demand_variant": self.demand_variant,
@@ -170,7 +172,6 @@ class WarmStateIdentity:
                        for name, record in sorted(self.inputs.items())},
             "source_files": {name: dict(record)
                              for name, record in sorted(self.source_files.items())},
-            "git_commit": self.git_commit,
             "python_version": self.python_version,
             "sumo_version": self.sumo_version,
             "platform_id": self.platform_id,
@@ -182,7 +183,7 @@ class WarmStateIdentity:
     def from_dict(cls, raw: Mapping[str, Any]) -> "WarmStateIdentity":
         if not isinstance(raw, Mapping):
             raise ValueError("warm_state_identity must be a JSON object")
-        if raw.get("schema_version") != SCHEMA_VERSION:
+        if raw.get("schema_version") != WARM_STATE_SCHEMA_VERSION:
             raise ValueError("unsupported warm_state_identity schema")
         return cls(
             demand_build_id=str(raw.get("demand_build_id", "")),
@@ -193,7 +194,6 @@ class WarmStateIdentity:
             warmup_end_s=raw.get("warmup_end_s"),
             inputs=raw.get("inputs", {}),
             source_files=raw.get("source_files", {}),
-            git_commit=raw.get("git_commit"),
             python_version=str(raw.get("python_version", "")),
             sumo_version=str(raw.get("sumo_version", "")),
             platform_id=str(raw.get("platform_id", "")),
@@ -252,7 +252,6 @@ def create_warm_state_identity(
         warmup_end_s=warmup_end_s,
         inputs=inputs,
         source_files=sources,
-        git_commit=git_commit(),
         python_version=sys.version.split()[0],
         sumo_version=version,
         platform_id=platform.platform(),
@@ -511,7 +510,7 @@ def _read_valid_manifest(
             (entry / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None, "manifest_missing_or_invalid"
-    if manifest.get("schema_version") != SCHEMA_VERSION:
+    if manifest.get("schema_version") != WARM_STATE_SCHEMA_VERSION:
         return None, "schema_mismatch"
     if manifest.get("kind") != "sumo_warm_state":
         return None, "kind_mismatch"
@@ -545,6 +544,29 @@ def _read_valid_manifest(
         or state_path.stat().st_size != state_record.get("bytes")
     ):
         return None, "state_digest_mismatch"
+    # Semantic members (e.g. the prefix metrics a warm run needs to account for
+    # the pre-warm segment) are part of the entry, not loose files beside it.
+    # An unverified companion file could be truncated by a crash or edited
+    # afterwards, and the warm arm would silently trust it.
+    members = manifest.get("members")
+    if members is None:
+        members = {}
+    if not isinstance(members, dict):
+        return None, "members_invalid"
+    for name, record in members.items():
+        if not isinstance(name, str) or not name or "/" in name or name.startswith("."):
+            return None, "member_name_invalid"
+        member_path = entry / name
+        if member_path.is_symlink() or not member_path.is_file():
+            return None, "member_missing"
+        member_digest = sha256_file(member_path)
+        if (
+            not isinstance(record, dict)
+            or member_digest is None
+            or member_digest != record.get("sha256")
+            or member_path.stat().st_size != record.get("bytes")
+        ):
+            return None, "member_digest_mismatch"
     return manifest, "valid"
 
 
@@ -553,6 +575,7 @@ def store_warm_state(
     identity: WarmStateIdentity,
     state_path: Path,
     equivalence: EquivalenceCertificate,
+    members: Mapping[str, str] | None = None,
 ) -> Path:
     """Atomically store one state only after exact semantic equivalence."""
     if (
@@ -585,8 +608,22 @@ def store_warm_state(
                 destination = temporary / STATE_FILENAME
                 shutil.copy2(state_path, destination)
                 digest = sha256_file(destination)
+                member_records: dict[str, dict[str, Any]] = {}
+                for name, text in sorted((members or {}).items()):
+                    if (
+                        not isinstance(name, str) or not name
+                        or "/" in name or name.startswith(".")
+                        or name == STATE_FILENAME or name == "manifest.json"
+                    ):
+                        raise ValueError(f"invalid warm-state member name: {name!r}")
+                    member_path = temporary / name
+                    member_path.write_text(text, encoding="utf-8")
+                    member_records[name] = {
+                        "bytes": member_path.stat().st_size,
+                        "sha256": sha256_file(member_path),
+                    }
                 manifest = {
-                    "schema_version": SCHEMA_VERSION,
+                    "schema_version": WARM_STATE_SCHEMA_VERSION,
                     "kind": "sumo_warm_state",
                     "key": identity.content_key,
                     "identity": identity.to_dict(),
@@ -596,6 +633,7 @@ def store_warm_state(
                         "bytes": destination.stat().st_size,
                         "sha256": digest,
                     },
+                    "members": member_records,
                 }
                 (temporary / "manifest.json").write_text(
                     json.dumps(manifest, indent=2, sort_keys=True) + "\n",

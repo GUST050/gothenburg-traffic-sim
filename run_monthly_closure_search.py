@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -25,6 +26,15 @@ from traffic_sim.simulation.monthly_search import (
     run_monthly_search,
 )
 from traffic_sim.simulation.monthly_demand import MonthlyDemandResolverRunner
+from traffic_sim.simulation.envelope import (
+    EnvelopePolicy,
+    build_simulation_envelope,
+)
+from traffic_sim.simulation.independent_daily import (
+    INDEPENDENT_DAILY_ENVELOPE_POLICY,
+    IndependentDailyRunner,
+    IsolatedDailySumoRunner,
+)
 from traffic_sim.simulation.monthly_sumo import (
     ArchivedDemandSumoRunner,
     SEED_WORKER_BENCHMARK_RECORD,
@@ -54,9 +64,32 @@ def _bounded_exhaustive_builder(
     spec_path: Path,
     *,
     maximum_candidates: int,
+    proxy_version: str = "bounded_exhaustive_sumo_v1",
 ) -> dict[str, Any]:
     spec = load_closure_search_spec(spec_path)
     schedules = generate_closure_schedules(spec)
+    if len(schedules) > maximum_candidates:
+        raise ValueError(
+            f"independent exhaustive screening generated {len(schedules)} "
+            f"candidates, above the explicit cap {maximum_candidates}"
+        )
+    return _exhaustive_payload(
+        spec_path,
+        spec=spec,
+        schedules=schedules,
+        maximum_candidates=maximum_candidates,
+        proxy_version=proxy_version,
+    )
+
+
+def _exhaustive_payload(
+    spec_path: Path,
+    *,
+    spec,
+    schedules,
+    maximum_candidates: int,
+    proxy_version: str,
+) -> dict[str, Any]:
     if len(schedules) > maximum_candidates:
         raise ValueError(
             f"bounded exhaustive screening generated {len(schedules)} "
@@ -65,7 +98,7 @@ def _bounded_exhaustive_builder(
     return {
         "schema_version": 1,
         "kind": "monthly_closure_proxy_screening",
-        "proxy_version": "bounded_exhaustive_sumo_v1",
+        "proxy_version": proxy_version,
         "search": spec.to_dict(),
         "claim_boundary": {
             "evidence_level": "no_proxy_bounded_exhaustive",
@@ -78,7 +111,7 @@ def _bounded_exhaustive_builder(
         "unavailable_candidates": [],
         "ranked_candidates": [],
         "shortlist": {
-            "version": "bounded_exhaustive_sumo_v1",
+            "version": proxy_version,
             "selection_complete": True,
             "entries": [
                 {
@@ -96,6 +129,102 @@ def _bounded_exhaustive_builder(
             }
         },
     }
+
+
+def _independent_exhaustive_builder(
+    spec_path: Path,
+    *,
+    maximum_candidates: int,
+    maximum_daily_units: int,
+    baseline_trip_duration_p99_s: int,
+) -> dict[str, Any]:
+    spec = load_closure_search_spec(spec_path)
+    if spec.interday_policy != "independent_daily_reset_v1":
+        raise ValueError(
+            "independent exhaustive screening requires the independent policy"
+        )
+    schedules = generate_closure_schedules(spec)
+    from traffic_sim.simulation.independent_daily import decompose_schedules
+    units, parents = decompose_schedules(spec, schedules)
+    if len(units) > maximum_daily_units:
+        raise ValueError(
+            f"independent exhaustive screening generated {len(units)} unique "
+            f"daily SUMO units, above the explicit cap {maximum_daily_units}"
+        )
+    source_year = 2027 if spec.source == "forecast" else 2025
+    source_start = date(source_year, 1, 1)
+    source_end = date(source_year + 1, 1, 1)
+    unavailable_units: dict[str, str] = {}
+    for unit in units:
+        try:
+            envelope = build_simulation_envelope(
+                spec,
+                unit.schedule,
+                baseline_trip_duration_p99_s=(
+                    baseline_trip_duration_p99_s
+                ),
+                policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
+            )
+        except ValueError as exc:
+            unavailable_units[unit.unit_id] = str(exc)
+            continue
+        envelope_start = date.fromisoformat(envelope.scenario_start[:10])
+        envelope_end = date.fromisoformat(envelope.scenario_end[:10])
+        if envelope_start < source_start or envelope_end > source_end:
+            unavailable_units[unit.unit_id] = (
+                "exact warm-up/recovery envelope lies outside the "
+                f"downloaded {source_year} {spec.source} demand year"
+            )
+
+    unavailable_candidates = []
+    eligible_schedules = []
+    for schedule in schedules:
+        failed = [
+            (unit_id, unavailable_units[unit_id])
+            for unit_id in parents[schedule.schedule_id]
+            if unit_id in unavailable_units
+        ]
+        if failed:
+            unavailable_candidates.append({
+                "schedule_id": schedule.schedule_id,
+                "evidence": {
+                    "reason": "independent daily envelope unavailable",
+                    "daily_units": [
+                        {"unit_id": unit_id, "reason": reason}
+                        for unit_id, reason in failed
+                    ],
+                },
+                "coverage": None,
+            })
+        else:
+            eligible_schedules.append(schedule)
+    if not eligible_schedules:
+        raise ValueError(
+            "independent exhaustive screening has no schedules whose exact "
+            "warm-up and recovery fit the downloaded demand year"
+        )
+
+    payload = _exhaustive_payload(
+        spec_path,
+        spec=spec,
+        schedules=eligible_schedules,
+        maximum_candidates=maximum_candidates,
+        proxy_version="independent_daily_exhaustive_sumo_v1",
+    )
+    payload["candidate_count"] = len(schedules)
+    payload["scoreable_candidate_count"] = len(eligible_schedules)
+    payload["unavailable_candidates"] = unavailable_candidates
+    payload["independent_daily_execution"] = {
+        "interday_policy": spec.interday_policy,
+        "work_allocation_policy": spec.work_allocation_policy,
+        "unique_daily_unit_count": len(units),
+        "executable_daily_unit_count": (
+            len(units) - len(unavailable_units)
+        ),
+        "unavailable_daily_unit_count": len(unavailable_units),
+        "maximum_daily_units": maximum_daily_units,
+    }
+    return payload
 
 
 def parse_args() -> argparse.Namespace:
@@ -136,7 +265,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--screening-mode",
-        choices=("proxy", "bounded-exhaustive"),
+        choices=("proxy", "bounded-exhaustive", "independent-exhaustive"),
         default="proxy",
     )
     parser.add_argument(
@@ -145,9 +274,57 @@ def parse_args() -> argparse.Namespace:
         default=12,
         help="Hard candidate cap when --screening-mode=bounded-exhaustive.",
     )
+    parser.add_argument(
+        "--independent-exhaustive-candidate-cap",
+        type=int,
+        default=100_000,
+        help="Hard parent-schedule cap for exact independent daily search.",
+    )
+    parser.add_argument(
+        "--independent-exhaustive-daily-cap",
+        type=int,
+        default=10_000,
+        help="Hard unique daily SUMO-unit cap for exact independent search.",
+    )
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--baseline-cache", type=Path)
+    parser.add_argument(
+        "--daily-result-cache",
+        type=Path,
+        default=Path("runs") / "closure-search-daily-results",
+        help=(
+            "Content-addressed independent-day evidence cache used when the "
+            "search spec selects independent_daily_reset_v1."
+        ),
+    )
     parser.add_argument("--seed-workers", type=int, default=1)
+    parser.add_argument(
+        "--daily-workers",
+        type=int,
+        default=3,
+        help=(
+            "Isolated SUMO/TraCI worker interpreters for independent daily "
+            "units. Ignored by continuous searches."
+        ),
+    )
+    execution = parser.add_mutually_exclusive_group()
+    execution.add_argument(
+        "--warm-execution",
+        dest="warm_execution",
+        action="store_true",
+        help=(
+            "Use the validated SUMO warm-state path. Cache misses bootstrap "
+            "a provisional prefix; any unusable warm attempt falls back to "
+            "the unchanged cold path (default)."
+        ),
+    )
+    execution.add_argument(
+        "--cold-execution",
+        dest="warm_execution",
+        action="store_false",
+        help="Disable warm-state execution and run every observation cold.",
+    )
+    parser.set_defaults(warm_execution=True)
     return parser.parse_args()
 
 
@@ -157,8 +334,20 @@ def main() -> None:
         raise SystemExit("--baseline-trip-duration-p99-s must be positive")
     if args.bounded_exhaustive_cap <= 0:
         raise SystemExit("--bounded-exhaustive-cap must be positive")
+    if (
+        args.independent_exhaustive_candidate_cap <= 0
+        or args.independent_exhaustive_daily_cap <= 0
+    ):
+        raise SystemExit("independent exhaustive caps must be positive")
     if args.seed_workers < 1:
         raise SystemExit("--seed-workers must be at least 1")
+    if args.daily_workers < 1:
+        raise SystemExit("--daily-workers must be at least 1")
+    if args.warm_execution and args.seed_workers != 1:
+        raise SystemExit(
+            "warm execution currently requires --seed-workers 1 because the "
+            "production TraCI controller owns one active connection; use "
+            "--cold-execution for parallel seed workers")
     approved = approved_seed_workers()
     if args.seed_workers > approved and os.environ.get(
             "MONTHLY_SEED_WORKER_BENCHMARK") == "1":
@@ -178,6 +367,17 @@ def main() -> None:
             "benchmark_seed_workers.py to establish identical evidence and a "
             "measured peak RSS first; parallel SUMO stays closed until then."
         )
+    if args.daily_workers > approved:
+        raise SystemExit(
+            f"--daily-workers {args.daily_workers} exceeds the {approved} "
+            "approved isolated SUMO worker count"
+        )
+    if args.seed_workers > 1 and args.daily_workers > 1:
+        raise SystemExit(
+            "parallel seed workers and parallel daily workers cannot be "
+            "combined; that would multiply the approved SUMO process ceiling"
+        )
+    runner = None
     try:
         spec = load_closure_search_spec(args.spec)
         policy = MonthlySearchPolicy.from_dict(_read(args.policy))
@@ -195,8 +395,29 @@ def main() -> None:
             "study_provenance_key": study_key,
             "seed_workers": args.seed_workers,
         }
+        if args.warm_execution:
+            # Construction is process-free. TraCI is resolved and SUMO starts
+            # only if an eligible observation actually enters the warm path.
+            # A cache miss bootstraps a provisional prefix. The runner retains
+            # its fail-closed cold fallback if that bootstrap or any later
+            # warm-path step is unusable.
+            from traffic_sim.simulation.warm_state_boundary import (
+                WarmPrefixController,
+            )
+            runner_options.update({
+                "warm_execution": True,
+                "boundary_controller": WarmPrefixController(),
+            })
         if args.baseline_cache is not None:
             runner_options["cache_root"] = args.baseline_cache
+        if (
+            spec.interday_policy == "independent_daily_reset_v1"
+            and args.demand_archive is not None
+        ):
+            raise ValueError(
+                "independent daily searches require exact per-date demand "
+                "resolution; --demand-archive compatibility mode is not valid"
+            )
         if args.demand_archive is not None:
             runner = ArchivedDemandSumoRunner(
                 spec,
@@ -204,13 +425,34 @@ def main() -> None:
                 **runner_options,
             )
         else:
-            runner = MonthlyDemandResolverRunner(
+            resolved_runner = MonthlyDemandResolverRunner(
                 spec,
                 runs_root=args.demand_runs_root,
                 release_root=args.demand_release_root,
                 build_missing=not args.no_build_missing_demand,
+                envelope_policy=(
+                    INDEPENDENT_DAILY_ENVELOPE_POLICY
+                    if spec.interday_policy == "independent_daily_reset_v1"
+                    else EnvelopePolicy()
+                ),
                 **runner_options,
             )
+            if spec.interday_policy == "independent_daily_reset_v1":
+                daily_runner = (
+                    IsolatedDailySumoRunner(
+                        resolved_runner,
+                        unit_workers=args.daily_workers,
+                    )
+                    if args.daily_workers > 1
+                    else resolved_runner
+                )
+                runner = IndependentDailyRunner(
+                    spec,
+                    daily_runner=daily_runner,
+                    cache_root=args.daily_result_cache,
+                )
+            else:
+                runner = resolved_runner
         if args.screening_mode == "proxy":
             # Screen with EXACTLY the frozen v4 campaign policy. Until the
             # fresh gate passes, the new shortlist remains release-blocked;
@@ -222,10 +464,26 @@ def main() -> None:
                 road_domain_status="in_domain",
                 policy=HELD_OUT_VALIDATED_SHORTLIST_POLICY,
             )
-        else:
+        elif args.screening_mode == "bounded-exhaustive":
             screen_builder = lambda path: _bounded_exhaustive_builder(
                 path,
                 maximum_candidates=args.bounded_exhaustive_cap,
+            )
+        else:
+            if spec.interday_policy != "independent_daily_reset_v1":
+                raise ValueError(
+                    "--screening-mode=independent-exhaustive requires an "
+                    "independent daily search spec"
+                )
+            screen_builder = lambda path: _independent_exhaustive_builder(
+                path,
+                maximum_candidates=(
+                    args.independent_exhaustive_candidate_cap
+                ),
+                maximum_daily_units=args.independent_exhaustive_daily_cap,
+                baseline_trip_duration_p99_s=(
+                    args.baseline_trip_duration_p99_s
+                ),
             )
         result = run_monthly_search(
             spec,
@@ -236,6 +494,10 @@ def main() -> None:
         )
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
         raise SystemExit(str(exc)) from exc
+    finally:
+        cleanup = getattr(runner, "cleanup", None)
+        if callable(cleanup):
+            cleanup()
 
     boundary = result.get("claim_boundary", {})
     print(

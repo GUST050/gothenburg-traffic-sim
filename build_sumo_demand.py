@@ -47,6 +47,13 @@ from traffic_sim.core.fingerprint import make_fingerprint, sha256_file
 from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
                                          write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
+from traffic_sim.demand.build_lock import demand_build_lock, parent_holds_lock
+from traffic_sim.demand.provenance import (
+    augment_calibrated_edge_support,
+    validate_calibrated_provenance,
+)
+from traffic_sim.demand.route_support import route_edges
+from traffic_sim.demand.source_identity import demand_source_paths
 from train_agent1 import HOLIDAY_DATES_2025
 from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
 
@@ -638,6 +645,8 @@ def main() -> None:
     # target, without reconstructing a potentially newer split model later.
     targets_by_variant: dict[str, list[dict[str, float]]] = {}
     report = None
+    candidate_provenance = None
+    edge_support_augmentation = None
 
     if args.engine == "pfe":
         # ── The full hierarchy: hard counts + conservation bounds + priors ────
@@ -816,6 +825,67 @@ def main() -> None:
                 "--seed", str(args.seed),
             ], home)
 
+    if args.engine == "pfe":
+        required_route_edges = route_edges(cand_path)
+        measured_route_edges = {
+            edge_id for edge_ids in sensor_edges.values() for edge_id in edge_ids
+        }
+        edge_support_augmentation = {"schema_version": 1, "status": "pass",
+                                     "variants": {}}
+        for suffix, key in variants:
+            route_path = (calib_path if suffix == "" else
+                          SUMO_DIR / f"calibrated{suffix}.rou.xml")
+            agent_path = route_path.with_name(
+                route_path.name.replace(".rou.xml", ".agents.json"))
+            support_report = augment_calibrated_edge_support(
+                cand_path,
+                cand_path.with_name(cand_path.name.replace(
+                    ".rou.xml", ".meta.json")),
+                route_path,
+                agent_path,
+                required_edges=required_route_edges,
+                forbidden_edges=measured_route_edges,
+                days=args.days,
+            )
+            edge_support_augmentation["variants"][key] = support_report
+            if key in variant_fit_reports:
+                variant_fit_reports[key]["calibration_core_vehicles"] = (
+                    variant_fit_reports[key].get("vehicles"))
+                variant_fit_reports[key]["support_augmentation_vehicles"] = (
+                    support_report["vehicles_added"])
+                variant_fit_reports[key]["vehicles"] = (
+                    int(variant_fit_reports[key].get("vehicles") or 0)
+                    + support_report["vehicles_added"])
+            if suffix == "" and report is not None:
+                report["calibration_core_vehicles"] = report.get("vehicles")
+                report["support_augmentation_vehicles"] = support_report[
+                    "vehicles_added"]
+                report["vehicles"] = int(report.get("vehicles") or 0) \
+                    + support_report["vehicles_added"]
+            print(f"  {key} full-edge calibrated support: "
+                  f"{support_report['required_edges']}/"
+                  f"{support_report['required_edges']} edges, "
+                  f"{support_report['vehicles_added']} explicit support vehicles")
+        candidate_provenance = validate_calibrated_provenance(
+            cand_path,
+            cand_path.with_name(cand_path.name.replace(".rou.xml", ".meta.json")),
+            [
+                (
+                    calib_path if suffix == "" else
+                    SUMO_DIR / f"calibrated{suffix}.rou.xml",
+                    (calib_path if suffix == "" else
+                     SUMO_DIR / f"calibrated{suffix}.rou.xml").with_name(
+                         (calib_path if suffix == "" else
+                          SUMO_DIR / f"calibrated{suffix}.rou.xml").name.replace(
+                              ".rou.xml", ".agents.json")),
+                )
+                for suffix, _key in variants
+            ],
+        )
+        print("  calibrated candidate provenance: "
+              f"{candidate_provenance['vehicles']} vehicles across "
+              f"{len(candidate_provenance['variants'])} variant(s) — PASS")
+
     meta = demand_metadata(
         start_date=args.start_date, days=args.days, source=args.source,
         begin=args.begin, end=args.end, qi_start=qi_start,
@@ -854,6 +924,10 @@ def main() -> None:
         }
     if variant_fit_reports:
         meta["pfe_fit_variants"] = variant_fit_reports
+    if candidate_provenance is not None:
+        meta["candidate_provenance"] = candidate_provenance
+    if edge_support_augmentation is not None:
+        meta["edge_support_augmentation"] = edge_support_augmentation
     if targets_by_variant:
         meta["sensor_targets"] = {
             "schema_version": 1,
@@ -915,29 +989,16 @@ def main() -> None:
         "priors": SUMO_DIR / "prior_flows.json",
         "assignment_priors": SUMO_DIR / "assignment_priors.json",
         "calibrated_q50": SUMO_DIR / "calibrated.rou.xml",
+        "calibrated_q50_agents": SUMO_DIR / "calibrated.agents.json",
         "demand_spec": demand_spec_path,
     }
     for suffix, _key in variants:
         if suffix:
             fingerprint_artifacts[f"calibrated{suffix}"] = (
                 SUMO_DIR / f"calibrated{suffix}.rou.xml")
-    source_files = {
-        "build_sumo_demand": Path(__file__),
-        "build_data": Path("build_data.py"),
-        "sensor_registry": Path("traffic_sim/intake/sensors.py"),
-        "sensor_registry_data": Path("data_in/sensors.json"),
-        "build_candidates": Path("build_candidates.py"),
-        "build_sumo_net": Path("build_sumo_net.py"),
-        "pfe": Path("traffic_sim/demand/pfe.py"),
-        "pfe_kernel": Path("traffic_sim/demand/pfe_kernel.py"),
-        "candidate_cache": Path("traffic_sim/demand/cache.py"),
-        "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
-        "assignment_priors": Path("assignment_priors.py"),
-        "prior_flows": Path("prior_flows.py"),
-        "observability": Path("observability.py"),
-    }
-    for module_path in sorted(Path("demand").glob("*.py")):
-        source_files[f"demand/{module_path.name}"] = module_path
+            fingerprint_artifacts[f"calibrated{suffix}_agents"] = (
+                SUMO_DIR / f"calibrated{suffix}.agents.json")
+    source_files = demand_source_paths(Path.cwd())
     # The exact contract is written only after all expensive calibration and
     # structure gates have completed, immediately before the matching metadata
     # fingerprint is created.
@@ -1043,4 +1104,8 @@ def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
 
 
 if __name__ == "__main__":
-    _tracked_main()
+    if parent_holds_lock():
+        _tracked_main()
+    else:
+        with demand_build_lock():
+            _tracked_main()

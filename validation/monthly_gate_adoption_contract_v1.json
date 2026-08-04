@@ -1,0 +1,123 @@
+{
+  "artifacts": {
+    "adoption_certificate": {
+      "content_key_algorithm": "sha256 over canonical JSON of the certificate minus content_key",
+      "default_path": "validation/monthly_gate_adoption_certificate.json",
+      "exact_fields": [
+        "campaign_version",
+        "claim_scope",
+        "content_key",
+        "gate_record_bytes",
+        "gate_record_sha256",
+        "kind",
+        "manifest_content_key",
+        "manifest_path",
+        "proxy_version",
+        "required_cases",
+        "schema_version",
+        "shortlist_policy_content_key",
+        "shortlist_version"
+      ],
+      "produced_by": "post-review adoption task (never by a campaign run)"
+    },
+    "gate_record": {
+      "default_path": "validation/monthly_gate_record.json",
+      "exact_fields": [
+        "case_count",
+        "completed_cases",
+        "failure_recall_definition",
+        "gate_checks",
+        "gate_status",
+        "global_best_claim_allowed",
+        "heldout_set",
+        "kind",
+        "manifest_content_key",
+        "metrics",
+        "practical_winner_definition",
+        "proxy_version",
+        "regret_definition",
+        "required_cases",
+        "schema_version",
+        "shortlist_policy_content_key",
+        "shortlist_version",
+        "thresholds",
+        "ui_exposure_allowed"
+      ],
+      "produced_by": "run_monthly_proxy_validation.gate_record_for"
+    }
+  },
+  "authorizes": "nothing by itself: this contract defines the seam. No gate record and no adoption certificate exist for v5, and none is created by this task.",
+  "binding_rules": [
+    "both artifacts must be regular, non-symlink files; a symlink is refused rather than followed",
+    "certificate key set must be exact; unknown or missing fields are fatal",
+    "certificate content_key must recompute over its own canonical body",
+    "gate record byte length AND sha256 must equal the certificate's binding",
+    "the manifest named by the certificate must production-validate and its content key must equal the certificate's",
+    "the campaign must not be in REJECTED_CAMPAIGNS",
+    "every manifest source_fingerprint must still match the live repository file",
+    "gate record key set must be exact; identity fields must agree with BOTH certificate and manifest",
+    "required/completed/case_count must all equal the frozen manifest case count",
+    "thresholds must equal the production threshold set (manifest gate + minimum_ranking_case_fraction)",
+    "gate_checks key set must be exact for the frozen gate; every check must be true",
+    "metric key set must be exactly the producer's; values must satisfy their declared domains",
+    "every numerically-derivable check is RECOMPUTED from metrics and thresholds and must agree",
+    "gate_status must be pass and both claim flags true"
+  ],
+  "claim_scope": "sumo_verified_schedules_within_the_enumerated_search_space",
+  "content_key": "26a9ca0234ec981f7b79f6dadeac6a4c0b0a2be7496c97da700157d6cf156f40",
+  "contract_version": "v1",
+  "fail_closed": "any absence, alteration, unknown field, earlier campaign, incomplete run or mismatch returns None; the product then uses bounded-exhaustive screening and forbids UI/global-best claims",
+  "frozen_at": "2026-07-27",
+  "gate_record_value_schema": {
+    "all_numeric_values_must_be_finite": true,
+    "correlation_metrics_minus1_to_1": [
+      "median_spearman",
+      "median_spearman_discriminating"
+    ],
+    "exact_metric_keys": [
+      "discriminating_case_fraction",
+      "discriminating_practical_winner_recall",
+      "failure_disqualification_recall",
+      "median_objective_spread_s",
+      "median_spearman",
+      "median_spearman_discriminating",
+      "p90_normalized_shortlist_regret",
+      "practical_winner_recall",
+      "ranking_case_fraction",
+      "spearman_case_fraction",
+      "total_disqualified_schedules",
+      "winner_recall"
+    ],
+    "non_nullable_metrics": [
+      "discriminating_case_fraction",
+      "ranking_case_fraction",
+      "spearman_case_fraction",
+      "total_disqualified_schedules",
+      "winner_recall"
+    ],
+    "nonnegative_integer_counts": [
+      "total_disqualified_schedules"
+    ],
+    "nonnegative_metrics": [
+      "median_objective_spread_s",
+      "p90_normalized_shortlist_regret"
+    ],
+    "schema_version": 1,
+    "unit_interval_metrics": [
+      "discriminating_case_fraction",
+      "discriminating_practical_winner_recall",
+      "failure_disqualification_recall",
+      "practical_winner_recall",
+      "ranking_case_fraction",
+      "spearman_case_fraction",
+      "winner_recall"
+    ]
+  },
+  "kind": "monthly_gate_adoption_contract",
+  "purpose": "Adoption of a monthly held-out gate requires TWO independent artifacts. The gate record alone is self-certifying: it asserts its own campaign identity, so a byte-level edit to any metric, threshold or claim flag still validated against itself. A post-review adoption certificate binds the record's exact bytes together with the frozen manifest identity and the bounded claim scope.",
+  "rejected_campaigns": [
+    "v4"
+  ],
+  "schema_version": 1,
+  "thresholds_rule": "record thresholds must equal EXACTLY the production evaluator's set: the frozen manifest gate PLUS manifest.minimum_ranking_case_fraction. Equality with manifest['gate'] alone is WRONG and would make every real gate_record_for() record unadoptable."
+}

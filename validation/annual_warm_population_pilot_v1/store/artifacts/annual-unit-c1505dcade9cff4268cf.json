@@ -1,0 +1,140 @@
+{
+  "content_key": "03e0b9f0481078bf31a29deef3a6759a5a144c09494ab0072212faba4fd4dec0",
+  "members": {
+    "demand_build_spec.json": {
+      "blob": "blobs/a4/a47c69130bb6db09d06367caedaa37338b2339b4ed1f486174e6c77d5bc6470e.gz",
+      "content_bytes": 270,
+      "content_sha256": "a47c69130bb6db09d06367caedaa37338b2339b4ed1f486174e6c77d5bc6470e",
+      "encoding": "gzip",
+      "stored_bytes": 188,
+      "stored_sha256": "b20036aecb9f293d7fa01f2ed5a250224577d57ad1ede5663f94452b447b7e10"
+    },
+    "demand_manifest.json": {
+      "blob": "blobs/1f/1f8bb9d31b7e61036203a61f6d1bbef617c0bd056945c3821edc0ec593bf77ba.gz",
+      "content_bytes": 4315,
+      "content_sha256": "1f8bb9d31b7e61036203a61f6d1bbef617c0bd056945c3821edc0ec593bf77ba",
+      "encoding": "gzip",
+      "stored_bytes": 1567,
+      "stored_sha256": "25c9ef748945da19d45c62180442e544948b15f10f5cb51dfb32bd188c740487"
+    },
+    "demand_meta.json": {
+      "blob": "blobs/be/be4675595163f815230a69b2b741507e1d9063078c109c81b5f1f8d1770c07d0.gz",
+      "content_bytes": 141029,
+      "content_sha256": "be4675595163f815230a69b2b741507e1d9063078c109c81b5f1f8d1770c07d0",
+      "encoding": "gzip",
+      "stored_bytes": 17693,
+      "stored_sha256": "484adf8aae203111e9365c6b1b30840787b53473286fa5a98dd50dcffb14c41f"
+    },
+    "prefix_evidence.json": {
+      "blob": "blobs/f7/f7c1d890ffb518ef424c374ce88be8c8673ccc3957bc9a05fa2dcf0ed4429dcc.gz",
+      "content_bytes": 42158,
+      "content_sha256": "f7c1d890ffb518ef424c374ce88be8c8673ccc3957bc9a05fa2dcf0ed4429dcc",
+      "encoding": "gzip",
+      "stored_bytes": 7259,
+      "stored_sha256": "0d9ced4f19b112eef812ec79e477310e57da371fa62969034963e6d098a51c10"
+    },
+    "route.rou.xml": {
+      "blob": "blobs/06/066206caa394f1ad686af5c39aeb310c6073bdc4409a4b985e8c1ee15d7dd29d.gz",
+      "content_bytes": 26017822,
+      "content_sha256": "066206caa394f1ad686af5c39aeb310c6073bdc4409a4b985e8c1ee15d7dd29d",
+      "encoding": "gzip",
+      "stored_bytes": 2278257,
+      "stored_sha256": "5c2b3f14ad006f6bc4ad2db626f33aaa5014c3b8fe790ce26be943c81c2c6181"
+    },
+    "state.xml.gz": {
+      "blob": "blobs/b7/b74f9a8ad158a6909bf945a511df493e48765073ca6c68f2419dcef47c3a09ae.gz",
+      "content_bytes": 72595,
+      "content_sha256": "b74f9a8ad158a6909bf945a511df493e48765073ca6c68f2419dcef47c3a09ae",
+      "encoding": "gzip",
+      "stored_bytes": 72577,
+      "stored_sha256": "dfd612d47f63994332c548f451fa74cc81f7ffa68c32f6ddca68606c063dd075"
+    }
+  },
+  "metadata": {
+    "checkpoint_s": 24300,
+    "demand_archive": {
+      "archive": "/Users/gt/Documents/gs-project/runs/demand-20260719-103337-2ee86c10-599b",
+      "archive_content_key": "aefaf8f8b4da2e82c7013638d4edc1c473f9c6645862774fbfe46484366cb178",
+      "archive_manifest_sha256": "1f8bb9d31b7e61036203a61f6d1bbef617c0bd056945c3821edc0ec593bf77ba",
+      "demand_build_spec": {
+        "begin": "00:00",
+        "build_key": "18d9c712dc356ef3",
+        "days": 1,
+        "end": "24:00",
+        "kind": "demand_build",
+        "purpose": "closure_envelope",
+        "schema_version": 1,
+        "source": "forecast",
+        "start_date": "2027-07-15",
+        "structural_reference_date": "2025-09-16"
+      },
+      "finished_at": "2026-07-19T10:36:33Z",
+      "outputs": [
+        {
+          "bytes": 141029,
+          "name": "demand_meta.json",
+          "sha256": "be4675595163f815230a69b2b741507e1d9063078c109c81b5f1f8d1770c07d0"
+        },
+        {
+          "bytes": 270,
+          "name": "demand_build_spec.json",
+          "sha256": "a47c69130bb6db09d06367caedaa37338b2339b4ed1f486174e6c77d5bc6470e"
+        },
+        {
+          "bytes": 26017822,
+          "name": "calibrated.rou.xml",
+          "sha256": "066206caa394f1ad686af5c39aeb310c6073bdc4409a4b985e8c1ee15d7dd29d"
+        },
+        {
+          "bytes": 25136233,
+          "name": "calibrated_v1.rou.xml",
+          "sha256": "0829171a8ecfdb354b070b7e3ad21dc9665505439a9a6fb053057af042e3163e"
+        },
+        {
+          "bytes": 26999238,
+          "name": "calibrated_v2.rou.xml",
+          "sha256": "d9f55531629ce59bf101a77990bcbee017d6c211e5922dff76d5134450ea8629"
+        }
+      ],
+      "run_id": "demand-20260719-103337-2ee86c10-599b"
+    },
+    "demand_build_key": "18d9c712dc356ef3",
+    "demand_build_spec": {
+      "begin": "00:00",
+      "build_key": "18d9c712dc356ef3",
+      "days": 1,
+      "end": "24:00",
+      "kind": "demand_build",
+      "purpose": "closure_envelope",
+      "schema_version": 1,
+      "source": "forecast",
+      "start_date": "2027-07-15",
+      "structural_reference_date": "2025-09-16"
+    },
+    "plan_content_key": "b89e4a5e617ebe11ba6d448a6ccb5a1afa9af13eaac29ace3ed152292105a542",
+    "schema": "annual_warm_unit_metadata_v1",
+    "seed": 1001,
+    "slot": {
+      "closure_end": "2027-07-15T15:00:00",
+      "closure_start": "2027-07-15T07:00:00",
+      "daily_end": "15:00",
+      "daily_start": "07:00",
+      "day_count": 1,
+      "demand_build_key": "18d9c712dc356ef3",
+      "first_work_date": "2027-07-15",
+      "requested_checkpoint_s": 24300,
+      "requested_checkpoint_time": "2027-07-15T06:45:00",
+      "required_work_minutes": 480,
+      "scenario_end": "2027-07-16T00:00:00",
+      "scenario_start": "2027-07-15T00:00:00",
+      "scheduled_work_minutes": 480,
+      "slot_id": "annual-slot-53ea44a9ac52aec902c0"
+    },
+    "slot_id": "annual-slot-53ea44a9ac52aec902c0",
+    "unit_id": "annual-unit-c1505dcade9cff4268cf",
+    "variant": "q50"
+  },
+  "plan_content_key": "b89e4a5e617ebe11ba6d448a6ccb5a1afa9af13eaac29ace3ed152292105a542",
+  "schema": "annual_warm_artifact_v1",
+  "unit_id": "annual-unit-c1505dcade9cff4268cf"
+}

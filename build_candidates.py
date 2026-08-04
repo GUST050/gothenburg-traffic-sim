@@ -110,6 +110,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import networkx as nx
 import osmnx as ox
 from shapely.geometry import Point, shape
 from shapely.strtree import STRtree
@@ -544,6 +545,46 @@ def load_sumo_routing_data(
 def load_sumo_edge_ids(path: Path = NET_PATH) -> set[str]:
     """Backward-compatible edge-ID view of :func:`load_sumo_routing_data`."""
     return load_sumo_routing_data(path)[0]
+
+
+def load_sumo_connection_graph(
+    path: Path,
+    edge_ids: set[str],
+    travel_times: dict[str, float],
+    *,
+    include_uturns: bool = False,
+) -> nx.DiGraph:
+    """Build the legal passenger-routing edge graph published by SUMO.
+
+    GraphML node adjacency is insufficient here: netconvert's connection
+    table is the authority for legal turns.  Choosing support endpoints on
+    the looser GraphML graph made duarouter repair otherwise plausible OD
+    pairs, invalidating their provenance.  Nodes in this graph are SUMO edge
+    IDs and arcs are legal ``from -> to`` connections.
+    """
+    root = ET.parse(path).getroot()
+    graph = nx.DiGraph()
+    graph.add_nodes_from(edge_ids)
+    for connection in root.findall("connection"):
+        source = connection.get("from")
+        destination = connection.get("to")
+        # A legal U-turn is still an implausible support trip: selecting the
+        # reverse edge as the "nearest" endpoint creates an edge-out/edge-back
+        # route that --remove-loops then quite correctly repairs away. Ordinary
+        # candidates reject the same geometry in drop_uturn_routes().
+        if not include_uturns and connection.get("dir") == "t":
+            continue
+        if source not in edge_ids or destination not in edge_ids:
+            continue
+        cost = travel_times.get(destination)
+        if cost is None or not math.isfinite(cost) or cost <= 0:
+            continue
+        if not graph.has_edge(source, destination) \
+                or cost < graph[source][destination]["weight"]:
+            graph.add_edge(source, destination, weight=cost)
+    if graph.number_of_edges() == 0:
+        raise ValueError(f"SUMO network {path} contains no legal edge connections")
+    return graph
 
 
 def load_graph_edges(G, routable_edge_ids: set[str] | None = None):
@@ -1203,7 +1244,84 @@ def prune_candidate_metadata(metadata_path: Path | None, routed_path: Path) -> N
         json.dump(document, f, separators=(",", ":"))
 
 
-def drop_uturn_routes(path: Path) -> None:
+def replace_support_routes(
+    diverse_path: Path,
+    deterministic_path: Path,
+    support_ids: set[str],
+) -> dict[str, int]:
+    """Replace randomized support routes with deterministic shortest paths.
+
+    Ordinary candidates intentionally use ``--weights.random-factor 2`` for
+    route diversity. Edge-support candidates have a different contract: each
+    must survive the loop/detour realism filters. Route both batches through
+    duarouter, then take ordinary vehicles from the diverse result and support
+    vehicles from the deterministic result. IDs and departures are unchanged.
+    """
+    diverse_tree = ET.parse(diverse_path)
+    diverse_root = diverse_tree.getroot()
+    deterministic_root = ET.parse(deterministic_path).getroot()
+    deterministic = {
+        vehicle.get("id", ""): vehicle
+        for vehicle in deterministic_root.findall("vehicle")
+        if vehicle.get("id") in support_ids
+    }
+    missing = sorted(support_ids - set(deterministic))
+    if missing:
+        raise ValueError(
+            f"deterministic routing omitted {len(missing)} edge-support "
+            f"candidate(s): {', '.join(missing[:10])}")
+    ordinary = [
+        vehicle for vehicle in diverse_root.findall("vehicle")
+        if vehicle.get("id") not in support_ids
+    ]
+    for vehicle in diverse_root.findall("vehicle"):
+        diverse_root.remove(vehicle)
+    vehicles = ordinary + [deterministic[vehicle_id]
+                           for vehicle_id in sorted(support_ids)]
+    vehicles.sort(key=lambda vehicle: (
+        float(vehicle.get("depart", "0")), vehicle.get("id", "")))
+    diverse_root.extend(vehicles)
+    diverse_tree.write(diverse_path)
+    return {
+        "ordinary": len(ordinary),
+        "support": len(deterministic),
+        "total": len(vehicles),
+    }
+
+
+def replace_support_routes_from_requests(
+    diverse_path: Path,
+    requests: list[dict],
+) -> dict[str, int]:
+    """Install exact legal shortest paths computed on SUMO's connection graph."""
+    tree = ET.parse(diverse_path)
+    root = tree.getroot()
+    by_id = {request["id"]: request for request in requests}
+    ordinary = [
+        vehicle for vehicle in root.findall("vehicle")
+        if vehicle.get("id") not in by_id
+    ]
+    for vehicle in root.findall("vehicle"):
+        root.remove(vehicle)
+    support = []
+    for vehicle_id, request in sorted(by_id.items()):
+        vehicle = ET.Element(
+            "vehicle", id=vehicle_id, depart=f'{request["depart"]:.1f}')
+        ET.SubElement(vehicle, "route", edges=" ".join(request["route_edges"]))
+        support.append(vehicle)
+    vehicles = ordinary + support
+    vehicles.sort(key=lambda vehicle: (
+        float(vehicle.get("depart", "0")), vehicle.get("id", "")))
+    root.extend(vehicles)
+    tree.write(diverse_path)
+    return {
+        "ordinary": len(ordinary),
+        "support": len(support),
+        "total": len(vehicles),
+    }
+
+
+def drop_uturn_routes(path: Path, exempt_ids: set[str] | None = None) -> None:
     """Direction-aware gates + a stiff turnaround penalty (see main()) cut
     literal U-turns from ~80% to ~10% of via-forced candidates — not zero,
     because a straight-line gate filter is only an approximation of what the
@@ -1235,6 +1353,8 @@ def drop_uturn_routes(path: Path) -> None:
     root = tree.getroot()
     dropped = 0
     for veh in list(root):
+        if veh.get("id") in (exempt_ids or set()):
+            continue
         route = veh.find("route")
         edges = route.get("edges").split()
         if route_visits_a_node_twice(edges):
@@ -1247,7 +1367,8 @@ def drop_uturn_routes(path: Path) -> None:
 
 
 def drop_excessive_detours(path: Path, G, max_stretch: float,
-                           edge_costs: dict[str, float] | None = None) -> None:
+                           edge_costs: dict[str, float] | None = None,
+                           exempt_ids: set[str] | None = None) -> None:
     """Drop candidates whose OWN realized path costs more than max_stretch
     times the TRUE shortest path between their OWN entry and exit nodes —
     "enforce the actual invariant directly" (this file's own established
@@ -1305,6 +1426,8 @@ def drop_excessive_detours(path: Path, G, max_stretch: float,
     info: list[tuple[object, int, int, float]] = []
     entries_needed: set[int] = set()
     for veh in vehicles:
+        if veh.get("id") in (exempt_ids or set()):
+            continue
         route = veh.find("route")
         edges = route.get("edges").split()
         entry = int(edges[0].split("_")[0])
@@ -2544,6 +2667,213 @@ class CandidateStructure:
     routing_costs: dict[str, float] | None = None
 
 
+def generate_edge_coverage_requests(
+    G,
+    edges: list[dict],
+    hmass: np.ndarray,
+    amass: dict[str, np.ndarray],
+    entries: list[tuple[str, int]],
+    exits: list[tuple[str, int]],
+    measured: list[str],
+    routing_costs: dict[str, float],
+    routing_connections: nx.DiGraph | None = None,
+    fallback_connections: nx.DiGraph | None = None,
+) -> list[dict]:
+    """Create one provenance-labelled support request per non-sensor edge.
+
+    Ordinary candidates remain sensor-conditioned.  That is appropriate for
+    calibration but left roads outside all sampled paths impossible to study.
+    These additional requests use real home/activity access edges or boundary
+    gates where possible and make the uncovered edge an endpoint of an exact
+    shortest legal SUMO-connection path.
+    They are a *support set*, not extra observed trips: PFE may use them when
+    weak assignment priors require the corridor, while purpose-time margins
+    deliberately ignore their synthetic sampling time.
+    """
+    measured_set = set(measured)
+    edge_by_id = {edge["id"]: edge for edge in edges}
+
+    graph = nx.DiGraph()
+    graph.add_nodes_from(edge_by_id)
+    if routing_connections is not None:
+        graph.add_edges_from(routing_connections.edges(data=True))
+    else:
+        # Synthetic-test/compatibility fallback. Production passes SUMO's
+        # exact connection graph above; here ordinary graph-node adjacency
+        # supplies the equivalent edge-to-edge relation.
+        starting_at: dict[int, list[str]] = {}
+        for edge in edges:
+            starting_at.setdefault(int(edge["u"]), []).append(edge["id"])
+        for edge in edges:
+            for following in starting_at.get(int(edge["v"]), ()):
+                cost = float(routing_costs[following])
+                graph.add_edge(edge["id"], following, weight=cost)
+
+    source_by_edge: dict[str, tuple[str, str, float]] = {}
+    for index, edge in enumerate(edges):
+        edge_id = edge["id"]
+        mass = float(hmass[index])
+        if mass > 0 and edge_id not in measured_set:
+            source_by_edge[edge_id] = (edge_id, "home", mass)
+    for edge_id, _node in entries:
+        if edge_id in measured_set or edge_id not in edge_by_id:
+            continue
+        record = (edge_id, "entry", 0.0)
+        source_by_edge.setdefault(edge_id, record)
+
+    destination_by_edge: dict[str, tuple[str, str, float]] = {}
+    for index, edge in enumerate(edges):
+        edge_id = edge["id"]
+        choices = [(purpose, float(values[index]))
+                   for purpose, values in amass.items()
+                   if float(values[index]) > 0]
+        if not choices or edge_id in measured_set:
+            continue
+        purpose, mass = max(choices, key=lambda item: item[1])
+        record = (edge_id, purpose, mass)
+        destination_by_edge[edge_id] = record
+    for edge_id, _node in exits:
+        if edge_id in measured_set or edge_id not in edge_by_id:
+            continue
+        record = (edge_id, "exit", 0.0)
+        destination_by_edge.setdefault(edge_id, record)
+
+    if not source_by_edge or not destination_by_edge:
+        raise ValueError("edge coverage requires home/entry and activity/exit endpoints")
+    _source_distance, source_paths = nx.multi_source_dijkstra(
+        graph, set(source_by_edge), weight="weight")
+    _destination_distance, destination_paths = nx.multi_source_dijkstra(
+        graph.reverse(copy=False), set(destination_by_edge), weight="weight")
+
+    def nearest_source(target_edge: str, excluded_edge: str | None = None):
+        path = source_paths.get(target_edge)
+        record = source_by_edge.get(path[0]) if path else None
+        if record is not None and record[0] != excluded_edge:
+            return record
+        for edge_id in nx.single_source_dijkstra_path_length(
+                graph.reverse(copy=False), target_edge, weight="weight"):
+            record = source_by_edge.get(edge_id)
+            if record is not None and record[0] != excluded_edge:
+                return record
+        return None
+
+    def nearest_destination(target_edge: str, excluded_edge: str | None = None):
+        path = destination_paths.get(target_edge)
+        record = destination_by_edge.get(path[0]) if path else None
+        if record is not None and record[0] != excluded_edge:
+            return record
+        for edge_id in nx.single_source_dijkstra_path_length(
+                graph, target_edge, weight="weight"):
+            record = destination_by_edge.get(edge_id)
+            if record is not None and record[0] != excluded_edge:
+                return record
+        return None
+
+    requests: list[dict] = []
+    targets = sorted(set(edge_by_id) - measured_set)
+    for position, target_id in enumerate(targets):
+        # Make the guaranteed edge an ENDPOINT, never a forced intermediate
+        # via.  A first real build showed why this matters: duarouter quite
+        # reasonably satisfied thousands of forced-via requests by repairing
+        # endpoints or introducing a loop, after which the existing realism
+        # filters rejected them.  As an endpoint the target is present by
+        # construction and the remainder is one ordinary shortest path.
+        origin = None
+        destination = None
+        synthetic_endpoint = False
+        unavoidable_loop = False
+        target_source = source_by_edge.get(target_id)
+        target_destination = destination_by_edge.get(target_id)
+        if target_source is not None:
+            origin = target_source
+            destination = nearest_destination(target_id, target_id)
+        if (origin is None or destination is None) \
+                and target_destination is not None:
+            alternative_origin = nearest_source(target_id, target_id)
+            if alternative_origin is not None:
+                origin = alternative_origin
+                destination = target_destination
+        if origin is None or destination is None:
+            alternative_destination = nearest_destination(target_id, target_id)
+            if alternative_destination is not None:
+                origin = (target_id, "network", 0.0)
+                destination = alternative_destination
+                synthetic_endpoint = True
+            else:
+                alternative_origin = nearest_source(target_id, target_id)
+                if alternative_origin is not None:
+                    origin = alternative_origin
+                    destination = (target_id, "network", 0.0)
+                    synthetic_endpoint = True
+        if (origin is None or destination is None) \
+                and fallback_connections is not None:
+            # Some SUMO edges form isolated two-edge components whose only
+            # legal connection is a turnaround. A city-connected OD would be
+            # false provenance, so keep this explicit support route local.
+            following = sorted(
+                edge_id for edge_id in fallback_connections.successors(target_id)
+                if edge_id != target_id)
+            if following:
+                origin = (target_id, "network", 0.0)
+                destination = (following[0], "network", 0.0)
+                synthetic_endpoint = True
+                unavoidable_loop = True
+            else:
+                preceding = sorted(
+                    edge_id for edge_id in fallback_connections.predecessors(target_id)
+                    if edge_id != target_id)
+                if preceding:
+                    origin = (preceding[0], "network", 0.0)
+                    destination = (target_id, "network", 0.0)
+                    synthetic_endpoint = True
+                    unavoidable_loop = True
+        if origin is None or destination is None or origin[0] == destination[0]:
+            raise ValueError(
+                f"no distinct routable endpoints can support network edge {target_id}")
+
+        origin_id, origin_kind, _origin_mass = origin
+        destination_id, destination_kind, _destination_mass = destination
+        support_graph = (fallback_connections
+                         if unavoidable_loop else graph)
+        try:
+            route_edges = nx.shortest_path(
+                support_graph, origin_id, destination_id, weight="weight")
+        except (nx.NetworkXNoPath, nx.NodeNotFound) as exc:
+            raise ValueError(
+                f"support endpoints are not connected for {target_id}") from exc
+        if target_id not in route_edges:
+            raise ValueError(
+                f"support path does not contain its target edge {target_id}")
+        if origin_kind == "network" or destination_kind == "network":
+            purpose = (destination_kind if destination_kind in amass
+                       else "external")
+            kind, leg = "bg", "coverage"
+        elif origin_kind == "entry" and destination_kind == "exit":
+            purpose, kind, leg = "through", "ee", "through"
+        elif origin_kind == "entry":
+            purpose, kind, leg = destination_kind, "ei", "inbound"
+        elif destination_kind == "exit":
+            purpose, kind, leg = "external", "ie", "outbound"
+        else:
+            purpose, kind, leg = destination_kind, "ii", "outbound"
+        requests.append({
+            "id": f"coverage{position}",
+            "depart": (position + 0.5) * 86400.0 / max(1, len(targets)),
+            "from": origin_id,
+            "to": destination_id,
+            "via": None,
+            "purpose": purpose,
+            "tour_id": f"coverage-{kind}-{position}",
+            "leg": leg,
+            "coverage_edge": target_id,
+            "support_only": True,
+            "synthetic_endpoint": synthetic_endpoint,
+            "unavoidable_loop": unavoidable_loop,
+            "route_edges": route_edges,
+        })
+    return requests
+
+
 def build_location_pool_document(home: EndpointField,
                                  activities: dict[str, EndpointField]) -> dict[str, list[dict]]:
     """Compact shared endpoint-location pools for PFE provenance.
@@ -2879,6 +3209,10 @@ def main() -> None:
     G = ox.load_graphml(GRAPH_PATH)
     try:
         sumo_edge_ids, routing_costs = load_sumo_routing_data(NET_PATH)
+        routing_connections = load_sumo_connection_graph(
+            NET_PATH, sumo_edge_ids, routing_costs)
+        fallback_connections = load_sumo_connection_graph(
+            NET_PATH, sumo_edge_ids, routing_costs, include_uturns=True)
     except (FileNotFoundError, ET.ParseError, ValueError) as exc:
         sys.exit(str(exc))
     with open("web/data/flows.json") as f:
@@ -3012,6 +3346,12 @@ def main() -> None:
     trips_path = SUMO_DIR / f"tours{args.out_suffix}.trips.xml"
     candidate_meta: dict[str, dict] = {}
     location_pools = build_location_pool_document(home_field, activity_fields)
+    try:
+        coverage_requests = generate_edge_coverage_requests(
+            routing_G, edges, hmass, amass, entries, exits, measured,
+            routing_costs, routing_connections, fallback_connections)
+    except (ValueError, nx.NetworkXError) as exc:
+        sys.exit(f"could not build complete network-edge candidate support: {exc}")
     location_report = {
         "schema_version": 1,
         "home": home_field.report,
@@ -3059,12 +3399,41 @@ def main() -> None:
                 if destination_pool is not None:
                     record["destination_location_pool"] = destination_pool
                 candidate_meta[trip_id] = record
+        for request in coverage_requests:
+            via = f' via="{request["via"]}"' if request["via"] else ""
+            f.write(f'  <trip id="{request["id"]}" '
+                    f'depart="{request["depart"]:.1f}" '
+                    f'from="{request["from"]}" to="{request["to"]}"{via}/>'
+                    "\n")
+            origin_pool, destination_pool = endpoint_pool_keys(
+                request["tour_id"], request["leg"], request["purpose"],
+                request["from"], request["to"], location_pools)
+            record = {
+                "purpose": request["purpose"],
+                "tour_id": request["tour_id"],
+                "leg": request["leg"],
+                "origin_edge": request["from"],
+                "destination_edge": request["to"],
+                "via_edge": request["via"],
+                "candidate_depart_s": round(request["depart"], 3),
+                "coverage_edge": request["coverage_edge"],
+                "support_only": True,
+                "synthetic_endpoint": request["synthetic_endpoint"],
+                "unavoidable_loop": request["unavoidable_loop"],
+            }
+            if origin_pool is not None:
+                record["origin_location_pool"] = origin_pool
+            if destination_pool is not None:
+                record["destination_location_pool"] = destination_pool
+            candidate_meta[request["id"]] = record
         f.write("</routes>\n")
     n_written = len(multi_day_trips) if multi_day_trips is not None else len(trips)
-    print(f"{n_written} trips written, all sensor-anchored — target mix "
+    print(f"{n_written} ordinary sensor-anchored trips written — target mix "
           f"was {n_through} E-E through + {n_internal} I-I / {n_ei} E-I / "
           f"{n_ie} I-E paired tours (actual counts vary since some tour "
           f"attempts are dropped when no sensor naturally fits either leg)")
+    print(f"  full-edge support requests: {len(coverage_requests)} "
+          "provenance-labelled candidate routes")
     if target_candidate_count:
         generated_fraction = n_written / target_candidate_count
         print(f"  generated candidate supply: {generated_fraction:.1%} "
@@ -3116,8 +3485,7 @@ def main() -> None:
     if args.weight_file:
         print(f"  routing by MEASURED travel time from {args.weight_file} "
               f"(congestion-feedback iteration)")
-    res = subprocess.run(
-        [str(home / "bin" / "duarouter"), "-n", str(NET_PATH),
+    router_prefix = [str(home / "bin" / "duarouter"), "-n", str(NET_PATH),
          "--route-files", str(trips_path), "-o", str(out),
          *weight_args,
          "--weights.random-factor", str(args.route_diversity),
@@ -3141,11 +3509,20 @@ def main() -> None:
          # timestamp/echoed options differ) at 2.2x routing speed. The trip
          # XML is self-generated, so schema validation adds nothing.
          "--routing-threads", str(min(8, os.cpu_count() or 1)),
-         "--xml-validation", "never"],
+         "--xml-validation", "never"]
+    res = subprocess.run(
+        router_prefix,
         capture_output=True, text=True, timeout=300)
     if res.returncode != 0:
         print(res.stderr[-1500:])
         sys.exit("duarouter failed")
+    try:
+        merge_report = replace_support_routes_from_requests(
+            out, coverage_requests)
+    except (ET.ParseError, ValueError) as exc:
+        sys.exit(f"could not install exact edge-support routes: {exc}")
+    print(f"  route split: {merge_report['ordinary']} diverse ordinary + "
+          f"{merge_report['support']} exact edge-support candidates")
     integrity = validate_routed_candidates(
         out, meta_out, measured=measured, sumo_edge_ids=sumo_edge_ids,
         intents_path=trips_path)
@@ -3166,24 +3543,35 @@ def main() -> None:
                 f"candidate retention {retention:.1%} is below the "
                 f"{MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor; "
                 "refusing to calibrate a collapsed route pool")
-    drop_uturn_routes(out)
-    drop_excessive_detours(out, routing_G, args.route_diversity, routing_costs)
+    exact_support_ids = {request["id"] for request in coverage_requests}
+    drop_uturn_routes(out, exempt_ids=exact_support_ids)
+    drop_excessive_detours(
+        out, routing_G, args.route_diversity, routing_costs,
+        exempt_ids=exact_support_ids)
     prune_candidate_metadata(meta_out, out)
     final_count = sum(1 for _ in ET.parse(out).getroot().iter("vehicle"))
-    if requested:
-        final_retention = final_count / requested
-        if final_retention < MIN_ROUTED_CANDIDATE_FRACTION:
-            sys.exit(
-                f"final candidate retention {final_retention:.1%} is below "
-                f"the {MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor after "
-                "loop/detour filtering")
     if target_candidate_count:
-        final_pool_fraction = final_count / target_candidate_count
+        final_metadata = json.loads(meta_out.read_text()).get("candidates", {})
+        support_survivors = sum(
+            1 for record in final_metadata.values()
+            if isinstance(record, dict) and record.get("support_only") is True
+        )
+        final_pool_fraction = (final_count - support_survivors) / target_candidate_count
         if final_pool_fraction < MIN_ROUTED_CANDIDATE_FRACTION:
             sys.exit(
                 f"final candidate supply {final_pool_fraction:.1%} is below the "
                 f"{MIN_ROUTED_CANDIDATE_FRACTION:.0%} safety floor relative to "
                 "the requested pool")
+    routed_edge_support: set[str] = set()
+    for vehicle in ET.parse(out).getroot().iter("vehicle"):
+        route = vehicle.find("route")
+        routed_edge_support.update((route.get("edges") if route is not None else "").split())
+    missing_route_support = sorted(graph_edge_ids - routed_edge_support)
+    if missing_route_support:
+        sys.exit(
+            f"candidate pool lacks routed support for {len(missing_route_support)} "
+            "SUMO/GraphML edge(s): " + ", ".join(missing_route_support[:20])
+        )
     cross_report = report_sensor_cross_hits(out, measured)
     uncovered = sorted(m for m, report in cross_report.items()
                        if report["total"] == 0)
@@ -3191,6 +3579,7 @@ def main() -> None:
         sys.exit("candidate pool has no valid route through measured edge(s): "
                  + ", ".join(uncovered))
     print(f"Wrote {out}  ({final_count} routed candidates)")
+    print(f"  network edge support: {len(graph_edge_ids)}/{len(graph_edge_ids)}")
     print(f"  sensor cross-hit diagnostic (sumo/sensor_coverage_report.json): "
           f"{ {m: r['total'] for m, r in cross_report.items()} }")
     if short_quota:

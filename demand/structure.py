@@ -106,20 +106,27 @@ def calibrated_agent_summary(route_path: Path, n_intervals: int) -> dict | None:
         return None
     with open(agent_path) as f:
         agents = json.load(f).get("agents", [])
-    purposes = Counter(agent.get("purpose", "unknown") for agent in agents)
+    support_agents = [agent for agent in agents
+                      if agent.get("support_only") is True]
+    behavioural_agents = [agent for agent in agents
+                           if agent.get("support_only") is not True]
+    purposes = Counter(agent.get("purpose", "unknown")
+                       for agent in behavioural_agents)
     by_quarter = [Counter() for _ in range(n_intervals)]
     origin_locations = Counter(
-        agent.get("origin_location_id") for agent in agents
+        agent.get("origin_location_id") for agent in behavioural_agents
         if agent.get("origin_location_id") is not None)
-    origin_edges = Counter(agent.get("origin_edge") for agent in agents
+    origin_edges = Counter(agent.get("origin_edge") for agent in behavioural_agents
                           if agent.get("origin_edge") is not None)
-    for agent in agents:
+    for agent in behavioural_agents:
         quarter = int(float(agent.get("departure_s", 0)) // 900)
         if 0 <= quarter < n_intervals:
             by_quarter[quarter][agent.get("purpose", "unknown")] += 1
     result = {
         "agent_file": agent_path.name,
         "n_agents": len(agents),
+        "n_behavioural_agents": len(behavioural_agents),
+        "n_edge_support_agents": len(support_agents),
         "purpose_counts": dict(sorted(purposes.items())),
         "purpose_counts_by_quarter": [dict(sorted(counts.items()))
                                       for counts in by_quarter],
@@ -269,6 +276,11 @@ def purpose_lengths_km(route_path: Path) -> dict | None:
         agents = json.load(f).get("agents", [])
     by_p: dict[str, list[float]] = {}
     for a in agents:
+        # Full-edge support is an explicit structural floor, not a claim that
+        # an unobserved one-vehicle road probe has a survey-derived purpose.
+        # Keep it in simulated route metrics, but out of P(length|purpose).
+        if a.get("support_only") is True:
+            continue
         o = edge_latlon.get(a.get("origin_edge"))
         d = edge_latlon.get(a.get("destination_edge"))
         if o is None or d is None:
