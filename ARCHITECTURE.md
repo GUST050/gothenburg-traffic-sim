@@ -35,7 +35,7 @@ of this hierarchy, and its provenance is carried all the way to the map:
 Flows on unmeasured streets are the OUTPUT of level 4 — never an input
 guess. Their trustworthiness is measured (stage F), not presumed.
 
-## The six agents
+## The six pipeline stages
 
 ```
  data_in/ (city drops files)
@@ -160,6 +160,19 @@ The route-candidate pool (what PFE selects among) is now the standard
 **subarea/cordon** structure (FHWA/state-DOT subarea-analysis practice;
 Cascetta's quasi-dynamic OD) with REAL data at every endpoint, replacing
 uniform `randomTrips`:
+
+**Every-edge support correction (2026-08-04).** Behavioral candidates remain
+sensor-conditioned, but the published pool also contains one provenance-
+labelled exact shortest legal SUMO-connection route for every otherwise
+unsupported drivable edge. U-turn connections are excluded unless an isolated
+component has no other legal route, in which case the exception is explicit.
+After PFE, a deterministic greedy set cover adds the minimum support-only
+vehicles needed for each calibrated variant without crossing measured edges.
+They participate in SUMO and closure effects but not behavioral purpose,
+length or OD statistics. Publication requires 7,125/7,125 candidate and
+q10/q50/q90 edge equality plus exact candidate-route/agent provenance. The PFE
+touch index is constructed once before worker fork and reused without changing
+numeric order or output.
   - **E-E** (through) — gate→gate, gate weight ∝ approach-road class
     (motorway/trunk draw more than a residential fringe street — the only
     local proxy available; no external cordon counts exist to calibrate
@@ -376,9 +389,354 @@ detail is explicitly `queue_detail_not_assessed`.
 `screen_monthly_closures.py` and `run_monthly_proxy_validation.py` are
 root-level CLI entrypoints only; neither is wired to `serve.py` or the web UI.
 Proxy version `monthly_proxy_v1` failed its 2026-07-18 held-out gate
-(winner-recall upper bound 0.7778 < 0.90; median Spearman 0.50 < 0.60), so
-the architecture currently permits only internal screening or exhaustive
-fallback and forbids a global-best/UI claim.
+(winner-recall upper bound 0.7778 < 0.90; median Spearman 0.50 < 0.60).
+AUDITED then ADOPTION REJECTED (LUNA-V4-04 concluded rejected; LUNA-V5-01
+2026-07-27): the v4 audit PASSED — the preserved evidence is complete,
+identity-bound and reproduces its report and gate record canonically — but
+ADOPTION was rejected for whole-record integrity: a lone gate record is
+self-certifying, so any byte edited inside it still validated against
+itself. The tracked v4 product candidate was removed and the product is
+back in bounded-exhaustive fail-closed mode. Adoption now requires TWO
+artifacts (`traffic_sim/simulation/heldout_gate.py`): the gate record AND a
+post-review adoption certificate binding its exact bytes, the frozen
+manifest identity and the bounded claim scope; absence or alteration of
+either fails closed. The audited v4 numbers were
+(campaign key `1505ecfb…`, 5/5 cases, 75 schedules): all seven frozen checks
+passed — practical-winner recall 1.0 and discriminating practical-winner
+recall 1.0 (min 0.9), p90 normalized shortlist regret 0.0 (max 0.1), failure-
+disqualification recall 0.6819 (min 0.6), discriminating case fraction 0.6
+(min 0.4), ranking case fraction 1.0 (min 0.5), and every shortlist contains
+an eligible candidate.  `serve.py` selects proxy screening only behind an
+adopted gate and, with none adopted, uses bounded-exhaustive with its hard
+cap.  V5 RAN (2026-07-27) and FAILED discrimination: all five held-out edges
+produced zero objective spread, so no case discriminated and the gate failed
+`discriminating_case_coverage` and `discriminating_practical_winner_recall`.
+That was a property of the selected edges, not proxy quality: v5's structural
+selection had no pre-outcome signal for objective spread. Its evidence is spent
+and treated as opaque.
+V6 is FROZEN but UNEXECUTED and UNAPPROVED
+(`validation/monthly_proxy_manifest_v6.json`): five cases and 75 schedules on
+edges disjoint from every v1-v5 held-out edge and their junction neighbours,
+selected by the versioned `demand_exposure_v1` rule from the CANONICAL archived
+demand designated for v6 — strictly positive q10/q50/q90 exposure in every
+closure window, ranked by temporal variation — with v4/v5 gate thresholds
+unchanged. That archive designation is v6-LOCAL and does not repair the
+globally ambiguous demand key `2ac04275daabe93c`, which three successful
+archives claim with three distinct input contents. Demand exposure is a
+selection signal only; it does not guarantee a 300-second SUMO spread. Each
+case preserves its RAW evidence — the 15 frozen schedule IDs and the q10/q50/q90
+vehicle exposure for each of those windows — so the aggregates and the whole
+ranking recompute from the artifact alone, without rerunning the freeze. The
+frozen package has no overwrite escape hatch and publishes all-or-nothing. The
+no-overwrite guarantee comes from the publishing PRIMITIVE, not from a check
+that precedes it: scratch files are created `O_EXCL` and finals are published
+with `os.link`, which fails if the path already exists, so a final appearing
+between an absence check and the write cannot be clobbered. This call owns only
+what it created — a foreign file at a final path is preserved and refused over,
+never deleted — and a rollback that cannot clean up raises instead of reporting
+success. Any v6 SUMO execution requires a clear user request for that frozen
+campaign and the normal safety confirmation appropriate to an expensive,
+evidence-producing run; it is not tied to a particular model role.
+MONTHLY WARM-STATE ACCOUNTING (LUNA-WARM-04, 2026-07-28): the warm branch's
+pre-warm segment is described by versioned `monthly_prefix_evidence_v1`:
+completed-only trip aggregates, queue maximum, counters and recovery buckets,
+stored inside the warm-state cache entry's atomic digest-bound member set. Every
+`DisruptionMetrics` field crosses the warm boundary by an explicit rule bound
+mechanically to `dataclasses.fields`, so an unclassified field is a hard error
+rather than a silently dropped or double-counted value. Recovery buckets are
+concatenated into one ordered, gap-free domain and never synthesised. This is
+accounting only. v1 was EXECUTED (LUNA-WARM-05) and FAILED: SUMO's
+`loaded`/`inserted`/teleport counters are CUMULATIVE across a loaded state, so
+summing prefix and post double-counted every vehicle live at the snapshot
+(+1081/+1065); closure throughput was never measured on the warm side (0 vs
+None); and the prefix had been simulated from the UNFILTERED route. v2
+(LUNA-WARM-06) takes cumulative counters from the post state with the prefix as
+a lower bound, measures closure throughput with closed edges zero-filled, and
+selects the snapshot strictly before the earliest departure that closure
+filtering changes or drops — audited per variant against the archive routes and
+frozen into the campaign identity.
+
+v2 was EXECUTED (LUNA-WARM-07) and FAILED, but far more narrowly: 3/3 coverage,
+complete execution evidence, and 16 of 18 semantic groups exactly equal. The
+single residual group was the objective itself, `total_time_loss_s`, where warm
+came out LOWER on every identity — q10 -7.73 s, q50 -80.62 s, q90 -138.97 s —
+monotone in demand volume. That ordering identified the cause: a vehicle still
+driving at the snapshot is BOUNDARY-ACTIVE, excluded from the completed-only
+prefix and, after `--load-state`, reporting only post-boundary time loss in its
+resumed tripinfo, so its pre-boundary delay was counted nowhere. Completed-only
+tripinfo had removed double-counting and introduced under-counting instead;
+denser demand strands more vehicles at the warm point, which is exactly the
+observed pattern.
+
+v3 (LUNA-WARM-08) fixes the accounting rather than tolerating the gap.
+`warm_state_boundary.py`'s `WarmPrefixController` owns ONE SUMO process and its
+TraCI connection for the prefix run, so the ledger and the saved state describe
+the same instant of the same run — a batch `--save-state` run cannot provide
+that, because by the time it exits there is nothing left to ask which vehicles
+were in flight. `traci`, `subprocess` and `socket` are imported LAZILY inside
+its methods, so constructing a controller starts nothing and the validation
+harness can hold one unconditionally while every check stays process-free. It
+captures a per-vehicle ledger of exactly the vehicles in flight AT the saved
+step and reconciles it against the resumed tripinfo BY VEHICLE IDENTITY:
+`monthly_prefix_evidence_v2` carries the ledger and the per-vehicle completed
+map, and each boundary vehicle contributes its post-warm trip plus its ledger
+offset exactly once. Segment values stay RAW until the end and are normalised
+ONCE per final per-vehicle total: rounding each half separately is a different
+operation from rounding the whole, so a vehicle accruing 1.005 s on each side of
+the snapshot would reconstruct as 2.00 while one uninterrupted run reports 2.01.
+Raw in memory is not sufficient, because the post-warm half round-trips through
+a FILE that SUMO writes at its reported precision — and that residual has NO
+precision-based fix. Raising SUMO's output precision was tried and reverted for
+two independent, measured reasons: `--precision` is GLOBAL, so it also changed
+the warm arm's edgeData and summary output and broke the recovery and waiting
+semantics the contract requires to stay identical; and no finite precision
+suffices anyway, since for any p the true sum can sit closer to a rounding
+boundary than the serialization error at p (proven for p = 2..12 in
+`tests/test_warm_state_boundary.py`). Warm argv is therefore BYTE-IDENTICAL to
+cold argv, the comparison stays exact with no tolerance, and the residual is
+declared in the frozen manifest as `known_residual`: at most one unit in the
+last reported place per boundary vehicle. It can therefore make the campaign
+FAIL rather than pass quietly — which is the honest outcome, and closing it
+needs a decision above the accounting layer.
+The per-vehicle completed map must also AGREE with the aggregates it accompanies
+— same trip count, same total, disjoint from the active set — on write and on
+read, since otherwise the objective is rebuilt from one while every other check
+reads the other. Capture at any step other than the warm point is fatal,
+because it would name the wrong vehicles and every later reconciliation would
+be confidently wrong. A boundary vehicle that never reappears, a vehicle in
+both segments, a duplicate or malformed tripinfo record, and legacy v1 evidence
+are all fail-closed; v1 evidence is a cache MISS, never reinterpreted. Every one
+of those failures becomes a COLD FALLBACK with a recorded reason rather than an
+escaping error — the guard sits at the boundary in `_run_observation` that
+consumes the warm path, so it does not depend on having predicted which internal
+step fails. The warm arm is an optimisation over an equivalent cold arm, so
+nothing it does may cost an observation: an escape would abort the whole
+identity and produce no evidence at all, which is strictly worse than running
+cold. The
+boundary schema and the tripinfo precision are bound into the warm identity by
+content, so changing either invalidates cached prefixes instead of silently
+altering reconstructed objectives. Split diagnostics publish only BOUNDED
+facts — a count, a digest and the reconciliation totals — never the per-vehicle
+map, which would grow the canonical payload with traffic.
+
+Cold/warm equivalence and any speedup remain UNDEMONSTRATED; v3 is frozen,
+unapproved and unexecuted, and it disclaims its own hypothesis in advance: if
+the objective still differs after reconciliation, boundary-active accounting is
+NOT the cause and the campaign fails honestly. v1 and v2 are retained for
+provenance and are permanently unadoptable — their frozen source fingerprints
+predate this accounting, and that drift is the mechanism that blocks reuse.
+
+WARMING HAS NEVER EXECUTED — DIAGNOSED AND REPAIRED (LUNA-WARM-14/15,
+2026-07-31). The v6 campaign ran and its structured diagnostics named the cause:
+every identity recorded `cache_miss -> bootstrap_started -> snapshot_failed
+[No module named 'traci', ModuleNotFoundError] -> bootstrap_failed`. Production
+did a bare `import traci`, but the package ships INSIDE the SUMO installation at
+`<sumo_home>/tools/traci` and is not on `sys.path`. So every "warm" arm since the
+controller was introduced was a cold fallback caused by an import error, and
+warm_executions was 0 in v4, v5 and v6 alike. (That changed at v9, which warmed
+all three identities — see the localization section below. No equivalence,
+speedup or adoption claim rests on it: v9 failed.)
+
+The repair lives in `traffic_sim/simulation/runtime.py`: one resolver imports
+TraCI from the exact active SUMO home (a non-empty `SUMO_HOME` wins
+deterministically; a declared-but-unusable home is an error, never a silent
+fallback to a different installation) and PROVES the imported module's origin
+lies inside that installation's `traci` package. The controller resolves through
+it before any launcher or port, so an unusable TraCI starts no process; and the
+campaign harness runs the same resolver as a mandatory preflight AFTER
+approval-token validation but BEFORE any artifact root is checked or created, so
+an environment that cannot warm can never again consume an approved,
+non-resumable campaign.
+
+The check that would have caught this without a campaign now exists: the resolver
+is exercised against a real fake `<home>/tools/traci` package through Python's own
+import machinery. Every earlier test injected a fake traci module and therefore
+could not notice that production never resolved one — the same unwired-seam shape
+that produced the boundary controller, default-runner and unforwarded-attempt
+defects. A dependency a test supplies is a dependency that test cannot check.
+
+Confirmed once by a direct import-only probe of the installed package under audit
+-event guards (no socket, no child process, no TraCI call): origin
+`<sumo_home>/tools/traci/__init__.py`, full required API present.
+
+v7 was REJECTED in process-free review and never approved or executed: its
+resolver repair was correct, but its fingerprints omitted
+`tests/test_warm_state_boundary.py` and `tests/test_monthly_warm_state.py`, so
+the two regressions that give the repair its meaning could have been weakened
+while its key still validated. The rejection cost no campaign. v7's bytes are
+preserved exactly as reviewed; superseded contracts are succeeded, never edited.
+
+WARM EXECUTION HAPPENED, AND THE RESIDUAL IS NOW LOCALIZED (LUNA-WARM-16/22/23,
+2026-08-01/02). v9 was executed once with exact user approval and is the FIRST
+campaign in this family whose warm arm actually ran: all three identities reached
+`warm_completed`. It then FAILED the paired comparison — 3 comparisons, 3
+mismatches, no cache published — with a residual of -7.73 / -80.62 / -138.97 s.
+Those numbers are bit-identical to v2's, which predates `--save-state.rng` and
+`--save-state.precision` entirely, so the state-serialization hypothesis is
+REFUTED. Warm was also ~13% slower than cold there, as expected while every
+identity is a cache miss paying for its own prefix.
+
+The LUNA-WARM-22 forensic diagnostic then localized the gap exactly. It is NOT
+distributed, NOT rounding and NOT a partition error: 5 of 44, 10 of 50 and 12 of
+51 vehicles IN FLIGHT across the warm point carry the entire residual between
+them, their per-vehicle deltas summing to it to the cent. All are negative, all
+sit in the resumed phase, and most — 1, 8 and 10 respectively — come back with
+EXACTLY 0.0 accumulated time loss. Every other vehicle, more than 99.99% of the
+population, is identical between the arms.
+
+That refutes BOTH earlier rules at once. LUNA-WARM-08 probed one boundary vehicle
+and found its accumulator preserved; generalising that to a universal rule loses
+the minority that IS the residual. v3's blanket per-vehicle offset would double
+count the ~80% of in-flight vehicles whose accumulator demonstrably survives.
+WHY those particular vehicles lose it is still unknown, and no evidence so far
+explains the selection.
+
+v10 (LUNA-WARM-23) binds a SELECTIVE, restore-measured correction instead of
+either rule: the prefix controller captures a `vehicle_id -> timeLoss` ledger
+from the same TraCI connection, instant and process that writes the state; a
+bounded resumed controller connects before any resumed step and captures the same
+map after the load; and only the positive `saved - restored` differences actually
+observed are added back, once each, to their own resumed record at production
+reporting precision. Nothing is inferred — an unmeasured vehicle is never
+corrected, and a preserved one is left byte-semantically unchanged. Prefix
+evidence advances to `monthly_prefix_evidence_v4` to carry the audit.
+
+v12 was approved and EXECUTED once (LUNA-WARM-24). All three warm arms completed,
+but the exact v2/v9 residual remained: cold minus warm was 7.730000004,
+80.620000002 and 138.970000003 seconds for q10/q50/q90, and no cache was
+published. Its equal TraCI save/restore ledgers therefore REFUTE the selective
+TraCI-deficit correction rather than validate it.
+
+V13 (LUNA-WARM-25) follows the actual SUMO mesoscopic source. Tripinfo reports
+the private `MSDevice_Tripinfo::myMesoTimeLoss` member and device save/load omit
+that member. Although TraCI documents `getTimeLoss()` as accumulated time loss,
+the frozen mesoscopic save/load diagnostics show it does not exactly reproduce
+the private tripinfo member across this boundary. The state-owning prefix process now emits
+`tripinfo-output.write-unfinished=true` at precision 16 after capturing the
+exact active ID set. Strict parsing binds those unfinished values to that set;
+the resumed phase joins the private prefix and resumed accumulators by vehicle
+ID and rounds every whole trip once to the ordinary two-decimal production
+format. The ledger validator reconstructs the captured-population digest from
+the warm point and sorted active IDs on every read. Completed prefix XML order
+is persisted separately from its canonical ID map, and the resumed values
+continue that exact accumulator so floating-point segment regrouping cannot
+create a cold/warm mismatch. Completed, active and post-boundary populations
+must be exhaustive and disjoint. Missing, duplicate, overlapping, malformed or
+unknown pre-boundary records fail closed to the unchanged cold path. Because
+SUMO precision is
+global, warm edgeData is normalized per edge back to cold precision before
+recovery aggregation; integer queue, counter, health and closure fields keep
+their existing parsers. V13 no longer retains all arrived vehicles: terminal
+TraCI ledgers are retired, so that memory/runtime cost provides no evidence.
+
+The warm cache identity advances to schema 2 and prefix evidence to
+`monthly_prefix_evidence_v7`; every legacy entry is a cache miss. V13 was
+executed once, but the execution sandbox denied the IPv4/TCP localhost bind in
+`WarmPrefixController._free_port()` before every prefix launch. All three
+attempts therefore fell back to cold, produced zero semantic mismatches but zero
+valid warm executions, and published no cache. This is environment-failure
+evidence, not an equivalence result. V14 preserves the complete v13 experiment
+and mechanism but adds a mandatory bind-capability preflight after approval and
+TraCI validation and before keyed-root inspection. V14 is FROZEN, UNAPPROVED
+and UNEXECUTED. Product-default warming remains OFF; the shortest remaining gate
+is one fresh exact-key campaign run once with approved socket permission.
+
+PRESERVED-ACCUMULATOR WARMING, v4 FROZEN (LUNA-WARM-09, 2026-07-30): the
+measurement below retired v3's design, and v4 replaces it. The objective rule is
+now the completed-prefix aggregate PLUS the resumed aggregate — each vehicle
+counted once and whole — with NO per-vehicle boundary offset anywhere. A vehicle
+that finished before the snapshot is in the prefix aggregate; one still driving at
+it is absent from the completed-only prefix and appears once in the resumed
+aggregate carrying its full time loss, because the saved state preserved its
+accumulator. Every other `DisruptionMetrics` field keeps its existing explicit
+rule. Prefix evidence advances to `monthly_prefix_evidence_v3`, which carries
+bounded snapshot facts instead of a per-vehicle ledger; v1 and v2 evidence are
+cache MISSES, never reinterpreted.
+
+A welcome consequence: with no sum-of-halves there is no serialization residual,
+so the bounded ±0.01 s skew v3 had to declare — and could never eliminate at any
+output precision — simply does not arise.
+
+THE SNAPSHOT NOW APPLIES WHAT ITS IDENTITY CLAIMS. v3's cache identity recorded
+`save-state.rng` and 16-digit precision while its prefix command applied neither,
+so the state on disk was not the state its key described. The prefix command now
+carries exactly one `--save-state.rng true` and one `--save-state.precision 16`,
+DERIVED from the same `warm_state_cache` constants the identity records rather
+than restated by hand, and the controller refuses a command that omits or
+duplicates either, or that sets the global `--precision` (which would change
+edgeData and summary output and break the warm arm's recovery and waiting
+semantics). `WarmPrefixController` owns one process and one connection, snapshots
+at the exact step, requires an observed zero exit, captures stderr to a file
+rather than a pipe, and kills/reaps without masking a primary error.
+
+WHAT REMAINS UNPROVEN, stated plainly: LUNA-WARM-07's residual is UNEXPLAINED,
+not explained. Its boundary-active explanation was refuted by measurement. The v4
+hypothesis is that DEFAULT state serialization caused it, and v4's frozen manifest
+records that hypothesis, the exact mechanism under test, and the condition that
+refutes it — if the objective still differs with these settings applied, the
+cause is something else and the campaign fails honestly. Warming remains
+default-OFF; v4 is frozen, unapproved and unexecuted, and the one remaining gate
+is a single fresh approved paired cold/warm campaign. v1, v2 and v3 are retained
+byte-untouched and are all unadoptable: their frozen fingerprints predate this
+accounting, and v3's freeze tool can no longer even import against the live tree.
+
+SAVED-STATE TIME-LOSS SEMANTICS MEASURED (LUNA-WARM-08 revision 3, 2026-07-30,
+`validation/warm_state_time_loss_semantics_v2_outcome`): one approved
+non-campaign SUMO/TraCI diagnostic against the tracked network answered the
+question v3 was built on top of, and the answer CONTRADICTS v3's premise.
+
+The revision-2 run reached the same numbers but was REJECTED rather than
+reinterpreted: its arms waited for each SUMO process and discarded the result, so
+a run that completed and then failed was indistinguishable from a clean one. This
+revision requires and records an observed zero exit from all three arms — cold 0,
+prefix 0, resumed 0 — and the classification reproduced unchanged, which means
+those numbers were never wrong, only unverified. That distinction is the whole
+point: unverified evidence is not evidence.
+
+Fixture: one synthetic vehicle on the deterministically-selected probe edge
+`10017905051_124601298_0` (271.1 m, limit 13.89 m/s, chosen as the
+lexicographically smallest of 737 qualifying edges), speed held at 2.0 m/s at
+every step in every arm, snapshot at t = 20 s, SUMO 1.27.1, default output
+precision throughout. Three runs: one uninterrupted, one prefix that captured
+the boundary and saved state through the same TraCI connection, one resumed.
+
+Observed: boundary `getTimeLoss` 15.7184 s; immediately after `--load-state` the
+restored vehicle reports 15.72 s — the accumulator SURVIVES. The resumed run's
+tripinfo then reports `timeLoss` 109.90 s, exactly equal to the uninterrupted
+run's 109.90 s, and NOT equal to 109.90 − 15.72 = 94.18 s. The resumed tripinfo
+record is in fact identical to the cold one field for field, including
+`depart="0.00"` and `arrival="128.00"`. Classification:
+`full_accumulator_preserved`.
+
+CONSEQUENCE for the v3 accounting: a resumed vehicle's tripinfo already carries
+its whole trip's time loss, so adding a per-vehicle boundary ledger offset on top
+of it DOUBLE COUNTS the pre-boundary delay. v3's reconciliation is built on the
+opposite assumption. The v3 artifacts are deliberately left untouched by this
+revision, and choosing the replacement accounting is not this task's decision.
+
+CONSEQUENCE for the original observation: this also reopens LUNA-WARM-07's
+measured gap. If resumed tripinfo is complete, then completed-only prefix plus
+resumed already sums correctly with no offset, so the −7.73 / −80.62 / −138.97 s
+shortfall — monotone in demand — must have a DIFFERENT cause that remains
+unexplained. It was never proven to be boundary-active accounting; it was only
+consistent with it.
+
+LIMITATIONS, and they are real: one synthetic vehicle, one edge, no interacting
+traffic, one SUMO version, one platform, one snapshot instant. All three arms
+logged a benign SUMO warning that `SUMO_HOME` was unset, which disables input XML
+schema validation; the network was already validated when it was built, and the
+warning is recorded in the outcome rather than suppressed. This is a
+MECHANISM observation, not equivalence evidence, not performance evidence, and
+not grounds for adoption or release. A single vehicle cannot show what happens to
+a vehicle that is mid-junction, mid-lane-change, teleporting, or queued behind
+others at the snapshot.
+
+LIMITATION, deliberately recorded: the proxy is validated as a SHORTLISTER,
+NOT as a full ranker.  Median Spearman is NEGATIVE (-0.371 overall, -0.637 on
+the discriminating cases); v4's gate scores practical-winner recall, regret
+and failure recall, and keeps Spearman as a diagnostic only.  Claims stay
+limited to SUMO-verified schedules inside the enumerated search space, and
+failure-disqualification recall sits only modestly above its 0.60 floor.
 The 2026-07-19 `stratified_shortlist_v2` safety correction does not relabel
 that failed evidence: bounded searches select every legal schedule even when
 the proxy cannot score it, and larger searches explicitly simulate
@@ -423,9 +781,13 @@ three-window Gothenburg/SUMO 1.27.1 golden completed in 211.42 s at
 q10/q50/q90 counts 4/5/7. This validates execution, restart and policy
 resources only. The backend currently consumes one explicit immutable demand
 archive covering the shortlist envelopes; automatic build/cache resolution
-across all date envelopes in a future month remains required. The new
-untouched monthly held-out gate has also not run, so global-best and UI
-exposure remain false.
+across all date envelopes in a future month remains required. The untouched
+monthly held-out gate HAS now run: the v4 record passed its audit on
+2026-07-27, but its ADOPTION WAS REJECTED for whole-record integrity (see the
+monthly-proxy section above), so global-best and UI exposure remain FALSE.
+They can open only once a future campaign's record is adopted together with a
+post-review adoption certificate, and then only for SUMO-verified schedules
+within the enumerated search space.
 
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
@@ -459,6 +821,173 @@ guide**: the map shows where the next station buys the most certainty.
 One ID space (`u_v_k` everywhere) · WGS84 on all interfaces · absolute time
 (epoch + 15-min index, ISO-T, UTC parse) · directions are metadata, never
 guesses · missing ≠ zero · every number carries provenance + confidence.
+
+### Monthly warm-state activation (2026-08-03)
+
+The recurring monthly command now enables the existing mesoscopic warm path by
+default. `MonthlyDemandResolverRunner` forwards one explicit
+`WarmPrefixController` to every archived-demand child; `--cold-execution`
+retains a deliberate all-cold mode. Warm execution is limited to one seed
+worker because the current TraCI controller owns one active connection.
+
+Warm cache entries remain content-addressed by exact demand variant, seed,
+network, route mutation, warm point, SUMO/platform identity, snapshot settings
+and every state-interpreting source. Restoration revalidates the state,
+prefix-evidence and passing equivalence certificate. On a cache miss, the first
+observation bootstraps a provisional state from zero; later compatible
+observations extend the nearest earlier provisional state and transport exact
+prefix evidence rather than replaying from zero. Provisional states are not
+published; malformed evidence, bootstrap or extension failure records the
+reason and executes the unchanged cold observation. The v16 paired campaign
+(`53ea67be…36ef0`) passed exact semantic
+equality for q10/q50/q90 and supplied the three atomically adopted product-cache
+entries. A true cache-hit run completed all three in 71.568 s versus 88.506 s
+cold (19.1% faster); bootstrap time is intentionally excluded from that claim.
+
+### Annual warm-state population boundary (2026-08-03)
+
+Annual coverage is a separate candidate-free bank, not an expansion of the
+product cache's trust. `annual_warm_plan.py` projects the complete independent
+daily 2027 timing domain: every 15-minute-aligned interval within 00:00–24:00.
+Of 1,699,440 possible intervals, 1,682,634 have an exact source-year/DST
+envelope. They collapse to 34,895 road-independent checkpoint requests and
+104,685 exact q10/q50/q90 seed states. `AnnualWarmPlanIndex` maps schedules for
+different directed edges to those requests, but its result is only a requested
+checkpoint: the existing route-mutation audit, safe-boundary calculation,
+exact identity, equivalence certificate and cold fallback remain mandatory
+before product reuse.
+
+`annual_warm_store.py` keeps a state together with its exact route, prefix
+evidence and demand provenance. This is required because SUMO save-states omit
+future departures. Members are deduplicated by their original SHA-256 and
+deterministically gzip-compressed only when smaller; restore verifies both the
+stored representation and original bytes. Artifact validation also cross-binds
+the selected variant route, demand metadata/spec and demand manifest bytes to
+the hashes in the named immutable demand archive; archive labels alone are not
+accepted. Unit manifests and content blobs publish without replacing an
+existing immutable identity.
+
+`populate_annual_warming.py` orders every demand-build/seed/variant group as an
+exact predecessor chain. Its first checkpoint bootstraps from zero and every
+later checkpoint must validate and extend the preceding artifact; a missing or
+inexact predecessor stops the chain rather than silently replaying from zero.
+It also owns a transactional SQLite progress registry and
+three persistent spawn-isolated worker processes, so each TraCI controller has
+a private process/connection without paying interpreter and plan-validation
+startup for every state. Existing progress databases are accepted only after
+every immutable unit row, lifecycle field and SQLite integrity result match the
+plan. A crash after artifact publication but before the progress commit is
+reconciled by validating the orphan artifact instead of rerunning SUMO. Root,
+plan, progress, store, staging and population-lock types fail closed on symlink
+or non-regular substitutions.
+
+The execution hot path validates and indexes the full plan once per process,
+retains one immutable archived-demand runner per worker/current demand build,
+and passes the parent's already verified archive record into isolated workers.
+Predecessor restore reads and hashes only the state and prefix evidence consumed
+by chaining; shared route/demand members remain bound by the immutable manifest
+and current archive validation. Progress transitions finish one dependency-
+ready batch atomically. Crash-published orphans receive the stronger full
+semantic restore check before success: prefix schema and warm point, demand
+contract, state mode/time/version and all member hashes.
+
+Each extension materializes only the departure-sorted route window for its
+exact predecessor/checkpoint interval. Loading the full three-day route at every
+link caused parsed route definitions to accumulate in saved states; a real
+96-link pilot exposed state growth to 45 MiB before this was fixed. Route-window
+states now remain 1.24–1.59 MiB. The mesoscopic tripinfo accumulator omitted by
+SUMO state serialization is re-quantized to its native millisecond `SUMOTime`
+grid at each internal handoff and rounded to production precision only for the
+final metric. A maximum-depth regression and independent cold bootstraps at
+links 2, 48 and 96 require exact vehicle populations, values, completed order,
+insertions, teleports, queues and recovery buckets. The only permitted audit
+difference is SUMO's non-behavioural `loaded` route-parser lookahead; it remains
+relationship-checked and may not excuse any other counter mismatch.
+
+The 367 canonical demand builds normally cover previous/current/next day and
+are shared by all compatible windows; exact shorter fallbacks handle source-year
+and DST boundaries. Annual, monthly and direct demand builds share one reentrant
+inter-process lock across live-release snapshot/build/restore, so concurrent
+calibrations cannot restore stale bytes over another build. The plan binds the
+SUMO/platform identity and every state-producing source. Initial population
+requires 160 GiB free and execution stops before dropping below an 8 GiB
+reserve; these gates replace the unsafe original 8 GiB readiness threshold.
+
+Cache identity does not include the repository commit hash: exact source-file,
+input, runtime, platform, SUMO and serialization fingerprints are the effective
+identity, so unrelated commits do not invalidate states.
+
+Final plan `9cc823d3…45283b` binds the every-edge demand release, route-window
+chaining, millisecond accumulator transport and the corrected disk gate. The
+real 96-link q10 pilot under the immediately preceding state-equivalent plan
+completed with zero failures; its v2 audit restored every link and passed all
+selected behavioural cold comparisons. The only later bound-code change is the
+preflight constant described below, so none of those diagnostic artifacts is
+eligible for production reuse or relabelling.
+
+A measured three-day archive occupies 326 MiB and the q10 96-link store occupies
+40 MiB. Projecting 367 retained archives plus three variant chains, staging and
+the 8-GiB runtime reserve showed the former 160-GiB gate could admit a run with
+effectively no completion margin. The initial minimum is now 192 GiB
+(206,158,430,208 bytes). Current free space is 180,475,920,384 bytes, so the
+final preflight fails closed and no production root is initialized. Full
+population has not started. Population does not activate or certify the bank
+for product use; 16,806 intervals whose envelope cannot be represented exactly
+remain unavailable and therefore fall back cold.
+
+### Independent-day long closure search (2026-08-03)
+
+Long calendar searches now have an explicit
+`independent_daily_reset_v1` policy. It is an opt-in modelling assumption, not
+a reinterpretation of the continuous contract above. Each candidate is split
+into exact road/date/start/end daily SUMO units; date-specific forecast demand,
+q10/q50/q90 variants, canonical seeds, the full production six-hour recovery
+cap and all normal feasibility/health metrics remain unchanged. Only traffic
+state between work days is reset. Parent evidence is reconstructed by summing
+matched baseline/candidate pairs for the same variant and seed before the
+existing robust decision.
+
+`exact_balanced_daily_v1` allocates the requested work in exact 15-minute
+blocks. For example, 50 hours over nine days becomes two 5 h 45 min days and
+seven 5 h 30 min days; all legal placements are enumerated and overshoot is
+zero. Its sequence uses consecutive eligible work dates, so deselected
+weekends and explicit blackout dates are skipped rather than making an
+eight-to-ten-workday schedule impossible. The exact selected dates are bound
+into the schedule ID. The web work-period tool selects this policy and caps
+work days at ten.
+
+Daily evidence is content-addressed by simulation-affecting unit and child
+backend identity, not by parent search ID, month range or total-work label.
+Consequently, widening a search can reuse already-computed exact units. Up to
+three daily units execute in isolated interpreters, each with a private TraCI
+connection; seed-level and daily-level parallelism cannot be multiplied.
+Broad cache-hit reconstruction does not publish one redundant pilot file or
+progress-manifest rewrite per parent. The full pilot statistics and schedule
+ledger remain workspace artifacts, while the final API payload contains only
+the bounded finalists/selected schedules.
+Without an adopted proxy gate, the server uses
+`independent_daily_exhaustive_sumo_v1`: every available parent is retained,
+unavailable parents are reported, and each unique daily unit runs once. This
+is exact within the stated independent-day
+model and UI-visible under restricted claim wording, but the first uncached
+road/range is not an instant operation. Cache hits and completed resumable
+work are the near-instant path. The concrete 50-hour, 15:00–22:00 contract
+with Monday–Friday work dates enumerates January–May as 22,666 parent schedules
+backed by only 2,675 unique daily units; the full 2027 calendar is 57,932
+parents / 6,525 units. On the current machine those process-free enumerations
+completed in about 4 s and 10 s respectively; these are planning times, not
+SUMO runtime claims. For the full-year weekday example, 25 late-31-December
+daily units (affecting 229 parent schedules) are explicitly unavailable
+because their six-hour recovery would require nonexistent 2028 forecast
+demand; the remaining 57,703 parents / 6,500 units continue normally. A result
+with any unavailable schedule is labelled best only among the available
+schedules and cannot make a global-best claim.
+
+The obsolete v1 annual readiness record covers only 07:00–15:30 and is retained
+as historical pilot evidence. Earlier full-day v2 roots predate the pre-run
+hardening and are also superseded. The current v3 plan is the full-day contract
+described above. Full population and any later product-cache activation remain
+separate work; the unchanged cold path is authoritative on every miss.
 
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).

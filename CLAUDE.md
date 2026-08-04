@@ -1,6 +1,9 @@
 # Traffic animation & incident simulation — Gothenburg
 
-Persistent project context for Claude Code. Keep this file in the repo root.
+Persistent historical project context for any model or contributor. Keep this
+file in the repo root. Collaboration and workflow behavior are defined by
+`AGENTS.md`; this file does not assign Claude, Codex or another model a fixed
+role.
 
 **ARCHITECTURE.md is the source of truth for the program's structure** (six
 stages: Intake → Observability → Forecast → Demand → Simulation → Confidence,

@@ -1,234 +1,212 @@
-# Codex Sol/Luna Agent Router
+# Collaborative Agent Guide
+
+## Purpose
+
+This repository supports collaboration between different models and tools
+without binding a model to a permanent role or forcing work through a rigid
+state machine. An actor is the model or person doing the current work. Roles
+such as planner, implementer, researcher, tester and reviewer describe the work
+being done; they are not identities or permission classes.
+
+The goal is simple: understand the user's latest request, take the next useful
+safe action, verify the result and leave enough context for another actor to
+continue.
 
 ## Sources of truth
 
-Each concern has one authority:
+Use these sources in this order:
 
-- `AGENTS.md`: stable Sol/Luna protocol, roles, transitions, and safety rules.
-- The single marked `WORKFLOW_CONTROL` and `ACTIVE_TASK` blocks in `TASKS.md`:
-  current workflow state and current task contract.
-- The single marked `CURRENT_HANDOFF` block in `AGENT_NOTES.md`: current
-  planning, execution, or review evidence.
-- `ARCHITECTURE.md`: program structure.
-- `IMPROVEMENT_PLAN.md`: improvement priorities.
+1. The user's latest request and any explicit scope or safety limits.
+2. System, tool and environment rules that cannot be changed by repository
+   documentation.
+3. `AGENTS.md` for collaboration conventions.
+4. `ARCHITECTURE.md` for program structure and technical contracts.
+5. The marked current blocks in `TASKS.md` and `AGENT_NOTES.md` for the latest
+   project focus and handoff context.
+6. `IMPROVEMENT_PLAN.md` for priorities and longer-term direction.
 
-In `TASKS.md` and `AGENT_NOTES.md`, everything outside the three marked blocks
-is historical or supporting context, not current task/state authority and not
-default startup context. `PROJECT_CONTEXT_OLD_AGENTS.md` and `CLAUDE.md` are
-historical context. If architecture or priority documents disagree with
-history, the named authority wins.
+Everything outside the marked current blocks in `TASKS.md` and
+`AGENT_NOTES.md` is historical or supporting context. Historical Sol/Luna
+labels, states, approvals and handoffs describe how earlier work was managed;
+they do not restrict current actors.
 
-## Roles and routing
+`CLAUDE.md`, `PROJECT_CONTEXT_OLD_AGENTS.md`, dated audits and archived copies
+are useful background, not workflow authority. When history conflicts with the
+current architecture, current task or latest user request, the current source
+wins.
 
-Sol High owns planning, prioritization, architecture and risk decisions, task
-decomposition, approval recording, final review, and task closure. Luna High
-owns implementation of the current task, focused tests and debugging,
-required task documentation, and the implementation handoff. Sol must
-delegate implementation to Luna as one cohesive, reviewable delivery slice
-when the work fits a bounded contract. A slice includes all tightly coupled
-implementation layers, focused debugging, tests, and documentation needed for
-one user-visible or evidence-visible outcome; Sol must not split it merely by
-file or implementation layer.
+## Flexible actors
 
-There is exactly one marked `ACTIVE_TASK` block and one task ID/revision in
-flight. Sol plans or reviews only. Luna implements or fixes only the task and
-revision named by `WORKFLOW_CONTROL`, then stops for Sol review.
+- Any capable model or person may plan, implement, test, debug, document or
+  review.
+- Codex, Claude and other models have no fixed repository role. The user may
+  name a model or role, but does not have to.
+- One actor may take a task from discovery through implementation and
+  verification. A handoff or independent review is useful when risk warrants
+  it, not mandatory for ordinary progress.
+- A suggested next actor or action is advisory. If a different actor can safely
+  make progress, it should do so.
+- Direct user requests may replace, pause or reprioritize the current focus.
+  Update the current blocks so the repository reflects that decision.
+- Do not stop merely because an old owner, state, revision or transition names
+  another model. Stop only for a real blocker, a safety boundary or a material
+  choice that needs the user.
 
-## Delivery size and Luna autonomy
+## Working loop
 
-Every task declares exactly one delivery size:
+For non-trivial work:
 
-- `NARROW`: boundary discovery when risk or uncertainty makes implementation
-  scope unsafe to predict. Its completion outcome is a reviewable decision or
-  evidence package, not an arbitrary implementation fragment.
-- `STANDARD`: the default complete vertical slice, including its tightly
-  coupled implementation, focused debugging, tests, and documentation.
-- `EXTENDED`: a larger but still cohesive outcome. Sol defines explicit
-  internal checkpoints so Luna can verify direction and evidence while
-  continuing without intermediate handoffs.
+1. Read this file and the user's current request.
+2. Read the marked current blocks in `TASKS.md` and `AGENT_NOTES.md` when they
+   are relevant. Read architecture or plan sections only as needed.
+3. Run `git status --short` and inspect relevant diffs. Preserve unrelated and
+   user-owned changes.
+4. State the outcome being pursued and choose the next useful action.
+5. Inspect, implement and verify autonomously within the user's scope.
+6. Repair in-scope defects found by checks. Ask the user only when a missing
+   decision would materially change the result or when new authority is needed.
+7. For substantial work, refresh the marked current blocks with a concise,
+   truthful snapshot. Do not rewrite historical entries merely to modernize
+   their terminology.
+8. Report the result, checks, remaining risks and a useful next step.
 
-Changing delivery size never expands approval, allowed-file, safety, release,
-publication, architecture, or artifact-contract authority. There is still one
-active task and one final Sol review gate; `EXTENDED` checkpoints are internal
-execution checks, not extra workflow states or implicit approval gates.
+Searching, reading, local edits, focused tests and ordinary debugging do not
+need a planning/review round trip. Keep plans proportional to the task; small
+changes need no ceremony.
 
-Within the active contract, Luna continues autonomously through the complete
-slice. Luna may inspect relevant files, make reasonable local implementation
-choices, run the authorized focused checks, diagnose failures caused by its
-changes, repair them in scope, and rerun those checks. Routine repository-
-discoverable questions, implementation substeps, and check failures do not
-require an intermediate return to Sol.
+## Current coordination blocks
 
-Luna hands off only when one terminal condition is met:
+The markers are retained for compatibility with existing scripts and for quick
+cross-model orientation. They are coordination records, not permission gates.
+Each current marker must occur exactly once in its owning file.
 
-1. The entire completion outcome and all acceptance criteria pass.
-2. An external approval or authority boundary is reached.
-3. An architecture or artifact contract must change.
-4. Scope must materially expand beyond the active contract.
-5. Three distinct serious implementation approaches have failed with recorded
-   evidence.
+`TASKS.md` contains:
 
-Searching, reading, ordinary diagnosis, and one retry of the same check are
-not serious failed approaches. A blocked handoff must state the exact blocker,
-evidence, attempted approaches, remaining safe options, and the recommended
-next decision for Sol. Luna must not report only that it is stuck, wait for
-routine clarification discoverable from the repository, or broaden scope
-silently.
+```text
+<!-- WORKFLOW_CONTROL_START -->
+## WORKFLOW_CONTROL
+- Mode
+- Current focus
+- Status
+- Suggested next action
+- Eligible actors
+- Safety boundary
+- Updated
+<!-- WORKFLOW_CONTROL_END -->
+```
 
-## Startup fast path
-
-For every non-trivial `SOL PLAN`, `LUNA DO`, `LUNA FIX`, or `SOL REVIEW`:
-
-1. Read all of `AGENTS.md`.
-2. Read only the marked `WORKFLOW_CONTROL` and `ACTIVE_TASK` blocks in
-   `TASKS.md` and the marked `CURRENT_HANDOFF` block in `AGENT_NOTES.md`.
-3. Run `git status --short`.
-4. Inspect targeted diffs for the active task's allowed files. Treat all
-   unrelated changes as user-owned and preserve them.
-5. Validate that every current marker occurs exactly once, and that task ID,
-   revision, state, owner, next action, transition metadata, and approval
-   fields agree.
-
-Read `ARCHITECTURE.md`, `IMPROVEMENT_PLAN.md`, or historical task/evidence
-sections only when the active task names them or the current decision requires
-them. Use targeted searches and excerpts; never load a growing ledger merely
-to discover current state.
-
-If a marker or required field is missing or duplicated, IDs/revisions
-conflict, the state/action/role combination is illegal, or scope and approval
-cannot be proven, stop fail-closed. Do not implement, run checks with side
-effects, repair state speculatively, or use history to resolve the conflict;
-report the mismatch to Sol.
-
-## Workflow state machine
-
-Only these transitions are legal:
-
-| Command / actor | Required state | Resulting state | Next action |
-|---|---|---|---|
-| `SOL PLAN` / Sol | `READY_FOR_SOL_PLAN` | `READY_FOR_LUNA` or `BLOCKED` | `LUNA DO` or exact unblock condition |
-| approval record / Sol | `BLOCKED` | `READY_FOR_LUNA` | `LUNA DO` |
-| `LUNA DO` / Luna | `READY_FOR_LUNA` | `READY_FOR_SOL_REVIEW` | `SOL REVIEW` |
-| `SOL REVIEW` / Sol | `READY_FOR_SOL_REVIEW` | `READY_FOR_SOL_PLAN`, `FIX_REQUIRED`, or `BLOCKED` | `SOL PLAN`, `LUNA FIX`, or exact unblock condition |
-| `LUNA FIX` / Luna | `FIX_REQUIRED` | `READY_FOR_SOL_REVIEW` | `SOL REVIEW` |
-
-`READY_FOR_SOL_PLAN` means the marked task is concluded and non-executable;
-Sol replaces it when planning the next revision or task. `BLOCKED` is
-non-executable. No other actor, command, state, or transition is implied.
-
-Every legal transition atomically writes `State`, `Next action`, and
-`Transition`, where `Transition` is `<actor> / <command> / <YYYY-MM-DD>` and
-describes the operation that produced the current state. A missing, stale, or
-partially updated member of this triple is conflicting state and fails closed.
-
-Field ownership is strict:
-
-- Sol owns the active task contract: ID, revision, owner, scope, allowed
-  files, forbidden work, acceptance criteria, checks, approval gate, and
-  escalation conditions.
-- Sol owns all `WORKFLOW_CONTROL` fields during planning/review. Luna may
-  change only the atomic `State`, `Next action`, and `Transition` triple, and
-  only for a valid terminal `READY_FOR_LUNA`/`FIX_REQUIRED` to
-  `READY_FOR_SOL_REVIEW` handoff explicitly required by the active task. That
-  handoff may report completed work or a terminal blocker; Sol decides the
-  resulting review state. `Owner` is the assigned implementation owner, not
-  the actor named by `Next action`; Luna cannot change any other Sol-owned
-  control field.
-- The acting role replaces `CURRENT_HANDOFF`: Sol for planning/review and Luna
-  for implementation/fix. A durable dated entry may be added below it; old
-  entries are never rewritten.
-
-Any scope or contract change requires Sol to increment the task revision and
-issue a fresh handoff. Luna must match the task ID and revision across all
-three current blocks before acting. Evidence or approval for another ID,
-revision, scope, content key, or state is invalid.
-
-## Compact schemas
-
-Sol uses this bounded active-task schema:
+and:
 
 ```text
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 ### <TASK-ID> — <title>
-- Revision / owner / status / delivery size
-- Objective and scope (maximum 120 words)
+- Status
+- Objective and scope
 - Completion outcome
-- Internal checkpoints (`EXTENDED` only; otherwise `NOT_APPLICABLE`)
-- Allowed files
-- Forbidden work
+- Context or checkpoints
+- Primary files
+- Constraints and safety
 - Acceptance criteria
-- Focused checks
-- Approval gate: NOT_REQUIRED, or REQUIRED with exact scope/key, exact quoted
-  user message, user-message date, and Sol recorder/date
-- Terminal handoff conditions
+- Useful checks
 <!-- ACTIVE_TASK_END -->
 ```
 
-The acting role uses this bounded handoff schema:
+`AGENT_NOTES.md` contains:
 
 ```text
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
-- Task / revision / state / transition / owner
+- Focus and status
+- Summary
 - Files changed
-- Checks: exact command and PASS/FAIL/NOT_RUN
-- Evidence (maximum five bullets; no raw logs)
-- Approval: NOT_REQUIRED, or matched scope/key/message/date
-- Blockers: none, or exact blocker / evidence / attempted approaches /
-  remaining safe options / recommended next decision for Sol
-- Next action
+- Checks
+- Decisions and evidence
+- Blockers or risks
+- Suggested next action
+- Actor notes
 <!-- CURRENT_HANDOFF_END -->
 ```
 
-Summaries are at most 120 words and evidence at most five bullets. Commands
-and failures may link to a dated history entry, but history below the block is
-never required startup context.
+Statuses such as `READY`, `IN_PROGRESS`, `BLOCKED`, `REVIEW` and `DONE` are
+descriptive only. Any actor may update them when the evidence changes. Task IDs,
+revisions and primary-file lists help traceability but do not prevent related
+work required to finish the user's requested outcome.
 
-## Approval and safety gates
+If current markers are missing or duplicated, repair them when the intended
+current context is clear from the latest user request and nearby content. If it
+is not clear, report the ambiguity instead of inventing project history.
 
-Work needing user approval remains `BLOCKED` until Sol records, in the active
-task, the exact user message, exact authorized scope or immutable key, the
-message date, and Sol's recorder/date. Luna must match all fields and the
-current task ID/revision before any preflight or execution covered by the
-gate. Approval may never be inferred, reused from another task/revision/key,
-expanded, or applied retroactively. `SOL PLAN`, `LUNA DO`, and review commands
-are not approval.
+## Continuation and handoffs
 
-- Do not run SUMO unless the active task explicitly authorizes it and the
-  exact required approval record matches.
-- Do not create or inspect outcomes unless the active task explicitly
-  authorizes it and the exact required approval record matches.
-- Do not start demand generation or horizon warming unless the active task
-  explicitly authorizes it and the exact required approval record matches.
-- Do not merge Stage B unless Sol review explicitly approves it.
-- Do not weaken validation, provenance, recall, regret, failure-recall,
-  release, or publication gates.
-- Diagnostic replay is never release evidence.
+`CONTINUE` or `CONTINUE using AGENTS.md` means: inspect the current context and
+continue with the next useful safe action. It works in any model or tool.
 
-## Command aliases
+A handoff should be concise and decision-useful. Record what changed, exact
+checks and results, important evidence, real blockers and what another actor
+can do next. Do not require the user to paste a special role command. Do not
+create a handoff solely to transfer work between planning and implementation
+when the same actor can continue safely.
 
-- `SOL PLAN`: validate the fast path; create exactly one cohesive delivery-
-  slice contract, using `STANDARD` by default; set `READY_FOR_LUNA` or
-  `BLOCKED`; write the current handoff; stop.
-- `LUNA DO`: require `READY_FOR_LUNA`; implement only the matching task;
-  complete its authorized implementation/debug/check/documentation loop;
-  write one terminal handoff; set `READY_FOR_SOL_REVIEW`; stop.
-- `LUNA FIX`: require `FIX_REQUIRED`; fix only blockers in the matching current
-  handoff; autonomously complete the authorized repair/check loop; hand off
-  once for review; stop.
-- `SOL REVIEW`: require `READY_FOR_SOL_REVIEW`; review only the allowed diff
-  and recorded evidence; write exactly one `REVIEW_STATUS: APPROVED`,
-  `REVIEW_STATUS: FIX_REQUIRED`, or `REVIEW_STATUS: BLOCKED`; transition per
-  the state table; stop.
+When reviewing, report findings by severity and evidence. The reviewer may fix
+issues when the user asked for a completed outcome; otherwise keep a pure review
+read-only. Independent review is recommended for high-risk release, security,
+data-integrity and scientific-claim changes, but the reviewer can be any capable
+actor.
 
-## Luna escalation
+## Scope and autonomy
 
-Luna stops and escalates without broadening scope only at the terminal handoff
-conditions above. Auth, safety, data loss, provenance, publication, database,
-approval, or state conflicts are authority boundaries and therefore always
-terminal. At three failed serious approaches, Luna records the required
-blocker evidence and safe options instead of attempting a fourth approach.
+Treat an active task as a focus contract, not a cage:
 
-External workers such as Claude may act as Luna only when they follow this
-contract. Sol retains review and approval authority.
+- Work toward the complete user-visible or evidence-visible outcome.
+- Inspect and edit tightly related files when necessary, and record the reason.
+- Do not bundle unrelated work merely because it is nearby.
+- Preserve unrelated dirty-worktree changes.
+- Prefer repository-discoverable answers over routine clarification questions.
+- If the current approach cannot reach the goal, revise the approach and the
+  coordination record instead of preserving a failing workflow for its own
+  sake.
+
+Stop and ask only when there is a genuine authority boundary, destructive or
+irreversible consequence, missing secret/access, material architecture choice,
+or several credible approaches have failed and user direction is needed.
+
+## Safety and evidence
+
+Flexibility does not weaken product, scientific or operational safeguards.
+
+- Do not delete data, reset user changes, publish, deploy, push, release, spend
+  money, contact external parties or perform another consequential external
+  action unless the user's request and the tool's approval rules authorize it.
+- Local source edits, documentation, read-only inspection and focused tests are
+  normally allowed as part of implementation.
+- SUMO runs, campaign creation, outcome inspection and demand/horizon warming
+  may be performed when they are materially required by the user's requested
+  goal, their scope and cost are understood, and no narrower safety rule
+  requires confirmation. They do not require a special Sol/Luna task or magic
+  approval wording.
+- Before an expensive or evidence-producing run, bind inputs and outputs,
+  avoid clobbering prior evidence, and make clear whether the run is diagnostic
+  or release evidence.
+- Never weaken validation, provenance, exactness, recall, regret,
+  failure-recall, health, adoption, release or publication gates merely to make
+  a result pass. Any deliberate contract change must be explicit and tested.
+- Diagnostic replay is not release evidence unless the release contract says
+  so and the user has requested that promotion.
+- Keep secrets out of logs and documentation.
+
+Approval can be expressed in normal language. Record the relevant scope when it
+matters, but do not demand an exact quote, immutable phrase or role-specific
+recorder unless an external system genuinely requires it.
+
+## Documentation quality
+
+- Keep current summaries short; keep detailed history in dated sections.
+- Use stable links and file names. Do not copy the same current state into many
+  places.
+- Label hypotheses, measurements, decisions and superseded conclusions
+  separately.
+- Update `ARCHITECTURE.md` when structure or contracts change and
+  `IMPROVEMENT_PLAN.md` when priorities or evidence change.
+- Preserve historical records unless they are factually wrong; add a correction
+  or supersession note rather than silently rewriting the past.
