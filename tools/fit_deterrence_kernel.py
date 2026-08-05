@@ -34,6 +34,10 @@ FIT_PATH = ROOT / "sumo" / "trip_length_fit_kernelfit.json"
 # ~100 s now, up from ~16 s, because rejection sampling pays real retries) —
 # the first, denser sweep under the OLD sampling showed L1 nearly flat in
 # beta at fixed alpha, so a coarser grid loses little.
+# Two fits count as tied when their L1 differs by less than this FRACTION
+# of the better one — scale-free, so it survives a change of target.
+NEAR_TIE_REL_TOL = 0.05
+
 ALPHAS = [0.0, 1.5, 3.0]
 BETAS = [1.3, 1.8, 2.6]
 
@@ -49,6 +53,17 @@ def run_combo(alpha: float, beta: float) -> dict:
         sys.exit(f"build_candidates.py failed for alpha={alpha} beta={beta}")
     with open(FIT_PATH) as f:
         return json.load(f)
+
+
+def select_winner(results: list[dict]) -> tuple[dict, dict, list[dict]]:
+    """Declared selection rule: lowest L1 wins; the destination-proximity
+    metric breaks only genuine ties. Returns (best, winner, near_ties)."""
+    ordered = sorted(results, key=lambda r: r["l1"])
+    best = ordered[0]
+    near_ties = [r for r in ordered
+                 if r["l1"] <= best["l1"] * (1.0 + NEAR_TIE_REL_TOL)]
+    winner = min(near_ties, key=lambda r: r["dest_near_sensor_pct"])
+    return best, winner, near_ties
 
 
 def main() -> None:
@@ -70,9 +85,7 @@ def main() -> None:
                   f"(baseline {row['baseline_pct']}%)")
 
     results.sort(key=lambda r: r["l1"])
-    best = results[0]
-    near_ties = [r for r in results if r["l1"] <= best["l1"] + 0.02]
-    winner = min(near_ties, key=lambda r: r["dest_near_sensor_pct"])
+    best, winner, near_ties = select_winner(results)
     print(f"\nbest L1: alpha={best['alpha']} beta={best['beta']} L1={best['l1']}")
     print(f"winner (proximity tiebreak among {len(near_ties)} near-ties): "
           f"alpha={winner['alpha']} beta={winner['beta']} L1={winner['l1']} "

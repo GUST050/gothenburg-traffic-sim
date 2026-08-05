@@ -808,6 +808,64 @@ class TestPurposeLengthOrdering:
         assert "purpose_length_km" not in report
 
 
+
+class TestSharedRouteReferencesAreResolved:
+    """A vehicle may carry its route inline OR reference a shared
+    <route id=...>. Found 2026-08-05: the metric loop skipped the
+    referencing form outright, so those vehicles vanished from EVERY
+    structure metric and the remainder was reported as the whole
+    population. Inert while the publisher emits inline routes, but the
+    candidate pool already uses shared routes and DEMAND_PIPELINE_REVIEW's
+    S4 proposes them for the pool file."""
+
+    @staticmethod
+    def _geo(tmp_path):
+        def feat(eid, lat, sensor=None):
+            props = {"id": eid}
+            if sensor:
+                props["sensor_id"] = sensor
+            return {"type": "Feature", "properties": props,
+                    "geometry": {"type": "LineString",
+                                 "coordinates": [[11.97, lat], [11.971, lat]]}}
+        geo = tmp_path / "network.geojson"
+        geo.write_text(json.dumps({"features": [
+            feat("A", 57.700, sensor="s1"), feat("B", 57.750),
+        ]}))
+        return geo
+
+    def test_a_referenced_route_is_counted_not_skipped(self, monkeypatch, tmp_path):
+        geo = self._geo(tmp_path)
+        monkeypatch.setattr(dstructure, "GEO_PATH", geo)
+        rou = tmp_path / "calibrated.rou.xml"
+        # one inline vehicle, one referencing a shared route — both cross
+        # the sensor edge A, so both must appear in sensor_passages.
+        rou.write_text(
+            '<routes>'
+            '<route id="r0" edges="A B"/>'
+            '<vehicle id="0" depart="0.0"><route edges="A B"/></vehicle>'
+            '<vehicle id="1" depart="1.0" route="r0"/>'
+            '</routes>')
+        report = bsd.calibrated_structure_report(rou)
+        assert report is not None
+        counted = sum(report["sensor_passages"].values())
+        assert counted == 2, (
+            f"both vehicles must be counted, got {counted}: "
+            f"{report['sensor_passages']}")
+
+    def test_an_unresolvable_route_raises_instead_of_under_reporting(
+            self, monkeypatch, tmp_path):
+        geo = self._geo(tmp_path)
+        monkeypatch.setattr(dstructure, "GEO_PATH", geo)
+        rou = tmp_path / "calibrated.rou.xml"
+        rou.write_text(
+            '<routes>'
+            '<vehicle id="0" depart="0.0"><route edges="A B"/></vehicle>'
+            '<vehicle id="1" depart="1.0" route="missing"/>'
+            '</routes>')
+        with pytest.raises(ValueError, match="no resolvable route"):
+            bsd.calibrated_structure_report(rou)
+
+
 _FAKE_PUBLISH_STAGED: dict = {}
 
 

@@ -210,11 +210,32 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
     quarter_totals = Counter()
     under_1km_by_quarter = Counter()
     n_no_sensor = 0
-    for veh in ET.parse(route_path).getroot().iter("vehicle"):
+    root = ET.parse(route_path).getroot()
+    # A vehicle may carry its route inline OR reference a shared
+    # <route id=...> defined once in the same file. Silently skipping the
+    # referencing form would drop those vehicles from EVERY metric below —
+    # trip-length fit, destination proximity, sensor passages, onward
+    # distance and the under-1km cap — and report the remainder as if it
+    # were the whole population. Inert while the publisher emits inline
+    # routes only, but the candidate pool already uses the shared form and
+    # DEMAND_PIPELINE_REVIEW's S4 proposes it for the pool file, so resolve
+    # it here and refuse rather than under-report.
+    named_routes = {
+        route.get("id"): route.get("edges", "")
+        for route in root.iter("route") if route.get("id")
+    }
+    for veh in root.iter("vehicle"):
         route = veh.find("route")
-        if route is None or not route.get("edges"):
-            continue
-        edges = route.get("edges").split()
+        if route is not None and route.get("edges"):
+            edges_text = route.get("edges")
+        else:
+            edges_text = named_routes.get(veh.get("route"), "")
+        if not edges_text:
+            raise ValueError(
+                f"vehicle {veh.get('id')!r} in {route_path} has no resolvable "
+                "route: neither an inline <route edges=...> nor a reference to "
+                "a shared <route id=...> in the same file")
+        edges = edges_text.split()
         o, d = edge_latlon.get(edges[0]), edge_latlon.get(edges[-1])
         dest_edges.append(edges[-1])
         if o is not None and d is not None:
