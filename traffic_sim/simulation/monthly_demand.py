@@ -98,6 +98,20 @@ LIVE_DEMAND_RELEASE_PRODUCTS = (
     Path("sumo") / "candidates.rou.xml",
     Path("sumo") / "candidates.meta.json",
 )
+# Whole DIRECTORIES the builder rewrites wholesale. A demand build clears
+# stale scenarios, so an envelope build deletes the deployed site's scenario
+# artifacts outright - found 2026-07-21 during the day-library proof, which
+# removed four tracked scenario files and had to restore them from git. File
+# entries cannot express that: what has to come back is the directory's exact
+# contents, including the absence of anything the build added.
+LIVE_DEMAND_RELEASE_DIRECTORIES = (
+    Path("web") / "data" / "scenarios",
+)
+# Written beside the snapshot so a run that is KILLED (SIGKILL, a serve.py
+# timeout, a crash) still leaves a recoverable pointer. Without it the
+# restore lives only in a finally block, which a kill skips - exactly what
+# happened when the 40h search was cancelled mid-build.
+LIVE_RELEASE_SNAPSHOT_MARKER = Path("runs") / ".live-demand-release-snapshot.json"
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -156,6 +170,69 @@ def _manifest_outputs(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, Any
 def _current_demand_runtime() -> tuple[str, str | None]:
     """Runtime fields recorded by ``make_fingerprint`` for reuse validation."""
     return sys.version.split()[0], sumo_version(sumo_home())
+GENERATION_SOURCE_FILES = ("build_candidates", "pfe", "build_sumo_demand")
+
+
+def demand_generation_of(archive: Path) -> dict[str, str]:
+    """The source hashes of the code that produced one demand archive.
+
+    A demand archive is content-addressed by its CONTRACT (dates, source,
+    window), which is deliberately silent about the code that filled it. That
+    is what lets a rebuild reuse an archive — and also what would let one
+    search mix an envelope calibrated before a generator change with one
+    calibrated after it, since every envelope build is a fresh subprocess
+    importing whatever code is on disk at the time.
+
+    Stage B changes the candidate seeding, so this is no longer hypothetical:
+    a `prepare` in flight across its landing could straddle it. Reading the
+    generator hashes the archive already records makes that detectable.
+    """
+    metadata = _read(Path(archive) / "demand_meta.json")
+    source_files = (metadata.get("build_fingerprint") or {}).get(
+        "source_files") or {}
+    return {
+        name: str((source_files.get(name) or {}).get("sha256", ""))
+        for name in GENERATION_SOURCE_FILES
+    }
+
+
+def _require_one_demand_generation(
+    entries_by_key: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Refuse a release whose archives were built by different generators.
+
+    Fail closed and name the disagreement: comparing envelopes calibrated by
+    two different candidate generators is not a paired comparison, and the
+    difference would otherwise be invisible in every downstream artifact.
+    """
+    generations: dict[str, list[str]] = {}
+    for key, entry in sorted(entries_by_key.items()):
+        archive = Path(str(entry.get("archive", "")))
+        try:
+            generation = demand_generation_of(archive)
+        except (OSError, ValueError):
+            raise ValueError(
+                f"monthly demand archive has no readable build fingerprint: "
+                f"{archive}"
+            ) from None
+        if not all(generation.values()):
+            raise ValueError(
+                f"monthly demand archive does not record its generator "
+                f"source hashes: {archive}"
+            )
+        generations.setdefault(_canonical_digest(generation, length=16),
+                               []).append(key)
+    if len(generations) > 1:
+        groups = "; ".join(
+            f"{digest}: {', '.join(keys)}"
+            for digest, keys in sorted(generations.items())
+        )
+        raise ValueError(
+            "monthly demand release mixes archives built by different "
+            f"candidate/solver generations ({groups}). Rebuild the older "
+            "envelopes so every candidate is compared against demand from "
+            "one generation."
+        )
 
 
 def validate_demand_archive(
@@ -316,10 +393,13 @@ def snapshot_live_demand_release(
     *,
     root: Path = _PROJECT_ROOT,
     products: Sequence[Path] = LIVE_DEMAND_RELEASE_PRODUCTS,
+    directories: Sequence[Path] = LIVE_DEMAND_RELEASE_DIRECTORIES,
+    marker: Path | None = None,
 ) -> dict[str, Any]:
-    """Copy the live release product set aside before an envelope build."""
+    """Copy the live release aside before an envelope build."""
     directory = Path(tempfile.mkdtemp(prefix="live-demand-release-"))
     entries: list[dict[str, Any]] = []
+    trees: list[dict[str, Any]] = []
     try:
         for index, relative in enumerate(products):
             source = Path(root) / relative
@@ -328,10 +408,29 @@ def snapshot_live_demand_release(
                 saved = f"{index:03}-{source.name}"
                 shutil.copy2(source, directory / saved)
             entries.append({"relative": str(relative), "saved": saved})
+        for index, relative in enumerate(directories):
+            source = Path(root) / relative
+            saved = None
+            if source.is_dir():
+                saved = f"tree{index:03}-{source.name}"
+                shutil.copytree(source, directory / saved)
+            trees.append({"relative": str(relative), "saved": saved})
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
-    return {"root": Path(root), "directory": directory, "entries": entries}
+    snapshot = {"root": Path(root), "directory": directory,
+                "entries": entries, "trees": trees}
+    marker_path = LIVE_RELEASE_SNAPSHOT_MARKER if marker is None else Path(marker)
+    snapshot["marker"] = marker_path
+    _atomic_json(marker_path, {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "live_demand_release_snapshot",
+        "root": str(Path(root)),
+        "directory": str(directory),
+        "entries": entries,
+        "trees": trees,
+    })
+    return snapshot
 
 
 def restore_live_demand_release(snapshot: Mapping[str, Any]) -> None:
@@ -343,6 +442,22 @@ def restore_live_demand_release(snapshot: Mapping[str, Any]) -> None:
     """
     directory = Path(snapshot["directory"])
     root = Path(snapshot["root"])
+    for tree in snapshot.get("trees", ()):
+        target = root / str(tree["relative"])
+        saved = tree["saved"]
+        if saved is None:
+            shutil.rmtree(target, ignore_errors=True)
+            continue
+        source = directory / str(saved)
+        if not source.is_dir():
+            raise FileNotFoundError(
+                f"live demand release snapshot is incomplete: {source}")
+        staging = target.with_name(target.name + ".restore.tmp")
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(source, staging)
+        shutil.rmtree(target, ignore_errors=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(staging, target)
     for entry in snapshot["entries"]:
         target = root / str(entry["relative"])
         saved = entry["saved"]
@@ -362,6 +477,50 @@ def restore_live_demand_release(snapshot: Mapping[str, Any]) -> None:
         finally:
             temporary.unlink(missing_ok=True)
     shutil.rmtree(directory, ignore_errors=True)
+    marker = snapshot.get("marker")
+    if marker is not None:
+        Path(marker).unlink(missing_ok=True)
+
+
+def recover_live_demand_release(
+    marker: Path = LIVE_RELEASE_SNAPSHOT_MARKER,
+) -> dict[str, Any] | None:
+    """Restore a live release left behind by a killed run, if there is one.
+
+    The normal restore runs in a finally block, which a SIGKILL - or a
+    serve.py timeout that kills the job - skips entirely. The snapshot marker
+    survives that, so the next run can put the deployed release back before
+    doing anything else. Returns what it recovered, or None if there was
+    nothing to recover.
+    """
+    marker = Path(marker)
+    try:
+        record = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if (
+        not isinstance(record, dict)
+        or record.get("kind") != "live_demand_release_snapshot"
+        or not isinstance(record.get("entries"), list)
+    ):
+        # A marker we cannot read is not a licence to guess: leave the box
+        # alone and say so, rather than restoring from a half-written record.
+        raise ValueError(f"unreadable live release snapshot marker: {marker}")
+    directory = Path(str(record["directory"]))
+    if not directory.is_dir():
+        # The snapshot itself is gone (temp cleaned). Nothing can be restored;
+        # drop the marker so it stops claiming otherwise.
+        marker.unlink(missing_ok=True)
+        return None
+    snapshot = {
+        "root": Path(str(record["root"])),
+        "directory": directory,
+        "entries": record["entries"],
+        "trees": record.get("trees", []),
+        "marker": marker,
+    }
+    restore_live_demand_release(snapshot)
+    return record
 
 
 def build_demand_archive(required: DemandBuildSpec) -> None:
@@ -595,6 +754,7 @@ class MonthlyDemandResolverRunner:
         }
         if set(by_key) != set(required_by_key):
             raise ValueError("monthly demand release does not cover the shortlist")
+        _require_one_demand_generation(by_key)
 
         for key, required in required_by_key.items():
             pinned = by_key[key]

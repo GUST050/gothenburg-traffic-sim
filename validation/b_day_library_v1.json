@@ -1,0 +1,79 @@
+{
+  "record": "b_day_library_v1",
+  "created": "2026-07-21",
+  "plan": "SPEED_ARCHITECTURE_PLAN_2026-07.md stage B (L1 store + L2 assembly wired into build_sumo_demand)",
+  "what_changed": "A whole-day window is now built as 'build the missing calendar days, then concatenate them'. Assembly is the only way a multi-day window is produced, so there is no second implementation that can drift. Sub-day windows, congestion-feedback builds and legacy-pool builds keep the direct path: their candidate pool depends on the whole window's own solution, so there is no day to store.",
+  "end_to_end_proof": {
+    "harness": "scratchpad b_proof.py \u2014 two overlapping 2-day windows, live release snapshotted and restored around both",
+    "windows": [
+      {
+        "start_date": "2025-09-16",
+        "days": 2,
+        "wall_s": 9.1,
+        "library": "2/2 days reused, 0 calibrated",
+        "geh_pct": {
+          "edge_shares": 100.0,
+          "edge_shares_q10": 100.0,
+          "edge_shares_q90": 100.0
+        },
+        "vehicles": {
+          "edge_shares": 43888,
+          "edge_shares_q10": 42302,
+          "edge_shares_q90": 45414
+        },
+        "per_day_geh_pct": [
+          100.0,
+          100.0
+        ]
+      },
+      {
+        "start_date": "2025-09-17",
+        "days": 2,
+        "wall_s": 115.0,
+        "library": "1/2 days reused, 1 calibrated",
+        "geh_pct": {
+          "edge_shares": 100.0,
+          "edge_shares_q10": 100.0,
+          "edge_shares_q90": 100.0
+        },
+        "vehicles": {
+          "edge_shares": 44749,
+          "edge_shares_q10": 43243,
+          "edge_shares_q90": 46296
+        },
+        "per_day_geh_pct": [
+          100.0,
+          100.0
+        ]
+      }
+    ],
+    "cold_cost_per_day_measured": {
+      "candidate_generation_s": 15.1,
+      "interval_solving_s": 36.7,
+      "integer_repair_s": 18.0,
+      "route_publish_s": 1.6,
+      "note": "one calendar day, 3 variants, 288 variant-quarter solves, 10 workers"
+    },
+    "storage": {
+      "two_days_all_variants_bytes_human": "352M",
+      "per_day_human": "~176M"
+    },
+    "every_hard_gate_held": "100% GEH<5 on every day and every direction variant in both windows; live release byte-restored afterwards"
+  },
+  "finding_that_changed_the_design": {
+    "assumption": "days of the same type share one candidate pool, so a merged window report could require identical protected-signature coverage",
+    "reality": "each day resamples its own tour templates against its own profile (build_candidates._resample_reused_template_tours), so two weekdays share geometry but not the exact multiset \u2014 pools differ slightly by design",
+    "consequence": "a day is calibrated against ITS OWN pool, not the union of the window's days as a monolithic build did. This is a further results-affecting difference beyond the four seeding streams, and is recorded as such in the plan.",
+    "resolution": "coverage is a diagnostic, so the window reports the conservative envelope (fewest signatures, most missing per purpose) and keeps the per-day values beside it"
+  },
+  "pending_gates": {
+    "golden_ab_6_2": "one 11-day window built directly vs forced through cold L1 + assembly, byte-compared. The unit-scale equality is already a permanent test (tests/test_day_library.py::TestAssemblyEqualsMonolith); the full-scale run is owed.",
+    "neutrality_6_3": "re-run 3 of the 12 held-out v2 cases on B-seeded demand -> validation/b_seeding_neutrality_v1.json",
+    "golden_refreeze": "normal, closure, 7-day and monthly goldens rebuilt on B"
+  },
+  "unrelated_gap_found": {
+    "what": "a demand build deletes web/data/scenarios/*.json (stale-scenario clearing)",
+    "correction": "the monthly search was NEVER exposed: build_demand_archive already passes --keep-scenarios. The deletion during this proof came from the harness calling build_sumo_demand.py directly. The earlier claim that envelope builds wipe the deployed scenarios was wrong.",
+    "status": "restored from git; the scenario directory is now covered by the live-release snapshot guard anyway, as defence in depth"
+  }
+}

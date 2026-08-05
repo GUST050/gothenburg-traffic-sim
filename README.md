@@ -97,6 +97,21 @@ more than one day, not N times more — see `IMPROVEMENT_PLAN.md` for measured t
 Per-scenario trajectory (individual-vehicle) export defaults off above one
 day (file size); pass `--trajectories` to force it on.
 
+**Pre-warming a horizon:** every calendar day is calibrated once and stored
+in a content-addressed day library (`runs/demand-days/`), so a window that
+already has its days is assembled in seconds instead of solved again.
+`make warm-horizon FROM=2027-01-01 TO=2027-12-31` fills that library ahead of
+time — measured ~100–150 s per day-slot, about 30 h and ~24 GB for a full
+year, run as a background job. Each build's own `runs/demand-*` archive is
+discarded once its days are stored (it is a ~100 MB-per-day-slot uncompressed
+duplicate under a build key nothing looks up; `--keep-archives` retains
+them). It is safe to stop with ^C and rerun (it
+resumes from `runs/warm-horizon/…/progress.json`), a window that fails is
+recorded and the rest still build, and it takes the shared workspace lock
+around each build, so the web app refuses a simultaneous simulation with a
+message naming the warm run instead of interleaving files with it.
+`make warm-horizon-plan` prints the plan and any date it cannot cover.
+
 **Feeding it new data:** drop new quarterly sensor CSVs in `data_in/`
 (see `data_in/README.md`), verify the station's measured direction in the
 city's traffic catalogue, add its metadata to `data_in/sensors.json`, and run

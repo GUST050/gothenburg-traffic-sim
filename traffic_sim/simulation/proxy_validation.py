@@ -637,6 +637,11 @@ def evaluate_validation_case(
         "normalized_shortlist_regret": regret,
         "spearman_rho": spearman,
         "spearman_n": len(correlated),
+        # How much decision there was to get right: the span of the eligible
+        # schedules' exhaustive objectives.  A case whose span sits inside
+        # the practical-equivalence band cannot distinguish a good ranking
+        # from a lucky one, and is counted as such rather than averaged in
+        # as if it were evidence of discrimination.
         "objective_spread_s": (
             max(float(candidate["sumo_objective"]) for candidate in eligible)
             - best_objective
@@ -727,6 +732,10 @@ def evaluate_validation_set(
     )
     spearman_case_fraction = len(spearmans) / len(ranking_reports)
     ranking_case_fraction = len(ranking_reports) / len(case_reports)
+    # Discriminating cases: those whose eligible schedules really do differ by
+    # more than the pre-registered indifference zone. Recall over THEM is the
+    # number that says whether the proxy can choose, as opposed to whether
+    # everything it could have chosen happened to be equally good.
     discriminating = [
         report for report in ranking_reports
         if tolerance is not None
@@ -781,6 +790,9 @@ def evaluate_validation_set(
                 len(regrets) == len(ranking_reports)
             ),
         }
+        # v3-style checks, present only when the frozen manifest asked for
+        # them. A set that claims to test discrimination must contain enough
+        # cases that actually do, and must be judged on those cases.
         if "minimum_discriminating_case_fraction" in gate:
             gate_checks["discriminating_case_coverage"] = (
                 discriminating_case_fraction

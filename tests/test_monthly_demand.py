@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -42,7 +43,14 @@ def _spec(*, end_date="2027-07-22", latest_end="07:00"):
     )
 
 
-def _archive(root, required, name, *, finished_at):
+GENERATION = {
+    "build_candidates": {"sha256": "a" * 64, "bytes": 1},
+    "pfe": {"sha256": "b" * 64, "bytes": 1},
+    "build_sumo_demand": {"sha256": "c" * 64, "bytes": 1},
+}
+
+
+def _archive(root, required, name, *, finished_at, generation=None):
     archive = root / name
     archive.mkdir(parents=True)
     files = {
@@ -54,6 +62,9 @@ def _archive(root, required, name, *, finished_at):
             "schema_version": 1,
             "candidates": {"candidate": {}},
         }),
+        # demand_meta.json is deliberately NOT written here: the `metadata`
+        # dict below is the authoritative one and overwrites it, so a second
+        # copy at this point would read as live while never surviving.
         "calibrated.rou.xml": (
             "<routes><vehicle id='q50' depart='0'>"
             "<route edges='edge-a'/></vehicle></routes>"),
@@ -96,8 +107,16 @@ def _archive(root, required, name, *, finished_at):
         },
         "build_fingerprint": {
             "schema_version": 1,
-            "source_files": monthly_demand.demand_source_fingerprints(
-                monthly_demand._PROJECT_ROOT),
+            # Real source hashes by default, so the reuse-validation tests see
+            # a truthful archive. A caller that passes `generation` is testing
+            # the generation-mixing guard and must be able to override exactly
+            # the GENERATION_SOURCE_FILES entries -- this dict is written over
+            # demand_meta.json below, so injecting it anywhere else is lost.
+            "source_files": {
+                **monthly_demand.demand_source_fingerprints(
+                    monthly_demand._PROJECT_ROOT),
+                **(dict(generation) if generation is not None else {}),
+            },
             "python": monthly_demand._current_demand_runtime()[0],
             "sumo_version": monthly_demand._current_demand_runtime()[1],
             "artifacts": {
@@ -577,3 +596,128 @@ def test_missing_archive_fails_closed_when_build_is_disabled(tmp_path):
     )
     with pytest.raises(FileNotFoundError, match="no succeeded immutable"):
         resolver.prepare(schedules)
+
+
+def _two_required(tmp_path):
+    resolver = MonthlyDemandResolverRunner(
+        _spec(), baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", runs_root=tmp_path / "runs",
+        release_root=tmp_path / "releases", build_missing=False)
+    schedules = generate_closure_schedules(_spec())
+    required = _required_for(resolver, schedules)
+    keys = sorted(required)
+    if len(keys) < 2:
+        pytest.skip("needs at least two distinct envelopes")
+    return [(key, required[key]) for key in keys[:2]]
+
+
+def test_release_mixing_demand_generations_is_refused(tmp_path, monkeypatch):
+    """A search must not compare envelopes built by different generators.
+
+    Every envelope build is a fresh subprocess importing whatever code is on
+    disk, so a long search that straddles a generator change silently ends up
+    with archives from both sides. That is not a paired comparison, and it is
+    invisible in every downstream artifact unless something checks.
+    """
+    entries = {}
+    for index, (key, required) in enumerate(_two_required(tmp_path)):
+        generation = dict(GENERATION)
+        if index:
+            generation["build_candidates"] = {"sha256": "z" * 64, "bytes": 1}
+        archive = _archive(
+            tmp_path, required, f"archive-{index}",
+            finished_at="2026-07-21T00:00:00Z", generation=generation)
+        entries[key] = {"archive": str(archive)}
+
+    with pytest.raises(ValueError, match="different candidate/solver"):
+        monthly_demand._require_one_demand_generation(entries)
+
+
+def test_release_of_one_generation_is_accepted(tmp_path):
+    entries = {
+        key: {"archive": str(_archive(
+            tmp_path, required, f"same-{index}",
+            finished_at="2026-07-21T00:00:00Z"))}
+        for index, (key, required) in enumerate(_two_required(tmp_path))
+    }
+    monthly_demand._require_one_demand_generation(entries)
+
+
+def test_archive_without_generator_hashes_is_refused(tmp_path):
+    key, required = _two_required(tmp_path)[0]
+    archive = _archive(tmp_path, required, "unfingerprinted",
+                       finished_at="2026-07-21T00:00:00Z",
+                       generation={"build_candidates": {"sha256": "", "bytes": 0}})
+    with pytest.raises(ValueError, match="generator source hashes"):
+        monthly_demand._require_one_demand_generation(
+            {key: {"archive": str(archive)}})
+
+
+class TestLiveReleaseKillSafety:
+    """The restore lives in a finally block, which a kill skips. A marker on
+    disk is what lets the next run put the deployed release back."""
+
+    def _live(self, tmp_path):
+        root = tmp_path / "box"
+        (root / "sumo").mkdir(parents=True)
+        (root / "web" / "data" / "scenarios").mkdir(parents=True)
+        (root / "sumo" / "calibrated.rou.xml").write_text("live routes")
+        (root / "web" / "data" / "scenarios" / "baseline.json").write_text("live")
+        return root
+
+    def _snapshot(self, tmp_path, root):
+        return monthly_demand.snapshot_live_demand_release(
+            root=root,
+            products=(Path("sumo") / "calibrated.rou.xml",),
+            directories=(Path("web") / "data" / "scenarios",),
+            marker=tmp_path / "marker.json")
+
+    def test_a_killed_run_is_recovered_from_the_marker(self, tmp_path):
+        root = self._live(tmp_path)
+        self._snapshot(tmp_path, root)   # deliberately never restored
+        (root / "sumo" / "calibrated.rou.xml").write_text("envelope routes")
+        (root / "web" / "data" / "scenarios" / "baseline.json").unlink()
+
+        recovered = monthly_demand.recover_live_demand_release(
+            tmp_path / "marker.json")
+
+        assert recovered is not None
+        assert (root / "sumo" / "calibrated.rou.xml").read_text() == "live routes"
+        assert (root / "web" / "data" / "scenarios"
+                / "baseline.json").read_text() == "live"
+        assert not (tmp_path / "marker.json").exists()
+
+    def test_scenario_directory_contents_are_restored_exactly(self, tmp_path):
+        root = self._live(tmp_path)
+        snapshot = self._snapshot(tmp_path, root)
+        # A build clears stale scenarios and writes its own.
+        (root / "web" / "data" / "scenarios" / "baseline.json").unlink()
+        (root / "web" / "data" / "scenarios" / "intruder.json").write_text("new")
+
+        monthly_demand.restore_live_demand_release(snapshot)
+
+        scenarios = sorted(
+            path.name for path in (root / "web" / "data" / "scenarios").iterdir())
+        assert scenarios == ["baseline.json"]
+
+    def test_a_completed_restore_leaves_no_marker(self, tmp_path):
+        root = self._live(tmp_path)
+        snapshot = self._snapshot(tmp_path, root)
+        monthly_demand.restore_live_demand_release(snapshot)
+        assert not (tmp_path / "marker.json").exists()
+        assert monthly_demand.recover_live_demand_release(
+            tmp_path / "marker.json") is None
+
+    def test_an_unreadable_marker_is_refused_not_guessed(self, tmp_path):
+        marker = tmp_path / "marker.json"
+        marker.write_text(json.dumps({"kind": "something_else"}))
+        with pytest.raises(ValueError, match="unreadable live release"):
+            monthly_demand.recover_live_demand_release(marker)
+
+    def test_a_marker_whose_snapshot_is_gone_is_dropped(self, tmp_path):
+        root = self._live(tmp_path)
+        snapshot = self._snapshot(tmp_path, root)
+        shutil.rmtree(snapshot["directory"])
+        assert monthly_demand.recover_live_demand_release(
+            tmp_path / "marker.json") is None
+        assert not (tmp_path / "marker.json").exists()

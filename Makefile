@@ -40,6 +40,20 @@ demand:
 demand-morning:
 	python3 build_sumo_demand.py
 
+# Pre-warm the demand day library so viewing a date and searching over it
+# stop paying for calibration. FROM/TO default to the 2027 forecast year;
+# measured cost is ~100-150 s and ~32 MB per day-slot, so a whole year is a
+# background job of roughly 30 h and ~24 GB that is safe to interrupt and
+# rerun (it resumes).
+FROM ?= 2027-01-01
+TO   ?= 2027-12-31
+SOURCE ?= forecast
+warm-horizon:
+	python3 warm_demand_horizon.py --source $(SOURCE) --from $(FROM) --to $(TO)
+
+warm-horizon-plan:
+	python3 warm_demand_horizon.py --source $(SOURCE) --from $(FROM) --to $(TO) --dry-run
+
 scenario:
 	python3 run_scenario.py
 	python3 run_scenario.py --close 60786979_3575001205_0 1455801464_18241874_0

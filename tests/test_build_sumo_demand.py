@@ -22,6 +22,7 @@ from demand import publication as dpub
 from demand import priors as dpriors
 from demand import structure as dstructure
 from demand import calibration as dcal
+from traffic_sim.core.fingerprint import fingerprint_files
 from traffic_sim.demand import cache as candidate_cache
 
 
@@ -1096,3 +1097,111 @@ def _legacy_counts_job(job):
     """Module level so the fork pool can pickle it: leaves every quarter
     unfilled, which sends the writer down its historical inline path."""
     return job[0], job[1], None
+
+
+class TestDayPoolBlocks:
+    """Stage B: candidate blocks for calibrating ONE day inside a composition.
+
+    A day calibrated alone must see the same variable set as that day inside
+    a window (so the other day types in the composition contribute geometry)
+    while its own quarters receive only its own candidates (so the per-quarter
+    purpose mix is unchanged).
+    """
+
+    WEEKDAY = pd.Timestamp("2025-09-16")   # Tuesday
+    WEEKEND = pd.Timestamp("2025-09-20")   # Saturday
+
+    def _blocks(self, day, composition):
+        return dintake.day_pool_blocks({}, {}, day, 0, composition)
+
+    def test_single_type_composition_is_just_the_day(self):
+        blocks = self._blocks(self.WEEKDAY, ("weekday",))
+        assert len(blocks) == 1
+        assert blocks[0]["offset_s"] == 0
+        assert blocks[0]["date"] == "2025-09-16"
+        assert blocks[0]["pool_key"] == "weekday"
+
+    def test_other_day_types_are_carried_outside_the_calibrated_window(self):
+        blocks = self._blocks(self.WEEKDAY, ("weekday", "weekend"))
+        own, carrier = blocks
+        assert own["offset_s"] == 0 and own["pool_key"] == "weekday"
+        # A 24 h calibration covers 0..86400; the carrier must start beyond it
+        # so its departures cannot land in any calibrated quarter.
+        assert carrier["offset_s"] >= 86400
+        assert carrier["pool_key"] == "weekend"
+        assert carrier["shape_carrier"] is True
+
+    def test_carrier_blocks_are_canonical_not_calendar(self):
+        # A carrier exists to bring a day type's geometry, so its draws must
+        # depend on the day type alone — otherwise the same composition would
+        # produce different pools on different dates.
+        weekday_side = self._blocks(self.WEEKDAY, ("weekday", "weekend"))[1]
+        weekend_side = self._blocks(self.WEEKEND, ("weekday", "weekend"))[1]
+        assert weekday_side["date"] == "pool-template:weekend"
+        assert weekend_side["date"] == "pool-template:weekday"
+
+    def test_exactly_one_block_per_day_type(self):
+        blocks = self._blocks(self.WEEKDAY, ("weekday", "weekend"))
+        keys = [block["pool_key"] for block in blocks]
+        assert sorted(keys) == ["weekday", "weekend"]
+        # Repeating a type once per calendar day (what a monolithic window
+        # does) would make structure-guard pool shares depend on how many
+        # weekdays and weekend days shared the envelope.
+        assert len(keys) == len(set(keys))
+
+    def test_day_outside_its_composition_is_refused(self):
+        with pytest.raises(ValueError, match="composition"):
+            self._blocks(self.WEEKEND, ("weekday",))
+
+    def test_window_composition_covers_every_day_type_present(self):
+        assert dintake.window_pool_composition(self.WEEKDAY, 1) == ("weekday",)
+        assert dintake.window_pool_composition(self.WEEKDAY, 7) == (
+            "weekday", "weekend")
+        assert dintake.window_pool_composition(self.WEEKEND, 2) == ("weekend",)
+
+    def test_holidays_share_the_weekend_geometry_pool(self):
+        # classify_day already treats a holiday as weekend-shaped; the pool
+        # key must follow it, or a holiday would demand its own template.
+        assert dintake.pool_key_for(pd.Timestamp("2025-12-25")) == "weekend"
+
+
+class TestStartupSourceHashes:
+    """A build's provenance must describe the code that actually ran.
+
+    Demand builds run for hours. Hashing the sources when the metadata is
+    written records whatever is on disk by then — after a mid-build edit,
+    code that never ran. Found live 2026-07-21 on a running search.
+    """
+
+    def test_fingerprint_uses_hashes_captured_before_the_build(self, tmp_path):
+        from traffic_sim.core.fingerprint import make_fingerprint
+
+        source = tmp_path / "generator.py"
+        source.write_text("original\n")
+        captured = fingerprint_files({"generator": source})
+        source.write_text("edited mid-build\n")
+
+        record = make_fingerprint(
+            contract={"kind": "test"}, artifacts={},
+            source_files={"generator": source},
+            source_file_records=captured)
+
+        assert record["source_files"] == captured
+        assert record["source_files"]["generator"]["sha256"] != (
+            fingerprint_files({"generator": source})["generator"]["sha256"])
+
+    def test_without_captured_hashes_the_current_files_are_used(self, tmp_path):
+        from traffic_sim.core.fingerprint import make_fingerprint
+
+        source = tmp_path / "generator.py"
+        source.write_text("original\n")
+        record = make_fingerprint(
+            contract={"kind": "test"}, artifacts={},
+            source_files={"generator": source})
+
+        assert record["source_files"] == fingerprint_files({"generator": source})
+
+    def test_the_demand_builder_captures_its_generators_at_import(self):
+        assert "build_candidates" in bsd.STARTUP_SOURCE_HASHES
+        assert "pfe" in bsd.STARTUP_SOURCE_HASHES
+        assert bsd.STARTUP_SOURCE_HASHES["build_candidates"]["sha256"]

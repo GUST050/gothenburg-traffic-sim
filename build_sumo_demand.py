@@ -43,13 +43,16 @@ import numpy as np
 import pandas as pd
 
 from traffic_sim.simulation.runtime import sumo_home
-from traffic_sim.core.fingerprint import make_fingerprint, sha256_file
+from traffic_sim.core.fingerprint import (fingerprint_files, make_fingerprint,
+                                           sha256_file)
 from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
                                          write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
 from traffic_sim.demand.build_lock import demand_build_lock, parent_holds_lock
 from traffic_sim.demand.provenance import validate_calibrated_provenance
 from traffic_sim.demand.source_identity import demand_source_paths
+from demand.day_library import (DayIdentity, DayLibrary, assemble_window,
+                                merge_day_reports)
 from train_agent1 import HOLIDAY_DATES_2025
 from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
 
@@ -73,6 +76,47 @@ STRUCTURAL_REFERENCE_DATE = "2025-09-16"
 # Candidate-pool density: one random trip every N seconds of the window.
 # The pool needs route DIVERSITY, not volume — routeSampler repeats routes.
 CANDIDATE_PERIOD_S = 2.0
+
+
+def _digest_payload(payload) -> str:
+    """Stable content digest of a JSON-able calibration input."""
+    import hashlib
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                           allow_nan=False, default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _source_files() -> dict[str, Path]:
+    """Every source file whose content defines a demand build's identity."""
+    files = {
+        "build_sumo_demand": Path(__file__),
+        "build_data": Path("build_data.py"),
+        "sensor_registry": Path("traffic_sim/intake/sensors.py"),
+        "sensor_registry_data": Path("data_in/sensors.json"),
+        "build_candidates": Path("build_candidates.py"),
+        "build_sumo_net": Path("build_sumo_net.py"),
+        "pfe": Path("traffic_sim/demand/pfe.py"),
+        "pfe_kernel": Path("traffic_sim/demand/pfe_kernel.py"),
+        "candidate_cache": Path("traffic_sim/demand/cache.py"),
+        "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
+        "assignment_priors": Path("assignment_priors.py"),
+        "prior_flows": Path("prior_flows.py"),
+        "observability": Path("observability.py"),
+    }
+    for module_path in sorted(Path("demand").glob("*.py")):
+        files[f"demand/{module_path.name}"] = module_path
+    return files
+
+
+SOURCE_FILES = _source_files()
+# Captured at STARTUP, not when the metadata is written. A demand build runs
+# for hours; hashing the sources at the end records whatever is on disk by
+# then, which after a mid-build edit is code that never ran. Found 2026-07-21:
+# an envelope whose candidates were generated at 14:24 was fingerprinted at
+# 17:35 against an edited build_candidates.py, so its provenance named a
+# generator it had not used - and the release guard that reads exactly this
+# record would then refuse a perfectly consistent search.
+STARTUP_SOURCE_HASHES = fingerprint_files(SOURCE_FILES)
 
 
 def candidate_routing_weight_cache_input(weight_file: Path | None) -> Path:
@@ -366,9 +410,11 @@ def parse_args() -> argparse.Namespace:
 # Patch SUMO_DIR/GEO_PATH on demand.intake for these functions.
 from demand.intake import (activity_purpose_shares_for_window, build_targets,
                            classify_day, demand_metadata, has_split_quantiles,
-                           load_direction_split, load_sensor_edges, multi_day_blocks,
+                           day_pool_blocks, load_direction_split,
+                           load_sensor_edges, multi_day_blocks,
                            observed_sensor_series, real_day_shape,
-                           target_series, validate_date_range)
+                           target_series, validate_date_range,
+                           window_pool_composition)
 
 # Structure metrics/gates — demand/structure.py (H1). GEO_PATH and the
 # geometry cache live there — monkeypatch THERE.
@@ -403,7 +449,8 @@ from demand.feedback import (BPR_PERIOD_S, FEEDBACK_SIM_TIMEOUT_S,
 
 # PFE calibration orchestration — moved to demand/calibration.py (H1,
 # 2026-07-14). The _PFE_PAR_* pool globals live there.
-from demand.calibration import (run_pfe_variants_flat_parallel,
+from demand.calibration import (_agent_path_for, _report_is_publishable,
+                                run_pfe_variants_flat_parallel,
                                 warn_bound_violations,
                                 warn_relaxed_bound_violations,
                                 warn_purpose_allocation_drift,
@@ -494,7 +541,8 @@ def main() -> None:
 
     cand_path = SUMO_DIR / "candidates.rou.xml"
 
-    def generate_candidates(weight_file: Path | None = None) -> None:
+    def generate_candidates(weight_file: Path | None = None,
+                            cache_date: str | None = None) -> None:
         started = time.perf_counter()
         if args.legacy_random_pool:
             print("\nGenerating candidate route pool (LEGACY: uniform randomTrips) …")
@@ -556,6 +604,16 @@ def main() -> None:
                 "gravity_alpha": args.gravity_alpha,
                 "cross_fraction": args.cross_fraction,
                 "is_weekend": use_weekend_shape,
+                # Candidate departures are keyed by calendar date (stage B),
+                # so the date is part of the pool's identity. Without it two
+                # dates whose measured day-shape happens to be identical (or
+                # absent) would share a cache entry and one would silently be
+                # served the other's candidates.
+                # In day-library mode each day generates its own pool, and
+                # the same calendar day must hit the same cache entry from
+                # ANY window - keying on the window start would regenerate an
+                # identical pool per envelope (cache_date is the day's date).
+                "start_date": cache_date or range_start.strftime("%Y-%m-%d"),
                 "min_per_sensor": 50,
                 "route_diversity": 2.0,
                 "seed": args.seed,
@@ -595,6 +653,11 @@ def main() -> None:
                 cmd += ["--real-day-shape-file", str(day_shape_path)]
             if day_blocks_path is not None:
                 cmd += ["--day-blocks-file", str(day_blocks_path)]
+            else:
+                # Single-day builds carry their date the same way a multi-day
+                # block does, so one day's candidates are identical whether it
+                # is built alone or inside a window (stage B).
+                cmd += ["--date", range_start.strftime("%Y-%m-%d")]
             if weight_file is not None:
                 cmd += ["--weight-file", str(weight_file),
                        "--weight-period", str(BPR_PERIOD_S)]
@@ -679,6 +742,184 @@ def main() -> None:
                 n_intervals, qi_start, bounds_data, priors_data, corridor,
                 assign_data, prior_variant.get(suffix, "prior"))
 
+        # ── Day library: build each calendar day once, then assemble ──────────
+        # A closure search re-derives the same calendar days for every
+        # overlapping envelope. Since stage B made a day's demand a function
+        # of the day itself, a whole-day window is now built as
+        # "build the missing days, then concatenate" - and assembly is the
+        # ONLY way a multi-day window is produced, so there is no second
+        # implementation that could drift (plan invariant 3).
+        #
+        # Sub-day windows (06:00-10:00) have no day to store and keep the
+        # direct path, as do congestion-feedback and legacy-pool builds,
+        # whose candidate pool depends on the whole window's own solution.
+        whole_day_window = (
+            n_intervals % 96 == 0
+            and purpose_departure_offset_s == 0
+            and n_intervals == args.days * 96
+        )
+        use_day_library = (
+            whole_day_window
+            and not args.legacy_random_pool
+            and (1 if args.legacy_random_pool else args.congestion_iterations) == 1
+        )
+        composition = window_pool_composition(range_start, args.days)
+
+        def day_identity(day: pd.Timestamp, day_index: int,
+                         variant_inputs: dict) -> DayIdentity:
+            """Everything this day's calibration is a function of."""
+            span = slice(day_index * 96, (day_index + 1) * 96)
+            constraints = {
+                suffix: {
+                    "targets": variant_inputs[suffix]["targets"][span],
+                    "bounds": variant_inputs[suffix]["bounds_pq"][span],
+                    "hard_bounds": variant_inputs[suffix]["hard_bounds_pq"][span],
+                    "priors": variant_inputs[suffix]["priors_pq"][span],
+                }
+                for suffix, _key in variants
+            }
+            return DayIdentity(
+                date=day.strftime("%Y-%m-%d"),
+                source=args.source,
+                pool_composition=composition,
+                inputs={
+                    "constraints": _digest_payload(constraints),
+                    "purpose_shares": _digest_payload(
+                        activity_purpose_shares[span]),
+                    "through_share_target": args.through_share_target,
+                    "candidate_pool": sha256_file(cand_path),
+                    "candidate_metadata": sha256_file(
+                        cand_path.with_name("candidates.meta.json")),
+                    "edge_geometry": sha256_file(GEO_PATH),
+                    "variants": [key for _suffix, key in variants],
+                },
+                source_hashes={
+                    name: record["sha256"]
+                    for name, record in sorted(STARTUP_SOURCE_HASHES.items())
+                    if name in {"build_candidates", "pfe", "pfe_kernel",
+                                "build_sumo_demand", "demand/calibration.py",
+                                "demand/structure.py", "demand/locations.py"}
+                },
+            )
+
+        def calibrate_window(variants, variant_inputs, **options):
+            if not use_day_library:
+                return run_pfe_variants_flat_parallel(
+                    cand_path, variants, variant_inputs, **options)
+            nonlocal day_blocks_path
+            library = DayLibrary()
+            day_blocks_path = SUMO_DIR / "candidate_day_blocks.json"
+            day_directories: list[Path] = []
+            per_variant_reports: dict[str, list[dict]] = {
+                suffix: [] for suffix, _key in variants}
+            reused = 0
+            for day_index in range(args.days):
+                day = range_start + pd.Timedelta(days=day_index)
+                day_blocks_path.write_text(json.dumps(day_pool_blocks(
+                    flows, sensor_edges, day, qi_start + day_index * 96,
+                    composition)))
+                generate_candidates(weight_file,
+                                    cache_date=day.strftime("%Y-%m-%d"))
+                identity = day_identity(day, day_index, variant_inputs)
+                entry = library.get(identity)
+                if entry is None:
+                    _calibrate_one_day(library, identity, day_index,
+                                       variants, variant_inputs, options)
+                    entry = library.get(identity)
+                    if entry is None:
+                        raise RuntimeError(
+                            f"demand day {identity.date} did not store")
+                else:
+                    reused += 1
+                    print(f"  day {identity.date}: library hit "
+                          f"{identity.key[:12]}")
+                day_directories.append(library.path_for(identity))
+                for suffix, _key in variants:
+                    per_variant_reports[suffix].append(json.loads(
+                        (library.path_for(identity)
+                         / f"fit{suffix}.json").read_text()))
+            print(f"  demand day library: {reused}/{args.days} day(s) reused, "
+                  f"{args.days - reused} calibrated")
+            # The direction variants form one demand contract, exactly as in
+            # the direct path: assemble every variant to a staged sibling,
+            # verify every merged report against the same publication gate,
+            # and only then flip the complete set. Without this, a crash
+            # after q50's assembly leaves a hybrid on disk - the failure mode
+            # the staged flow in run_pfe_variants_flat_parallel exists to
+            # prevent, which the library path must not quietly reintroduce.
+            reports = {}
+            staged: list[tuple[Path, Path]] = []
+            try:
+                for suffix, _key in variants:
+                    out_path = Path(variant_inputs[suffix]["out_path"])
+                    staged_path = out_path.with_name(out_path.name + ".staged")
+                    assemble_window(
+                        day_directories, staged_path,
+                        _agent_path_for(staged_path),
+                        names=(f"calibrated{suffix}.rou.xml",
+                               f"calibrated{suffix}.agents.json"))
+                    staged.append((staged_path, out_path))
+                    report = merge_day_reports(per_variant_reports[suffix])
+                    if not _report_is_publishable(report):
+                        raise RuntimeError(
+                            f"assembled window failed the publication gate "
+                            f"for calibrated{suffix}; no variants published")
+                    if not variant_inputs[suffix].get("keep_achieved", False):
+                        report.pop("achieved", None)
+                    reports[suffix] = report
+                for staged_path, out_path in staged:
+                    os.replace(staged_path, out_path)
+                    os.replace(_agent_path_for(staged_path),
+                               _agent_path_for(out_path))
+            finally:
+                for staged_path, _out_path in staged:
+                    staged_path.unlink(missing_ok=True)
+                    _agent_path_for(staged_path).unlink(missing_ok=True)
+            return reports
+
+        def _calibrate_one_day(library, identity, day_index, variants,
+                               variant_inputs, options):
+            """Calibrate and publish ONE day, day-local, into the library."""
+            span = slice(day_index * 96, (day_index + 1) * 96)
+            with tempfile.TemporaryDirectory(prefix="demand-day-") as scratch:
+                scratch_dir = Path(scratch)
+                day_inputs = {
+                    suffix: {
+                        **variant_inputs[suffix],
+                        "targets": variant_inputs[suffix]["targets"][span],
+                        "bounds_pq": variant_inputs[suffix]["bounds_pq"][span],
+                        "hard_bounds_pq":
+                            variant_inputs[suffix]["hard_bounds_pq"][span],
+                        "priors_pq": variant_inputs[suffix]["priors_pq"][span],
+                        "out_path": scratch_dir / f"calibrated{suffix}.rou.xml",
+                        # The window report is merged from these, so a day
+                        # always keeps its own achieved map.
+                        "keep_achieved": True,
+                    }
+                    for suffix, _key in variants
+                }
+                day_options = dict(options)
+                day_options["activity_purpose_shares_by_quarter"] = (
+                    activity_purpose_shares[span])
+                day_options["day_quarters"] = 96
+                day_options["purpose_departure_offset_s"] = 0.0
+                day_reports = run_pfe_variants_flat_parallel(
+                    cand_path, variants, day_inputs, **day_options)
+                artifacts = {}
+                for suffix, _key in variants:
+                    route = scratch_dir / f"calibrated{suffix}.rou.xml"
+                    artifacts[route.name] = route
+                    agents = _agent_path_for(route)
+                    artifacts[agents.name] = agents
+                    fit = scratch_dir / f"fit{suffix}.json"
+                    fit.write_text(json.dumps(day_reports[suffix],
+                                              separators=(",", ":")))
+                    artifacts[fit.name] = fit
+                library.put(identity, artifacts, fit={
+                    "geh_pct": day_reports[""]["geh_pct"],
+                    "vehicles": day_reports[""]["vehicles"],
+                })
+
         # ── Congestion-feedback loop (primary "" / q50 variant only) ──────────
         # PFE picks route USE COUNTS to match sensor totals, but the candidate
         # routes it picks from were generated against FREE-FLOW cost — a route
@@ -720,12 +961,17 @@ def main() -> None:
                     }
                 reports = timed(
                     "pfe_variants_and_rounding",
-                    lambda: run_pfe_variants_flat_parallel(
-                        cand_path, variants, variant_inputs,
+                    lambda: calibrate_window(
+                        variants, variant_inputs,
                         max_workers=args.pfe_workers or (os.cpu_count() or 1),
                         purpose_departure_offset_s=purpose_departure_offset_s,
                         activity_purpose_shares_by_quarter=activity_purpose_shares,
-                        through_share_target=args.through_share_target))
+                        through_share_target=args.through_share_target,
+                        # Whole-day windows restart each day's endpoint draw
+                        # ordinals, so a day's published vehicles depend only
+                        # on that day (stage B). Sub-day windows have no day
+                        # boundary to restart at.
+                        day_quarters=(96 if n_intervals % 96 == 0 else None)))
                 for suffix, key in variants:
                     variant_report = reports[suffix]
                     variant_fit_reports[key] = fit_summary(
@@ -961,12 +1207,16 @@ def main() -> None:
                 SUMO_DIR / f"calibrated{suffix}.rou.xml")
             fingerprint_artifacts[f"calibrated{suffix}_agents"] = (
                 SUMO_DIR / f"calibrated{suffix}.agents.json")
+    # Keep main's resolver rather than stage B's module-level SOURCE_FILES:
+    # both survive the merge, but demand_source_paths() is what the current
+    # tree fingerprints with.
     source_files = demand_source_paths(Path.cwd())
     # The exact contract is written only after all expensive calibration and
     # structure gates have completed, immediately before the matching metadata
     # fingerprint is created.
     write_demand_build_spec(demand_spec_path, demand_spec)
     meta["build_fingerprint"] = make_fingerprint(
+        source_file_records=STARTUP_SOURCE_HASHES,
         contract={k: v for k, v in meta.items()
                   if k not in {"timings_s", "pfe_timing_s",
                                "build_fingerprint"}},
