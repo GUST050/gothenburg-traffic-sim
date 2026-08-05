@@ -1,0 +1,37 @@
+{
+  "direct_run_trace": {
+    "ended_teleporting_on_edge": "7532496129_7532496152_0",
+    "note": "SUMO refused to reinsert the vehicle on the closed edge and placed it on the edge AFTER the closure, so this teleport produced no entry at all",
+    "refused_on_closed_edge": true,
+    "teleported_from_edge": "496248275_7532496160_0",
+    "teleports_observed": 1,
+    "vehicle": "pfe4885"
+  },
+  "kind": "closure_leak_mechanism_measurement",
+  "measured_at": "2026-08-06",
+  "schedule_level_cooccurrence": {
+    "disqualified_by_neither": 21,
+    "schedules_total": 75,
+    "teleports_without_throughput": 5,
+    "throughput_without_teleports": 0,
+    "with_teleports": 40,
+    "with_throughput": 35
+  },
+  "schema_version": 1,
+  "sources": {
+    "campaign_outcomes": "runs/closure-proxy-validation/43e040ca72c21ebd52a62cb800c946ca1960943dd5571c92a51ba92d4af2a0cb/outcomes.json",
+    "direct_run": "v9-control-secondary-3 edge, 8h closure, warnings enabled"
+  },
+  "unplanned_finding": {
+    "dropped_or_truncated_unreachable_only": 21,
+    "note": "schedules disqualified with no teleport and no throughput at all. Fixing teleports alone cannot make these eligible; they are vehicles with no route, a failure mode the plan's stages 2-3 do not address"
+  },
+  "verdict": {
+    "gate_minimum_share": 0.9,
+    "gate_passed": true,
+    "holds": "teleports are a NECESSARY condition: throughput never occurs without them in any of the 75 schedules",
+    "premise": "CLOSURE_INTEGRITY_PLAN 1.1 claimed the leak and the teleports are one event counted twice",
+    "refuted": "they are not the same event. Teleports occur without any throughput, and a directly observed teleport was REFUSED entry to the closed edge and landed past it",
+    "result": "REVISED, not confirmed"
+  }
+}
