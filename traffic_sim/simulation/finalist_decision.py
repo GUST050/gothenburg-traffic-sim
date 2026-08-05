@@ -61,6 +61,13 @@ class FinalistPolicy:
     absolute_precision_floor_s: float
     practical_equivalence_s: float
     max_repetitions: int
+    #: Equivalence band for the DETERMINISTIC closure objective, in vehicle-
+    #: hours. practical_equivalence_s is a noise allowance for a sampled
+    #: quantity and does not transfer: seconds are not hours, and there is no
+    #: sampling error to allow for here. Defaults to 0.0 — with no noise, any
+    #: difference is real — so a release must freeze a deliberate value if it
+    #: wants trivial differences treated as ties.
+    practical_equivalence_vehicle_hours: float = 0.0
     initial_repetitions: int = 4
     confidence_level: float = 0.95
     relative_precision: float = 0.05
@@ -139,11 +146,31 @@ class PairedObservation:
         return self.candidate_time_loss_s - self.baseline_time_loss_s
 
 
+# Ranking objective (2026-08-05). See closure_ranking for why simulated
+# delay was replaced: on this network delta_time_loss_s is noise (a real
+# closure gave +0.050 s and -0.100 s per arm; congestion feedback converged
+# at 0.0% change), while displaced vehicles and detour cost separate
+# candidates by orders of magnitude.
+#
+# CONSEQUENCE, stated because it is easy to miss: the new objective is
+# DETERMINISTIC. It has no sampling error, so for candidates ranked on it the
+# confidence apparatus below (robust_lower/upper_95_s, precision_met,
+# repetition_cap_reached, next_runs) is inert by construction — intervals are
+# zero-width, precision is always met and more repetitions never help. It is
+# retained, not deleted, because candidates WITHOUT disruption evidence still
+# fall back to the time-loss path.
+from traffic_sim.simulation.closure_ranking import (  # noqa: E402
+    ClosureCost, rank_closures, worst_variant_cost)
+
+
 @dataclass(frozen=True)
 class CandidateEvidence:
     candidate_id: str
     observations: tuple[PairedObservation, ...] = ()
     hard_failures: tuple[str, ...] = ()
+    #: One closure_disruption() record per demand variant, or () when the
+    #: candidate was evaluated before this objective existed.
+    disruption: tuple[Mapping, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
@@ -272,6 +299,8 @@ class CandidateStatistics:
     all_variants_ready: bool
     precision_met: bool
     provenance_key: str | None
+    #: Worst-variant closure cost, or None when no disruption evidence exists.
+    closure_cost: ClosureCost | None = None
 
 
 @dataclass(frozen=True)
@@ -331,6 +360,18 @@ class DecisionResult:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def _closure_cost_for(candidate: CandidateEvidence) -> ClosureCost | None:
+    """Reduce a candidate's per-variant disruption records to one cost.
+
+    Returns None when the candidate has no disruption evidence, which keeps
+    pre-objective candidates on the legacy time-loss path instead of silently
+    ranking them as costless.
+    """
+    if not getattr(candidate, "disruption", ()):
+        return None
+    return worst_variant_cost(candidate.candidate_id, list(candidate.disruption))
 
 
 def _validate_candidate_observations(
@@ -511,6 +552,7 @@ def _candidate_statistics(
             all_variants_ready=False,
             precision_met=False,
             provenance_key=None,
+            closure_cost=_closure_cost_for(candidate),
         )
     grouped = _validate_candidate_observations(candidate, policy)
     variants = tuple(
@@ -547,6 +589,7 @@ def _candidate_statistics(
         robust_lower_95_s=robust_lower,
         robust_upper_95_s=robust_upper,
         worst_variant=worst_variant,
+        closure_cost=_closure_cost_for(candidate),
         all_variants_ready=ready,
         precision_met=ready and all(item.precision_met for item in variants),
         provenance_key=(
@@ -636,13 +679,43 @@ def decide_finalists(
             simultaneous_comparisons=comparisons,
         )
 
-    ranked = sorted(
-        viable,
-        key=lambda candidate: (
-            float(candidate.robust_upper_95_s),
-            candidate.candidate_id,
-        ),
-    )
+    # RANKING OBJECTIVE. When every viable candidate carries disruption
+    # evidence, rank on what the closure costs the people driving — displaced
+    # vehicles and detour, lexicographically, per closure_ranking. Candidates
+    # that strand a driver are refused there rather than ranked: an
+    # unreachable destination is not "a bit more delay", and averaging it into
+    # a score hides it. Mixed or absent evidence falls back to the legacy
+    # time-loss bound so pre-objective campaigns still decide.
+    costed = [c for c in viable if c.closure_cost is not None]
+    if costed and len(costed) == len(viable):
+        ordered, refused = rank_closures(c.closure_cost for c in costed)
+        by_id = {c.candidate_id: c for c in costed}
+        refused_ids = {c.candidate_id for c in refused}
+        ranked = [by_id[cost.candidate_id] for cost in ordered]
+        viable = [c for c in viable if c.candidate_id not in refused_ids]
+        if not ranked:
+            return DecisionResult(
+                status="no_viable",
+                winner_id=None,
+                tie_ids=(),
+                reason=(
+                    "every schedule leaves at least one destination "
+                    "unreachable by car"
+                ),
+                candidates=statistics,
+                next_runs=(),
+                policy=policy,
+                confidence_level=policy.confidence_level,
+                simultaneous_comparisons=comparisons,
+            )
+    else:
+        ranked = sorted(
+            viable,
+            key=lambda candidate: (
+                float(candidate.robust_upper_95_s),
+                candidate.candidate_id,
+            ),
+        )
     best = ranked[0]
     if len(ranked) == 1:
         if best.precision_met or not requests:
@@ -664,6 +737,48 @@ def decide_finalists(
             reason="the only viable schedule has not met the precision target",
             candidates=statistics,
             next_runs=requests,
+            policy=policy,
+            confidence_level=policy.confidence_level,
+            simultaneous_comparisons=comparisons,
+        )
+
+    if best.closure_cost is not None and all(
+            c.closure_cost is not None for c in ranked):
+        # Deterministic objective: no sampling error, so the confidence
+        # apparatus has nothing to resolve. A candidate wins outright when
+        # every rival costs more than it by more than the equivalence band.
+        band = policy.practical_equivalence_vehicle_hours
+        best_hours = best.closure_cost.added_vehicle_hours
+        clear = [c for c in ranked[1:]
+                 if c.closure_cost.added_vehicle_hours - best_hours > band]
+        if len(clear) == len(ranked) - 1:
+            return DecisionResult(
+                status="unique_winner",
+                winner_id=best.candidate_id,
+                tie_ids=(),
+                reason=(
+                    "one schedule displaces fewer vehicles and adds less "
+                    "driving than every rival, on deterministic evidence"
+                ),
+                candidates=statistics,
+                next_runs=(),
+                policy=policy,
+                confidence_level=policy.confidence_level,
+                simultaneous_comparisons=comparisons,
+            )
+        tied = tuple(c.candidate_id for c in ranked
+                     if c.closure_cost.added_vehicle_hours - best_hours <= band)
+        return DecisionResult(
+            status="tie",
+            winner_id=None,
+            tie_ids=tied,
+            reason=(
+                "several schedules are within the vehicle-hour equivalence "
+                "band; no further simulation can separate a deterministic "
+                "objective"
+            ),
+            candidates=statistics,
+            next_runs=(),
             policy=policy,
             confidence_level=policy.confidence_level,
             simultaneous_comparisons=comparisons,

@@ -541,3 +541,78 @@ class TestConditionalMicroscopicConfirmation:
                     MicroResult("stale", "study-one", True, True, True, True),
                 ],
             )
+
+
+def _disruption(hours=0.0, metres=0.0, affected=0, no_detour=0):
+    return {"added_vehicle_hours": hours, "added_metres_total": metres,
+            "vehicles_affected": affected, "vehicles_no_detour": no_detour}
+
+
+def _costed(candidate_id, deltas, disruption, **kw):
+    """Evidence that additionally carries per-variant disruption records."""
+    base = _candidate(candidate_id, deltas, **kw)
+    return dataclasses.replace(base, disruption=tuple(disruption))
+
+
+class TestClosureObjectiveRanking:
+    """The ranking objective is displaced vehicles and detour, not simulated
+    delay. Measured 2026-08-05: delta_time_loss_s on this network is noise
+    (a real closure gave +0.050 s and -0.100 s per arm; congestion feedback
+    converged at 0.0% change), while disruption separates candidates by
+    orders of magnitude."""
+
+    def test_disruption_decides_even_when_time_loss_disagrees(self):
+        # 'cheap' looks WORSE on time loss but costs far fewer vehicle-hours.
+        cheap = _costed("cheap", _all_variants([80.0, 80.0, 80.0, 80.0]),
+                        [_disruption(hours=0.2, metres=100, affected=4_371)])
+        dear = _costed("dear", _all_variants([10.0, 10.0, 10.0, 10.0]),
+                       [_disruption(hours=20.6, metres=41_000, affected=8_427)])
+        result = decide_finalists([cheap, dear], _policy())
+        assert result.winner_id == "cheap", (
+            "ranking must follow disruption, not the time-loss bound")
+
+    def test_a_schedule_that_strands_drivers_is_refused_not_ranked(self):
+        severing = _costed("severing", _all_variants([1.0, 1.0, 1.0, 1.0]),
+                           [_disruption(hours=0.0, affected=5, no_detour=287)])
+        ok = _costed("ok", _all_variants([50.0, 50.0, 50.0, 50.0]),
+                     [_disruption(hours=20.6, metres=41_000, affected=8_427)])
+        result = decide_finalists([severing, ok], _policy())
+        assert result.winner_id == "ok", (
+            "an unreachable destination is not 'a bit more delay' and must "
+            "not win on near-zero vehicle-hours")
+
+    def test_all_severing_yields_no_viable(self):
+        a = _costed("a", _all_variants([1.0] * 4),
+                    [_disruption(no_detour=3)])
+        b = _costed("b", _all_variants([1.0] * 4),
+                    [_disruption(no_detour=9)])
+        result = decide_finalists([a, b], _policy())
+        assert result.status == "no_viable"
+        assert result.winner_id is None
+
+    def test_candidates_without_disruption_keep_the_legacy_key(self):
+        """Pre-objective campaigns must still decide, not rank as costless."""
+        low = _candidate("low", _all_variants([10.0, 10.0, 10.0, 10.0]))
+        high = _candidate("high", _all_variants([90.0, 90.0, 90.0, 90.0]))
+        result = decide_finalists([low, high], _policy())
+        assert result.winner_id == "low"
+
+    def test_mixed_evidence_falls_back_rather_than_mixing_scales(self):
+        costed = _costed("costed", _all_variants([90.0] * 4),
+                         [_disruption(hours=0.1, affected=10)])
+        plain = _candidate("plain", _all_variants([10.0] * 4))
+        result = decide_finalists([costed, plain], _policy())
+        assert result.winner_id == "plain", (
+            "vehicle-hours and seconds are different scales; a partially "
+            "costed field must not be ranked as if they were comparable")
+
+    def test_worst_variant_is_taken_across_direction_splits(self):
+        a = _costed("a", _all_variants([1.0] * 4),
+                    [_disruption(hours=1.0, affected=10),
+                     _disruption(hours=9.0, affected=10),
+                     _disruption(hours=2.0, affected=10)])
+        b = _costed("b", _all_variants([1.0] * 4),
+                    [_disruption(hours=5.0, affected=10)])
+        result = decide_finalists([a, b], _policy())
+        assert result.winner_id == "b", (
+            "a must be judged on its worst variant (9.0), not its best")
