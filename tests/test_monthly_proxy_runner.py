@@ -362,7 +362,7 @@ class TestLegacyBehaviourIsUnchanged:
         set stays pinned so a campaign cannot acquire exact binding by
         accident — legacy v1-v5 must remain excluded (covered above)."""
         assert _runner().EXACT_DEMAND_BINDING_CAMPAIGNS == frozenset(
-            {"v6", "v7", "v8"})
+            {"v6", "v7", "v8", "v9"})
 
     def test_key_resolution_still_exists_for_legacy_campaigns(self):
         """Legacy is not broadened, relabeled or removed."""

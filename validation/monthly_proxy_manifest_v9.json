@@ -1,0 +1,405 @@
+{
+  "campaign_version": "v9",
+  "cases": [
+    {
+      "case_id": "v9-discriminating-tertiary-a",
+      "closure_search_spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "3c99ddf834b30e8c5484",
+        "demand_build_id": "6ecedd258714e22c",
+        "directed_edges": [
+          "10248537886_8722747968_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:30"
+        },
+        "permitted_date_end": "2027-07-19",
+        "permitted_date_start": "2027-07-15",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 480,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "v9-discriminating-tertiary-a",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "directed_edges": [
+        "10248537886_8722747968_0"
+      ],
+      "expected_discriminating": true,
+      "schedule_ids": [
+        "closure-50768a137efeb6962603",
+        "closure-b6970d09e30d60390e28",
+        "closure-4966b6ea6ca39851ded8",
+        "closure-12958963589db995790e",
+        "closure-3e2c1adb50584af6e0a5",
+        "closure-dff63302e3981c9417b6",
+        "closure-ac6b90489c2619b49fb4",
+        "closure-7a69440ba77826489892",
+        "closure-a38ed3717f5f95f82d89",
+        "closure-a6b82881fd08b95585b0",
+        "closure-dbad4ac22880a47eecd4",
+        "closure-f2637bfe22dbec0ed843",
+        "closure-b9c7b5072ae62e739a81",
+        "closure-aacaba8e8b3ea0e6910f",
+        "closure-216062ef53c1d20ce526"
+      ],
+      "strata": {
+        "day_type": "mixed_weekday_weekend",
+        "duration": "single_8h",
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_within_400m",
+        "topology": "demand_supported_pre_outcome"
+      }
+    },
+    {
+      "case_id": "v9-discriminating-tertiary-b",
+      "closure_search_spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "92c9b85ba96db66bdb0f",
+        "demand_build_id": "6ecedd258714e22c",
+        "directed_edges": [
+          "312999716_312999717_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:30"
+        },
+        "permitted_date_end": "2027-07-19",
+        "permitted_date_start": "2027-07-15",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 480,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "v9-discriminating-tertiary-b",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "directed_edges": [
+        "312999716_312999717_0"
+      ],
+      "expected_discriminating": true,
+      "schedule_ids": [
+        "closure-44857fe5ac626724adc4",
+        "closure-eb02daaff5734c6382d1",
+        "closure-d69b62e5bc9a67989b0d",
+        "closure-01b092db1c0ffa5a3978",
+        "closure-ec3cd7c8d587fea543a5",
+        "closure-3f6b2cf419bdac25bcf8",
+        "closure-c170d1127ddb80aa0541",
+        "closure-4789d88857067b095f8f",
+        "closure-62d32623c7cc4089c3b2",
+        "closure-1503e2fa56ce1740dc05",
+        "closure-973838314dca30d97632",
+        "closure-322263ee4e8876a75db7",
+        "closure-12d382bff606f8e4ee98",
+        "closure-6a25f9305ce607819b03",
+        "closure-205bd4b0540326627777"
+      ],
+      "strata": {
+        "day_type": "mixed_weekday_weekend",
+        "duration": "single_8h",
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_within_400m",
+        "topology": "demand_supported_pre_outcome"
+      }
+    },
+    {
+      "case_id": "v9-control-tertiary-1",
+      "closure_search_spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "70ca2d2d469049ce232d",
+        "demand_build_id": "6ecedd258714e22c",
+        "directed_edges": [
+          "7532496188_8722747991_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:30"
+        },
+        "permitted_date_end": "2027-07-19",
+        "permitted_date_start": "2027-07-15",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 480,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "v9-control-tertiary-1",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "directed_edges": [
+        "7532496188_8722747991_0"
+      ],
+      "expected_discriminating": false,
+      "schedule_ids": [
+        "closure-80d96a7fce662622ab37",
+        "closure-d1e83be3a07e27c2cb14",
+        "closure-ac163048abb89bccf221",
+        "closure-3a427399c4f346cfb5e3",
+        "closure-d72ece20d14a17911448",
+        "closure-5252443711e079ff1508",
+        "closure-77e4436f9788abbfa8c5",
+        "closure-5c70e9dea71480d1d8e7",
+        "closure-c6db6eb64762d8a52359",
+        "closure-013f4109b2898e7e62b9",
+        "closure-505ea830379ffbd8ca59",
+        "closure-1932e08c8132a8caaaee",
+        "closure-070ee252e4872154db89",
+        "closure-83ef87e0f8791553f4be",
+        "closure-54a3c3402120625e83eb"
+      ],
+      "strata": {
+        "day_type": "mixed_weekday_weekend",
+        "duration": "single_8h",
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_within_400m",
+        "topology": "demand_supported_pre_outcome"
+      }
+    },
+    {
+      "case_id": "v9-control-tertiary-2",
+      "closure_search_spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "3fc8d89c4f17fed98bad",
+        "demand_build_id": "6ecedd258714e22c",
+        "directed_edges": [
+          "105979278_26193194_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:30"
+        },
+        "permitted_date_end": "2027-07-19",
+        "permitted_date_start": "2027-07-15",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 480,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "v9-control-tertiary-2",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "directed_edges": [
+        "105979278_26193194_0"
+      ],
+      "expected_discriminating": false,
+      "schedule_ids": [
+        "closure-72f84f953f38127a247d",
+        "closure-9d81a898d93d5a20eb50",
+        "closure-cd28e48139f991c54c8b",
+        "closure-032f5a0b347c3ea1dac5",
+        "closure-6a42758b6b7e3b39b00c",
+        "closure-86e2948164cb8314d0a2",
+        "closure-12ba46c47048983365c0",
+        "closure-0879ddd0e9f5a64b4697",
+        "closure-529e56dee05c7f45cab2",
+        "closure-cb7f53fe2cd3a46edb93",
+        "closure-5512f3f3c90abf2ddd9d",
+        "closure-1aab6b8939b6a073e508",
+        "closure-35d980845a9803096cbf",
+        "closure-72a8f4424ba0e955aacc",
+        "closure-1347b9246876c07af35b"
+      ],
+      "strata": {
+        "day_type": "mixed_weekday_weekend",
+        "duration": "single_8h",
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_within_400m",
+        "topology": "demand_supported_pre_outcome"
+      }
+    },
+    {
+      "case_id": "v9-control-secondary-3",
+      "closure_search_spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "blackout_dates": [],
+        "closure_type": "full",
+        "content_key": "caf8201af05c5b215e44",
+        "demand_build_id": "6ecedd258714e22c",
+        "directed_edges": [
+          "7532496160_7532496129_0"
+        ],
+        "dst_policy": "exclude_transition_dates",
+        "duration_basis": "required_work_time",
+        "kind": "closure_search",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "07:00",
+          "latest_end": "15:30"
+        },
+        "permitted_date_end": "2027-07-19",
+        "permitted_date_start": "2027-07-15",
+        "policy_status": "user_supplied_unverified",
+        "required_work_minutes": 480,
+        "resolution_minutes": 15,
+        "same_daily_window": true,
+        "schema_version": 1,
+        "search_id": "v9-control-secondary-3",
+        "source": "forecast",
+        "timezone": "Europe/Stockholm",
+        "work_to_closure_assumption": "one_to_one"
+      },
+      "directed_edges": [
+        "7532496160_7532496129_0"
+      ],
+      "expected_discriminating": false,
+      "schedule_ids": [
+        "closure-440d5a44f680075f7b7b",
+        "closure-452c21a761b376501bc1",
+        "closure-8a8c5601b69506df373b",
+        "closure-99eb93782d4f413be33b",
+        "closure-3da2f8a3d2e7ce986a11",
+        "closure-9c0a5a8a671306eff4a0",
+        "closure-74eb74d042b897a9f19f",
+        "closure-2609fbb89706b7b51d94",
+        "closure-ca76ae5baf683e1b8b03",
+        "closure-8318079e0994d08477eb",
+        "closure-16b1b576fa88a9c636fa",
+        "closure-7b40a8c5c51b00ac846b",
+        "closure-c4f582169ec396bd4536",
+        "closure-c9cf733fb50f5fa6d9fe",
+        "closure-ce3ef11f9371aa866b66"
+      ],
+      "strata": {
+        "day_type": "mixed_weekday_weekend",
+        "duration": "single_8h",
+        "road_class": "secondary",
+        "sensor_distance_band": "near_within_400m",
+        "topology": "demand_supported_pre_outcome"
+      }
+    }
+  ],
+  "content_key": "43e040ca72c21ebd52a62cb800c946ca1960943dd5571c92a51ba92d4af2a0cb",
+  "frozen_at": "2026-08-05",
+  "frozen_before_outcomes": true,
+  "gate": {
+    "discriminating_practical_winner_recall_minimum": 0.9,
+    "failure_disqualification_recall_minimum": 0.6,
+    "minimum_discriminating_case_fraction": 0.4,
+    "p90_normalized_shortlist_regret_maximum": 0.1,
+    "practical_equivalence_vehicle_hours": 0.001,
+    "practical_winner_recall_minimum": 0.9
+  },
+  "kind": "monthly_proxy_validation_manifest",
+  "minimum_cases": 5,
+  "minimum_ranking_case_fraction": 0.5,
+  "minimum_spearman_case_fraction": 0.5,
+  "outcomes_path": null,
+  "outcomes_present_at_freeze": false,
+  "policy_content_key": "48038cf03c77a0a70eedb9be3673ad3cc40d5191afaa3642749fd03e8ea672e0",
+  "proxy_version": "monthly_proxy_v1",
+  "required_strata": {
+    "day_type": [
+      "mixed_weekday_weekend"
+    ],
+    "duration": [
+      "single_8h"
+    ],
+    "road_class": [
+      "secondary",
+      "tertiary"
+    ],
+    "sensor_distance_band": [
+      "near_within_400m"
+    ],
+    "topology": [
+      "demand_supported_pre_outcome"
+    ]
+  },
+  "schema_version": 1,
+  "selection_content_key": "7fdd3b030a8f9366aeeb1c453a06059728726894c43519f04eb275b30f6a3259",
+  "shortlist_policy_content_key": "7cd20362813c21cd7ea8e80b703a10d0",
+  "shortlist_version": "stratified_shortlist_v3",
+  "source_fingerprints": {
+    "run_monthly_proxy_validation.py": "2dbb8a28f630d3cbbd3516a096d1d8c34e3d67ae3c14e7a8524e8d2a5609f77b",
+    "tools/freeze_heldout_v9.py": "ab0866214b0ca39a1d36e7bdfe7f3d1126efe177d55e7603f1cbf956450b1f6c",
+    "traffic_sim/core/closure_calendar.py": "2058faa6bb4492ae020ad0cdedfc35290fc28fd7af3eaf6ccb31f90ed20a1106",
+    "traffic_sim/simulation/heldout_gate.py": "423551e20a5d2d126bcf86bfefdd3ee3f637bd0d708398117a9a4cd75fd1e3cb",
+    "traffic_sim/simulation/heldout_selection.py": "862c10908c6347729d2ddce3f02111a1c84fa85a2a8e1dbe87161b310606091e",
+    "traffic_sim/simulation/monthly_proxy.py": "495df1aeed262183bb878605a4811a24d702f67b23bde81a659778d3b3a0af82",
+    "traffic_sim/simulation/monthly_search.py": "ab13ffa26fd5ceb92916b870dc2e8507835ae9f187e80b4c42641048cec98ba1",
+    "traffic_sim/simulation/proxy_validation.py": "a5e9b39f9f8bb28bcfb7361ac41ca86a1b8d275bc2f616ce56839140b7182342",
+    "validation/heldout_v9_selection.json": "7cf6f3a3dccb5d6244441bdbea26465140217f3c6ea4c36fb9eeb2050f3a0ac6",
+    "validation/monthly_proxy_policy_v9.json": "50fe2c85dfbec51f480dd96859c0c7dc60a60026b8c0e5f86e0ad351c9688427"
+  },
+  "source_identity": "monthly-proxy-v9-stratified-shortlist-v3",
+  "status": "frozen_pre_outcome_design"
+}
