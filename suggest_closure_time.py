@@ -254,6 +254,23 @@ def proxy_scores(windows: list[tuple[int, int]], close_edges: list[str],
     return out, excluded
 
 
+
+def _finalist_disruption(variants, close_edges, closures):
+    """Per-variant closure cost for finalist ranking, or () if unavailable.
+
+    Deterministic and demand-side, so it adds no simulation. Returns an empty
+    tuple rather than raising: a candidate with no disruption evidence keeps
+    the legacy time-loss key instead of ranking as costless.
+    """
+    try:
+        report = rs.closure_disruption_across_variants(
+            list(variants), set(close_edges), list(closures or []),
+            *rs.free_flow_edge_cost(), adj=rs.build_edge_graph(set()))
+    except Exception:
+        return ()
+    return (report,) if report is not None else ()
+
+
 def rank_candidates(scored: list[dict]) -> list[dict]:
     """Borda-style combined rank: average of the two ascending rank
     positions (closed-edge flow, corridor flow), lower average = better.
@@ -1012,6 +1029,14 @@ def main() -> None:
                         ),
                         provenance_key=provenance_key,
                         hard_failures=feasibility["hard_failures"],
+                        # The RANKING OBJECTIVE: what this closure costs the
+                        # people driving, per direction-split variant. Without
+                        # it decide_finalists falls back to the legacy
+                        # delta_time_loss key, which on this network is noise
+                        # (a real closure gave +0.050 s and -0.100 s per arm;
+                        # congestion feedback converged at 0.0% change).
+                        disruption=_finalist_disruption(
+                            variants, args.edge, closures),
                     )
                 )
             robust_decision = decide_finalists(

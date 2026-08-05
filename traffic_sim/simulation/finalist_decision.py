@@ -196,6 +196,7 @@ def paired_candidate_evidence(
     matched_baseline_id: str,
     provenance_key: str,
     hard_failures: Sequence[str] = (),
+    disruption: Sequence[Mapping[str, Any]] = (),
 ) -> CandidateEvidence:
     """Build explicit paired evidence from SUMO replication records.
 
@@ -268,6 +269,7 @@ def paired_candidate_evidence(
         candidate_id=candidate_id,
         observations=observations,
         hard_failures=tuple(str(reason) for reason in hard_failures),
+        disruption=tuple(disruption),
     )
 
 

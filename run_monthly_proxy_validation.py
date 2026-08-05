@@ -465,6 +465,12 @@ def _run_case(
     close_edges = list(spec.directed_edges)
     adjacency = rs.build_edge_graph(set(close_edges))
     freeflow = rs.edge_freeflow_times()
+    # Inputs for the RANKING OBJECTIVE (displaced vehicles and detour). The
+    # graph here is deliberately UNBANNED: the metric needs the baseline
+    # optimal path as well as the post-closure one, and `adjacency` above
+    # already has the closed edges removed for the rerouter.
+    objective_adjacency = rs.build_edge_graph(set())
+    objective_time, objective_len = rs.free_flow_edge_cost()
     rerouter_edges = rs.edges_near(close_edges, rs.REROUTER_RADIUS_M)
     detour = legacy.detour_availability(close_edges, rs.NET_PATH)
 
@@ -514,6 +520,19 @@ def _run_case(
             interval = legacy.delta_time_loss_interval(
                 per_seed, baseline_seeds
             )
+            # THE OBJECTIVE (2026-08-05). Previously sumo_objective was
+            # interval["median_s"] — delta time loss in SECONDS. On this
+            # network that cannot rank: a real closure produced +0.050 s and
+            # -0.100 s across arms, and congestion feedback converged at 0.0%
+            # change, so there is no congestion for a closure to disturb.
+            # It is now the closure's cost to the people driving, in
+            # vehicle-hours, measured on every direction-split variant and
+            # reduced to the worst case. Deterministic and demand-side: it
+            # needs no SUMO, but the SUMO run above still decides ELIGIBILITY
+            # (feasibility and disqualification), which is why it stays.
+            disruption = rs.closure_disruption_across_variants(
+                variants, set(close_edges), closures,
+                objective_time, objective_len, adj=objective_adjacency)
             feasibility = legacy.closure_feasibility(
                 metrics, baseline, detour=detour
             )
@@ -522,9 +541,15 @@ def _run_case(
                 "schedule_id": schedule.schedule_id,
                 "eligible": bool(feasibility["eligible"]),
                 "sumo_objective": (
-                    float(interval["median_s"])
-                    if feasibility["eligible"]
+                    float(disruption["added_vehicle_hours"])
+                    if feasibility["eligible"] and disruption is not None
                     else None
+                ),
+                "objective_unit": "vehicle_hours",
+                "disruption": disruption,
+                "delta_time_loss_median_s": (
+                    float(interval["median_s"])
+                    if feasibility["eligible"] else None
                 ),
                 "proxy_rank": (
                     int(candidate_proxy["proxy_rank"])

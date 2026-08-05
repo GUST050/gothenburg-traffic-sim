@@ -426,7 +426,8 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
 
 def closure_disruption_across_variants(
         variant_paths, closed_edges: set[str], closures: list,
-        edge_time: dict, edge_len: dict) -> dict | None:
+        edge_time: dict, edge_len: dict,
+        adj: dict | None = None) -> dict | None:
     """Measure the closure on EVERY direction-split variant, worst case first.
 
     q10/q50/q90 are three plausible directional assignments of the same
@@ -438,7 +439,11 @@ def closure_disruption_across_variants(
     is judged on its least favourable directional outcome on each axis; the
     per-variant records are kept alongside so the spread stays inspectable.
     """
-    adj = build_edge_graph(set())
+    # The caller may pass a prebuilt UNBANNED graph — a campaign evaluates
+    # dozens of schedules against the same network and should not rebuild it
+    # each time.
+    if adj is None:
+        adj = build_edge_graph(set())
     per_variant = {}
     for path in variant_paths:
         report = closure_disruption(
