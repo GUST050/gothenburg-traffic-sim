@@ -42,7 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 # claimed by several successful archives with DIFFERENT input bytes — so key
 # resolution silently depends on which copy sorts last. These campaigns are
 # bound to the exact archive their frozen selection artifact recorded.
-EXACT_DEMAND_BINDING_CAMPAIGNS = frozenset({"v6", "v7"})   # v7 binds its
+EXACT_DEMAND_BINDING_CAMPAIGNS = frozenset({"v6", "v7", "v8"})   # v7 binds its
 # canonical archive the same way v6 does: by exact path and full identity.
 
 # The exact command shape a future, separately approved v6 run must use.
