@@ -391,15 +391,27 @@ class TestLiveSourceFingerprintEnforcement:
         assert load_adopted_gate(gp, cp) is None
 
     def test_latest_v6_fingerprints_are_stale_and_remain_frozen(self):
-        """The live product must refuse v6 rather than re-label old evidence."""
+        """The live product must refuse v6 rather than re-label old evidence.
+
+        The set is pinned EXACTLY, not asserted non-empty: it is a canary, and
+        a loose check would stop reporting which sources moved. It therefore
+        grows as the tree moves, and each addition is a deliberate edit.
+
+        Grew 2026-08-05 when the ranking objective migrated to vehicle-hours:
+        proxy_validation gained the tolerance-field migration, and the campaign
+        runner gained v9 in EXACT_DEMAND_BINDING_CAMPAIGNS. More drift still
+        means v6 stays refused, which is the property under test.
+        """
         import hashlib as _h
         drifted = {
             rel for rel, digest in _manifest()["source_fingerprints"].items()
             if _h.sha256(Path(rel).read_bytes()).hexdigest() != digest
         }
         assert drifted == {
+            "run_monthly_proxy_validation.py",
             "traffic_sim/core/closure_calendar.py",
             "traffic_sim/simulation/monthly_search.py",
+            "traffic_sim/simulation/proxy_validation.py",
         }
 
     def test_spent_campaign_v5_cannot_adopt(self, tmp_path):
