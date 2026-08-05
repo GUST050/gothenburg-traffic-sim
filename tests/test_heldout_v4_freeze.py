@@ -177,6 +177,9 @@ def test_v4_recorded_enforcement_hashes_remain_frozen():
         "traffic_sim/core/closure_calendar.py",
         "run_monthly_proxy_validation.py",
         "traffic_sim/simulation/monthly_search.py",
+        # 2026-08-05: the gate schema took the tolerance-field migration when
+        # the ranking objective moved to vehicle-hours.
+        "traffic_sim/simulation/proxy_validation.py",
     }
 
 

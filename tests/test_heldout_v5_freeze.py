@@ -223,8 +223,13 @@ class TestSourceFingerprints:
         "traffic_sim/core/closure_calendar.py",
         # LUNA-V6-02: the frozen campaign identity moved v5 -> v6.
         "traffic_sim/simulation/monthly_search.py",
-        # LUNA-V6-04: the runner gained v6 exact-demand binding.
+        # LUNA-V6-04: the runner gained v6 exact-demand binding, and later v7,
+        # v8 and v9 as the objective migrated to vehicle-hours.
         "run_monthly_proxy_validation.py",
+        # 2026-08-05: the gate schema took the tolerance-field migration, so a
+        # gate names the UNIT of the objective it bounds (seconds or
+        # vehicle-hours) instead of assuming seconds.
+        "traffic_sim/simulation/proxy_validation.py",
     }
 
     def test_the_spent_campaign_no_longer_matches_the_live_tree(self):

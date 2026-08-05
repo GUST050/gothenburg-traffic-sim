@@ -275,6 +275,11 @@ class TestSourceFingerprintsAndReproduction:
     EXPECTED_DRIFT = {
         "traffic_sim/core/closure_calendar.py",
         "traffic_sim/simulation/monthly_search.py",
+        # 2026-08-05, vehicle-hours objective migration: the runner gained v7,
+        # v8 and v9 exact-demand binding and now measures the displaced-vehicle
+        # objective, and the gate schema names the unit it bounds.
+        "run_monthly_proxy_validation.py",
+        "traffic_sim/simulation/proxy_validation.py",
     }
 
     def test_fingerprints_cover_the_executable_selection_path(self):
