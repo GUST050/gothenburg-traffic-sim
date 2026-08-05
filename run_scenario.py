@@ -44,6 +44,7 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -64,6 +65,7 @@ from traffic_sim.simulation.trajectory_contract import (
 from traffic_sim.simulation.warm_state_cache import (
     load_state_arguments,
     save_state_arguments,
+    save_states_arguments,
 )
 from traffic_sim.demand.route_support import combined_route_edges
 
@@ -1639,6 +1641,7 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
              summary_output: Path | None = None,
              save_state_path: Path | None = None,
              save_state_time_s: int | None = None,
+             save_state_checkpoints: Sequence[tuple[int, Path]] | None = None,
              load_state_path: Path | None = None,
              tripinfo_write_unfinished: bool = True,
              output_precision: int | None = None,
@@ -1739,16 +1742,30 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
     if (save_state_path is None) != (save_state_time_s is None):
         raise ValueError(
             "save_state_path and save_state_time_s must be supplied together")
+    if save_state_checkpoints is not None and save_state_path is not None:
+        raise ValueError(
+            "pass either one save_state_path/save_state_time_s pair or "
+            "save_state_checkpoints, never both")
+    # One run, many snapshots. Every checkpoint obeys the same exclusive-end
+    # rule as the single-snapshot form; validating them all here means a bad
+    # plan fails before SUMO starts rather than yielding a short state set.
+    checkpoints = list(save_state_checkpoints or ())
     if save_state_path is not None:
-        # SUMO's --end is exclusive: a state requested exactly at --end is
-        # never written.  Require at least one following simulation second.
-        if not begin_s < save_state_time_s < duration_s + flush_s:
-            raise ValueError(
-                "save_state_time_s must be after begin_s and before the "
-                "exclusive simulation end")
-        metric_paths["state"] = Path(save_state_path)
-        cmd.extend(save_state_arguments(
-            save_state_path, warmup_end_s=save_state_time_s))
+        checkpoints = [(int(save_state_time_s), Path(save_state_path))]
+    if checkpoints:
+        for when, _path in checkpoints:
+            # SUMO's --end is exclusive: a state requested exactly at --end is
+            # never written.  Require at least one following simulation second.
+            if not begin_s < when < duration_s + flush_s:
+                raise ValueError(
+                    "save state times must be after begin_s and before the "
+                    f"exclusive simulation end; {when} is not")
+        if save_state_path is not None:
+            metric_paths["state"] = Path(save_state_path)
+        else:
+            metric_paths["states"] = tuple(
+                (when, Path(path)) for when, path in checkpoints)
+        cmd.extend(save_states_arguments(checkpoints))
     if load_state_path is not None:
         if begin_s <= 0:
             raise ValueError(
