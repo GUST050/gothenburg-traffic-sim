@@ -48,11 +48,7 @@ from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
                                          write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
 from traffic_sim.demand.build_lock import demand_build_lock, parent_holds_lock
-from traffic_sim.demand.provenance import (
-    augment_calibrated_edge_support,
-    validate_calibrated_provenance,
-)
-from traffic_sim.demand.route_support import route_edges
+from traffic_sim.demand.provenance import validate_calibrated_provenance
 from traffic_sim.demand.source_identity import demand_source_paths
 from train_agent1 import HOLIDAY_DATES_2025
 from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
@@ -826,10 +822,6 @@ def main() -> None:
             ], home)
 
     if args.engine == "pfe":
-        required_route_edges = route_edges(cand_path)
-        measured_route_edges = {
-            edge_id for edge_ids in sensor_edges.values() for edge_id in edge_ids
-        }
         # BASELINE RULE (2026-08-05): no synthetic support vehicles. The
         # augmentation added routes built with forbidden_edges=measured, i.e.
         # traffic that by construction can never cross a sensor. Under the
@@ -837,40 +829,6 @@ def main() -> None:
         edge_support_augmentation = {"schema_version": 1,
                                      "status": "disabled_baseline_rule",
                                      "variants": {}}
-        for suffix, key in ():
-            route_path = (calib_path if suffix == "" else
-                          SUMO_DIR / f"calibrated{suffix}.rou.xml")
-            agent_path = route_path.with_name(
-                route_path.name.replace(".rou.xml", ".agents.json"))
-            support_report = augment_calibrated_edge_support(
-                cand_path,
-                cand_path.with_name(cand_path.name.replace(
-                    ".rou.xml", ".meta.json")),
-                route_path,
-                agent_path,
-                required_edges=required_route_edges,
-                forbidden_edges=measured_route_edges,
-                days=args.days,
-            )
-            edge_support_augmentation["variants"][key] = support_report
-            if key in variant_fit_reports:
-                variant_fit_reports[key]["calibration_core_vehicles"] = (
-                    variant_fit_reports[key].get("vehicles"))
-                variant_fit_reports[key]["support_augmentation_vehicles"] = (
-                    support_report["vehicles_added"])
-                variant_fit_reports[key]["vehicles"] = (
-                    int(variant_fit_reports[key].get("vehicles") or 0)
-                    + support_report["vehicles_added"])
-            if suffix == "" and report is not None:
-                report["calibration_core_vehicles"] = report.get("vehicles")
-                report["support_augmentation_vehicles"] = support_report[
-                    "vehicles_added"]
-                report["vehicles"] = int(report.get("vehicles") or 0) \
-                    + support_report["vehicles_added"]
-            print(f"  {key} full-edge calibrated support: "
-                  f"{support_report['required_edges']}/"
-                  f"{support_report['required_edges']} edges, "
-                  f"{support_report['vehicles_added']} explicit support vehicles")
         candidate_provenance = validate_calibrated_provenance(
             cand_path,
             cand_path.with_name(cand_path.name.replace(".rou.xml", ".meta.json")),
