@@ -165,6 +165,7 @@ from traffic_sim.simulation.trajectory_contract import (
     validate_multiday_trajectory,
 )
 from traffic_sim.demand.route_support import combined_route_edges
+from traffic_sim.simulation.workspace import WorkspaceLock
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -251,7 +252,63 @@ def _signal_window_from_spec(spec: ScenarioSpec) -> tuple[str, str]:
         raise ValueError("signal analysis_window must stay within the scenario's first day")
     return measure_start.strftime("%H:%M"), measure_end.strftime("%H:%M")
 
-_sim_lock   = threading.Lock()     # one simulation-class job at a time
+class _SimulationSlot:
+    """One simulation-class job at a time — across threads AND processes.
+
+    The threading lock alone only serializes THIS server's jobs. Everything a
+    job writes (sumo/, web/data/scenarios, the live release products) is also
+    written by command-line builds: a horizon pre-warm run
+    (warm_demand_horizon.py) or a monthly search can be running beside the
+    server for hours. Taking the shared workspace lock here means a browser
+    action is refused with a clear "who is running" message instead of
+    interleaving its files with theirs.
+
+    Deliberately drop-in: acquire/release/locked keep threading.Lock's
+    semantics, so every existing call site and lifecycle test is unchanged.
+    """
+
+    def __init__(self) -> None:
+        self._thread_lock = threading.Lock()
+        self._workspace: WorkspaceLock | None = None
+        self.blocked_by: str = ""
+
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        if not self._thread_lock.acquire(blocking, timeout):
+            return False
+        workspace = WorkspaceLock(f"serve.py {os.getpid()}")
+        if not workspace.acquire():
+            self.blocked_by = workspace.holder_description()
+            self._thread_lock.release()
+            return False
+        self.blocked_by = ""
+        self._workspace = workspace
+        return True
+
+    def release(self) -> None:
+        workspace, self._workspace = self._workspace, None
+        try:
+            if workspace is not None:
+                workspace.release()
+        finally:
+            self._thread_lock.release()
+
+    def locked(self) -> bool:
+        return self._thread_lock.locked()
+
+
+_sim_lock   = _SimulationSlot()    # one simulation-class job at a time
+
+
+def _busy_message() -> str:
+    """Why a simulation-class request was refused, naming the other job.
+
+    A refusal that only says "something is running" is a support question
+    when the other job is a background horizon warm that owns the machine
+    for hours; naming it lets the user decide to wait or to stop it.
+    """
+    if _sim_lock.blocked_by:
+        return f"en simulering kör redan — {_sim_lock.blocked_by}"
+    return "en simulering kör redan — vänta"
 _recal_lock = threading.Lock()     # guards _recal_state below
 _recal_state: dict = {"status": "idle"}
 _close_lock = threading.Lock()     # guards _close_state below
@@ -1271,7 +1328,7 @@ class Handler(SimpleHTTPRequestHandler):
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
-            return self._json(409, {"error": "en simulering kör redan — vänta"})
+            return self._json(409, {"error": _busy_message()})
         # Lock stays held for the whole job — released by the background
         # thread, not here (same reasoning as _recalibrate).
         with _close_lock:
@@ -1438,7 +1495,7 @@ class Handler(SimpleHTTPRequestHandler):
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
-            return self._json(409, {"error": "en simulering kör redan — vänta"})
+            return self._json(409, {"error": _busy_message()})
         # Lock stays held for the WHOLE job — released by the background
         # thread, not here. The request handler returns immediately; the
         # job's lifetime is no longer tied to this one HTTP connection.
@@ -1697,7 +1754,7 @@ class Handler(SimpleHTTPRequestHandler):
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
-            return self._json(409, {"error": "en simulering kör redan — vänta"})
+            return self._json(409, {"error": _busy_message()})
         with _suggest_lock:
             _suggest_state.clear()
             _suggest_state.update(status="running", edges=edges,
@@ -1835,7 +1892,7 @@ class Handler(SimpleHTTPRequestHandler):
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
-            return self._json(409, {"error": "en simulering kör redan — vänta"})
+            return self._json(409, {"error": _busy_message()})
         with _optimize_lock:
             _optimize_state.clear()
             _optimize_state.update(status="running", edges=edges,
@@ -1975,7 +2032,7 @@ class Handler(SimpleHTTPRequestHandler):
         if blocked:
             return self._json(503, blocked)
         if not _sim_lock.acquire(blocking=False):
-            return self._json(409, {"error": "en simulering kör redan — vänta"})
+            return self._json(409, {"error": _busy_message()})
         with _monthly_lock:
             _monthly_state.clear()
             _monthly_state.update(status="running",

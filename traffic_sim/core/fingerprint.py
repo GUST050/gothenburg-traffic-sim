@@ -68,18 +68,25 @@ def sumo_version(home: Path) -> str | None:
 
 def make_fingerprint(*, contract: dict, artifacts: Mapping[str, Path],
                      source_files: Mapping[str, Path],
-                     sumo_home: Path | None = None) -> dict:
+                     sumo_home: Path | None = None,
+                     source_file_records: Mapping[str, dict] | None = None) -> dict:
     """Create a reproducibility record and its stable build ID.
 
     Paths are labels only; absolute filesystem locations never enter the
     build ID.  Source-file hashes cover uncommitted local edits, while the Git
     commit and SUMO version make a published run auditable later.
+
+    ``source_file_records`` supplies hashes captured EARLIER — at process
+    start — for builds long enough that the sources can change underneath
+    them. Hashing at the end would otherwise record code that never ran.
     """
     record = {
         "schema_version": SCHEMA_VERSION,
         "contract": contract,
         "artifacts": fingerprint_files(artifacts),
-        "source_files": fingerprint_files(source_files),
+        "source_files": (dict(source_file_records)
+                         if source_file_records is not None
+                         else fingerprint_files(source_files)),
         "git_commit": git_commit(),
         "python": sys.version.split()[0],
         "sumo_version": sumo_version(sumo_home) if sumo_home else None,

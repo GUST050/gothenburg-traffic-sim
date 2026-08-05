@@ -157,9 +157,9 @@ def _bundle_digest(paths: list[Path]) -> str:
     return _canonical_digest(records)
 
 
-def _demand_archives() -> dict[str, Path]:
+def _demand_archives(root: Path = Path("runs")) -> dict[str, Path]:
     found: dict[str, Path] = {}
-    for meta_path in sorted(Path("runs").glob("demand-*/demand_meta.json")):
+    for meta_path in sorted(Path(root).glob("demand-*/demand_meta.json")):
         try:
             metadata = _read(meta_path)
             manifest = _read(meta_path.parent / "manifest.json")
@@ -413,6 +413,7 @@ def _run_case(
     run_root: Path,
     sumo_home: Path,
     seed_workers: int,
+    refresh_stale: bool = False,
 ) -> dict[str, Any]:
     case_id = descriptor["case_id"]
     case_path = run_root / "cases" / f"{case_id}.json"
@@ -447,6 +448,21 @@ def _run_case(
             and saved.get("proxy_input_sha256") == proxy_digest
         ):
             return saved["outcome"]
+        if (
+            saved.get("status") == "complete"
+            and saved.get("proxy_input_sha256") != proxy_digest
+            and not refresh_stale
+        ):
+            # A completed case whose proxy inputs have since drifted is
+            # STORED EVIDENCE built under other conditions. Overwriting it in
+            # place is how a gate record's evidence bytes stop matching their
+            # recorded hashes (it happened, 2026-07-22). Rerunning must be an
+            # explicit decision - a different --state-root, or this flag.
+            raise SystemExit(
+                f"[{case_id}] stored complete case was produced under "
+                "different proxy inputs; rerun with --state-root elsewhere "
+                "or pass --refresh-stale-cases to overwrite it deliberately"
+            )
 
     metadata = _read(archive / "demand_meta.json")
     if metadata.get("demand_build_key") != spec.demand_build_id:
@@ -614,6 +630,25 @@ def parse_args() -> argparse.Namespace:
         "--seed-workers", type=int, default=1,
         help="Concurrent SUMO seeds (default 1; use >1 only after benchmarking).",
     )
+    parser.add_argument(
+        "--state-root", type=Path, default=None,
+        help="Directory for this run's progress/outcomes. Default is the "
+             "manifest-keyed campaign directory - which, once a gate record "
+             "references it, is FROZEN EVIDENCE. Point somewhere else for "
+             "any experimental rerun (found 2026-07-22: a stage-B rerun "
+             "silently rewrote three frozen case files in place).",
+    )
+    parser.add_argument(
+        "--demand-root", type=Path, default=Path("runs"),
+        help="Run registry searched for archived demand (demand-*/). Point "
+             "at an isolated root to validate against specific archives.",
+    )
+    parser.add_argument(
+        "--refresh-stale-cases", action="store_true",
+        help="Allow overwriting a COMPLETE stored case whose proxy inputs "
+             "have drifted. Without it such a case is refused, because "
+             "silently rewriting it destroys the stored evidence bytes.",
+    )
     return parser.parse_args()
 
 
@@ -634,7 +669,8 @@ def main() -> None:
             f"({', '.join(sorted(EXACT_DEMAND_BINDING_CAMPAIGNS))}); campaign "
             f"{manifest.get('campaign_version')!r} does not")
 
-    run_root = DEFAULT_ROOT / manifest["content_key"]
+    run_root = (Path(args.state_root) if args.state_root is not None
+                else DEFAULT_ROOT / manifest["content_key"])
     run_root.mkdir(parents=True, exist_ok=True)
     selected = set(args.case)
     unknown = selected - {case["case_id"] for case in manifest["cases"]}
@@ -644,7 +680,7 @@ def main() -> None:
         # Exactly one archive, already verified. No discovery, no fallback.
         archives = {bound_demand[0]: bound_demand[1]}
     else:
-        archives = _demand_archives()
+        archives = _demand_archives(args.demand_root)
     sumo_home = rs.sumo_home()
     outcomes = []
     missing = []
@@ -669,6 +705,7 @@ def main() -> None:
             run_root=run_root,
             sumo_home=sumo_home,
             seed_workers=args.seed_workers,
+            refresh_stale=args.refresh_stale_cases,
         ))
 
     partial = {

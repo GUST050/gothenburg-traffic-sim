@@ -21,11 +21,15 @@ from traffic_sim.core.contracts import (
     load_closure_search_spec,
 )
 from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.simulation.workspace import WorkspaceLock
 from traffic_sim.simulation.monthly_search import (
     MonthlySearchPolicy,
     run_monthly_search,
 )
-from traffic_sim.simulation.monthly_demand import MonthlyDemandResolverRunner
+from traffic_sim.simulation.monthly_demand import (
+    MonthlyDemandResolverRunner,
+    recover_live_demand_release,
+)
 from traffic_sim.simulation.envelope import (
     EnvelopePolicy,
     build_simulation_envelope,
@@ -325,6 +329,10 @@ def parse_args() -> argparse.Namespace:
         help="Disable warm-state execution and run every observation cold.",
     )
     parser.set_defaults(warm_execution=True)
+    parser.add_argument("--workspace-wait-s", type=float, default=3600.0,
+                        help="Seconds to wait for the shared demand "
+                             "workspace (a horizon pre-warm or the web "
+                             "app may hold it) before giving up.")
     return parser.parse_args()
 
 
@@ -378,6 +386,24 @@ def main() -> None:
             "combined; that would multiply the approved SUMO process ceiling"
         )
     runner = None
+    recovered = recover_live_demand_release()
+    if recovered is not None:
+        print(
+            "restored the live demand release left behind by a killed run "
+            f"({len(recovered.get('entries', []))} products, "
+            f"{len(recovered.get('trees', []))} directories)",
+            file=sys.stderr,
+        )
+    # A search owns the shared demand workspace for hours: it rebuilds
+    # envelopes into sumo/ and snapshots the live release around them. The
+    # web app and a horizon pre-warm run take the same lock, so this waits
+    # for whichever of them is mid-build instead of interleaving files with
+    # it - and says whose job it is waiting for.
+    workspace = WorkspaceLock(f"run_monthly_closure_search {os.getpid()}")
+    if not workspace.acquire(timeout=args.workspace_wait_s, poll_s=10.0):
+        raise SystemExit(
+            f"demand workspace busy: {workspace.holder_description()}; "
+            "wait for it, stop it, or raise --workspace-wait-s")
     try:
         spec = load_closure_search_spec(args.spec)
         policy = MonthlySearchPolicy.from_dict(_read(args.policy))
@@ -498,6 +524,7 @@ def main() -> None:
         cleanup = getattr(runner, "cleanup", None)
         if callable(cleanup):
             cleanup()
+        workspace.release()
 
     boundary = result.get("claim_boundary", {})
     print(

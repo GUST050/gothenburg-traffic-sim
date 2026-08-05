@@ -100,6 +100,7 @@ from __future__ import annotations
 
 import argparse
 from collections import OrderedDict
+import hashlib
 import json
 import math
 import os
@@ -2996,12 +2997,51 @@ def endpoint_pool_keys(tour_id: str, leg: str, purpose: str,
             destination_key if destination_key in pools else None)
 
 
+def _derived_seed(base_seed: int, tag: str) -> int:
+    """A stable independent stream from (base seed, label).
+
+    Used instead of arithmetic on a window position so that a stream depends
+    on WHAT it draws for (a calendar date, a day type) rather than on where
+    that thing happened to sit in the window being built.
+    """
+    digest = hashlib.sha256(f"{int(base_seed)}|{tag}".encode()).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
+def day_block_seed(base_seed: int, date: str | None, day_index: int) -> int:
+    """Departure-draw stream for one calendar day.
+
+    Keyed by the DATE (2026-07-21, SPEED_ARCHITECTURE_PLAN stage B). It used
+    to be ``base_seed + day_index``, i.e. window-relative: the same Tuesday
+    drew different departures depending on which day the window started on,
+    which is exactly what makes a day non-reusable between windows. Callers
+    that genuinely have no date (legacy/minimal entry points, tests) keep the
+    positional stream.
+    """
+    if date is None:
+        return base_seed + day_index
+    return _derived_seed(base_seed, f"date:{date}")
+
+
+def day_type_template_seed(base_seed: int, pool_key: str) -> int:
+    """Geometry stream for one day type.
+
+    Route geometry is generated once per day type and reused. That template
+    used to come from whichever block of the type appeared FIRST in the
+    window, so a window starting Monday and one starting Tuesday got
+    different weekday geometry. Deriving it from the day type alone makes the
+    template canonical: the same pool_key always yields the same geometry.
+    """
+    return _derived_seed(base_seed, f"pool:{pool_key}")
+
+
 def generate_day_block(
     structure: CandidateStructure, profile: np.ndarray, offset_s: float,
     id_prefix: str, seed: int, day_index: int, n_total: int,
     through_fraction: float, cross_fraction: float, gravity_km: float,
     is_weekend: bool, min_per_sensor: int, template_trips: list[tuple] | None = None,
-    gravity_alpha: float = 0.0,
+    gravity_alpha: float = 0.0, date: str | None = None,
+    pool_key: str | None = None,
 ) -> tuple[list[tuple], list[float], dict[str, int], list[tuple]]:
     """Generate one calendar-day candidate block.
 
@@ -3009,12 +3049,20 @@ def generate_day_block(
     the same type reuse that geometry but draw fresh departures from their own
     exact-day profile. This keeps the PFE shape pool bounded while preserving
     every day's measured/forecast departure-time signal.
+
+    The two random streams are deliberately separate (stage B): geometry is
+    canonical per day type, departures are keyed by calendar date. A day's
+    candidates are therefore a function of the day itself, not of the window
+    it is being generated inside — the property the demand day-library needs.
     """
-    rng = np.random.default_rng(seed + day_index)
+    rng = np.random.default_rng(day_block_seed(seed, date, day_index))
     raw_lengths: list[float] = []
     if template_trips is None:
+        template_rng = np.random.default_rng(day_type_template_seed(
+            seed, pool_key if pool_key is not None
+            else ("weekend" if is_weekend else "weekday")))
         raw_trips, raw_lengths, short = generate_sensor_anchored_trips(
-            rng, structure.G, structure.edges, structure.hmass, structure.amass,
+            template_rng, structure.G, structure.edges, structure.hmass, structure.amass,
             structure.entries, structure.exits, structure.entry_ids, structure.exit_ids,
             structure.w_entry, structure.w_exit, profile, structure.measured,
             n_total, through_fraction, cross_fraction, gravity_km, is_weekend,
@@ -3207,6 +3255,12 @@ def main() -> None:
                         "date/day-of-week it was building for at all, always "
                         "silently assuming an average weekday even when "
                         "calibrating a Saturday/Sunday.")
+    ap.add_argument("--date", default=None,
+                    help="Calendar date (YYYY-MM-DD) this single-day block "
+                        "generates. Keys the departure-draw stream, so the "
+                        "same date yields the same candidates in any build "
+                        "(SPEED_ARCHITECTURE_PLAN stage B). Multi-day builds "
+                        "carry the date per block in --day-blocks-file.")
     ap.add_argument("--real-day-shape-file", default=None,
                     help="JSON array of 24 hourly shares — the ACTUAL "
                         "measured (or, for a forecast date, Agent 1's "
@@ -3370,7 +3424,8 @@ def main() -> None:
                 str(block_spec["id_prefix"]), args.seed, day_index, args.n_total,
                 args.through_fraction, args.cross_fraction, args.gravity_km,
                 bool(block_spec.get("is_weekend", False)), args.min_per_sensor,
-                templates.get(pool_key), gravity_alpha=args.gravity_alpha)
+                templates.get(pool_key), gravity_alpha=args.gravity_alpha,
+                date=block_spec.get("date"), pool_key=pool_key)
             templates.setdefault(pool_key, template)
             multi_day_trips.extend(block)
             tour_lengths_km.extend(lengths)
@@ -3388,7 +3443,7 @@ def main() -> None:
             structure, shape_hourly, 0.0, "", args.seed, 0, args.n_total,
             args.through_fraction, args.cross_fraction, args.gravity_km,
             args.is_weekend, args.min_per_sensor,
-            gravity_alpha=args.gravity_alpha)
+            gravity_alpha=args.gravity_alpha, date=args.date)
         trips = [
             (depart, from_edge, to_edge, via_edge, purpose, tour_id, leg)
             for _trip_id, depart, from_edge, to_edge, via_edge,

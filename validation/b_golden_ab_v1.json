@@ -1,0 +1,35 @@
+{
+  "record": "b_golden_ab_v1",
+  "created": "2026-07-21",
+  "plan": "SPEED_ARCHITECTURE_PLAN_2026-07.md 6.2 (assembly identity, full scale)",
+  "question": "Is a window served from the day library exactly what recomputing it produces? If not, reuse could silently change a result.",
+  "case": {
+    "start_date": "2025-09-15",
+    "days": 7,
+    "span": "Mon 2025-09-15 through Sun 2025-09-21",
+    "why": "a full week carries BOTH day-type pools, so the mixed weekday/weekend composition is exercised, not just weekdays"
+  },
+  "method": "same window built twice against identical inputs: cold with runs/demand-days emptied first, then warm with every day served from the library. All six published artifacts and the metadata fit sections byte-compared.",
+  "result": "PASS",
+  "artifacts_identical": true,
+  "fit_identical": true,
+  "digests": {
+    "calibrated.rou.xml": "78f0e30d99ae2520efb12b01233e330cbec846e61077ce1a8463ec78f9dd5eff",
+    "calibrated_v1.rou.xml": "1ebd1b9cfc54e3c0dc847490560ed649f1b62484b7666522856b6f7389fa9472",
+    "calibrated_v2.rou.xml": "0bffc8777d6aada6bf447f7dc95ed09f3918430aa1a97f1a811bd44c97fffb97",
+    "calibrated.agents.json": "a31f9727f5056989da96f288bf2c7c3502f6893c4323daff5b1f8ce4aec8fe11",
+    "calibrated_v1.agents.json": "85d89c203937ba6593f11b93fb663a9f9b7ad415334430e824ca3d943e3db8e4",
+    "calibrated_v2.agents.json": "7a9aff2a06af3860cd2cb4892465ba455dbe1eb2becc27769b00f947e4bbbaf2"
+  },
+  "cold": {
+    "wall_s": 1580.5,
+    "library": "demand day library: 0/7 day(s) reused, 7 calibrated"
+  },
+  "warm": {
+    "wall_s": 32.2,
+    "library": "demand day library: 7/7 day(s) reused, 0 calibrated"
+  },
+  "speedup": 49.1,
+  "note": "The unit-scale version of this equality (assembly vs monolithic writer on a 2-day fixture) is a permanent regression test in tests/test_day_library.py::TestAssemblyEqualsMonolith. This record is the full-scale run the plan asked for.",
+  "still_pending": "6.3 held-out neutrality spot-check and the golden re-freeze; no claim rests on stage B until those pass."
+}
