@@ -35,11 +35,33 @@ _MODES = frozenset({"meso", "micro"})
 # spanned hundreds of seconds, which is measurement noise, not proxy
 # error.  Spearman becomes a reported diagnostic, not a gate.
 _GATE_FIELDS = (
-    "practical_equivalence_s",
     "practical_winner_recall_minimum",
     "p90_normalized_shortlist_regret_maximum",
     "failure_disqualification_recall_minimum",
 )
+# The indifference zone, in the OBJECTIVE'S OWN UNIT. The gate arithmetic is
+# objective-agnostic — it only ever compares sumo_objective against
+# best_objective + tolerance — but the unit is not, and a tolerance carried
+# across a change of objective is silently wrong. (Measured 2026-08-05: an
+# absolute 0.02 tie-break survived a 20x rescaling of its metric and promoted
+# a fit 1.7x worse than the best.) A manifest must therefore name its unit,
+# and exactly one of these may appear:
+#   practical_equivalence_s              seconds of added time loss  (v1-v6)
+#   practical_equivalence_vehicle_hours  vehicle-hours of added driving (v7+)
+_TOLERANCE_FIELDS = (
+    "practical_equivalence_s",
+    "practical_equivalence_vehicle_hours",
+)
+
+
+def gate_tolerance(gate: dict) -> float | None:
+    """The indifference zone, whichever unit this manifest declared."""
+    if not gate:
+        return None
+    for field in _TOLERANCE_FIELDS:
+        if field in gate:
+            return gate[field]
+    return None
 # Additive discrimination checks used by v3/v4. Earlier manifests do not
 # contain these fields and retain their original gate semantics unchanged.
 _OPTIONAL_GATE_FIELDS = (
@@ -179,7 +201,8 @@ def validate_validation_manifest(
                 "validation manifest gate must define at least "
                 + ", ".join(_GATE_FIELDS)
             )
-        unknown = set(gate_raw) - set(_GATE_FIELDS) - set(_OPTIONAL_GATE_FIELDS)
+        unknown = (set(gate_raw) - set(_GATE_FIELDS)
+                   - set(_TOLERANCE_FIELDS) - set(_OPTIONAL_GATE_FIELDS))
         if unknown:
             raise ValueError(
                 "validation manifest gate has unknown fields: "
@@ -188,11 +211,17 @@ def validate_validation_manifest(
         gate = {
             field: _number(gate_raw[field], f"gate.{field}")
             for field in _GATE_FIELDS
+            + tuple(f for f in _TOLERANCE_FIELDS if f in gate_raw)
             + tuple(field for field in _OPTIONAL_GATE_FIELDS if field in gate_raw)
         }
-        if gate["practical_equivalence_s"] <= 0:
-            raise ValueError("gate.practical_equivalence_s must be positive")
-        for field in sorted(set(gate) - {"practical_equivalence_s"}):
+        present = [f for f in _TOLERANCE_FIELDS if f in gate]
+        if len(present) != 1:
+            raise ValueError(
+                "gate must declare exactly one indifference zone naming its "
+                f"unit, one of {list(_TOLERANCE_FIELDS)}; found {present}")
+        if gate[present[0]] <= 0:
+            raise ValueError(f"gate.{present[0]} must be positive")
+        for field in sorted(set(gate) - set(present)):
             if not 0 < gate[field] <= 1:
                 raise ValueError(
                     f"gate.{field} must be above zero and at most one"
@@ -646,7 +675,7 @@ def evaluate_validation_set(
         raise ValueError("validation outcomes do not exactly cover frozen cases")
 
     gate = manifest.get("gate")
-    tolerance = gate["practical_equivalence_s"] if gate else None
+    tolerance = gate_tolerance(gate)
     case_reports = [
         evaluate_validation_case(
             case,

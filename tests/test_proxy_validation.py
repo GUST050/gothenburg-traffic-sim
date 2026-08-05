@@ -343,11 +343,29 @@ def test_gate_object_is_content_keyed_and_validated():
     plain = _manifest()
     gated = _gated_manifest()
     assert gated["content_key"] != plain["content_key"]
-    with pytest.raises(ValueError, match="gate must define at least"):
+    # A gate with NO indifference zone is still rejected; the message now
+    # names the unit requirement introduced for the v7 objective.
+    with pytest.raises(ValueError, match="exactly one indifference zone"):
         _gated_manifest(lambda raw: raw["gate"].pop("practical_equivalence_s"))
     with pytest.raises(ValueError, match="must be positive"):
         _gated_manifest(
             lambda raw: raw["gate"].update(practical_equivalence_s=0))
+    # Declaring BOTH units is the new failure mode: the gate arithmetic is
+    # objective-agnostic, so an ambiguous unit would silently compare
+    # vehicle-hours against a seconds tolerance.
+    with pytest.raises(ValueError, match="exactly one indifference zone"):
+        _gated_manifest(lambda raw: raw["gate"].update(
+            practical_equivalence_vehicle_hours=1.0))
+
+
+def test_gate_accepts_a_vehicle_hours_indifference_zone():
+    """v7 ranks on displaced vehicles and detour, so its tolerance is in
+    vehicle-hours. The gate must carry it without renaming anything else."""
+    from traffic_sim.simulation.proxy_validation import gate_tolerance
+    manifest = _gated_manifest(lambda raw: (
+        raw["gate"].pop("practical_equivalence_s"),
+        raw["gate"].update(practical_equivalence_vehicle_hours=0.25)))
+    assert gate_tolerance(manifest["gate"]) == 0.25
 
 
 def test_discriminating_fraction_uses_ranking_cases_only():
