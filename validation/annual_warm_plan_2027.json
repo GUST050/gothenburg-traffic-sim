@@ -314056,7 +314056,7 @@
       "work_date": "2027-12-31"
     }
   ],
-  "content_key": "de071336ab0e0c5dfd69a1f1052681c02ef9bad5cf46ff2d9099fc0132f203db",
+  "content_key": "8c1c681b63f08c132dc084233460670ae09b52b3076fa236cb145f3f999cd758",
   "coverage": {
     "calendar_days": 365,
     "checkpoint_requests": 34895,
@@ -318526,9 +318526,9 @@
       "sha256": "82bf7dfaf0d2ef52684d008ed42bc1e9d46171b3efab4e79376ad18bec27ee14"
     },
     "demand_builder_source": {
-      "bytes": 58892,
+      "bytes": 57078,
       "path": "build_sumo_demand.py",
-      "sha256": "28233fd70e350ed28ee189cc9f782908c75825ea711a0d397426d44cc4420e96"
+      "sha256": "f0b00806769ce043a1dcde922a4dac491ff8957b6403e7bc26dacd22fc559e94"
     },
     "demand_source:assignment_priors": {
       "bytes": 31310,
@@ -318536,9 +318536,9 @@
       "sha256": "2d5e7201120bfcb0beaf0fe5e36ade8d57664230bc56825a1a5add3aef5ad92d"
     },
     "demand_source:build_candidates": {
-      "bytes": 182485,
+      "bytes": 186656,
       "path": "build_candidates.py",
-      "sha256": "67c4fa1ef648c5653fe0aa77c824da082d0dc5fca8b4512c8cac319e7424b469"
+      "sha256": "3a1360765d53077a51c7c5592ec4682a9b55be0d790c78933fe0a3f858ec4228"
     },
     "demand_source:build_data": {
       "bytes": 35336,
@@ -318546,9 +318546,9 @@
       "sha256": "b3f395cebffd309d3e4130cf7cf8fd200323918b372e90af9f6bfa206fdfe8f7"
     },
     "demand_source:build_sumo_demand": {
-      "bytes": 58892,
+      "bytes": 57078,
       "path": "build_sumo_demand.py",
-      "sha256": "28233fd70e350ed28ee189cc9f782908c75825ea711a0d397426d44cc4420e96"
+      "sha256": "f0b00806769ce043a1dcde922a4dac491ff8957b6403e7bc26dacd22fc559e94"
     },
     "demand_source:build_sumo_net": {
       "bytes": 12151,
@@ -318601,9 +318601,9 @@
       "sha256": "1603c1846c3fdc708d586a436b418e1b305e9c4744ca8c5e4ce9f7f63833faf7"
     },
     "demand_source:demand/structure.py": {
-      "bytes": 26249,
+      "bytes": 27406,
       "path": "demand/structure.py",
-      "sha256": "bb90c41c82b9b47eff6db5b571c75fc609a02b58218a9f189a9ba6b8884eaa19"
+      "sha256": "4f3473763b0ce3c272f01acca0861a83af9cf8cfc96fdb031190af0398585dfc"
     },
     "demand_source:demand_source_identity": {
       "bytes": 2210,
@@ -318701,9 +318701,9 @@
       "sha256": "12b327bb331484c82115cb9854842770370c75eeab974a4c7b242b433f4f3fbf"
     },
     "population_tool_source": {
-      "bytes": 36007,
+      "bytes": 39391,
       "path": "tools/populate_annual_warming.py",
-      "sha256": "ed5bb32921fff14db06a065456e4738642ea547272180574da193a7b78bb0ec6"
+      "sha256": "7e326ec1405ec7476225bc0d5208f6f76e7f46de7017cfcbab795bc83b6bff59"
     },
     "runtime_source": {
       "bytes": 6773,
@@ -318711,9 +318711,9 @@
       "sha256": "5402430b6bcf92ef41e916b2d3000f5fdbf3f7680596a289248469e694a68356"
     },
     "scenario_runner_source": {
-      "bytes": 138734,
+      "bytes": 148116,
       "path": "run_scenario.py",
-      "sha256": "58a4be2304537c182eec7b37cb6e1100ae42b627bb1fe93cf32dc653dbf95236"
+      "sha256": "1ab1e996d9037a0782aef9ec21c19b1436e27050f101166e9625c9e30dea34b5"
     },
     "storage_pilot_tool_source": {
       "bytes": 7869,
@@ -318726,9 +318726,9 @@
       "sha256": "37467ca596085bbc963b3e47ea12789084318b568372d9c165075b59991d7819"
     },
     "warm_cache_source": {
-      "bytes": 36278,
+      "bytes": 38273,
       "path": "traffic_sim/simulation/warm_state_cache.py",
-      "sha256": "1abaaad8683bf115ee8decc24380afe9cd477325136c95fab2c14044de383cf6"
+      "sha256": "9221cb3715c077685837fb156a7c4bf89a445d29c1fa7f82e26a8852f85be93e"
     },
     "warm_route_windows_source": {
       "bytes": 6690,
