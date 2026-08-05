@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
- "generated_at": "2026-08-05T09:12:01Z",
+ "generated_at": "2026-08-05T10:26:55Z",
  "demand_window": "2025-09-16",
  "demand_source": "historical",
- "demand_build_id": "bd579e611c22fe22560a",
+ "demand_build_id": "a3168d5d50526f60628f",
  "overall": "warn",
  "sections": {
   "counts_fit": {

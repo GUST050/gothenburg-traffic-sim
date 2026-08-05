@@ -289,6 +289,132 @@ def demand_window_label(meta: dict) -> str:
             f"({meta['days']} days)")
 
 
+def free_flow_edge_cost() -> tuple[dict[str, float], dict[str, float]]:
+    """(seconds, metres) per edge at free flow, read once from the network."""
+    global _FREE_FLOW_EDGE_TIME
+    if _FREE_FLOW_EDGE_TIME is None:
+        table = {}
+        metres = {}
+        for edge in ET.parse(NET_PATH).getroot().iter("edge"):
+            if edge.get("function") == "internal":
+                continue
+            lanes = [lane for lane in edge if lane.tag == "lane"]
+            if not lanes:
+                continue
+            length = float(lanes[0].get("length", 0) or 0)
+            speed = max(float(lanes[0].get("speed", 1) or 1), 0.1)
+            table[edge.get("id")] = length / speed
+            metres[edge.get("id")] = length
+        _FREE_FLOW_EDGE_TIME = (table, metres)
+    return _FREE_FLOW_EDGE_TIME
+
+
+_FREE_FLOW_EDGE_TIME: tuple[dict, dict] | None = None
+
+
+def _cheapest(adj: dict, cost: dict, src: str, dst: str,
+              banned: frozenset) -> float | None:
+    """Least-cost edge path src->dst avoiding `banned`, or None if severed."""
+    if src == dst:
+        return 0.0
+    seen = {src: 0.0}
+    queue = [(0.0, src)]
+    while queue:
+        spent, edge = heapq.heappop(queue)
+        if edge == dst:
+            return spent
+        if spent > seen.get(edge, float("inf")):
+            continue
+        for nxt in adj.get(edge, ()):
+            if nxt in banned or nxt not in cost:
+                continue
+            through = spent + cost[nxt]
+            if through < seen.get(nxt, float("inf")):
+                seen[nxt] = through
+                heapq.heappush(queue, (through, nxt))
+    return None
+
+
+def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
+                       edge_time: dict, edge_len: dict,
+                       adj: dict | None = None) -> dict | None:
+    """How many vehicles a closure displaces, and how far it pushes them.
+
+    Deliberately demand-side and congestion-independent: the detour is a
+    property of the network and the closure, not of how busy the roads are.
+    That matters because this network runs at free flow — congestion feedback
+    converged at 0.0% change (measured 2026-08-05) — so simulated delay
+    carries almost no signal, while displaced-vehicle count is exactly what
+    the sensors constrain and the confidence map qualifies.
+
+    A vehicle is AFFECTED when its calibrated baseline route would enter a
+    closed edge while that edge is shut (arrival accumulated at free-flow
+    cost, the basis the router used). Severity compares like with like — the
+    cheapest legal path with the closure against the cheapest without it, for
+    that vehicle's own origin and destination. Using the vehicle's realised
+    route as the "before" understates it badly: realised routes run ~1.16x
+    optimal, so an optimal detour can look free.
+
+    `added_*_total` is the honest headline. The MEDIAN is often zero even for
+    a heavily used edge, because a dense grid gives most drivers a free
+    parallel street; the cost lands on a tail, which only the total captures.
+    """
+    if not closed_edges or not route_path.exists():
+        return None
+    if adj is None:
+        adj = build_edge_graph(set())
+    closed = frozenset(closed_edges)
+    windows = [(float(c["begin_s"]), float(c["end_s"])) for c in closures
+               if c.get("begin_s") is not None and c.get("end_s") is not None]
+    cache: dict = {}
+    affected = severed = considered = 0
+    added_s: list[float] = []
+    added_m: list[float] = []
+    for veh in ET.parse(route_path).getroot().iter("vehicle"):
+        route = veh.find("route")
+        if route is None or not route.get("edges"):
+            continue
+        considered += 1
+        edges = route.get("edges").split()
+        clock = float(veh.get("depart", "0"))
+        struck = False
+        for edge in edges:
+            if edge in closed:
+                struck = not windows or any(lo <= clock < hi for lo, hi in windows)
+                break
+            clock += edge_time.get(edge, 0.0)
+        if not struck:
+            continue
+        affected += 1
+        key = (edges[0], edges[-1])
+        if key not in cache:
+            cache[key] = (
+                _cheapest(adj, edge_time, edges[0], edges[-1], frozenset()),
+                _cheapest(adj, edge_len, edges[0], edges[-1], frozenset()),
+                _cheapest(adj, edge_time, edges[0], edges[-1], closed),
+                _cheapest(adj, edge_len, edges[0], edges[-1], closed))
+        base_s, base_m, det_s, det_m = cache[key]
+        if base_s is None:
+            continue                      # unreachable even without the closure
+        if det_s is None:
+            severed += 1                  # destination now unreachable by car
+            continue
+        added_s.append(max(det_s - base_s, 0.0))
+        added_m.append(max((det_m or 0.0) - (base_m or 0.0), 0.0))
+    median = lambda xs: round(sorted(xs)[len(xs) // 2], 1) if xs else 0.0
+    return {
+        "vehicles_affected": affected,
+        "vehicles_considered": considered,
+        "vehicles_no_detour": severed,
+        "added_vehicle_hours": round(sum(added_s) / 3600.0, 2),
+        "added_metres_total": round(sum(added_m), 1),
+        "added_seconds_median": median(added_s),
+        "added_metres_median": median(added_m),
+        "basis": "calibrated baseline routes; cheapest legal path with vs "
+                 "without the closure, free-flow cost",
+    }
+
+
 def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
                            spec, traj_name, name: str, label: str,
                            close_edges: list, closures: list, window_label: str,
@@ -297,7 +423,8 @@ def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
                            closure_integrity, seed_count: int, seed_values: list,
                            sig: str, seed_health: list, health_flags: list,
                            multi_day_validation, sensor_audit, flows_out: dict,
-                           conf_out: dict) -> dict:
+                           conf_out: dict,
+                           disruption: dict | None = None) -> dict:
     """The published scenario JSON payload, factored out so the benchmark harness
     can build the byte-identical artifact from the same inputs.
 
@@ -346,6 +473,7 @@ def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
         **({"multi_day_validation": multi_day_validation}
            if multi_day_validation is not None else {}),
         "sensor_audit":      sensor_audit,
+        **({"disruption": disruption} if disruption is not None else {}),
         "flows":      flows_out,
         "confidence": conf_out,
     }
@@ -2760,7 +2888,10 @@ def main() -> None:
         closure_integrity=closure_integrity, seed_count=seed_count,
         seed_values=seed_values, sig=sig, seed_health=seed_health,
         health_flags=health_flags, multi_day_validation=multi_day_validation,
-        sensor_audit=sensor_audit, flows_out=flows_out, conf_out=conf_out)
+        sensor_audit=sensor_audit, flows_out=flows_out, conf_out=conf_out,
+        disruption=closure_disruption(
+            SUMO_DIR / "calibrated.rou.xml", set(close_edges), closures,
+            *free_flow_edge_cost()))
     out_path = OUT_DIR / f"{name}.json"
     atomic_write_json(out_path, payload, separators=(",", ":"))
     _LAST_SCENARIO_OUTPUT = out_path

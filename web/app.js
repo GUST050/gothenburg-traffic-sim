@@ -523,10 +523,46 @@
             await ensureBaselineLoaded();
             if (token !== scenarioToken) return;   // superseded while loading
           }
+          showClosureImpact(scenProviders[file]);
           setMode(btnScen, wrapForComparison(scenProviders[file]));
           updateDeltaToggleVisibility();
           // Scenario files start at their own epoch (window start)
           State.setQI(params.get('qi') ? Number(params.get('qi')) : 0);
+        }
+
+        // What a closure costs: how many vehicles it displaces and how far
+        // it pushes them. A count and a detour — never a delay: congestion
+        // feedback on this network converged at 0.0% change, so simulated
+        // delay is noise, while displaced vehicles and detour distance are
+        // properties of the measured demand and the network.
+        function showClosureImpact(provider) {
+          const el = document.getElementById('closure-impact');
+          const d = provider?.disruption;
+          if (!d || !provider.closedEdges?.length) { el.hidden = true; return; }
+          const sv = (n) => n.toLocaleString('sv-SE');
+          const parts = [`🚧 ${sv(d.vehicles_affected)} fordon berörs`];
+          if (d.added_vehicle_hours != null) {
+            parts.push(`+${d.added_vehicle_hours.toLocaleString('sv-SE',
+                        { maximumFractionDigits: 1 })} fordonstimmar omväg`);
+          }
+          if (d.added_metres_median) {
+            parts.push(`median +${sv(Math.round(d.added_metres_median))} m`);
+          }
+          if (d.vehicles_no_detour) {
+            parts.push(`⚠ ${sv(d.vehicles_no_detour)} utan omväg`);
+          }
+          el.textContent = parts.join(' · ');
+          el.title = 'Antal kalibrerade fordon vars rutt korsar den avstängda '
+            + 'sträckan medan den är stängd, och hur mycket längre de tvingas '
+            + 'köra (billigaste lagliga väg med avstängningen jämfört med utan). '
+            + 'Detta är en RÄKNING och en OMVÄG, inte en försening: nätet kör i '
+            + 'friflöde (återkopplingen konvergerade på 0,0 % förändring), så '
+            + 'simulerad försening bär nästan ingen signal. '
+            + 'Medianen är ofta 0 även för en hårt trafikerad gata — de flesta '
+            + 'får en gratis parallellgata, kostnaden ligger i svansen, och '
+            + 'därför är summan (fordonstimmar) huvudtalet. '
+            + '"Utan omväg" = destinationen går inte längre att nå med bil.';
+          el.hidden = false;
         }
 
         async function openScenario() {

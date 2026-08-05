@@ -27,6 +27,11 @@ class HistoricalProvider {
     // historical/forecast files leave these empty.
     this.isScenario  = !!payload.scenario;
     this.trajectories = payload.trajectories ?? null;   // per-vehicle playback file
+    // How many calibrated vehicles this closure forces off their route.
+    // A COUNT, not a delay: the calibrated network runs at free flow, so
+    // delay carries almost no signal, while displaced-vehicle count is the
+    // quantity the sensors constrain. Absent on older artifacts.
+    this.disruption = payload.disruption ?? null;
     this.closedEdges = payload.scenario?.closed_edges
                        ?? (payload.scenario?.closed_edge ? [payload.scenario.closed_edge] : []);
     // New scenarios carry per-edge [begin_s, end_s) windows. Existing saved
