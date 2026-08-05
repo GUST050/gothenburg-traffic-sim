@@ -347,7 +347,7 @@
       }
     }
   ],
-  "content_key": "d45a3dfde1af2631a9b0e4940454bb851e91fa5bd38b0b32b823509e3e5e5da7",
+  "content_key": "d937e4dc9758594a7ec0f4e6d54f9165cd51a4e1cb3be4b1dc851fa942edf14c",
   "frozen_at": "2026-08-05",
   "frozen_before_outcomes": true,
   "gate": {
@@ -389,7 +389,7 @@
   "shortlist_policy_content_key": "7cd20362813c21cd7ea8e80b703a10d0",
   "shortlist_version": "stratified_shortlist_v3",
   "source_fingerprints": {
-    "run_monthly_proxy_validation.py": "bd60ddf031f9f36e65c140702de6440f8ef9ca9eeff12bda121f0c51f284345b",
+    "run_monthly_proxy_validation.py": "e53917c6b54a5bc5f4f4a5105796fc23f628029faf0f98c9089efc231cc177cf",
     "tools/freeze_heldout_v7.py": "30f97979bc4f7f70b75f53838a3fe90982ed18454e957bcfb5e2a0e581982389",
     "traffic_sim/core/closure_calendar.py": "2058faa6bb4492ae020ad0cdedfc35290fc28fd7af3eaf6ccb31f90ed20a1106",
     "traffic_sim/simulation/heldout_gate.py": "423551e20a5d2d126bcf86bfefdd3ee3f637bd0d708398117a9a4cd75fd1e3cb",
