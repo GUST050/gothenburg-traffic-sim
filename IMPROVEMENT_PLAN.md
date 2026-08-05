@@ -3406,7 +3406,7 @@ PERMANENT honest labels, not provisional ones awaiting an unlock:
 
 None of this stops the product. It is complete on the data it has, and the
 confidence map plus these labels are exactly the honesty mechanism that
-makes shipping on six sensors defensible. `DATA_REQUEST_2026-07.md` is
+makes shipping on six sensors defensible. `docs/plans/DATA_REQUEST_2026-07.md` is
 retained only as a record of what WOULD strengthen which claim, marked
 not-sent; it is not an action item.
 
@@ -3900,7 +3900,7 @@ finishes each dependency-ready batch transactionally. Semantic orphan recovery
 now validates prefix, demand and SUMO state contents before promotion, and
 provisional monthly workspaces are cleaned on success or failure. Bound
 measurements and official SUMO references are recorded in
-`WARMING_FINAL_AUDIT_2026-08-03.md`.
+`docs/reviews/WARMING_FINAL_AUDIT_2026-08-03.md`.
 
 Progress is transactional SQLite rather than a 100k-entry rewritten JSON
 ledger. The pre-run audit added exact immutable-row/lifecycle verification,

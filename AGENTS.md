@@ -30,7 +30,7 @@ Everything outside the marked current blocks in `TASKS.md` and
 labels, states, approvals and handoffs describe how earlier work was managed;
 they do not restrict current actors.
 
-`CLAUDE.md`, `PROJECT_CONTEXT_OLD_AGENTS.md`, dated audits and archived copies
+`CLAUDE.md`, `docs/plans/PROJECT_CONTEXT_OLD_AGENTS.md`, dated audits and archived copies
 are useful background, not workflow authority. When history conflicts with the
 current architecture, current task or latest user request, the current source
 wins.

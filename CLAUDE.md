@@ -410,7 +410,7 @@ Goal arc, in order:
   sensitivity-tested prior; purpose labels state a behavioural class, not
   verified intent; no local speed/travel-time calibration. These are
   FIXED honest boundaries, not pending unlocks — do not re-open them as
-  TODOs or recommend sending a data request. `DATA_REQUEST_2026-07.md` is
+  TODOs or recommend sending a data request. `docs/plans/DATA_REQUEST_2026-07.md` is
   a not-sent record only.)
 
 ## Files
