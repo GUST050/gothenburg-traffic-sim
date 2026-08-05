@@ -188,6 +188,18 @@ def _parser() -> argparse.ArgumentParser:
             "archives; the artifact store already binds every member it needs."
         ),
     )
+    parser.add_argument(
+        "--no-prefetch-demand", dest="prefetch_demand",
+        action="store_false", default=True,
+        help=(
+            "Build each demand archive only once its predecessor's state units "
+            "have finished. The default overlaps the next build with the "
+            "current group's units, which are chain-bound to 3 of 10 cores and "
+            "would otherwise leave the solver idle. Artifacts are unaffected "
+            "either way -- archives are content-addressed -- so this exists to "
+            "A/B the scheduling and as an escape hatch under memory pressure."
+        ),
+    )
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--preflight", action="store_true")
     action.add_argument("--initialize", action="store_true")
@@ -641,6 +653,7 @@ def execute_population(
     demand_build_key: str | None = None,
     variant: str | None = None,
     keep_demand_archives: bool = False,
+    prefetch_demand: bool = True,
     worker_function=None,
 ) -> dict[str, Any]:
     if isinstance(state_workers, bool) or not isinstance(state_workers, int) \
@@ -694,8 +707,47 @@ def execute_population(
         )
     else:
         executor_context = ThreadPoolExecutor(max_workers=state_workers)
-    with executor_context as executor:
-        for demand_key, units in groups.items():
+    # Overlap the NEXT group's demand build with THIS group's state units.
+    #
+    # Measured shape per 3-day build: ~332 s of demand (PFE/solver, saturating
+    # every core) then ~252 s of state units (chain-bound at 3 of 10 cores).
+    # Run back to back, each phase idles the resource the other needs, and the
+    # state phase is 43% of a 59.5 h annual population.
+    #
+    # The two are safe to overlap because they touch disjoint things: a unit
+    # reads only its already-materialised archive directory, while the build
+    # works under the global demand_build_lock() and its live-release
+    # snapshot guard. Only one build can ever run regardless -- that lock
+    # serializes it -- so this adds concurrency between phases, never between
+    # builds, and every artifact stays byte-identical because content
+    # addressing decides what a build produces, not when it is started.
+    build_pool = ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="annual-demand-prefetch")
+    pending_archives: dict[str, Any] = {}
+    group_order = list(groups)
+
+    def _archive_record_for(demand_key: str) -> dict[str, Any]:
+        started = pending_archives.pop(demand_key, None)
+        if started is not None:
+            return started.result()
+        return _resolve_demand_archive(demands[demand_key])
+
+    def _start_next_build(index: int) -> None:
+        if not prefetch_demand or index + 1 >= len(group_order):
+            return
+        following = group_order[index + 1]
+        if following in pending_archives:
+            return
+        # A prefetch leaves two archives resident, so charge the guard before
+        # committing to it rather than discovering the shortfall mid-build.
+        _runtime_disk_guard(root)
+        pending_archives[following] = build_pool.submit(
+            _resolve_demand_archive, demands[following])
+
+    # build_pool is entered first and so exits LAST: an in-flight prefetch is
+    # always waited out, even when the unit executor raises.
+    with build_pool, executor_context as executor:
+        for group_index, (demand_key, units) in enumerate(groups.items()):
             # The job may run for days. Refuse to cross a source/input edit and
             # silently build a mixed bank; already-running workers retain the
             # prior imported code until this group ends, then this seal aborts.
@@ -732,8 +784,11 @@ def execute_population(
             if not remaining:
                 continue
             _runtime_disk_guard(root)
-            archive_record = _resolve_demand_archive(demands[demand_key])
+            archive_record = _archive_record_for(demand_key)
             archive = Path(archive_record["archive"])
+            # This group's archive is on disk and its units are about to run;
+            # that is exactly the window the next build should occupy.
+            _start_next_build(group_index)
             while remaining:
                 # Never submit a unit until its exact predecessor is durable.
                 # Fixed-size slicing is unsafe after a partial failure: once
@@ -824,6 +879,13 @@ def execute_population(
                 ]
             if not keep_demand_archives:
                 _prune_demand_archive(archive, demand_key, progress)
+    # A prefetch is never cancelled: the archive is content-addressed, so a
+    # completed one is simply reused by the next run, whereas abandoning a
+    # half-built one mid-lock is what leaves the live release unrestored.
+    for started in pending_archives.values():
+        # Surface a prefetch failure instead of discarding it silently; the
+        # next run would otherwise hit the same build error with no record.
+        started.result()
     return progress.summary()
 
 
@@ -883,6 +945,7 @@ def main(argv: list[str] | None = None) -> int:
             demand_build_key=args.demand_build_key,
             variant=args.variant,
             keep_demand_archives=args.keep_demand_archives,
+            prefetch_demand=args.prefetch_demand,
         )
     print(json.dumps({**summary, "root": str(root)}, sort_keys=True))
     return 0

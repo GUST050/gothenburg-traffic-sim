@@ -928,3 +928,98 @@ def test_initialized_root_rejects_a_symlinked_plan(plan, tmp_path):
     (root / tool.PLAN_FILENAME).symlink_to(external)
     with pytest.raises(ValueError, match="plan is not a regular file"):
         tool.initialize_root(plan, root)
+
+
+def _record_events(plan, root, tmp_path, events):
+    """Fake resolve/worker pair that logs the order of build vs unit work."""
+
+    def fake_resolve(required):
+        events.append(("resolve", required.build_key))
+        unit = _progress(plan, root).selectable(limit=1)[0]
+        context = annual_unit_context(
+            plan, unit["unit_id"], unit_hint=_hint(unit))
+        return _archive_record(context, tmp_path / "archive")
+
+    def fake_worker(unit, archive):
+        events.append(("unit", unit["demand_build_key"]))
+        predecessor = unit.get("_predecessor_unit")
+        context = annual_unit_context(
+            plan, unit["unit_id"], unit_hint=_hint(unit))
+        metadata = build_unit_metadata(
+            plan, unit["unit_id"],
+            demand_archive=_archive_record(context, tmp_path / "archive"),
+            unit_hint=_hint(unit),
+            predecessor_unit_id=(
+                None if predecessor is None else predecessor["unit_id"]),
+        )
+        return AnnualWarmArtifactStore(root / "store").pack_artifact(
+            plan_content_key=plan["content_key"], unit_id=unit["unit_id"],
+            members=_member_files(
+                tmp_path / "members" / unit["unit_id"], unit["checkpoint_s"],
+                context["demand_build_spec"]),
+            metadata=metadata)
+
+    return fake_resolve, fake_worker
+
+
+def _phase_order(events):
+    """(index the second build started, index the first group's last unit)."""
+    resolves = [key for kind, key in events if kind == "resolve"]
+    first, second = resolves[0], resolves[1]
+    assert first != second, "expected two distinct demand groups"
+    return (events.index(("resolve", second)),
+            len(events) - 1 - events[::-1].index(("unit", first)))
+
+
+# 273 units exhaust the first demand build, so 274 reaches a second group.
+_TWO_GROUPS = 274
+
+
+def test_the_next_demand_build_starts_while_the_current_units_run(
+    plan, tmp_path, monkeypatch
+):
+    """Stage-2 scheduling: overlap the demand build with the state units.
+
+    Measured per 3-day build: ~332 s of demand (solver, every core) then ~252 s
+    of state units (chain-bound to 3 of 10). Run back to back, each phase idles
+    the resource the other needs, and the state phase is 43% of a 59.5 h annual
+    population. No artifact changes -- archives are content-addressed -- so
+    what this asserts is ORDER, which is the entire change.
+    """
+    root = tmp_path / "annual"
+    tool.initialize_root(plan, root)
+    events = []
+    fake_resolve, fake_worker = _record_events(plan, root, tmp_path, events)
+    monkeypatch.setattr(tool, "_resolve_demand_archive", fake_resolve)
+
+    tool.execute_population(
+        plan, plan_path=tmp_path / "plan.json", root=root,
+        state_workers=3, max_units=_TWO_GROUPS, reference_edge="edge_0",
+        demand_build_key=None, worker_function=fake_worker)
+
+    started_second, last_first_unit = _phase_order(events)
+    assert started_second < last_first_unit, (
+        "the second demand build must be submitted while the first group's "
+        "units are still running; it started only after they finished")
+
+
+def test_prefetch_can_be_switched_off_for_measurement(plan, tmp_path, monkeypatch):
+    """--no-prefetch-demand restores strict phase ordering so the two
+    schedules can be A/B'd on one machine, and is the escape hatch when a
+    second resident archive would not fit."""
+    root = tmp_path / "annual"
+    tool.initialize_root(plan, root)
+    events = []
+    fake_resolve, fake_worker = _record_events(plan, root, tmp_path, events)
+    monkeypatch.setattr(tool, "_resolve_demand_archive", fake_resolve)
+
+    tool.execute_population(
+        plan, plan_path=tmp_path / "plan.json", root=root,
+        state_workers=3, max_units=_TWO_GROUPS, reference_edge="edge_0",
+        demand_build_key=None, prefetch_demand=False,
+        worker_function=fake_worker)
+
+    started_second, last_first_unit = _phase_order(events)
+    assert started_second > last_first_unit, (
+        "with prefetch disabled the second build must not start until the "
+        "first group's units are done")
