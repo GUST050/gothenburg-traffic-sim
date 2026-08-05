@@ -394,6 +394,19 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
         if not struck:
             continue
         affected += 1
+        # A vehicle whose OWN FIRST edge is shut cannot start at all: there is
+        # no partial trip to price, and _cheapest() would happily route from a
+        # closed origin because it only bans an edge when stepping ONTO it.
+        # Left unhandled this scored a denied departure as a free detour
+        # (added_vehicle_hours 0.0, vehicles_no_detour 0), so a closure that
+        # denied 85 departures could rank BEST -- exactly the trap the SUMO
+        # integrity gate used to catch before denied departures were
+        # reclassified as impact rather than failure (metrics.
+        # access_impact_reasons, 2026-08-06). The protection belongs here, in
+        # the ranking, not in a check on simulator artifacts.
+        if edges[0] in closed:
+            severed += 1
+            continue
         key = (edges[0], edges[-1])
         if key not in cache:
             cache[key] = (

@@ -242,13 +242,43 @@ def closure_edge_leaked(throughput: int | None) -> bool:
     return throughput is not None and throughput > 0
 
 
+def access_impact_reasons(metrics: DisruptionMetrics) -> tuple[str, ...]:
+    """Access a closure genuinely removes, reported as IMPACT not failure.
+
+    A car cannot start from a fully closed street, and a trip whose last leg
+    is closed off really does end short. Both are ANSWERS -- part of what the
+    closure costs -- and they belong beside vehicles_affected and
+    vehicles_no_detour in the ranking.
+
+    They were hard failures until 2026-08-06, and that made every edge trips
+    depart from permanently uncloseable. Measured over the v9 campaign's 75
+    schedules: the one case that produced a usable ranking was the one case
+    with zero unreachability, while the worst dropped 85 vehicles with zero
+    truncations -- pure origin-drops. 21 of the 61 disqualified schedules
+    carried NO teleports and NO closed-edge throughput at all, so they failed
+    on this alone. Since busy streets have the most departures, the rule
+    refused to answer exactly where the answer matters most.
+    """
+    reasons = []
+    if metrics.dropped_unreachable:
+        reasons.append("dropped_unreachable_vehicles")
+    if metrics.truncated_unreachable:
+        reasons.append("truncated_unreachable_vehicles")
+    return tuple(reasons)
+
+
 def disqualification_reasons(metrics: DisruptionMetrics) -> tuple[str, ...]:
-    """Return hard integrity failures; no time-loss trade-off is permitted."""
+    """Return hard integrity failures; no time-loss trade-off is permitted.
+
+    ARTIFACTS ONLY. A teleport is the simulator relocating a stuck vehicle,
+    and throughput on a closed edge is traffic that should not physically be
+    there -- neither is something a real closure does, so a run showing them
+    is not evidence about the closure. Access the closure genuinely removes
+    is a different category and is reported by access_impact_reasons().
+    """
     reasons = []
     if metrics.teleport_total:
         reasons.append("teleports")
-    if metrics.dropped_unreachable:
-        reasons.append("dropped_unreachable_vehicles")
     if closure_edge_leaked(metrics.closed_edge_throughput):
         reasons.append("active_closure_edge_throughput")
     return tuple(reasons)

@@ -77,9 +77,14 @@ def test_lower_time_loss_with_teleports_or_drops_is_disqualified():
     assert comparison.delta_time_loss_s == -50.0
     assert is_disqualified(candidate)
     assert comparison.candidate_disqualified
-    assert comparison.disqualification_reasons == (
-        "teleports", "dropped_unreachable_vehicles",
-    )
+    # 2026-08-06: a denied departure is an IMPACT of the closure, not an
+    # artifact of the run, so it no longer disqualifies -- the teleport still
+    # does. See metrics.access_impact_reasons and
+    # tests/test_closure_access_impact.py. What this test protects, that a
+    # lower time loss bought by losing access cannot win, now lives in the
+    # RANKING: closure_disruption counts a denied departure as
+    # vehicles_no_detour, which closure_ranking disqualifies on.
+    assert comparison.disqualification_reasons == ("teleports",)
 
 
 def test_active_closure_throughput_uses_only_complete_active_quarters():

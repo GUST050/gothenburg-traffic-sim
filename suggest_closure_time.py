@@ -550,8 +550,11 @@ def closure_feasibility(candidate: cm.DisruptionMetrics,
     recommendation and is marked ``queue_unmeasured``.
     """
     hard_failures = list(cm.disqualification_reasons(candidate))
-    if candidate.truncated_unreachable:
-        hard_failures.append("truncated_unreachable_vehicles")
+    # Lost access is an IMPACT of the closure, not a failure of the run --
+    # see metrics.access_impact_reasons for why it stopped being a hard
+    # failure on 2026-08-06. Still reported, so a schedule that strands
+    # people is visible rather than silently ranked as if it did not.
+    access_impacts = list(cm.access_impact_reasons(candidate))
     if candidate.loaded > 0:
         unfinished = candidate.unfinished_trips / candidate.loaded
         if unfinished > rs.HEALTH_UNFINISHED_MAX_SHARE:
@@ -585,6 +588,9 @@ def closure_feasibility(candidate: cm.DisruptionMetrics,
     return {
         "eligible": not hard_failures,
         "hard_failures": sorted(set(hard_failures)),
+        "access_impacts": sorted(set(access_impacts)),
+        "vehicles_denied_departure": candidate.dropped_unreachable,
+        "vehicles_ended_short": candidate.truncated_unreachable,
         "detour": detour_status,
         "queue": queue,
         "paired_delta_time_loss": None,

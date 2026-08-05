@@ -89,3 +89,31 @@ class TestGuards:
     def test_no_closed_edges_yields_no_report(self, tmp_path):
         path = _routes(tmp_path, [("v", 0.0, ["A", "B"])])
         assert _run(path, []) is None
+
+
+class TestDeniedDeparture:
+    """A vehicle whose OWN FIRST edge is closed cannot start at all.
+
+    Found 2026-08-06 while reclassifying denied departures from an integrity
+    failure into an impact: _cheapest() only bans an edge when stepping ONTO
+    it, so a route FROM a closed origin still priced as reachable. The closure
+    therefore scored as free (added_vehicle_hours 0.0, vehicles_no_detour 0),
+    which would let a closure denying 85 departures rank best once the SUMO
+    gate stopped catching it.
+    """
+
+    def test_a_vehicle_departing_on_the_closed_edge_has_no_detour(self, tmp_path):
+        path = _routes(tmp_path, [("v", 0.0, ["A", "B", "C", "D"])])
+        report = _run(path, ["A"])
+        assert report["vehicles_affected"] == 1
+        assert report["vehicles_no_detour"] == 1, (
+            "a denied departure must disqualify the closure in the ranking, "
+            "not price as a free detour")
+        assert report["added_vehicle_hours"] == 0.0
+
+    def test_a_mid_route_closure_with_a_detour_still_prices_normally(self, tmp_path):
+        """The guard must not swallow ordinary reroutes."""
+        path = _routes(tmp_path, [("v", 0.0, ["A", "B", "C", "D"])])
+        report = _run(path, ["C"])
+        assert report["vehicles_no_detour"] == 0
+        assert report["added_vehicle_hours"] > 0

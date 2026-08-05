@@ -323,14 +323,19 @@ class TestClosureFeasibility:
         assert result["eligible"] is True
         assert result["queue"]["delta"] == 5
 
-    def test_partial_topology_detour_is_diagnostic_but_real_truncation_fails(self):
+    def test_partial_topology_detour_is_diagnostic_and_truncation_is_impact(self):
+        """2026-08-06: a trip that ends short is what the closure COSTS, not a
+        broken run, so it is reported instead of disqualifying. Making it a
+        hard failure is what left every edge trips depart from uncloseable."""
         result = sct.closure_feasibility(
             self._metrics(trunc=1), self._metrics(),
             detour={"score": 0.5})
-        assert result["eligible"] is False
+        assert result["eligible"] is True
         assert result["detour"] == "topology_partial_detour"
         assert "partial_detour_access" not in result["hard_failures"]
-        assert "truncated_unreachable_vehicles" in result["hard_failures"]
+        assert "truncated_unreachable_vehicles" not in result["hard_failures"]
+        assert "truncated_unreachable_vehicles" in result["access_impacts"]
+        assert result["vehicles_ended_short"] == 1
 
     def test_topology_only_missing_detour_does_not_hide_a_healthy_simulation(self):
         result = sct.closure_feasibility(
