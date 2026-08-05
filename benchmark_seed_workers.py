@@ -101,6 +101,20 @@ def run_search(archive: Path, root: Path, cache: Path, workers: int,
         "--root", str(root),
         "--baseline-cache", str(cache),
         "--seed-workers", str(workers),
+        # Pin daily workers to 1 on BOTH arms so seed parallelism is the only
+        # variable. Left at its default of 3 the serial arm would itself run
+        # 3 concurrent SUMO processes (making "serial" a misnomer and its RSS
+        # baseline meaningless), and the parallel arm would be rejected
+        # outright: seed and daily parallelism may not be combined.
+        "--daily-workers", "1",
+        # Both arms must run the SAME execution mode or the identity check
+        # compares two different semantics and fails for the wrong reason.
+        # Cold is the only mode that can run seeds concurrently at all
+        # (run_monthly_closure_search rejects warm + --seed-workers > 1,
+        # and its default flipped to warm after the 2026-07-21 record was
+        # written), and it is also the shape this gate is asked about:
+        # N independent SUMO processes, one connection each.
+        "--cold-execution",
     ]
     environment = dict(os.environ)
     if allow_unapproved:

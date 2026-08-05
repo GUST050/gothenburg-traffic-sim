@@ -397,14 +397,73 @@ _rvu_short_raw = (0.09, 0.31, 0.19)
 RVU_SHORT_BIN_SHARES = tuple(v / sum(_rvu_short_raw) for v in _rvu_short_raw)
 
 
-def trip_length_fit(lengths_km: list[float]) -> dict:
+def canvas_length_availability(edges: list[dict], samples: int = 200_000,
+                               seed: int = 0) -> list[float]:
+    """Share of intra-canvas O→D pairs that fall in each RVU short bin.
+
+    WHY (2026-08-05): RVU's shares describe complete door-to-door journeys
+    anywhere in Västra Götaland. A HOME-BASED TOUR in this pool starts and
+    ends inside a 6.34 x 5.95 km canvas (diagonal 8.69 km), so it physically
+    cannot reproduce them: RVU wants 32.2% of trips at 5-10 km, but only
+    9.2% of random edge pairs in this canvas are even that far apart.
+    Scoring the generator against the raw shares therefore measured the
+    canvas, not the generator — measured L1 0.7938 against raw RVU versus
+    0.0262 against the corrected target below, on the same pool.
+
+    This is a property of the network geometry alone: it depends on no
+    candidate, no pool draw and no calibration result, so correcting with it
+    cannot be moved by anything downstream.
+    """
+    import random as _random
+
+    points = [(float(e["lat"]), float(e["lon"])) for e in edges
+              if e.get("lat") is not None and e.get("lon") is not None]
+    if len(points) < 2:
+        return list(RVU_SHORT_BIN_SHARES)
+    rng = _random.Random(seed)
+    counts = [0, 0, 0]
+    kept = 0
+    for _ in range(samples):
+        a = points[rng.randrange(len(points))]
+        b = points[rng.randrange(len(points))]
+        d = float(gravity_distance_km(
+            np.array([b[0]]), np.array([b[1]]), a[0], a[1])[0])
+        if d <= RVU_SHORT_BIN_EDGES_KM[0]:
+            counts[0] += 1; kept += 1
+        elif d <= RVU_SHORT_BIN_EDGES_KM[1]:
+            counts[1] += 1; kept += 1
+        elif d <= RVU_SHORT_BIN_EDGES_KM[2]:
+            counts[2] += 1; kept += 1
+    if kept == 0:
+        return list(RVU_SHORT_BIN_SHARES)
+    return [c / kept for c in counts]
+
+
+def availability_corrected_rvu_target(edges: list[dict]) -> list[float]:
+    """RVU's behavioural preference, restricted to what this canvas can hold.
+
+    target ∝ RVU(bin) x availability(bin). External behavioural evidence
+    supplies the preference; the canvas geometry supplies what is reachable.
+    Neither term is derived from the candidate pool, so this target does not
+    move when the pool changes — unlike a pool-relative cap.
+    """
+    avail = canvas_length_availability(edges)
+    weighted = [r * a for r, a in zip(RVU_SHORT_BIN_SHARES, avail)]
+    total = sum(weighted)
+    if total <= 0:
+        return list(RVU_SHORT_BIN_SHARES)
+    return [w / total for w in weighted]
+
+
+def trip_length_fit(lengths_km: list[float],
+                    target: list[float] | None = None) -> dict:
     """Bin generated home-based-tour lengths into RVU's short bins and score
-    the L1 distance to RVU's real (renormalized) shares — actually
-    implements the fit build_candidates.py's own docstring has claimed
-    since 2026-07-05 ("replaced [GEH scoring] with a trip-length fit"),
-    which calibrate_theta.py never did (confirmed 2026-07-08: it only ever
-    scored by GEH, which saturates at 100% for every θ combination and
-    carries no signal to pick between them)."""
+    the L1 distance to the target shares.
+
+    ``target`` defaults to raw RVU for backwards compatibility, but the
+    production call passes :func:`availability_corrected_rvu_target` — see
+    that function for why the raw shares are not a valid target for an
+    intra-canvas tour."""
     n = len(lengths_km)
     if n == 0:
         return {"shares": [0.0, 0.0, 0.0], "l1_distance": float("inf"), "n": 0}
@@ -421,9 +480,14 @@ def trip_length_fit(lengths_km: list[float]) -> dict:
             over_10km += 1
     n_short = n - over_10km
     shares = [c / n_short for c in counts] if n_short > 0 else [0.0, 0.0, 0.0]
-    l1 = sum(abs(s - r) for s, r in zip(shares, RVU_SHORT_BIN_SHARES))
+    goal = list(target) if target is not None else list(RVU_SHORT_BIN_SHARES)
+    l1 = sum(abs(s - r) for s, r in zip(shares, goal))
     return {"shares": [round(s, 4) for s in shares], "l1_distance": round(l1, 4),
-           "n": n, "over_10km_pct": round(100 * over_10km / n, 1)}
+            "target_shares": [round(t, 4) for t in goal],
+            "rvu_raw_shares": [round(r, 4) for r in RVU_SHORT_BIN_SHARES],
+            "l1_vs_raw_rvu": round(
+                sum(abs(s - r) for s, r in zip(shares, RVU_SHORT_BIN_SHARES)), 4),
+            "n": n, "over_10km_pct": round(100 * over_10km / n, 1)}
 
 
 # ONE definition of "near a sensor" for the whole destination-bias guard
@@ -3346,12 +3410,18 @@ def main() -> None:
     trips_path = SUMO_DIR / f"tours{args.out_suffix}.trips.xml"
     candidate_meta: dict[str, dict] = {}
     location_pools = build_location_pool_document(home_field, activity_fields)
-    try:
-        coverage_requests = generate_edge_coverage_requests(
-            routing_G, edges, hmass, amass, entries, exits, measured,
-            routing_costs, routing_connections, fallback_connections)
-    except (ValueError, nx.NetworkXError) as exc:
-        sys.exit(f"could not build complete network-edge candidate support: {exc}")
+    # BASELINE RULE (Gustav, 2026-08-05): the calibrated population contains
+    # ONLY traffic that crosses a measured edge. The edge-coverage support set
+    # existed to make unmeasured roads studyable for closures, but it is
+    # synthetic traffic that no sensor observes, and it was not inert: its
+    # shapes were eligible members of the per-purpose quota groups whose
+    # targets are computed from real trips only (_purpose_targets_per_quarter
+    # skips support_only), so synthetic stubs could satisfy a real trip's
+    # quota. Measured consequence on 2027-05-12: 3,327 of 23,220 calibrated
+    # vehicles (14.3%) crossed no sensor at all.
+    # Kept as an empty list so every downstream consumer stays on its normal
+    # path and no support route is ever written, merged or exempted.
+    coverage_requests: list[dict] = []
     location_report = {
         "schema_version": 1,
         "home": home_field.report,
@@ -3449,7 +3519,8 @@ def main() -> None:
     except ValueError as exc:
         sys.exit(str(exc))
 
-    fit = trip_length_fit(tour_lengths_km)
+    length_target = availability_corrected_rvu_target(edges)
+    fit = trip_length_fit(tour_lengths_km, target=length_target)
     fit["through_fraction"] = args.through_fraction
     fit["gravity_km"] = args.gravity_km
     fit["gravity_alpha"] = args.gravity_alpha
@@ -3464,9 +3535,12 @@ def main() -> None:
         dest_edges, edge_latlon, measured)
     with open(SUMO_DIR / f"trip_length_fit{args.out_suffix}.json", "w") as f:
         json.dump(fit, f, indent=1)
-    print(f"  trip-length fit vs RVU short bins {RVU_SHORT_BIN_SHARES}: "
-          f"generated {fit['shares']}  L1={fit['l1_distance']}  "
-          f"(>10km: {fit.get('over_10km_pct', 0)}%)")
+    print(f"  trip-length fit vs availability-corrected RVU target "
+          f"{fit['target_shares']}: generated {fit['shares']}  "
+          f"L1={fit['l1_distance']}  (>10km: {fit.get('over_10km_pct', 0)}%)")
+    print(f"    raw RVU {fit['rvu_raw_shares']} is NOT the target: an "
+          f"intra-canvas tour cannot reach it (L1 vs raw would be "
+          f"{fit['l1_vs_raw_rvu']}) — see availability_corrected_rvu_target")
     prox = fit["dest_sensor_proximity"]
     print(f"  destinations within {prox['radius_m']:.0f} m of a sensor: "
           f"{prox['pct_within']}%  (all-edges baseline {prox['baseline_pct_within']}%)")
@@ -3568,10 +3642,16 @@ def main() -> None:
         routed_edge_support.update((route.get("edges") if route is not None else "").split())
     missing_route_support = sorted(graph_edge_ids - routed_edge_support)
     if missing_route_support:
-        sys.exit(
-            f"candidate pool lacks routed support for {len(missing_route_support)} "
-            "SUMO/GraphML edge(s): " + ", ".join(missing_route_support[:20])
-        )
+        # NOT an error under the baseline rule. Full-edge coverage was only
+        # ever achievable via the synthetic support set; with the pool made
+        # of measured traffic alone, edges no sensor-crossing path reaches
+        # are legitimately uncovered and must carry zero baseline flow.
+        # Reported so the number stays visible: these edges cannot be studied
+        # by closure, because there is no measured traffic to divert.
+        print(f"  edges with no sensor-anchored candidate: "
+              f"{len(missing_route_support)}/{len(graph_edge_ids)} "
+              f"({len(missing_route_support) / max(1, len(graph_edge_ids)):.1%})"
+              " — zero baseline flow, closures there are no-ops")
     cross_report = report_sensor_cross_hits(out, measured)
     uncovered = sorted(m for m, report in cross_report.items()
                        if report["total"] == 0)

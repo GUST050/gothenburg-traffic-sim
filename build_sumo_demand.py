@@ -830,9 +830,14 @@ def main() -> None:
         measured_route_edges = {
             edge_id for edge_ids in sensor_edges.values() for edge_id in edge_ids
         }
-        edge_support_augmentation = {"schema_version": 1, "status": "pass",
+        # BASELINE RULE (2026-08-05): no synthetic support vehicles. The
+        # augmentation added routes built with forbidden_edges=measured, i.e.
+        # traffic that by construction can never cross a sensor. Under the
+        # rule "only what is measured is simulated" it must not exist.
+        edge_support_augmentation = {"schema_version": 1,
+                                     "status": "disabled_baseline_rule",
                                      "variants": {}}
-        for suffix, key in variants:
+        for suffix, key in ():
             route_path = (calib_path if suffix == "" else
                           SUMO_DIR / f"calibrated{suffix}.rou.xml")
             agent_path = route_path.with_name(

@@ -21,12 +21,24 @@ Goal arc, in order:
 - The canvas is GOTHENBURG'S INNER CITY (INNER_CITY_BBOX in build_data.py:
   river→Krokslätt, Vallgraven→Gårda; ~7 100 directed edges, bridges and big
   approaches as through-traffic gates). No display clip.
-- The product promise: accuracy is a GRADIENT — hard (measured/PFE-
-  constrained) near sensors, prior-driven elsewhere — and every sensor the
-  city adds raises accuracy wherever it is placed. The confidence map is
-  the product's honesty: we SIMULATE everywhere but CLAIM only what the
-  per-edge confidence supports. (This resolves the original "citywide would
-  be ungrounded extrapolation" concern: the extrapolation is now labelled.)
+- The product promise — REWRITTEN 2026-08-05 (supersedes "we SIMULATE
+  everywhere but CLAIM only what the per-edge confidence supports"). The
+  BASELINE RULE is now: **only what is measured is simulated.** Every
+  calibrated vehicle crosses at least one measured edge; no synthetic
+  background traffic exists anywhere in the pipeline. Every sensor the city
+  adds still raises accuracy wherever it is placed, and it now also
+  ENLARGES the simulated network, because coverage follows sensor-crossing
+  paths.
+  CONSEQUENCE, stated plainly: roughly half the inner city carries ZERO
+  baseline flow (measured 2027-05-12: 3 339 of 7 125 edges, 46.9%, have no
+  sensor-anchored candidate at all). Those edges are not "low confidence" —
+  they are empty, so closing one is a structural no-op with nothing to
+  divert, and any before/after comparison there is degenerate. This is the
+  accepted price of not inventing traffic.
+  The rule is a BASELINE rule only. In a closure scenario the same vehicles
+  keep their destinations and reroute freely to the fastest remaining path,
+  which may take them off every sensor — that is the closure effect being
+  measured, not a violation.
 - Sensor edge IDs verified IDENTICAL across the expansion — all contracts
   survived.
 - OD/candidate generation is GROUNDED (2026-07-05): SCB DeSO population +
@@ -261,7 +273,7 @@ Goal arc, in order:
 - The seam: the renderer only ever calls `flowAt(edgeId, t)`. Today a HistoricalProvider reads flows.json. Later a ModelProvider (forecasts) and a ScenarioProvider (`flowAt(edgeId, t, scenario)` for incidents) plug into the same interface. The map/animation code never changes when the source changes.
 
 ## Contracts — fixed; everything depends on these
-- `network.geojson`: LineString features = edges, Point features = nodes. Stable string IDs. WGS84 coords. Each measured edge carries `sensor_id`. Every edge carries `dist_sensor_m` and `confidence` = exp(-d²/2σ²), d = distance to nearest sensor. σ is now fitted from the leakage-free LOSO report when `web/data/loso_report.json` exists (current value 144.0 m, robust median of 7 held-out measured-edge points); `build_data.py` falls back to the old guessed 250 m only when that validation artifact or the previous network file is missing. NOTE: this static confidence is empirically anchored only in the near field (<~300 m in the current two-cluster sensor layout). Citywide/inner-city distances beyond that remain labelled extrapolation. ScenarioProvider can further reduce confidence per edge/scenario using Monte Carlo spread; the renderer just displays whatever confidence number it gets.
+- `network.geojson`: LineString features = edges, Point features = nodes. Stable string IDs. WGS84 coords. Each measured edge carries `sensor_id`. Every edge carries `dist_sensor_m` and `confidence` = exp(-d²/2σ²), d = distance to nearest sensor. CAVEAT 2026-08-05: under the baseline rule this smooth decay no longer describes the whole network — ~46.9% of edges now carry zero baseline flow, so their real epistemic status is "not simulated", not "low confidence". The formula is retained for the sensor-reachable subgraph; treat a nonzero `confidence` on an edge with no baseline traffic as meaningless until the map distinguishes covered from uncovered. σ is now fitted from the leakage-free LOSO report when `web/data/loso_report.json` exists (current value 144.0 m, robust median of 7 held-out measured-edge points); `build_data.py` falls back to the old guessed 250 m only when that validation artifact or the previous network file is missing. NOTE: this static confidence is empirically anchored only in the near field (<~300 m in the current two-cluster sensor layout). Citywide/inner-city distances beyond that remain labelled extrapolation. ScenarioProvider can further reduce confidence per edge/scenario using Monte Carlo spread; the renderer just displays whatever confidence number it gets.
 - `flows.json` / `flows_forecast.json`: `{epoch, interval_minutes, flows}` where `flows[edgeId][quarterIndex] = count`, `null` where missing. Same edge IDs as the GeoJSON. Epoch strings have no timezone suffix — the web app parses them as UTC (provider.js appends 'Z'); keep parse and getUTC* formatting consistent.
 - One ID space across data/model/sim/map. One coordinate system (WGS84). Time = ISO datetime / abstract index — never "row in the 2025 file".
 - `NormalProfile.flowAt/calmAt(edgeId, qi, dayOfWeek)`: dayOfWeek (0=Mon) MUST be derived from the ACTIVE provider's epoch (2025 starts Wednesday, 2027 Friday) — never from qi alone.
@@ -279,7 +291,7 @@ Goal arc, in order:
 4. IN PROGRESS — Incident simulation (SUMO). Working vertical slice DONE (2026-07-02):
    - `build_sumo_net.py`: graph.graphml → plain XML → netconvert → sumo/net.net.xml. SUMO edge IDs are IDENTICAL to our edge IDs (u_v_k) — never break this.
    - `estimate_directions.py`: ESTIMATES a time-of-day direction split for Total sensors — unsupervised AM/PM Gaussian decomposition of each September weekday profile (R² 0.73–0.89), AM component assigned to the directed edge pointing toward the city centre (prior, not measured). Peak split ~80/20. Falls back to 50/50 when fit is weak. → sumo/direction_split.json
-   - `build_sumo_demand.py`: 15-min sensor counts (directional via the estimated split) → randomTrips candidate pool → routeSampler calibration. Fit: 100% GEH<5 at all 11 edges, all intervals. Also exports the implied OD matrix (calibrated trips aggregated to zones: two cluster areas + 8 compass entry sectors) → web/data/od_matrix.json/.csv — ONE plausible OD consistent with the counts; the true OD is not identifiable from 6 counters. Only sensor-crossing traffic is calibrated — streets far from sensors carry little traffic, which the confidence value communicates honestly.
+   - `build_sumo_demand.py`: 15-min sensor counts (directional via the estimated split) → randomTrips candidate pool → routeSampler calibration. Fit: 100% GEH<5 at all 11 edges, all intervals. Also exports the implied OD matrix (calibrated trips aggregated to zones: two cluster areas + 8 compass entry sectors) → web/data/od_matrix.json/.csv — ONE plausible OD consistent with the counts; the true OD is not identifiable from 6 counters. Only sensor-crossing traffic is calibrated. As of 2026-08-05 this is ENFORCED, not merely typical: the edge-coverage support set and the calibrated edge-support augmentation are both removed, so streets that no sensor-crossing path reaches carry exactly zero baseline traffic rather than a little synthetic traffic. See the baseline rule at the top of this file.
    - `run_scenario.py [--close edgeId]`: Monte Carlo (3 seeds), per-edge 15-min flows + confidence = spatial_prior × exp(-CV) → web/data/scenarios/*.json + index.json manifest. Uses --ignore-route-errors (vehicles destined for the closed edge are dropped).
    - Web: "Scenario" toggle + dropdown; scenario colours ALL simulated edges (dots stay on sensor edges for perf); closed edges drawn black-dashed; URL params ?mode=scenario&file=&qi=.
    - MESOSCOPIC BY DEFAULT (2026-07-03): run_scenario runs sumo --mesosim (queue-based). Rationale: our product is 15-min edge flows, which doesn't need microscopic car-following. Measured: whole-day 3-seed closure 35 s meso vs 25 min micro (43×), AND delivery is BETTER (simulated/measured at sensors 0.87–0.96, total 0.91, vs micro 0.83–0.94). --micro flag kept for comparison runs. Closure rerouter is attached only to edges within 400 m of the closure (REROUTER_RADIUS_M) — global rerouter cost was the other bottleneck.
