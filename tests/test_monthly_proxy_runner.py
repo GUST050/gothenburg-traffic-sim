@@ -356,8 +356,12 @@ class TestLegacyBehaviourIsUnchanged:
         assert "v5" not in runner.EXACT_DEMAND_BINDING_CAMPAIGNS
         assert "v4" not in runner.EXACT_DEMAND_BINDING_CAMPAIGNS
 
-    def test_only_v6_binds_exactly(self):
-        assert _runner().EXACT_DEMAND_BINDING_CAMPAIGNS == frozenset({"v6"})
+    def test_only_demand_binding_campaigns_bind_exactly(self):
+        """v7 joined v6 when the ranking objective changed: it binds its own
+        canonical archive by exact path and full identity the same way. The
+        set stays pinned so a campaign cannot acquire exact binding by
+        accident — legacy v1-v5 must remain excluded (covered above)."""
+        assert _runner().EXACT_DEMAND_BINDING_CAMPAIGNS == frozenset({"v6", "v7"})
 
     def test_key_resolution_still_exists_for_legacy_campaigns(self):
         """Legacy is not broadened, relabeled or removed."""

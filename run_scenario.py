@@ -380,8 +380,14 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
         struck = False
         for edge in edges:
             if edge in closed:
-                struck = not windows or any(lo <= clock < hi for lo, hi in windows)
-                break
+                if not windows or any(lo <= clock < hi for lo, hi in windows):
+                    struck = True
+                    break
+                # This closed edge is OPEN at the time this vehicle reaches it,
+                # so the vehicle drives it and continues — a LATER closed edge
+                # may still fall inside a window. Stopping at the first closed
+                # edge silently missed exactly the realistic case: a worksite
+                # closing a stretch for one shift.
             clock += edge_time.get(edge, 0.0)
         if not struck:
             continue
@@ -406,13 +412,55 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
         "vehicles_affected": affected,
         "vehicles_considered": considered,
         "vehicles_no_detour": severed,
-        "added_vehicle_hours": round(sum(added_s) / 3600.0, 2),
+        # 4dp, not 2: this is the primary ranking key, and 2dp quantised
+        # anything under 18 vehicle-seconds to zero, making distinct
+        # candidates compare equal for no reason.
+        "added_vehicle_hours": round(sum(added_s) / 3600.0, 4),
         "added_metres_total": round(sum(added_m), 1),
         "added_seconds_median": median(added_s),
         "added_metres_median": median(added_m),
         "basis": "calibrated baseline routes; cheapest legal path with vs "
                  "without the closure, free-flow cost",
     }
+
+
+def closure_disruption_across_variants(
+        variant_paths, closed_edges: set[str], closures: list,
+        edge_time: dict, edge_len: dict) -> dict | None:
+    """Measure the closure on EVERY direction-split variant, worst case first.
+
+    q10/q50/q90 are three plausible directional assignments of the same
+    measured counts, and the project treats that interval as the honest
+    product rather than picking one. Measuring only q50 — as the first cut of
+    this metric did — silently dropped that uncertainty from the ranking.
+
+    Top-level fields are the FIELD-WISE worst across variants, so a schedule
+    is judged on its least favourable directional outcome on each axis; the
+    per-variant records are kept alongside so the spread stays inspectable.
+    """
+    adj = build_edge_graph(set())
+    per_variant = {}
+    for path in variant_paths:
+        report = closure_disruption(
+            Path(path), closed_edges, closures, edge_time, edge_len, adj=adj)
+        if report is not None:
+            per_variant[Path(path).name] = report
+    if not per_variant:
+        return None
+    records = list(per_variant.values())
+    worst = {
+        "vehicles_affected": max(r["vehicles_affected"] for r in records),
+        "vehicles_considered": max(r["vehicles_considered"] for r in records),
+        "vehicles_no_detour": max(r["vehicles_no_detour"] for r in records),
+        "added_vehicle_hours": max(r["added_vehicle_hours"] for r in records),
+        "added_metres_total": max(r["added_metres_total"] for r in records),
+        "added_seconds_median": max(r["added_seconds_median"] for r in records),
+        "added_metres_median": max(r["added_metres_median"] for r in records),
+        "basis": records[0]["basis"],
+    }
+    worst["reduction"] = "field-wise worst across direction-split variants"
+    worst["by_variant"] = per_variant
+    return worst
 
 
 def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
@@ -2889,8 +2937,8 @@ def main() -> None:
         seed_values=seed_values, sig=sig, seed_health=seed_health,
         health_flags=health_flags, multi_day_validation=multi_day_validation,
         sensor_audit=sensor_audit, flows_out=flows_out, conf_out=conf_out,
-        disruption=closure_disruption(
-            SUMO_DIR / "calibrated.rou.xml", set(close_edges), closures,
+        disruption=closure_disruption_across_variants(
+            demand_variants(meta), set(close_edges), closures,
             *free_flow_edge_cost()))
     out_path = OUT_DIR / f"{name}.json"
     atomic_write_json(out_path, payload, separators=(",", ":"))

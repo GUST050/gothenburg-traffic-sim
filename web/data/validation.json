@@ -1,73 +1,72 @@
 {
  "schema_version": 1,
- "generated_at": "2026-08-05T12:03:38Z",
- "demand_window": "2027-07-15",
- "demand_source": "forecast",
- "demand_build_id": "6be372d002835c406126",
+ "generated_at": "2026-08-05T15:13:38Z",
+ "demand_window": "2025-09-16",
+ "demand_source": "historical",
+ "demand_build_id": "a282cf914f540eb0255c",
  "overall": "warn",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 86800,
+   "vehicles": 21656,
    "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
   },
   "structure": {
    "status": "warn",
    "flags": [
-    "purpose_length_ordering: fritid median 2.87 km < arbete median 2.91 km \u2014 RVU (Trafikanalys Tabell 3) orders fritid longest; P(length|purpose) decohered in calibration",
-    "trips_under_1km_cap: 102 quarter(s) exceed the exact 2.00x pool-share/floor-2 cap; maximum excess 24.96 vehicle(s)"
+    "trips_under_1km_cap: 22 quarter(s) exceed the exact 2.00x pool-share/floor-2 cap; maximum excess 14.10 vehicle(s)"
    ],
-   "dest_within_200m_pct": 4.6,
+   "dest_within_200m_pct": 3.8,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0101,
-    0.7946,
-    0.1953
+    0.011,
+    0.7803,
+    0.2087
    ],
-   "trip_length_l1_vs_rvu": 0.5383,
-   "onward_after_sensor_median_m": 2904.1,
-   "onward_under_200m_pct": 2.1,
+   "trip_length_l1_vs_rvu": 0.5097,
+   "onward_after_sensor_median_m": 2845.9,
+   "onward_under_200m_pct": 1.7,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
   },
   "purposes": {
-   "status": "warn",
+   "status": "pass",
    "purpose_counts": {
-    "arbete": 24254,
-    "external": 5349,
-    "fritid": 15295,
-    "service": 20161,
-    "through": 21741
+    "arbete": 7962,
+    "external": 1311,
+    "fritid": 2397,
+    "service": 4528,
+    "through": 5458
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 24254,
-     "mean_km": 2.93,
-     "median_km": 2.91
+     "n": 7962,
+     "mean_km": 2.73,
+     "median_km": 2.49
     },
     "external": {
-     "n": 5349,
-     "mean_km": 3.38,
-     "median_km": 3.58
+     "n": 1311,
+     "mean_km": 3.64,
+     "median_km": 3.6
     },
     "fritid": {
-     "n": 15295,
-     "mean_km": 2.93,
-     "median_km": 2.87
+     "n": 2397,
+     "mean_km": 3.02,
+     "median_km": 2.94
     },
     "service": {
-     "n": 20161,
-     "mean_km": 3.09,
-     "median_km": 2.77
+     "n": 4528,
+     "mean_km": 3.01,
+     "median_km": 2.78
     },
     "through": {
-     "n": 21741,
-     "mean_km": 5.26,
-     "median_km": 5.08
+     "n": 5458,
+     "mean_km": 5.59,
+     "median_km": 5.9
     }
    },
-   "ordering_violated": true,
+   "ordering_violated": false,
    "purpose_incompatible_quarters_by_variant": {
     "edge_shares": 0,
     "edge_shares_q10": 0,
@@ -121,7 +120,7 @@
    "gate": "alla fordon insatta, <2% ofullbordade, teleporteringar under tr\u00f6skel, per fr\u00f6"
   },
   "sensor_output": {
-   "status": "warn",
+   "status": "pass",
    "contract": "raw_edgeData_hourly_ensemble_vs_frozen_15min_targets",
    "uses_raw_ensemble_mean": true,
    "aggregation_minutes": 60,
@@ -131,13 +130,13 @@
    "max_abs_error": 18.666667,
    "station_edge_quarters": 144,
    "station_max_abs_error": 23.333333,
-   "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5",
-   "reason": "sensor-output-fit f\u00f6r flera dagar kr\u00e4ver 96 kvartar per dag"
+   "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "multi_day": {
-   "status": "missing",
-   "days": 5,
-   "reason": "baseline saknar periodisk SUMO-sammanfattning f\u00f6r flera dagar"
+   "status": "pass",
+   "days": 1,
+   "not_applicable": true,
+   "gate": "flerdagsgrind g\u00e4ller endast kontinuerliga dagar"
   },
   "held_out": {
    "status": "info",
@@ -155,8 +154,37 @@
    "note": "utel\u00e4mnad-station-\u00e5terskapande; karakterisering, inte grind \u2014 extrema veck kan spegla sensorns informationsisolering, inte modellfel"
   },
   "temporal_holdout": {
-   "status": "missing",
-   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='523622c006c1a6b20bf7e81b6564d0aaa43863e378c5fa27fc9a2187cdc252b1', current='23c19df6ce24ee247b660f7b068ebf79026926c37cfeb6f71bf02d981f1b7dbd'; reference window: report='2025-09-16T00:00:00', current='2027-07-15T00:00:00'; source: report='historical', current='forecast'"
+   "status": "info",
+   "protocol": "temporal_loso_pfe_meso_v1",
+   "reference_window": {
+    "start": "2025-09-16T00:00:00",
+    "end": "2025-09-17T00:00:00"
+   },
+   "evaluation_window": {
+    "start": "2025-09-17T00:00:00",
+    "end": "2025-09-18T00:00:00"
+   },
+   "minimum_coverage": 0.9,
+   "observed_quarters": {
+    "107:60786979_3575001205_0": 96,
+    "107:1455801464_18241874_0": 96,
+    "1074:60790252_60790253_0": 96,
+    "1076:30420757_30421744_0": 96,
+    "133:26842525_26355153_0": 95,
+    "134:26355153_96523321_0": 96,
+    "2276:26355153_91615277_0": 96
+   },
+   "ratios": {
+    "107:60786979_3575001205_0": 0.86,
+    "107:1455801464_18241874_0": 1.965,
+    "1074:60790252_60790253_0": 0.757,
+    "1076:30420757_30421744_0": 0.881,
+    "133:26842525_26355153_0": 0.878,
+    "134:26355153_96523321_0": 2.511,
+    "2276:26355153_91615277_0": 2.536
+   },
+   "median_ratio": 0.881,
+   "note": "fryst kandidatpool/n\u00e4t/priorer utv\u00e4rderade p\u00e5 en annan historisk dag; utel\u00e4mnad stations egna v\u00e4rden anv\u00e4nds endast f\u00f6r j\u00e4mf\u00f6relse"
   }
  }
 }
