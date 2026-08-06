@@ -1,3 +1,104 @@
 {
-  "scenarios": []
+  "demand_signature": "f9a7f246a3bf5bbd733b",
+  "scenarios": [
+    {
+      "name": "baseline",
+      "label": "Baslinje (ingen avst\u00e4ngning)",
+      "file": "baseline.json",
+      "closed_edges": [],
+      "closures": [],
+      "closure_integrity": null,
+      "scenario_spec": {
+        "scenario_id": "baseline",
+        "demand_build_id": "f9a7f246a3bf5bbd733b",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "start_time": "2025-09-16T00:00:00",
+        "end_time": "2025-09-17T00:00:00",
+        "closures": [],
+        "simulation_mode": "meso",
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "demand_variant_mapping": {
+          "1000": "q10",
+          "1001": "q50",
+          "1002": "q90"
+        },
+        "objective_profile": "default",
+        "signal_plan_id": null,
+        "analysis_window": null,
+        "schema_version": 1
+      },
+      "demand_signature": "f9a7f246a3bf5bbd733b",
+      "build_id": "f9a7f246a3bf5bbd733b",
+      "demand_build_key": "f59ea19f882259b4",
+      "window": "2025-09-16 00:00\u201324:00"
+    },
+    {
+      "name": "close_60786979_3575001205_0+1455801464_18241874_0",
+      "label": "Avst\u00e4ngning: Sk\u00e5negatan",
+      "file": "close_60786979_3575001205_0+1455801464_18241874_0.json",
+      "closed_edges": [
+        "60786979_3575001205_0",
+        "1455801464_18241874_0"
+      ],
+      "closures": [
+        {
+          "edge_id": "60786979_3575001205_0",
+          "begin_s": 0,
+          "end_s": 90000
+        },
+        {
+          "edge_id": "1455801464_18241874_0",
+          "begin_s": 0,
+          "end_s": 90000
+        }
+      ],
+      "closure_integrity": "verified_clean",
+      "scenario_spec": {
+        "scenario_id": "close_60786979_3575001205_0+1455801464_18241874_0",
+        "demand_build_id": "f9a7f246a3bf5bbd733b",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "start_time": "2025-09-16T00:00:00",
+        "end_time": "2025-09-17T00:00:00",
+        "closures": [
+          {
+            "edge_id": "60786979_3575001205_0",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closure_type": "full",
+            "permitted_access_exceptions": []
+          },
+          {
+            "edge_id": "1455801464_18241874_0",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closure_type": "full",
+            "permitted_access_exceptions": []
+          }
+        ],
+        "simulation_mode": "meso",
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "demand_variant_mapping": {
+          "1000": "q10",
+          "1001": "q50",
+          "1002": "q90"
+        },
+        "objective_profile": "default",
+        "signal_plan_id": null,
+        "analysis_window": null,
+        "schema_version": 1
+      },
+      "demand_signature": "f9a7f246a3bf5bbd733b",
+      "build_id": "f9a7f246a3bf5bbd733b",
+      "demand_build_key": "f59ea19f882259b4",
+      "window": "2025-09-16 00:00\u201324:00"
+    }
+  ]
 }
