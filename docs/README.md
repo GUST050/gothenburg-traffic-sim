@@ -18,6 +18,13 @@ documents in the repository root.
 Those stay in the root because code and tests reference them by path —
 `IMPROVEMENT_PLAN.md` alone is named by 39 source files.
 
+## Start here
+
+`OPEN_ISSUES_2026-08-06.md` — everything known to be wrong, unresolved or
+unproven, with where the evidence lives and whether each item is MEASURED,
+DOCUMENTED or OPEN. Written as a handoff; read it before picking up the
+warming, closure or demand work.
+
 ## history/
 
 The append-only ledgers, split out on 2026-08-06. `AGENTS.md` says everything
