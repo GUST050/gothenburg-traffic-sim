@@ -494,6 +494,63 @@ def warn_bound_violations(report: dict, label: str) -> None:
 _WIDENED_BAND_RUNGS = {"relax_tol2x": 2, "relax_tol4x": 4, "relax_no_bounds": 4}
 
 
+def warn_widened_measurement_band(report: dict, label: str) -> None:
+    """Report any interval that published against a WIDENED measured band.
+
+    ADDED 2026-08-06. This used to be reported only inside
+    warn_relaxed_bound_violations, which returns early when there are no
+    Level-2 bound violations -- so an interval at relax_tol2x (bounds KEPT,
+    band widened) disclosed nothing at all, and the two conditions are
+    independent. A widened band is the single most serious concession the
+    ladder can make, it is invisible to GEH<5 at these volumes (the widest 4x
+    band tops out at GEH 3.81 and no measured edge has ever exceeded 203
+    vehicles in a quarter), and it must therefore always announce itself.
+    """
+    summary = report.get("relaxation_summary") or {}
+    widened = {name: int(summary[name]) for name in _WIDENED_BAND_RUNGS
+               if summary.get(name)}
+    if not widened:
+        return
+    total = sum(int(v) for v in summary.values()) or 1
+    count = sum(widened.values())
+    detail = ", ".join(f"{n} at x{_WIDENED_BAND_RUNGS[name]} ({name})"
+                       for name, n in sorted(widened.items()))
+    print(f"  ⚠ WIDENED MEASUREMENT BAND ({label}): {count} of {total} "
+          f"interval(s) ({100 * count / total:.1f}%) published against a "
+          f"widened band — {detail}. Every counts-first rung, including the "
+          f"complete LP at the declared band, failed first, so these counts "
+          f"are genuinely unservable by this route pool. GEH<5 cannot detect "
+          f"this at these volumes")
+
+
+def warn_prior_relaxations(report: dict, label: str) -> None:
+    """Report intervals whose Level-3 priors yielded to keep a count in band.
+
+    ADDED 2026-08-06 with RUNG_NOPRIOR_TOL1, and the disclosure matters more
+    than usual here: dropping the prior layer is what stopped these intervals
+    widening their measured band, so without this line the fix would look
+    free. It is not quite free — those intervals lose the corridor and
+    gravity-assignment pull on edges nothing measures, so their flow on those
+    edges is shaped by the counts and the pool alone.
+
+    The concession is the right way round: a level-3 modelled estimate giving
+    way to a level-1 measurement. Before this rung existed the priors were
+    handed to the solver at EVERY rung, so the measurement gave way instead —
+    the third instance of that inversion, after the Level-2 bounds and the
+    purpose quotas.
+    """
+    summary = report.get("relaxation_summary") or {}
+    dropped = int(summary.get("no_priors_tol1", 0) or 0)
+    if not dropped:
+        return
+    total = sum(int(v) for v in summary.values()) or 1
+    print(f"  ⓘ PRIORS RELAXED ({label}): {dropped} of {total} interval(s) "
+          f"({100 * dropped / total:.1f}%) dropped the Level-3 prior layer to "
+          f"serve their measured counts at the UNWIDENED band. Counts kept "
+          f"exactly; those intervals carry no corridor/assignment pull on "
+          f"unmeasured edges")
+
+
 def warn_purpose_quota_relaxations(report: dict, label: str) -> None:
     """Report intervals whose purpose MIX yielded to keep a count exact.
 
@@ -529,24 +586,22 @@ def warn_relaxed_bound_violations(report: dict, label: str) -> None:
     wider. On this network GEH<5 cannot show that — the widest 4x band tops
     out at GEH 3.81, and no measured edge has ever exceeded 203 vehicles in
     a quarter — so if this warning does not say it, nothing does.
+
+    NARROWED 2026-08-06: the band half of that claim now lives in
+    warn_widened_measurement_band, which reports unconditionally. Coupling it
+    to a bound violation meant a widened band with no bound violation — the
+    whole relax_tol2x rung — announced nothing.
     """
     violations = report.get("relaxed_bound_violations", [])
     if not violations:
         return
     quarters = sorted({int(v["quarter"]) for v in violations})
     summary = report.get("relaxation_summary") or {}
-    widened = {name: int(summary[name]) for name in _WIDENED_BAND_RUNGS
-               if summary.get(name)}
-    if widened:
-        detail = ", ".join(
-            f"{count} at x{_WIDENED_BAND_RUNGS[name]} ({name})"
-            for name, count in sorted(widened.items()))
-        band = (f"; {sum(widened.values())} interval(s) also solved against a "
-                f"WIDENED measurement band — {detail}. GEH<5 cannot detect "
-                f"this at these volumes")
-    else:
-        band = ("; every interval kept the unwidened measurement band "
-                "(tol x1)")
+    widened = sum(int(summary[name]) for name in _WIDENED_BAND_RUNGS
+                  if summary.get(name))
+    band = ("; the measurement band stayed unwidened (tol x1)" if not widened
+            else f"; see the WIDENED MEASUREMENT BAND line for the "
+                 f"{widened} interval(s) that also widened their band")
     print(f"  ⚠ STRUCTURAL BOUNDS RELAXED ({label}): "
           f"{len(violations)} edge-quarter value(s) in quarters {quarters}"
           f"{band} — inspect confidence before use")

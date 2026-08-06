@@ -907,13 +907,78 @@ def repair_integer_bounds(
 # way to a level-1 measurement, which is the hierarchy working. The publish
 # path already handles a non-exact mix: purpose_mix_is_exact exists precisely
 # to tell that counts-first fallback apart from an exact-purpose solve.
+#
+# THIRD INVERSION, same class, fixed 2026-08-06 (RUNG_NOPRIOR_TOL1). This is
+# the one that actually caused the weekend widened bands, and it sat behind a
+# wrong diagnosis. The level-3 PRIORS were passed to solve_interval_entropy at
+# EVERY rung -- the bounds rung drops bounds, the quota rung drops quotas, and
+# both keep handing the solver the same priors. So when a prior and a measured
+# count were jointly unreachable, the prior could not yield and THE COUNT HAD
+# TO.
+#
+# Measured on a real 2027-05-01 (Saturday) forecast build, 12 of 96 intervals
+# widened. Node 26355153 carries three of the seven measured edges: one
+# measured inflow and two measured outflows whose counts demand ~1.9x the
+# inflow, so the balance must arrive via the node's UNMEASURED approaches.
+# Those approaches are the opposite carriageways 96523321_26355153_0 (prior
+# target 2.9, weight 1.000) and 91615277_26355153_0 (target 3.0, weight
+# 0.714), and they share 153 and 340 routes respectively with the measured
+# outflow each one starves. Every iteration the prior pulled those shared
+# routes back down, so the measured outflows settled 2-7 vehicles below their
+# level-1 targets -- at a STABLE fixed point, not a slow one: 200 and 2000
+# iterations land on the same vector, and with the priors removed the same
+# interval hits its targets EXACTLY (worst residual 0.00 of tolerance).
+# Dropping the priors at the unwidened band recovers 12 of 12.
+#
+# Two further facts kept this invisible, both measured:
+#
+#   (1) tol_mult NEVER ENTERS THE IPF ITERATION. It is read only by
+#       _check_entropy_solution. RUNG_NOBND_TOL1 and RUNG_RELAX_NOBND
+#       therefore compute a BIT-IDENTICAL vector (verified: max|diff| = 0.0)
+#       and differ only in the ruler it is judged against. A widening rung
+#       does not find a better solution -- it accepts the one already there.
+#       So "the band had to widen" was never evidence about the route pool.
+#
+#   (2) The pool was blamed anyway. It is not the pool: an LP over the same
+#       shapes finds a nonnegative route-flow vector inside the UNWIDENED
+#       band for all 12 intervals, and for all 96 on both a weekday and a
+#       weekend pool. The recorded diagnosis -- "the pool cannot span the
+#       target vector, and no ordering of solver relaxations can change
+#       that" -- is refuted by that check; see docs/OPEN_ISSUES_2026-08-06.md
+#       section 6c.
+#
+# Which is why RUNG_LP_FALLBACK moved as well. IPF is an iterative scheme with no
+# completeness guarantee, so "IPF failed" must never be read as "no solution
+# exists". The LP is complete, and running it at the UNWIDENED band BEFORE any
+# widening rung is what turns "the band widens only when the counts are
+# genuinely unservable" from an aspiration into a fact. It used to sit after
+# every widening rung, where it could not do that job. The trailing
+# RUNG_LP_FALLBACK is the SAME call, simply moved above the widening rungs;
+# moving it adds no capability, because the position it left is unreachable
+# from anywhere the moved copy did not already run.
+#
+# ORDERING, measured rather than assumed: dropping the priors while KEEPING
+# the Level-2 bounds recovers only 6 of the 12, so a prior-only rung placed
+# above RUNG_NOBND_TOL1 would be weaker than the ladder needs. The new rung is
+# therefore a monotone continuation -- bounds, then quotas, then priors -- and
+# the existing rung order is left exactly as it was. A finer two-dimensional
+# ladder (bounds x priors) would rescue those 6 at a smaller concession; that
+# is a deliberate future change, not a side effect of this one.
+#
+# Also measured: restricting the drop to only those priors sharing a route
+# with a measured edge (the provably minimal interfering set -- a prior whose
+# routes miss every measured edge cannot move a measured total) removes
+# nothing here. All 7 priors in the affected quarters interfere, because
+# corridor priors are by construction adjacent to sensors. That machinery
+# would buy nothing on this network, so the rung drops the layer.
 RUNG_CLEAN        = 0   # first solve_interval_entropy call succeeded
 RUNG_NOBND_TOL1   = 1   # bounds dropped, measurement band UNWIDENED
 RUNG_NOQUOTA_TOL1 = 2   # bounds AND purpose quotas dropped, band UNWIDENED
-RUNG_RELAX_TOL2X  = 3   # tol_mult=2.0, bounds kept
-RUNG_RELAX_TOL4X  = 4   # tol_mult=4.0, bounds kept
-RUNG_RELAX_NOBND  = 5   # tol_mult=4.0, bounds dropped
-RUNG_LP_FALLBACK  = 6   # solve_interval (LP), the final rung
+RUNG_NOPRIOR_TOL1 = 3   # bounds, quotas AND level-3 priors dropped, band UNWIDENED
+RUNG_LP_FALLBACK  = 4   # complete LP, bounds dropped, band UNWIDENED
+RUNG_RELAX_TOL2X  = 5   # tol_mult=2.0, bounds kept
+RUNG_RELAX_TOL4X  = 6   # tol_mult=4.0, bounds kept
+RUNG_RELAX_NOBND  = 7   # tol_mult=4.0, bounds dropped
 RUNG_INFEASIBLE   = -1  # no rung produced a solution
 
 
@@ -982,34 +1047,64 @@ def solve_interval_with_relaxation(
                                  touch_index=touch_index)
     if sol is not None:
         return sol, RUNG_CLEAN
-    for rung, (tol_mult, use_bounds, use_required) in zip(
-        (RUNG_NOBND_TOL1, RUNG_NOQUOTA_TOL1,
-         RUNG_RELAX_TOL2X, RUNG_RELAX_TOL4X, RUNG_RELAX_NOBND),
-        ((1.0, False, True), (1.0, False, False),
-         (2.0, True, True), (4.0, True, True), (4.0, False, True)),
+
+    # Stage 1 — give up every NON-measurement constraint first, in increasing
+    # order of what it costs, with the measured band left exactly as declared.
+    # `continue`, not `break`: these rungs are no longer last, so a caller that
+    # forbids structural relaxation must skip them and keep descending to the
+    # bounds-preserving widening rungs below. With all of stage 1 skipped such
+    # a caller sees exactly the pre-2026-08-06 ladder.
+    for rung, (use_required, use_priors) in zip(
+        (RUNG_NOBND_TOL1, RUNG_NOQUOTA_TOL1, RUNG_NOPRIOR_TOL1),
+        ((True, True), (False, True), (False, False)),
     ):
-        # `continue`, not `break`: the no-bounds rungs are no longer last, so
-        # a caller that forbids structural relaxation must skip them and keep
-        # descending the bounds-preserving ones. With RUNG_NOBND_TOL1 skipped
-        # such a caller sees exactly the pre-2026-08-06 ladder.
+        if not allow_structural_relaxation:
+            continue
+        sol = solve_interval_entropy(
+            shapes, targets, {}, priors if use_priors else {},
+            tol_mult=1.0, route_cost=route_cost,
+            groups=active_groups(False, use_required),
+            touch_index=touch_index)
+        if sol is not None:
+            return sol, rung
+
+    # Stage 2 — the completeness backstop, still at the UNWIDENED band. IPF is
+    # an iterative scheme with no completeness guarantee, so its failure is
+    # not evidence that no solution exists; the LP is complete and decides
+    # that question. This is the SAME call that used to sit at the very
+    # bottom of the ladder, MOVED above the widening rungs — which is what
+    # makes the counts-first contract enforceable rather than merely intended.
+    # Moving it adds no capability: the trailing copy is now unreachable
+    # (identical arguments, identical guard), so nothing that used to report
+    # INFEASIBLE becomes publishable. Widening the band is strictly the
+    # larger concession, so it must come after this, not before.
+    if allow_structural_relaxation:
+        sol = solve_interval(shapes, targets, {}, priors,
+                             route_cost=route_cost,
+                             groups=active_groups(False))
+        if sol is not None:
+            return sol, RUNG_LP_FALLBACK
+
+    # Stage 3 — only now widen the measured band itself.
+    for rung, (tol_mult, use_bounds) in zip(
+        (RUNG_RELAX_TOL2X, RUNG_RELAX_TOL4X, RUNG_RELAX_NOBND),
+        ((2.0, True), (4.0, True), (4.0, False)),
+    ):
         if not use_bounds and not allow_structural_relaxation:
             continue
         sol = solve_interval_entropy(
             shapes, targets, bounds if use_bounds else {}, priors,
             tol_mult=tol_mult, route_cost=route_cost,
-            groups=active_groups(use_bounds, use_required),
+            groups=active_groups(use_bounds),
             touch_index=touch_index)
         if sol is not None:
             return sol, rung
-    if not allow_structural_relaxation:
-        return None, RUNG_INFEASIBLE
-    # Bounds and structural caps have already been deliberately dropped at
-    # RUNG_RELAX_NOBND. The LP backstop must preserve that counts-first
-    # contract rather than making an otherwise feasible interval fail.
-    sol = solve_interval(shapes, targets, {}, priors,
-                         route_cost=route_cost,
-                         groups=active_groups(False))
-    return sol, (RUNG_LP_FALLBACK if sol is not None else RUNG_INFEASIBLE)
+    # The LP already ran at stage 2 under this same guard and with these same
+    # arguments, so there is nothing left to try: repeating it here would be
+    # dead code, and running it at a WIDENED band instead would let intervals
+    # that used to fail the build publish quietly — a loosened gate, not a
+    # fix. An interval reaching this point is genuinely unservable.
+    return None, RUNG_INFEASIBLE
 
 
 def _shape_purposes(shape: Candidate) -> set[str]:
@@ -1712,6 +1807,7 @@ def _draw_endpoint_location(source: Candidate, side: str, ordinal: int) -> dict 
 RUNG_NAMES = {
     RUNG_CLEAN: "clean", RUNG_NOBND_TOL1: "no_bounds_tol1",
     RUNG_NOQUOTA_TOL1: "no_purpose_quota_tol1",
+    RUNG_NOPRIOR_TOL1: "no_priors_tol1",
     RUNG_RELAX_TOL2X: "relax_tol2x",
     RUNG_RELAX_TOL4X: "relax_tol4x", RUNG_RELAX_NOBND: "relax_no_bounds",
     RUNG_LP_FALLBACK: "lp_fallback", RUNG_INFEASIBLE: "infeasible",
@@ -1725,30 +1821,44 @@ def _rung_measurement_tol_mult(rung: int | None) -> float:
         # Dropping the plausibility layer never widens the measurement band.
         RUNG_NOBND_TOL1: 1.0,
         RUNG_NOQUOTA_TOL1: 1.0,
-        RUNG_RELAX_TOL2X: 2.0,
-        RUNG_RELAX_TOL4X: 4.0,
-        RUNG_RELAX_NOBND: 4.0,
+        RUNG_NOPRIOR_TOL1: 1.0,
         # solve_interval() is invoked with its default tolerance on the LP
         # backstop, after Level-2 bounds have already been dropped.
         RUNG_LP_FALLBACK: 1.0,
+        RUNG_RELAX_TOL2X: 2.0,
+        RUNG_RELAX_TOL4X: 4.0,
+        RUNG_RELAX_NOBND: 4.0,
     }.get(rung, 1.0)
 
 
 def _rung_keeps_structural_bounds(rung: int | None) -> bool:
     """Whether this rung still solved with its supplied Level-2 bounds."""
-    return rung not in (RUNG_NOBND_TOL1, RUNG_NOQUOTA_TOL1, RUNG_RELAX_NOBND,
-                        RUNG_LP_FALLBACK, RUNG_INFEASIBLE)
+    return rung not in (RUNG_NOBND_TOL1, RUNG_NOQUOTA_TOL1, RUNG_NOPRIOR_TOL1,
+                        RUNG_RELAX_NOBND, RUNG_LP_FALLBACK, RUNG_INFEASIBLE)
 
 
 def _rung_keeps_purpose_quota(rung: int | None) -> bool:
     """Whether this rung still enforced the exact purpose mix.
 
-    Only RUNG_NOQUOTA_TOL1 drops it, and only to keep a measured count exact
-    -- a level-1 measurement outranking a level-3 behavioural prior. The
-    route's own provenance is unaffected either way (the pool is stratified
-    per (geometry, purpose)); what drifts is the published MIX.
+    RUNG_NOQUOTA_TOL1 drops it, and RUNG_NOPRIOR_TOL1 below it inherits that
+    drop -- both only to keep a measured count exact, a level-1 measurement
+    outranking a level-3 behavioural prior. The route's own provenance is
+    unaffected either way (the pool is stratified per (geometry, purpose));
+    what drifts is the published MIX.
     """
-    return rung != RUNG_NOQUOTA_TOL1
+    return rung not in (RUNG_NOQUOTA_TOL1, RUNG_NOPRIOR_TOL1)
+
+
+def _rung_keeps_priors(rung: int | None) -> bool:
+    """Whether this rung still solved with its supplied Level-3 priors.
+
+    Only RUNG_NOPRIOR_TOL1 drops them, and only to keep a measured count
+    inside its DECLARED band -- see the RUNG_* block for the measurement that
+    motivated it. A dropped prior layer changes no route's provenance; it
+    removes a modelled pull toward estimated flows on edges nothing measured,
+    which is precisely the pull that was holding measured edges off target.
+    """
+    return rung != RUNG_NOPRIOR_TOL1
 
 
 def quarter_publish_counts(

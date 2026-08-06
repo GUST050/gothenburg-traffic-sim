@@ -470,6 +470,138 @@ class TestRouteIndexGroups:
         assert pfe._rung_keeps_purpose_quota(pfe.RUNG_NOBND_TOL1)
         assert pfe.RUNG_NAMES[pfe.RUNG_NOQUOTA_TOL1] == "no_purpose_quota_tol1"
 
+    def test_ladder_drops_the_level3_priors_before_the_measured_band(self):
+        # REGRESSION (2026-08-06), the THIRD hierarchy inversion and the one
+        # that actually caused the weekend widened bands. The priors were
+        # handed to the solver at EVERY rung — the bounds rung drops bounds,
+        # the quota rung drops quotas, and both kept passing the same priors
+        # — so a prior that conflicted with a measured count could not yield
+        # and the COUNT had to.
+        #
+        # The real geometry, reduced to its smallest faithful form. Two
+        # measured edges SHARE a route, which is what stops Level 1's
+        # sequential rescale from satisfying both by itself; the other route
+        # serving m1 also traverses "opp", the unmeasured opposite
+        # carriageway, whose Level-3 prior pulls it back down every
+        # iteration. That is exactly node 26355153: a measured outflow whose
+        # count can only be met via routes the opposite carriageway's prior
+        # suppresses. One measured edge is NOT enough to reproduce it —
+        # Level 1 then hits its single target exactly every pass.
+        shapes = [cand("m1", "opp"), cand("m1", "m2")]
+        targets = {"m1": 100.0, "m2": 20.0}
+        sol, rung = solve_interval_with_relaxation(
+            shapes, targets, {}, {"opp": (3.0, 1.0)})
+
+        assert sol is not None
+        assert rung == pfe.RUNG_NOPRIOR_TOL1
+        assert pfe._rung_measurement_tol_mult(rung) == 1.0
+        assert served(sol, shapes, "m1") == pytest.approx(100, rel=0.06)
+        assert served(sol, shapes, "m2") == pytest.approx(20, rel=0.06)
+
+        # Same pool and counts without the conflicting prior solve clean, so
+        # the prior really is what the rung had to give up.
+        _clean_sol, clean_rung = solve_interval_with_relaxation(
+            shapes, targets, {}, {})
+        assert clean_rung == RUNG_CLEAN
+
+    def test_a_prior_that_does_not_block_a_count_is_still_applied(self):
+        # The prior layer must only be dropped when it genuinely blocks a
+        # measured count, never as a shortcut. A prior with its own routes
+        # cannot conflict with m, so the interval solves clean and keeps it.
+        shapes = [cand("m"), cand("p")]
+        sol, rung = solve_interval_with_relaxation(
+            shapes, {"m": 100.0}, {}, {"p": (20.0, 1.0)})
+
+        assert rung == RUNG_CLEAN
+        assert pfe._rung_keeps_priors(rung)
+        assert served(sol, shapes, "p") == pytest.approx(20, abs=1.0)
+
+    def test_priors_outrank_nothing_and_are_dropped_last(self):
+        # Ordering contract: bounds first, then the provenance quota, and the
+        # Level-3 priors only after both. A case a bound drop alone resolves
+        # must keep its priors.
+        shapes = [cand("m", "u")]
+        sol, rung = solve_interval_with_relaxation(
+            shapes, {"m": 100.0}, {"u": (0.0, 5.0)}, {"q": (7.0, 1.0)})
+
+        assert rung == pfe.RUNG_NOBND_TOL1
+        assert pfe._rung_keeps_priors(rung)
+
+    def test_dropping_the_priors_is_reported_not_silent(self):
+        assert not pfe._rung_keeps_priors(pfe.RUNG_NOPRIOR_TOL1)
+        assert pfe._rung_keeps_priors(pfe.RUNG_NOQUOTA_TOL1)
+        assert pfe._rung_keeps_priors(pfe.RUNG_NOBND_TOL1)
+        assert pfe.RUNG_NAMES[pfe.RUNG_NOPRIOR_TOL1] == "no_priors_tol1"
+        # It inherits the quota drop from the rung above it.
+        assert not pfe._rung_keeps_purpose_quota(pfe.RUNG_NOPRIOR_TOL1)
+        assert not pfe._rung_keeps_structural_bounds(pfe.RUNG_NOPRIOR_TOL1)
+
+    def test_every_counts_first_rung_sorts_below_every_widening_rung(self):
+        # The rung integers are compared numerically by the structure guard
+        # ("capped_rung > rung" means a weaker outcome), so the ordering is
+        # part of the contract, not cosmetic. Anything that keeps the
+        # declared band must sort below anything that widens it.
+        exact = [pfe.RUNG_CLEAN, pfe.RUNG_NOBND_TOL1, pfe.RUNG_NOQUOTA_TOL1,
+                 pfe.RUNG_NOPRIOR_TOL1, pfe.RUNG_LP_FALLBACK]
+        widening = [pfe.RUNG_RELAX_TOL2X, pfe.RUNG_RELAX_TOL4X,
+                    pfe.RUNG_RELAX_NOBND]
+        assert max(exact) < min(widening)
+        assert all(pfe._rung_measurement_tol_mult(r) == 1.0 for r in exact)
+        assert all(pfe._rung_measurement_tol_mult(r) > 1.0 for r in widening)
+
+    def test_the_complete_lp_runs_before_the_band_is_ever_widened(self):
+        # REGRESSION (2026-08-06). IPF is an iterative scheme with no
+        # completeness guarantee, so "IPF failed" is not evidence that no
+        # solution exists — but the LP that decides that question used to sit
+        # BELOW every widening rung, so a widened band was accepted while an
+        # exact-band solution was still reachable. With IPF forced to fail
+        # everywhere, the ladder must still land on the exact-band LP rather
+        # than on any tol-widening rung.
+        monkey = pfe.solve_interval_entropy
+        try:
+            pfe.solve_interval_entropy = lambda *a, **k: None
+            sol, rung = pfe.solve_interval_with_relaxation(
+                [cand("m")], {"m": 100.0}, {}, {})
+        finally:
+            pfe.solve_interval_entropy = monkey
+
+        assert sol is not None
+        assert rung == pfe.RUNG_LP_FALLBACK
+        assert pfe._rung_measurement_tol_mult(rung) == 1.0
+        assert served(sol, [cand("m")], "m") == pytest.approx(100, rel=0.06)
+
+    def test_widening_the_band_does_not_change_what_ipf_computes(self):
+        # The fact that made the old ladder's widening rungs look like they
+        # were finding something: tol_mult is read ONLY by the acceptance
+        # check, never by the iteration. So a widening rung publishes the
+        # SAME vector the unwidened rung refused, judged by a looser ruler —
+        # which means a widened band is never evidence about the route pool.
+        # Pin it, so a future change cannot quietly make widening curative
+        # without saying so.
+        # One route on two measured edges: the iteration settles on b's
+        # target, which sits outside a's x1 band but inside its x4 one.
+        shapes = [cand("a", "b")]
+        targets = {"a": 16.0, "b": 20.0}
+        loose = solve_interval_entropy(shapes, targets, {}, {}, tol_mult=1e9)
+        wide = solve_interval_entropy(shapes, targets, {}, {}, tol_mult=4.0)
+        assert loose is not None and wide is not None
+        # Same vector, only the ruler differs.
+        assert np.array_equal(loose, wide)
+        assert solve_interval_entropy(shapes, targets, {}, {},
+                                      tol_mult=1.0) is None
+
+    def test_forbidding_structural_relaxation_skips_the_new_rungs_too(self):
+        # A caller that already has a stronger solution must not be handed a
+        # weaker one by the rungs added in 2026-08-06. All of stage 1 and the
+        # LP drop the Level-2 bounds, so all of them have to be skipped —
+        # such a caller still sees exactly the pre-fix ladder.
+        shapes = [cand("m", "opp")]
+        sol, rung = solve_interval_with_relaxation(
+            shapes, {"m": 100.0}, {}, {"opp": (3.0, 1.0)},
+            allow_structural_relaxation=False)
+        assert rung not in (pfe.RUNG_NOBND_TOL1, pfe.RUNG_NOQUOTA_TOL1,
+                            pfe.RUNG_NOPRIOR_TOL1, pfe.RUNG_LP_FALLBACK)
+
     def test_the_quota_outranks_the_optional_structural_caps(self):
         # Ordering contract: Level-2 bounds and optional shape caps go first
         # (RUNG_NOBND_TOL1), the provenance quota only after them. A case that

@@ -453,8 +453,10 @@ from demand.feedback import (BPR_PERIOD_S, FEEDBACK_SIM_TIMEOUT_S,
 from demand.calibration import (_agent_path_for, _report_is_publishable,
                                 run_pfe_variants_flat_parallel,
                                 warn_bound_violations,
+                                warn_prior_relaxations,
                                 warn_purpose_quota_relaxations,
                                 warn_relaxed_bound_violations,
+                                warn_widened_measurement_band,
                                 warn_purpose_allocation_drift,
                                 warn_unserviceable_measured_edges)
 
@@ -1019,6 +1021,8 @@ def main() -> None:
                     warn_bound_violations(variant_report, key)
                     warn_relaxed_bound_violations(variant_report, key)
                     warn_purpose_quota_relaxations(variant_report, key)
+                    warn_prior_relaxations(variant_report, key)
+                    warn_widened_measurement_band(variant_report, key)
                     if variant_report["geh_pct"] < 100:
                         print("  ⚠ measured-edge fit below gate — inspect before use")
                 report = reports[""]
@@ -1046,6 +1050,8 @@ def main() -> None:
             warn_bound_violations(report, "edge_shares")
             warn_relaxed_bound_violations(report, "edge_shares")
             warn_purpose_quota_relaxations(report, "edge_shares")
+            warn_prior_relaxations(report, "edge_shares")
+            warn_widened_measurement_band(report, "edge_shares")
 
             if args.congestion_method == "simulate":
                 # Simple GEH-based early stop — this method is meant for an
