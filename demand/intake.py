@@ -353,7 +353,19 @@ def build_targets(
         t: dict[str, float] = {}
         for edges in sensor_edges.values():
             for edge_id in edges:
-                share = est_shares.get(edge_id, [1.0 / len(edges)] * 96)[slot]
+                # Split ONLY a two-way total. A single-direction station
+                # already measures one carriageway, so its value IS that
+                # direction's count and must enter level 1 untouched.
+                #
+                # This guard became load-bearing on 2026-08-06, when the
+                # direction model started predicting both carriageways at
+                # every station. Its shares are pair-normalised, so a measured
+                # edge suddenly resolved to ~0.5 here and a measured 50 would
+                # have been calibrated as 25 -- silently, at 100% GEH against
+                # the halved target. The estimated opposite carriageway is not
+                # a level-1 target at all; it enters as a level-2 bound.
+                share = (est_shares.get(edge_id, [1.0 / len(edges)] * 96)[slot]
+                         if len(edges) > 1 else 1.0)
                 v = flows.get(edge_id, [None])[qi] if qi < len(flows.get(edge_id, [])) else None
                 if v is not None:
                     t[edge_id] = v * share

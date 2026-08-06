@@ -174,6 +174,7 @@ def build_interval_constraints(
     corridor_priors: dict,
     assignment_data: dict,
     prior_key: str = "prior",
+    opposite_bounds: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict], list[dict]]:
     """Build the exact per-quarter PFE constraint hierarchy used in production.
 
@@ -197,6 +198,15 @@ def build_interval_constraints(
             slot_i = i % 96
             if slot_i < len(series) and series[slot_i]:
                 hard_bounds[edge_id] = (series[slot_i][0], series[slot_i][1])
+
+        # The unmeasured carriageway at each single-direction station. It is a
+        # level-2 hard bound like any other structural relationship, so the
+        # solution MUST land inside it -- the estimate is fulfilled, not
+        # merely suggested. It is applied before the broad assignment
+        # ceilings below, which explicitly never overwrite a hard bound.
+        if opposite_bounds and i < len(opposite_bounds):
+            for edge_id, span in opposite_bounds[i].items():
+                hard_bounds.setdefault(edge_id, span)
 
         bounds = dict(hard_bounds)
         priors = {}
@@ -238,3 +248,71 @@ def structural_bounds_and_priors(begin: str, end: str) -> tuple[dict, dict]:
     """Load date-invariant structural inputs, never target-date inputs."""
     return (ensure_bounds(STRUCTURAL_REFERENCE_DATE, begin, end),
             ensure_priors(STRUCTURAL_REFERENCE_DATE))
+
+
+def opposite_direction_bounds(
+    flows: dict[str, list],
+    n_intervals: int,
+    qi_start: int,
+    registry_path: Path | None = None,
+    split_key: str = "edge_shares",
+) -> list[dict[str, tuple[float, float]]]:
+    """Level-2 bounds for the UNMEASURED carriageway at each station.
+
+    Five of the six stations measure one direction only. Until 2026-08-06 the
+    opposite carriageway carried no constraint at all: the PFE filled it from
+    structure with nothing to answer to, which is a silent assumption dressed
+    as a result. The direction model now predicts both sides, so the opposite
+    flow follows from the measured one:
+
+        v_opposite = v_measured * (1 - s) / s
+
+    where ``s`` is the measured direction's predicted share. The q10 and q90
+    shares give the interval; ``lo`` and ``hi`` are ordered afterwards because
+    the mapping is DECREASING in ``s`` -- a larger measured share means less
+    traffic left for the other side, so the q90 share yields the LOW bound.
+
+    A bound, never a target. CLAUDE.md forbids presenting this direction as
+    known, and it is not: the solution must land inside a declared interval,
+    which is exactly what a level-2 bound expresses. The interval is wide --
+    a measured 50 admits roughly 33 to 72 the other way -- and that width is
+    the honest content, not a defect to tune away.
+    """
+    from demand.intake import load_direction_split
+
+    registry_path = registry_path or Path("data_in/sensors.json")
+    if not registry_path.is_file():
+        return [{} for _ in range(n_intervals)]
+    registry = json.loads(registry_path.read_text())
+    rows = registry if isinstance(registry, list) else registry.get(
+        "sensors", registry)
+
+    shares = {key: load_direction_split(key) for key in
+              (split_key, "edge_shares_q10", "edge_shares_q90")}
+    pairs = []
+    for row in rows:
+        spec = row.get("opposite_direction") or {}
+        opposite = spec.get("edge_id")
+        measured = [e for e in row.get("approved_edge_ids", [])]
+        if not opposite or len(measured) != 1:
+            continue                      # two-way stations need no inference
+        pairs.append((measured[0], opposite))
+
+    out: list[dict[str, tuple[float, float]]] = []
+    for i in range(n_intervals):
+        qi, slot = qi_start + i, (qi_start + i) % 96
+        bounds: dict[str, tuple[float, float]] = {}
+        for measured, opposite in pairs:
+            series = flows.get(measured) or []
+            v = series[qi] if qi < len(series) else None
+            if v is None:
+                continue                  # missing measurement constrains nothing
+            candidates = []
+            for key in ("edge_shares_q10", "edge_shares_q90"):
+                s = (shares[key].get(measured) or [None] * 96)[slot]
+                if s and 0.0 < s < 1.0:
+                    candidates.append(v * (1.0 - s) / s)
+            if len(candidates) == 2:
+                bounds[opposite] = (min(candidates), max(candidates))
+        out.append(bounds)
+    return out

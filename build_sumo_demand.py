@@ -430,6 +430,7 @@ from demand.structure import (DEST_GROUP_CAP_MULT, LENGTH_BIN_EDGES_KM,
 from demand.priors import (build_interval_constraints,
                            ensure_assignment_priors, ensure_bounds,
                            ensure_observability, ensure_priors,
+                           opposite_direction_bounds,
                            structural_bounds_and_priors)
 
 
@@ -737,10 +738,21 @@ def main() -> None:
                   f"unconstrained edges get a weak (w={assign_w}) realistic pull")
         prior_variant = {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
 
+        # The unmeasured carriageway at every single-direction station, as an
+        # interval the solver must satisfy. Per variant, because the interval
+        # comes from the direction model's own q10/q90 and therefore moves
+        # with the variant being built.
+        opposite_by_variant = {
+            suffix: opposite_direction_bounds(
+                flows, n_intervals, qi_start, split_key=key)
+            for suffix, key in variants
+        }
+
         def build_bounds_priors(suffix: str) -> tuple[list[dict], list[dict], list[dict]]:
             return build_interval_constraints(
                 n_intervals, qi_start, bounds_data, priors_data, corridor,
-                assign_data, prior_variant.get(suffix, "prior"))
+                assign_data, prior_variant.get(suffix, "prior"),
+                opposite_bounds=opposite_by_variant.get(suffix))
 
         # ── Day library: build each calendar day once, then assemble ──────────
         # A closure search re-derives the same calendar days for every

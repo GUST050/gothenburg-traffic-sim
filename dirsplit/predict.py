@@ -36,6 +36,12 @@ from .train import FEATURE_NAMES, MODEL_PATH, PROFILE_FEATURES
 
 GEO_PATH     = Path("web/data/network.geojson")
 PROFILE_PATH = Path("web/data/normal_profile.json")
+# The validated registry is the source of truth for which edge is the
+# opposite carriageway of a single-direction station. It is recorded there,
+# verified, rather than re-derived per run: 1076's opposite side sits 82.5 m
+# away, just outside build_data's 80 m snap rule, and widening that threshold
+# would change every other consumer of it.
+SENSOR_REGISTRY = Path("data_in/sensors.json")
 OUT_PATH     = Path("sumo/direction_split.json")
 
 CLAMP = (0.1, 0.9)
@@ -92,14 +98,58 @@ def main() -> None:
 
     G = load_city_graph("goteborg")
 
+    # Every sensor gets BOTH directions, not only the two-way station.
+    #
+    # Until 2026-08-06 this filtered on level == "Total", which matched sensor
+    # 107 alone. The other five stations measure ONE carriageway, so their
+    # opposite side had no estimate at all and the PFE filled it from
+    # structure with nothing to answer to. The registry now records a
+    # verified opposite edge per single-direction station, and the model runs
+    # on the pair exactly as it does for 107.
+    #
+    # The opposite edge is a DIFFERENT edge with its own features, which is
+    # what makes this meaningful rather than circular: edge_features()
+    # measures radial_cos and the residential/major half-discs relative to
+    # the direction of travel, so reversing an edge flips radial_cos and
+    # res_asym/major_asym exactly and swaps behind/ahead (verified on all
+    # four node-reverse pairs). A model given identical features for both
+    # sides could only ever answer 50/50.
+    def _midpoint(props: dict, feat: dict) -> dict:
+        c = feat["geometry"]["coordinates"]
+        props["_mid_lat"] = (c[0][1] + c[-1][1]) / 2
+        props["_mid_lon"] = (c[0][0] + c[-1][0]) / 2
+        return props
+
+    by_edge = {f["properties"]["id"]: f for f in geo["features"]
+               if f["geometry"]["type"] == "LineString"}
+    opposite_of = {}
+    if SENSOR_REGISTRY.exists():
+        registry = json.loads(SENSOR_REGISTRY.read_text())
+        rows = registry if isinstance(registry, list) else registry.get(
+            "sensors", registry)
+        for row in rows:
+            spec = row.get("opposite_direction")
+            if spec and spec.get("edge_id"):
+                opposite_of[str(row["sensor_id"])] = spec["edge_id"]
+
     sensors: dict[str, list[dict]] = {}
     for feat in geo["features"]:
         p = feat["properties"]
-        if p.get("sensor_id") and p.get("level") == "Total":
-            c = feat["geometry"]["coordinates"]
-            p["_mid_lat"] = (c[0][1] + c[-1][1]) / 2
-            p["_mid_lon"] = (c[0][0] + c[-1][0]) / 2
-            sensors.setdefault(str(p["sensor_id"]), []).append(p)
+        if not p.get("sensor_id"):
+            continue
+        sid = str(p["sensor_id"])
+        if p.get("level") == "Total":
+            sensors.setdefault(sid, []).append(_midpoint(p, feat))
+            continue
+        opposite = by_edge.get(opposite_of.get(sid, ""))
+        if opposite is None:
+            print(f"{sid:<8} skipped — single-direction station with no "
+                  f"verified opposite_direction in the registry")
+            continue
+        pair = dict(opposite["properties"])
+        pair["_estimated_side"] = True          # never a measured carriageway
+        sensors.setdefault(sid, []).extend(
+            [_midpoint(p, feat), _midpoint(pair, opposite)])
 
     def edge_feats(props: dict) -> dict:
         u, v, k = map(int, props["id"].split("_"))
@@ -168,7 +218,7 @@ def main() -> None:
     OUT_PATH.parent.mkdir(exist_ok=True)
     with open(OUT_PATH, "w") as f:
         json.dump(result, f, indent=1)
-    print(f"Wrote {OUT_PATH}  ({len(result)} Total sensors)")
+    print(f"Wrote {OUT_PATH}  ({len(result)} sensors, both directions)")
 
 
 if __name__ == "__main__":
