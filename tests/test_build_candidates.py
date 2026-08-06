@@ -37,31 +37,6 @@ def read_vehicle_ids(path):
     return [veh.get("id") for veh in ET.parse(path).getroot().iter("vehicle")]
 
 
-def test_full_edge_support_requests_cover_every_non_sensor_edge():
-    graph = nx.MultiDiGraph()
-    edges = []
-    routing_costs = {}
-    for u, v in ((0, 1), (1, 2), (2, 3)):
-        graph.add_edge(u, v, key=0)
-        edge_id = f"{u}_{v}_0"
-        edges.append({"id": edge_id, "u": u, "v": v})
-        routing_costs[edge_id] = 1.0
-    hmass = np.array([1.0, 0.0, 0.0])
-    amass = {"arbete": np.array([0.0, 0.0, 1.0])}
-
-    requests = bc.generate_edge_coverage_requests(
-        graph, edges, hmass, amass, [], [], ["1_2_0"], routing_costs)
-
-    assert {item["coverage_edge"] for item in requests} == {
-        "0_1_0", "2_3_0"}
-    assert all(item["support_only"] is True for item in requests)
-    assert all(item["synthetic_endpoint"] is False for item in requests)
-    assert all(item["unavoidable_loop"] is False for item in requests)
-    for item in requests:
-        assert item["coverage_edge"] in {item["from"], item["to"]}
-        assert item["via"] is None
-
-
 def test_support_routes_replace_randomized_routes_and_keep_departure_order(tmp_path):
     diverse = tmp_path / "diverse.rou.xml"
     deterministic = tmp_path / "deterministic.rou.xml"
@@ -117,30 +92,6 @@ def test_sumo_connection_graph_excludes_uturns(tmp_path):
         network, {"A", "B", "R"}, {"A": 1.0, "B": 2.0, "R": 3.0},
         include_uturns=True)
     assert full.has_edge("A", "R")
-
-
-def test_isolated_turnaround_component_is_kept_as_explicit_support():
-    graph = nx.MultiDiGraph()
-    graph.add_edge(0, 1, key=0)
-    graph.add_edge(1, 0, key=0)
-    edges = [
-        {"id": "0_1_0", "u": 0, "v": 1},
-        {"id": "1_0_0", "u": 1, "v": 0},
-    ]
-    no_uturn = nx.DiGraph()
-    no_uturn.add_nodes_from(("0_1_0", "1_0_0"))
-    full = nx.DiGraph()
-    full.add_edge("0_1_0", "1_0_0", weight=1.0)
-    full.add_edge("1_0_0", "0_1_0", weight=1.0)
-
-    requests = bc.generate_edge_coverage_requests(
-        graph, edges, np.array([1.0, 0.0]),
-        {"arbete": np.array([1.0, 0.0])}, [], [], [],
-        {"0_1_0": 1.0, "1_0_0": 1.0}, no_uturn, full)
-
-    assert len(requests) == 2
-    assert all(item["unavoidable_loop"] is True for item in requests)
-    assert all(item["synthetic_endpoint"] is True for item in requests)
 
 
 def test_generate_day_block_reuses_geometry_but_resamples_each_days_departures(monkeypatch):

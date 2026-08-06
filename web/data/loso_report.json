@@ -10,7 +10,7 @@
   "evaluation_mode": "same_window_loso",
   "n_intervals": 96,
   "simulation_mode": "meso",
-  "candidate_pool_sha256": "9385822d7d14891086b2212b4676f5179f64b5eb449094c4d2c2e684708c738f",
+  "candidate_pool_sha256": "165892f9e140a1fdca795fd547c32f46667c67ec514cf82fd40d71a6b3a2d4cb",
   "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
   "assignment_prior_enabled": true,
   "activity_purpose_margin": "calendar_hour_day_type",
@@ -33,16 +33,16 @@
    "edges": {
     "60786979_3575001205_0": {
      "measured_total": 3191,
-     "simulated_total": 4903,
-     "ratio": 1.537,
-     "geh_ok_pct": 54.2,
+     "simulated_total": 3570,
+     "ratio": 1.119,
+     "geh_ok_pct": 87.5,
      "observed_quarters": 96
     },
     "1455801464_18241874_0": {
      "measured_total": 3216,
-     "simulated_total": 5120,
-     "ratio": 1.592,
-     "geh_ok_pct": 45.8,
+     "simulated_total": 6444,
+     "ratio": 2.003,
+     "geh_ok_pct": 20.8,
      "observed_quarters": 96
     }
    },
@@ -52,8 +52,8 @@
    "edges": {
     "60790252_60790253_0": {
      "measured_total": 2875,
-     "simulated_total": 2429,
-     "ratio": 0.845,
+     "simulated_total": 3034,
+     "ratio": 1.055,
      "geh_ok_pct": 95.8,
      "observed_quarters": 96
     }
@@ -64,9 +64,9 @@
    "edges": {
     "30420757_30421744_0": {
      "measured_total": 4820,
-     "simulated_total": 3083,
-     "ratio": 0.64,
-     "geh_ok_pct": 54.2,
+     "simulated_total": 4863,
+     "ratio": 1.009,
+     "geh_ok_pct": 70.8,
      "observed_quarters": 96
     }
    },
@@ -76,9 +76,9 @@
    "edges": {
     "26842525_26355153_0": {
      "measured_total": 3569,
-     "simulated_total": 2551,
-     "ratio": 0.715,
-     "geh_ok_pct": 58.3,
+     "simulated_total": 2489,
+     "ratio": 0.697,
+     "geh_ok_pct": 54.2,
      "observed_quarters": 95
     }
    },
@@ -88,9 +88,9 @@
    "edges": {
     "26355153_96523321_0": {
      "measured_total": 3141,
-     "simulated_total": 7881,
-     "ratio": 2.509,
-     "geh_ok_pct": 25.0,
+     "simulated_total": 7691,
+     "ratio": 2.449,
+     "geh_ok_pct": 33.3,
      "observed_quarters": 96
     }
    },
@@ -100,9 +100,9 @@
    "edges": {
     "26355153_91615277_0": {
      "measured_total": 4473,
-     "simulated_total": 11539,
-     "ratio": 2.58,
-     "geh_ok_pct": 20.8,
+     "simulated_total": 11498,
+     "ratio": 2.571,
+     "geh_ok_pct": 8.3,
      "observed_quarters": 96
     }
    },
