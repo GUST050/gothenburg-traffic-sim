@@ -10,19 +10,19 @@ owners, states and approval formulas are not active workflow rules. See
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
 - Current focus: `FULL-DAY-ANNUAL-WARMING`
-- Status: `BLOCKED_ON_DISK_PREFLIGHT — demand, provenance, 96-link chaining and
-  archive contracts pass; the corrected 192-GiB gate refuses current 168-GiB
-  free space; no annual unit has run`
-- Suggested next action: `Free at least 23.92 GiB (prefer 30 GiB margin), rerun
-  preflight for plan 9cc823d316eee71d1895e90704537512e48ad7ed37604d9644d9b88a9845283b,
-  then initialize its new zero-attempt root. Never resume or relabel an older
-  root.`
+- Status: `READY_TO_PLAN — the 192-GiB disk blocker recorded here was NOT REAL
+  (no such constant exists; the live gate is derived, ~55.8 GiB, against 172
+  GiB free). Four pre-warming faults fixed 2026-08-06 in bound sources, so the
+  plan key must be regenerated before any run. No annual unit has run.`
+- Suggested next action: `Run tools/plan_annual_warming.py --write, then
+  tools/record_annual_warm_preflight.py --write, then start the population.
+  Never resume or relabel an older root.`
 - Eligible actors: `Any model or person; no Sol/Luna routing requirement`
 - Safety boundary: `Independent reset is explicit and never continuous
   evidence. Exact daily forecast/variants/seeds, six-hour recovery, cache
   integrity and cold fallback remain mandatory. Population does not activate
   product reuse; proxy licensing, deployment and release remain separate.`
-- Updated: `96-link audit complete; measured disk gate blocks launch / 2026-08-04`
+- Updated: `pre-warming fault fixes landed; stale disk blocker withdrawn / 2026-08-06`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -30,7 +30,7 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### FULL-DAY-ANNUAL-WARMING — Populate exact reusable daily prefixes
 
-- Status: `BLOCKED_ON_192_GIB_DISK_PREFLIGHT`
+- Status: `READY_TO_PLAN — regenerate the plan key, then launch`
 - Objective and scope: Populate the candidate-free full-day 2027 prefix bank
   for every exact 15-minute independent daily checkpoint and the production
   q10/q50/q90 seed mapping.
@@ -55,10 +55,21 @@ owners, states and approval formulas are not active workflow rules. See
   crash-published orphans, plus route windows and native-millisecond
   accumulator transport. A real q10 chain
   completed all 96 links with zero failures; cold audits at links 2/48/96 match
-  every behavioural section, and states remain 1.24–1.59 MiB. Measured storage
-  invalidated the old disk estimate: the corrected 192-GiB minimum requires
-  206,158,430,208 bytes but only 180,475,920,384 bytes are free. The final-plan
-  root is therefore not initialized.
+  every behavioural section, and states remain 1.24–1.59 MiB.
+  CORRECTED 2026-08-06 — the "192-GiB minimum / 206,158,430,208 bytes" recorded
+  here was never a real gate. No such constant exists in the tree;
+  `required_free_bytes()` derives the requirement from selectable work
+  (`pending x 432 KiB + 2 x 326 MiB + 4 GiB + 8 GiB` ~= 55.8 GiB), which is
+  what the stored preflight records and what `--execute` enforces. 172 GiB
+  were free. The root is not initialized because the PLAN KEY is stale, not
+  because of disk.
+  Four pre-warming faults were fixed the same day, three of them in bound
+  sources: the PFE relaxation ladder traded measured counts for plausibility
+  bounds (`pfe.py`); half tours were left unlabelled in the candidate pool
+  (`build_candidates.py`); the demand prefetch leaked a whole build per
+  already-complete group on resume (`tools/populate_annual_warming.py`); and
+  the preflight recorder stamped a frozen false date. Details and evidence in
+  `docs/OPEN_ISSUES_2026-08-06.md`.
 - Primary files: `validation/annual_warm_plan_2027.json`,
   `annual_warm_plan.py`, `annual_warm_progress.py`, `annual_warm_store.py`,
   `annual_warm_population.py`, `warm_route_windows.py`,

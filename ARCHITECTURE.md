@@ -35,6 +35,34 @@ of this hierarchy, and its provenance is carried all the way to the map:
 Flows on unmeasured streets are the OUTPUT of level 4 — never an input
 guess. Their trustworthiness is measured (stage F), not presumed.
 
+**The hierarchy is enforced by the ORDER of the relaxation ladder** (`pfe.py`,
+`solve_interval_with_relaxation`). When an interval is infeasible something
+has to give, and which thing gives is the hierarchy in executable form:
+
+```
+RUNG_CLEAN        tol x1, bounds on     everything holds
+RUNG_NOBND_TOL1   tol x1, bounds OFF    level 3 yields first
+RUNG_RELAX_TOL2X  tol x2, bounds on     level 1 band widens only after
+RUNG_RELAX_TOL4X  tol x4, bounds on
+RUNG_RELAX_NOBND  tol x4, bounds off
+RUNG_LP_FALLBACK  exact LP backstop
+```
+
+CORRECTED 2026-08-06: the ladder used to run the two tol-widening rungs
+BEFORE it would drop a bound, and had no rung that dropped a bound at the
+unwidened band at all — so an interval infeasible only because of a level-3
+plausibility bound bought its feasibility with up to 4x the level-1
+measurement tolerance, inverting the hierarchy. Measured over 12 builds /
+6,336 interval solves: 22.6% of intervals solved at `relax_no_bounds` (tol x4
+AND bounds off) while the two tol-widening rungs rescued 0.6%.
+
+**GEH cannot police this boundary, so do not rely on it to.** The x4 band is
+±max(8, 0.20·target); at its far edge GEH peaks at 3.81 for a 400 veh/quarter
+target, and the largest count ever measured on any of the 7 measured edges in
+any quarter is 203. A build can therefore report 100% GEH<5 with a fifth of
+its intervals sitting anywhere inside a 20% band. `relaxation_summary` in
+`demand_meta.json` is the diagnostic that does show it.
+
 ## The six pipeline stages
 
 ```
@@ -188,6 +216,22 @@ numeric order or output.
     the θ entry below). E-I/I-E (one end a boundary gate) are now real,
     added via `--cross-fraction` (disclosed neutral prior, same status as
     through_fraction).
+    HALF TOURS (2026-08-06): the pairing above holds in the GENERATOR, but
+    `validate_routed_candidates`, `drop_uturn_routes` and
+    `drop_excessive_detours` each delete individual legs and none knows a
+    tour has two. Measured: 1,316 of 2,695 non-through tours (48.8%) reached
+    the delivered pool with one leg, and the loss is directional — a return
+    leg must reach an independently drawn gate AND pass a sensor, so it
+    routes more circuitously and is filtered ~1.8x more often than an
+    inbound one. The surviving leg is KEPT (the pool is a coverage support
+    set; the PFE reweights freely and never reads the pairing, and dropping
+    costs 13.9% of the pool, below the 75% supply floor) but its
+    `candidates.meta.json` record now carries `tour_partner_dropped: true`,
+    which flows into `calibrated.agents.json` so no consumer can mistake a
+    half tour for a tour. Every build prints the count and the per-leg
+    split. `--atomic-tours` drops instead, for work that does consume
+    pairing. The composition bias is measured and visible, NOT corrected —
+    correcting it means generating replacement tours.
     Purpose is sampled from RVU's split (43/33/24 %, its WEEKLY average —
     Fig.11 has no day-type qualifier), but NOT as one flat number: split
     into weekday/weekend/holiday profiles AND by hour of departure (e.g.

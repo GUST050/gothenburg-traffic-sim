@@ -66,6 +66,30 @@ discards the units already built, not just the run.
 
 Full constraint table in `docs/plans/WARMING_PLAN_2026-08-05.md`.
 
+**Still true after the 2026-08-06 fixes, and for the same reason:** three of
+the four fixes landed in bound sources (`traffic_sim/demand/pfe.py`,
+`build_candidates.py`, `tools/populate_annual_warming.py`), so the key moved
+again. Do not copy a key into a document — four different ones appear across
+`TASKS.md`, `WARMING_PLAN`, the stored preflight and reality, and none of the
+first three validates. Compute it when you need it.
+
+## 3b. NOT A BLOCKER — the recorded 192-GiB disk gate never existed
+
+**MEASURED, 2026-08-06.** `TASKS.md` carried
+`BLOCKED_ON_192_GIB_DISK_PREFLIGHT` as the active status. There is no 192 GiB
+constant in the tree. `required_free_bytes()`
+(`tools/populate_annual_warming.py:115`) derives the requirement from the work
+an invocation can select:
+
+```
+104,685 x 432 KiB + 2 x 326 MiB + 4 GiB + 8 GiB  =  ~55.8 GiB
+```
+
+The stored preflight agrees (`minimum_free_bytes = 59,877,867,520`), and 172
+GiB were free. The flat whole-year threshold this superseded was retired when
+archives began being pruned as their chains complete. **Warming was never
+blocked on disk.** Corrected in `TASKS.md` and `WARMING_PLAN`.
+
 ## 4. v9 held-out campaign: failed one check of seven
 
 **MEASURED** · `runs/closure-proxy-validation/43e040ca…/report.json`
@@ -143,6 +167,42 @@ carriageways, measured edges resolved to ~0.5 and a measured 50 would have been
 calibrated as **25 — silently, at 100% GEH against the halved target.** It now
 splits genuine two-way totals only.
 
+## 6b. FIXED — the relaxation ladder bought feasibility with measured counts
+
+**MEASURED, 2026-08-06** · 12 demand builds, 6,336 interval solves.
+
+`solve_interval_with_relaxation`'s ladder ran (tol ×2, bounds kept) → (tol ×4,
+bounds kept) → (tol ×4, bounds dropped). There was **no rung that dropped a
+plausibility bound at the unwidened band at all**, so an interval infeasible
+only because of a Level-2 bound paid for its feasibility with up to 4× the
+measurement tolerance — the exact trade the function's own docstring says must
+never happen.
+
+```
+clean             4861   76.7%
+relax_tol2x         22    0.3%
+relax_tol4x         19    0.3%
+relax_no_bounds   1434   22.6%   <- tol x4 AND bounds off
+```
+
+The two tol-widening rungs rescued 0.6% of intervals while 22.6% took a
+widened band they may never have needed.
+
+**And GEH<5 structurally cannot see it.** `tol = max(2.0, 0.05·target)·mult`,
+so ×4 permits ±max(8, 0.20·target). At the far edge of that band GEH is 2.14
+at target 10, 1.91 at 100, 3.81 at 400; breaching GEH 5 needs a target above
+~688 veh/quarter. **The largest count ever measured on any of the 7 measured
+edges in any quarter is 203.** So "100% GEH<5" is guaranteed to pass wherever
+in the relaxed band the solution lands.
+
+**Fix:** `RUNG_NOBND_TOL1` inserted as the FIRST relaxation — bounds dropped,
+band untouched. The tol-widening rungs follow and are now reached only when
+dropping the plausibility layer was not by itself enough. The
+`allow_structural_relaxation=False` path skips it with `continue` (was
+`break`), so those callers see the pre-fix ladder exactly. The build warning
+no longer says the flat "sensor constraints were retained" — it names the
+widened-band interval count and multiplier when there is one.
+
 ## 7. Pool and picker
 
 **DOCUMENTED** · `docs/reviews/PIPELINE_FAULT_AUDIT_2026-08-06.md` and
@@ -167,28 +227,148 @@ demand there is no route choice at all, so entropy maximisation — the whole
 justification for picking one solution in an underdetermined problem — is
 passive there.
 
+**FIXED 2026-08-06 — half tours were invisible.** `drop_uturn_routes`,
+`drop_excessive_detours` and `validate_routed_candidates` each delete
+individual `<vehicle>` legs and none of them knows a tour has two, so nothing
+re-checked pairing afterwards. Measured on the 2025-09-16 pool: **1,316 of
+2,695 non-through tours (48.8%) were half tours**, and they reached the
+simulation — 4,682 of 21,812 published vehicles (**21.5%**; 28.7% of tour
+vehicles) were a leg whose partner had been deleted, in all three variants.
+
+The loss is DIRECTIONAL, which is what makes it a modelling issue rather than
+bookkeeping: a return leg must reach an independently drawn gate *and* pass a
+sensor, so it routes more circuitously and the loop/detour filters catch it
+more often. Inbound legs survived ~1.8× more often than outbound ones (E-I
+118 vs 63, I-E 141 vs 82) — a net **+114 legs entering the canvas and never
+leaving**.
+
+Telling detail: `_resample_reused_template_tours` already asserts "one
+complete, single-purpose paired tour", but it runs on generator output, before
+these filters. The invariant was checked exactly where it held and never where
+it broke.
+
+**What was NOT done, and why.** Dropping the tour atomically was implemented
+first and is available as `--atomic-tours`. It is not the default: it removes
+1,316 tours / **13.9% of the pool**, which takes delivered supply to 68.2%,
+**under the 75% `MIN_ROUTED_CANDIDATE_FRACTION` floor** — the build fails
+outright. Lowering that floor to accommodate it would be weakening a gate to
+make a result pass. More importantly the pool is a *coverage support set*: the
+PFE reweights route flows freely and never reads the pairing, and the pool's
+own design note says its value "lies in covering distinct (entry, exit) pairs,
+not in matching their frequencies". Deleting 1,316 valid distinct route shapes
+to preserve an invariant nothing consumes spends exactly what the pool is for.
+
+The default is therefore `mark_orphaned_tour_legs`: the leg stays as valid
+standalone support, its record gains `tour_partner_dropped: true` so the
+provenance that flows into `calibrated.agents.json` stops claiming a tour that
+has one half, and every build prints the count and the per-leg directional
+split. **OPEN:** the composition bias itself is now measured and visible but
+not corrected. Correcting it means generating replacement tours for filtered
+legs, which is a generator change, not a filter change.
+
 **NOT a fault, checked:** exact deduplication already happens at load
 (`pfe.py:1508`), and path-size logit (Ben-Akiva & Bierlaire 1999) is already
 applied as the IPF seed prior (`pfe.py:126`). I recommended both before
 discovering they existed — I had measured the on-disk pool, not the solver's
 variable set.
 
-## 8. Test suite: 156-158 failures, and why they are not fixed
+## 7b. FIXED — the demand prefetch leaked a whole build per resumed group
 
-**MEASURED.** 32 of 35 frozen artifacts have drifted from the live tree.
-`metrics.py` and `monthly_sumo.py` each break 20 of them; `run_scenario.py`
-breaks 18. The failures cascade: sources drift → `verify_live_inputs()` refuses
-→ the diagnostic never runs → downstream tests hit `FileNotFoundError`. So the
-count overstates the number of distinct causes.
+**MEASURED by inspection, 2026-08-06** ·
+`tools/populate_annual_warming.py:735-791`.
+
+`_start_next_build(i)` submitted a demand build for group *i+1*
+unconditionally. When that group turned out to be already complete, the loop
+short-circuits it with `continue`, which skips **both** `_archive_record_for`
+(so the future is never popped) and `_prune_demand_archive` (so the archive is
+never released).
+
+On a resumed run — the normal case, since completed units are durable — that
+is a full ~332 s demand solve producing an archive nothing consumes, left
+resident at 326 MiB. It also silently breaks the
+`CONCURRENT_DEMAND_ARCHIVES = 2` premise `required_free_bytes` is derived from,
+while `_runtime_disk_guard` only enforces a flat 8 GiB reserve.
+
+**Fix:** never prefetch for a group with no selectable unit, and reconcile
+(wait for, then prune) any prefetch whose group turns out to need nothing —
+which still happens if a sibling process finishes that group's last unit in
+between. Regression test asserts a resumed run issues zero demand builds.
+
+## 7c. FIXED — the preflight recorder stamped a frozen false date
+
+**2026-08-06** · `tools/record_annual_warm_preflight.py`.
+
+`--write` hardcoded `"recorded_date": "2026-08-04"` and `validate_report`
+required exactly that, so a record written on any other day certified itself
+as having been taken on 2026-08-04. In a repository whose whole discipline is
+seals refusing to certify stale evidence, a self-falsifying timestamp is the
+one field that must not be frozen. It now records the real date and validates
+that the field is an ISO date.
+
+`main()` also hardcoded `state_workers=3` with the validator rejecting
+anything else, so a record for more workers was unobtainable without a code
+edit — even though `approved_seed_workers()` returns **8** on this host. It
+now takes `--state-workers` and requires only that the benchmark approves it,
+which is the rule `production_preflight()` already enforces at run time.
+
+**Worth knowing:** nothing on the execute path reads this record at all. Its
+only consumer is `tools/freeze_annual_warm_readiness.py`. `WARMING_PLAN` §3's
+claim that raising the worker count "needs a new preflight record" was never
+enforced; corrected there.
+
+## 8. Test suite: 156 failures, and why they are not fixed
+
+**MEASURED, full runs 2026-08-06, before and after the day's fixes:**
+
+```
+before   158 failed, 3727 passed, 21 skipped   (20m31s)
+after    156 failed, 3745 passed, 23 skipped   (20m41s)
+```
+
+The −2 are the only two failures that were **not** seal drift, both verified
+green directly afterwards: `test_scenario.py` (see the end of this section)
+and `test_annual_warm_readiness.py`, which was failing because the tracked
+plan differed from live sources and is fixed by regenerating the plan. The
++18 passing are the new regression tests. Every remaining failure is
+frozen-contract seal drift.
+
+**42 of 43** validation artifacts that bind source hashes have drifted from
+the live tree (reproducible statically in seconds, no test run needed).
+Drivers, by number of artifacts broken:
+
+```
+20  monthly_search.py      20  metrics.py      20  monthly_sumo.py
+20  monthly_warm_state.py  19  closure_calendar.py   19  run_scenario.py (+13)
+18  warm_state_cache.py    18  warm_state_boundary.py
+```
+
+`monthly_search.py` and `monthly_warm_state.py` are equal-largest drivers and
+were not previously named. The failures cascade: sources drift →
+`verify_live_inputs()` refuses → the diagnostic never runs → downstream tests
+hit `FileNotFoundError`. So the count overstates the number of distinct causes.
 
 They are the seals doing their job — refusing to certify old evidence against
 changed code. Fixing them means re-freezing evidence to match code, which this
-project's discipline forbids doing casually. Down from 259 at session start.
+project's discipline forbids doing casually.
 
-`test_heldout_v6_freeze::test_freeze_preview_reports_drift_without_rewriting_history`
-is structural and will break again on every future campaign freeze: v6 excludes
-prior campaigns' edges, so freezing v7/v8/v9 changed what a v6 re-run selects.
-It needs a design decision, not a patch.
+**The structural part, which is the real finding:** the seals are versioned and
+never retired. `monthly_warm_state_manifest_v1 … v16` all still exist, all
+still drift (12-20 bound sources each), with 16 matching
+`test_monthly_warm_state_v*_freeze.py` modules — 157 of the 158 failures are in
+freeze/seal modules. So the count measures **accumulated frozen history, not
+breakage, and it grows monotonically with every campaign freeze**. v10 will add
+roughly another 14. The design decision `test_heldout_v6_freeze` needs is the
+whole versioned-manifest family's decision, not one test's: when is a superseded
+vN seal retired?
+
+**FIXED, the one failure that was not seal drift:**
+`test_scenario.py::test_index_lists_existing_files`. `clear_stale_scenarios()`
+deliberately leaves a VALID EMPTY `index.json` after a demand rebuild, but the
+`needs_scenarios` guard only tested `INDEX_PATH.exists()`, so that documented
+state slipped past the skip and then failed an assertion that scenarios exist.
+The guard now skips on an empty manifest, and a new unconditional test asserts
+the empty manifest is still structurally valid — so relaxing the guard does not
+also stop anyone noticing a corrupt one.
 
 ## 9. Mistakes made this session — so they are not repeated
 

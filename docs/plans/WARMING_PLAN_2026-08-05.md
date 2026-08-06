@@ -1,6 +1,7 @@
 # Warming — plan and operations card
 
-**Date:** 2026-08-05 · **Status:** population RUNNING. Supersedes Stage 5 of
+**Date:** 2026-08-05, corrected 2026-08-06 · **Status:** NOT RUNNING, and no
+annual unit has ever run. Supersedes Stage 5 of
 `CLOSURE_INTEGRITY_PLAN_2026-08-05.md`, which was the warming half buried in a
 closure plan.
 
@@ -10,27 +11,61 @@ Delete or archive this file when the run is finished and reconciled.
 
 ## 0. What is running
 
-The 2027 annual warm population, started 2026-08-05.
+**Nothing.** This section said "population RUNNING" from 2026-08-05 until it
+was corrected on 2026-08-06. It was never true: the log named below
+(`runs/annual-warm-logs/2027-20260805-234645.log`) stops after the first
+demand build for the 2027-01-01 window, and the progress store holds no
+completed unit.
+
+The keys quoted here were also stale in every direction. For the record, four
+different plan keys have appeared in project documents:
+
+| source | key |
+| --- | --- |
+| this file, before the correction | `8c1c681b…` |
+| this file, "was" | `de071336…` |
+| `TASKS.md` ACTIVE_TASK | `9cc823d3…` |
+| `validation/annual_warm_preflight_v1.json` | `de071336…` |
+| **actually current on 2026-08-06** | `8540680061febd86…` |
+
+None of the first four validates. Do not copy a plan key into a document —
+compute it (`python3 tools/plan_annual_warming.py --verify`) at the moment
+you need it. Every source edit invalidates it again, and the fixes landed on
+2026-08-06 touched `pfe.py`, `build_candidates.py` and
+`tools/populate_annual_warming.py`, all three of which are bound sources.
+
+The intended invocation, once the plan is regenerated:
 
 ```bash
-python3 tools/populate_annual_warming.py --execute \
-  --state-workers 3 --plan-key 8c1c681b63f08c132dc084233460670ae09b52b3076fa236cb145f3f999cd758
+python3 tools/plan_annual_warming.py --write
+python3 tools/populate_annual_warming.py --execute --state-workers 3
 ```
-
-Log path is in `runs/annual-warm-logs/latest-path.txt`. Root is
-`runs/annual-warm-2027/8c1c681b.../`.
 
 | | |
 | --- | --- |
-| plan key | `8c1c681b63f08c13…` (was `de071336ab0e0c5d…`) |
 | state requests | 104,685 (34,895 checkpoints × 3 variants) |
 | demand builds | 367 three-day windows over 365 days |
-| free disk at start | 155.6 GB against a 59.9 GB floor |
-| approved state workers | 8 (running at 3 — see §3) |
+| disk floor | ~55.8 GiB, DERIVED from selectable work (see §3a) |
+| approved state workers | 8 (`approved_seed_workers()`, measured on this host) |
 
 Everything finished is durable (SQLite + content-addressed store). Completed
 units are skipped on resume; `pending`, `running` and `failed` are re-run. The
 job is safe to interrupt.
+
+### 3a. The disk gate is derived, not a constant
+
+`TASKS.md` recorded the run as `BLOCKED_ON_192_GIB_DISK_PREFLIGHT`. There is
+no 192 GiB constant anywhere in the tree, and there has not been since
+`required_free_bytes()` replaced the flat whole-year threshold. The live gate
+is
+
+```
+pending_units x 432 KiB + 2 x 326 MiB + 4 GiB + 8 GiB  ~=  55.8 GiB
+```
+
+which the stored preflight agrees with (`minimum_free_bytes =
+59,877,867,520`). Free space on 2026-08-06 was 172 GiB. **The recorded
+blocker was not real.**
 
 ---
 
@@ -99,8 +134,22 @@ against 584 s.
 
 ## 3. Why 3 workers and not 8
 
-`approved_seed_workers()` permits 8 and `record_annual_warm_preflight.py:68`
-hard-requires exactly 3, so raising it needs a new preflight record.
+`approved_seed_workers()` permits 8. This section used to add that
+`record_annual_warm_preflight.py:68` "hard-requires exactly 3, so raising it
+needs a new preflight record" — that was wrong twice over, and both halves
+were fixed on 2026-08-06:
+
+- **Nothing on the execute path reads that record.** Its only consumer is
+  `tools/freeze_annual_warm_readiness.py`. `--execute` re-derives everything
+  through `production_preflight()`, whose worker gate is
+  `approved_seed_workers()` alone. So the record never constrained the run.
+- **The tool could not have recorded another value anyway.** `main()`
+  hardcoded `state_workers=3` and the validator rejected anything else, so
+  the "new preflight record" the sentence asked for was unobtainable without
+  a code edit. It now takes `--state-workers` and validates it against the
+  approved count. Its `recorded_date` was likewise the frozen literal
+  `2026-08-04`, written *and* required — a record made on any other day
+  certified itself as two days old. It now records the real date.
 
 More importantly, raising it alone would have done nothing: within one demand
 archive only 3 units are ever dependency-ready, one per q10/q50/q90 chain,
