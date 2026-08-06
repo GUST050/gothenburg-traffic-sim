@@ -314056,7 +314056,7 @@
       "work_date": "2027-12-31"
     }
   ],
-  "content_key": "ce1b9ad5d289553654773dd04e788e1eadb7bc4ed9026436734b2c1e65d90261",
+  "content_key": "118ce400f47f4b1939d0a67137c96c5215acbdc650a4501b10f47360671237d0",
   "coverage": {
     "calendar_days": 365,
     "checkpoint_requests": 34895,
@@ -318676,9 +318676,9 @@
       "sha256": "296065141735bea302f72bd9406e11ff84cb165613f61b3f6dfe46606561d791"
     },
     "metrics_source": {
-      "bytes": 10802,
+      "bytes": 12336,
       "path": "traffic_sim/simulation/metrics.py",
-      "sha256": "3edf71b82933601b5084229eac0ca63f8bd83a87fef946e23cb14b572d120134"
+      "sha256": "7f8eac6f834de7f5c22b4b47bfa6a36a4e3596b7fa3f40dbd2e7a256de11a71d"
     },
     "monthly_demand_source": {
       "bytes": 38372,
@@ -318716,9 +318716,9 @@
       "sha256": "5402430b6bcf92ef41e916b2d3000f5fdbf3f7680596a289248469e694a68356"
     },
     "scenario_runner_source": {
-      "bytes": 148116,
+      "bytes": 148925,
       "path": "run_scenario.py",
-      "sha256": "1ab1e996d9037a0782aef9ec21c19b1436e27050f101166e9625c9e30dea34b5"
+      "sha256": "a86779ab33f687bfd5c2cd35a3b9b7d53f7cc4df5a9db93d97483471bb7a8e9a"
     },
     "storage_pilot_tool_source": {
       "bytes": 7869,
