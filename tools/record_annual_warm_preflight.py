@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -63,10 +64,29 @@ def validate_report(report: Mapping[str, Any], plan: Mapping[str, Any]) -> dict:
             or report["status"] != "pass" \
             or report["plan_content_key"] != plan["content_key"]:
         raise ValueError("annual warm preflight report identity differs")
-    if report["recorded_date"] != "2026-08-04":
-        raise ValueError("annual warm preflight date differs")
-    if report["state_workers"] != 3 or report["approved_state_workers"] < 3:
-        raise ValueError("annual warm preflight lacks three approved workers")
+    # The date is provenance, not a gate: it records WHEN this environment was
+    # measured. It used to be the frozen literal "2026-08-04", written by
+    # --write and required by --verify, so a record made on any other day
+    # certified itself as having been taken on 2026-08-04. In a repository
+    # whose whole discipline is seals refusing to certify stale evidence, a
+    # self-falsifying timestamp is the one field that must not be frozen.
+    recorded_date = report["recorded_date"]
+    try:
+        date.fromisoformat(str(recorded_date))
+    except (TypeError, ValueError):
+        raise ValueError("annual warm preflight date is not an ISO date")
+    # The worker count is a real gate, but it is not the constant 3. Record
+    # whatever was measured and require only that the benchmark approves it,
+    # which is the same rule production_preflight() enforces at run time.
+    state_workers = report["state_workers"]
+    approved = report["approved_state_workers"]
+    if isinstance(state_workers, bool) or not isinstance(state_workers, int) \
+            or state_workers < 1:
+        raise ValueError("annual warm preflight state workers are malformed")
+    if isinstance(approved, bool) or not isinstance(approved, int) \
+            or approved < state_workers:
+        raise ValueError(
+            "annual warm preflight records more workers than are approved")
     if report["localhost_ipv4_tcp_bind"] is not True:
         raise ValueError("annual warm preflight localhost bind did not pass")
     # The gate is derived from the work the invocation could select, so the
@@ -100,15 +120,25 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--write", action="store_true")
     action.add_argument("--verify", action="store_true")
     parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument(
+        "--state-workers", type=int, default=3,
+        help=(
+            "Concurrent SUMO state workers to record. Must not exceed "
+            "approved_seed_workers(); production_preflight() enforces that. "
+            "Was hardcoded to 3, which made a record for any other count "
+            "impossible to produce even after the benchmark approved it."
+        ),
+    )
     args = parser.parse_args(argv)
     output = args.output if args.output.is_absolute() else ROOT / args.output
     plan = build_default_plan()
     if args.write:
-        raw = production_preflight(plan, _root_for(plan, None), state_workers=3)
+        raw = production_preflight(
+            plan, _root_for(plan, None), state_workers=args.state_workers)
         report: dict[str, Any] = {
             "schema": "annual_warm_preflight_v1",
             "status": "pass",
-            "recorded_date": "2026-08-04",
+            "recorded_date": date.today().isoformat(),
             "plan_content_key": plan["content_key"],
             "sumo_version": raw["sumo_version"],
             "sumo_home": raw["sumo_home"],

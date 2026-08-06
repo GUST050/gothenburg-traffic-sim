@@ -1003,6 +1003,45 @@ def test_the_next_demand_build_starts_while_the_current_units_run(
         "units are still running; it started only after they finished")
 
 
+class TestPrefetchIsNotIssuedForFinishedGroups:
+    """REGRESSION (2026-08-06): the prefetch leaked a whole demand build.
+
+    `_start_next_build` submitted group i+1 unconditionally. When that group
+    turns out to need nothing, the population loop short-circuits it with
+    `continue`, which skips BOTH `_archive_record_for` (so the pending future
+    is never popped) and `_prune_demand_archive` (so the archive is never
+    released). The result is a full ~332 s demand solve producing an archive
+    nothing consumes, left resident at 326 MiB — and the
+    CONCURRENT_DEMAND_ARCHIVES = 2 premise `required_free_bytes` is derived
+    from is silently false, while the runtime guard only enforces a flat
+    8 GiB reserve.
+    """
+
+    class _Progress:
+        def __init__(self, pending):
+            self.pending = pending
+            self.asked = []
+
+        def selectable(self, *, limit=None, demand_build_key=None):
+            self.asked.append((demand_build_key, limit))
+            return ({"unit_id": "u"},) if demand_build_key in self.pending else ()
+
+    def test_a_group_with_work_is_still_prefetched(self):
+        progress = self._Progress({"build-b"})
+        assert tool._should_prefetch(progress, "build-b") is True
+
+    def test_a_finished_group_is_never_prefetched(self):
+        progress = self._Progress({"build-b"})
+        assert tool._should_prefetch(progress, "build-a") is False
+
+    def test_the_check_is_bounded_to_one_row(self):
+        # The guard runs once per group over 367 groups; it must not pull the
+        # whole selectable set back to answer a yes/no question.
+        progress = self._Progress({"build-b"})
+        tool._should_prefetch(progress, "build-b")
+        assert progress.asked == [("build-b", 1)]
+
+
 def test_prefetch_can_be_switched_off_for_measurement(plan, tmp_path, monkeypatch):
     """--no-prefetch-demand restores strict phase ordering so the two
     schedules can be A/B'd on one machine, and is the escape hatch when a

@@ -269,6 +269,18 @@ def _free_bytes_without_create(root: Path) -> int:
     return shutil.disk_usage(disk_probe).free
 
 
+def _should_prefetch(progress: AnnualWarmProgressStore, demand_key: str) -> bool:
+    """Whether a group still has work worth building its archive for.
+
+    The prefetch used to be unconditional. A group with nothing left to run
+    is short-circuited by the population loop's `continue`, which skips both
+    the pop of the pending future and the prune -- so an unconditional
+    prefetch spent a full demand solve on an archive nothing consumed and
+    left it resident. On a resumed run that is the common case.
+    """
+    return bool(progress.selectable(demand_build_key=demand_key, limit=1))
+
+
 def _prune_demand_archive(
     archive: Path, demand_key: str, progress: AnnualWarmProgressStore
 ) -> bool:
@@ -738,11 +750,29 @@ def execute_population(
         following = group_order[index + 1]
         if following in pending_archives:
             return
+        if not _should_prefetch(progress, following):
+            return
         # A prefetch leaves two archives resident, so charge the guard before
         # committing to it rather than discovering the shortfall mid-build.
         _runtime_disk_guard(root)
         pending_archives[following] = build_pool.submit(
             _resolve_demand_archive, demands[following])
+
+    def _reconcile_unused_prefetch(demand_key: str) -> None:
+        """Settle a prefetch whose group turned out to need nothing.
+
+        The selectable check above closes the common case, but a sibling
+        process can finish a group's last unit between the prefetch and this
+        group being reached. Waiting on the future here keeps the archive
+        accounted for, and pruning it restores the two-resident-archive
+        premise that `required_free_bytes` is derived from.
+        """
+        started = pending_archives.pop(demand_key, None)
+        if started is None:
+            return
+        record = started.result()
+        if not keep_demand_archives:
+            _prune_demand_archive(Path(record["archive"]), demand_key, progress)
 
     # build_pool is entered first and so exits LAST: an in-flight prefetch is
     # always waited out, even when the unit executor raises.
@@ -782,6 +812,7 @@ def execute_population(
                     progress.mark_running(unit["unit_id"])
                 progress.mark_succeeded(unit["unit_id"], artifact["content_key"])
             if not remaining:
+                _reconcile_unused_prefetch(demand_key)
                 continue
             _runtime_disk_guard(root)
             archive_record = _archive_record_for(demand_key)
