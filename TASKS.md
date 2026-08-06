@@ -10,12 +10,14 @@ owners, states and approval formulas are not active workflow rules. See
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
 - Current focus: `FULL-DAY-ANNUAL-WARMING`
-- Status: `READY_TO_RUN — the blocker that killed the 2026-08-06 21:12 launch
-  is FIXED and verified end to end on the exact window that failed. Plan
-  regenerated, preflight passing, a fresh root initialized wholly pending
-  (104,685). No annual unit has run yet.`
-- Suggested next action: `Launch under caffeinate so a sleeping Mac cannot
-  corrupt the wall-clock measurement:
+- Status: `RUNNING since 2026-08-06 23:46, under caffeinate. First units ever
+  banked: 45 succeeded / 0 failed within the first few minutes. THREE separate
+  faults had to be fixed to get here (32a883f, e0fbeaf, 8a6e463) — the run had
+  never reached a single unit before.`
+- Suggested next action: `Watch it. Check with
+  tools/populate_annual_warming.py --status --state-workers 3. If it stops,
+  resume with the SAME --execute command: completed units are durable and
+  skipped, running/failed retry. Relaunch recipe:
   KEY=$(python3 -c "import json;print(json.load(open('validation/annual_warm_plan_2027.json'))['content_key'])")
   nohup python3 tools/populate_annual_warming.py --execute --state-workers 3 --plan-key $KEY > runs/annual-warm-logs/2027-$(date +%Y%m%d-%H%M%S).log 2>&1 &
   caffeinate -i -w <pid>
