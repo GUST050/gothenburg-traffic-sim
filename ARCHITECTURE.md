@@ -40,28 +40,59 @@ guess. Their trustworthiness is measured (stage F), not presumed.
 has to give, and which thing gives is the hierarchy in executable form:
 
 ```
-RUNG_CLEAN        tol x1, bounds on     everything holds
-RUNG_NOBND_TOL1   tol x1, bounds OFF    level 3 yields first
-RUNG_RELAX_TOL2X  tol x2, bounds on     level 1 band widens only after
-RUNG_RELAX_TOL4X  tol x4, bounds on
-RUNG_RELAX_NOBND  tol x4, bounds off
-RUNG_LP_FALLBACK  exact LP backstop
+RUNG_CLEAN             tol x1, everything on      everything holds
+RUNG_NOBND_TOL1        tol x1, bounds OFF         level-2 bounds yield first
+RUNG_NOQUOTA_TOL1      tol x1, + quotas OFF       then the purpose mix
+RUNG_NOPRIOR_TOL1      tol x1, + priors OFF       then the level-3 priors
+RUNG_LP_FALLBACK       tol x1, complete LP        IPF is not a completeness proof
+RUNG_RELAX_TOL2X       tol x2, bounds on          the measured band widens
+RUNG_RELAX_TOL4X       tol x4, bounds on          only after ALL of the above
+RUNG_RELAX_NOBND       tol x4, bounds off
 ```
 
-CORRECTED 2026-08-06: the ladder used to run the two tol-widening rungs
-BEFORE it would drop a bound, and had no rung that dropped a bound at the
-unwidened band at all — so an interval infeasible only because of a level-3
-plausibility bound bought its feasibility with up to 4x the level-1
-measurement tolerance, inverting the hierarchy. Measured over 12 builds /
-6,336 interval solves: 22.6% of intervals solved at `relax_no_bounds` (tol x4
-AND bounds off) while the two tol-widening rungs rescued 0.6%.
+The invariant, stated once: **every non-measurement layer is surrendered
+before the measurement band moves by one unit.**
 
-**GEH cannot police this boundary, so do not rely on it to.** The x4 band is
-±max(8, 0.20·target); at its far edge GEH peaks at 3.81 for a 400 veh/quarter
-target, and the largest count ever measured on any of the 7 measured edges in
-any quarter is 203. A build can therefore report 100% GEH<5 with a fifth of
-its intervals sitting anywhere inside a 20% band. `relaxation_summary` in
-`demand_meta.json` is the diagnostic that does show it.
+CORRECTED 2026-08-06, three times in one day, each the same mistake in a
+different layer — a constraint that stayed active at *every* rung, so when it
+conflicted with a measurement the MEASUREMENT gave way:
+
+1. **Level-2 bounds.** The ladder ran both tol-widening rungs before it would
+   drop a bound, and had no rung dropping a bound at the unwidened band at
+   all. Measured over 12 builds / 6,336 solves: 22.6% of intervals landed on
+   `relax_no_bounds` (tol x4 AND bounds off) while the tol-widening rungs
+   rescued 0.6%.
+2. **Purpose quotas** (`required_groups`) — same shape, fixed by
+   `RUNG_NOQUOTA_TOL1`.
+3. **Level-3 priors** — the one that actually caused the weekend widened
+   bands, fixed by `RUNG_NOPRIOR_TOL1`. On a real 2027-05-01 forecast build
+   the opposite-carriageway priors at node 26355153 held two measured edges
+   2-7 vehicles below target at a stable fixed point; dropping the layer
+   recovered 12 of 12 intervals exactly. See `docs/OPEN_ISSUES_2026-08-06.md`
+   section 6c.
+
+`RUNG_LP_FALLBACK` also **moved above** the widening rungs. IPF is an
+iterative scheme with no completeness guarantee, so its failure is not
+evidence that no solution exists — the LP is what decides that, and while it
+sat at the bottom the ladder could widen a band with an exact-band solution
+still reachable. Moving it adds no capability (the position it left is
+unreachable from anywhere the moved copy did not already run); it makes the
+contract enforceable instead of aspirational.
+
+**Two things make violations of this invisible, so do not rely on either.**
+- **GEH cannot police the boundary.** The x4 band is ±max(8, 0.20·target); at
+  its far edge GEH peaks at 3.81 for a 400 veh/quarter target, and the largest
+  count ever measured on any of the 7 measured edges in any quarter is 203. A
+  build can report 100% GEH<5 with a fifth of its intervals anywhere inside a
+  20% band.
+- **`tol_mult` never enters the IPF iteration.** It is read only by
+  `_check_entropy_solution`, so a widening rung returns a bit-identical vector
+  to its unwidened counterpart and merely judges it by a looser ruler. A
+  widened band is therefore *never* evidence about the route pool — reading it
+  as such is what produced the wrong diagnosis in 6c.
+
+`relaxation_summary` in `demand_meta.json` is the diagnostic that does show
+all of this, and `warn_widened_measurement_band` reports it on every build.
 
 ## The six pipeline stages
 

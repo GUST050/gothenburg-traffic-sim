@@ -2419,6 +2419,21 @@ def blend_day_shape(real: np.ndarray, fallback: np.ndarray,
 # TOL1), 11 of 96 weekend quarters were STILL infeasible at the exact band --
 # the pool simply could not span the target vector there.
 #
+# CORRECTED 2026-08-06: that last sentence was wrong, and the correction is
+# why POOL_DEPARTURE_UNIFORM_FLOOR staying at 0.0 was the right call for a
+# reason other than the measured one. The pool DOES span the target vector --
+# an LP over the same shapes finds a nonnegative route-flow vector inside the
+# UNWIDENED band for every one of those quarters. What was still infeasible
+# was RUNG_NOQUOTA_TOL1 specifically, and only because it kept handing the
+# solver the Level-3 PRIORS, which were holding two measured edges off target.
+# "IPF returned None" is not "no solution exists"; IPF is iterative and has no
+# completeness guarantee. Fixed by RUNG_NOPRIOR_TOL1 plus moving the complete
+# LP above the widening rungs -- see traffic_sim/demand/pfe.py's RUNG_* block
+# and docs/OPEN_ISSUES_2026-08-06.md section 6c.
+#
+# The sparsity measured above is real and the reasoning below still stands on
+# its own terms; it just was not what caused those quarters to relax.
+#
 # This costs nothing behaviourally, and that is the crucial point: the pool is
 # a SUPPORT SET, and a candidate is a possible route, not a vehicle. The PFE
 # assigns volume from the measured counts, so adding shapes to a sparse hour
