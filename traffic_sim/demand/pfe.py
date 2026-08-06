@@ -1050,23 +1050,23 @@ def solve_interval_with_relaxation(
 
     # Stage 1 — give up every NON-measurement constraint first, in increasing
     # order of what it costs, with the measured band left exactly as declared.
-    # `continue`, not `break`: these rungs are no longer last, so a caller that
-    # forbids structural relaxation must skip them and keep descending to the
-    # bounds-preserving widening rungs below. With all of stage 1 skipped such
-    # a caller sees exactly the pre-2026-08-06 ladder.
-    for rung, (use_required, use_priors) in zip(
-        (RUNG_NOBND_TOL1, RUNG_NOQUOTA_TOL1, RUNG_NOPRIOR_TOL1),
-        ((True, True), (False, True), (False, False)),
-    ):
-        if not allow_structural_relaxation:
-            continue
-        sol = solve_interval_entropy(
-            shapes, targets, {}, priors if use_priors else {},
-            tol_mult=1.0, route_cost=route_cost,
-            groups=active_groups(False, use_required),
-            touch_index=touch_index)
-        if sol is not None:
-            return sol, rung
+    # Every rung here drops the Level-2 bounds, so a caller that forbids
+    # structural relaxation skips the stage WHOLE and carries on to the
+    # bounds-preserving widening rungs below — which is the pre-2026-08-06
+    # ladder exactly. It must not stop the descent (the reason the old
+    # single-loop form had to `continue` rather than `break`).
+    if allow_structural_relaxation:
+        for rung, (use_required, use_priors) in zip(
+            (RUNG_NOBND_TOL1, RUNG_NOQUOTA_TOL1, RUNG_NOPRIOR_TOL1),
+            ((True, True), (False, True), (False, False)),
+        ):
+            sol = solve_interval_entropy(
+                shapes, targets, {}, priors if use_priors else {},
+                tol_mult=1.0, route_cost=route_cost,
+                groups=active_groups(False, use_required),
+                touch_index=touch_index)
+            if sol is not None:
+                return sol, rung
 
     # Stage 2 — the completeness backstop, still at the UNWIDENED band. IPF is
     # an iterative scheme with no completeness guarantee, so its failure is
