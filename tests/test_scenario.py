@@ -24,8 +24,30 @@ SCEN_DIR   = Path(__file__).parent.parent / "web" / "data" / "scenarios"
 INDEX_PATH = SCEN_DIR / "index.json"
 GEO_PATH   = Path(__file__).parent.parent / "web" / "data" / "network.geojson"
 
+
+def _built_scenarios() -> list:
+    """Scenarios currently on disk, or [] when none have been built.
+
+    `clear_stale_scenarios()` deliberately leaves a VALID EMPTY manifest
+    after a demand rebuild rather than deleting index.json — a CLI-only
+    `make demand` has no guarantee `run_scenario.py` runs next, and the web
+    app needs a parseable manifest either way. The guard below used to test
+    only `INDEX_PATH.exists()`, so that documented state slipped past it and
+    then failed the "index.json has no scenarios" assertion. An empty
+    manifest means the scenarios have not been built, which is a skip.
+    """
+    if not INDEX_PATH.exists():
+        return []
+    try:
+        with open(INDEX_PATH) as f:
+            return json.load(f).get("scenarios") or []
+    except (OSError, ValueError):
+        return []
+
+
 needs_scenarios = pytest.mark.skipif(
-    not INDEX_PATH.exists(), reason="no scenarios built — run run_scenario.py"
+    not _built_scenarios(),
+    reason="no scenarios built — run run_scenario.py",
 )
 
 
@@ -542,6 +564,20 @@ class TestAtomicWriteJson:
         path = tmp_path / "out.json"
         run_scenario.atomic_write_json(path, {"a": 1}, indent=2)
         assert "\n" in path.read_text()   # indent=2 forces multi-line output
+
+
+@pytest.mark.skipif(not INDEX_PATH.exists(),
+                    reason="no manifest at all — run_scenario.py never ran")
+def test_index_is_a_valid_manifest_even_when_empty():
+    # The EMPTY case is a real contract, not an absence of one: a demand
+    # rebuild wipes the scenarios and clear_stale_scenarios() must leave a
+    # manifest the web app can still parse. Checked unconditionally so that
+    # relaxing needs_scenarios to skip on an empty manifest does not also
+    # stop anyone from noticing a corrupt or malformed one.
+    with open(INDEX_PATH) as f:
+        manifest = json.load(f)
+    assert isinstance(manifest, dict)
+    assert isinstance(manifest.get("scenarios"), list)
 
 
 @needs_scenarios
