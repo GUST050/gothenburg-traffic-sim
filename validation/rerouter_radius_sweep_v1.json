@@ -1,0 +1,59 @@
+{
+  "closure_window_s": [
+    25200,
+    54000
+  ],
+  "demand_build_key": "a1ea9baf7002a4b1",
+  "deployed_radius_m": 400,
+  "edge": "7532496160_7532496129_0",
+  "kind": "rerouter_radius_sweep",
+  "measurements": [
+    {
+      "denied_departures": 3,
+      "exit": 0,
+      "fanout_s": 0.04,
+      "radius_m": 400,
+      "rerouter_edges": 58,
+      "sumo_wall_s": 8.5,
+      "teleports": 1,
+      "wall_vs_400m": 1.0
+    },
+    {
+      "denied_departures": 3,
+      "exit": 0,
+      "fanout_s": 0.07,
+      "radius_m": 800,
+      "rerouter_edges": 567,
+      "sumo_wall_s": 5.6,
+      "teleports": 1,
+      "wall_vs_400m": 0.66
+    },
+    {
+      "denied_departures": 3,
+      "exit": 0,
+      "fanout_s": 0.04,
+      "radius_m": 1500,
+      "rerouter_edges": 1905,
+      "sumo_wall_s": 6.0,
+      "teleports": 1,
+      "wall_vs_400m": 0.71
+    },
+    {
+      "denied_departures": 3,
+      "exit": 0,
+      "fanout_s": 0.07,
+      "radius_m": 3000,
+      "rerouter_edges": 4979,
+      "sumo_wall_s": 6.2,
+      "teleports": 1,
+      "wall_vs_400m": 0.73
+    }
+  ],
+  "schema_version": 1,
+  "verdict": {
+    "benefit_premise": "ALSO REFUTED on this case. The teleport count is 1 at every radius. The teleporting vehicle was stuck on the edge immediately BEFORE the closure, which is already inside 400 m, and SUMO reported 'No route found' -- it had passed a rerouter edge and still had no alternative. Reach was not its problem.",
+    "cost_premise": "REFUTED. REROUTER_RADIUS_M = 400 exists because global rerouters were a bottleneck. Widening to 3000 m grows the rerouter from 58 to 4,979 edges (86x) with no wall-time increase at all; the 8.5 s at 400 m is first-run warm-up, the rest sit at 5.6-6.2 s.",
+    "limitation": "ONE teleport on one edge with the deployed 2-day forecast demand is a thin sample. It is enough to refute the cost premise, which is a property of the network and SUMO, but not enough to prove reach never matters on a busier case.",
+    "recommendation": "LEAVE THE CONSTANT AT 400 m. Widening is free but buys nothing measurable, and changing it would alter rerouting and therefore every scenario result, plus force another annual-plan regeneration, for no gain."
+  }
+}
