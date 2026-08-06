@@ -721,3 +721,116 @@ class TestLiveReleaseKillSafety:
         assert monthly_demand.recover_live_demand_release(
             tmp_path / "marker.json") is None
         assert not (tmp_path / "marker.json").exists()
+
+
+_ARCHIVE_LABELS = {
+    "candidates.rou.xml": "candidate_routes",
+    "candidates.meta.json": "candidate_metadata",
+    "calibrated.rou.xml": "calibrated_q50",
+    "calibrated.agents.json": "calibrated_q50_agents",
+    "calibrated_v1.rou.xml": "calibrated_v1",
+    "calibrated_v1.agents.json": "calibrated_v1_agents",
+    "calibrated_v2.rou.xml": "calibrated_v2",
+    "calibrated_v2.agents.json": "calibrated_v2_agents",
+}
+
+
+def _rewrite_metadata(archive, metadata):
+    """Write demand_meta.json and re-bind every artifact and manifest hash.
+
+    The archive seals its artifacts twice over -- once in the build
+    fingerprint, once in the run manifest -- so a test that edits a route file
+    has to re-seal both or it is testing the tamper detector instead of the
+    contract it means to exercise.
+    """
+    metadata["build_fingerprint"]["artifacts"] = {
+        label: {"bytes": (archive / filename).stat().st_size,
+                "sha256": _sha(archive / filename)}
+        for filename, label in _ARCHIVE_LABELS.items()
+    }
+    (archive / "demand_meta.json").write_text(json.dumps(metadata))
+    manifest = json.loads((archive / "manifest.json").read_text())
+    manifest["outputs"] = [
+        {"name": path.name, "bytes": path.stat().st_size, "sha256": _sha(path)}
+        for path in sorted(archive.iterdir())
+        if path.name != "manifest.json"
+    ]
+    (archive / "manifest.json").write_text(json.dumps(manifest))
+
+# ── Baseline-rule edge support (2026-08-06) ──────────────────────────────────
+# The annual warming, having cleared two earlier faults, failed here: the
+# archive contract still demanded the full-edge support augmentation that the
+# baseline rule ("only what is measured is simulated") deliberately deleted on
+# 2026-08-05, so no archive built under the current rule could ever validate.
+
+def _baseline_rule_archive(tmp_path, name, *, mode="single_pool",
+                           calibrated_edges="edge-a"):
+    schedules = generate_closure_schedules(_spec(end_date="2027-07-15"))
+    resolver = MonthlyDemandResolverRunner(
+        _spec(end_date="2027-07-15"),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        runs_root=tmp_path,
+        release_root=tmp_path / "releases",
+        build_missing=False,
+        runner_factory=FakeChildRunner,
+    )
+    required = resolver._required(schedules[0])
+    archive = _archive(tmp_path, required, name,
+                       finished_at="2027-01-01T00:00:00Z")
+    for variant in ("calibrated.rou.xml", "calibrated_v1.rou.xml",
+                    "calibrated_v2.rou.xml"):
+        (archive / variant).write_text(
+            f"<routes><vehicle id='v' depart='0'>"
+            f"<route edges='{calibrated_edges}'/></vehicle></routes>")
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["edge_support_augmentation"] = {
+        "schema_version": 1, "status": "disabled_baseline_rule", "variants": {}}
+    metadata["candidate_provenance"] = {
+        "schema_version": 1, "status": "pass", "mode": mode}
+    _rewrite_metadata(archive, metadata)
+    return archive, required
+
+
+def test_archive_accepts_the_baseline_rule_edge_support_state(tmp_path):
+    archive, required = _baseline_rule_archive(tmp_path, "demand-baseline")
+
+    record = validate_demand_archive(archive, required)
+
+    assert record["demand_build_spec"]["purpose"] == "closure_envelope"
+
+
+def test_archive_rejects_a_route_outside_its_candidate_pool(tmp_path):
+    """Containment is the half of the old contract that still binds."""
+    archive, required = _baseline_rule_archive(
+        tmp_path, "demand-stray", calibrated_edges="edge-a edge-invented")
+
+    with pytest.raises(ValueError, match="absent from its candidate pool"):
+        validate_demand_archive(archive, required)
+
+
+def test_day_assembled_archive_is_not_held_to_a_single_days_pool(tmp_path):
+    """The archive keeps only the LAST day's pool, so containment cannot apply.
+
+    Every earlier day's routes legitimately use edges that pool never had --
+    52 of them on the first annual envelope. The per-day provenance proofs
+    cover those vehicles instead, and they are strictly stronger: they name
+    the candidate, not merely the edge set.
+    """
+    archive, required = _baseline_rule_archive(
+        tmp_path, "demand-assembled", mode="assembled_day_library",
+        calibrated_edges="edge-a edge-from-another-day")
+
+    record = validate_demand_archive(archive, required)
+
+    assert record["archive"].endswith("demand-assembled")
+
+
+def test_archive_rejects_an_unknown_edge_support_status(tmp_path):
+    archive, required = _baseline_rule_archive(tmp_path, "demand-unknown")
+    metadata = json.loads((archive / "demand_meta.json").read_text())
+    metadata["edge_support_augmentation"]["status"] = "something_new"
+    _rewrite_metadata(archive, metadata)
+
+    with pytest.raises(ValueError, match="unknown edge-support status"):
+        validate_demand_archive(archive, required)

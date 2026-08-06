@@ -280,3 +280,4 @@ def test_source_inventory_covers_every_demand_module():
     for package in ("demand", "traffic_sim/demand"):
         for module in (root / package).glob("*.py"):
             assert module.resolve() in tracked, f"{module} escapes provenance"
+

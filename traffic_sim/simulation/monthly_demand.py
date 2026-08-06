@@ -307,12 +307,9 @@ def validate_demand_archive(
     )
     if not isinstance(augmentation, Mapping) \
             or augmentation.get("schema_version") != 1 \
-            or augmentation.get("status") != "pass" \
-            or not isinstance(augmentation_variants, Mapping) \
-            or set(augmentation_variants) != {
-                "edge_shares", "edge_shares_q10", "edge_shares_q90"}:
+            or not isinstance(augmentation_variants, Mapping):
         raise ValueError(
-            f"demand archive lacks passing full-edge support: {archive}")
+            f"demand archive lacks an edge-support record: {archive}")
     candidate_edges = route_edges(archive / "candidates.rou.xml")
     if not candidate_edges:
         raise ValueError(f"demand archive candidate pool has no edges: {archive}")
@@ -321,15 +318,83 @@ def validate_demand_archive(
         "edge_shares_q10": archive / "calibrated_v1.rou.xml",
         "edge_shares_q90": archive / "calibrated_v2.rou.xml",
     }
-    for label, support_report in augmentation_variants.items():
-        if not isinstance(support_report, Mapping) \
-                or support_report.get("status") != "pass" \
-                or int(support_report.get("required_edges", 0)) \
-                != len(candidate_edges) \
-                or route_edges(variant_routes[label]) != candidate_edges:
+    support_status = augmentation.get("status")
+    if support_status == "pass":
+        # Pre-baseline-rule archives, where synthetic support vehicles were
+        # added until the calibrated routes covered every pool edge. Still
+        # accepted exactly as before, so old archives keep validating.
+        if set(augmentation_variants) != set(variant_routes):
             raise ValueError(
-                f"demand archive has invalid full-edge support for {label}: "
-                f"{archive}")
+                f"demand archive lacks passing full-edge support: {archive}")
+        for label, support_report in augmentation_variants.items():
+            if not isinstance(support_report, Mapping) \
+                    or support_report.get("status") != "pass" \
+                    or int(support_report.get("required_edges", 0)) \
+                    != len(candidate_edges) \
+                    or route_edges(variant_routes[label]) != candidate_edges:
+                raise ValueError(
+                    f"demand archive has invalid full-edge support for {label}: "
+                    f"{archive}")
+    elif support_status == "disabled_baseline_rule":
+        # BASELINE RULE (2026-08-05, CLAUDE.md): "only what is measured is
+        # simulated". The augmentation this branch replaces existed to force
+        # calibrated routes to cover EVERY pool edge, and it did so with
+        # vehicles built with forbidden_edges=measured -- traffic that by
+        # construction can never cross a sensor. The rule deleted it, and
+        # roughly half the inner city legitimately carries zero baseline flow
+        # as a result.
+        #
+        # So the old equality here is not merely unmet, it is UNSATISFIABLE by
+        # design: demanding it would require re-inventing exactly the synthetic
+        # traffic the rule forbids. Found 2026-08-06 when the annual warming,
+        # having cleared two earlier faults, failed on this one -- no archive
+        # built under the current rule can ever validate.
+        #
+        # This is a contract UPDATE, not a relaxed gate: the direction of the
+        # binding is simply reversed. Coverage (every pool edge is driven)
+        # cannot hold; CONTAINMENT (no calibrated route uses an edge the pool
+        # never offered) still must, and it is the half that actually protects
+        # the archive -- it is what would catch routes fabricated outside the
+        # published candidate pool.
+        if augmentation_variants:
+            raise ValueError(
+                "demand archive disabled edge support but still reports "
+                f"variants: {archive}")
+        # A DAY-ASSEMBLED window (stage B) draws a separate candidate pool per
+        # calendar day and the archive keeps only the LAST one, so containment
+        # against it would fail for every earlier day's routes -- measured: 52
+        # such edges on the first annual envelope. That is the same
+        # namespace mistake the per-day provenance fix removed, one level up,
+        # and testing it here would be just as wrong.
+        #
+        # Nothing is lost by not testing it: the per-day provenance proofs
+        # already bind every published vehicle to a real candidate in the pool
+        # that actually produced it, which is strictly STRONGER than
+        # containment (it names the candidate, not merely the edge set). This
+        # branch therefore checks what the archive alone can still witness.
+        if provenance.get("mode") == "assembled_day_library":
+            for label, route_path in sorted(variant_routes.items()):
+                if not route_edges(route_path):
+                    raise ValueError(
+                        f"demand archive variant {label} has no routes: "
+                        f"{archive}")
+        else:
+            for label, route_path in sorted(variant_routes.items()):
+                used = route_edges(route_path)
+                if not used:
+                    raise ValueError(
+                        f"demand archive variant {label} has no routes: "
+                        f"{archive}")
+                outside = used - candidate_edges
+                if outside:
+                    raise ValueError(
+                        f"demand archive variant {label} uses {len(outside)} "
+                        f"edge(s) absent from its candidate pool, e.g. "
+                        f"{sorted(outside)[:3]}: {archive}")
+    else:
+        raise ValueError(
+            f"demand archive has an unknown edge-support status "
+            f"{support_status!r}: {archive}")
     fingerprints = build_fingerprint.get("artifacts") or {}
     artifact_names = {
         "candidates.rou.xml": "candidate_routes",
