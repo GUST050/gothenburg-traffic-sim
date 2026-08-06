@@ -260,8 +260,58 @@ def test_reused_late_paired_tour_returns_after_midnight_not_before_outbound():
 
 
 def test_late_outbound_return_hour_is_next_day():
+    """Legacy sampler, retained only as the template path's fallback."""
     pm_weights = np.zeros(24); pm_weights[23] = 1.0
     assert bc._sample_return_hour(np.random.default_rng(42), 23, pm_weights) == 24
+
+
+class TestActivityDuration:
+    """Return time is now OUTBOUND + a drawn activity duration (2026-08-06).
+
+    It used to be a return-HOUR draw from the PM-only shape clamped by
+    max(h_out+1, draw). For an afternoon outbound the PM draw is usually
+    EARLIER than h_out+1, so the return collapsed onto the clamp: measured
+    P(return == h_out+1) was 65.4% at h_out=16, 82.9% at 18, 94.6% at 20 and
+    100% at 22, and 62.5% of tours depart at or after noon. Duration was never
+    modelled -- in the delivered pool that gave work tours a MEDIAN of 3.78 h
+    with 10.3% under 45 minutes.
+    """
+
+    def test_work_activities_are_a_working_day_not_an_errand(self):
+        rng = np.random.default_rng(0)
+        d = np.array([bc.sample_activity_duration_h(rng, "arbete")
+                      for _ in range(20000)])
+        # ATUS: employed persons who worked averaged 7 h 45 min on days worked.
+        assert 6.5 < np.median(d) < 8.5
+        assert (d < 0.75).mean() < 0.01, "a 45-minute work day must be rare"
+
+    def test_errands_are_short_and_leisure_sits_between(self):
+        rng = np.random.default_rng(0)
+        svc = np.array([bc.sample_activity_duration_h(rng, "service")
+                        for _ in range(20000)])
+        fri = np.array([bc.sample_activity_duration_h(rng, "fritid")
+                        for _ in range(20000)])
+        # Shopping/errand episodes cluster at 10-30 min; leisure is broader.
+        assert np.median(svc) < 1.0
+        assert np.median(svc) < np.median(fri) < 4.0
+
+    def test_duration_is_always_a_real_stop_and_never_a_second_day(self):
+        rng = np.random.default_rng(0)
+        for purpose in ("arbete", "service", "fritid", "external", "unknown"):
+            d = np.array([bc.sample_activity_duration_h(rng, purpose)
+                          for _ in range(5000)])
+            assert d.min() >= bc.MIN_ACTIVITY_DURATION_H
+            assert d.max() <= bc.MAX_ACTIVITY_DURATION_H
+
+    def test_a_return_can_never_precede_its_own_outbound(self):
+        # The property the old clamp existed to protect, now structural: the
+        # return is the outbound plus a strictly positive duration.
+        rng = np.random.default_rng(7)
+        for _ in range(2000):
+            h_out = int(rng.integers(0, 24))
+            t_out = (h_out + rng.random()) * 3600.0
+            t_ret = t_out + bc.sample_activity_duration_h(rng, "fritid") * 3600.0
+            assert t_ret > t_out
 
 
 class TestGateWeights:
@@ -738,6 +788,88 @@ class TestEnforceTourAtomicity:
         assert counts == Counter({"ii-1": 2, "ee-1": 1})
 
 
+class TestDropLocalRoundaboutDetours:
+    """Local optimality: a globally fine route can hide a local absurdity.
+
+    ADDED 2026-08-06 after investigating "cars go around in a roundabout and
+    change direction completely". Measured: of 1,867 traversals whose heading
+    reversed >135 degrees, 99.4% ARE the exact shortest path from entry to
+    exit (median 29 m inside), i.e. correct driving forced by one-way
+    geometry. The 0.6% residual was invisible to drop_excessive_detours: a
+    101-edge route at a globally fine 1.099x contained a manoeuvre costing
+    3.3x its own local shortest path -- 4.4 cost units inside 734, so no
+    whole-route threshold could ever reach it.
+    """
+
+    @staticmethod
+    def _graph():
+        # A 4-node one-way roundabout 1->2->3->4->1, plus a direct 1->3 street.
+        # Going 1->2->3 round the circle costs 2; the direct street costs 1.
+        G = nx.MultiDiGraph()
+        for n in (1, 2, 3, 4, 9):
+            G.add_node(n, x=0.0, y=0.0)
+        for u, v in ((1, 2), (2, 3), (3, 4), (4, 1)):
+            G.add_edge(u, v, 0, length=100.0, travel_time=1.0,
+                       junction="roundabout")
+        G.add_edge(1, 3, 0, length=100.0, travel_time=1.0)   # direct link
+        G.add_edge(3, 9, 0, length=100.0, travel_time=1.0)   # exit road
+        return G
+
+    def test_a_wasteful_circulation_is_dropped(self, tmp_path):
+        G = self._graph()
+        path = tmp_path / "candidates.rou.xml"
+        # 1->2->3 uses two roundabout edges (cost 2) when 1->3 costs 1.
+        write_routes(path, [("waste", ["1_2_0", "2_3_0", "3_9_0"])])
+        bc.drop_local_roundabout_detours(path, G, 1.5)
+        assert read_vehicle_ids(path) == []
+
+    def test_a_minimal_legitimate_traversal_survives(self, tmp_path):
+        G = self._graph()
+        path = tmp_path / "candidates.rou.xml"
+        # One roundabout edge, and it IS the shortest way from 3 to 4.
+        write_routes(path, [("ok", ["3_4_0"])])
+        bc.drop_local_roundabout_detours(path, G, 1.5)
+        assert read_vehicle_ids(path) == ["ok"]
+
+    def test_a_forced_long_way_round_is_kept(self, tmp_path):
+        """THE CASE THAT MUST NOT REGRESS -- 99.4% of real traversals.
+
+        With no direct link, going most of the way round a one-way roundabout
+        is the ONLY way to reach the far arm, so it is the local shortest path
+        by definition and must survive however far the heading turns.
+        """
+        G = nx.MultiDiGraph()
+        for n in (1, 2, 3, 4, 9):
+            G.add_node(n, x=0.0, y=0.0)
+        for u, v in ((1, 2), (2, 3), (3, 4), (4, 1)):
+            G.add_edge(u, v, 0, length=100.0, travel_time=1.0,
+                       junction="roundabout")
+        G.add_edge(4, 9, 0, length=100.0, travel_time=1.0)
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("forced", ["1_2_0", "2_3_0", "3_4_0", "4_9_0"])])
+        bc.drop_local_roundabout_detours(path, G, 1.5)
+        assert read_vehicle_ids(path) == ["forced"]
+
+    def test_exact_support_routes_are_exempt(self, tmp_path):
+        G = self._graph()
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("sup", ["1_2_0", "2_3_0", "3_9_0"])])
+        bc.drop_local_roundabout_detours(path, G, 1.5, exempt_ids={"sup"})
+        assert read_vehicle_ids(path) == ["sup"]
+
+    def test_a_network_without_roundabouts_is_a_noop(self, tmp_path):
+        G = nx.MultiDiGraph()
+        for n in (1, 2, 3):
+            G.add_node(n, x=0.0, y=0.0)
+        G.add_edge(1, 2, 0, length=100.0, travel_time=1.0)
+        G.add_edge(2, 3, 0, length=100.0, travel_time=1.0)
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("a", ["1_2_0", "2_3_0"])])
+        report = bc.drop_local_roundabout_detours(path, G, 1.5)
+        assert report == {"dropped": 0, "checked": 0}
+        assert read_vehicle_ids(path) == ["a"]
+
+
 class TestDropExcessiveDetours:
     """Added 2026-07-10 (Gustav asked directly: could the candidate pool
     contain "helt orimliga rutter", completely unreasonable routes? Honest
@@ -796,16 +928,24 @@ class TestDropExcessiveDetours:
         bc.drop_excessive_detours(path, G, max_stretch=2.0)
         assert path.stat().st_mtime_ns == mtime_before   # write() skipped when dropped==0
 
-    def test_stretch_bound_is_tied_to_the_route_diversity_parameter(self, tmp_path):
-        """max_stretch is passed straight through from --route-diversity
-        (the same parameter driving duarouter's --weights.random-factor),
-        not an unrelated constant -- a stricter caller-supplied bound must
-        catch what a looser one lets through."""
+    def test_stretch_bound_is_independent_of_the_jitter_parameter(self, tmp_path):
+        """max_stretch now comes from --max-stretch, NOT --route-diversity.
+
+        They were the same value until 2026-08-06, which made the filter's
+        threshold exactly the generator's own theoretical worst case: SUMO
+        bounds a random-factor X result at X times the optimal cost, so a
+        filter at X could only catch what the generator was already licensed
+        to produce. Measured on a real build: 13 of 12,000 dropped (0.1%).
+        The bound must be settable independently of the jitter."""
         G = self._graph()
         path = tmp_path / "candidates.rou.xml"
         write_routes(path, [("detour", ["1_4_0", "4_5_0", "5_3_0"])])   # 6x true shortest
         bc.drop_excessive_detours(path, G, max_stretch=10.0)   # loose: 6x survives
         assert read_vehicle_ids(path) == ["detour"]
+
+        write_routes(path, [("detour", ["1_4_0", "4_5_0", "5_3_0"])])
+        bc.drop_excessive_detours(path, G, max_stretch=1.5)    # strict: 6x is dropped
+        assert read_vehicle_ids(path) == []
 
     def test_shared_entry_nodes_use_one_batched_dijkstra_call(self, tmp_path, monkeypatch):
         """Endpoints repeat heavily in the real pool (e.g. ~900 via-trips
@@ -1988,6 +2128,141 @@ class TestDestinationSensorProximity:
         result = bc.destination_sensor_proximity(
             ["known", "not_in_network"], edge_latlon, ["sensor"])
         assert result["n"] == 1
+
+
+class TestLengthBinDepletionIsDetectable:
+    """Length drift must be judged NET OF the deliberate composition change.
+
+    Two facts, both measured 2026-08-06, and the second corrects the first.
+
+    (a) Every structural check in demand/structure.py, and the PFE structure
+        guard it mirrors, is a CEILING tripped by `>`. A ceiling cannot see a
+        DEFICIT, and on a real build the 5-10 km bin fell to 0.50x its pool
+        share with no cap binding anywhere.
+
+    (b) That particular deficit is NOT a defect. E-E through trips are 58.2%
+        of the pool with 69.2% of them in the 5-10 km bin, and
+        apply_through_share_target pins published through traffic at
+        theta=0.25. Expected 5-10 km share at the pool mix 0.439, at the
+        published mix 0.239, observed 0.215 -- theta explains essentially all
+        of it. Flagging that would be alarm fatigue on a validated decision.
+
+    So the guard compares against the pool reweighted to the CALIBRATED
+    purpose mix: composition shifts predict themselves and stay silent, while
+    a genuine within-purpose selection drift still fires.
+    """
+
+    def test_the_depletion_threshold_is_not_the_inflation_reciprocal(self):
+        from demand import structure as ds
+        # 1/STRUCTURE_FLAG_MULT = 0.40 would require losing 60% of a bin's
+        # share before flagging, so a bin losing HALF stays silent. Depletion
+        # is not the reciprocal of inflation; it needs its own threshold.
+        assert ds.LENGTH_BIN_DEPLETION_FRAC > 1.0 / ds.STRUCTURE_FLAG_MULT
+        assert 0.5 < ds.LENGTH_BIN_DEPLETION_FRAC < 1.0
+
+    def _flags(self, tmp_path, monkeypatch, pool_bins, cal_bins, cal_shares):
+        from demand import structure as ds
+
+        def fake_metrics(path):
+            return {"trip_length_fit": {"shares": cal_shares},
+                    "dest_sensor_proximity": {"pct_within": 1.0,
+                                              "baseline_pct_within": 1.0,
+                                              "radius_m": 200.0},
+                    "onward_after_last_sensor": {"pct_under_200m": 1.0,
+                                                 "median_m": 1.0,
+                                                 "n_routes_without_sensor": 0},
+                    "sensor_passages": {}, "purpose_length_km": {}}
+
+        monkeypatch.setattr(ds, "_route_structure_metrics", fake_metrics)
+        monkeypatch.setattr(ds, "purpose_lengths_km", lambda path: None)
+        monkeypatch.setattr(
+            ds, "purpose_length_bins",
+            lambda path: pool_bins if "pool" in str(path) else cal_bins)
+        report = ds.calibrated_structure_report(
+            tmp_path / "calib.rou.xml", tmp_path / "pool.rou.xml")
+        return [f for f in report["structure_flags"] if "length_bin_depleted" in f]
+
+    def test_a_pure_composition_shift_is_not_flagged(self, tmp_path, monkeypatch):
+        # THE THETA CASE. 'through' is long, 'local' is short, and each keeps
+        # its own length distribution exactly -- only the MIX moves, 50/50 in
+        # the pool to 25/75 published. Expected 5-10 km share falls from 0.50
+        # to 0.25 all by itself; the observed 0.25 matches, so nothing fires.
+        pool = {"through": {"n": 50, "shares": [0.0, 0.0, 1.0, 0.0]},
+                "local":   {"n": 50, "shares": [0.0, 1.0, 0.0, 0.0]}}
+        cal = {"through": {"n": 25, "shares": [0.0, 0.0, 1.0, 0.0]},
+               "local":   {"n": 75, "shares": [0.0, 1.0, 0.0, 0.0]}}
+        assert not self._flags(tmp_path, monkeypatch, pool, cal,
+                               [0.0, 0.75, 0.25, 0.0])
+
+    def test_within_purpose_selection_drift_is_flagged(self, tmp_path, monkeypatch):
+        # Same mix as the pool, so composition explains NOTHING -- yet the
+        # 5-10 km bin still halves. That is the picker choosing different
+        # routes for the same kind of trip, which must not stay silent.
+        pool = {"through": {"n": 50, "shares": [0.0, 0.0, 1.0, 0.0]},
+                "local":   {"n": 50, "shares": [0.0, 1.0, 0.0, 0.0]}}
+        cal = {"through": {"n": 50, "shares": [0.0, 0.0, 1.0, 0.0]},
+               "local":   {"n": 50, "shares": [0.0, 1.0, 0.0, 0.0]}}
+        assert self._flags(tmp_path, monkeypatch, pool, cal,
+                           [0.0, 0.75, 0.25, 0.0])
+
+    def test_a_bin_the_expectation_barely_populates_is_ignored(
+            self, tmp_path, monkeypatch):
+        # A 2% expected bin vanishing is sampling noise, not structural drift.
+        pool = {"local": {"n": 100, "shares": [0.0, 0.98, 0.02, 0.0]}}
+        cal = {"local": {"n": 100, "shares": [0.0, 0.98, 0.02, 0.0]}}
+        assert not self._flags(tmp_path, monkeypatch, pool, cal,
+                               [0.0, 1.0, 0.0, 0.0])
+
+    def test_an_unmapped_population_says_nothing_rather_than_guess(
+            self, tmp_path, monkeypatch):
+        # If most calibrated vehicles have no pool counterpart the expectation
+        # is not a usable null, so the guard must abstain, not fire.
+        pool = {"only_this": {"n": 5, "shares": [0.0, 1.0, 0.0, 0.0]}}
+        cal = {"unmapped": {"n": 95, "shares": [0.0, 0.0, 1.0, 0.0]},
+               "only_this": {"n": 5, "shares": [0.0, 1.0, 0.0, 0.0]}}
+        assert not self._flags(tmp_path, monkeypatch, pool, cal,
+                               [0.0, 0.9, 0.1, 0.0])
+
+
+class TestTripLengthYardstickIsShared:
+    """Generation and calibration must be graded against the SAME target.
+
+    REGRESSION (2026-08-06). demand/structure.trip_length_fit had no target
+    parameter and always scored against RAW RVU, while
+    build_candidates.trip_length_fit scores generation against the
+    AVAILABILITY-CORRECTED target. Both were printed in one build log as
+    "L1 ... vs RVU short bins" — generation 0.024, calibration 0.537 — which
+    reads as calibration destroying a fit generation had nailed. On the same
+    yardstick the real figure was 0.278: the reported number was 1.9x too
+    large, measured against a target build_candidates' own docstring calls
+    structurally unreachable for an intra-canvas tour.
+    """
+
+    def test_both_modules_accept_the_same_target(self):
+        from demand import structure as dstructure
+        assert "target" in bc.trip_length_fit.__code__.co_varnames
+        assert "target" in dstructure.trip_length_fit.__code__.co_varnames
+
+    def test_the_reported_distance_follows_the_supplied_target(self):
+        from demand.structure import trip_length_fit as fit
+        lengths = [0.5] * 10 + [3.0] * 80 + [7.0] * 10      # shares .10/.80/.10
+        corrected = [0.03, 0.91, 0.06]
+        raw = fit(lengths)
+        cor = fit(lengths, target=corrected)
+        assert raw["target_is_availability_corrected"] is False
+        assert cor["target_is_availability_corrected"] is True
+        assert cor["target_shares"] == [0.03, 0.91, 0.06]
+        # The corrected target is much closer to this pool than raw RVU is,
+        # so grading against raw must not be what l1_distance reports.
+        assert cor["l1_distance"] < raw["l1_distance"]
+        # ...and the raw number stays available, under a name that says so.
+        assert cor["l1_vs_raw_rvu"] == raw["l1_distance"]
+
+    def test_an_empty_pool_still_declares_its_yardstick(self):
+        from demand.structure import trip_length_fit as fit
+        out = fit([], target=[0.03, 0.91, 0.06])
+        assert out["target_is_availability_corrected"] is True
+        assert out["target_shares"] == [0.03, 0.91, 0.06]
 
 
 class TestTripLengthFit:

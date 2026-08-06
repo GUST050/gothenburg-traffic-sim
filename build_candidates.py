@@ -501,6 +501,58 @@ NEAR_SENSOR_RADIUS_M = 200.0
 # the same artificial sensor cluster through a different mechanism.
 MIN_ROUTED_CANDIDATE_FRACTION = 0.75
 
+# Route-generation behaviour, defined ONCE. build_sumo_demand.py shells out to
+# this module without passing either flag, so it inherits these defaults -- and
+# it also has to name route diversity in its candidate-cache key. That key used
+# to hardcode its own copy of the number, so changing the default here would
+# silently have made the cache claim a jitter the pool was not built with, and
+# served an old pool for a new request. Import these instead of restating them.
+#
+# DEFAULT_ROUTE_DIVERSITY is duarouter's --weights.random-factor: edge costs
+# are drawn from [1, X). SUMO documents X as bounding the result at X times the
+# optimal cost IN THE WORST CASE, which reads as "2.0 permits 100% slower
+# trips". MEASURED 2026-08-06, and the bound is not the outcome:
+#
+#   jitter   on-fastest*   median excess*   distinct routes   edges covered
+#     1.0        11.2%          +3.0%             1456            2950
+#     1.3        13.9%          +3.0%             1804            3075
+#     2.0        10.8%          +3.5%             2309            3242
+#   (* against the fastest path that STILL CROSSES the trip's own sensor)
+#
+# At X=2.0, 0.0% of routes exceed +50%. Route directness is essentially
+# INDEPENDENT of this parameter, because the visible ~16% detour is not jitter
+# at all -- it is the sensor-crossing requirement of the baseline rule. Measure
+# against the unconstrained shortest path and every level looks bad (median
+# 1.15-1.16); measure against the fastest path through the sensor the trip was
+# generated for and every level is +3%.
+#
+# Diversity, by contrast, responds strongly: 2.0 gives 59% more distinct routes
+# and 10% more covered edges than 1.0, which directly reduces the share of the
+# network carrying zero baseline flow (58.6% -> 54.5%) -- a headline product
+# property under the baseline rule.
+#
+# Fidelity check against GPS route-choice evidence: 18-34% of real drivers take
+# the fastest path (PLOS One 34% all trips / 13.5% commute; FHWA multiday GPS
+# ~27%; connected-driver study 18.4%). Every jitter level here sits at 11-14%,
+# so these vehicles already deviate from optimal at least as much as real ones.
+# There is no fidelity argument for buying less diversity.
+#
+# It was briefly lowered to 1.3 on the reasoning above being unmeasured; the
+# sweep refuted it and it is back at 2.0. Do not lower it again without
+# re-running that sweep -- the naive argument is persuasive and wrong.
+DEFAULT_ROUTE_DIVERSITY = 2.0
+# A plausibility BACKSTOP, deliberately above the jitter bound so it is nearly
+# inert. Routes should be direct because the generator prefers fast roads, not
+# because a filter deletes the ones that are not.
+DEFAULT_MAX_STRETCH = 1.5
+# LOCAL optimality backstop for circulatory geometry. A whole-route stretch
+# check cannot see a small absurdity inside a long route: measured, a 101-edge
+# route at a globally fine 1.099x contained a roundabout manoeuvre costing 3.3x
+# its own local shortest path. 1.5x local is deliberately generous -- a one-way
+# roundabout legitimately forces you most of the way round, and 99.4% of
+# heading reversals are the exact local shortest path and must survive.
+DEFAULT_MAX_LOCAL_STRETCH = 1.5
+
 
 def destination_sensor_proximity(dest_edge_ids: list[str],
                                  edge_latlon: dict[str, tuple[float, float]],
@@ -1610,6 +1662,114 @@ def drop_uturn_routes(path: Path, exempt_ids: set[str] | None = None) -> None:
           f"twice (a literal U-turn is the special case one step back)")
 
 
+def drop_local_roundabout_detours(path: Path, G, max_local_stretch: float,
+                                  edge_costs: dict[str, float] | None = None,
+                                  exempt_ids: set[str] | None = None) -> dict:
+    """Drop a route that goes absurdly far around a roundabout.
+
+    WHY THIS EXISTS AND drop_excessive_detours DOES NOT COVER IT (measured
+    2026-08-06, investigating Gustav's report that cars "go around in a
+    roundabout and change direction completely"):
+
+    That report is mostly NOT a defect. Of 1,867 roundabout traversals whose
+    heading reversed by more than 135 degrees, **99.4% are the exact shortest
+    path from where the vehicle enters the roundabout to where it leaves**,
+    with a median of 29 m travelled inside. A one-way roundabout forces you
+    round it; if your exit is on the far side your heading reverses, and no
+    alternative exists. That is correct driving that merely looks odd on a
+    map, and it must not be filtered away.
+
+    The residual 0.6% is real, and it is invisible to the existing global
+    check. The worst case measured:
+
+        route 101 edges, cost 734.4, shortest 668.2  -> global stretch 1.099x
+        the roundabout manoeuvre inside it: 6.3 vs 1.9 -> LOCAL stretch 3.3x
+
+    drop_excessive_detours compares a route's TOTAL cost against the shortest
+    path for its own endpoints, so a 4.4-unit absurdity inside a 734-unit
+    route is 0.6% of the total and sits far under any global threshold. A
+    globally reasonable route can therefore contain a locally absurd
+    manoeuvre, permanently.
+
+    This is the route-choice literature's LOCAL OPTIMALITY criterion -- a
+    generated path is implausible if some SUBPATH of it is not close to the
+    shortest path between that subpath's own endpoints -- applied where this
+    network actually exhibits the pathology. It is a BACKSTOP, not a
+    load-bearing constraint: measured on the real pool it drops 9 routes of
+    ~9,200 (0.1%). If it ever starts dropping a large share, the generator
+    changed and that is the thing to investigate, not this threshold.
+
+    Restricted to roundabout runs deliberately. A general all-subpath check is
+    the broader form and is not implemented: it costs O(edges x window)
+    shortest-path queries per route, and the measured pathology is confined to
+    one-way circulatory geometry, which is exactly where a local detour can be
+    forced without the global cost moving.
+    """
+    junction_of = nx.get_edge_attributes(G, "junction")
+    roundabout = {f"{u}_{v}_{k}" for (u, v, k), tag in junction_of.items()
+                  if "roundabout" in str(tag) or "circular" in str(tag)}
+    if not roundabout:
+        return {"dropped": 0, "checked": 0}
+
+    cost_graph = nx.DiGraph()
+    for u, v, k, data in G.edges(keys=True, data=True):
+        cost = routing_cost_for_edge_id(G, f"{u}_{v}_{k}", edge_costs)
+        if not cost_graph.has_edge(u, v) or cost < cost_graph[u][v]["c"]:
+            cost_graph.add_edge(u, v, c=cost)
+
+    # Entry/exit node pairs repeat heavily across the pool, so one cache turns
+    # this from a per-route cost into a per-junction-movement one.
+    shortest: dict[tuple[int, int], float | None] = {}
+
+    def best_cost(a: int, b: int) -> float | None:
+        if (a, b) not in shortest:
+            try:
+                shortest[(a, b)] = nx.shortest_path_length(
+                    cost_graph, a, b, weight="c")
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                shortest[(a, b)] = None
+        return shortest[(a, b)]
+
+    tree = ET.parse(path)
+    root = tree.getroot()
+    dropped = 0
+    checked = 0
+    for vehicle in list(root):
+        if vehicle.get("id") in (exempt_ids or set()):
+            continue
+        edges = vehicle.find("route").get("edges").split()
+        nodes = [int(edges[0].split("_")[0])] + [
+            int(e.split("_")[1]) for e in edges]
+        offending = False
+        i = 0
+        while i < len(edges):
+            if edges[i] not in roundabout:
+                i += 1
+                continue
+            j = i
+            while j < len(edges) and edges[j] in roundabout:
+                j += 1
+            checked += 1
+            actual = sum(routing_cost_for_edge_id(G, e, edge_costs)
+                         for e in edges[i:j])
+            best = best_cost(nodes[i], nodes[j])
+            if best is not None and best > 0 and actual > best * max_local_stretch:
+                offending = True
+                break
+            i = j
+        if offending:
+            root.remove(vehicle)
+            dropped += 1
+    if dropped:
+        tree.write(path)
+    print(f"  dropped {dropped} candidate(s) whose roundabout manoeuvre cost "
+          f"more than {max_local_stretch:.1f}x the shortest path between the "
+          f"points it entered and left the roundabout (a local absurdity a "
+          f"whole-route stretch check cannot see; {checked} traversals "
+          f"checked)")
+    return {"dropped": dropped, "checked": checked}
+
+
 def drop_excessive_detours(path: Path, G, max_stretch: float,
                            edge_costs: dict[str, float] | None = None,
                            exempt_ids: set[str] | None = None) -> None:
@@ -1631,12 +1791,27 @@ def drop_excessive_detours(path: Path, G, max_stretch: float,
     yes, nothing verified it, only drop_uturn_routes' narrower invariant
     did.
 
-    max_stretch is deliberately the SAME --route-diversity value passed to
-    duarouter's --weights.random-factor, not an arbitrary constant: that
-    parameter IS the mechanism being checked, so the tolerance for how far
-    a jittered path may stray from true-shortest should be exactly the
-    tolerance we told duarouter to explore, not a second, disconnected
-    magic number. Endpoints repeat heavily across the pool (e.g. all
+    max_stretch WAS deliberately the same --route-diversity value passed to
+    duarouter's --weights.random-factor, on the reasoning that the jitter
+    parameter IS the mechanism being checked, so the tolerance should match
+    the tolerance we told duarouter to explore rather than be a second,
+    disconnected magic number.
+
+    DECOUPLED 2026-08-06, because that reasoning is inverted. Setting the
+    filter's threshold to the generator's own theoretical worst case means
+    it can only ever catch a route that exceeded what the generator was
+    already licensed to produce -- SUMO documents random-factor X as
+    bounding the result at X times the optimal cost. Measured on a real
+    12,000-candidate build: 13 dropped, 0.1%. The filter was load-bearing
+    in name only.
+
+    They answer different questions: --route-diversity is a perceived-cost-
+    error model governing how far the search may EXPLORE, --max-stretch is
+    a plausibility gate governing how far a result may SHIP. With the jitter
+    at a behavioural 1.3 and the backstop at 1.5, this filter should be
+    nearly inert -- and that is the intent. Routes are meant to be direct
+    because the generator prefers fast roads, not because a filter deletes
+    the ones that are not. Endpoints repeat heavily across the pool (e.g. all
     ~900 via-trips through one sensor share a handful of gate pairs), so
     true-shortest-path costs are batched: one scipy Dijkstra call per
     DISTINCT ENTRY node (returning distances to every other node at once),
@@ -2263,9 +2438,62 @@ def _activity_purpose_mix(profile: np.ndarray, is_weekend: bool) -> dict[str, fl
     }
 
 
+# Out-of-home ACTIVITY DURATION by purpose — (median hours, lognormal sigma).
+#
+# ADDED 2026-08-06, replacing a return-hour clamp. The old model drew a return
+# HOUR from the PM-only departure shape and applied max(h_out + 1, draw). For
+# any afternoon outbound the PM draw is usually EARLIER than h_out + 1, so the
+# return collapsed onto the clamp: measured P(return == h_out+1) was 20.5% at
+# h_out=12, 65.4% at 16, 82.9% at 18, 94.6% at 20 and 100% at 22 -- and 62.5%
+# of tours depart at or after noon, so this governed most of the pool. Duration
+# was never modelled; it was whatever the clamp left over. In the delivered
+# candidates that produced work tours with a MEDIAN of 3.78 h and 10.3% under
+# 45 minutes, and 02:00 departures with 14 h "activities".
+#
+# Duration is now drawn directly and the return time derived from it, which is
+# both the causally correct order and the one that can be checked against data.
+# Lognormal is the standard shape for activity durations: strictly positive and
+# right-skewed.
+#
+# Medians are anchored to time-use evidence, not invented:
+#   arbete   7.5 h  - ATUS: employed persons who worked averaged 7 h 45 min on
+#                    days worked; activity-travel surveys put most work/school
+#                    episodes over 4 h.
+#   service  0.6 h  - shopping/errand episodes cluster at 10-30 min, with meal
+#                    and service stops 30-60 min.
+#   fritid   2.0 h  - social/recreational episodes are broader than errands and
+#                    much shorter than a work day.
+# Sigma is set so each purpose's 10-90 range spans the reported spread rather
+# than to fit any single statistic; these are behavioural PRIORS, at the same
+# evidential standing as PURPOSE_LENGTH_SCALE, and are labelled as such.
+PURPOSE_ACTIVITY_DURATION_H: dict[str, tuple[float, float]] = {
+    "arbete":   (7.5, 0.30),
+    "service":  (0.6, 0.70),
+    "fritid":   (2.0, 0.60),
+    # An external tour's "activity" is the whole in-canvas stay; treat it like
+    # a broad discretionary visit rather than a work day.
+    "external": (2.0, 0.60),
+}
+MIN_ACTIVITY_DURATION_H = 1.0 / 6.0     # 10 minutes: below this it is not a stop
+MAX_ACTIVITY_DURATION_H = 16.0          # beyond this it is a different day
+
+
+def sample_activity_duration_h(rng: np.random.Generator, purpose: str) -> float:
+    """Hours spent at the activity, drawn from its purpose's distribution."""
+    median, sigma = PURPOSE_ACTIVITY_DURATION_H.get(
+        str(purpose), PURPOSE_ACTIVITY_DURATION_H["fritid"])
+    hours = float(median) * math.exp(float(sigma) * float(rng.standard_normal()))
+    return float(min(max(hours, MIN_ACTIVITY_DURATION_H), MAX_ACTIVITY_DURATION_H))
+
+
 def _sample_return_hour(rng: np.random.Generator, outbound_hour: int,
                         pm_weights: np.ndarray) -> int:
     """Draw a paired return hour strictly after its outbound hour.
+
+    SUPERSEDED 2026-08-06 by sample_activity_duration_h -- see the note on
+    PURPOSE_ACTIVITY_DURATION_H for the clamp artifact this produced. Retained
+    only for the legacy template path's fallback and for regression tests that
+    pin the old behaviour; new code should draw a duration instead.
 
     Hour 24 is intentional for a 23:xx outbound: the leg is overnight, not
     an impossible earlier return randomly placed back in the 23:00 bucket.
@@ -2567,17 +2795,22 @@ def generate_sensor_anchored_trips(
     tour_lengths_km: list[float] = []
     n_dropped_no_sensor = 0
 
-    def am_pm_hours():
-        h_out = rng.choice(24, p=shape_hourly)
-        pm_shape = shape_hourly * (np.arange(24) >= 12)
-        pm_shape = pm_shape / pm_shape.sum() if pm_shape.sum() > 0 else shape_hourly
-        h_ret = _sample_return_hour(rng, h_out, pm_shape)
-        # Do not clamp a late outbound trip back into hour 23. That made a
-        # 23:xx outbound and its return draw independent seconds inside the
-        # same hour, so the return could precede its own outbound. A 24:xx
-        # return is an overnight leg: it falls in the next day when present,
-        # and outside a one-day calibration window otherwise.
-        return h_out, h_ret
+    def tour_departures(h_out: int, purpose: str) -> tuple[float, float]:
+        """(outbound depart s, return depart s) for one tour.
+
+        Replaces am_pm_hours' return-HOUR draw with an activity DURATION draw.
+        The return leg departs exactly one activity after the outbound one, so
+        a return can never precede its outbound and no clamp is needed -- and
+        duration becomes a modelled quantity conditioned on purpose, instead of
+        whatever the clamp happened to leave over. An overnight return simply
+        lands past 86400 s, which downstream day assembly already handles.
+
+        Purpose must therefore be drawn BEFORE this is called; the causal
+        order is hour -> purpose | hour -> duration | purpose.
+        """
+        t_out = (h_out + rng.random()) * 3600.0
+        t_ret = t_out + sample_activity_duration_h(rng, purpose) * 3600.0
+        return t_out, t_ret
 
     n_through     = int(n_total * through_fraction)
     n_tours_total = (n_total - n_through) // 2
@@ -2698,7 +2931,7 @@ def generate_sensor_anchored_trips(
                                   anchor_lats,
                                   anchor_lons, dest_lats, dest_lons,
                                   dest_u_idx_a, dest_v_idx_a, base_w, beta_km,
-                                  mask_cache, scalar_cache):
+                                  mask_cache, scalar_cache, base_w_label):
         """ONE rejection-sampling try of the conditioned outbound leg — the
         statistical core of the destination-bias fix, shared by the I-I,
         E-I and I-E loops so the three tour categories can never drift onto
@@ -2723,12 +2956,22 @@ def generate_sensor_anchored_trips(
 
         # The ACCEPT test needs only two scalars, both fully determined by
         # (anchor, beta, base_w) — the full destination field is rebuilt
-        # only for the ~2% of tries that are accepted. id(base_w) is in the
-        # key because base_w is the per-purpose activity-mass array
-        # (draw_purpose_weights returns the same object per purpose):
-        # keying on beta alone would silently corrupt the cache if two
-        # purposes ever shared a length scale.
-        key = (a_pos, beta_km, id(base_w))
+        # only for the ~2% of tries that are accepted. The weight pool must
+        # be part of the key: beta alone would silently corrupt the cache if
+        # two purposes ever shared a length scale.
+        #
+        # HARDENED 2026-08-06. The key used id(base_w). That is correct only
+        # while every base_w outlives the cache, which is true today (they are
+        # amass[purpose] entries and w_exit, all held for the whole call) but
+        # is not enforced anywhere. CPython recycles the id of a collected
+        # object, so the day someone passes a COMPUTED array here — say
+        # amass[purpose] * seasonal_factor — a temporary could inherit a dead
+        # array's id and the cache would return another purpose's scalars.
+        # That failure is silent, produces no error, and biases the drawn
+        # destinations; across a 367-build warming run it would be invisible.
+        # A stable caller-supplied label cannot be recycled, and gives the
+        # identical key structure for the pools in use today.
+        key = (a_pos, beta_km, base_w_label)
         scalars = scalar_cache.get(key) if cache_conditioned_fields else None
         if scalars is None:
             d_km = gravity_distance_km(dest_lats, dest_lons,
@@ -2760,15 +3003,16 @@ def generate_sensor_anchored_trips(
     # needs to verify SOME sensor naturally connects them (no new draw).
     ii_masks, ii_scalars = ConditionedMaskCache(), {}
     for tour_no in range(n_internal):
-        h_out, h_ret = am_pm_hours()
+        h_out = int(rng.choice(24, p=shape_hourly))
         purpose, far_base = draw_purpose_weights(h_out)
+        t_out, t_ret = tour_departures(h_out, purpose)
         succeeded = False
         for _ in range(n_accept_tries):
             drawn = draw_conditioned_outbound(
                 home_anchor_p, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons,
                 edge_lats, edge_lons, edge_u_idx, edge_v_idx, far_base,
                 gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0),
-                ii_masks, ii_scalars)
+                ii_masks, ii_scalars, purpose)
             if drawn is None:
                 continue   # anchor rejected — this IS the conditioning
             a_pos, f_pos, d_km_f, membership = drawn
@@ -2782,10 +3026,10 @@ def generate_sensor_anchored_trips(
             quota[m_edge] -= 1
             quota[return_sensor] -= 1
             tour_lengths_km.append(d_km_f)
-            trips.append(((h_out + rng.random()) * 3600,
+            trips.append((t_out,
                           edge_ids[a_pos], edge_ids[f_pos], m_edge,
                           purpose, f"ii-{tour_no}", "outbound"))
-            trips.append(((h_ret + rng.random()) * 3600,
+            trips.append((t_ret,
                           edge_ids[f_pos], edge_ids[a_pos], return_sensor,
                           purpose, f"ii-{tour_no}", "return"))
             succeeded = True
@@ -2797,15 +3041,16 @@ def generate_sensor_anchored_trips(
     # exit gate (never back through the entry gate — see note above).
     ei_masks, ei_scalars = ConditionedMaskCache(), {}
     for tour_no in range(n_ei):
-        h_out, h_ret = am_pm_hours()
+        h_out = int(rng.choice(24, p=shape_hourly))
         purpose, far_base = draw_purpose_weights(h_out)
+        t_out, t_ret = tour_departures(h_out, purpose)
         succeeded = False
         for _ in range(n_accept_tries):
             drawn = draw_conditioned_outbound(
                 entry_anchor_p, entry_u_nodes, entry_v_nodes, entry_lats,
                 entry_lons, edge_lats, edge_lons, edge_u_idx, edge_v_idx, far_base,
                 gravity_km * PURPOSE_LENGTH_SCALE.get(purpose, 1.0),
-                ei_masks, ei_scalars)
+                ei_masks, ei_scalars, purpose)
             if drawn is None:
                 continue
             a_pos, f_pos, d_km_f, membership = drawn
@@ -2825,10 +3070,10 @@ def generate_sensor_anchored_trips(
             quota[m_edge] -= 1
             quota[return_m_edge] -= 1
             tour_lengths_km.append(d_km_f)
-            trips.append(((h_out + rng.random()) * 3600,
+            trips.append((t_out,
                           entry_ids[a_pos], edge_ids[f_pos], m_edge,
                           purpose, f"ei-{tour_no}", "inbound"))
-            trips.append(((h_ret + rng.random()) * 3600,
+            trips.append((t_ret,
                           edge_ids[f_pos], exit_ids[g_pos], return_m_edge,
                           purpose, f"ei-{tour_no}", "outbound"))
             succeeded = True
@@ -2840,14 +3085,15 @@ def generate_sensor_anchored_trips(
     # drawn entry gate (never from the same exit gate — see note above).
     ie_masks, ie_scalars = ConditionedMaskCache(), {}
     for tour_no in range(n_ie):
-        h_out, h_ret = am_pm_hours()
+        h_out = int(rng.choice(24, p=shape_hourly))
+        t_out, t_ret = tour_departures(h_out, "external")
         succeeded = False
         for _ in range(n_accept_tries):
             drawn = draw_conditioned_outbound(
                 home_anchor_p, edge_u_nodes, edge_v_nodes, edge_lats, edge_lons,
                 exit_lats, exit_lons, exit_u_idx, exit_v_idx, w_exit,
                 gravity_km * PURPOSE_LENGTH_SCALE.get("external", 1.0),
-                ie_masks, ie_scalars)
+                ie_masks, ie_scalars, "external:exit_gates")
             if drawn is None:
                 continue
             a_pos, f_pos, d_km_f, membership = drawn
@@ -2871,10 +3117,10 @@ def generate_sensor_anchored_trips(
             quota[m_edge] -= 1
             quota[return_m_edge] -= 1
             tour_lengths_km.append(d_km_f)
-            trips.append(((h_out + rng.random()) * 3600,
+            trips.append((t_out,
                           edge_ids[a_pos], exit_ids[f_pos], m_edge,
                           "external", f"ie-{tour_no}", "outbound"))
-            trips.append(((h_ret + rng.random()) * 3600,
+            trips.append((t_ret,
                           entry_ids[g_pos], edge_ids[a_pos], return_m_edge,
                           "external", f"ie-{tour_no}", "inbound"))
             succeeded = True
@@ -3102,7 +3348,12 @@ def generate_day_block(
                 or (kind == "ei" and leg == "outbound")
                 or (kind == "ie" and leg == "inbound"))
 
-    hours = np.empty(len(day_templates), dtype=int)
+    # Departure SECONDS, not hours: a tour's return is now its outbound plus a
+    # drawn activity duration, which is not hour-granular. Same model as
+    # generate_sensor_anchored_trips' tour_departures -- the two paths must not
+    # disagree about when a return leg leaves, since the day library assembles
+    # windows out of exactly these blocks.
+    depart_s = np.empty(len(day_templates), dtype=float)
     by_tour: dict[str, list[int]] = {}
     for i, template in enumerate(day_templates):
         by_tour.setdefault(str(template[4]), []).append(i)
@@ -3116,21 +3367,25 @@ def generate_day_block(
             # template is handled the same safe way rather than guessing a
             # synthetic return relationship.
             for i in indices:
-                hours[i] = int(rng.choice(24, p=departure_weights(
+                h = int(rng.choice(24, p=departure_weights(
                     str(day_templates[i][3]))))
+                depart_s[i] = (h + rng.random()) * 3600.0
             continue
         h_out = int(rng.choice(24, p=departure_weights(purpose)))
-        pm_weights = departure_weights(purpose, pm_only=True)
-        h_ret = _sample_return_hour(rng, h_out, pm_weights)
+        t_out = (h_out + rng.random()) * 3600.0
+        t_ret = t_out + sample_activity_duration_h(rng, purpose) * 3600.0
         for i in outbound_indices:
-            hours[i] = h_out
+            depart_s[i] = t_out
         for i in return_indices:
-            hours[i] = h_ret
+            depart_s[i] = t_ret
+    # The sub-hour jitter is already inside depart_s, drawn once per tour so a
+    # return stays exactly one activity after its own outbound. Re-jittering
+    # here would break that link again, which is the bug this replaced.
     block = [
-        (f"{id_prefix}{i}", offset_s + (hour + rng.random()) * 3600,
+        (f"{id_prefix}{i}", offset_s + float(seconds),
          from_edge, to_edge, via, purpose, f"{id_prefix}{tour_id}", leg)
-        for i, (template, hour)
-        in enumerate(zip(day_templates, hours))
+        for i, (template, seconds)
+        in enumerate(zip(day_templates, depart_s))
         for from_edge, to_edge, via, purpose, tour_id, leg in [template[:6]]
     ]
     return block, lengths, short, canonical_templates
@@ -3267,7 +3522,8 @@ def main() -> None:
                         "real graph varies 1.3%%-100%% by sensor). This floor "
                         "only guards against a sensor silently getting zero "
                         "coverage.")
-    ap.add_argument("--route-diversity", type=float, default=2.0,
+    ap.add_argument("--route-diversity", type=float,
+                    default=DEFAULT_ROUTE_DIVERSITY,
                     help="duarouter --weights.random-factor: per-trip edge-"
                         "weight jitter drawn from [1, X) so similar OD pairs "
                         "spread across several realistic routes instead of "
@@ -3275,7 +3531,41 @@ def main() -> None:
                         "same failure mode assignment_priors.py's Dial-style "
                         "stochastic multipath was built to fix, applied here "
                         "natively via duarouter instead of a re-implemented "
-                        "networkx shortest-path loop")
+                        "networkx shortest-path loop. SUMO's X-times-optimal "
+                        "figure is a WORST-CASE bound, not the outcome: "
+                        "measured at X=2.0, 0.0% of routes exceed +50% and "
+                        "the median is +3.5% over the fastest path that "
+                        "still crosses the trip's own sensor. Directness is "
+                        "near-independent of X; diversity is not. See the "
+                        "DEFAULT_ROUTE_DIVERSITY sweep table before changing "
+                        "this. Use --max-stretch for the plausibility gate")
+    ap.add_argument("--max-stretch", type=float,
+                    default=DEFAULT_MAX_STRETCH,
+                    help="drop_excessive_detours' plausibility backstop: a "
+                        "candidate whose realised path costs more than X "
+                        "times the true shortest path for its own endpoints "
+                        "is discarded. DECOUPLED from --route-diversity on "
+                        "2026-08-06. They had deliberately been the same "
+                        "number, on the reasoning that the jitter bound is "
+                        "the mechanism being checked — but that makes the "
+                        "filter's threshold exactly the generator's own "
+                        "theoretical worst case, so it can only catch what "
+                        "the generator was already licensed to produce. "
+                        "Measured: it dropped 13 of 12,000 candidates "
+                        "(0.1%). They answer different questions — how far "
+                        "the search may EXPLORE versus how far a result may "
+                        "SHIP — and a backstop above the jitter bound is "
+                        "meant to be nearly inert, which is the point")
+    ap.add_argument("--max-local-stretch", type=float,
+                    default=DEFAULT_MAX_LOCAL_STRETCH,
+                    help="local-optimality backstop: drop a candidate whose "
+                        "ROUNDABOUT manoeuvre costs more than X times the "
+                        "shortest path between the points it entered and left "
+                        "the roundabout. --max-stretch scores a whole route, "
+                        "so it cannot see a small absurdity inside a long one "
+                        "(measured: a 101-edge route at a globally fine 1.099x "
+                        "contained a 3.3x roundabout manoeuvre). Near-inert by "
+                        "design: drops ~0.1% of the real pool")
     ap.add_argument("--atomic-tours", action="store_true",
                     help="drop a paired tour's surviving leg when the route "
                         "filters removed its partner, so every tour in the "
@@ -3663,7 +3953,10 @@ def main() -> None:
     exact_support_ids = {request["id"] for request in coverage_requests}
     drop_uturn_routes(out, exempt_ids=exact_support_ids)
     drop_excessive_detours(
-        out, routing_G, args.route_diversity, routing_costs,
+        out, routing_G, args.max_stretch, routing_costs,
+        exempt_ids=exact_support_ids)
+    drop_local_roundabout_detours(
+        out, routing_G, args.max_local_stretch, routing_costs,
         exempt_ids=exact_support_ids)
     # LAST of the route filters, deliberately: it reconciles the pairing the
     # three above break, so it has to see their combined survivors.
