@@ -203,6 +203,91 @@ dropping the plausibility layer was not by itself enough. The
 no longer says the flat "sensor constraints were retained" — it names the
 widened-band interval count and multiplier when there is one.
 
+## 6c. OPEN — node 26355153 cannot deliver its measured outflow/inflow ratio
+
+**MEASURED 2026-08-06.** The root cause of the widened-band intervals, located
+precisely, and NOT fixed.
+
+Three of the seven measured edges meet at node 26355153:
+
+```
+IN   26842525_26355153_0                              MEASURED
+     91615277_26355153_0, 96523321_26355153_0,
+     165154328_26355153_0                             unmeasured
+OUT  26355153_96523321_0, 26355153_91615277_0         both MEASURED
+```
+
+The two measured outflows carry about **1.9x** the measured inflow; the rest
+arrives via the three unmeasured approaches. That ratio is real and stable —
+historical median **1.91**, forecast median **1.84**, with the forecast range
+TIGHTER than historical (p10-p90 1.50-2.13 against 1.35-2.43). **The forecast
+is not anomalous and is not the problem.**
+
+The pool is. **94% of candidate routes on the outflow edges also use the
+measured inflow edge**, so the pool can only deliver outflow ≈ inflow while
+the counts demand ≈1.9x. With every constraint dropped except the counts
+themselves (`RUNG_NOQUOTA_TOL1`: bounds off, quotas off, band x1) those
+quarters are STILL infeasible — the pool cannot span the target vector, and no
+ordering of solver relaxations can change that. The band widens because it is
+the only thing left to give.
+
+**It is a WEEKEND issue, not a forecast one.** Within the same forecast
+source: Monday 1 widened interval, Saturday 11, Sunday 12. Earlier notes
+calling this a "forecast" problem were imprecise.
+
+**Cost:** ~8% of weekend intervals publish against a band up to 4x the
+measured tolerance. Every build still reports 100% GEH<5 and 0 infeasible, and
+GEH cannot detect this at these volumes (see 6b) — the per-build warning is
+what surfaces it.
+
+**Fix direction, NOT attempted:** the pool needs routes reaching those outflow
+edges via the UNMEASURED approaches to the node. That is a generation change
+(how origins are drawn around that junction) and it interacts with the
+sensor-anchoring rule, since a route must still cross a sensor to exist.
+
+**Two hypotheses were tested and REFUTED** — recorded so they are not retried:
+
+1. *Purpose quotas forcing the band open.* Refuted for this case. The
+   investigation did find a real inversion and fixed it (6d), but the weekend
+   counts were unchanged by it.
+2. *Sparse candidate coverage in low-demand quarters.* The sparsity is real
+   (relaxing quarters: median 108 candidates, as few as 2 on a given measured
+   edge, against 220/18-19 in clean quarters), but a 25% uniform departure
+   floor left the relaxations at 23/23/20 — **unchanged** — while costing
+   **577 s -> 950 s (+65%)** per 3-day build, roughly 24 h -> 35 h on the
+   annual run. `POOL_DEPARTURE_UNIFORM_FLOOR` is therefore default **0.0**;
+   the mechanism is kept and documented, not paid for.
+
+## 6d. FIXED — purpose quotas outranked the measured counts
+
+**MEASURED 2026-08-06**, the second inversion of the same class as 6b.
+
+`required_groups` (the exact purpose mix) stayed active at EVERY ladder rung,
+so when the quotas and the measured counts were jointly infeasible the quotas
+could not yield and **the counts had to**. Proven on a minimal case — measured
+edge m=100 served only by an `arbete` route, quota pinning arbete at 90:
+
+```
+with the quota     band x1 INFEASIBLE, x2 serves m=90   <- count relaxed
+without the quota  band x1 serves m=100                 <- count exact
+ladder outcome: relax_tol2x
+```
+
+The old justification was that an inviolable quota stops the solver
+"publishing a route with a fabricated purpose label". That conflated two
+things: `prepare_calibration` stratifies the pool into one variable per
+(geometry, purpose), so provenance is immutable regardless of which groups are
+constrained. Dropping a quota only lets the published MIX drift from its RVU
+prior — a level-3 behavioural prior yielding to a level-1 measurement, which
+is the hierarchy working.
+
+**Fix:** `RUNG_NOQUOTA_TOL1` — bounds and quotas dropped, measurement band
+UNWIDENED — placed after the Level-2 bounds and before any widening. Verified
+on live data: one 2027-04-26 interval moved from `relax_tol2x` to
+`no_purpose_quota_tol1` and now serves its counts exactly. A new
+`PURPOSE MIX RELAXED` log line reports it, so the fix does not trade one
+silent concession for another.
+
 ## 7. Pool and picker
 
 **DOCUMENTED** · `docs/reviews/PIPELINE_FAULT_AUDIT_2026-08-06.md` and

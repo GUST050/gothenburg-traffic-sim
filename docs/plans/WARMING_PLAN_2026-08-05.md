@@ -185,20 +185,44 @@ these edits a bound source (§1) so it cannot land mid-run anyway.
 
 ---
 
-## 5. The bigger warming lever, still held
+## 5. The bigger warming lever — MERGED 2026-08-06, this section was stale
 
 `speed-stage-b` — per-day demand, collapsing the 2.99× window redundancy (367
 builds for 363 days). Already built: 23 commits, day library, window assembly,
 gzipped storage, warm-horizon CLI, and a **full-scale golden A/B that passed
 byte-identical** (`41a5195`).
 
-It would take the demand half from 33.8 h to ~11.3 h — worth more than
-everything in §2–§4 combined. It is unmerged by owner decision (`efd3230`)
-pending a held-out set strong enough to test ranking discrimination.
+It takes the demand half from 33.8 h to ~11.3 h — worth more than everything
+in §2–§4 combined.
 
-v9 is now that set in all but one gate check (`median_spearman` +0.945 against
-the v3-era −0.976), so **Stage 4 of the closure plan is what unblocks this**.
-Integration cost measured: 9 conflicted files.
+**CORRECTED 2026-08-06.** This section said stage B was "unmerged by owner
+decision (`efd3230`)". That was true when written and is not true now:
+
+```
+efd3230  2026-07-22  Record owner decision: hold B unmerged pending a stronger v3 set
+9591bc7  2026-08-06  Merge stage B: the demand day library          <- MERGED
+56414bd  2026-08-06  Regenerate the annual warm plan on stage B demand
+```
+
+`9591bc7` is an ancestor of HEAD, `demand/day_library.py` is present, and
+`use_day_library` is ON by default for whole-day windows — which is exactly
+what every annual demand build is (`begin 00:00`, `end 24:00`). The annual
+plan itself was regenerated on stage B demand.
+
+Leaving the stale text here caused a real error: a later estimate assumed
+each of the 367 windows recalibrates all three of its days and projected
+~61 h. The plan's own structure refutes that —
+
+```
+demand builds             367
+day-slots across windows  1087
+DISTINCT calendar days     363
+redundancy factor         2.99x
+```
+
+— and the day library is what collapses 1087 day-calibrations to 363. Any
+estimate must count DISTINCT DAYS, not window-days. See §2 for the corrected
+projection.
 
 ---
 
