@@ -49,7 +49,9 @@ from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
                                          write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
 from traffic_sim.demand.build_lock import demand_build_lock, parent_holds_lock
-from traffic_sim.demand.provenance import validate_calibrated_provenance
+from traffic_sim.demand.provenance import (DAY_PROVENANCE_NAME,
+                                           validate_assembled_provenance,
+                                           validate_calibrated_provenance)
 from traffic_sim.demand.source_identity import demand_source_paths
 from demand.day_library import (DayIdentity, DayLibrary, assemble_window,
                                 merge_day_reports)
@@ -795,6 +797,12 @@ def main() -> None:
             and (1 if args.legacy_random_pool else args.congestion_iterations) == 1
         )
         composition = window_pool_composition(range_start, args.days)
+        # The stored day directories this window was assembled from, empty
+        # unless the day library actually ran. It selects which provenance
+        # contract the published window is held to below, so it must be set by
+        # the code that assembles, not inferred from flags that only say what
+        # was INTENDED.
+        assembled_day_dirs: list[Path] = []
 
         def day_identity(day: pd.Timestamp, day_index: int,
                          variant_inputs: dict) -> DayIdentity:
@@ -839,6 +847,7 @@ def main() -> None:
                     cand_path, variants, variant_inputs, **options)
             nonlocal day_blocks_path
             library = DayLibrary()
+            nonlocal assembled_day_dirs
             day_blocks_path = SUMO_DIR / "candidate_day_blocks.json"
             day_directories: list[Path] = []
             per_variant_reports: dict[str, list[dict]] = {
@@ -871,6 +880,10 @@ def main() -> None:
                          / f"fit{suffix}.json").read_text()))
             print(f"  demand day library: {reused}/{args.days} day(s) reused, "
                   f"{args.days - reused} calibrated")
+            # Hand the proven days to the window-level check. Non-empty is what
+            # marks this window as day-assembled: its candidate ids belong to
+            # per-day pools, not to whatever pool is left on disk.
+            assembled_day_dirs = list(day_directories)
             # The direction variants form one demand contract, exactly as in
             # the direct path: assemble every variant to a staged sibling,
             # verify every merged report against the same publication gate,
@@ -946,6 +959,27 @@ def main() -> None:
                     fit.write_text(json.dumps(day_reports[suffix],
                                               separators=(",", ":")))
                     artifacts[fit.name] = fit
+                # Prove provenance HERE, where the context holds: cand_path and
+                # its sidecar are THIS day's pool right now, and the day's own
+                # ``d0_`` ids resolve against it exactly. Once the loop moves on
+                # this pool is overwritten by the next day's, so a window can
+                # never re-derive it -- which is precisely the bug that stopped
+                # the 2026-08-06 warming launch. The stored proof is what
+                # validate_assembled_provenance verifies later, and it travels
+                # with the day, so a LIBRARY HIT carries its proof forward
+                # instead of silently skipping the check.
+                day_provenance = validate_calibrated_provenance(
+                    cand_path,
+                    cand_path.with_name(
+                        cand_path.name.replace(".rou.xml", ".meta.json")),
+                    [(scratch_dir / f"calibrated{suffix}.rou.xml",
+                      _agent_path_for(scratch_dir / f"calibrated{suffix}.rou.xml"))
+                     for suffix, _key in variants],
+                )
+                record = scratch_dir / DAY_PROVENANCE_NAME
+                record.write_text(json.dumps(day_provenance,
+                                             separators=(",", ":")))
+                artifacts[record.name] = record
                 library.put(identity, artifacts, fit={
                     "geh_pct": day_reports[""]["geh_pct"],
                     "vehicles": day_reports[""]["vehicles"],
@@ -1112,25 +1146,35 @@ def main() -> None:
         edge_support_augmentation = {"schema_version": 1,
                                      "status": "disabled_baseline_rule",
                                      "variants": {}}
-        candidate_provenance = validate_calibrated_provenance(
-            cand_path,
-            cand_path.with_name(cand_path.name.replace(".rou.xml", ".meta.json")),
-            [
-                (
-                    calib_path if suffix == "" else
-                    SUMO_DIR / f"calibrated{suffix}.rou.xml",
-                    (calib_path if suffix == "" else
-                     SUMO_DIR / f"calibrated{suffix}.rou.xml").with_name(
-                         (calib_path if suffix == "" else
-                          SUMO_DIR / f"calibrated{suffix}.rou.xml").name.replace(
-                              ".rou.xml", ".agents.json")),
-                )
-                for suffix, _key in variants
-            ],
-        )
-        print("  calibrated candidate provenance: "
-              f"{candidate_provenance['vehicles']} vehicles across "
-              f"{len(candidate_provenance['variants'])} variant(s) — PASS")
+        variant_artifacts = []
+        for suffix, _key in variants:
+            route_path = (calib_path if suffix == ""
+                          else SUMO_DIR / f"calibrated{suffix}.rou.xml")
+            variant_artifacts.append((route_path, _agent_path_for(route_path)))
+        if assembled_day_dirs:
+            # Day-assembled window: every candidate id belongs to the pool of
+            # the DAY that drew it, and each day's pool was overwritten by the
+            # next one. Resolving these ids against the single pool left on
+            # disk is not a weaker check, it is a WRONG one -- it would compare
+            # day 0's agents against day 1's candidates. The days carry their
+            # own proofs instead; this verifies them and binds them to the
+            # published artifacts.
+            candidate_provenance = validate_assembled_provenance(
+                assembled_day_dirs, variant_artifacts)
+            print("  calibrated candidate provenance: "
+                  f"{candidate_provenance['vehicles']} vehicles across "
+                  f"{len(candidate_provenance['variants'])} variant(s) from "
+                  f"{len(candidate_provenance['days'])} proven day(s) — PASS")
+        else:
+            candidate_provenance = validate_calibrated_provenance(
+                cand_path,
+                cand_path.with_name(
+                    cand_path.name.replace(".rou.xml", ".meta.json")),
+                variant_artifacts,
+            )
+            print("  calibrated candidate provenance: "
+                  f"{candidate_provenance['vehicles']} vehicles across "
+                  f"{len(candidate_provenance['variants'])} variant(s) — PASS")
 
     meta = demand_metadata(
         start_date=args.start_date, days=args.days, source=args.source,
