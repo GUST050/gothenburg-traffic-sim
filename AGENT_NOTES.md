@@ -7,52 +7,43 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `FULL-DAY-ANNUAL-WARMING` /
-  `BLOCKED_ON_192_GIB_DISK_PREFLIGHT`.
-- Summary: Every-edge demand/provenance and maximum-depth warm chaining are
-  validated. Final plan `9cc823d3…45283b` contains 104,685 units, but no root is
-  initialized because the corrected disk gate requires 192 GiB and only about
-  168 GiB is free. No annual unit has run.
-- Files changed: content-addressed store reuse, complete archive source binding,
-  route-window chaining, native-millisecond boundary transport, annual chain
-  audit, disk gate, focused tests, final plan and pre-warming documentation.
-- Checks: annual/store/progress/population/boundary/route suite — `164 PASS`;
-  boundary/route/audit-focused suite — `125 PASS`; held-out mechanism suite —
-  `176 PASS`; final plan verify and `git diff --check` — `PASS`; real 96-link
-  q10 population — `96 succeeded, 0 failed`; v2 cold audit — `PASS`. Final
-  production preflight — expected `FAIL` on disk (206,158,430,208 required;
-  180,475,920,384 available).
-- Decisions and evidence:
-  1. Plan `9cc823d3…45283b`: 365 days, 96 clock slots, 1,699,440 possible and
-     1,682,634 exact intervals, 34,895 checkpoints, 367 demand builds, 104,685
-     q10/q50/q90 state units. The 16,806 exact-envelope gaps remain cold.
-  2. Canonical archive `demand-20260804-100926-c6316856-7efa` contains all ten
-     products, 179,232 calibrated vehicles across three days, every one of the
-     7,125 routable edges, 100% GEH<5 and zero infeasible intervals. Its full
-     current demand-source/runtime/output identity validates.
-  3. The first full-chain pilot exposed full-route definition accumulation:
-     depth-96 state grew to 45 MiB. Exact departure-window route shards fix it;
-     final states remain 1.24–1.59 MiB.
-  4. The final q10 chain populated 96/96 links with zero failures. Independent
-     cold comparisons at links 2/48/96 have exact vehicle records, time-loss
-     totals, active accumulators, completed order, insertion/teleport counters,
-     queue and recovery buckets. Cold-only `loaded` lookahead differs by
-     4/55/14 definitions and is explicitly non-behavioural and bounded.
-  5. One-process 96-snapshot batching is rejected under the current exactness
-     contract: unfinished tripinfo finalizes at SUMO exit, and save-state omits
-     the private mesoscopic time-loss accumulator required at every checkpoint.
-  6. A three-day archive measures 326 MiB and the q10 chain store 40 MiB. The
-     old 160-GiB gate could admit a near-complete disk abort; 192 GiB provides
-     measured headroom plus the separate 8-GiB runtime reserve.
-- Blockers or risks: Free at least 23.92 GiB, preferably 30 GiB, then rerun the
-  final preflight. Historical plans, pilots, preflight/readiness records and
-  source-bound campaigns remain evidence only and must not be relabelled.
-- Suggested next action: after freeing disk, run `python3
-  tools/populate_annual_warming.py --preflight --state-workers 3`. Only if it
-  passes, initialize plan `9cc823d316eee71d1895e90704537512e48ad7ed37604d9644d9b88a9845283b`
-  and confirm 104,685 pending/zero attempts before execution.
-- Actor notes: Do not use any older root or stale readiness command. Population
-  still does not activate or certify the bank for product reuse.
+- Focus and status: `PRE-WARMING-CLEANUP-AND-VALIDATION` / `READY_TO_PLAN`.
+- Summary: the stage B warming alarm is withdrawn. Six LOSO draws under
+  identical code span 0.929-1.537, and the pre-B baseline of 0.971 falls
+  inside that range -- the apparent regression was a low draw compared
+  against a high draw of the same distribution. Warming is unblocked by
+  anything raised here; it needs a fresh plan key and, ideally, v10 first.
+- READ FIRST: `docs/OPEN_ISSUES_2026-08-06.md`. Every open item, each marked
+  MEASURED / DOCUMENTED / OPEN, with where its evidence lives.
+- The finding that outlives this task: a SINGLE LOSO run cannot compare two
+  pipeline versions. Draw spread under identical code is 0.608 (SD 0.236),
+  the same order as differences previously attributed to code changes. Any
+  such claim needs several draws per version; n=3 per arm can never reach
+  significance (min two-sided p = 0.100), n=4 is the floor.
+  Evidence: `validation/loso_draw_variance_v1.json`.
+- Landed this session: C1 closure-integrity fix (lost access is an impact,
+  not a broken run) plus the denied-departure hole it exposed; the
+  direction model extended to all six sensors as a CEILING only, never a
+  floor; a silent target-halving bug in `build_targets`; stage B merged;
+  474 lines of retired coverage machinery removed; project map cut from 22
+  root documents to 9 and ~50 GB of disposable run output to 19 GB.
+- Checks: demand 100% GEH<5 and 0 infeasible on all three variants; 3,687
+  passing tests. 158 failures are frozen-contract seal drift (32 of 35
+  artifacts), down from 259 at session start -- they are the seals refusing
+  to certify old evidence against changed code, not breakage.
+- Next, in order:
+  1. `tools/plan_annual_warming.py --write` -- the key is stale again.
+  2. Freeze and run v10. v9 failed one check of seven
+     (`ranking_case_fraction` 0.4 against 0.5); its cause was C1, now fixed,
+     so the same selection rule should pass. `global_best_claim_allowed`
+     stays False until it does.
+  3. Measure link-flow observability for the five unmeasured carriageways.
+     It decides whether the direction ceiling should exist at all, and it
+     was never measured.
+- Not blocking, low priority: six pre-B draws (`6e5763e^`) would turn the
+  stage B result into a formal test. A worktree has none of the gitignored
+  inputs -- copy `sumo/net.net.xml` in and verify the build before spending
+  six runs on it.
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
