@@ -488,11 +488,40 @@ def warn_bound_violations(report: dict, label: str) -> None:
               f"after rounding — {sample}{more}.")
 
 
+#: Ladder rungs that solved against a WIDENED measurement band, and the
+#: multiplier each applied. Kept as names so this stays readable against a
+#: stored report without importing the solver's integer constants.
+_WIDENED_BAND_RUNGS = {"relax_tol2x": 2, "relax_tol4x": 4, "relax_no_bounds": 4}
+
+
 def warn_relaxed_bound_violations(report: dict, label: str) -> None:
-    """Expose intentional counts-first structural relaxations honestly."""
+    """Expose intentional counts-first structural relaxations honestly.
+
+    This used to end with the flat claim "sensor constraints were retained".
+    That was true only in the sense that the constraint rows were still
+    present: rungs that drop the Level-2 bounds also solve at ``tol_mult``
+    4.0, so the measured counts were retained against a band four times
+    wider. On this network GEH<5 cannot show that — the widest 4x band tops
+    out at GEH 3.81, and no measured edge has ever exceeded 203 vehicles in
+    a quarter — so if this warning does not say it, nothing does.
+    """
     violations = report.get("relaxed_bound_violations", [])
-    if violations:
-        quarters = sorted({int(v["quarter"]) for v in violations})
-        print(f"  ⚠ STRUCTURAL BOUNDS RELAXED ({label}): "
-              f"{len(violations)} edge-quarter value(s) in quarters {quarters} — "
-              "sensor constraints were retained; inspect confidence before use")
+    if not violations:
+        return
+    quarters = sorted({int(v["quarter"]) for v in violations})
+    summary = report.get("relaxation_summary") or {}
+    widened = {name: int(summary[name]) for name in _WIDENED_BAND_RUNGS
+               if summary.get(name)}
+    if widened:
+        detail = ", ".join(
+            f"{count} at x{_WIDENED_BAND_RUNGS[name]} ({name})"
+            for name, count in sorted(widened.items()))
+        band = (f"; {sum(widened.values())} interval(s) also solved against a "
+                f"WIDENED measurement band — {detail}. GEH<5 cannot detect "
+                f"this at these volumes")
+    else:
+        band = ("; every interval kept the unwidened measurement band "
+                "(tol x1)")
+    print(f"  ⚠ STRUCTURAL BOUNDS RELAXED ({label}): "
+          f"{len(violations)} edge-quarter value(s) in quarters {quarters}"
+          f"{band} — inspect confidence before use")

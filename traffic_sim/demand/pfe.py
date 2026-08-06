@@ -865,11 +865,31 @@ def repair_integer_bounds(
 # can show a real convergence diagnostic (2026-07-10, found in a review:
 # the ladder ran silently, with no visibility into how often quarters
 # needed it) instead of only a pass/fail infeasible_intervals count.
+#
+# ORDERING IS THE CONTRACT (2026-08-06). The ladder is ordered strongest-
+# first under THIS project's stated hierarchy: the measured sensor counts are
+# the calibration contract, Level-2 structural bounds are a plausibility
+# prior. So a rung that keeps the measurement band exact and drops a bound
+# ranks ABOVE one that keeps the bound by widening the band.
+#
+# It used to be the other way round: the ladder went (tol x2, bounds kept),
+# (tol x4, bounds kept), (tol x4, bounds dropped), with no rung that dropped
+# a bound at the unwidened band at all. An interval infeasible only because
+# of a plausibility bound therefore bought its feasibility with up to 4x the
+# measurement tolerance -- the exact trade solve_interval_with_relaxation's
+# own docstring says must never happen. Measured over 12 demand builds /
+# 6,336 interval solves before the fix: clean 76.7%, relax_tol2x 0.3%,
+# relax_tol4x 0.3%, relax_no_bounds 22.6%. The two tol-widening rungs
+# rescued 0.6% of intervals while 22.6% took the widened band they may never
+# have needed, and GEH<5 cannot detect that: at the far edge of the 4x band
+# GEH peaks at 3.81 for a 400 veh/quarter target, and the largest count ever
+# measured on any of the 7 measured edges in any quarter is 203.
 RUNG_CLEAN        = 0   # first solve_interval_entropy call succeeded
-RUNG_RELAX_TOL2X  = 1   # tol_mult=2.0, bounds kept
-RUNG_RELAX_TOL4X  = 2   # tol_mult=4.0, bounds kept
-RUNG_RELAX_NOBND  = 3   # tol_mult=4.0, bounds dropped
-RUNG_LP_FALLBACK  = 4   # solve_interval (LP), the final rung
+RUNG_NOBND_TOL1   = 1   # bounds dropped, measurement band UNWIDENED
+RUNG_RELAX_TOL2X  = 2   # tol_mult=2.0, bounds kept
+RUNG_RELAX_TOL4X  = 3   # tol_mult=4.0, bounds kept
+RUNG_RELAX_NOBND  = 4   # tol_mult=4.0, bounds dropped
+RUNG_LP_FALLBACK  = 5   # solve_interval (LP), the final rung
 RUNG_INFEASIBLE   = -1  # no rung produced a solution
 
 
@@ -891,9 +911,14 @@ def solve_interval_with_relaxation(
     RUNG_INFEASIBLE if none did), not just whether one exists.
 
     ``groups`` (structure preservation, 2026-07-12) are dropped at the same
-    ladder stage as bounds (RUNG_RELAX_NOBND): both are plausibility
-    constraints, strictly weaker than the measured counts — a group cap
-    must never be the reason an interval's real sensor counts go unserved.
+    ladder stage as bounds: both are plausibility constraints, strictly
+    weaker than the measured counts — a group cap must never be the reason
+    an interval's real sensor counts go unserved. That is why the FIRST
+    relaxation tried is RUNG_NOBND_TOL1, which drops them while leaving the
+    measurement band untouched; the tol-widening rungs come after it, and
+    are reached only when dropping the plausibility layer was not by itself
+    enough. See the RUNG_* block for the measurement that motivated the
+    order.
 
     ``required_groups`` are different: they encode a route's immutable
     provenance class (for example ``arbete`` versus ``genomfart``), not an
@@ -919,11 +944,15 @@ def solve_interval_with_relaxation(
     if sol is not None:
         return sol, RUNG_CLEAN
     for rung, (tol_mult, use_bounds) in zip(
-        (RUNG_RELAX_TOL2X, RUNG_RELAX_TOL4X, RUNG_RELAX_NOBND),
-        ((2.0, True), (4.0, True), (4.0, False)),
+        (RUNG_NOBND_TOL1, RUNG_RELAX_TOL2X, RUNG_RELAX_TOL4X, RUNG_RELAX_NOBND),
+        ((1.0, False), (2.0, True), (4.0, True), (4.0, False)),
     ):
+        # `continue`, not `break`: the no-bounds rungs are no longer last, so
+        # a caller that forbids structural relaxation must skip them and keep
+        # descending the bounds-preserving ones. With RUNG_NOBND_TOL1 skipped
+        # such a caller sees exactly the pre-2026-08-06 ladder.
         if not use_bounds and not allow_structural_relaxation:
-            break
+            continue
         sol = solve_interval_entropy(
             shapes, targets, bounds if use_bounds else {}, priors,
             tol_mult=tol_mult, route_cost=route_cost,
@@ -1080,7 +1109,12 @@ def solve_interval_with_structure_guard(
             # old path did exactly that: a cap could force RUNG_RELAX_NOBND,
             # then the writer quite correctly rejected the resulting bound
             # breach many minutes after the actual decision was made.
-            allow_structural_relaxation = rung >= RUNG_RELAX_NOBND
+            # Expressed against the predicate rather than a numeric rung
+            # comparison: RUNG_NOBND_TOL1 also drops the Level-2 bounds but
+            # sorts BELOW the tol-widening rungs, so `rung >= RUNG_RELAX_NOBND`
+            # would have silently re-forbidden relaxation for a solution that
+            # had already taken it.
+            allow_structural_relaxation = not _rung_keeps_structural_bounds(rung)
             capped_sol, capped_rung = solve_interval_with_relaxation(
                 shapes, targets, bounds, priors, route_cost=route_cost,
                 groups=[(members, 0.0, cap_share * total)
@@ -1243,8 +1277,20 @@ def apply_through_share_target(
             out.append(Counter(mix))
             continue
         ext = float(mix.get("external", 0))
-        act_target = max(tot - theta * tot - ext, 0.0)
-        new = Counter({"through": theta * tot})
+        through_target = theta * tot
+        act_target = tot - through_target - ext
+        if act_target < 0.0:
+            # External traffic alone already exceeds the non-through budget.
+            # Clamping act_target at 0 and keeping BOTH through and external
+            # at full size made the mix sum to more than `tot`, so the quarter
+            # silently published a different through share than theta once
+            # _integer_mix_targets renormalised it back down. Give the
+            # activity categories nothing and take the shortfall out of the
+            # through quota instead, which is the term theta actually governs;
+            # external is an observed absolute count and stays intact.
+            act_target = 0.0
+            through_target = max(tot - ext, 0.0)
+        new = Counter({"through": through_target})
         if ext:
             new["external"] = ext
         for k, v in acts.items():
@@ -1622,7 +1668,8 @@ def _draw_endpoint_location(source: Candidate, side: str, ordinal: int) -> dict 
 
 
 RUNG_NAMES = {
-    RUNG_CLEAN: "clean", RUNG_RELAX_TOL2X: "relax_tol2x",
+    RUNG_CLEAN: "clean", RUNG_NOBND_TOL1: "no_bounds_tol1",
+    RUNG_RELAX_TOL2X: "relax_tol2x",
     RUNG_RELAX_TOL4X: "relax_tol4x", RUNG_RELAX_NOBND: "relax_no_bounds",
     RUNG_LP_FALLBACK: "lp_fallback", RUNG_INFEASIBLE: "infeasible",
 }
@@ -1632,6 +1679,8 @@ def _rung_measurement_tol_mult(rung: int | None) -> float:
     """Return the Level-1 tolerance multiplier used by a solved interval."""
     return {
         RUNG_CLEAN: 1.0,
+        # Dropping the plausibility layer never widens the measurement band.
+        RUNG_NOBND_TOL1: 1.0,
         RUNG_RELAX_TOL2X: 2.0,
         RUNG_RELAX_TOL4X: 4.0,
         RUNG_RELAX_NOBND: 4.0,
@@ -1643,7 +1692,8 @@ def _rung_measurement_tol_mult(rung: int | None) -> float:
 
 def _rung_keeps_structural_bounds(rung: int | None) -> bool:
     """Whether this rung still solved with its supplied Level-2 bounds."""
-    return rung not in (RUNG_RELAX_NOBND, RUNG_LP_FALLBACK, RUNG_INFEASIBLE)
+    return rung not in (RUNG_NOBND_TOL1, RUNG_RELAX_NOBND,
+                        RUNG_LP_FALLBACK, RUNG_INFEASIBLE)
 
 
 def quarter_publish_counts(

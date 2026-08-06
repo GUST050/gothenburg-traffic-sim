@@ -299,6 +299,25 @@ class TestCalibrateGEH:
         assert result["arbete"] / result["service"] == pytest.approx(2)
         assert result["service"] / result["fritid"] == pytest.approx(2)
 
+    def test_through_target_never_inflates_a_quarter_past_its_total(self):
+        # REGRESSION (2026-08-06). When external alone exceeds the non-through
+        # budget, act_target went negative and was clamped at 0 while through
+        # and external both kept their full size — so the mix summed to MORE
+        # than the quarter's own total and _integer_mix_targets renormalised
+        # it back down, silently publishing a through share that was not
+        # theta. Here tot=100, theta=0.25 leaves 75 for non-through, but
+        # external is 90. The total must be conserved and external, an
+        # observed absolute count, must survive intact.
+        source = Counter({"through": 5, "external": 90, "arbete": 5})
+
+        result = pfe.apply_through_share_target([source], 0.25)[0]
+
+        assert sum(result.values()) == pytest.approx(100)
+        assert result["external"] == pytest.approx(90)
+        assert result["through"] == pytest.approx(10)
+        assert result["arbete"] == pytest.approx(0)
+        assert all(value >= 0 for value in result.values())
+
     def test_through_target_rejects_invalid_enabled_value(self):
         with pytest.raises(ValueError, match=r"within \(0, 1\)"):
             pfe.apply_through_share_target([Counter({"arbete": 1})], 1.0)
@@ -390,6 +409,46 @@ class TestRouteIndexGroups:
         assert sol is not None
         assert served(sol, cands, "m") == pytest.approx(100, rel=0.06)
         assert rung != RUNG_INFEASIBLE
+
+    def test_ladder_drops_bounds_before_it_widens_the_measured_band(self):
+        # REGRESSION (2026-08-06). The ladder used to run (tol x2, bounds
+        # kept) and (tol x4, bounds kept) BEFORE it would drop a Level-2
+        # bound, so an interval infeasible only because of a plausibility
+        # bound paid for its feasibility with up to 4x the measurement
+        # tolerance. Here M=100 is servable exactly, but only by a route the
+        # bound on "u" forbids. The first relaxation must therefore be
+        # RUNG_NOBND_TOL1 — bound gone, measurement band untouched.
+        cands = [cand("m", "u")]
+        sol, rung = solve_interval_with_relaxation(
+            cands, {"m": 100.0}, {"u": (0.0, 5.0)}, {})
+        assert sol is not None
+        assert rung == pfe.RUNG_NOBND_TOL1
+        assert pfe._rung_measurement_tol_mult(rung) == 1.0
+        assert served(sol, cands, "m") == pytest.approx(100, rel=0.06)
+
+    def test_nobnd_tol1_is_recorded_as_having_dropped_its_bounds(self):
+        # The writer decides whether a bound breach is a real violation or an
+        # accepted counts-first relaxation from this predicate alone. A rung
+        # that drops bounds must never be reported as having kept them.
+        assert not pfe._rung_keeps_structural_bounds(pfe.RUNG_NOBND_TOL1)
+        assert pfe.RUNG_NAMES[pfe.RUNG_NOBND_TOL1] == "no_bounds_tol1"
+
+    def test_forbidding_structural_relaxation_still_descends_the_ladder(self):
+        # RUNG_NOBND_TOL1 sits FIRST now, so the skip for callers that forbid
+        # structural relaxation has to `continue`, not `break` — otherwise the
+        # bounds-preserving tol rungs below it become unreachable and an
+        # interval that only needed tol x2 reports infeasible.
+        # Bound hi=93 sits OUTSIDE the clean band [95,105] but inside the
+        # x2 band [90,110], so the interval is infeasible at RUNG_CLEAN and
+        # feasible at exactly RUNG_RELAX_TOL2X — the rung a `break` here
+        # would have made unreachable.
+        cands = [cand("m")]
+        sol, rung = solve_interval_with_relaxation(
+            cands, {"m": 100.0}, {"m": (0.0, 93.0)}, {},
+            allow_structural_relaxation=False)
+        assert sol is not None
+        assert rung == pfe.RUNG_RELAX_TOL2X
+        assert pfe._rung_keeps_structural_bounds(rung)
 
     def test_group_with_zero_lo_does_not_activate_its_members(self):
         # A pure ceiling must not, by itself, put flow on a route nothing
