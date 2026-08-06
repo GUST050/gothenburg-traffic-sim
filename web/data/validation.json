@@ -1,69 +1,69 @@
 {
  "schema_version": 1,
- "generated_at": "2026-08-06T14:50:49Z",
+ "generated_at": "2026-08-06T16:36:20Z",
  "demand_window": "2025-09-16",
  "demand_source": "historical",
- "demand_build_id": "f9a7f246a3bf5bbd733b",
+ "demand_build_id": "0c15c13bd0602d191ee5",
  "overall": "warn",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 21781,
+   "vehicles": 21669,
    "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
   },
   "structure": {
    "status": "warn",
    "flags": [
-    "trips_under_1km_cap: 13 quarter(s) exceed the exact 2.00x pool-share/floor-2 cap; maximum excess 2.18 vehicle(s)"
+    "trips_under_1km_cap: 21 quarter(s) exceed the exact 2.00x pool-share/floor-2 cap; maximum excess 4.00 vehicle(s)"
    ],
-   "dest_within_200m_pct": 4.1,
+   "dest_within_200m_pct": 4.0,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0062,
-    0.8024,
-    0.1914
+    0.0074,
+    0.778,
+    0.2145
    ],
-   "trip_length_l1_vs_rvu": 0.5539,
-   "onward_after_sensor_median_m": 2870.1,
-   "onward_under_200m_pct": 1.5,
+   "trip_length_l1_vs_rvu": 0.3067,
+   "onward_after_sensor_median_m": 2880.0,
+   "onward_under_200m_pct": 1.9,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
   },
   "purposes": {
    "status": "pass",
    "purpose_counts": {
-    "arbete": 8003,
-    "external": 1276,
-    "fritid": 2457,
-    "service": 4550,
-    "through": 5495
+    "arbete": 7944,
+    "external": 1375,
+    "fritid": 2417,
+    "service": 4464,
+    "through": 5469
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 8003,
-     "mean_km": 2.71,
-     "median_km": 2.64
+     "n": 7944,
+     "mean_km": 2.8,
+     "median_km": 2.61
     },
     "external": {
-     "n": 1276,
-     "mean_km": 3.85,
-     "median_km": 3.62
+     "n": 1375,
+     "mean_km": 4.01,
+     "median_km": 3.98
     },
     "fritid": {
-     "n": 2457,
-     "mean_km": 2.97,
-     "median_km": 2.78
+     "n": 2417,
+     "mean_km": 2.98,
+     "median_km": 2.79
     },
     "service": {
-     "n": 4550,
-     "mean_km": 2.99,
-     "median_km": 2.78
+     "n": 4464,
+     "mean_km": 2.96,
+     "median_km": 2.8
     },
     "through": {
-     "n": 5495,
-     "mean_km": 5.24,
-     "median_km": 5.42
+     "n": 5469,
+     "mean_km": 5.64,
+     "median_km": 6.07
     }
    },
    "ordering_violated": false,
@@ -97,22 +97,22 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 20966,
-     "loaded": 20966,
+     "inserted": 20906,
+     "loaded": 20906,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 21781,
-     "loaded": 21781,
+     "inserted": 21669,
+     "loaded": 21669,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 22507,
-     "loaded": 22507,
+     "inserted": 22290,
+     "loaded": 22290,
      "unfinished": 0,
      "teleports": 0
     }
@@ -126,10 +126,10 @@
    "aggregation_minutes": 60,
    "edge_quarters": 168,
    "geh_lt_5_pct": 100.0,
-   "mean_abs_error": 3.448409,
-   "max_abs_error": 16.390333,
+   "mean_abs_error": 3.329806,
+   "max_abs_error": 18.522,
    "station_edge_quarters": 144,
-   "station_max_abs_error": 29.666667,
+   "station_max_abs_error": 30.0,
    "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "multi_day": {
@@ -155,7 +155,7 @@
   },
   "temporal_holdout": {
    "status": "missing",
-   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='523622c006c1a6b20bf7e81b6564d0aaa43863e378c5fa27fc9a2187cdc252b1', current='9385822d7d14891086b2212b4676f5179f64b5eb449094c4d2c2e684708c738f'"
+   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='523622c006c1a6b20bf7e81b6564d0aaa43863e378c5fa27fc9a2187cdc252b1', current='3b37af2aa60143d4954840c7f46be159e6ffa7c8136d361547524a48ae563c8c'"
   }
  }
 }
