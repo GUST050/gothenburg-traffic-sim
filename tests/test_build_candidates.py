@@ -575,6 +575,169 @@ class TestDropUturnRoutes:
         assert read_vehicle_ids(path) == ["clean"]
 
 
+class TestMarkOrphanedTourLegs:
+    """THE DEFAULT half-tour treatment (2026-08-06).
+
+    drop_uturn_routes, drop_excessive_detours and validate_routed_candidates
+    all delete individual legs, so a paired tour could lose its return and
+    leave a half tour whose surviving leg still carried tour provenance into
+    calibrated.agents.json. Measured on the real 2025-09-16 pool: 1,316 of
+    2,695 non-through tours (48.8%) were half tours, reaching 21.5% of
+    published vehicles. The pool is a coverage support set the PFE reweights
+    freely, so the legs are KEPT — deleting them costs 13.9% of the pool and
+    breaches the 75% supply floor — but the breakage is now recorded instead
+    of silent.
+    """
+
+    def _meta(self, path, records):
+        path.write_text(json.dumps(
+            {"schema_version": 2, "candidates": records}))
+
+    def _read(self, path):
+        return json.loads(path.read_text())["candidates"]
+
+    def test_orphaned_leg_is_kept_but_marked(self, tmp_path):
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        write_routes(rou, [("t1_out", ["1_2_0"]), ("t2_out", ["3_4_0"]),
+                           ("t2_ret", ["4_3_0"])])
+        self._meta(meta, {
+            "t1_out": {"tour_id": "ii-1", "leg": "outbound"},
+            "t2_out": {"tour_id": "ii-2", "leg": "outbound"},
+            "t2_ret": {"tour_id": "ii-2", "leg": "return"},
+        })
+        report = bc.mark_orphaned_tour_legs(
+            rou, meta, expected_legs=Counter({"ii-1": 2, "ii-2": 2}))
+
+        assert read_vehicle_ids(rou) == ["t1_out", "t2_out", "t2_ret"]
+        records = self._read(meta)
+        assert records["t1_out"]["tour_partner_dropped"] is True
+        assert "tour_partner_dropped" not in records["t2_out"]
+        assert "tour_partner_dropped" not in records["t2_ret"]
+        assert report["orphaned_legs"] == 1
+        assert report["tours_broken"] == 1
+
+    def test_the_marked_leg_keeps_its_tour_id(self, tmp_path):
+        # endpoint_pool_keys derives the location-pool class from tour_id, so
+        # rewriting it here would silently move the endpoint into a different
+        # pool for a reason unrelated to the pairing.
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        write_routes(rou, [("t1_out", ["1_2_0"])])
+        self._meta(meta, {"t1_out": {"tour_id": "ii-1", "leg": "outbound"}})
+        bc.mark_orphaned_tour_legs(
+            rou, meta, expected_legs=Counter({"ii-1": 2}))
+        assert self._read(meta)["t1_out"]["tour_id"] == "ii-1"
+
+    def test_the_directional_split_is_reported(self, tmp_path):
+        # The imbalance is the finding: return/outbound legs are filtered
+        # more often than inbound ones, so the report has to name the leg.
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        write_routes(rou, [("a", ["1_2_0"]), ("b", ["3_4_0"])])
+        self._meta(meta, {
+            "a": {"tour_id": "ei-1", "leg": "inbound"},
+            "b": {"tour_id": "ei-2", "leg": "inbound"},
+        })
+        report = bc.mark_orphaned_tour_legs(
+            rou, meta, expected_legs=Counter({"ei-1": 2, "ei-2": 2}))
+        assert report["by_leg"] == {"ei/inbound": 2}
+
+    def test_complete_tours_and_through_trips_are_never_marked(self, tmp_path):
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        write_routes(rou, [("ee1", ["1_2_0"]), ("t_out", ["3_4_0"]),
+                           ("t_ret", ["4_3_0"])])
+        self._meta(meta, {
+            "ee1": {"tour_id": "ee-1", "leg": "through"},
+            "t_out": {"tour_id": "ii-1", "leg": "outbound"},
+            "t_ret": {"tour_id": "ii-1", "leg": "return"},
+        })
+        report = bc.mark_orphaned_tour_legs(
+            rou, meta, expected_legs=Counter({"ee-1": 1, "ii-1": 2}))
+        assert report["orphaned_legs"] == 0
+        assert all("tour_partner_dropped" not in record
+                   for record in self._read(meta).values())
+
+
+class TestEnforceTourAtomicity:
+    """The OPT-IN (--atomic-tours) alternative to marking: drop the tour
+    whole. Kept for any future work that actually consumes tour pairing;
+    not the delivered default, because it removes 13.9% of the pool and
+    takes the supply below MIN_ROUTED_CANDIDATE_FRACTION."""
+
+    def _meta(self, path, records):
+        path.write_text(json.dumps(
+            {"schema_version": 2, "candidates": records}))
+
+    def test_surviving_leg_of_a_broken_tour_is_dropped(self, tmp_path):
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        # t1's return already lost to an earlier filter; only outbound is here.
+        write_routes(rou, [("t1_out", ["1_2_0"]), ("t2_out", ["3_4_0"]),
+                           ("t2_ret", ["4_3_0"])])
+        self._meta(meta, {
+            "t1_out": {"tour_id": "ii-1", "leg": "outbound"},
+            "t2_out": {"tour_id": "ii-2", "leg": "outbound"},
+            "t2_ret": {"tour_id": "ii-2", "leg": "return"},
+        })
+        report = bc.enforce_tour_atomicity(
+            rou, meta, expected_legs=Counter({"ii-1": 2, "ii-2": 2}))
+        assert read_vehicle_ids(rou) == ["t2_out", "t2_ret"]
+        assert report == {"tours_broken": 1, "legs_dropped": 1, "checked": 2}
+
+    def test_complete_tours_and_through_trips_are_untouched(self, tmp_path):
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        write_routes(rou, [("ee1", ["1_2_0"]), ("t_out", ["3_4_0"]),
+                           ("t_ret", ["4_3_0"])])
+        self._meta(meta, {
+            "ee1": {"tour_id": "ee-1", "leg": "through"},
+            "t_out": {"tour_id": "ii-1", "leg": "outbound"},
+            "t_ret": {"tour_id": "ii-1", "leg": "return"},
+        })
+        report = bc.enforce_tour_atomicity(
+            rou, meta, expected_legs=Counter({"ee-1": 1, "ii-1": 2}))
+        assert read_vehicle_ids(rou) == ["ee1", "t_out", "t_ret"]
+        assert report["legs_dropped"] == 0
+
+    def test_a_fully_dropped_tour_is_not_counted_as_broken(self, tmp_path):
+        # Both legs already gone is the filters working as intended, not a
+        # pairing breach — there is nothing left to remove or to report.
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        write_routes(rou, [("keep", ["1_2_0"])])
+        self._meta(meta, {"keep": {"tour_id": "ee-1", "leg": "through"}})
+        report = bc.enforce_tour_atomicity(
+            rou, meta, expected_legs=Counter({"ee-1": 1, "ii-9": 2}))
+        assert read_vehicle_ids(rou) == ["keep"]
+        assert report["tours_broken"] == 0
+
+    def test_exact_support_routes_are_never_removed(self, tmp_path):
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        write_routes(rou, [("sup", ["1_2_0"])])
+        self._meta(meta, {"sup": {"tour_id": "ii-1", "leg": "outbound"}})
+        bc.enforce_tour_atomicity(
+            rou, meta, expected_legs=Counter({"ii-1": 2}),
+            exempt_ids={"sup"})
+        assert read_vehicle_ids(rou) == ["sup"]
+
+    def test_pruned_metadata_alone_cannot_detect_a_half_tour(self, tmp_path):
+        # WHY expected_legs is captured before duarouter: both
+        # validate_routed_candidates and prune_candidate_metadata rewrite the
+        # sidecar down to survivors, after which a half tour is indistinguish-
+        # able from a tour that only ever had one leg. Without the snapshot
+        # the pass must degrade to doing nothing, never to a wrong removal.
+        rou, meta = tmp_path / "c.rou.xml", tmp_path / "c.meta.json"
+        write_routes(rou, [("t1_out", ["1_2_0"])])
+        self._meta(meta, {"t1_out": {"tour_id": "ii-1", "leg": "outbound"}})
+        report = bc.enforce_tour_atomicity(rou, meta)
+        assert read_vehicle_ids(rou) == ["t1_out"]
+        assert report["legs_dropped"] == 0
+
+    def test_tour_leg_counts_reads_the_generators_own_output(self):
+        counts = bc.tour_leg_counts({
+            "a": {"tour_id": "ii-1", "leg": "outbound"},
+            "b": {"tour_id": "ii-1", "leg": "return"},
+            "c": {"tour_id": "ee-1", "leg": "through"},
+            "d": {"no_tour": True},
+        })
+        assert counts == Counter({"ii-1": 2, "ee-1": 1})
+
+
 class TestDropExcessiveDetours:
     """Added 2026-07-10 (Gustav asked directly: could the candidate pool
     contain "helt orimliga rutter", completely unreasonable routes? Honest

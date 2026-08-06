@@ -99,7 +99,7 @@ output — pfe.py is untouched).
 from __future__ import annotations
 
 import argparse
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 import hashlib
 import json
 import math
@@ -1287,6 +1287,185 @@ def validate_routed_candidates(
         "missing_requested": missing_requested,
         "reasons": reasons,
     }
+
+
+def tour_leg_counts(candidate_meta: dict) -> Counter:
+    """How many legs the GENERATOR created for each tour.
+
+    Must be taken from the generator's own metadata, before duarouter or any
+    filter has run. ``validate_routed_candidates`` and
+    ``prune_candidate_metadata`` both rewrite the sidecar down to survivors,
+    so a count read after either of them cannot tell a half tour from a tour
+    that only ever had one leg.
+    """
+    counts: Counter = Counter()
+    for record in candidate_meta.values():
+        if isinstance(record, dict) and record.get("tour_id"):
+            counts[str(record["tour_id"])] += 1
+    return counts
+
+
+def mark_orphaned_tour_legs(routed_path: Path, metadata_path: Path | None,
+                            expected_legs: Counter | None = None) -> dict:
+    """Record which surviving legs lost their partner, and how asymmetrically.
+
+    THE DEFAULT half-tour treatment, and the reason it is not
+    ``enforce_tour_atomicity``: this pool is a SUPPORT SET. The PFE reweights
+    route flows freely and never consumes the pairing, and the pool's own
+    design note says its value "lies in covering distinct (entry, exit)
+    pairs, not in matching their frequencies". A surviving leg is a valid,
+    distinct route shape; deleting it to preserve an invariant nothing reads
+    costs coverage, which is the thing the pool exists to provide. Measured:
+    atomic dropping removes ~13.9% of the pool (1,314-1,319 tours across
+    rebuilds; 1,316 on the pool first analysed) and takes the delivered
+    supply to 68.2%, under the 75% MIN_ROUTED_CANDIDATE_FRACTION floor --
+    the build fails outright, and lowering that floor to accommodate it
+    would be weakening a gate to make a result pass.
+
+    What WAS wrong before 2026-08-06 is that the breakage was invisible. The
+    sidecar still labelled a half tour's surviving leg with a ``tour_id`` and
+    a ``leg``, and that provenance flows into ``calibrated.agents.json``, so
+    every consumer saw a tour that no longer had two halves. Measured on the
+    2025-09-16 pool: 1,316 of 2,695 non-through tours (48.8%) were half
+    tours, reaching 21.5% of published vehicles.
+
+    The loss is also DIRECTIONAL and worth reporting every build: a return
+    leg has to reach an independently drawn gate AND pass a sensor, so it is
+    routed more circuitously and the loop/detour filters catch it more often.
+    Inbound legs survived ~1.8x more often than outbound ones (E-I 118 vs 63,
+    I-E 141 vs 82) -- a net +114 legs entering the canvas and never leaving.
+    That is a real composition bias, so it gets printed rather than inferred.
+    """
+    empty = {"orphaned_legs": 0, "tours_broken": 0, "by_leg": {}}
+    if metadata_path is None or not metadata_path.exists():
+        return empty
+    with open(metadata_path) as f:
+        document = json.load(f)
+    candidates = document.get("candidates")
+    if not isinstance(candidates, dict):
+        return empty
+
+    expected: Counter = (Counter(expected_legs) if expected_legs is not None
+                         else tour_leg_counts(candidates))
+    surviving_ids = {vehicle.get("id")
+                     for vehicle in ET.parse(routed_path).getroot().findall("vehicle")}
+    surviving: Counter = Counter()
+    for vehicle_id in surviving_ids:
+        record = candidates.get(vehicle_id)
+        if isinstance(record, dict) and record.get("tour_id"):
+            surviving[str(record["tour_id"])] += 1
+
+    broken = {tour for tour, n in expected.items()
+              if n > 1 and 0 < surviving[tour] < n}
+    by_leg: Counter = Counter()
+    orphaned = 0
+    for vehicle_id in surviving_ids:
+        record = candidates.get(vehicle_id)
+        if not isinstance(record, dict) or str(record.get("tour_id")) not in broken:
+            continue
+        # Explicit provenance rather than a silent half tour. The tour_id is
+        # left intact: endpoint_pool_keys derives the location-pool class from
+        # it, so rewriting the id here would move the endpoint to a different
+        # pool for no reason connected to the pairing.
+        record["tour_partner_dropped"] = True
+        by_leg[f"{_tour_kind(str(record['tour_id']))}/{record.get('leg')}"] += 1
+        orphaned += 1
+    if orphaned:
+        with open(metadata_path, "w") as f:
+            json.dump(document, f, separators=(",", ":"))
+    share = orphaned / len(surviving_ids) if surviving_ids else 0.0
+    print(f"  {orphaned} surviving leg(s) of {len(broken)} tour(s) lost their "
+          f"partner to the route filters ({share:.1%} of the pool) — kept as "
+          f"valid standalone support, marked tour_partner_dropped; "
+          f"by leg {dict(sorted(by_leg.items()))}")
+    return {"orphaned_legs": orphaned, "tours_broken": len(broken),
+            "by_leg": dict(by_leg)}
+
+
+def enforce_tour_atomicity(routed_path: Path, metadata_path: Path | None,
+                           expected_legs: Counter | None = None,
+                           exempt_ids: set[str] | None = None) -> dict:
+    """Drop a paired tour whole, or not at all. OPT-IN via ``--atomic-tours``.
+
+    Not the default: see :func:`mark_orphaned_tour_legs` for why deleting a
+    valid route shape to preserve an unused invariant costs the coverage the
+    pool exists to provide, and for the measured supply-floor breach.
+    Provided because a tour-consistent pool is the right input for any future
+    work that DOES consume the pairing (a tour-based assignment, or a
+    mode/destination model estimated on complete tours).
+
+    FOUND 2026-08-06. ``validate_routed_candidates``, ``drop_uturn_routes``
+    and ``drop_excessive_detours`` all remove individual ``<vehicle>``
+    elements. None of them knows a tour has two legs, and nothing re-checked
+    pairing afterwards, so a tour whose outbound routed cleanly but whose
+    return looped lost only the return -- leaving a half tour in the pool.
+
+    Measured on the pre-fix 2025-09-16 pool: 1,316 of 2,695 non-through tours
+    (48.8%) were half tours, and they reached the simulation -- 4,682 of
+    21,812 published vehicles (21.5%; 28.7% of tour vehicles) were a leg
+    whose partner had been deleted.
+
+    Why this is a modelling defect and not bookkeeping: the loss is
+    DIRECTIONAL. A return leg has to reach an independently drawn gate AND
+    pass a sensor, so it is routed more circuitously and caught by the
+    loop/detour filters more often. Inbound legs survived ~1.8x more often
+    than outbound ones (E-I 118 vs 63, I-E 141 vs 82), leaving a net +114
+    legs that entered the canvas and never left. Tour-based demand models
+    exist precisely to enforce outbound/return consistency, and a filter that
+    silently breaks it reintroduces the trip-based inconsistency the tour
+    structure was chosen to avoid. Dropping the tour atomically removes the
+    asymmetry exactly, because a tour now survives whole or not at all.
+
+    The generator's own output is the reference for how many legs a tour
+    should have -- ``_resample_reused_template_tours`` already asserts the
+    same "one complete paired tour" invariant upstream, on data that has not
+    been through these filters yet. This is that invariant, re-checked where
+    it actually breaks.
+
+    E-E through trips are single-leg by construction and are never touched,
+    nor are exact edge-support routes in ``exempt_ids``.
+    """
+    empty = {"tours_broken": 0, "legs_dropped": 0, "checked": 0}
+    if metadata_path is None or not metadata_path.exists():
+        return empty
+    with open(metadata_path) as f:
+        candidates = json.load(f).get("candidates")
+    if not isinstance(candidates, dict):
+        return empty
+
+    # Falling back to the (already pruned) sidecar would silently see every
+    # half tour as a complete one-leg tour and drop nothing, so a caller that
+    # omits expected_legs gets the weaker check, never a wrong one.
+    expected: Counter = (Counter(expected_legs) if expected_legs is not None
+                         else tour_leg_counts(candidates))
+
+    tree = ET.parse(routed_path)
+    root = tree.getroot()
+    exempt = exempt_ids or set()
+    surviving: Counter = Counter()
+    for vehicle in root.findall("vehicle"):
+        record = candidates.get(vehicle.get("id"))
+        if isinstance(record, dict) and record.get("tour_id"):
+            surviving[str(record["tour_id"])] += 1
+
+    broken = {tour for tour, n in expected.items()
+              if n > 1 and 0 < surviving[tour] < n}
+    dropped = 0
+    if broken:
+        for vehicle in list(root):
+            vehicle_id = vehicle.get("id")
+            if vehicle_id in exempt:
+                continue
+            record = candidates.get(vehicle_id)
+            if isinstance(record, dict) and str(record.get("tour_id")) in broken:
+                root.remove(vehicle)
+                dropped += 1
+        tree.write(routed_path)
+    print(f"  dropped {dropped} surviving leg(s) of {len(broken)} tour(s) whose "
+          f"partner leg was removed by the route filters (a tour is kept whole "
+          f"or not at all; through trips are single-leg and unaffected)")
+    return {"tours_broken": len(broken), "legs_dropped": dropped,
+            "checked": sum(1 for n in expected.values() if n > 1)}
 
 
 def prune_candidate_metadata(metadata_path: Path | None, routed_path: Path) -> None:
@@ -3097,6 +3276,17 @@ def main() -> None:
                         "stochastic multipath was built to fix, applied here "
                         "natively via duarouter instead of a re-implemented "
                         "networkx shortest-path loop")
+    ap.add_argument("--atomic-tours", action="store_true",
+                    help="drop a paired tour's surviving leg when the route "
+                        "filters removed its partner, so every tour in the "
+                        "pool is complete. OFF by default: the pool is a "
+                        "coverage support set the PFE reweights freely and "
+                        "never reads the pairing from, and dropping costs "
+                        "13.9% of the pool — enough to breach the 75% supply "
+                        "floor. The default instead MARKS each orphaned leg "
+                        "(tour_partner_dropped) and reports the directional "
+                        "imbalance. Use this for work that does consume tour "
+                        "pairing")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out-suffix", default="",
                     help="internal use by calibrate_theta.py")
@@ -3403,6 +3593,11 @@ def main() -> None:
         json.dump({"schema_version": 2, "location_pools": location_pools,
                    "candidates": candidate_meta}, f,
                   separators=(",", ":"))
+    # Snapshot the generator's own leg counts NOW. duarouter drops, endpoint
+    # validation and the loop/detour filters all rewrite the sidecar down to
+    # survivors, after which a half tour is indistinguishable from a tour
+    # that only ever had one leg.
+    generated_legs = tour_leg_counts(candidate_meta)
     weight_args = duarouter_weight_args(args.weight_file, args.weight_period)
     if args.weight_file:
         print(f"  routing by MEASURED travel time from {args.weight_file} "
@@ -3470,6 +3665,13 @@ def main() -> None:
     drop_excessive_detours(
         out, routing_G, args.route_diversity, routing_costs,
         exempt_ids=exact_support_ids)
+    # LAST of the route filters, deliberately: it reconciles the pairing the
+    # three above break, so it has to see their combined survivors.
+    if args.atomic_tours:
+        enforce_tour_atomicity(out, meta_out, expected_legs=generated_legs,
+                               exempt_ids=exact_support_ids)
+    else:
+        mark_orphaned_tour_legs(out, meta_out, expected_legs=generated_legs)
     prune_candidate_metadata(meta_out, out)
     final_count = sum(1 for _ in ET.parse(out).getroot().iter("vehicle"))
     if target_candidate_count:
