@@ -203,7 +203,88 @@ dropping the plausibility layer was not by itself enough. The
 no longer says the flat "sensor constraints were retained" — it names the
 widened-band interval count and multiplier when there is one.
 
-## 6c. OPEN — node 26355153 cannot deliver its measured outflow/inflow ratio
+## 6c. FIXED — the Level-3 priors outranked the measured counts
+
+**RESOLVED 2026-08-06, later the same day.** The section below is kept because
+its geometry is right and worth having; its *conclusion* was wrong, and the
+correction is instructive enough to state first.
+
+**The pool was never the problem.** The claim below — "the pool cannot span the
+target vector, and no ordering of solver relaxations can change that" — is
+refuted by direct measurement. An LP over the same shapes finds a nonnegative
+route-flow vector inside the UNWIDENED band for **every** one of the 12
+widened Saturday intervals, and for all 96 quarters on both a weekday and a
+purpose-built weekend pool. The pool carries 493 routes reaching those outflow
+edges *without* the measured inflow — ample freedom.
+
+**What actually happened** was the third instance of the inversion class fixed
+twice already the same day (6b bounds, 6d quotas): the **Level-3 priors were
+passed to the solver at every rung and never dropped**. The node's unmeasured
+opposite carriageways `96523321_26355153_0` (prior target 2.9, weight 1.000)
+and `91615277_26355153_0` (target 3.0, weight 0.714) share **153** and **340**
+routes respectively with the measured outflow each one starves — precisely the
+routes that approach the node from an unmeasured direction. Every iteration the
+prior pulled them back down, so the measured outflows settled 2-7 vehicles
+below target, at a **stable** fixed point: 200 and 2000 iterations land on the
+same vector, and removing the priors hits the targets **exactly** (worst
+residual 0.00 of tolerance).
+
+**Two facts kept it hidden, both now measured and pinned by tests:**
+
+1. **`tol_mult` never enters the IPF iteration** — it is read only by
+   `_check_entropy_solution`. `RUNG_NOBND_TOL1` and `RUNG_RELAX_NOBND` compute
+   a **bit-identical** vector (verified: max|diff| = 0.0) and differ only in
+   the ruler. A widening rung never *found* anything; it accepted what was
+   already there. So "the band had to widen" was never evidence about the pool
+   — which is exactly how it got read as evidence about the pool.
+2. **The complete solver sat below the widening rungs.** IPF is iterative with
+   no completeness guarantee, so its failure is not proof of infeasibility; the
+   LP decides that, and it ran only *after* the band had already been widened.
+
+**Fix** (`traffic_sim/demand/pfe.py`): `RUNG_NOPRIOR_TOL1` — bounds, quotas and
+the Level-3 prior layer dropped, measurement band **unwidened** — inserted
+after the quota rung and before any widening rung; and the existing exact-band
+LP **moved above** the widening rungs, which adds no capability (the position
+it left is unreachable) but makes "the band widens only when the counts are
+genuinely unservable" enforceable rather than aspirational. A new
+`PRIORS RELAXED` line reports it, and `warn_widened_measurement_band` now
+reports a widened band **unconditionally** — previously that disclosure was
+nested inside `warn_relaxed_bound_violations`, which returns early when there
+are no bound violations, so the whole `relax_tol2x` rung announced nothing.
+
+**Verified end to end** on a real 2027-05-01 forecast build, all three
+direction-split variants: widened intervals **12 → 0**, `relaxation_summary`
+`{clean 63, no_bounds_tol1 21, no_priors_tol1 12}`, 100% GEH<5, 0 infeasible.
+Sunday 12 → 0 and Monday 1 → 0 on the same pool. The deployed 2025-09-16
+weekday build never hit this (`{clean 80, no_bounds_tol1 16}`), so no rebuild
+of the live demand was required.
+
+**Ordering, measured not assumed:** dropping the priors while *keeping* the
+Level-2 bounds recovers only 6 of the 12, so the new rung is a monotone
+continuation rather than a reordering of the existing contract. A finer
+two-dimensional ladder (bounds × priors) would rescue those 6 at a smaller
+concession — a deliberate future change, not a side effect of this one.
+Restricting the drop to the provably minimal interfering set (priors sharing a
+route with a measured edge) removes nothing here: all 7 priors in the affected
+quarters interfere, because corridor priors are adjacent to sensors by
+construction.
+
+**What the fix costs, stated plainly:** those 12 intervals per weekend day
+carry no corridor or gravity-assignment pull on unmeasured edges, so their
+flow there is shaped by the counts and the pool alone. That is the intended
+direction of the trade — a level-3 modelled estimate yielding to a level-1
+measurement — but it is a real change to those intervals, not a free win.
+
+**Still OPEN, and unaffected by this fix:** the opposite-carriageway *prior*
+pulls that carriageway up as well as down, on an edge nothing measures. It is
+the same manufacturing concern that retired the direction-split floor (§6),
+one level down in the hierarchy. Worth a deliberate look at whether it should
+exist at all; the ladder now stops it from costing a measured count, which is
+a different question from whether it is right.
+
+---
+
+### The original entry, kept for its geometry (conclusion superseded above)
 
 **MEASURED 2026-08-06.** The root cause of the widened-band intervals, located
 precisely, and NOT fixed.
@@ -239,6 +320,13 @@ calling this a "forecast" problem were imprecise.
 measured tolerance. Every build still reports 100% GEH<5 and 0 infeasible, and
 GEH cannot detect this at these volumes (see 6b) — the per-build warning is
 what surfaces it.
+
+> **SUPERSEDED.** The two paragraphs above and below are the wrong diagnosis.
+> The pool spans the target vector fine (LP-verified, 12/12); the Level-3
+> priors were holding the measured edges off target. See the top of this
+> section. The "94% of candidate routes" figure is real but was read as a
+> constraint when it is not one — 493 out-only routes remain, and the PFE is
+> free to scale them.
 
 **Fix direction, NOT attempted:** the pool needs routes reaching those outflow
 edges via the UNMEASURED approaches to the node. That is a generation change

@@ -276,7 +276,35 @@ Goal arc, in order:
 - `network.geojson`: LineString features = edges, Point features = nodes. Stable string IDs. WGS84 coords. Each measured edge carries `sensor_id`. Every edge carries `dist_sensor_m` and `confidence` = exp(-d²/2σ²), d = distance to nearest sensor. DEPLOYED 2026-08-05 at σ=119.5 m by recomputing `confidence` in place on the committed `network.geojson` from its existing `dist_sensor_m` values — NOT by rerunning `build_data.py`, whose `main()` pulls fresh OSM and would drift street names and highway classes as a side effect (the same method used for the 144.0 m deployment). Verified: `confidence` is the only property that changed, on 477 edges, with zero geometry changes. Note this is an annotation only — it adds no traffic anywhere. CAVEAT: under the baseline rule this smooth decay no longer describes the whole network — ~46.9% of edges now carry zero baseline flow, so their real epistemic status is "not simulated", not "low confidence". The formula is retained for the sensor-reachable subgraph; treat a nonzero `confidence` on an edge with no baseline traffic as meaningless until the map distinguishes covered from uncovered. σ is now fitted from the leakage-free LOSO report when `web/data/loso_report.json` exists (current value **119.5 m**, robust median of 7 held-out measured-edge points; was 144.0 m before the sensor-crossing baseline rule changed the demand and LOSO was re-run); `build_data.py` falls back to the old guessed 250 m only when that validation artifact or the previous network file is missing. NOTE: this static confidence is empirically anchored only in the near field (<~300 m in the current two-cluster sensor layout). Citywide/inner-city distances beyond that remain labelled extrapolation. ScenarioProvider can further reduce confidence per edge/scenario using Monte Carlo spread; the renderer just displays whatever confidence number it gets.
 - `flows.json` / `flows_forecast.json`: `{epoch, interval_minutes, flows}` where `flows[edgeId][quarterIndex] = count`, `null` where missing. Same edge IDs as the GeoJSON. Epoch strings have no timezone suffix — the web app parses them as UTC (provider.js appends 'Z'); keep parse and getUTC* formatting consistent.
 - `candidates.meta.json` (`schema_version: 2`): one record per candidate leg, carrying `tour_id`, `leg`, purpose, endpoints and location pools; this provenance flows into `calibrated.agents.json`. ADDED 2026-08-06: `tour_partner_dropped: true` on a leg whose paired partner was removed by the route filters. It is NOT rare — 13.9% of the pool, reaching ~24% of published vehicles — because `validate_routed_candidates`, `drop_uturn_routes` and `drop_excessive_detours` delete individual legs and none of them knows a tour has two. Never read `tour_id`+`leg` as proof of a complete tour without checking this flag. The bias is directional (return legs are filtered ~1.8× more often than inbound ones), so it is reported per leg on every build; `--atomic-tours` drops half tours instead, at the cost of 13.9% of the pool and a breach of the 75% supply floor.
-- PFE RELAXATION LADDER ORDER (`pfe.py`) is a contract, not an implementation detail: measured counts outrank Level-2 plausibility bounds, so `RUNG_NOBND_TOL1` (bounds off, measurement band UNWIDENED) is tried before any rung that widens the band. **GEH<5 cannot police this** — the old ×4 band peaks at GEH 3.81 for a 400 veh/quarter target and no measured edge has ever exceeded 203 in a quarter, so a build could report 100% GEH<5 with 22.6% of intervals anywhere inside a 20% band. Read `relaxation_summary` in `demand_meta.json` to see it; any `relax_tol2x`/`relax_tol4x`/`relax_no_bounds` count means a widened band was used.
+- PFE RELAXATION LADDER ORDER (`pfe.py`) is a contract, not an implementation
+  detail: **the measured counts outrank every other constraint, so EVERY
+  non-measurement layer is dropped before the measurement band is widened by
+  one unit.** The order is `clean` → `no_bounds_tol1` (Level-2 bounds and
+  structural caps off) → `no_purpose_quota_tol1` (purpose quotas off too) →
+  `no_priors_tol1` (Level-3 priors off too) → `lp_fallback` (the complete LP,
+  still at the declared band) → only then `relax_tol2x`/`relax_tol4x`/
+  `relax_no_bounds`. Three separate inversions of this rule have been found
+  and fixed (2026-08-06): bounds, then purpose quotas, then priors — each one
+  a constraint that stayed active at every rung, so when it conflicted with a
+  measurement the MEASUREMENT gave way. When adding any new constraint to the
+  solver, the question to answer first is: at which rung does it yield?
+  Two facts make violations of this contract invisible unless you look:
+  - **GEH<5 cannot police it.** The ×4 band peaks at GEH 3.81 for a 400
+    veh/quarter target and no measured edge has ever exceeded 203 in a
+    quarter, so a build can report 100% GEH<5 with 22.6% of intervals
+    anywhere inside a 20% band.
+  - **`tol_mult` never enters the IPF iteration** — it is read only by
+    `_check_entropy_solution`, so a widening rung returns a BIT-IDENTICAL
+    vector to its unwidened counterpart and merely judges it by a looser
+    ruler. A widened band is therefore never evidence that the route pool
+    could not serve the counts; that question is decided by the LP, which is
+    why the LP now sits above the widening rungs. Pinned by
+    `test_widening_the_band_does_not_change_what_ipf_computes`.
+  Read `relaxation_summary` in `demand_meta.json`: any `relax_tol2x`/
+  `relax_tol4x`/`relax_no_bounds` count means a widened band was used, and
+  `warn_widened_measurement_band` now reports that unconditionally on every
+  build (it used to be nested inside the bound-violation warning, which
+  returns early when there are no bound violations).
 - One ID space across data/model/sim/map. One coordinate system (WGS84). Time = ISO datetime / abstract index — never "row in the 2025 file".
 - `NormalProfile.flowAt/calmAt(edgeId, qi, dayOfWeek)`: dayOfWeek (0=Mon) MUST be derived from the ACTIVE provider's epoch (2025 starts Wednesday, 2027 Friday) — never from qi alone.
 
