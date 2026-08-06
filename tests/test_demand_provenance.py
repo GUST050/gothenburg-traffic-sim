@@ -235,3 +235,48 @@ def test_assembled_window_refuses_an_uncovered_variant(tmp_path):
 
     with pytest.raises(ValueError, match="no day provenance covers variant"):
         validate_assembled_provenance(days, [(other, other_agents)])
+
+
+# ── Archive source inventory (2026-08-06) ─────────────────────────────────────
+
+def test_build_records_the_same_source_inventory_the_validator_checks():
+    """A demand archive must be VALIDATABLE, not merely well-formed.
+
+    Regression for the second fault that stopped the annual warming launch:
+    "demand build completed without a valid archive". build_sumo_demand kept a
+    hand-maintained copy of the demand source inventory and recorded it in
+    every archive, while validate_demand_archive compared that record against
+    the canonical demand_source_paths() inventory. The copy was missing five
+    entries, so the two dicts could never be equal and NO archive could ever
+    validate -- which is why no annual unit had ever run.
+
+    A mirror of a globbed inventory cannot be kept correct by hand, so the
+    equality itself is the contract worth pinning.
+    """
+    from pathlib import Path
+    import build_sumo_demand
+    from traffic_sim.demand.source_identity import demand_source_fingerprints
+
+    root = Path(build_sumo_demand.__file__).resolve().parent
+    assert build_sumo_demand.STARTUP_SOURCE_HASHES == \
+        demand_source_fingerprints(root)
+
+
+def test_source_inventory_covers_every_demand_module():
+    """The glob half of the inventory must really be a glob.
+
+    Adding a module under traffic_sim/demand/ silently broke the old
+    hand-maintained list. Assert coverage directly so a future copy cannot
+    reintroduce the same drift undetected.
+    """
+    from pathlib import Path
+    import build_sumo_demand
+
+    root = Path(build_sumo_demand.__file__).resolve().parent
+    tracked = {
+        Path(path).resolve()
+        for path in build_sumo_demand.SOURCE_FILES.values()
+    }
+    for package in ("demand", "traffic_sim/demand"):
+        for module in (root / package).glob("*.py"):
+            assert module.resolve() in tracked, f"{module} escapes provenance"

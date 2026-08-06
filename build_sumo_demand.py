@@ -89,25 +89,32 @@ def _digest_payload(payload) -> str:
 
 
 def _source_files() -> dict[str, Path]:
-    """Every source file whose content defines a demand build's identity."""
-    files = {
-        "build_sumo_demand": Path(__file__),
-        "build_data": Path("build_data.py"),
-        "sensor_registry": Path("traffic_sim/intake/sensors.py"),
-        "sensor_registry_data": Path("data_in/sensors.json"),
-        "build_candidates": Path("build_candidates.py"),
-        "build_sumo_net": Path("build_sumo_net.py"),
-        "pfe": Path("traffic_sim/demand/pfe.py"),
-        "pfe_kernel": Path("traffic_sim/demand/pfe_kernel.py"),
-        "candidate_cache": Path("traffic_sim/demand/cache.py"),
-        "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
-        "assignment_priors": Path("assignment_priors.py"),
-        "prior_flows": Path("prior_flows.py"),
-        "observability": Path("observability.py"),
-    }
-    for module_path in sorted(Path("demand").glob("*.py")):
-        files[f"demand/{module_path.name}"] = module_path
-    return files
+    """Every source file whose content defines a demand build's identity.
+
+    ONE inventory, delegated to demand_source_paths() -- the module whose own
+    docstring states the contract: "builders and consumers share this exact
+    inventory and reject archives produced by any other source bytes."
+
+    This used to be a SECOND, hand-maintained copy of that list, and the two
+    drifted (found 2026-08-06, by the annual warming failing with "demand build
+    completed without a valid archive"). A build records
+    STARTUP_SOURCE_HASHES, taken from here; validate_demand_archive compares it
+    against demand_source_fingerprints(). The copy here was missing five
+    entries the canonical inventory has -- calibrated_provenance,
+    demand_source_identity and the traffic_sim/demand/*.py glob
+    (__init__.py, build_lock.py, route_support.py) -- so the two dicts could
+    never be equal and NO archive could EVER validate, whatever it contained.
+    Archives back to 2026-07-16 carry the same gap, which is why no annual unit
+    has ever run.
+
+    A hand-maintained mirror of a globbed inventory cannot stay correct: adding
+    any file under traffic_sim/demand/ silently broke it. Delegating removes
+    the failure mode rather than re-syncing the copy.
+
+    Resolution is anchored to this file's own directory, not the process cwd,
+    so a build launched from anywhere fingerprints the same tree.
+    """
+    return demand_source_paths(Path(__file__).resolve().parent)
 
 
 SOURCE_FILES = _source_files()
