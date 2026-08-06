@@ -1,0 +1,30 @@
+{
+  "data": {
+    "observations_per_station_heading_hour_weekday": 4,
+    "rows": 19627,
+    "source": "Statens vegvesen hourly directional counts (training set)",
+    "stations_sampled": 117,
+    "weeks_per_station": 4
+  },
+  "kind": "dirsplit_weekday_signal_measurement",
+  "limitation": "Measured on Norwegian streets. Gothenburg is not in this sample, which is exactly why the deployed model shrinks its predictions toward 50/50 (lambda = 0.256).",
+  "measured_at": "2026-08-06",
+  "measurements": {
+    "deployed_model_q90_minus_q10": [
+      0.078,
+      0.236
+    ],
+    "direction_share_spread_across_hours_within_station": 0.025,
+    "direction_share_spread_across_mon_fri_within_hour": 0.003,
+    "median_abs_am_minus_pm_share_per_station": 0.0,
+    "ratio_hour_to_weekday": 10
+  },
+  "question": "Does adding day-of-week to the direction-split model buy anything, and should the model be applied to all six sensors?",
+  "schema_version": 1,
+  "verdict": {
+    "apply_to_all_sensors": "STILL WORTH DOING, and independent of the weekday question. It is what gives the five single-direction stations an opposite carriageway at all.",
+    "control": "The measurement does detect real signal: time-of-day spread is 10x the weekday spread, so a null weekday result is not an artifact of the method.",
+    "deeper_finding": "Direction split behaves as a near-constant property of a street rather than a time-varying one. Even time-of-day only moves it 2.5 pp, and the median station shows a 0.000 AM-vs-PM reversal.",
+    "weekday": "NOT WORTH ADDING. The weekday effect is 0.003 (0.3 pp) against a reported model interval of 0.078-0.236 (7.8-23.6 pp) -- 25x to 75x smaller than the uncertainty already declared, so it would be invisible. Splitting Mon-Fri also cuts support per cell from 20 observations to 4, which makes the q10/q90 tails noisier. Expected net effect: worse."
+  }
+}
