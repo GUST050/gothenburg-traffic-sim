@@ -313,6 +313,24 @@ def opposite_direction_bounds(
                 if s and 0.0 < s < 1.0:
                     candidates.append(v * (1.0 - s) / s)
             if len(candidates) == 2:
-                bounds[opposite] = (min(candidates), max(candidates))
+                # A CEILING ONLY. The lower bound was removed 2026-08-06 after
+                # measuring that it bound at the FLOOR in 40.1% of edge-quarters
+                # -- the solver wanted less traffic on the opposite carriageway
+                # than the model demanded, so the constraint was manufacturing
+                # vehicles no measurement asked for. That is precisely what the
+                # baseline rule forbids ("only what is measured is simulated").
+                #
+                # The cause is structural, not numerical: the candidate pool is
+                # sensor-anchored, so the unmeasured carriageway carries 3x to
+                # 10x fewer routes than the measured one (283 against 2,779 at
+                # station 133). With so few routes to spread over, meeting a
+                # floor means inflating the ones that exist rather than using
+                # appropriate ones. The right fix is to GENERATE routes that
+                # serve that direction -- column generation -- not to coerce
+                # the ones already there.
+                #
+                # A ceiling is safe in a way a floor is not: it can only
+                # prevent implausible excess, never create traffic.
+                bounds[opposite] = (0.0, max(candidates))
         out.append(bounds)
     return out

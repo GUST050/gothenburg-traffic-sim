@@ -74,10 +74,12 @@ class TestOppositeDirectionBounds:
         out = opposite_direction_bounds({"measured": [50.0]}, 1, 0,
                                         registry_path=self._registry(tmp_path))
         lo, hi = out[0]["other"]
-        # s=0.6 -> 50*0.4/0.6 = 33.3 (low); s=0.4 -> 50*0.6/0.4 = 75 (high)
-        assert round(lo, 1) == 33.3
+        # A CEILING only: s=0.4 -> 50*0.6/0.4 = 75 is the most the opposite
+        # side could plausibly carry. The floor is deliberately 0.
+        assert lo == 0.0, (
+            "a floor would force traffic onto a carriageway nothing measured; "
+            "it bound at the floor in 40% of edge-quarters and was removed")
         assert round(hi, 1) == 75.0
-        assert lo < hi, "the mapping is decreasing in s; bounds must be ordered"
 
     def test_a_two_way_station_gets_no_inferred_bound(self, tmp_path, monkeypatch):
         import demand.intake as intake
