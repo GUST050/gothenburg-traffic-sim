@@ -18,6 +18,18 @@ documents in the repository root.
 Those stay in the root because code and tests reference them by path —
 `IMPROVEMENT_PLAN.md` alone is named by 39 source files.
 
+## history/
+
+The append-only ledgers, split out on 2026-08-06. `AGENTS.md` says everything
+outside the marked blocks is historical, and it was 99.5% of both files —
+22,045 lines of which 118 were live. The marked blocks stay in the root files;
+these hold the rest, unchanged.
+
+| file | lines | split from |
+| --- | --- | --- |
+| `AGENT_NOTES_history.md` | 14,681 | `AGENT_NOTES.md` (14,736 → 62) |
+| `TASKS_history.md` | 7,234 | `TASKS.md` (7,309 → 82) |
+
 ## reviews/
 
 Point-in-time audits. Read for evidence and measurements, not for current
