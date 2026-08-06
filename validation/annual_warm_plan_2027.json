@@ -314056,7 +314056,7 @@
       "work_date": "2027-12-31"
     }
   ],
-  "content_key": "183f35757195ec2cd206106cddfcf41e7890c3a5bfebabc3f00a3041baa146fe",
+  "content_key": "c073327702538f557592b1a10f46c815444ef9d89c4b7630a0bfda6878d37496",
   "coverage": {
     "calendar_days": 365,
     "checkpoint_requests": 34895,
@@ -318526,9 +318526,9 @@
       "sha256": "82bf7dfaf0d2ef52684d008ed42bc1e9d46171b3efab4e79376ad18bec27ee14"
     },
     "demand_builder_source": {
-      "bytes": 73486,
+      "bytes": 76438,
       "path": "build_sumo_demand.py",
-      "sha256": "aa0233e259663758befb4365aa7f3146600f376357559245461a8c4e6a264ccc"
+      "sha256": "360cadea26d30fead25bda0866f4defba3806f0d98b77f5232eca50edcdb4946"
     },
     "demand_source:assignment_priors": {
       "bytes": 31310,
@@ -318546,9 +318546,9 @@
       "sha256": "b3f395cebffd309d3e4130cf7cf8fd200323918b372e90af9f6bfa206fdfe8f7"
     },
     "demand_source:build_sumo_demand": {
-      "bytes": 73486,
+      "bytes": 76438,
       "path": "build_sumo_demand.py",
-      "sha256": "aa0233e259663758befb4365aa7f3146600f376357559245461a8c4e6a264ccc"
+      "sha256": "360cadea26d30fead25bda0866f4defba3806f0d98b77f5232eca50edcdb4946"
     },
     "demand_source:build_sumo_net": {
       "bytes": 12151,
@@ -318556,9 +318556,9 @@
       "sha256": "f2c0d830cf5173093639ccc2b767e5bc08735f6b4cfa7ac5669aca14dc319594"
     },
     "demand_source:calibrated_provenance": {
-      "bytes": 7583,
+      "bytes": 13956,
       "path": "traffic_sim/demand/provenance.py",
-      "sha256": "579013e5e28b76237e1d2fcb0d754f7bfc96226d72ba4ca74953a1a8ec0914ef"
+      "sha256": "3fe34be7a2cdbebd34f29a78d7688a9d9e5dff762c7f6744a51dd3eb561c9898"
     },
     "demand_source:candidate_cache": {
       "bytes": 3736,

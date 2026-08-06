@@ -10,16 +10,17 @@ owners, states and approval formulas are not active workflow rules. See
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
 - Current focus: `FULL-DAY-ANNUAL-WARMING`
-- Status: `BLOCKED — launched 2026-08-06 21:12, died 4 min in on the FIRST
-  demand build. Not a resource or plan-key problem: every gate passed and the
-  PFE itself was clean (100% GEH<5, 0 infeasible on all three variants). The
-  window then failed provenance validation:
-  "calibrated agent 'pfe0' references unknown candidate 'd0_1942'".
-  0 of 104,685 units banked; nothing corrupted; root still wholly pending.`
-- Suggested next action: `Fix the stage-B multi-day provenance bug below, then
-  re-run the preparation (the fix lands in a bound source, so the plan key and
-  preflight must be regenerated) and relaunch. Never resume or relabel an
-  older root.`
+- Status: `READY_TO_RUN — the blocker that killed the 2026-08-06 21:12 launch
+  is FIXED and verified end to end on the exact window that failed. Plan
+  regenerated, preflight passing, a fresh root initialized wholly pending
+  (104,685). No annual unit has run yet.`
+- Suggested next action: `Launch under caffeinate so a sleeping Mac cannot
+  corrupt the wall-clock measurement:
+  KEY=$(python3 -c "import json;print(json.load(open('validation/annual_warm_plan_2027.json'))['content_key'])")
+  nohup python3 tools/populate_annual_warming.py --execute --state-workers 3 --plan-key $KEY > runs/annual-warm-logs/2027-$(date +%Y%m%d-%H%M%S).log 2>&1 &
+  caffeinate -i -w <pid>
+  Never resume or relabel an older root; the fix moved the plan key, so the
+  roots under runs/annual-warm-2027/ from earlier keys are all superseded.`
 - Eligible actors: `Any model or person; no Sol/Luna routing requirement`
 - Safety boundary: `Independent reset is explicit and never continuous
   evidence. Exact daily forecast/variants/seeds, six-hour recovery, cache
@@ -33,11 +34,26 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### FULL-DAY-ANNUAL-WARMING — Populate exact reusable daily prefixes
 
-- Status: `BLOCKED on a stage-B day-library bug that makes every multi-day
-  demand build fail provenance validation. Preparation is otherwise DONE and
-  still valid (plan verifies, preflight passes, root initialized wholly
-  pending at 104,685).`
-- BLOCKER, measured 2026-08-06: `day_pool_blocks` (demand/intake.py:224)
+- Status: `READY_TO_RUN — the stage-B day-library provenance blocker is FIXED
+  (commit 32a883f) and the preparation re-run on top of it: plan verifies,
+  preflight passes, fresh root initialized wholly pending at 104,685.`
+- FIX, 2026-08-06 (`32a883f`): provenance is proven PER DAY, at calibration
+  time, against that day's own pool — candidate cross-reference included — and
+  the proof is stored beside the day's artifacts so a LIBRARY HIT carries it
+  forward instead of skipping the check. The window then verifies those
+  proofs, re-checks every invariant that survives assembly (route/agent
+  pairing, unique ids, endpoints, purposes, departures) and binds the two by
+  per-variant vehicle count, so no vehicle can be added, dropped or renumbered
+  between the proven days and the published window. Strictly stronger than the
+  single-pool check for these windows. The monolithic path is untouched and
+  still uses the single-pool check, because `multi_day_blocks` gives each day
+  a distinct prefix and one pool per window, so its ids do resolve.
+  Verified: the exact window that failed (2027-01-01 +2d forecast) now exits 0
+  with "93066 vehicles across 3 variant(s) from 2 proven day(s) — PASS", and
+  again on a rerun with 2/2 days served from the library. Nine regression
+  tests in `tests/test_demand_provenance.py`, one of which reproduces the
+  original error so the reason this exists cannot be lost.
+- THE BUG IT FIXED, measured 2026-08-06: `day_pool_blocks` (demand/intake.py:224)
   hardcodes `id_prefix "d0_"` for the day's own block — correct in isolation,
   because stage B calibrates each day ALONE. But the window loop
   (build_sumo_demand.py:846-871) calls `generate_candidates()` once per day,
@@ -60,10 +76,9 @@ owners, states and approval formulas are not active workflow rules. See
   Note also that the golden A/B in WARMING_PLAN §5 ("passed byte-identical",
   41a5195) compared route/agent bytes but evidently never exercised
   window-level provenance validation, or it would have caught this.
-  Fix direction: provenance is a PER-DAY property under stage B, so validate
-  each day inside `_calibrate_one_day` while its own pool is still the one on
-  disk, and stop cross-referencing candidates at the window level (or teach
-  the day library to store each day's meta and namespace ids at assembly).
+  Failing outright was the LUCKY outcome: where an id existed in both pools
+  the old check silently compared an agent against the WRONG candidate and
+  passed. That is why it could not be fixed by relaxing the check.
 - Objective and scope: Populate the candidate-free full-day 2027 prefix bank
   for every exact 15-minute independent daily checkpoint and the production
   q10/q50/q90 seed mapping.
