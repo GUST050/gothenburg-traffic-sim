@@ -1,0 +1,18 @@
+{
+  "attributed_difference": 0.566,
+  "baseline_63c672c_median": 0.971,
+  "consequence": "Any LOSO comparison of two pipeline versions needs several draws per version and must compare distributions, not two single numbers. Historical single-draw LOSO comparisons in this project are weaker than they were presented as.",
+  "draw_spread_same_code": 0.418,
+  "kind": "loso_draw_variance_measurement",
+  "limitation": "n=3 estimates the spread poorly. It is enough to show the comparison is underpowered; it is not enough to bound the variance or to rule a real stage B effect in or out.",
+  "measured_at": "2026-08-06",
+  "medians": {
+    "seed_20260807": 1.119,
+    "seed_20260808": 1.49,
+    "seed_default": 1.537
+  },
+  "method": "Three demand builds under IDENTICAL code, differing only in --seed, each followed by a full six-fold LOSO on the same window (2025-09-16).",
+  "question": "Can a single LOSO run distinguish a pipeline change from the randomness of one candidate-pool draw?",
+  "schema_version": 1,
+  "verdict": "UNDERPOWERED. The spread between three draws of the SAME code is 0.418, the same order as the 0.566 shift previously attributed to stage B. A single LOSO run therefore cannot separate a pipeline change from draw noise at this magnitude, and the stage B claim is NOT established."
+}
