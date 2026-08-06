@@ -25,6 +25,13 @@ def cand(*edges):
     return Candidate(depart=0.0, edges=list(edges))
 
 
+def purpose_cand(purpose, *edges):
+    """A candidate carrying provenance, for required_groups (purpose) tests."""
+    shape = Candidate(depart=0.0, edges=list(edges))
+    shape.intent = {"purpose": purpose}
+    return shape
+
+
 def served(x, cands, edge):
     return sum(xi for xi, c in zip(x, cands) if edge in c.edges)
 
@@ -425,6 +432,55 @@ class TestRouteIndexGroups:
         assert rung == pfe.RUNG_NOBND_TOL1
         assert pfe._rung_measurement_tol_mult(rung) == 1.0
         assert served(sol, cands, "m") == pytest.approx(100, rel=0.06)
+
+    def test_ladder_drops_the_purpose_quota_before_the_measured_band(self):
+        # REGRESSION (2026-08-06), the SECOND hierarchy inversion. Purpose
+        # quotas (required_groups) used to stay active at EVERY rung, so when
+        # they and the measured counts were jointly infeasible the quotas
+        # could not yield and the COUNTS had to. Here only the 'arbete' route
+        # touches measured edge m=100, while the quota pins arbete at 90:
+        # before the fix the ladder reached relax_tol2x and published 90
+        # against a measured 100. Dropping the quota serves 100 exactly at
+        # the unwidened band, and cannot fabricate a label because the pool
+        # is stratified per (geometry, purpose).
+        shapes = [purpose_cand("arbete", "m"), purpose_cand("through", "x")]
+        quota = [([0], 90.0, 90.0), ([1], 10.0, 10.0)]
+        sol, rung = solve_interval_with_relaxation(
+            shapes, {"m": 100.0}, {}, {}, required_groups=quota)
+
+        assert sol is not None
+        assert rung == pfe.RUNG_NOQUOTA_TOL1
+        assert pfe._rung_measurement_tol_mult(rung) == 1.0
+        assert served(sol, shapes, "m") == pytest.approx(100, rel=0.06)
+
+    def test_a_quota_that_is_satisfiable_is_still_enforced(self):
+        # The quota must only be dropped when it genuinely blocks a measured
+        # count, never as a shortcut: a feasible mix has to solve clean.
+        shapes = [purpose_cand("arbete", "m"), purpose_cand("through", "m")]
+        quota = [([0], 50.0, 50.0), ([1], 50.0, 50.0)]
+        sol, rung = solve_interval_with_relaxation(
+            shapes, {"m": 100.0}, {}, {}, required_groups=quota)
+
+        assert rung == RUNG_CLEAN
+        assert pfe._rung_keeps_purpose_quota(rung)
+        assert sol[0] == pytest.approx(50, abs=1.0)
+
+    def test_dropping_the_quota_is_reported_not_silent(self):
+        assert not pfe._rung_keeps_purpose_quota(pfe.RUNG_NOQUOTA_TOL1)
+        assert pfe._rung_keeps_purpose_quota(pfe.RUNG_NOBND_TOL1)
+        assert pfe.RUNG_NAMES[pfe.RUNG_NOQUOTA_TOL1] == "no_purpose_quota_tol1"
+
+    def test_the_quota_outranks_the_optional_structural_caps(self):
+        # Ordering contract: Level-2 bounds and optional shape caps go first
+        # (RUNG_NOBND_TOL1), the provenance quota only after them. A case that
+        # a bound drop alone resolves must NOT also lose its purpose mix.
+        shapes = [purpose_cand("arbete", "m", "u")]
+        sol, rung = solve_interval_with_relaxation(
+            shapes, {"m": 100.0}, {"u": (0.0, 5.0)}, {},
+            required_groups=[([0], 100.0, 100.0)])
+
+        assert rung == pfe.RUNG_NOBND_TOL1
+        assert pfe._rung_keeps_purpose_quota(rung)
 
     def test_nobnd_tol1_is_recorded_as_having_dropped_its_bounds(self):
         # The writer decides whether a bound breach is a real violation or an

@@ -884,12 +884,36 @@ def repair_integer_bounds(
 # have needed, and GEH<5 cannot detect that: at the far edge of the 4x band
 # GEH peaks at 3.81 for a 400 veh/quarter target, and the largest count ever
 # measured on any of the 7 measured edges in any quarter is 203.
+#
+# SECOND INVERSION, same class, fixed 2026-08-06 (RUNG_NOQUOTA_TOL1). The
+# purpose quotas (``required_groups``) stayed active at EVERY rung, so when
+# they and the measured counts were jointly infeasible the quotas could not
+# yield and THE COUNTS HAD TO. Proven on a minimal case: measured edge m=100
+# served only by an 'arbete' route, quota pinning arbete at 90 --
+#
+#   with the quota:     band x1 INFEASIBLE, x2 serves m=90   (count relaxed)
+#   without the quota:  band x1 serves m=100                 (count exact)
+#
+# Measured consequence on a real 3-day 2027 forecast build: weekend days took
+# a widened band on 11-12 of 96 intervals against the weekday's 1, while
+# `quarters_with_relaxed_mix` stayed 0 -- the purpose mix was satisfied
+# exactly and the measurement gave way instead.
+#
+# Dropping a quota CANNOT fabricate a purpose label, which is what the old
+# comment here worried about: prepare_calibration stratifies the pool into one
+# variable per (geometry, purpose), so a route's provenance is immutable
+# whether or not its group is constrained. Dropping the quota only lets the
+# resulting MIX drift from its behavioural prior -- a level-3 quantity giving
+# way to a level-1 measurement, which is the hierarchy working. The publish
+# path already handles a non-exact mix: purpose_mix_is_exact exists precisely
+# to tell that counts-first fallback apart from an exact-purpose solve.
 RUNG_CLEAN        = 0   # first solve_interval_entropy call succeeded
 RUNG_NOBND_TOL1   = 1   # bounds dropped, measurement band UNWIDENED
-RUNG_RELAX_TOL2X  = 2   # tol_mult=2.0, bounds kept
-RUNG_RELAX_TOL4X  = 3   # tol_mult=4.0, bounds kept
-RUNG_RELAX_NOBND  = 4   # tol_mult=4.0, bounds dropped
-RUNG_LP_FALLBACK  = 5   # solve_interval (LP), the final rung
+RUNG_NOQUOTA_TOL1 = 2   # bounds AND purpose quotas dropped, band UNWIDENED
+RUNG_RELAX_TOL2X  = 3   # tol_mult=2.0, bounds kept
+RUNG_RELAX_TOL4X  = 4   # tol_mult=4.0, bounds kept
+RUNG_RELAX_NOBND  = 5   # tol_mult=4.0, bounds dropped
+RUNG_LP_FALLBACK  = 6   # solve_interval (LP), the final rung
 RUNG_INFEASIBLE   = -1  # no rung produced a solution
 
 
@@ -920,11 +944,23 @@ def solve_interval_with_relaxation(
     enough. See the RUNG_* block for the measurement that motivated the
     order.
 
-    ``required_groups`` are different: they encode a route's immutable
-    provenance class (for example ``arbete`` versus ``genomfart``), not an
-    optional spatial-shape preference.  They remain active at every rung so
-    the solver never reaches an apparently valid count fit by publishing a
-    route with a fabricated purpose label.
+    ``required_groups`` encode a route's provenance class (for example
+    ``arbete`` versus ``genomfart``) rather than an optional spatial-shape
+    preference, so they outrank ``groups`` and are dropped only at
+    RUNG_NOQUOTA_TOL1 -- after the Level-2 bounds, before any widening of the
+    measurement band.
+
+    CORRECTED 2026-08-06. They used to remain active at EVERY rung, on the
+    stated grounds that the solver "never reaches an apparently valid count
+    fit by publishing a route with a fabricated purpose label". That
+    conflated two different things. Dropping a quota cannot fabricate a
+    label: prepare_calibration stratifies the pool into one variable per
+    (geometry, purpose), so provenance is immutable regardless of which
+    groups are constrained. All that drifts is the published purpose MIX --
+    a level-3 behavioural prior yielding to a level-1 measurement, which is
+    the hierarchy working rather than breaking. Keeping the quota inviolable
+    meant an infeasible quarter relaxed the MEASURED COUNTS instead; see the
+    RUNG_* block for the proof and the measured cost.
 
     ``allow_structural_relaxation=False`` is used by the outer structure
     guard after it already found a solution with stronger constraints. It
@@ -934,8 +970,11 @@ def solve_interval_with_relaxation(
     required_groups = [group for group in (required_groups or []) if group[0]]
     groups = [group for group in (groups or []) if group[0]]
 
-    def active_groups(include_structural: bool) -> list[tuple[list[int], float, float]]:
-        return required_groups + (groups if include_structural else [])
+    def active_groups(include_structural: bool,
+                      include_required: bool = True
+                      ) -> list[tuple[list[int], float, float]]:
+        return ((required_groups if include_required else [])
+                + (groups if include_structural else []))
 
     sol = solve_interval_entropy(shapes, targets, bounds, priors,
                                  route_cost=route_cost,
@@ -943,9 +982,11 @@ def solve_interval_with_relaxation(
                                  touch_index=touch_index)
     if sol is not None:
         return sol, RUNG_CLEAN
-    for rung, (tol_mult, use_bounds) in zip(
-        (RUNG_NOBND_TOL1, RUNG_RELAX_TOL2X, RUNG_RELAX_TOL4X, RUNG_RELAX_NOBND),
-        ((1.0, False), (2.0, True), (4.0, True), (4.0, False)),
+    for rung, (tol_mult, use_bounds, use_required) in zip(
+        (RUNG_NOBND_TOL1, RUNG_NOQUOTA_TOL1,
+         RUNG_RELAX_TOL2X, RUNG_RELAX_TOL4X, RUNG_RELAX_NOBND),
+        ((1.0, False, True), (1.0, False, False),
+         (2.0, True, True), (4.0, True, True), (4.0, False, True)),
     ):
         # `continue`, not `break`: the no-bounds rungs are no longer last, so
         # a caller that forbids structural relaxation must skip them and keep
@@ -956,7 +997,8 @@ def solve_interval_with_relaxation(
         sol = solve_interval_entropy(
             shapes, targets, bounds if use_bounds else {}, priors,
             tol_mult=tol_mult, route_cost=route_cost,
-            groups=active_groups(use_bounds), touch_index=touch_index)
+            groups=active_groups(use_bounds, use_required),
+            touch_index=touch_index)
         if sol is not None:
             return sol, rung
     if not allow_structural_relaxation:
@@ -1669,6 +1711,7 @@ def _draw_endpoint_location(source: Candidate, side: str, ordinal: int) -> dict 
 
 RUNG_NAMES = {
     RUNG_CLEAN: "clean", RUNG_NOBND_TOL1: "no_bounds_tol1",
+    RUNG_NOQUOTA_TOL1: "no_purpose_quota_tol1",
     RUNG_RELAX_TOL2X: "relax_tol2x",
     RUNG_RELAX_TOL4X: "relax_tol4x", RUNG_RELAX_NOBND: "relax_no_bounds",
     RUNG_LP_FALLBACK: "lp_fallback", RUNG_INFEASIBLE: "infeasible",
@@ -1681,6 +1724,7 @@ def _rung_measurement_tol_mult(rung: int | None) -> float:
         RUNG_CLEAN: 1.0,
         # Dropping the plausibility layer never widens the measurement band.
         RUNG_NOBND_TOL1: 1.0,
+        RUNG_NOQUOTA_TOL1: 1.0,
         RUNG_RELAX_TOL2X: 2.0,
         RUNG_RELAX_TOL4X: 4.0,
         RUNG_RELAX_NOBND: 4.0,
@@ -1692,8 +1736,19 @@ def _rung_measurement_tol_mult(rung: int | None) -> float:
 
 def _rung_keeps_structural_bounds(rung: int | None) -> bool:
     """Whether this rung still solved with its supplied Level-2 bounds."""
-    return rung not in (RUNG_NOBND_TOL1, RUNG_RELAX_NOBND,
+    return rung not in (RUNG_NOBND_TOL1, RUNG_NOQUOTA_TOL1, RUNG_RELAX_NOBND,
                         RUNG_LP_FALLBACK, RUNG_INFEASIBLE)
+
+
+def _rung_keeps_purpose_quota(rung: int | None) -> bool:
+    """Whether this rung still enforced the exact purpose mix.
+
+    Only RUNG_NOQUOTA_TOL1 drops it, and only to keep a measured count exact
+    -- a level-1 measurement outranking a level-3 behavioural prior. The
+    route's own provenance is unaffected either way (the pool is stratified
+    per (geometry, purpose)); what drifts is the published MIX.
+    """
+    return rung != RUNG_NOQUOTA_TOL1
 
 
 def quarter_publish_counts(

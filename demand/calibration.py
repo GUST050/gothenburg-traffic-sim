@@ -494,6 +494,31 @@ def warn_bound_violations(report: dict, label: str) -> None:
 _WIDENED_BAND_RUNGS = {"relax_tol2x": 2, "relax_tol4x": 4, "relax_no_bounds": 4}
 
 
+def warn_purpose_quota_relaxations(report: dict, label: str) -> None:
+    """Report intervals whose purpose MIX yielded to keep a count exact.
+
+    ADDED 2026-08-06 with RUNG_NOQUOTA_TOL1. Dropping a purpose quota is the
+    correct call under the estimation hierarchy -- a level-3 behavioural prior
+    giving way to a level-1 measurement, and it cannot fabricate a provenance
+    label because the pool is stratified per (geometry, purpose). But the
+    published mix does then drift from the RVU-derived prior for those
+    intervals, and that is exactly the kind of concession this project logs
+    rather than absorbs silently. Previously the quota was inviolable and the
+    MEASURED COUNTS were relaxed instead, which is the inversion this rung
+    fixed; without this line the fix would trade one silent concession for
+    another.
+    """
+    summary = report.get("relaxation_summary") or {}
+    dropped = int(summary.get("no_purpose_quota_tol1", 0) or 0)
+    if not dropped:
+        return
+    total = sum(int(v) for v in summary.values()) or 1
+    print(f"  ⓘ PURPOSE MIX RELAXED ({label}): {dropped} of {total} interval(s) "
+          f"({100 * dropped / total:.1f}%) dropped the exact purpose quota to "
+          f"serve their measured counts at the UNWIDENED band. Counts kept; "
+          f"the published purpose mix drifts from its RVU prior there")
+
+
 def warn_relaxed_bound_violations(report: dict, label: str) -> None:
     """Expose intentional counts-first structural relaxations honestly.
 
