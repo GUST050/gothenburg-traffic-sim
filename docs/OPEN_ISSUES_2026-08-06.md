@@ -14,7 +14,8 @@ Nothing here is speculation: each item says whether it is MEASURED, DOCUMENTED
 **MEASURED** · `validation/loso_draw_variance_v1.json`
 
 Three demand builds under identical code, differing only in `--seed`, gave LOSO
-medians **1.537 / 1.119 / 1.490** — a spread of **0.418**. The shift previously
+medians **1.537 / 1.119 / 1.490** — a spread of **0.418**, which grew to
+**0.608** over six draws (SD 0.236). The shift previously
 attributed to stage B was 0.971 → 1.537, a difference of **0.566**. Same order
 of magnitude.
 
@@ -31,21 +32,28 @@ Mann-Whitney p is **0.100** — such a comparison can never reach significance.
 n=4 is the minimum (p=0.029); the observed effect is 2.47 SD, so **6 per arm is
 comfortable**.
 
-## 2. OPEN — did stage B change held-out recovery?
+## 2. RESOLVED IN PRACTICE — stage B shows no effect on held-out recovery
 
-**OPEN** · the claim was withdrawn, not refuted.
+**MEASURED** · six draws of stage-B code:
 
-0.566 is larger than the 0.418 draw spread and may be real, but it was never
-established. I presented elimination of other causes as though it settled the
-question; eliminating alternatives says nothing about whether what remains
-exceeds noise.
+```
+0.929  1.119  1.384  1.401  1.490  1.537
+median 1.393   range 0.608   SD 0.236
+```
 
-**To settle it:** six draws of pre-stage-B code (`6e5763e^`) against the six
-being built now. The trap: a git worktree has none of the gitignored inputs, so
-at minimum `sumo/net.net.xml` must be copied in, and the build must be verified
-to produce the right thing *before* six runs are spent on it.
+The pre-B baseline is **0.971**, which falls INSIDE that range, near its low
+end. The alarm was raised by comparing a low draw of one distribution against a
+high draw of the same one.
 
-Until then, `speed-stage-b` is merged and warming has not started on it.
+So there is no evidence stage B degraded recovery, and the concern that it
+should not be warmed on is withdrawn.
+
+**Still not a formal test:** the pre-B arm remains n=1, so this shows the
+baseline is unremarkable under the stage-B distribution rather than proving the
+two distributions match. Six pre-B draws (`6e5763e^`) would settle it properly.
+The trap if anyone does: a git worktree has none of the gitignored inputs, so at
+minimum `sumo/net.net.xml` must be copied in and the build verified before six
+runs are spent on it. Low priority now.
 
 ## 3. BLOCKING WARMING — the annual plan key is stale again
 
