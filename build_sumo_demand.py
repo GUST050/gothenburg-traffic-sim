@@ -598,6 +598,9 @@ def main() -> None:
                 # — a changed field must invalidate the candidate pool.
                 "assignment_priors": SUMO_DIR / "assignment_priors.json",
             }
+            # Local: build_candidates does heavy module-level OSM/registry work
+            # that every importer of this module would otherwise pay for.
+            import build_candidates
             cache_config = {
                 "n_total": n_total,
                 "through_fraction": args.through_fraction,
@@ -616,7 +619,14 @@ def main() -> None:
                 # identical pool per envelope (cache_date is the day's date).
                 "start_date": cache_date or range_start.strftime("%Y-%m-%d"),
                 "min_per_sensor": 50,
-                "route_diversity": 2.0,
+                # Imported, never restated. This key must name the jitter the
+                # pool was ACTUALLY built with, and the subprocess below does
+                # not pass --route-diversity, so it inherits build_candidates'
+                # default. A local copy of the number silently decoupled the
+                # two the moment that default changed, which would have served
+                # a pool built at one jitter for a request at another.
+                "route_diversity": build_candidates.DEFAULT_ROUTE_DIVERSITY,
+                "max_stretch": build_candidates.DEFAULT_MAX_STRETCH,
                 "seed": args.seed,
                 # The content fingerprint above is the identity. Keep this
                 # label stable so moving a byte-identical weight file does
@@ -1185,10 +1195,18 @@ def main() -> None:
         prox = structure["dest_sensor_proximity"]
         tl = structure["trip_length_fit"]
         onward = structure["onward_after_last_sensor"]
+        # Name the yardstick. These two L1s are against DIFFERENT targets and
+        # were previously both printed as "vs RVU short bins", which made
+        # calibration look like it had wrecked a fit generation had nailed.
+        yard = ("availability-corrected RVU"
+                if tl.get("target_is_availability_corrected") else "RAW RVU")
         print(f"  calibrated structure: destinations within {prox['radius_m']:.0f} m "
               f"of a sensor {prox['pct_within']}% (all-edges baseline "
               f"{prox['baseline_pct_within']}%), trip-length shares {tl['shares']} "
-              f"L1={tl['l1_distance']} vs RVU short bins")
+              f"L1={tl['l1_distance']} vs {yard}"
+              + (f" (L1 vs raw RVU {tl['l1_vs_raw_rvu']}, which an intra-canvas "
+                 f"tour structurally cannot reach)"
+                 if tl.get("target_is_availability_corrected") else ""))
         print(f"    onward after last crossed sensor: median {onward['median_m']} m, "
               f"{onward['pct_under_200m']}% under 200 m; sensor passages "
               f"{structure['sensor_passages']}"

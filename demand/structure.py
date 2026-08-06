@@ -37,8 +37,33 @@ def gravity_distance_km(lats: np.ndarray, lons: np.ndarray,
                    + ((lons - lon0) * KLON_M / 1000.0) ** 2)
 
 
-def trip_length_fit(lengths_km: list[float]) -> dict:
-    """RVU short-distance-bin fit; identical contract to candidate reporting."""
+def trip_length_fit(lengths_km: list[float],
+                    target: list[float] | tuple[float, ...] | None = None) -> dict:
+    """RVU short-distance-bin fit; identical contract to candidate reporting.
+
+    FIXED 2026-08-06 -- the "identical contract" in that sentence was untrue,
+    and the difference silently made the pipeline look broken. This function
+    had no ``target`` parameter and always scored against RAW RVU, while
+    ``build_candidates.trip_length_fit`` scores generation against the
+    AVAILABILITY-CORRECTED target. Both numbers were then printed in one build
+    log as "L1 ... vs RVU short bins":
+
+        generation   L1 = 0.024   (vs the availability-corrected target)
+        calibration  L1 = 0.537   (vs raw RVU)
+
+    A reader would reasonably conclude that calibration destroyed the
+    trip-length fit. It did not; the two numbers were measured against
+    different yardsticks, one of which build_candidates' own docstring calls
+    structurally unreachable for an intra-canvas tour ("L1 vs raw would be
+    0.7825"). Grading a stage against a target it cannot reach, and printing
+    that beside a stage graded against a reachable one, is the exact
+    "compared numbers from different pipelines" error this project records.
+
+    ``target`` is now accepted and BOTH distances are always returned, each
+    labelled, so a caller that omits the target gets the raw-RVU number under
+    a name that says so rather than under the generic one.
+    """
+    goal = list(target) if target is not None else list(RVU_SHORT_BIN_SHARES)
     n = len(lengths_km)
     if n == 0:
         return {
@@ -46,6 +71,9 @@ def trip_length_fit(lengths_km: list[float]) -> dict:
             "counts": [0, 0, 0],
             "short_trip_count": 0,
             "l1_distance": float("inf"),
+            "l1_vs_raw_rvu": float("inf"),
+            "target_shares": [round(v, 4) for v in goal],
+            "target_is_availability_corrected": target is not None,
             "n": 0,
         }
     counts = [0, 0, 0]
@@ -64,8 +92,12 @@ def trip_length_fit(lengths_km: list[float]) -> dict:
     return {"shares": [round(value, 4) for value in shares],
             "counts": counts,
             "short_trip_count": n_short,
-            "l1_distance": round(sum(abs(value - target)
-                                     for value, target in zip(shares, RVU_SHORT_BIN_SHARES)), 4),
+            "l1_distance": round(sum(abs(value - want)
+                                     for value, want in zip(shares, goal)), 4),
+            "l1_vs_raw_rvu": round(sum(abs(value - raw)
+                                       for value, raw in zip(shares, RVU_SHORT_BIN_SHARES)), 4),
+            "target_shares": [round(v, 4) for v in goal],
+            "target_is_availability_corrected": target is not None,
             "n": n, "over_10km_pct": round(100 * over_10km / n, 1)}
 
 
@@ -259,7 +291,7 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
     onward_sorted = sorted(onward_m)
     return {
         "trip_length_fit": {
-            **trip_length_fit(lengths_km),
+            **trip_length_fit(lengths_km, target=_generation_length_target()),
             "quarter_totals": dict(sorted(quarter_totals.items())),
             "under_1km_by_quarter": dict(sorted(under_1km_by_quarter.items())),
         },
@@ -275,6 +307,66 @@ def _route_structure_metrics(route_path: Path) -> dict | None:
         "sensor_passages": {("3+" if k == 3 else str(k)): passages[k]
                             for k in sorted(passages)},
     }
+
+
+def purpose_length_bins(route_path: Path) -> dict | None:
+    """P(length bin | purpose) for one route file, pool or calibrated.
+
+    The two stages carry purpose in different sidecars -- a calibrated file
+    has ``*.agents.json``, the candidate pool has ``candidates.meta.json`` --
+    so this reads whichever exists. It is what lets a drift check separate a
+    COMPOSITION change (the through-share target moving the purpose mix, which
+    is designed) from a SELECTION change (different routes chosen for the same
+    kind of trip, which is not). Comparing raw length distributions conflates
+    the two and fires on theta doing its job.
+    """
+    if not GEO_PATH.exists():
+        return None
+    edge_latlon, _sensor_ids, _len_m = load_edge_geometry()
+    agent_path = route_path.with_name(
+        route_path.name.replace(".rou.xml", ".agents.json"))
+    meta_path = route_path.with_name(
+        route_path.name.replace(".rou.xml", ".meta.json"))
+    records: list[tuple[str, str, str]] = []      # (purpose, origin, destination)
+    if agent_path.exists():
+        with open(agent_path) as handle:
+            for a in json.load(handle).get("agents", []):
+                if a.get("support_only") is True:
+                    continue
+                records.append((str(a.get("purpose", "unknown")),
+                                a.get("origin_edge"), a.get("destination_edge")))
+    elif meta_path.exists():
+        with open(meta_path) as handle:
+            for rec in (json.load(handle).get("candidates") or {}).values():
+                if not isinstance(rec, dict) or rec.get("support_only") is True:
+                    continue
+                records.append((str(rec.get("purpose", "unknown")),
+                                rec.get("origin_edge"), rec.get("destination_edge")))
+    else:
+        return None
+
+    counts: dict[str, list[int]] = {}
+    n_bins = len(LENGTH_BIN_EDGES_KM) + 1
+    for purpose, origin, destination in records:
+        o = edge_latlon.get(origin)
+        d = edge_latlon.get(destination)
+        if o is None or d is None:
+            continue
+        km = float(gravity_distance_km(
+            np.array([d[0]]), np.array([d[1]]), o[0], o[1])[0])
+        index = n_bins - 1
+        for i, edge in enumerate(LENGTH_BIN_EDGES_KM):
+            if km <= edge:
+                index = i
+                break
+        counts.setdefault(purpose, [0] * n_bins)[index] += 1
+    out = {}
+    for purpose, bins in sorted(counts.items()):
+        total = sum(bins)
+        if total:
+            out[purpose] = {"n": total,
+                            "shares": [round(b / total, 4) for b in bins]}
+    return out or None
 
 
 def purpose_lengths_km(route_path: Path) -> dict | None:
@@ -341,6 +433,35 @@ LENGTH_BIN_EDGES_KM = (1.0, 5.0, 10.0)
 # cap multiple plus a 25% margin (the per-quarter caps carry a 2-vehicle
 # integer floor, so mild aggregate overshoot is expected, not a defect).
 STRUCTURE_FLAG_MULT = DEST_GROUP_CAP_MULT * 1.25
+# Depletion is NOT the reciprocal of inflation, and reusing STRUCTURE_FLAG_MULT
+# for it was the first mistake made here: 1/2.5 demands a bin lose 60% of its
+# share before flagging, so a bin losing HALF stayed silent -- which is exactly
+# what the real build does (5-10 km falls 0.432 -> 0.215, a factor of 0.50).
+# A length bin retaining under two thirds of its pool share is structural
+# drift, not sampling noise, so the threshold is set on its own terms.
+LENGTH_BIN_DEPLETION_FRAC = 0.67
+
+
+def _generation_length_target() -> list[float] | None:
+    """The availability-corrected target the GENERATOR was scored against.
+
+    build_candidates persists it in sumo/trip_length_fit.json. Reading it back
+    is what lets the calibrated stage be graded on the same yardstick instead
+    of against raw RVU, which an intra-canvas tour structurally cannot reach.
+    Returns None when the file is absent or malformed -- the caller then falls
+    back to raw RVU, and the report says so via
+    target_is_availability_corrected rather than implying otherwise.
+    """
+    try:
+        with open(Path("sumo") / "trip_length_fit.json") as handle:
+            target = json.load(handle).get("target_shares")
+    except (OSError, ValueError):
+        return None
+    if (isinstance(target, list) and len(target) == 3
+            and all(isinstance(v, (int, float)) and v >= 0 for v in target)
+            and sum(target) > 0):
+        return [float(v) for v in target]
+    return None
 
 
 def calibrated_structure_report(route_path: Path,
@@ -387,10 +508,17 @@ def calibrated_structure_report(route_path: Path,
                 "Tabell 3) orders fritid longest; P(length|purpose) decohered "
                 "in calibration")
 
+    cal_bins = purpose_length_bins(route_path)
+    if cal_bins:
+        report["purpose_length_bins"] = cal_bins
+
     if pool_path is not None:
         pool = _route_structure_metrics(pool_path)
         if pool is not None:
             report["pool"] = pool
+            pool_bins = purpose_length_bins(pool_path)
+            if pool_bins:
+                pool["purpose_length_bins"] = pool_bins
 
             def ratio_flag(name: str, calibrated_v, pool_v) -> None:
                 if calibrated_v is None or pool_v is None:
@@ -398,6 +526,88 @@ def calibrated_structure_report(route_path: Path,
                 if calibrated_v > max(pool_v, 0.5) * STRUCTURE_FLAG_MULT:
                     flags.append(f"{name}: calibrated {calibrated_v} vs pool "
                                  f"{pool_v} (over {STRUCTURE_FLAG_MULT:.2f}x)")
+
+            def length_bin_drift_flags() -> None:
+                """Flag length drift the CATEGORY MIX does not already explain.
+
+                ADDED 2026-08-06, then immediately corrected -- the correction
+                is the point, so it is recorded here.
+
+                The gap this started from is real: every structural check in
+                this file, and the PFE structure guard it mirrors, is a CEILING
+                tripped by `>`, and a ceiling cannot see a DEFICIT. Measured on
+                a real build the 5-10 km bin fell to 0.50x its pool share and
+                no cap bound, because a shortfall sits under every ceiling by
+                definition.
+
+                The first version of this flag compared the calibrated length
+                distribution straight against the pool's, and fired. That was a
+                FALSE ALARM on a deliberate design decision. Measured:
+
+                    E-E through trips are 58.2% of the pool, median O-D
+                    5.48 km, and 69.2% of them fall in the 5-10 km bin.
+                    apply_through_share_target pins published through traffic
+                    at theta = 0.25 (held-out-selected, second-day-confirmed),
+                    and the published mix is 25.2% E-E.
+
+                    Expected 5-10 km share at the POOL's through mix: 0.439
+                    Expected at the PUBLISHED through mix:            0.239
+                    Actually observed:                                0.215
+
+                So theta explains essentially the whole depletion. Flagging it
+                on every build would be alarm fatigue on a documented, validated
+                choice -- and would have taught a reader to ignore the one
+                signal that might later be real.
+
+                The fix is to flag only what the composition change does NOT
+                explain: build the expected bin distribution from the pool's
+                WITHIN-PURPOSE length distributions reweighted to the
+                calibrated purpose mix, and compare against that. A pure
+                composition shift (theta doing its job) now predicts itself and
+                stays silent; a genuine within-purpose selection drift -- the
+                picker preferring different routes for the SAME kind of trip --
+                still shows up.
+                """
+                pool_by_p = pool.get("purpose_length_bins")
+                cal_by_p = report.get("purpose_length_bins")
+                cal_fit = (report.get("trip_length_fit") or {}).get("shares")
+                if not pool_by_p or not cal_by_p or not cal_fit:
+                    return
+                # Expected = sum over purposes of P(purpose | calibrated)
+                #            x P(bin | purpose, pool).
+                n_bins = len(cal_fit)
+                cal_total = sum(v["n"] for v in cal_by_p.values()) or 1
+                expected = [0.0] * n_bins
+                covered = 0
+                for purpose, cal_rec in cal_by_p.items():
+                    pool_rec = pool_by_p.get(purpose)
+                    if not pool_rec or pool_rec["n"] == 0:
+                        continue
+                    weight = cal_rec["n"] / cal_total
+                    covered += cal_rec["n"]
+                    for i in range(n_bins):
+                        expected[i] += weight * pool_rec["shares"][i]
+                # Without most of the population mapped, the expectation is not
+                # a usable null; say nothing rather than guess.
+                if covered / cal_total < 0.9:
+                    return
+                labels = [f"{lo}-{hi} km" for lo, hi in
+                          zip((0,) + LENGTH_BIN_EDGES_KM[:-1], LENGTH_BIN_EDGES_KM)]
+                for i, (exp_share, c_share) in enumerate(zip(expected, cal_fit)):
+                    if exp_share < 0.05:      # a bin the pool barely populates
+                        continue
+                    if c_share < exp_share * LENGTH_BIN_DEPLETION_FRAC:
+                        label = labels[i] if i < len(labels) else f"bin {i}"
+                        flags.append(
+                            f"length_bin_depleted[{label}]: calibrated "
+                            f"{round(c_share, 4)} vs {round(exp_share, 4)} "
+                            f"expected from the pool at this purpose mix "
+                            f"({c_share / exp_share:.2f}x, under "
+                            f"{LENGTH_BIN_DEPLETION_FRAC:.2f}x — composition "
+                            f"already accounted for, so this is selection "
+                            f"drift)")
+
+            length_bin_drift_flags()
 
             ratio_flag("dest_within_200m_of_sensor_pct",
                        report["dest_sensor_proximity"]["pct_within"],
