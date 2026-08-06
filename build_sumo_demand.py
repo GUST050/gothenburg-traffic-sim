@@ -453,6 +453,7 @@ from demand.feedback import (BPR_PERIOD_S, FEEDBACK_SIM_TIMEOUT_S,
 from demand.calibration import (_agent_path_for, _report_is_publishable,
                                 run_pfe_variants_flat_parallel,
                                 warn_bound_violations,
+                                warn_purpose_quota_relaxations,
                                 warn_relaxed_bound_violations,
                                 warn_purpose_allocation_drift,
                                 warn_unserviceable_measured_edges)
@@ -627,6 +628,12 @@ def main() -> None:
                 # a pool built at one jitter for a request at another.
                 "route_diversity": build_candidates.DEFAULT_ROUTE_DIVERSITY,
                 "max_stretch": build_candidates.DEFAULT_MAX_STRETCH,
+                "max_local_stretch": build_candidates.DEFAULT_MAX_LOCAL_STRETCH,
+                # Changes WHICH route shapes exist per departure hour, so a
+                # pool built at one floor must never be served for a request
+                # at another.
+                "pool_departure_floor":
+                    build_candidates.POOL_DEPARTURE_UNIFORM_FLOOR,
                 "seed": args.seed,
                 # The content fingerprint above is the identity. Keep this
                 # label stable so moving a byte-identical weight file does
@@ -1011,6 +1018,7 @@ def main() -> None:
                     warn_purpose_allocation_drift(variant_report, key)
                     warn_bound_violations(variant_report, key)
                     warn_relaxed_bound_violations(variant_report, key)
+                    warn_purpose_quota_relaxations(variant_report, key)
                     if variant_report["geh_pct"] < 100:
                         print("  ⚠ measured-edge fit below gate — inspect before use")
                 report = reports[""]
@@ -1037,6 +1045,7 @@ def main() -> None:
             warn_unserviceable_measured_edges(report, "edge_shares")
             warn_bound_violations(report, "edge_shares")
             warn_relaxed_bound_violations(report, "edge_shares")
+            warn_purpose_quota_relaxations(report, "edge_shares")
 
             if args.congestion_method == "simulate":
                 # Simple GEH-based early stop — this method is meant for an

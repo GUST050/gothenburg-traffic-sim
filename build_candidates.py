@@ -2401,6 +2401,68 @@ def blend_day_shape(real: np.ndarray, fallback: np.ndarray,
     return blended / blended.sum()
 
 
+# How much uniform mass to mix into the POOL's departure-hour distribution.
+#
+# WHY (measured 2026-08-06). Candidate departures were drawn straight from the
+# demand day shape, so a 01:00 hour carrying 0.4% of daily traffic received
+# 0.4% of the candidate pool. But the calibration constraint system does not
+# shrink at night: it is 7 measured edges in EVERY quarter, whatever the
+# volume. Sparse quarters were therefore structurally under-determined --
+# measured on a real 2027 forecast build, some quarters had as few as 2-4
+# candidates touching a given measured edge against a median of 18-19, and
+# those were exactly the quarters that could not be solved:
+#
+#   relaxing quarters : median 108 candidates, min-coverage 11
+#   clean quarters    : median 220 candidates, min-coverage 19
+#
+# With every constraint dropped except the counts themselves (RUNG_NOQUOTA_
+# TOL1), 11 of 96 weekend quarters were STILL infeasible at the exact band --
+# the pool simply could not span the target vector there.
+#
+# This costs nothing behaviourally, and that is the crucial point: the pool is
+# a SUPPORT SET, and a candidate is a possible route, not a vehicle. The PFE
+# assigns volume from the measured counts, so adding shapes to a sparse hour
+# adds OPTIONS, not traffic -- an unneeded shape simply receives ~zero flow.
+# Purpose stays correct too, because purpose is drawn conditioned on the hour
+# a trip lands in (purpose_shares_for_hour), not on the shape's overall mass.
+#
+# The literature frames this as path-set adequacy: the number of paths needed
+# is set by the constraint system, not the demand level, and sparse low-demand
+# intervals are a recognised failure mode of interval-based OD estimation.
+#
+# DEFAULT 0.0 -- OFF. The reasoning above is sound and the sparsity is real,
+# but this was built to fix the weekend relaxations and IT DID NOT: a rebuild
+# of the same window at floor 0.25 left them at 23/23/20 widened intervals,
+# unchanged, while wall time went 577 s -> 950 s (+65%) because the extra
+# shapes enlarge every PFE solve. On the annual run that is roughly 24 h ->
+# 35 h bought for nothing. The real cause is elsewhere (see the node-26355153
+# finding in docs/OPEN_ISSUES), so this stays available and measured but is
+# not paid for by default. Raise it only with a specific reason and a
+# before/after on the relaxation counts.
+POOL_DEPARTURE_UNIFORM_FLOOR = 0.0
+
+
+def pool_departure_shape(demand_shape: np.ndarray,
+                         floor: float = POOL_DEPARTURE_UNIFORM_FLOOR
+                         ) -> np.ndarray:
+    """Departure-hour distribution for the CANDIDATE POOL.
+
+    Deliberately NOT the demand shape -- see POOL_DEPARTURE_UNIFORM_FLOOR.
+    The demand shape still governs how much traffic each hour receives, via
+    the measured/forecast counts the PFE calibrates against; this governs only
+    how many route SHAPES exist to carry it.
+    """
+    shape = np.asarray(demand_shape, dtype=float)
+    total = shape.sum()
+    if total <= 0 or not np.isfinite(total):
+        return np.full(len(shape), 1.0 / len(shape))
+    shape = shape / total
+    if not 0.0 <= floor < 1.0:
+        raise ValueError("pool departure floor must be within [0, 1)")
+    mixed = (1.0 - floor) * shape + floor / len(shape)
+    return mixed / mixed.sum()
+
+
 def _largest_remainder_targets(weights: dict[str, float], total: int) -> dict[str, int]:
     """Convert a categorical probability vector into deterministic counts.
 
@@ -3556,6 +3618,18 @@ def main() -> None:
                         "the search may EXPLORE versus how far a result may "
                         "SHIP — and a backstop above the jitter bound is "
                         "meant to be nearly inert, which is the point")
+    ap.add_argument("--pool-departure-floor", type=float,
+                    default=POOL_DEPARTURE_UNIFORM_FLOOR,
+                    help="uniform mass mixed into the CANDIDATE POOL's "
+                        "departure-hour distribution so sparse hours still "
+                        "carry enough route shapes to span the 7-edge "
+                        "constraint system. Adds options, not traffic — the "
+                        "PFE sets volume from the measured counts, so an "
+                        "unneeded shape gets ~zero flow. 0 restores the old "
+                        "behaviour of drawing pool departures straight from "
+                        "the demand shape, which left night quarters with as "
+                        "few as 2 candidates on a measured edge and made them "
+                        "infeasible at the exact band")
     ap.add_argument("--max-local-stretch", type=float,
                     default=DEFAULT_MAX_LOCAL_STRETCH,
                     help="local-optimality backstop: drop a candidate whose "
@@ -3661,6 +3735,17 @@ def main() -> None:
         with open(args.real_day_shape_file) as f:
             real_shape = np.array(json.load(f))
         shape_hourly = blend_day_shape(real_shape, shape_hourly)
+    # The POOL's departure spread is a support-coverage decision, not a demand
+    # one: volume comes from the counts the PFE calibrates against. Sparse
+    # hours need enough route shapes to span the same 7-edge constraint system
+    # as busy ones. See POOL_DEPARTURE_UNIFORM_FLOOR.
+    demand_shape_hourly = shape_hourly
+    shape_hourly = pool_departure_shape(shape_hourly, args.pool_departure_floor)
+    if args.pool_departure_floor > 0:
+        thin = int((demand_shape_hourly < 0.5 / 24).sum())
+        print(f"  pool departure support: {args.pool_departure_floor:.0%} uniform "
+              f"floor mixed in ({thin} hour(s) below half-uniform demand get "
+              f"route shapes they would otherwise lack; adds options, not traffic)")
     print(f"{len(entries)} entry gates, {len(exits)} exit gates")
 
     if hmass.sum() == 0:
@@ -3689,6 +3774,11 @@ def main() -> None:
             if profile.shape != (24,) or profile.sum() <= 0:
                 sys.exit(f"invalid 24-hour profile in day block {day_index}")
             profile /= profile.sum()
+            # Same support floor as the single-day path. This is the branch the
+            # WARMING run actually takes (every annual window is multi-day), so
+            # omitting it here would have left the fix inert for the one case
+            # it was built for.
+            profile = pool_departure_shape(profile, args.pool_departure_floor)
             pool_key = str(block_spec.get(
                 "pool_key", "weekend" if block_spec.get("is_weekend") else "weekday"))
             reused = pool_key in templates

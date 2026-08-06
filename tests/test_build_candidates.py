@@ -2130,6 +2130,62 @@ class TestDestinationSensorProximity:
         assert result["n"] == 1
 
 
+class TestPoolDepartureSupportFloor:
+    """The pool's departure spread is a SUPPORT decision, not a demand one.
+
+    Candidate departures were drawn straight from the demand day shape, so an
+    hour carrying 0.3% of daily traffic got 0.3% of the pool. But the
+    constraint system is 7 measured edges in EVERY quarter regardless of
+    volume, so sparse hours were structurally under-determined. Measured on a
+    real 2027 forecast build: relaxing quarters had median 108 candidates and
+    as few as 2 touching a given measured edge, against 220 / 18-19 in clean
+    quarters -- and with every constraint except the counts dropped
+    (RUNG_NOQUOTA_TOL1) 11 of 96 weekend quarters were STILL infeasible.
+
+    Adding shapes to a sparse hour adds OPTIONS, not traffic: the PFE assigns
+    volume from the measured counts, so an unneeded shape gets ~zero flow.
+    """
+
+    def test_it_is_OFF_by_default(self):
+        # Built for the weekend relaxations and it did NOT fix them (23/23/20
+        # widened intervals, unchanged) while costing +65% wall time. The
+        # mechanism is kept and measured; it is not paid for by default.
+        assert bc.POOL_DEPARTURE_UNIFORM_FLOOR == 0.0
+        demand = bc.daily_shape(is_weekend=True)
+        assert np.allclose(bc.pool_departure_shape(demand), demand)
+
+    def test_the_thinnest_hour_gains_shapes_when_enabled(self):
+        demand = bc.daily_shape(is_weekend=True)
+        pool = bc.pool_departure_shape(demand, 0.25)
+        assert pool.min() > demand.min() * 1.5
+
+    def test_the_busiest_hour_is_barely_touched(self):
+        demand = bc.daily_shape(is_weekend=False)
+        pool = bc.pool_departure_shape(demand, 0.25)
+        # Support for sparse hours must not come at the cost of gutting the
+        # peak, where the pool already spans the constraint space.
+        assert pool.max() > demand.max() * 0.8
+
+    def test_it_stays_a_distribution(self):
+        for weekend in (False, True):
+            pool = bc.pool_departure_shape(bc.daily_shape(weekend), 0.25)
+            assert pool.sum() == pytest.approx(1.0)
+            assert (pool > 0).all()
+
+    def test_zero_floor_is_exactly_the_old_behaviour(self):
+        demand = bc.daily_shape(is_weekend=True)
+        assert np.allclose(bc.pool_departure_shape(demand, 0.0), demand)
+
+    def test_a_degenerate_shape_falls_back_to_uniform(self):
+        pool = bc.pool_departure_shape(np.zeros(24))
+        assert pool == pytest.approx(np.full(24, 1 / 24))
+
+    @pytest.mark.parametrize("bad", [-0.1, 1.0, 1.5])
+    def test_an_invalid_floor_fails_closed(self, bad):
+        with pytest.raises(ValueError, match="floor"):
+            bc.pool_departure_shape(bc.daily_shape(False), bad)
+
+
 class TestLengthBinDepletionIsDetectable:
     """Length drift must be judged NET OF the deliberate composition change.
 
