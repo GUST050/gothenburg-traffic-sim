@@ -149,13 +149,67 @@ station 133). Meeting any floor means inflating the few routes that exist. The
 established remedy is **column generation** — generate paths that can carry the
 flow — not coercing the paths already there. Not built.
 
-**OPEN — should the ceiling exist at all?** Link-flow-observability theory says
-the first question is whether the opposite direction is *determinable* from the
-7 measured edges by conservation. If it is, no model is needed; if it is not,
-maximum entropy (leaving it free) is the principled default, and the deployed
-PFE already does that. The project's own shrinkage (λ=0.256) says confidence in
-the prior is minimal, which is exactly the regime where entropy wins. **The
-observability question was never measured.**
+**MEASURED 2026-08-07 — the observability question, answered, and the ceiling
+turns out to be mostly inert.** Two findings, and the second one reframes the
+first.
+
+**(1) The opposite carriageway is NOT determinable.** Method: Ng (2012),
+*Synergistic sensor location for link flow inference without path enumeration:
+a node-based approach* (Transp. Res. B 46(6) 781-788) — no path enumeration is
+needed; at a node where every incident link but ONE is known, conservation
+fixes the last one, and iterating to a fixed point yields exactly the
+determinable set. On the deployed network:
+
+```
+directed edges 7,147   nodes 3,402   measured 7
+DETERMINABLE: 25 of 7,147 (0.35%)  = 7 measured + 18 derived
+every opposite carriageway: NOT determinable
+```
+
+The nodes around the measured edges carry 2-5 unknown incident links each, far
+from the single one determination needs. The test is **deliberately generous**:
+it assumes strict conservation, i.e. that no trip starts or ends at any node.
+In this model they do, so anything undeterminable here is undeterminable in
+fact. (A first attempt via SVD null-space rank was numerically broken —
+reported a 7,146-dimensional null space for a 3,402x7,147 matrix — and was
+discarded rather than reported. The propagation above needs no numerics.)
+
+So the theory's answer applies: with the quantity undeterminable and the
+project's own shrinkage at λ=0.256, maximum entropy — leaving it free — is the
+principled default. Entropy maximisation is the Bayesian special case for
+minimal confidence in the prior.
+
+**(2) But the ceiling is applied on only ONE of five edges**, so the stakes are
+far smaller than the "binds 24.0% of edge-quarters" line above suggests.
+`build_interval_constraints` merges it with `hard_bounds.setdefault(...)`, so
+the direction estimate is used ONLY where no structural bound already exists.
+Measured on the deployed 2025-09-16 configuration:
+
+```
+26355153_26842525_0       proposed 95/96,  USED  0/96
+559960490_1305379743_0    proposed 96/96,  USED 96/96
+60790253_60790252_0       proposed 96/96,  USED  0/96
+91615277_26355153_0       proposed 96/96,  USED  0/96
+96523321_26355153_0       proposed 96/96,  USED  0/96
+                          -> used in 96 of 479 proposed edge-quarters (20.0%)
+```
+
+**What actually protects those four edges from absurd flow is the STRUCTURAL
+bound** — conservation-derived, from real measurements — not the direction
+model. That is the answer to "isn't the ceiling good to have?": yes, a ceiling
+is, and there is one; it simply is not this one.
+
+**The real defect is the in-between state.** The direction-split subsystem
+(`dirsplit/`, trained, shrunk, quantile-regressed, three demand variants) looks
+like it constrains five edges and actually constrains one. That is worse than
+either alternative: it should either apply where it is meant to, or not exist.
+`setdefault` decides which, silently, and nothing reports it.
+
+**Recommended, NOT yet done** (both touch bound sources, so neither can land
+while the annual warming runs): report the used-vs-proposed split on every
+build the way every other concession is reported, and then decide the ceiling
+on that evidence. Removing it changes exactly one edge; the four that look
+protected already are not protected by it.
 
 **MEASURED — weekday adds nothing** · `validation/dirsplit_weekday_signal_v1.json`.
 0.003 spread across Mon-Fri against a declared interval of 0.078-0.236, and
