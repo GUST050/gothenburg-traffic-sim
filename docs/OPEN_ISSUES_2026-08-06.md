@@ -430,6 +430,68 @@ on live data: one 2027-04-26 interval moved from `relax_tol2x` to
 `PURPOSE MIX RELAXED` log line reports it, so the fix does not trade one
 silent concession for another.
 
+## 6e. OPEN — LOSO leaves the held-out edge with NO constraint at all
+
+**MEASURED 2026-08-07, by reading the fold construction — no new run needed.**
+The LOSO harness measures something weaker than the question its own docstring
+asks, and the effect is large enough to dominate the DMRB verdict below.
+
+Three things happen to the held-out edge at once:
+
+```
+1. its measured COUNT is removed              deliberate -- that is the test
+2. ALL level-2 bounds are dropped, every fold  loso.py:13 "would leak the
+                                               held-out station"
+3. it has no assignment ceiling either         it was measured when the field
+                                               was built, and the field
+                                               EXCLUDES measured edges
+```
+
+Verified directly on the deployed configuration: `26355153_96523321_0` and
+`26355153_91615277_0` carry **no level-2 bound and no level-3 prior** — their
+count is the only thing that constrains them, which is correct in production —
+and `sumo/assignment_priors.json` covers **6,124 edges but none of the 7
+measured ones** (`assignment_priors.py:356`, sensor-edge exclusion).
+
+**So a genuinely unmeasured street gets a ceiling of `(0, max(5, 5x))` and the
+held-out street gets nothing.** The fold makes it freer than any real edge in
+the system, which is not the question "how wrong is the program on a street it
+cannot see?"
+
+**This explains the shape of the DMRB failure**, not just its size. Splitting
+the 2026-08-06 report by direction:
+
+```
+UNDER (baseline rule bites -- the pool cannot reach the station)
+  1074 0.71   133 0.84   1076 0.85
+OVER  (edge left wholly unconstrained)
+  107 1.40    107 1.63   134 2.50   2276 2.53
+```
+
+The baseline rule can only ever cause UNDER-prediction — it withholds traffic,
+it cannot invent it — so it cannot account for the four over-predictions. The
+two worst (2.50, 2.53) are exactly the two edges shown above to have no
+fallback constraint, and both are outflows of node 26355153, the same junction
+behind 6b/6c.
+
+**The harness is internally inconsistent about leakage.** The assignment
+prior's SCALE FACTOR got a surgical fix on 2026-07-09 — `exclude_sensor`
+removes precisely the held-out station's edges (`assignment_priors.py:544`).
+Level-2 bounds got a sledgehammer instead: all of them, in every fold,
+including bounds on edges nowhere near the held-out station. One leak was
+fixed properly and the other was not, in the same file family.
+
+**FIX, not attempted (`assignment_priors.py` is a BOUND source and the annual
+warming is mid-run):** build the assignment field per fold with the held-out
+station absent from `measured_set`, so its edges enter the field and receive
+the same ceiling every other unmeasured edge gets. The mechanism already
+exists — it is what `exclude_sensor` does for the scale factor — it is simply
+not applied here. Then re-run LOSO and re-read `tools/validate_dmrb.py`.
+
+**Do not read the current DMRB verdict as the model's spatial accuracy.** It is
+a lower bound depressed by a harness artifact of unknown size. The artifact's
+magnitude is itself unmeasured; that is what the fix would establish.
+
 ## 7. Pool and picker
 
 **DOCUMENTED** · `docs/reviews/PIPELINE_FAULT_AUDIT_2026-08-06.md` and
