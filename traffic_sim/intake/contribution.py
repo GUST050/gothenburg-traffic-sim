@@ -148,6 +148,17 @@ def build_contribution(*, sensor_id: str, registry: dict,
                                  if values else 0.0}
 
     station_after = _station(loso_after, str(sensor_id))
+    observability = (station_after or {}).get("observability_certificate")
+    requires_observability = bool(
+        ((loso_after or {}).get("comparison_contract") or {}).get(
+            "sensor_observability_gate"))
+    observability_ready = (
+        isinstance(observability, dict)
+        and observability.get("onboarding_ready") is True)
+    if requires_observability and not observability_ready:
+        # A ratio from an underidentified fold is still useful diagnosis, but
+        # it cannot certify that a newly added station improved inference.
+        outcome = "insufficient_evidence"
     own_ratios = []
     for edge in (station_after or {}).get("edges", {}).values():
         try:
@@ -182,6 +193,7 @@ def build_contribution(*, sensor_id: str, registry: dict,
                                                 else None),
             "new_station_ratios": own_ratios,
             "isolation_context": (station_after or {}).get("edges", {}),
+            "observability_certificate": observability,
         },
         "outcome": outcome,
         "claim": (

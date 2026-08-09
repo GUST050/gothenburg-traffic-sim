@@ -73,6 +73,30 @@ def test_negative_comparable_holdout_change_is_reported_as_worsened():
     assert report["outcome"] == "worsened"
 
 
+def test_new_protocol_refuses_underidentified_sensor_improvement_claim():
+    registry = {"sensors": [{"sensor_id": "new", "approved_edge_ids": ["e1"]}]}
+    network = {"features": [{"properties": {"id": "e1", "confidence": 0.2}}]}
+    before = _loso({"old": {"e": 0.5}})
+    after = _loso({"old": {"e": 0.9}, "new": {"e1": 1.0}})
+    for report in (before, after):
+        report["comparison_contract"]["sensor_observability_gate"] = (
+            "candidate incidence rank")
+    after["stations"]["new"]["observability_certificate"] = {
+        "status": "underidentified",
+        "onboarding_ready": False,
+    }
+
+    result = build_contribution(
+        sensor_id="new", registry=registry,
+        network_before=network, network_after=network,
+        loso_before=before, loso_after=after, flows_after={"e1": [1]},
+    )
+
+    assert result["outcome"] == "insufficient_evidence"
+    assert result["holdout"]["observability_certificate"]["status"] == (
+        "underidentified")
+
+
 def test_placement_screen_excludes_measured_edges_and_is_sorted():
     network = {"features": [
         {"properties": {"id": "measured", "sensor_id": "s", "confidence": 0.0,

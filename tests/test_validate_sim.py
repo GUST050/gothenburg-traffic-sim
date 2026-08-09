@@ -15,18 +15,96 @@ station must be dropped from that station's own fold."""
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import validate_sim
-from validate_sim import (corridor_priors_for_fold, demand_through_share_target,
-                          require_historical_demand,
-                          resolve_evaluation_window)
+from validate_sim import (assignment_edges_released_for_fold,
+                          compute_assignment_load_for_fold,
+                          controlled_publication_counts,
+                          corridor_priors_for_fold, demand_through_share_target,
+                          held_integer_publication_bounds,
+                          held_out_evaluation_series,
+                          include_held_assignment_flows,
+                          require_historical_demand, resolve_evaluation_window,
+                          select_station_folds)
+from traffic_sim.demand import pfe
+from traffic_sim.demand.pfe import Candidate
 
 
 def make_corridor(from_edge, to_edge, prior, band):
     return {"mid_edge": {"from_sensor_edge": from_edge, "to_sensor_edge": to_edge,
                          "prior": prior, "band": band}}
+
+
+class TestSelectStationFolds:
+    def test_subset_keeps_deterministic_order(self):
+        sensors = {"107": ["a", "b"], "134": ["c"], "2276": ["d"]}
+        assert select_station_folds(sensors, ["2276", "107"]) == ["107", "2276"]
+
+    def test_default_selects_all(self):
+        assert select_station_folds({"b": [], "a": []}, None) == ["a", "b"]
+
+    def test_unknown_station_fails_closed(self):
+        with pytest.raises(ValueError, match="unknown diagnostic station"):
+            select_station_folds({"107": ["a"]}, ["999"])
+
+    def test_duplicate_station_fails_closed(self):
+        with pytest.raises(ValueError, match="duplicates"):
+            select_station_folds({"107": ["a"]}, ["107", "107"])
+
+
+class TestHeldIntegerPublicationBounds:
+    def test_selects_only_held_assignment_edges(self):
+        bounds = [
+            {"held": (0.0, 5.0), "other": (0.0, 99.0)},
+            {"held": (0.0, 7.0)},
+        ]
+
+        selected = held_integer_publication_bounds(bounds, ["held"])
+
+        assert selected == [
+            {"held": (0.0, 5.0)},
+            {"held": (0.0, 7.0)},
+        ]
+        assert "other" in bounds[0]
+
+    def test_returns_none_when_assignment_has_no_held_ceiling(self):
+        assert held_integer_publication_bounds(
+            [{"other": (0.0, 99.0)}, {}], ["held"]) is None
+
+
+class TestControlledPublicationCounts:
+    def test_uses_joint_rounder_and_always_restores_production_helper(self):
+        shapes = [
+            Candidate(0.0, ["A"]),
+            Candidate(0.0, ["A", "B"]),
+            Candidate(0.0, ["B"]),
+            Candidate(0.0, ["X"]),
+        ]
+        original = pfe.round_preserving_measured
+
+        precomputed, report = controlled_publication_counts(
+            shapes,
+            [np.asarray([0.6, 0.4, 0.6, 0.4])],
+            [{"A": 1.0, "B": 1.0}],
+            [{}],
+            [pfe.RUNG_CLEAN],
+            [{}],
+            enforce_integer_bounds=False,
+            structure_groups=[],
+        )
+
+        counts, purpose_enforced = precomputed[0]
+        assert counts.sum() == 2
+        assert counts[0] + counts[1] == 1
+        assert counts[1] + counts[2] == 1
+        assert purpose_enforced is False
+        assert report["method_counts"] == {"production_joint_projection": 1}
+        assert report["evidence_class"] == "production_joint_projection"
+        assert report["max_abs_active_measurement_residual"] == 0
+        assert pfe.round_preserving_measured is original
 
 
 class TestCorridorPriorsForFold:
@@ -86,6 +164,113 @@ class TestCorridorPriorsForFold:
         out = corridor_priors_for_fold(corridor, edge_to_sensor, held="107", qi=0)
         assert "mid1" not in out   # anchored on held-out 107
         assert out["mid2"] == pytest.approx((20.0, 0.25))
+
+
+class TestFoldAssignmentField:
+    def test_structural_load_sees_held_station_as_unmeasured(self, monkeypatch):
+        original = validate_sim.assignment_prior_model.load_sensor_edges
+        seen = []
+
+        def fake_compute(**config):
+            seen.append(validate_sim.assignment_prior_model.load_sensor_edges())
+            assert config == {"seed": 7}
+            return {"held_edge": 2.0}
+
+        monkeypatch.setattr(validate_sim, "compute_assignment_load", fake_compute)
+        result = compute_assignment_load_for_fold(
+            "held", {"kept": ["kept_edge"], "held": ["held_edge"]},
+            {"seed": 7})
+
+        assert result == {"held_edge": 2.0}
+        assert seen == [{"kept": ["kept_edge"]}]
+        assert validate_sim.assignment_prior_model.load_sensor_edges is original
+
+    def test_structural_load_override_restores_after_failure(self, monkeypatch):
+        original = validate_sim.assignment_prior_model.load_sensor_edges
+        monkeypatch.setattr(
+            validate_sim, "compute_assignment_load",
+            lambda **_config: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            compute_assignment_load_for_fold(
+                "held", {"kept": ["kept_edge"], "held": ["held_edge"]})
+        assert validate_sim.assignment_prior_model.load_sensor_edges is original
+
+    def test_held_edge_is_formatted_like_an_unmeasured_edge(self, monkeypatch):
+        monkeypatch.setattr(
+            validate_sim.assignment_prior_model, "daily_shape",
+            lambda: [0.25, 0.75],
+        )
+        result = include_held_assignment_flows(
+            {"weight": 0.15, "scale_veh_per_day": 10.0,
+             "flows": {"ordinary": [1.0, 2.0]}},
+            {"held_edge": 2.0, "zero_edge": 0.0},
+            ["held_edge", "zero_edge"],
+        )
+
+        assert result["flows"]["ordinary"] == [1.0, 2.0]
+        assert result["flows"]["held_edge"] == [5.0, 15.0]
+        assert "zero_edge" not in result["flows"]
+
+    def test_all_constraints_derived_from_held_sensor_are_released(self):
+        released = assignment_edges_released_for_fold(
+            "held", ["measured"],
+            {
+                "reverse": {"sensor": "held"},
+                "other_reverse": {"sensor": "other"},
+            },
+            {
+                "held_corridor": {
+                    "from_sensor_edge": "measured",
+                    "to_sensor_edge": "other_measured",
+                },
+                "other_corridor": {
+                    "from_sensor_edge": "other_measured",
+                    "to_sensor_edge": "third_measured",
+                },
+            },
+            {
+                "measured": "held",
+                "other_measured": "other",
+                "third_measured": "third",
+            },
+        )
+        assert released == ["held_corridor", "measured", "reverse"]
+
+
+class TestHeldOutMeasurementSemantics:
+    def test_two_way_total_is_measured_once_and_simulated_directions_are_summed(self):
+        key, measured, simulated = held_out_evaluation_series(
+            {"east": [10, None, 30], "west": [10, None, 30]},
+            {"east": [4, 5, 12], "west": [6, 7, 18]},
+            ["east", "west"],
+            "two_way_total",
+        )
+
+        assert key == "station_total"
+        assert measured.tolist()[:1] == [10.0]
+        assert np.isnan(measured[1])
+        assert measured[2] == 30.0
+        assert simulated.tolist() == [10.0, 12.0, 30.0]
+
+    def test_two_way_total_rejects_nonduplicated_source_values(self):
+        with pytest.raises(ValueError, match="source values differ"):
+            held_out_evaluation_series(
+                {"east": [10, 20], "west": [11, 20]},
+                {"east": [4, 8], "west": [6, 12]},
+                ["east", "west"],
+                "two_way_total",
+            )
+
+    def test_directional_sensor_remains_an_edge_level_comparison(self):
+        key, measured, simulated = held_out_evaluation_series(
+            {"north": [10, 20]}, {"north": [9, 22]},
+            ["north"], "directional")
+
+        assert key == "north"
+        assert measured.tolist() == [10.0, 20.0]
+        assert simulated.tolist() == [9.0, 22.0]
 
 
 class TestHistoricalDemandGuard:

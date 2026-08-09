@@ -29,9 +29,11 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from importlib import metadata as importlib_metadata
 import json
 import multiprocessing as mp
 import os
+import platform
 import subprocess
 import sys
 import tempfile
@@ -128,6 +130,44 @@ SOURCE_FILES = _source_files()
 STARTUP_SOURCE_HASHES = fingerprint_files(SOURCE_FILES)
 
 
+def runtime_package_identity(packages: tuple[str, ...]) -> dict[str, str | None]:
+    """Return the numerical runtime that can change deterministic artifacts.
+
+    Source hashes and seeds are insufficient for byte-reproducible pool and
+    picker caches: NumPy explicitly does not promise Generator streams across
+    versions, and SciPy/HiGHS releases can change MILP behaviour.  Bind the
+    relevant package versions plus Python/platform to cache identities instead
+    of later labelling restored artifacts with whichever runtime is current.
+    """
+    identity: dict[str, str | None] = {
+        "python": sys.version,
+        "platform": platform.platform(),
+    }
+    for package in sorted(set(packages)):
+        try:
+            identity[package] = importlib_metadata.version(package)
+        except importlib_metadata.PackageNotFoundError:
+            identity[package] = None
+    return identity
+
+
+def demand_day_source_hashes(
+    records: dict[str, dict] | None = None,
+) -> dict[str, str | None]:
+    """Bind a calibrated day to the complete canonical source inventory.
+
+    A selective allow-list silently omitted newly introduced helpers such as
+    ``traffic_sim/demand/structure_caps.py``.  That allowed the day library to
+    restore picker output produced under old cap semantics.  The canonical
+    inventory is already glob-complete, so use all of it here as well.
+    """
+    active = STARTUP_SOURCE_HASHES if records is None else records
+    return {
+        name: record.get("sha256")
+        for name, record in sorted(active.items())
+    }
+
+
 def candidate_routing_weight_cache_input(weight_file: Path | None) -> Path:
     """Return the exact artifact that determines candidate routing costs.
 
@@ -137,6 +177,20 @@ def candidate_routing_weight_cache_input(weight_file: Path | None) -> Path:
     initial free-flow pass from every real feedback-weight file.
     """
     return weight_file if weight_file is not None else SUMO_DIR / ".no-routing-weights"
+
+
+def candidate_router_cache_input(home: Path) -> Path:
+    """Return the exact router executable that defines candidate geometry.
+
+    Candidate routes are outputs of ``duarouter``, not just of our Python
+    generator.  SUMO routing behaviour can change between releases, so a
+    cache key that fingerprints only the network, inputs and Python sources
+    can otherwise restore an old route pool after a SUMO upgrade.  Hash the
+    executable bytes as a required cache input; a missing binary remains a
+    distinct, fail-closed fingerprint and the subsequent routing invocation
+    still emits the operational error.
+    """
+    return Path(home) / "bin" / "duarouter"
 
 
 def pfe_fit_by_day(report: dict, targets: list[dict],
@@ -588,9 +642,18 @@ def main() -> None:
             }
             cache_inputs = {
                 "network": NET_PATH,
+                # The router is part of the pool-producing implementation.
+                # Its exact bytes, rather than only the later demand report's
+                # human-readable SUMO version, must invalidate cached routes.
+                "duarouter_binary": candidate_router_cache_input(home),
                 "graph": Path("web/data/graph.graphml"),
                 "map_network": GEO_PATH,
                 "source_flows": flows_path,
+                # Candidate anchoring is defined by the reviewed physical
+                # registry, not merely by whichever keys happen to exist in
+                # the current flow artifact. A new/re-snapped sensor must
+                # never restore a pool built for the old edge set.
+                "sensor_registry": Path("data_in/sensors.json"),
                 "normal_profile": Path("web/data/normal_profile.json"),
                 "direction_split": SUMO_DIR / "direction_split.json",
                 "population": Path("data_in/deso/population_2023.json"),
@@ -646,6 +709,12 @@ def main() -> None:
                 "pool_departure_floor":
                     build_candidates.POOL_DEPARTURE_UNIFORM_FLOOR,
                 "seed": args.seed,
+                # build_candidates uses Generator plus graph/geometry
+                # libraries whose algorithms are outside our source tree.
+                # A dependency upgrade must not inherit an older pool merely
+                # because the seed and Python files are unchanged.
+                "runtime": runtime_package_identity((
+                    "networkx", "numpy", "osmnx", "shapely")),
                 # The content fingerprint above is the identity. Keep this
                 # label stable so moving a byte-identical weight file does
                 # not create a needless second cache entry.
@@ -658,6 +727,8 @@ def main() -> None:
                 "dirsplit_geo": Path("dirsplit/geo.py"),
                 "endpoint_locations": Path("demand/locations.py"),
                 "candidate_cache": Path("traffic_sim/demand/cache.py"),
+                "sensor_registry_loader": Path(
+                    "traffic_sim/intake/sensors.py"),
                 "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
             }
             cache_key = candidate_cache.cache_key(
@@ -838,14 +909,10 @@ def main() -> None:
                         cand_path.with_name("candidates.meta.json")),
                     "edge_geometry": sha256_file(GEO_PATH),
                     "variants": [key for _suffix, key in variants],
+                    "picker_runtime": runtime_package_identity((
+                        "numba", "numpy", "scipy")),
                 },
-                source_hashes={
-                    name: record["sha256"]
-                    for name, record in sorted(STARTUP_SOURCE_HASHES.items())
-                    if name in {"build_candidates", "pfe", "pfe_kernel",
-                                "build_sumo_demand", "demand/calibration.py",
-                                "demand/structure.py", "demand/locations.py"}
-                },
+                source_hashes=demand_day_source_hashes(),
             )
 
         def calibrate_window(variants, variant_inputs, **options):
@@ -1030,6 +1097,10 @@ def main() -> None:
                         # independently. Keep the large achieved map only
                         # until fit_summary has compacted it into daily rows.
                         "keep_achieved": args.days > 1,
+                        "required_anchor_edges": sorted({
+                            edge for edges in sensor_edges.values()
+                            for edge in edges
+                        }),
                     }
                 reports = timed(
                     "pfe_variants_and_rounding",
@@ -1082,7 +1153,11 @@ def main() -> None:
                     integer_bounds_per_q=hard_bounds_pq,
                     purpose_departure_offset_s=purpose_departure_offset_s,
                     activity_purpose_shares_by_quarter=activity_purpose_shares,
-                    through_share_target=args.through_share_target))
+                    through_share_target=args.through_share_target,
+                    required_anchor_edges=sorted({
+                        edge for edges in sensor_edges.values()
+                        for edge in edges
+                    })))
             tag = f"[congestion-feedback {iteration+1}/{n_iter}]" if n_iter > 1 else "PFE"
             print(f"  {tag} edge_shares       {report['vehicles']:>6} veh  "
                   f"GEH<5: {report['geh_pct']}%  "

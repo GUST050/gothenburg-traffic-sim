@@ -575,6 +575,22 @@ class TestWriteWeightFile:
         assert free_key != weighted_key
         assert weighted_key != changed_weight_key
 
+    def test_duarouter_binary_changes_candidate_cache_identity(self, tmp_path):
+        """A SUMO upgrade must not restore routes made by the old router."""
+        home = tmp_path / "sumo-home"
+        binary = bsd.candidate_router_cache_input(home)
+        binary.parent.mkdir(parents=True)
+        binary.write_bytes(b"duarouter-v1")
+
+        first_key = candidate_cache.cache_key(
+            {}, {"duarouter_binary": binary}, {})
+        binary.write_bytes(b"duarouter-v2")
+        second_key = candidate_cache.cache_key(
+            {}, {"duarouter_binary": binary}, {})
+
+        assert binary == home / "bin" / "duarouter"
+        assert first_key != second_key
+
 
 class TestFeedbackSimulationTimeout:
     """The congestion-feedback loop (--congestion-iterations) runs one extra
@@ -1205,3 +1221,38 @@ class TestStartupSourceHashes:
         assert "build_candidates" in bsd.STARTUP_SOURCE_HASHES
         assert "pfe" in bsd.STARTUP_SOURCE_HASHES
         assert bsd.STARTUP_SOURCE_HASHES["build_candidates"]["sha256"]
+
+    def test_day_identity_uses_every_canonical_demand_source(self):
+        hashes = bsd.demand_day_source_hashes()
+
+        assert set(hashes) == set(bsd.STARTUP_SOURCE_HASHES)
+        assert "traffic_sim/demand/structure_caps.py" in hashes
+        assert hashes["traffic_sim/demand/structure_caps.py"]
+
+    def test_new_picker_helper_changes_day_identity(self):
+        base = {
+            "pfe": {"sha256": "pfe-v1"},
+            "traffic_sim/demand/structure_caps.py": {"sha256": "caps-v1"},
+        }
+        changed = {
+            **base,
+            "traffic_sim/demand/structure_caps.py": {"sha256": "caps-v2"},
+        }
+        identity = dict(
+            date="2027-01-01", source="forecast",
+            pool_composition=("weekday",), inputs={})
+
+        first = bsd.DayIdentity(
+            **identity, source_hashes=bsd.demand_day_source_hashes(base))
+        second = bsd.DayIdentity(
+            **identity, source_hashes=bsd.demand_day_source_hashes(changed))
+
+        assert first.key != second.key
+
+    def test_numerical_runtime_identity_records_versions(self):
+        identity = bsd.runtime_package_identity(("numpy", "scipy"))
+
+        assert identity["python"]
+        assert identity["platform"]
+        assert identity["numpy"] == np.__version__
+        assert identity["scipy"]

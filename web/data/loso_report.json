@@ -1,7 +1,7 @@
 {
- "schema_version": 2,
+ "schema_version": 3,
  "comparison_contract": {
-  "protocol": "loso_pfe_meso_v3",
+  "protocol": "loso_pfe_meso_v6",
   "source": "historical",
   "window_start": "2025-09-16T00:00:00",
   "window_end": "2025-09-17T00:00:00",
@@ -10,15 +10,23 @@
   "evaluation_mode": "same_window_loso",
   "n_intervals": 96,
   "simulation_mode": "meso",
-  "candidate_pool_sha256": "37fb0add0609a4591eb274ea722df28717761387beea62b6e6af3a9abd3be030",
+  "candidate_pool_sha256": "3b37af2aa60143d4954840c7f46be159e6ffa7c8136d361547524a48ae563c8c",
   "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
   "assignment_prior_enabled": true,
+  "assignment_field_config": {
+   "gravity_km": 1.8,
+   "through_fraction": 0.5,
+   "cross_fraction": 0.3,
+   "gravity_alpha": 1.5,
+   "seed": 42
+  },
+  "assignment_field_fold_rule": "held_sensor_removed_before_structural_loading; all edges covered by held-sensor measurements or derived priors receive the normal unmeasured-edge ceiling",
   "activity_purpose_margin": "calendar_hour_day_type",
   "through_share_target": 0.25,
   "minimum_temporal_coverage": null
  },
  "window": "2025-09-16 \u2192 2025-09-17 (exclusive)",
- "note": "leave-one-station-out \u2014 simulated vs measured at the held-out station; level-2 bounds, priors, corridor priors, and the assignment-prior scale factor are all recomputed per fold with the held-out station's own data excluded",
+ "note": "leave-one-station-out \u2014 simulated vs measured at the held-out station; the assignment field is rebuilt with the held station treated as genuinely unmeasured, while measurement-derived bounds and priors are excluded without using its count",
  "observed_quarters": {
   "1455801464_18241874_0": 96,
   "26355153_91615277_0": 96,
@@ -31,82 +39,919 @@
  "stations": {
   "107": {
    "edges": {
-    "60786979_3575001205_0": {
-     "measured_total": 3191,
-     "simulated_total": 3252,
-     "ratio": 1.019,
-     "geh_ok_pct": 79.2,
-     "observed_quarters": 96
-    },
-    "1455801464_18241874_0": {
-     "measured_total": 3216,
-     "simulated_total": 6635,
-     "ratio": 2.063,
-     "geh_ok_pct": 45.8,
-     "observed_quarters": 96
+    "station_total": {
+     "measurement_semantics": "two_way_total",
+     "component_edges": [
+      "60786979_3575001205_0",
+      "1455801464_18241874_0"
+     ],
+     "measured_total": 6407,
+     "simulated_total": 9246,
+     "ratio": 1.443,
+     "geh_ok_pct": 29.2,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 38.0,
+       "simulated": 96.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 20.0,
+       "simulated": 60.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 22.0,
+       "simulated": 41.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 22.0,
+       "simulated": 35.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 16.0,
+       "simulated": 48.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 63.0,
+       "simulated": 87.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 168.0,
+       "simulated": 293.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 431.0,
+       "simulated": 564.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 566.0,
+       "simulated": 728.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 417.0,
+       "simulated": 621.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 397.0,
+       "simulated": 522.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 381.0,
+       "simulated": 523.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 407.0,
+       "simulated": 593.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 396.0,
+       "simulated": 604.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 426.0,
+       "simulated": 487.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 466.0,
+       "simulated": 805.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 488.0,
+       "simulated": 604.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 452.0,
+       "simulated": 590.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 367.0,
+       "simulated": 627.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 298.0,
+       "simulated": 424.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 206.0,
+       "simulated": 396.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 153.0,
+       "simulated": 225.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 141.0,
+       "simulated": 175.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 66.0,
+       "simulated": 98.0
+      }
+     ],
+     "excluded_incomplete_hours": []
     }
    },
-   "pfe_geh_pct": 100.0
+   "pfe_geh_pct": 100.0,
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "1455801464_18241874_0",
+     "18241874_9439210780_0",
+     "60786979_3575001205_0",
+     "9037093028_30420757_0",
+     "9439210780_9037093028_0"
+    ],
+    "eligible_edges": [
+     "1455801464_18241874_0",
+     "18241874_9439210780_0",
+     "60786979_3575001205_0",
+     "9037093028_30420757_0",
+     "9439210780_9037093028_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 6.5101185091887555
+   }
   },
   "1074": {
    "edges": {
     "60790252_60790253_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "60790252_60790253_0"
+     ],
      "measured_total": 2875,
-     "simulated_total": 3267,
-     "ratio": 1.136,
-     "geh_ok_pct": 87.5,
-     "observed_quarters": 96
+     "simulated_total": 2541,
+     "ratio": 0.884,
+     "geh_ok_pct": 91.7,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 15.0,
+       "simulated": 15.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 8.0,
+       "simulated": 7.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 6.0,
+       "simulated": 11.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 3.0,
+       "simulated": 9.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 2.0,
+       "simulated": 11.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 23.0,
+       "simulated": 24.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 97.0,
+       "simulated": 69.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 199.0,
+       "simulated": 153.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 264.0,
+       "simulated": 249.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 204.0,
+       "simulated": 237.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 170.0,
+       "simulated": 126.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 186.0,
+       "simulated": 207.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 206.0,
+       "simulated": 135.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 210.0,
+       "simulated": 176.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 181.0,
+       "simulated": 157.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 132.0,
+       "simulated": 137.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 146.0,
+       "simulated": 180.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 196.0,
+       "simulated": 133.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 182.0,
+       "simulated": 120.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 132.0,
+       "simulated": 127.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 134.0,
+       "simulated": 85.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 94.0,
+       "simulated": 64.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 62.0,
+       "simulated": 63.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 23.0,
+       "simulated": 46.0
+      }
+     ],
+     "excluded_incomplete_hours": []
     }
    },
-   "pfe_geh_pct": 100.0
+   "pfe_geh_pct": 100.0,
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "60790252_60790253_0",
+     "60790253_60790252_0"
+    ],
+    "eligible_edges": [
+     "60790252_60790253_0",
+     "60790253_60790252_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 8.075240610148679
+   }
   },
   "1076": {
    "edges": {
     "30420757_30421744_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "30420757_30421744_0"
+     ],
      "measured_total": 4820,
-     "simulated_total": 6568,
-     "ratio": 1.363,
-     "geh_ok_pct": 41.7,
-     "observed_quarters": 96
+     "simulated_total": 3300,
+     "ratio": 0.685,
+     "geh_ok_pct": 62.5,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 38.0,
+       "simulated": 17.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 29.0,
+       "simulated": 29.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 9.0,
+       "simulated": 7.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 16.0,
+       "simulated": 33.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 12.0,
+       "simulated": 21.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 68.0,
+       "simulated": 31.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 182.0,
+       "simulated": 55.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 334.0,
+       "simulated": 135.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 366.0,
+       "simulated": 135.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 291.0,
+       "simulated": 243.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 307.0,
+       "simulated": 234.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 297.0,
+       "simulated": 201.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 312.0,
+       "simulated": 230.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 301.0,
+       "simulated": 202.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 316.0,
+       "simulated": 240.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 283.0,
+       "simulated": 269.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 356.0,
+       "simulated": 270.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 339.0,
+       "simulated": 230.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 277.0,
+       "simulated": 257.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 211.0,
+       "simulated": 170.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 185.0,
+       "simulated": 169.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 138.0,
+       "simulated": 75.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 100.0,
+       "simulated": 19.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 53.0,
+       "simulated": 28.0
+      }
+     ],
+     "excluded_incomplete_hours": []
     }
    },
-   "pfe_geh_pct": 100.0
+   "pfe_geh_pct": 100.0,
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "18241874_9439210780_0",
+     "30420757_30421744_0",
+     "559960490_1305379743_0",
+     "9037093028_30420757_0",
+     "9439210780_9037093028_0"
+    ],
+    "eligible_edges": [
+     "18241874_9439210780_0",
+     "30420757_30421744_0",
+     "559960490_1305379743_0",
+     "9037093028_30420757_0",
+     "9439210780_9037093028_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 7.606785130827945
+   }
   },
   "133": {
    "edges": {
     "26842525_26355153_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "26842525_26355153_0"
+     ],
      "measured_total": 3569,
-     "simulated_total": 3710,
-     "ratio": 1.04,
-     "geh_ok_pct": 87.5,
-     "observed_quarters": 95
+     "simulated_total": 2744,
+     "ratio": 0.769,
+     "geh_ok_pct": 60.9,
+     "observed_quarters": 95,
+     "hourly_cases": [
+      {
+       "hour_index": 1,
+       "measured": 11.0,
+       "simulated": 4.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 7.0,
+       "simulated": 5.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 9.0,
+       "simulated": 6.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 6.0,
+       "simulated": 8.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 23.0,
+       "simulated": 15.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 73.0,
+       "simulated": 42.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 185.0,
+       "simulated": 100.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 261.0,
+       "simulated": 185.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 227.0,
+       "simulated": 171.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 267.0,
+       "simulated": 163.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 246.0,
+       "simulated": 203.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 259.0,
+       "simulated": 205.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 213.0,
+       "simulated": 210.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 241.0,
+       "simulated": 211.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 326.0,
+       "simulated": 212.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 294.0,
+       "simulated": 151.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 267.0,
+       "simulated": 213.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 262.0,
+       "simulated": 197.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 179.0,
+       "simulated": 169.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 169.0,
+       "simulated": 90.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 37.0,
+       "simulated": 100.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 0.0,
+       "simulated": 52.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 0.0,
+       "simulated": 26.0
+      }
+     ],
+     "excluded_incomplete_hours": [
+      0
+     ]
     }
    },
-   "pfe_geh_pct": 100.0
+   "pfe_geh_pct": 100.0,
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "26355153_26842525_0",
+     "26842525_26355153_0"
+    ],
+    "eligible_edges": [
+     "26355153_26842525_0",
+     "26842525_26355153_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 7.689197837657623
+   }
   },
   "134": {
    "edges": {
     "26355153_96523321_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "26355153_96523321_0"
+     ],
      "measured_total": 3141,
-     "simulated_total": 9962,
-     "ratio": 3.172,
+     "simulated_total": 8207,
+     "ratio": 2.613,
      "geh_ok_pct": 29.2,
-     "observed_quarters": 96
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 11.0,
+       "simulated": 28.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 10.0,
+       "simulated": 13.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 3.0,
+       "simulated": 6.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 4.0,
+       "simulated": 12.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 5.0,
+       "simulated": 10.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 22.0,
+       "simulated": 32.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 96.0,
+       "simulated": 107.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 250.0,
+       "simulated": 552.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 281.0,
+       "simulated": 519.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 183.0,
+       "simulated": 488.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 164.0,
+       "simulated": 415.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 192.0,
+       "simulated": 415.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 184.0,
+       "simulated": 399.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 207.0,
+       "simulated": 602.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 195.0,
+       "simulated": 591.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 202.0,
+       "simulated": 756.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 229.0,
+       "simulated": 803.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 268.0,
+       "simulated": 680.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 180.0,
+       "simulated": 676.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 170.0,
+       "simulated": 400.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 119.0,
+       "simulated": 343.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 92.0,
+       "simulated": 187.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 49.0,
+       "simulated": 112.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 25.0,
+       "simulated": 61.0
+      }
+     ],
+     "excluded_incomplete_hours": []
     }
    },
-   "pfe_geh_pct": 100.0
+   "pfe_geh_pct": 100.0,
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "26355153_96523321_0",
+     "96523321_26355153_0"
+    ],
+    "eligible_edges": [
+     "26355153_96523321_0",
+     "96523321_26355153_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 8.12620790117075
+   }
   },
   "2276": {
    "edges": {
     "26355153_91615277_0": {
+     "measurement_semantics": "directional",
+     "component_edges": [
+      "26355153_91615277_0"
+     ],
      "measured_total": 4473,
-     "simulated_total": 12553,
-     "ratio": 2.806,
-     "geh_ok_pct": 12.5,
-     "observed_quarters": 96
+     "simulated_total": 11179,
+     "ratio": 2.499,
+     "geh_ok_pct": 16.7,
+     "observed_quarters": 96,
+     "hourly_cases": [
+      {
+       "hour_index": 0,
+       "measured": 14.0,
+       "simulated": 41.0
+      },
+      {
+       "hour_index": 1,
+       "measured": 11.0,
+       "simulated": 10.0
+      },
+      {
+       "hour_index": 2,
+       "measured": 6.0,
+       "simulated": 37.0
+      },
+      {
+       "hour_index": 3,
+       "measured": 10.0,
+       "simulated": 46.0
+      },
+      {
+       "hour_index": 4,
+       "measured": 7.0,
+       "simulated": 41.0
+      },
+      {
+       "hour_index": 5,
+       "measured": 35.0,
+       "simulated": 39.0
+      },
+      {
+       "hour_index": 6,
+       "measured": 99.0,
+       "simulated": 311.0
+      },
+      {
+       "hour_index": 7,
+       "measured": 259.0,
+       "simulated": 632.0
+      },
+      {
+       "hour_index": 8,
+       "measured": 343.0,
+       "simulated": 796.0
+      },
+      {
+       "hour_index": 9,
+       "measured": 255.0,
+       "simulated": 780.0
+      },
+      {
+       "hour_index": 10,
+       "measured": 289.0,
+       "simulated": 624.0
+      },
+      {
+       "hour_index": 11,
+       "measured": 269.0,
+       "simulated": 632.0
+      },
+      {
+       "hour_index": 12,
+       "measured": 288.0,
+       "simulated": 655.0
+      },
+      {
+       "hour_index": 13,
+       "measured": 298.0,
+       "simulated": 708.0
+      },
+      {
+       "hour_index": 14,
+       "measured": 291.0,
+       "simulated": 808.0
+      },
+      {
+       "hour_index": 15,
+       "measured": 365.0,
+       "simulated": 822.0
+      },
+      {
+       "hour_index": 16,
+       "measured": 320.0,
+       "simulated": 905.0
+      },
+      {
+       "hour_index": 17,
+       "measured": 356.0,
+       "simulated": 862.0
+      },
+      {
+       "hour_index": 18,
+       "measured": 318.0,
+       "simulated": 835.0
+      },
+      {
+       "hour_index": 19,
+       "measured": 202.0,
+       "simulated": 619.0
+      },
+      {
+       "hour_index": 20,
+       "measured": 198.0,
+       "simulated": 550.0
+      },
+      {
+       "hour_index": 21,
+       "measured": 141.0,
+       "simulated": 272.0
+      },
+      {
+       "hour_index": 22,
+       "measured": 64.0,
+       "simulated": 91.0
+      },
+      {
+       "hour_index": 23,
+       "measured": 35.0,
+       "simulated": 63.0
+      }
+     ],
+     "excluded_incomplete_hours": []
     }
    },
-   "pfe_geh_pct": 100.0
+   "pfe_geh_pct": 100.0,
+   "held_edge_assignment_ceiling": {
+    "required_edges": [
+     "26355153_91615277_0",
+     "91615277_26355153_0"
+    ],
+    "eligible_edges": [
+     "26355153_91615277_0",
+     "91615277_26355153_0"
+    ],
+    "missing_edges": [],
+    "scale_veh_per_day": 8.143337475635589
+   }
   }
  }
 }

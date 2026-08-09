@@ -37,6 +37,65 @@ def read_vehicle_ids(path):
     return [veh.get("id") for veh in ET.parse(path).getroot().iter("vehicle")]
 
 
+class TestSensorEdgeContract:
+    @staticmethod
+    def record(sensor_id, edges):
+        return {
+            "sensor_id": sensor_id,
+            "measurement_semantics": "directional",
+            "measured_bearing": "N",
+            "permitted_bearings": ["N"],
+            "coordinate_reference_system": "EPSG:3007",
+            "source": "test",
+            "source_file": "test.csv",
+            "snap_status": "approved",
+            "approved_edge_ids": edges,
+            "snap_distance_m": 1.0,
+            "catalogue_verification": {"status": "verified"},
+            "quality_status": "accepted",
+        }
+
+    def test_registry_edges_are_loaded_and_canonicalised(self, tmp_path):
+        registry = tmp_path / "sensors.json"
+        registry.write_text(json.dumps({
+            "schema_version": 1,
+            "sensors": [
+                self.record("later", ["B"]),
+                self.record("first", ["A", "C"]),
+            ]
+        }))
+
+        edges = bc.registered_sensor_edges(registry)
+
+        assert bc.validate_sensor_edge_contract(
+            {"C", "A", "B"}, edges) == ["A", "B", "C"]
+
+    def test_new_registry_edge_without_flow_fails_closed(self):
+        with pytest.raises(ValueError, match="registered edges missing flow"):
+            bc.validate_sensor_edge_contract({"A"}, {"A", "NEW"})
+
+    def test_unregistered_flow_edge_fails_closed(self):
+        with pytest.raises(ValueError, match="flow edges absent from registry"):
+            bc.validate_sensor_edge_contract({"A", "STALE"}, {"A"})
+
+    def test_empty_registry_fails_closed(self, tmp_path):
+        registry = tmp_path / "sensors.json"
+        registry.write_text(json.dumps({"schema_version": 1, "sensors": []}))
+
+        with pytest.raises(ValueError, match="non-empty sensors"):
+            bc.registered_sensor_edges(registry)
+
+    def test_pending_sensor_cannot_enter_warming_pool(self, tmp_path):
+        registry = tmp_path / "sensors.json"
+        pending = self.record("new", ["NEW"])
+        pending["snap_status"] = "pending"
+        registry.write_text(json.dumps({
+            "schema_version": 1, "sensors": [pending]}))
+
+        with pytest.raises(ValueError, match="snaps must be approved"):
+            bc.registered_sensor_edges(registry)
+
+
 def test_support_routes_replace_randomized_routes_and_keep_departure_order(tmp_path):
     diverse = tmp_path / "diverse.rou.xml"
     deterministic = tmp_path / "deterministic.rou.xml"
@@ -75,6 +134,58 @@ def test_exact_support_route_installation_does_not_depend_on_router_output(tmp_p
     }
     assert routes == {"ordinary": "A B", "support": "X Y Z"}
     assert report == {"ordinary": 1, "support": 1, "total": 2}
+
+
+def test_filtered_candidate_fallback_preserves_exact_trip_requests(tmp_path):
+    source = tmp_path / "all.trips.xml"
+    source.write_text(
+        '<routes><vType id="car"/><trip id="keep" depart="1" from="A" to="B"/>'
+        '<trip id="recover" depart="2" from="C" to="D" via="S"/></routes>')
+    subset = tmp_path / "fallback.trips.xml"
+
+    count = bc.write_trip_subset(source, subset, {"recover"})
+
+    root = ET.parse(subset).getroot()
+    assert count == 1
+    assert [trip.get("id") for trip in root.findall("trip")] == ["recover"]
+    recovered = root.find("trip")
+    assert recovered.attrib == {
+        "id": "recover", "depart": "2", "from": "C", "to": "D",
+        "via": "S",
+    }
+    assert root.find("vType").get("id") == "car"
+
+
+def test_filtered_candidate_fallback_rejects_unknown_request(tmp_path):
+    source = tmp_path / "all.trips.xml"
+    source.write_text('<routes><trip id="known" depart="1"/></routes>')
+
+    with pytest.raises(ValueError, match="absent from generated trips"):
+        bc.write_trip_subset(source, tmp_path / "subset.xml", {"missing"})
+
+
+def test_merge_fallback_adds_only_missing_routes_in_departure_order(tmp_path):
+    primary = tmp_path / "primary.rou.xml"
+    fallback = tmp_path / "fallback.rou.xml"
+    write_routes(primary, [("late", ["L"]), ("existing", ["E"])])
+    write_routes(fallback, [("existing", ["OTHER"]), ("early", ["A"])])
+    primary_root = ET.parse(primary)
+    primary_root.getroot().find("vehicle[@id='late']").set("depart", "20")
+    primary_root.getroot().find("vehicle[@id='existing']").set("depart", "10")
+    primary_root.write(primary)
+    fallback_root = ET.parse(fallback)
+    fallback_root.getroot().find("vehicle[@id='early']").set("depart", "5")
+    fallback_root.write(fallback)
+
+    recovered = bc.merge_missing_routed_candidates(primary, fallback)
+
+    assert recovered == ["early"]
+    assert read_vehicle_ids(primary) == ["early", "existing", "late"]
+    routes = {
+        vehicle.get("id"): vehicle.find("route").get("edges")
+        for vehicle in ET.parse(primary).getroot().iter("vehicle")
+    }
+    assert routes["existing"] == "E"
 
 
 def test_sumo_connection_graph_excludes_uturns(tmp_path):
@@ -1004,7 +1115,23 @@ class TestReportSensorCrossHits:
         write_routes(path, [("v0", ["1_2_0", "2_3_0"])])
         report = bc.report_sensor_cross_hits(path, ["2_3_0"])
         assert report["2_3_0"]["total"] == 1
+        assert report["2_3_0"]["unique_routes"] == 1
+        assert report["2_3_0"]["unique_od_pairs"] == 1
         assert report["2_3_0"]["cross_1"] == 0
+
+    def test_repeated_template_does_not_inflate_distinct_support(self, tmp_path):
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [
+            ("day0", ["1_2_0", "2_3_0"]),
+            ("day1", ["1_2_0", "2_3_0"]),
+            ("alternative", ["4_2_0", "2_3_0"]),
+        ])
+
+        report = bc.report_sensor_cross_hits(path, ["2_3_0"])
+
+        assert report["2_3_0"]["total"] == 3
+        assert report["2_3_0"]["unique_routes"] == 2
+        assert report["2_3_0"]["unique_od_pairs"] == 2
 
     def test_vehicle_touching_two_sensors_counts_for_both(self, tmp_path):
         path = tmp_path / "candidates.rou.xml"
@@ -1031,11 +1158,58 @@ class TestReportSensorCrossHits:
         report = bc.report_sensor_cross_hits(path, ["1_2_0"])
         assert report["1_2_0"]["total"] == 0
 
+    def test_final_pool_anchor_audit_finds_unanchored_candidate(self, tmp_path):
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [
+            ("anchored", ["1_2_0", "2_3_0"]),
+            ("unanchored", ["8_9_0", "9_10_0"]),
+        ])
+
+        assert bc.unanchored_candidate_ids(path, {"2_3_0"}) == ["unanchored"]
+
+    def test_final_pool_anchor_audit_rejects_empty_registry(self, tmp_path):
+        path = tmp_path / "candidates.rou.xml"
+        write_routes(path, [("candidate", ["1_2_0"])])
+
+        with pytest.raises(ValueError, match="contract is empty"):
+            bc.unanchored_candidate_ids(path, set())
+
     def test_writes_the_report_file(self, tmp_path):
         path = tmp_path / "candidates.rou.xml"
         write_routes(path, [("v0", ["1_2_0"])])
         bc.report_sensor_cross_hits(path, ["1_2_0"])
         assert (tmp_path / "sensor_coverage_report.json").exists()
+
+    def test_explicit_report_path_does_not_clobber_default(self, tmp_path):
+        path = tmp_path / "candidates.rou.xml"
+        custom = tmp_path / "sensor_coverage_report_audit.json"
+        write_routes(path, [("v0", ["1_2_0"])])
+
+        bc.report_sensor_cross_hits(path, ["1_2_0"], custom)
+
+        assert custom.exists()
+        assert not (tmp_path / "sensor_coverage_report.json").exists()
+
+    def test_final_pool_support_floor_applies_to_every_sensor(self):
+        report = {
+            "old": {"total": 500, "unique_routes": 50},
+            "new": {"total": 500, "unique_routes": 49},
+            "missing": {"total": 0, "unique_routes": 0},
+        }
+
+        assert bc.sensor_pool_support_failures(report, 50) == {
+            "missing": 0,
+            "new": 49,
+        }
+
+    def test_support_floor_cannot_be_disabled_to_zero(self):
+        assert bc.sensor_pool_support_failures(
+            {"new": {"total": 100, "unique_routes": 0}}, 0) == {"new": 0}
+
+    def test_raw_repetitions_cannot_satisfy_support_floor(self):
+        assert bc.sensor_pool_support_failures(
+            {"new": {"total": 1000, "unique_routes": 1}}, 50
+        ) == {"new": 1}
 
 
 class TestRouteVisitsANodeTwice:
@@ -2423,6 +2597,39 @@ class TestCalendarDateSeeding:
 
         # Whoever creates the weekday geometry, it comes from the same stream.
         assert len(seeds) == 2 and seeds[0] == seeds[1]
+
+    def test_geometry_template_uses_canonical_profile_not_first_day(
+            self, monkeypatch):
+        geometry_profiles = []
+
+        def fake_generate(_rng, *args, **_kwargs):
+            geometry_profiles.append(np.asarray(args[10]).copy())
+            return [(0.0, "from", "to", "via")], [1.0], {}
+
+        monkeypatch.setattr(bc, "generate_sensor_anchored_trips", fake_generate)
+        canonical = np.zeros(24); canonical[12] = 1.0
+        early = np.zeros(24); early[6] = 1.0
+        late = np.zeros(24); late[19] = 1.0
+
+        for profile, date in ((early, "2027-03-09"),
+                              (late, "2027-03-10")):
+            bc.generate_day_block(
+                self._structure(), profile, 0, "d_", 42, 0, 1,
+                .5, .3, 2.6, False, 1, date=date, pool_key="weekday",
+                template_profile=canonical)
+
+        assert len(geometry_profiles) == 2
+        assert np.array_equal(geometry_profiles[0], canonical)
+        assert np.array_equal(geometry_profiles[1], canonical)
+
+    def test_invalid_geometry_template_profile_fails_closed(self):
+        invalid = np.ones(23)
+
+        with pytest.raises(ValueError, match="template_profile"):
+            bc.generate_day_block(
+                self._structure(), np.full(24, 1 / 24), 0, "d_", 42,
+                0, 1, .5, .3, 2.6, False, 1,
+                template_profile=invalid)
 
     def test_day_type_templates_are_independent_streams(self):
         weekday = bc.day_type_template_seed(42, "weekday")

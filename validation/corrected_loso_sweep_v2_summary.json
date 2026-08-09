@@ -1,0 +1,360 @@
+{
+  "assignment_ceiling_complete": true,
+  "candidate_pool_sha256_by_seed": {
+    "20260807": "d3e0c93f7775d2f846a6c5f8575187b8598ecfbdf5cc0387832ca863c56e18e4",
+    "20260808": "b5872d214d5af2c6ae4ed804fbfaa909712d3c406eb194f93b025e50ca5db272",
+    "20260809": "cc2e2d705fa9e238ad7d4ab993962378ae321385218bef4268cd30f062780d6e",
+    "20260810": "2c238c27988639bde3a3acaf5adfd0af4d3dbb92f123f95837497aabb6b12871",
+    "20260811": "9f310ebfa2c0765757466dedcc9870b54f707f55aa3f55ca2f0b9c6d007b9edd",
+    "42": "3b37af2aa60143d4954840c7f46be159e6ffa7c8136d361547524a48ae563c8c"
+  },
+  "evidence_class": "diagnostic",
+  "field_semantics": {
+    "assignment_ceiling_complete": "derived_exact",
+    "candidate_pool_sha256": "derived_exact",
+    "daily_ratio": "diagnostic",
+    "geh_ok_pct": "diagnostic",
+    "inputs_sha256": "derived_exact",
+    "interpretation": "decision",
+    "manifest_sha256": "derived_exact",
+    "measured_daily_total": "measurement",
+    "seeds": "derived_exact",
+    "simulated_daily_total": "diagnostic",
+    "tag_guideline_pct": "model_assumption",
+    "tag_satisfactory_share_pct": "diagnostic",
+    "verdict": "decision"
+  },
+  "frozen_at": "2026-08-08T18:24:12.279735+00:00",
+  "git_identity_at_freeze": {
+    "diff_sha256": "003efdfb58261f6714554b8cdfd6b3099e6dbf3188515c187ffdab50c7860496",
+    "head": "47e195792c753e99ff451fc096ee9e71756d0a9d",
+    "worktree_dirty": true
+  },
+  "interpretation": "Every draw is below the strict TAG guideline of more than 85% satisfactory hourly cases. The dominant, seed-stable error is a shared junction: 134 and 2276 overpredict while 133 underpredicts. Stations 107 and 1074 are candidate-pool sensitive, so no single seed may be used to compare pipeline versions.",
+  "kind": "corrected_loso_sweep_baseline",
+  "limitations": [
+    "Diagnostic evidence, not a release artifact and not a TAG certification; TAG expects independent validation counts and many more observations than six stations on one day.",
+    "Six paired draws bound seed sensitivity but are too few for a strong asymptotic statistical claim.",
+    "Held-out recovery is measured on 2025-09-16 only; temporal transfer to an untouched date is a separate, unfinished step."
+  ],
+  "plan": "docs/plans/LOSO_POOL_PICKER_IMPROVEMENT_PLAN_2026-08-08.md",
+  "protocol": {
+    "evaluation": "leave-one-station-out, same-window",
+    "held_station_rule": "held sensor removed before structural assignment loading; held edges receive the normal unmeasured-edge ceiling; measurement-derived bounds, direction priors and corridor priors involving the held station are excluded",
+    "incomplete_hours": "excluded, never converted to zero",
+    "name": "loso_pfe_meso_v5",
+    "simulation_mode": "meso",
+    "two_way_total_rule": "a two-way-total station is compared once, raw total against the sum of the simulated directions"
+  },
+  "schema_version": 1,
+  "seeds": [
+    20260807,
+    20260808,
+    20260809,
+    20260810,
+    20260811,
+    42
+  ],
+  "source": {
+    "date": "2025-09-16",
+    "git_head": "47e195792c753e99ff451fc096ee9e71756d0a9d",
+    "inputs_sha256": {
+      "assignment_priors.py": "2d5e7201120bfcb0beaf0fe5e36ade8d57664230bc56825a1a5add3aef5ad92d",
+      "build_candidates.py": "8ef9b9a0e0e78286d8b89ed2192130b91eceef03cbb5ce06b4faab015a52577e",
+      "build_sumo_demand.py": "a5386c1b26ab19f838f7c267efbad81b19839f83ae2a65bcfcf7d0d778f4da42",
+      "data_in/sensors.json": "956d3d0a648c99430fd47c8ea7f4d798c4b1f1b7c9f1ffb028eb26a391354995",
+      "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+      "tools/run_corrected_loso_sweep.py": "8edc3556db062babad3736964d8e293c727ea87f5c659162fab1e00612c1d8db",
+      "tools/validate_dmrb.py": "19876a1619ccf4c0878ef1d0a67c264d4d3b599c56585496b56d202d3f2c4558",
+      "traffic_sim/confidence/loso.py": "d666edb856cb243e930dc5b53255a9ac4e33ef5bba3f6631d2a5118d640e17aa",
+      "traffic_sim/demand/pfe.py": "90788c1bc87c90d18c2ff8e7ff4c243f8ca844b9010add428d5d42e876edb38d",
+      "web/data/flows.json": "cd8793581c02d89d0106fd3e4ae35e46eaddb19cf29f5bb047d49e9556f22be6"
+    },
+    "inputs_verified_against_worktree": true,
+    "manifest_path": "runs/loso-corrected-v2-20260808/manifest.json",
+    "manifest_sha256": "18b89c4685611778b2c9eea184ead11f3a37e611c6f4e9db45524f51a1483776",
+    "manifest_status": "complete",
+    "manifest_tracked_in_git": false
+  },
+  "stations": [
+    {
+      "component_edges": [
+        "60786979_3575001205_0",
+        "1455801464_18241874_0"
+      ],
+      "daily_ratio_by_seed": {
+        "20260807": 1.123,
+        "20260808": 0.991,
+        "20260809": 1.163,
+        "20260810": 1.299,
+        "20260811": 1.875,
+        "42": 1.484
+      },
+      "daily_ratio_max": 1.875,
+      "daily_ratio_median": 1.231,
+      "daily_ratio_min": 0.991,
+      "evaluation_key": "station_total",
+      "geh_ok_pct_by_seed": {
+        "20260807": 75.0,
+        "20260808": 91.7,
+        "20260809": 79.2,
+        "20260810": 50.0,
+        "20260811": 25.0,
+        "42": 29.2
+      },
+      "geh_ok_pct_median": 62.5,
+      "measurement_semantics": "two_way_total",
+      "station": "107",
+      "tag_satisfactory_share_pct_by_seed": {
+        "20260807": 79.2,
+        "20260808": 91.7,
+        "20260809": 83.3,
+        "20260810": 66.7,
+        "20260811": 33.3,
+        "42": 50.0
+      },
+      "tag_satisfactory_share_pct_median": 72.95
+    },
+    {
+      "component_edges": [
+        "60790252_60790253_0"
+      ],
+      "daily_ratio_by_seed": {
+        "20260807": 0.943,
+        "20260808": 0.711,
+        "20260809": 0.633,
+        "20260810": 0.725,
+        "20260811": 0.905,
+        "42": 0.884
+      },
+      "daily_ratio_max": 0.943,
+      "daily_ratio_median": 0.8045,
+      "daily_ratio_min": 0.633,
+      "evaluation_key": "60790252_60790253_0",
+      "geh_ok_pct_by_seed": {
+        "20260807": 95.8,
+        "20260808": 75.0,
+        "20260809": 58.3,
+        "20260810": 75.0,
+        "20260811": 100.0,
+        "42": 91.7
+      },
+      "geh_ok_pct_median": 83.35,
+      "measurement_semantics": "directional",
+      "station": "1074",
+      "tag_satisfactory_share_pct_by_seed": {
+        "20260807": 100.0,
+        "20260808": 91.7,
+        "20260809": 87.5,
+        "20260810": 91.7,
+        "20260811": 100.0,
+        "42": 100.0
+      },
+      "tag_satisfactory_share_pct_median": 95.85
+    },
+    {
+      "component_edges": [
+        "30420757_30421744_0"
+      ],
+      "daily_ratio_by_seed": {
+        "20260807": 0.935,
+        "20260808": 0.872,
+        "20260809": 0.869,
+        "20260810": 0.892,
+        "20260811": 0.995,
+        "42": 0.685
+      },
+      "daily_ratio_max": 0.995,
+      "daily_ratio_median": 0.882,
+      "daily_ratio_min": 0.685,
+      "evaluation_key": "30420757_30421744_0",
+      "geh_ok_pct_by_seed": {
+        "20260807": 75.0,
+        "20260808": 83.3,
+        "20260809": 83.3,
+        "20260810": 70.8,
+        "20260811": 75.0,
+        "42": 62.5
+      },
+      "geh_ok_pct_median": 75.0,
+      "measurement_semantics": "directional",
+      "station": "1076",
+      "tag_satisfactory_share_pct_by_seed": {
+        "20260807": 83.3,
+        "20260808": 91.7,
+        "20260809": 91.7,
+        "20260810": 79.2,
+        "20260811": 79.2,
+        "42": 83.3
+      },
+      "tag_satisfactory_share_pct_median": 83.3
+    },
+    {
+      "component_edges": [
+        "26842525_26355153_0"
+      ],
+      "daily_ratio_by_seed": {
+        "20260807": 0.776,
+        "20260808": 0.798,
+        "20260809": 0.746,
+        "20260810": 0.795,
+        "20260811": 0.825,
+        "42": 0.769
+      },
+      "daily_ratio_max": 0.825,
+      "daily_ratio_median": 0.7855,
+      "daily_ratio_min": 0.746,
+      "evaluation_key": "26842525_26355153_0",
+      "geh_ok_pct_by_seed": {
+        "20260807": 60.9,
+        "20260808": 65.2,
+        "20260809": 52.2,
+        "20260810": 65.2,
+        "20260811": 65.2,
+        "42": 60.9
+      },
+      "geh_ok_pct_median": 63.05,
+      "measurement_semantics": "directional",
+      "station": "133",
+      "tag_satisfactory_share_pct_by_seed": {
+        "20260807": 91.3,
+        "20260808": 91.3,
+        "20260809": 82.6,
+        "20260810": 91.3,
+        "20260811": 91.3,
+        "42": 87.0
+      },
+      "tag_satisfactory_share_pct_median": 91.3
+    },
+    {
+      "component_edges": [
+        "26355153_96523321_0"
+      ],
+      "daily_ratio_by_seed": {
+        "20260807": 2.47,
+        "20260808": 2.474,
+        "20260809": 2.465,
+        "20260810": 2.325,
+        "20260811": 2.523,
+        "42": 2.613
+      },
+      "daily_ratio_max": 2.613,
+      "daily_ratio_median": 2.472,
+      "daily_ratio_min": 2.325,
+      "evaluation_key": "26355153_96523321_0",
+      "geh_ok_pct_by_seed": {
+        "20260807": 33.3,
+        "20260808": 29.2,
+        "20260809": 25.0,
+        "20260810": 29.2,
+        "20260811": 29.2,
+        "42": 29.2
+      },
+      "geh_ok_pct_median": 29.2,
+      "measurement_semantics": "directional",
+      "station": "134",
+      "tag_satisfactory_share_pct_by_seed": {
+        "20260807": 41.7,
+        "20260808": 33.3,
+        "20260809": 37.5,
+        "20260810": 45.8,
+        "20260811": 37.5,
+        "42": 41.7
+      },
+      "tag_satisfactory_share_pct_median": 39.6
+    },
+    {
+      "component_edges": [
+        "26355153_91615277_0"
+      ],
+      "daily_ratio_by_seed": {
+        "20260807": 2.563,
+        "20260808": 2.466,
+        "20260809": 2.433,
+        "20260810": 2.633,
+        "20260811": 2.662,
+        "42": 2.499
+      },
+      "daily_ratio_max": 2.662,
+      "daily_ratio_median": 2.531,
+      "daily_ratio_min": 2.433,
+      "evaluation_key": "26355153_91615277_0",
+      "geh_ok_pct_by_seed": {
+        "20260807": 12.5,
+        "20260808": 20.8,
+        "20260809": 12.5,
+        "20260810": 20.8,
+        "20260811": 12.5,
+        "42": 16.7
+      },
+      "geh_ok_pct_median": 14.6,
+      "measurement_semantics": "directional",
+      "station": "2276",
+      "tag_satisfactory_share_pct_by_seed": {
+        "20260807": 33.3,
+        "20260808": 33.3,
+        "20260809": 33.3,
+        "20260810": 33.3,
+        "20260811": 33.3,
+        "42": 33.3
+      },
+      "tag_satisfactory_share_pct_median": 33.3
+    }
+  ],
+  "status": "frozen",
+  "tag": {
+    "criterion": "either flow-difference band or GEH < 5",
+    "formal_certification": false,
+    "per_seed": [
+      {
+        "satisfactory_cases": 102,
+        "satisfactory_share_pct": 71.3,
+        "seed": 20260807,
+        "total_cases": 143,
+        "verdict": "fail"
+      },
+      {
+        "satisfactory_cases": 103,
+        "satisfactory_share_pct": 72.0,
+        "seed": 20260808,
+        "total_cases": 143,
+        "verdict": "fail"
+      },
+      {
+        "satisfactory_cases": 99,
+        "satisfactory_share_pct": 69.2,
+        "seed": 20260809,
+        "total_cases": 143,
+        "verdict": "fail"
+      },
+      {
+        "satisfactory_cases": 97,
+        "satisfactory_share_pct": 67.8,
+        "seed": 20260810,
+        "total_cases": 143,
+        "verdict": "fail"
+      },
+      {
+        "satisfactory_cases": 89,
+        "satisfactory_share_pct": 62.2,
+        "seed": 20260811,
+        "total_cases": 143,
+        "verdict": "fail"
+      },
+      {
+        "satisfactory_cases": 94,
+        "satisfactory_share_pct": 65.7,
+        "seed": 42,
+        "total_cases": 143,
+        "verdict": "fail"
+      }
+    ],
+    "seeds_meeting_guideline": 0,
+    "share_pct_max": 72.0,
+    "share_pct_median": 68.5,
+    "share_pct_min": 62.2,
+    "standard": "UK DfT TAG Unit M3.1, Table 2",
+    "tag_guideline_pct": 85.0
+  },
+  "verdict": "fail"
+}

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "kind": "paired_loso_integer_publication_treatment_summary",
+  "evidence_class": "diagnostic_replay",
+  "date": "2025-09-16",
+  "generated_on": "2026-08-09",
+  "protocol": "loso_pfe_meso_v7",
+  "source": {
+    "manifest": "runs/loso-integer-publication-v7-20260809/manifest.json",
+    "manifest_sha256": "08928d51a8e9502bb05bf7e15218e1494e9e101394563be1d92f3666e24d6b2b",
+    "manifest_status": "complete",
+    "manifest_tracked_in_git": false,
+    "runner_sha256": "f4358abfe038c63aed02fc9d6583d653a3b65f51fc6352a8d47c32f58030489c",
+    "loso_sha256": "61fd59570294f6584c1deb49640039c0b3596a691ee1c1f839726d7dfdae12f2",
+    "pfe_sha256": "90788c1bc87c90d18c2ff8e7ff4c243f8ca844b9010add428d5d42e876edb38d"
+  },
+  "treatment": {
+    "description": "Enforce only held-assignment-edge ceilings during integer publication; retain all continuous fold inputs and the existing 5x ceiling model.",
+    "held_counts_used_to_set_treatment": false,
+    "picker_trace_repeated": false,
+    "full_six_seed_campaign_run": false
+  },
+  "runs": [
+    {
+      "seed": 20260808,
+      "candidate_pool_sha256": "b5872d214d5af2c6ae4ed804fbfaa909712d3c406eb194f93b025e50ca5db272",
+      "demand_build_id": "25658a1d0d4c10afd406",
+      "loso_report_sha256": "06d17791134c739446a555eb75b0364c8b63d649f0f5a87cab7c3cb53d1acfba",
+      "integer_publication_enforced": true,
+      "stations": {
+        "107": {"v6_ratio": 1.071, "v7_ratio": 1.22, "delta": 0.149, "v7_geh_ok_pct": 66.7},
+        "134": {"v6_ratio": 2.474, "v7_ratio": 2.491, "delta": 0.017, "v7_geh_ok_pct": 33.3},
+        "2276": {"v6_ratio": 2.466, "v7_ratio": 2.425, "delta": -0.041, "v7_geh_ok_pct": 25.0}
+      }
+    },
+    {
+      "seed": 20260811,
+      "candidate_pool_sha256": "9f310ebfa2c0765757466dedcc9870b54f707f55aa3f55ca2f0b9c6d007b9edd",
+      "demand_build_id": "7f69eb9951fdbd401bf0",
+      "loso_report_sha256": "8a9dfb43473f970bd629db4b9edb3b6b89fd90c704c43300082783b58a56e187",
+      "integer_publication_enforced": true,
+      "stations": {
+        "107": {"v6_ratio": 1.876, "v7_ratio": 2.005, "delta": 0.129, "v7_geh_ok_pct": 20.8},
+        "134": {"v6_ratio": 2.523, "v7_ratio": 2.53, "delta": 0.007, "v7_geh_ok_pct": 29.2},
+        "2276": {"v6_ratio": 2.662, "v7_ratio": 2.601, "delta": -0.061, "v7_geh_ok_pct": 12.5}
+      }
+    }
+  ],
+  "decision": {
+    "validation_contract_fix": "retain",
+    "quality_treatment": "reject",
+    "reason": "Both seeds preserve the 134 overprediction and large 107 spread; 2276 improves only 0.041-0.061 in ratio. Existing assignment ceilings are too wide to control the measured integer-publication distortion.",
+    "run_six_seed_campaign": false,
+    "next_experiment": "Change the measurement-preserving integer route-choice objective or support selection using non-held criteria; screen on the same two seeds before any six-seed campaign. Do not tune the 5x ceiling against held observations."
+  },
+  "warming_compatibility": {
+    "production_bound_source_changed": false,
+    "annual_plan_verify": "pass",
+    "content_key_unchanged": true
+  }
+}

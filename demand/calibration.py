@@ -229,6 +229,7 @@ def _write_pfe_variant_report_job(job: tuple[str, str]):
         day_quarters=_PFE_PAR_DAY_QUARTERS,
         precomputed_counts=(
             _PFE_PAR_COUNTS[suffix] if _PFE_PAR_COUNTS is not None else None),
+        required_anchor_edges=data.get("required_anchor_edges"),
     )
     publish_s = time.perf_counter() - started
     report["timings_s"] = {

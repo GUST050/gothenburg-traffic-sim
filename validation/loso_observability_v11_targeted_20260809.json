@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "kind": "targeted_loso_generic_sensor_observability_screen",
+  "evidence_class": "diagnostic_replay",
+  "generated_on": "2026-08-09",
+  "date": "2025-09-16",
+  "production_contract": {
+    "protocol": "loso_pfe_meso_v11_observability_gate",
+    "candidate_pool_sha256": "9f310ebfa2c0765757466dedcc9870b54f707f55aa3f55ca2f0b9c6d007b9edd",
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "pfe_sha256": "b682dfd3f26c4bef97014f07c698a5fffe6eb79ed39b378e099020762ca61e6f",
+    "loso_sha256": "fbb6a3b59785c666cbbc6186df0ea718c686ad2581fad7ce5a34baa621d59a29",
+    "candidate_builder_sha256": "cf9d0c1f14c9e8f12fe9eb377fa8fb13a29043d12afe4b71bd9ca816601bb026",
+    "contribution_gate_sha256": "e8822b4f1a19fe9008931732a5add357f24a32040ce295f5c6d759d73e0b2302",
+    "raw_report_sha256": "dedfe5c32cb17790a40926c1b11aecd7f2a230fd9034338d191e4be9a0007870",
+    "seed": 20260811,
+    "n_intervals": 96
+  },
+  "station_107": {
+    "ratio": 1.615,
+    "geh_ok_pct": 29.2,
+    "measured_total": 6407,
+    "simulated_total": 10345,
+    "sensor_anchor_contract": {
+      "required": true,
+      "registered_edge_count": 7,
+      "published_vehicles": 22690,
+      "unanchored_vehicles": 0,
+      "pass": true
+    },
+    "observability_certificate": {
+      "status": "underidentified",
+      "onboarding_ready": false,
+      "route_variables": 5846,
+      "support_variables": 2361,
+      "support_shared_with_active_sensor": 666,
+      "support_exclusive_of_active_sensors": 1695,
+      "base_rank": 6,
+      "rank_with_sensor": 7,
+      "rank_gain": 1,
+      "normalized_row_span_residual": 0.539947810403
+    },
+    "inactive_shadow_publication": {
+      "60786979_3575001205_0": {
+        "continuous_total": 4168.601212,
+        "published_total": 4167,
+        "total_delta": -1.601212,
+        "max_abs_quarter_residual": 0,
+        "sum_abs_quarter_residual": 0
+      },
+      "1455801464_18241874_0": {
+        "continuous_total": 6178.323394,
+        "published_total": 6181,
+        "total_delta": 2.676606,
+        "max_abs_quarter_residual": 0,
+        "sum_abs_quarter_residual": 0
+      }
+    }
+  },
+  "pool_only_all_station_screen": {
+    "107": {"status": "underidentified", "support_variables": 2361, "exclusive_variables": 1695, "rank": "6->7"},
+    "1074": {"status": "underidentified", "support_variables": 1298, "exclusive_variables": 777, "rank": "7->8"},
+    "1076": {"status": "underidentified", "support_variables": 1625, "exclusive_variables": 914, "rank": "7->8"},
+    "133": {"status": "underidentified", "support_variables": 1255, "exclusive_variables": 0, "rank": "7->8"},
+    "134": {"status": "underidentified", "support_variables": 479, "exclusive_variables": 303, "rank": "7->8"},
+    "2276": {"status": "underidentified", "support_variables": 1237, "exclusive_variables": 158, "rank": "7->8"}
+  },
+  "rejected_treatments": {
+    "active_sensor_only_route_filter": {
+      "station": "107",
+      "ratio": 0.18,
+      "decision": "reject",
+      "reason": "LOSO hides the held count, not the physical sensor or traffic; filtering deletes held-only real movements"
+    },
+    "two_seed_candidate_pool_union": {
+      "seeds": [20260808, 20260811],
+      "candidates": 18201,
+      "shapes": 10667,
+      "station_107_ratio": 1.67,
+      "station_107_geh_ok_pct": 29.2,
+      "station_134_ratio": 1.03,
+      "station_134_geh_ok_pct": 100.0,
+      "decision": "reject",
+      "reason": "mixed station effect and volume inflation; more routes alone do not resolve allocation underidentification"
+    }
+  },
+  "decision": {
+    "integer_order_defect_fixed": true,
+    "inactive_shadow_margin_fixed": true,
+    "final_vehicle_sensor_anchor_gate": true,
+    "generic_final_pool_support_gate": true,
+    "generic_observability_gate": true,
+    "absolute_loso_quality_accepted": false,
+    "full_six_seed_campaign_run": false,
+    "interpretation": "Remaining held flow is not determined by active sensor margins and total flow. More seeds cannot create the missing information; improvement requires independently justified observations or support that closes the rank gap."
+  },
+  "warming": {
+    "plan_content_key": "37e78c7f056530b0d62bf0c7a73f6de432d83541334ba7a61528b41566c7535f",
+    "preflight_content_key": "c34a54d28a6e478c61be064b869db2760db42dbf507b6f4718e9284b4899efb7",
+    "preflight_status": "pass",
+    "population_started": false,
+    "pending_states": 104685
+  }
+}

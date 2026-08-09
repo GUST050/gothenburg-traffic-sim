@@ -19,6 +19,7 @@ from pfe import (Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
                  solve_calibration_intervals, solve_interval,
                  solve_interval_entropy, solve_interval_with_relaxation,
                  solve_interval_with_structure_guard, write_calibration_report)
+from traffic_sim.demand.structure_caps import integer_structure_cap
 
 
 def cand(*edges):
@@ -34,6 +35,12 @@ def purpose_cand(purpose, *edges):
 
 def served(x, cands, edge):
     return sum(xi for xi, c in zip(x, cands) if edge in c.edges)
+
+
+@pytest.mark.parametrize(("raw_limit", "expected"),
+                         [(1.2, 2), (2.49, 2), (2.5, 3), (2.87, 3)])
+def test_integer_structure_cap_matches_publication_bound(raw_limit, expected):
+    assert integer_structure_cap(1.0, raw_limit) == expected
 
 
 class TestSolveIntervalEntropy:
@@ -193,21 +200,34 @@ class TestPathSizeWeights:
         w = path_size_weights([cand("a", "b")])
         assert w[0] == pytest.approx(EPS_PARSIMONY)
 
-    def test_fully_overlapping_routes_cost_more(self):
+    def test_duplicate_geometry_counts_once(self):
         w = path_size_weights([cand("a", "b"), cand("a", "b")])
-        assert w[0] == pytest.approx(2 * EPS_PARSIMONY)
-        assert w[1] == pytest.approx(2 * EPS_PARSIMONY)
+        assert w[0] == pytest.approx(EPS_PARSIMONY)
+        assert w[1] == pytest.approx(EPS_PARSIMONY)
+
+    def test_purpose_variants_cannot_change_physical_route_prior(self):
+        work = purpose_cand("arbete", "a", "b")
+        leisure = purpose_cand("fritid", "a", "b")
+
+        weights = path_size_weights([work, leisure, cand("a", "c")])
+        without_duplicate = path_size_weights([work, cand("a", "c")])
+
+        assert weights[0] == pytest.approx(weights[1])
+        assert weights[0] == pytest.approx(without_duplicate[0])
+        assert weights[2] == pytest.approx(without_duplicate[1])
 
     def test_partial_overlap_is_intermediate(self):
         w_unique  = path_size_weights([cand("a", "b")])[0]
-        w_overlap = path_size_weights([cand("a", "b"), cand("a", "b")])[0]
         w_partial = path_size_weights([cand("a", "b"), cand("a", "c")])[0]
-        assert w_unique < w_partial < w_overlap
+        assert w_unique < w_partial
 
     def test_extreme_overlap_is_floored_not_unbounded(self):
-        # 20 routes all sharing one edge -> raw path size 1/20 = 0.05,
-        # clipped to the 0.15 floor rather than blowing the cost up ~20x.
-        w = path_size_weights([cand("shared") for _ in range(20)])
+        # 20 distinct routes share ten of eleven edges. Their raw path size
+        # falls below 0.15 and is clipped rather than making cost unbounded.
+        shared = [f"shared-{i}" for i in range(10)]
+        w = path_size_weights([
+            cand(*shared, f"unique-{i}") for i in range(20)
+        ])
         assert w[0] == pytest.approx(EPS_PARSIMONY / 0.15)
 
 
@@ -761,6 +781,7 @@ class TestBoundViolationsFromRounding:
         assert report["achieved"]["U"] == [3.0]
         assert report["bound_violations"] == []
 
+
     def test_repair_uses_the_solver_band_only_when_exact_is_infeasible(self):
         # The continuous solution may legitimately use RUNG_RELAX_TOL4X.
         # Reimposing M=10 exactly at the integer stage would conflict with
@@ -804,7 +825,8 @@ class TestBoundViolationsFromRounding:
         calls = []
 
         def repair_with_relaxed_band(counts, _shapes, _targets, _bounds,
-                                     groups=None, measurement_tol_mult=None):
+                                     groups=None, measurement_tol_mult=None,
+                                     **_projection_options):
             calls.append(measurement_tol_mult)
             if measurement_tol_mult != 4.0:
                 return None
@@ -819,11 +841,53 @@ class TestBoundViolationsFromRounding:
             enforce_integer_bounds=True,
             structure_groups=[([0], 0.2)])
 
-        assert calls == [4.0]
+        assert calls == [None, None, 4.0]
         route_counts = Counter(
             vehicle.find("route").get("edges")
             for vehicle in ET.parse(out).getroot().iter("vehicle"))
         assert route_counts == {"M SHORT": 2, "M LONG": 8}
+
+    def test_optional_structure_repairs_keep_prior_caps_active(
+            self, monkeypatch):
+        """A later group repair must not re-break an earlier group.
+
+        This is the small form of the production q44/q71 failure: fixing an
+        overflowing origin group could place flow back in the already-fixed
+        short-trip group because the integer active set was rebuilt from only
+        the *currently* overflowing groups on every pass.
+        """
+        shapes = [Candidate(depart=0.0, edges=["M", "A"]),
+                  Candidate(depart=0.0, edges=["M", "B"]),
+                  Candidate(depart=0.0, edges=["M", "C"])]
+        calls = []
+
+        def cycling_repair(counts, _shapes, _targets, _bounds, groups=None,
+                           reference=None, **_options):
+            groups = list(groups or [])
+            calls.append([tuple(group[0]) for group in groups])
+            # The joint projection calls carry the continuous reference. Keep
+            # the deliberately overflowing warm start so the integer active-
+            # set path below is what this regression exercises.
+            if reference is not None:
+                return np.array([5, 0, 7])
+            active = {tuple(group[0]) for group in groups}
+            if active == {(0,)}:
+                return np.array([2, 3, 7])  # fixes A, overflows B
+            if active == {(1,)}:
+                return np.array([3, 2, 7])  # old bug: re-breaks A
+            if active == {(0,), (1,)}:
+                return np.array([2, 2, 8])  # both caps retained
+            return counts
+
+        monkeypatch.setattr(pfe, "repair_integer_bounds", cycling_repair)
+        counts, _margin = pfe.quarter_publish_counts(
+            shapes, np.array([5.0, 0.0, 7.0]), {"M": 12.0}, {},
+            RUNG_CLEAN, Counter(), False, True,
+            structure_groups=[([0], 1 / 6), ([1], 1 / 6)])
+
+        assert counts.tolist() == [2, 2, 8]
+        # The final repair contains both the old and newly overflowing cap.
+        assert {(0,), (1,)} in [set(call) for call in calls]
 
     def test_optional_structure_cap_never_blocks_hard_bound_repair(self, tmp_path):
         # This is the production failure mode from 2027-02-26 q94 in small
@@ -857,7 +921,11 @@ class TestBoundViolationsFromRounding:
         # opts out of enforcement.
         shapes = [Candidate(depart=0.0, edges=["M"]),
                  Candidate(depart=0.0, edges=["M", "U"])]
-        solutions = [np.array([5.1, 2.3])]
+        # The production joint projection replaces the old greedy rounder,
+        # but diagnostic-only bounds must still remain absent from its model.
+        # This reference makes the sensor-exact L1 optimum put four vehicles
+        # on U, so the supplied U<=3 bound remains visible as a diagnostic.
+        solutions = [np.array([5.1, 4.3])]
         targets_per_q = [{"M": 10.0}]
         bounds_per_q = [{"U": (0.0, 3.0)}]
 
@@ -905,6 +973,150 @@ class TestBoundViolationsFromRounding:
 
         assert report["bound_violations"] == []
 
+
+class TestJointIntegerPublicationScaling:
+    """New sensors enter one canonical joint projection without special cases."""
+
+    @staticmethod
+    def publish(shapes, solution, targets, rung=RUNG_CLEAN):
+        counts, purpose_enforced = pfe.quarter_publish_counts(
+            shapes, np.asarray(solution, dtype=float), targets, {}, rung,
+            {}, False, False, None)
+        assert purpose_enforced is False
+        return counts
+
+    def test_sensor_registry_order_cannot_change_published_counts(self):
+        shapes = [cand("A"), cand("A", "B"), cand("B"), cand("X")]
+        solution = [0.6, 0.4, 0.6, 0.4]
+
+        forward = self.publish(shapes, solution, {"A": 1.0, "B": 1.0})
+        reverse = self.publish(shapes, solution, {"B": 1.0, "A": 1.0})
+
+        assert np.array_equal(forward, reverse)
+        assert served(forward, shapes, "A") == 1
+        assert served(forward, shapes, "B") == 1
+
+    def test_new_overlapping_sensor_is_automatically_constrained(self):
+        shapes = [cand("A"), cand("A", "B", "NEW"), cand("B"), cand("X")]
+        counts = self.publish(
+            shapes, [1.4, 0.2, 1.4, 0.0],
+            {"A": 2.0, "B": 2.0, "NEW": 1.0})
+
+        assert served(counts, shapes, "A") == 2
+        assert served(counts, shapes, "B") == 2
+        assert served(counts, shapes, "NEW") == 1
+
+    def test_inconsistent_exact_margins_use_only_declared_rung_band(self):
+        # One route cannot equal both targets.  The clean rung's declared
+        # ±max(1 vehicle, 5%) band makes the joint integer system feasible;
+        # publication must stay inside it instead of reviving greedy order.
+        shapes = [cand("IN", "OUT")]
+        counts = self.publish(shapes, [3.5], {"IN": 4.0, "OUT": 3.0})
+
+        assert abs(served(counts, shapes, "IN") - 4) <= 1
+        assert abs(served(counts, shapes, "OUT") - 3) <= 1
+
+    def test_solver_timeout_cannot_open_a_wider_band(self, monkeypatch):
+        class TimedOut:
+            success = False
+            x = None
+            status = 1
+
+        monkeypatch.setattr(pfe, "milp", lambda **_kwargs: TimedOut())
+
+        with pytest.raises(RuntimeError, match="not resolved.*no route file"):
+            self.publish([cand("M")], [10.0], {"M": 10.0})
+
+    def test_inactive_registered_sensor_preserves_continuous_shadow_margin(self):
+        shapes = [cand("ACTIVE"), cand("ACTIVE", "HELD")]
+        counts, _purpose = pfe.quarter_publish_counts(
+            shapes, np.asarray([5.5, 4.5]), {"ACTIVE": 10.0}, {},
+            RUNG_CLEAN, {}, False, False, None,
+            stability_edges=["HELD"],
+        )
+
+        assert served(counts, shapes, "ACTIVE") == 10
+        assert served(counts, shapes, "HELD") == round(4.5)
+
+    def test_shadow_margin_is_soft_and_cannot_override_active_sensor(self):
+        shapes = [cand("ACTIVE", "HELD")]
+        result = pfe.repair_integer_bounds(
+            np.asarray([10]), shapes, {"ACTIVE": 10.0}, {},
+            preferred={"HELD": 2.0}, reference=np.asarray([10.0]),
+            preserve_total=True, force=True,
+        )
+
+        assert result is not None
+        assert result.tolist() == [10]
+
+    def test_observability_certificate_detects_generic_new_sensor_ambiguity(self):
+        shapes = [cand("ACTIVE"), cand("ACTIVE", "NEW"), cand("NEW")]
+
+        certificate = pfe.sensor_observability_certificate(
+            shapes, ["ACTIVE"], {"new-sensor": ["NEW"]})["new-sensor"]
+
+        assert certificate["status"] == "underidentified"
+        assert certificate["onboarding_ready"] is False
+        assert certificate["rank_gain"] == 1
+        assert certificate["support_variables"] == 2
+
+    def test_observability_certificate_accepts_derived_station_total(self):
+        shapes = [cand("A", "NEW"), cand("B"), cand("A", "B", "NEW")]
+
+        certificate = pfe.sensor_observability_certificate(
+            shapes, ["A"], {"new-sensor": ["NEW"]})["new-sensor"]
+
+        assert certificate["status"] == "structurally_identifiable"
+        assert certificate["onboarding_ready"] is True
+        assert certificate["rank_gain"] == 0
+
+    def test_observability_certificate_rejects_missing_route_support(self):
+        certificate = pfe.sensor_observability_certificate(
+            [cand("ACTIVE")], ["ACTIVE"], {"new-sensor": ["NEW"]}
+        )["new-sensor"]
+
+        assert certificate["status"] == "unsupported"
+        assert certificate["onboarding_ready"] is False
+
+    @pytest.mark.parametrize("enforce_integer_bounds", [False, True])
+    def test_final_publication_rejects_vehicle_without_any_sensor_anchor(
+            self, tmp_path, enforce_integer_bounds):
+        output = tmp_path / "calibrated.rou.xml"
+
+        with pytest.raises(RuntimeError, match="cross no registered sensor"):
+            pfe.write_calibration_report(
+                [cand("UNMEASURED")], output, [{}], [np.asarray([1.0])],
+                bounds_per_q=[{}], rungs=[RUNG_CLEAN],
+                enforce_integer_bounds=enforce_integer_bounds,
+                required_anchor_edges=["SENSOR"],
+            )
+
+        assert not output.exists()
+
+    def test_final_publication_reports_sensor_anchor_proof(self, tmp_path):
+        report = pfe.write_calibration_report(
+            [cand("SENSOR")], tmp_path / "calibrated.rou.xml",
+            [{"SENSOR": 2.0}], [np.asarray([2.0])], bounds_per_q=[{}],
+            rungs=[RUNG_CLEAN], enforce_integer_bounds=True,
+            required_anchor_edges=["SENSOR"],
+        )
+
+        assert report["sensor_anchor_contract"]["pass"] is True
+        assert report["sensor_anchor_contract"]["unanchored_vehicles"] == 0
+
+    def test_anchor_rejection_preserves_previous_route(self, tmp_path):
+        output = tmp_path / "calibrated.rou.xml"
+        output.write_text("previous valid demand")
+
+        with pytest.raises(RuntimeError, match="cross no registered sensor"):
+            pfe.write_calibration_report(
+                [cand("UNMEASURED")], output, [{}], [np.asarray([1.0])],
+                bounds_per_q=[{}], rungs=[RUNG_CLEAN],
+                required_anchor_edges=["SENSOR"],
+            )
+
+        assert output.read_text() == "previous valid demand"
+        assert not output.with_suffix(output.suffix + ".tmp").exists()
 
 class TestRelaxationRungTracking:
     """solve_interval_with_relaxation reports WHICH ladder stage produced a
@@ -1402,15 +1614,14 @@ class TestPurposeStratifiedCalibration:
         calls = []
 
         def staged_repair(counts, _shapes, _targets, _bounds, groups=None,
-                          measurement_tol_mult=None):
-            calls.append(bool(groups))
-            if len(calls) == 1:
-                return None                 # initial joint repair
-            if len(calls) == 2:
-                return np.array([20, 0])    # count/bound-valid warm start
-            if len(calls) == 3:
-                return None                 # first purpose warm-start retry
-            return np.array([10, 10])       # structure then final purpose retry
+                          measurement_tol_mult=None, **projection_options):
+            calls.append((bool(groups),
+                          projection_options.get("preserve_total")))
+            # The joint production projection first preserves the continuous
+            # total, then deliberately drops only that modelled equality.
+            if projection_options.get("preserve_total") is True:
+                return None
+            return np.array([10, 10])
 
         monkeypatch.setattr(pfe, "repair_integer_bounds", staged_repair)
         out = tmp_path / "calibrated.rou.xml"
@@ -1418,9 +1629,9 @@ class TestPurposeStratifiedCalibration:
             shapes, out, [{"M": 20.0}], [np.array([10.0, 10.0])],
             bounds_per_q=[{}], rungs=[RUNG_CLEAN],
             enforce_integer_bounds=True, purpose_mixes_per_q=[mix],
-            structure_groups=[([0], 0.5)])
+            structure_groups=[])
 
-        assert calls == [True, False, True, True, True]
+        assert calls[:2] == [(True, True), (True, False)]
         assert report["purpose_allocation_summary"][
             "quarters_with_relaxed_mix"] == 0
         agents = json.loads(

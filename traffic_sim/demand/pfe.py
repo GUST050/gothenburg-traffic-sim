@@ -58,6 +58,7 @@ from scipy.optimize import Bounds, LinearConstraint, linprog, milp
 from scipy.sparse import csr_matrix, hstack, identity, lil_matrix, vstack
 
 from . import pfe_kernel
+from .structure_caps import integer_structure_cap
 
 # Compiled IPF fast path (see pfe_kernel.py's bit-identity contract).
 # PFE_PURE=1 forces the pure-Python reference loop; a numba-less install
@@ -125,14 +126,18 @@ def path_size_weights(shapes: list[Candidate]) -> np.ndarray:
     Ramming 2002's link-count-based simplification — no route/link lengths
     needed, just how many OTHER candidates in the pool share each edge):
 
-        PS_r = (1/|r|) · Σ_{e∈r} 1/N_e         N_e = #candidates using e
+        PS_r = (1/|r|) · Σ_{e∈r} 1/N_e         N_e = #route geometries using e
 
     PS_r → 1 for a route on largely distinctive edges, → small for one that
-    overlaps heavily with many alternatives. Returned as EPS_PARSIMONY/PS_r
-    so it drops straight into c_obj in place of the flat EPS_PARSIMONY."""
+    overlaps heavily with many alternatives. Purpose-stratified PFE variables
+    sharing the same physical geometry count once in ``N_e`` and receive the
+    same weight; otherwise merely adding purpose provenance changes the route-
+    choice prior. Returned as EPS_PARSIMONY/PS_r so it drops straight into
+    c_obj in place of the flat EPS_PARSIMONY."""
     edge_route_count: dict[str, int] = {}
-    for cand in shapes:
-        for e in set(cand.edges):
+    unique_geometries = {tuple(cand.edges) for cand in shapes}
+    for geometry in unique_geometries:
+        for e in set(geometry):
             edge_route_count[e] = edge_route_count.get(e, 0) + 1
     ps = np.ones(len(shapes))
     for i, cand in enumerate(shapes):
@@ -702,6 +707,10 @@ def repair_integer_bounds(
     bounds: dict[str, tuple[float, float]],
     groups: list[tuple[list[int], float, float]] | None = None,
     measurement_tol_mult: float | None = None,
+    preferred: dict[str, float] | None = None,
+    reference: np.ndarray | None = None,
+    preserve_total: bool = False,
+    force: bool = False,
 ) -> np.ndarray | None:
     """Repair a rounded route vector without weakening its constraints.
 
@@ -737,10 +746,11 @@ def repair_integer_bounds(
     closed in that case rather than silently emitting an invalid route file.
     """
     groups = [g for g in (groups or []) if g[0]]
-    if not bounds and not groups:
+    preferred = dict(preferred or {})
+    if not force and not bounds and not groups and not preferred:
         return counts
 
-    constrained = set(measured) | set(bounds)
+    constrained = set(measured) | set(bounds) | set(preferred)
     touch: dict[str, list[int]] = {e: [] for e in constrained}
     for j, cand in enumerate(shapes):
         for e in set(cand.edges) & constrained:
@@ -757,11 +767,13 @@ def repair_integer_bounds(
         (js, lo, hi) for js, lo, hi in groups
         if not (np.ceil(lo - 0.5) <= sum(counts[j] for j in js) <= np.floor(hi + 0.5))
     ]
-    if not violating and not group_violating:
+    if not force and not violating and not group_violating:
         return counts
 
     active = sorted({j for e in constrained for j in touch.get(e, [])}
                     | {j for js, _lo, _hi in groups for j in js})
+    if preserve_total or reference is not None:
+        active = list(range(len(shapes)))
     if not active:
         return None
     active_index = {j: k for k, j in enumerate(active)}
@@ -774,15 +786,24 @@ def repair_integer_bounds(
     # Their large objective weight keeps exact sensor counts first whenever
     # they coexist with the retained structural constraints; only a genuinely
     # impossible exact integer target uses the solver-authorised band.
-    measurement_items = list(measured.items()) if measurement_tol_mult is not None else []
+    # Canonical ordering is part of the scaling contract: registry/dict order
+    # must not become an implicit priority when sensors are added or reloaded.
+    measurement_items = (sorted(measured.items())
+                         if measurement_tol_mult is not None else [])
     measurement_index = {edge: k for k, (edge, _target) in enumerate(measurement_items)}
     n_measurement_deviations = 2 * len(measurement_items)
-    n_vars = 3 * n + n_measurement_deviations
+    preferred_items = sorted(preferred.items())
+    preferred_index = {
+        edge: k for k, (edge, _target) in enumerate(preferred_items)
+    }
+    n_preferred_deviations = 2 * len(preferred_items)
+    n_extra_deviations = n_measurement_deviations + n_preferred_deviations
+    n_vars = 3 * n + n_extra_deviations
     # A ±20 local window is deliberately wider than the single-vehicle
     # reconciliation nudges and avoids a route-count explosion in the repair.
     aeq = hstack((identity(n, format="csr"), -identity(n, format="csr"),
                   identity(n, format="csr"),
-                  csr_matrix((n, n_measurement_deviations))), format="csr")
+                  csr_matrix((n, n_extra_deviations))), format="csr")
     rows = [aeq]
     lower = [float(counts[j]) for j in active]
     upper = [float(counts[j]) for j in active]
@@ -800,7 +821,7 @@ def repair_integer_bounds(
     def add_edge_constraint(edge: str, lo: float, hi: float) -> None:
         add_index_constraint(touch.get(edge, []), lo, hi)
 
-    for edge, target in measured.items():
+    for edge, target in sorted(measured.items()):
         if measurement_tol_mult is None:
             # The historical contract for direct callers and optional
             # structure-cap repair: preserve the rounded sensor total exactly.
@@ -829,30 +850,98 @@ def repair_integer_bounds(
         rows.append(row.tocsr())
         lower.append(target_i)
         upper.append(target_i)
-    for edge, (lo, hi) in bounds.items():
+    for edge, target in preferred_items:
+        # Secondary (model-preservation) margin: keep the integer publication
+        # close to the completed continuous solution on registered sensor
+        # edges that are inactive in this fold.  These are soft equalities and
+        # can never make the active measurement/hard-bound system infeasible.
+        row = lil_matrix((1, n_vars), dtype=float)
+        for j in touch.get(edge, []):
+            k = active_index.get(j)
+            if k is not None:
+                row[0, k] = 1.0
+        d = 3 * n + n_measurement_deviations + 2 * preferred_index[edge]
+        row[0, d] = -1.0
+        row[0, d + 1] = 1.0
+        target_i = float(int(round(target)))
+        rows.append(row.tocsr())
+        lower.append(target_i)
+        upper.append(target_i)
+    for edge, (lo, hi) in sorted(bounds.items()):
         add_edge_constraint(edge, float(np.ceil(lo - 0.5)),
                             float(np.floor(hi + 0.5)))
     for js, lo, hi in groups:
         add_index_constraint(js, float(np.ceil(lo - 0.5)),
                              float(np.floor(hi + 0.5)))
 
-    base = np.asarray([counts[j] for j in active], dtype=float)
+    if preserve_total:
+        total_i = float(int(round(float(
+            np.asarray(reference, dtype=float).sum()
+            if reference is not None else counts.sum()))))
+        add_index_constraint(active, total_i, total_i)
+
+    source = (np.asarray(reference, dtype=float)
+              if reference is not None else counts.astype(float))
+    if source.shape != counts.shape:
+        raise ValueError("integer repair reference differs from counts shape")
+    base = np.asarray([source[j] for j in active], dtype=float)
     # One unit of sensor miss must always lose to any practical number of
     # local route-count nudges. This is still one linear MILP (not a slower
     # two-pass solve) and has only two extra continuous variables per sensor.
-    sensor_miss_penalty = 1_000_000.0
+    # z and the reference have the same nonnegative total when preserve_total
+    # is enabled, so their route L1 distance cannot exceed 2T. One vehicle of
+    # sensor miss therefore always loses without relying on a magic constant.
+    finite_limits = [float(round(float(target)))
+                     for target in measured.values()]
+    finite_limits.extend(
+        float(hi) for _edge, (_lo, hi) in bounds.items()
+        if np.isfinite(hi))
+    finite_limits.extend(
+        float(hi) for _js, _lo, hi in groups if np.isfinite(hi))
+    route_ceiling = max(
+        1.0,
+        float(int(round(source.sum()))),
+        max(finite_limits, default=0.0),
+    )
+    route_l1_upper = float(n) * route_ceiling + float(source.sum())
+    preferred_miss_penalty = max(1.0, route_l1_upper + 1.0)
+    preferred_residual_upper = sum(
+        float(n) * route_ceiling + abs(float(target))
+        for _edge, target in preferred_items)
+    sensor_miss_penalty = max(
+        preferred_miss_penalty,
+        preferred_miss_penalty * preferred_residual_upper
+        + route_l1_upper + 1.0,
+    )
+    if reference is not None:
+        route_lower = np.zeros(n)
+        route_upper = np.full(n, route_ceiling)
+    else:
+        route_lower = np.maximum(0.0, base - 20.0)
+        route_upper = base + 20.0
     result = milp(
         c=np.r_[np.zeros(n), np.ones(2 * n),
-                np.full(n_measurement_deviations, sensor_miss_penalty)],
-        integrality=np.r_[np.ones(n), np.zeros(2 * n + n_measurement_deviations)],
-        bounds=Bounds(np.r_[np.maximum(0.0, base - 20.0),
-                            np.zeros(2 * n + n_measurement_deviations)],
-                      np.r_[base + 20.0,
-                            np.full(2 * n + n_measurement_deviations, np.inf)]),
+                np.full(n_measurement_deviations, sensor_miss_penalty),
+                np.full(n_preferred_deviations, preferred_miss_penalty)],
+        integrality=np.r_[np.ones(n),
+                          np.zeros(2 * n + n_extra_deviations)],
+        bounds=Bounds(np.r_[route_lower,
+                            np.zeros(2 * n + n_extra_deviations)],
+                      np.r_[route_upper,
+                            np.full(2 * n + n_extra_deviations, np.inf)]),
         constraints=LinearConstraint(vstack(rows, format="csr"), lower, upper),
         options={"time_limit": 20.0},
     )
     if not result.success or result.x is None:
+        # Only HiGHS status 2 is a proof of infeasibility.  A time/iteration
+        # limit (status 1) or numerical/unknown failure must never be treated
+        # as permission to drop the interval-total equality or enter a wider
+        # sensor band.  Production joint projections fail closed; legacy
+        # best-effort repair callers retain their historical ``None`` result.
+        if force and reference is not None and int(result.status) != 2:
+            raise RuntimeError(
+                "joint integer projection was not resolved by the solver; "
+                "no route file was published")
         return None
     repaired = np.rint(result.x[:n]).astype(int)
     out = counts.copy()
@@ -1714,6 +1803,115 @@ def prepare_calibration(candidates_path: Path) -> tuple[list[Candidate], np.ndar
     return shapes, path_size_weights(shapes)
 
 
+def sensor_observability_certificate(
+    shapes: Sequence[Candidate],
+    active_edges: Iterable[str],
+    sensor_groups: Mapping[str, Iterable[str]],
+) -> dict[str, dict]:
+    """Prove whether inactive sensor totals are determined by the route pool.
+
+    This is a topology/pool certificate, not a fit against held observations.
+    Each route is a column.  The active measured edge margins plus the total
+    vehicle count are the known rows.  A held station is structurally
+    identifiable exactly when its (possibly multi-edge) count row lies in
+    their row span.  Otherwise the active data admits route reallocations that
+    change the held total, so a good or bad LOSO ratio cannot be made robust by
+    integer rounding alone.
+
+    The calculation is deliberately generic: adding a registry station only
+    adds another group to ``sensor_groups``; no station IDs or junctions are
+    special-cased.  Held observations are never accepted by this function.
+    """
+    n_routes = len(shapes)
+    active = sorted(set(str(edge) for edge in active_edges))
+    edge_rows = {
+        edge: np.asarray([float(edge in shape.edges) for shape in shapes])
+        for edge in active
+    }
+    base_rows = [np.ones(n_routes, dtype=float)]
+    base_rows.extend(edge_rows[edge] for edge in active)
+    base = np.vstack(base_rows) if n_routes else np.empty((len(base_rows), 0))
+    base_rank = int(np.linalg.matrix_rank(base)) if n_routes else 0
+    base_activity = np.any(base[1:] > 0, axis=0) if len(base_rows) > 1 else np.zeros(
+        n_routes, dtype=bool)
+
+    out: dict[str, dict] = {}
+    for sensor_id in sorted(sensor_groups, key=str):
+        components = tuple(sorted(set(
+            str(edge) for edge in sensor_groups[sensor_id]
+        )))
+        held_row = np.asarray([
+            float(sum(edge in shape.edges for edge in components))
+            for shape in shapes
+        ])
+        support = held_row > 0
+        support_variables = int(support.sum())
+        if not n_routes or not support_variables:
+            out[str(sensor_id)] = {
+                "status": "unsupported",
+                "onboarding_ready": False,
+                "component_edges": list(components),
+                "route_variables": n_routes,
+                "support_variables": support_variables,
+                "support_shared_with_active_sensor": 0,
+                "support_exclusive_of_active_sensors": support_variables,
+                "active_measurement_edges": active,
+                "base_rank": base_rank,
+                "rank_with_sensor": base_rank,
+                "rank_gain": None,
+                "normalized_row_span_residual": None,
+                "reason": "candidate pool contains no route through this sensor",
+            }
+            continue
+
+        augmented = np.vstack([base, held_row])
+        augmented_rank = int(np.linalg.matrix_rank(augmented))
+        rank_gain = augmented_rank - base_rank
+        # Least-squares residual is diagnostic magnitude only; rank_gain is
+        # the exact pass/fail contract.  Normalize so pools of different size
+        # remain comparable.
+        # Compute projection energy through the tiny row Gram matrix.  This
+        # avoids constructing an underdetermined 5,000+-column least-squares
+        # solution, whose cancelling coefficients can overflow even though
+        # the binary incidence matrix itself is well-conditioned enough for
+        # the rank decision above.
+        gram = base @ base.T
+        cross = base @ held_row
+        coefficients = np.linalg.pinv(gram, hermitian=True) @ cross
+        # ``np.matmul`` is routed through the platform BLAS, which has emitted
+        # spurious overflow warnings for even this binary self-dot on some
+        # macOS Accelerate builds. Elementwise reduction is exact here.
+        held_energy = float(np.sum(held_row * held_row))
+        explained_energy = float(np.sum(cross * coefficients))
+        residual_energy = max(0.0, held_energy - explained_energy)
+        residual = math.sqrt(residual_energy / max(
+            held_energy, np.finfo(float).eps))
+        identifiable = rank_gain == 0
+        out[str(sensor_id)] = {
+            "status": ("structurally_identifiable" if identifiable
+                       else "underidentified"),
+            "onboarding_ready": identifiable,
+            "component_edges": list(components),
+            "route_variables": n_routes,
+            "support_variables": support_variables,
+            "support_shared_with_active_sensor": int(
+                np.logical_and(support, base_activity).sum()),
+            "support_exclusive_of_active_sensors": int(
+                np.logical_and(support, ~base_activity).sum()),
+            "active_measurement_edges": active,
+            "base_rank": base_rank,
+            "rank_with_sensor": augmented_rank,
+            "rank_gain": rank_gain,
+            "normalized_row_span_residual": round(residual, 12),
+            "reason": (
+                "held station total is fixed by active margins and total flow"
+                if identifiable else
+                "active margins permit route reallocations that change the held station total"
+            ),
+        }
+    return out
+
+
 def solve_calibration_intervals(
     shapes: list[Candidate],
     route_cost: np.ndarray,
@@ -1871,6 +2069,7 @@ def quarter_publish_counts(
     strict_purpose: bool,
     enforce_integer_bounds: bool,
     structure_groups: list[tuple[list[int], float]] | None,
+    stability_edges: Iterable[str] | None = None,
 ) -> tuple[np.ndarray, bool]:
     """One quarter's integer rounding + constrained repair, as a pure function.
 
@@ -1885,7 +2084,37 @@ def quarter_publish_counts(
     Returns the repaired integer route-count vector and whether an exact
     purpose margin survived the repair.
     """
-    counts = round_preserving_measured(sol, shapes, targets)
+    # A configured sensor with no route support is a pool-coverage defect, not
+    # an integer-rounding constraint: an equality over an empty route set is
+    # unsatisfiable by construction.  Keep the original target dictionary for
+    # the calibration report (which must expose that miss), but give the joint
+    # projection only targets that this candidate pool can actually influence.
+    # Recompute this from the supplied shapes every quarter so adding a sensor
+    # or adding its first supporting route requires no station-specific code.
+    supported_edges = {
+        edge for shape in shapes for edge in set(shape.edges)
+    }
+    projection_targets = {
+        edge: target for edge, target in targets.items()
+        if edge in supported_edges
+    }
+    # In LOSO, every registered edge is known structurally but the held
+    # station's observations are absent.  Preserve the continuous model's own
+    # held-edge prediction as a secondary integer margin so discretisation
+    # cannot manufacture a large validation error.  No observed held count is
+    # read or passed. Active measurements remain hard and therefore outrank
+    # every shadow margin.
+    stability_targets = {
+        edge: float(sum(
+            sol[j] for j, shape in enumerate(shapes) if edge in shape.edges))
+        for edge in sorted(set(stability_edges or ()))
+        if edge in supported_edges and edge not in projection_targets
+    }
+    # Start from the total-preserving global vector only as a shape-compatible
+    # seed. The actual publication vector is a joint projection against the
+    # continuous solution below; no sensor receives a fold/order-dependent
+    # first claim on routes shared with another sensor.
+    counts = largest_remainder_round(sol)
     purpose_groups: list[tuple[list[int], float, float]] = []
     # Only enforce an exact margin during integer repair when the
     # continuous solver actually found one.  Otherwise this is the
@@ -1904,6 +2133,116 @@ def quarter_publish_counts(
             and _rung_keeps_structural_bounds(rung))
         else {}
     )
+    measurement_tol_mult = (
+        _rung_measurement_tol_mult(rung)
+        if rung in RUNG_NAMES and rung != RUNG_INFEASIBLE
+        else None
+    )
+
+    # Level 1 + retained Level 2 + the continuously achieved purpose margin
+    # are one integer problem.  If the modelled purpose margin cannot coexist
+    # with sensor/bound constraints, preserve the latter and disclose the
+    # purpose relaxation exactly as the continuous ladder does.  A failure of
+    # the hard projection is never hidden behind the legacy four-pass greedy
+    # heuristic.
+    def project_from_continuous(
+        active_groups: list[tuple[list[int], float, float]],
+    ) -> np.ndarray | None:
+        """Project jointly, retaining the continuous total when compatible.
+
+        The continuous total is a useful stabiliser, but it is not a measured
+        quantity.  A new sensor can legitimately require more/fewer integer
+        vehicles than ``round(sol.sum())`` (especially in small synthetic or
+        partially observed pools), so retry without that Level-3 equality
+        before declaring the Level-1/retained-Level-2 contract infeasible.
+        """
+        # Exact rounded margins are the first model, even when the continuous
+        # rung permits a wider band.  Enter that band only after proving the
+        # exact integer system infeasible; otherwise a weighted objective (or
+        # numerical tolerance) could spend sensor error merely to save small
+        # route-level deviations.
+        tolerances = [None]
+        if measurement_tol_mult is not None:
+            tolerances.append(measurement_tol_mult)
+        for active_tolerance in tolerances:
+            if active_tolerance is None and stability_targets:
+                # A registered inactive sensor is not a behavioural prior: it
+                # is a publication-invariance boundary. Try its rounded
+                # continuous margin as an exact integer equality before a
+                # purpose/optional-structure group is allowed to spend it.
+                # If a group conflicts, return control so the caller can drop
+                # that lower-priority group and retry. With no groups, fall
+                # through to the soft shadow model only when the integer
+                # sensor margins themselves are genuinely inconsistent.
+                exact_with_stability = {
+                    **projection_targets,
+                    **{edge: float(int(round(target)))
+                       for edge, target in stability_targets.items()},
+                }
+                for keep_total in (True, False):
+                    result = repair_integer_bounds(
+                        counts, shapes, exact_with_stability, repair_bounds,
+                        groups=active_groups,
+                        reference=sol,
+                        preserve_total=keep_total,
+                        force=True,
+                    )
+                    if result is not None:
+                        return result
+                if active_groups:
+                    return None
+            active_preferred = (
+                stability_targets if active_tolerance is None else {})
+            result = repair_integer_bounds(
+                counts, shapes, projection_targets, repair_bounds,
+                groups=active_groups,
+                measurement_tol_mult=active_tolerance,
+                preferred=active_preferred,
+                reference=sol,
+                preserve_total=True,
+                force=True,
+            )
+            if result is not None:
+                return result
+            result = repair_integer_bounds(
+                counts, shapes, projection_targets, repair_bounds,
+                groups=active_groups,
+                measurement_tol_mult=active_tolerance,
+                preferred=active_preferred,
+                reference=sol,
+                preserve_total=False,
+                force=True,
+            )
+            if result is not None:
+                return result
+        return None
+
+    projected = project_from_continuous(purpose_groups)
+    if projected is None and purpose_groups:
+        purpose_groups = []
+        purpose_margin_enforced = False
+        projected = project_from_continuous([])
+    if projected is None:
+        raise RuntimeError(
+            "joint integer publication is infeasible inside the solver rung's "
+            "measurement/bound contract; no route file was published")
+    counts = projected
+
+    # Optional structure caps are attempted jointly from the continuous
+    # reference, but never outrank sensors, retained hard bounds or an exact
+    # purpose margin. Only currently overflowing groups enter the MILP; this
+    # keeps the formulation sparse as new sensors/origin groups are added.
+    q_total = float(counts.sum())
+    initial_structure_groups = [
+        (members, 0.0, float(integer_structure_cap(q_total, cap_share)))
+        for members, cap_share in (structure_groups or [])
+        if int(counts[members].sum()) > integer_structure_cap(q_total, cap_share)
+    ]
+    if initial_structure_groups:
+        structured = project_from_continuous(
+            purpose_groups + initial_structure_groups)
+        if structured is not None:
+            counts = structured
     # structure_groups (2026-07-12, structure preservation): each
     # group cap needs an ABSOLUTE per-quarter ceiling, only known
     # once the quarter's integer total exists. Floor of 2 vehicles
@@ -1923,23 +2262,47 @@ def quarter_publish_counts(
         # groups can number in the hundreds; adding every satisfied
         # one to the MILP would make publication slower for no gain.
         return [
-            (members, 0.0, max(2.0, cap_share * q_total))
+            (members, 0.0, float(integer_structure_cap(q_total, cap_share)))
             for members, cap_share in structure_groups
-            if float(current[members].sum()) > max(2.0, cap_share * q_total)
+            if int(current[members].sum())
+            > integer_structure_cap(q_total, cap_share)
         ]
+
+    def stability_error(current: np.ndarray) -> int:
+        return sum(abs(
+            int(sum(current[j] for j, shape in enumerate(shapes)
+                    if edge in shape.edges)) - int(round(target)))
+            for edge, target in stability_targets.items())
 
     def apply_structure_repairs(
         current: np.ndarray,
         active_purpose_groups: list[tuple[list[int], float, float]],
     ) -> np.ndarray:
-        """Best-effort structure repair from the current warm start."""
-        for _repair_pass in range(3):
+        """Best-effort structure repair from the current warm start.
+
+        Keep every group activated by an earlier pass in the later MILPs.
+        Without that cumulative active set, repairing group B was allowed to
+        put vehicles straight back into group A.  The bounded loop could then
+        alternate between two individually repaired vectors and publish the
+        last one with a previously fixed cap broken.  This is independent of
+        group names or sensor count, so the same policy remains valid when a
+        new sensor creates additional origin/length interactions.
+        """
+        activated: dict[tuple[int, ...], tuple[list[int], float, float]] = {}
+        # Every useful pass activates at least one previously unseen group.
+        # The pool has a finite group set, so this is bounded without a magic
+        # pass count that becomes wrong when another sensor/group is added.
+        for _repair_pass in range(max(1, len(structure_groups or []))):
             quarter_groups = overflowing_groups(current)
             if not quarter_groups:
                 break
+            previous_keys = set(activated)
+            for group in quarter_groups:
+                activated[tuple(group[0])] = group
             repaired_structure = repair_integer_bounds(
-                current, shapes, targets, repair_bounds,
-                groups=active_purpose_groups + quarter_groups,
+                current, shapes, projection_targets, repair_bounds,
+                groups=active_purpose_groups + list(activated.values()),
+                preferred=stability_targets,
                 # The continuous interval may legitimately have used
                 # a wider measurement rung. Re-imposing the exact
                 # rounded target here makes a feasible structure
@@ -1961,7 +2324,8 @@ def quarter_publish_counts(
                 # sensor/bound edge; this cannot change a hard count
                 # or provenance. Refuse a move that would overflow
                 # another structure group.
-                protected = set(targets) | set(repair_bounds)
+                protected = (set(projection_targets) | set(repair_bounds)
+                             | set(stability_targets))
                 signatures = [
                     tuple(sorted(set(shape.edges) & protected))
                     for shape in shapes
@@ -1972,8 +2336,7 @@ def quarter_publish_counts(
                 ]
                 all_limits = [
                     (set(members),
-                     int(np.floor(max(2.0, cap * float(current.sum()))
-                                  + 0.5)))
+                     integer_structure_cap(float(current.sum()), cap))
                     for members, cap in (structure_groups or [])
                 ]
                 changed = False
@@ -2018,7 +2381,19 @@ def quarter_publish_counts(
                 if not changed:
                     break
                 continue
+            # Structure caps are explicitly best effort. They may not improve
+            # their own diagnostic by reintroducing discrete drift on an
+            # inactive registered sensor.
+            if stability_error(repaired_structure) > stability_error(current):
+                break
+            if np.array_equal(repaired_structure, current):
+                break
             current = repaired_structure
+            # With an unchanged active set the same deterministic MILP cannot
+            # discover a new result on another pass. A residual here is a
+            # genuinely optional/integer-infeasible cap, not a reason to spin.
+            if set(activated) == previous_keys:
+                break
         return current
 
     # First repair the non-negotiable constraints on their own.  An
@@ -2030,8 +2405,9 @@ def quarter_publish_counts(
     hard_repair_ok = True
     if repair_bounds or purpose_groups:
         repaired = repair_integer_bounds(
-            counts, shapes, targets, repair_bounds,
+            counts, shapes, projection_targets, repair_bounds,
             groups=purpose_groups,
+            preferred=stability_targets,
             measurement_tol_mult=_rung_measurement_tol_mult(rung))
         if repaired is None:
             hard_repair_ok = False
@@ -2048,14 +2424,16 @@ def quarter_publish_counts(
         # both passes retain every non-negotiable constraint.
         exact_purpose_groups = purpose_groups
         repaired = repair_integer_bounds(
-            counts, shapes, targets, repair_bounds,
+            counts, shapes, projection_targets, repair_bounds,
+            preferred=stability_targets,
             measurement_tol_mult=_rung_measurement_tol_mult(rung))
         hard_repair_ok = repaired is not None
         if repaired is not None:
             counts = repaired
             purpose_repaired = repair_integer_bounds(
-                counts, shapes, targets, repair_bounds,
+                counts, shapes, projection_targets, repair_bounds,
                 groups=exact_purpose_groups,
+                preferred=stability_targets,
                 measurement_tol_mult=_rung_measurement_tol_mult(rung))
             if purpose_repaired is not None:
                 counts = purpose_repaired
@@ -2085,13 +2463,15 @@ def quarter_publish_counts(
         _purpose_target, final_purpose_groups = purpose_quota_groups(
             shapes, purpose_mix, int(counts.sum()))
         purpose_repaired = repair_integer_bounds(
-            counts, shapes, targets, repair_bounds,
+            counts, shapes, projection_targets, repair_bounds,
             groups=final_purpose_groups,
+            preferred=stability_targets,
             measurement_tol_mult=_rung_measurement_tol_mult(rung))
         if purpose_repaired is not None:
-            counts = purpose_repaired
-            purpose_groups = final_purpose_groups
-            purpose_margin_enforced = True
+            if stability_error(purpose_repaired) <= stability_error(counts):
+                counts = purpose_repaired
+                purpose_groups = final_purpose_groups
+                purpose_margin_enforced = True
             # Purpose reconciliation can move routes back into an
             # optional structure group. Reapply the same best-effort
             # guard while retaining the now-exact purpose groups.
@@ -2112,6 +2492,9 @@ def write_calibration_report(
     purpose_mixes_per_q: list[Counter | dict[str, int]] | None = None,
     precomputed_counts: list[tuple[np.ndarray, bool] | None] | None = None,
     day_quarters: int | None = None,
+    stability_edges: Iterable[str] | None = None,
+    observability_groups: Mapping[str, Iterable[str]] | None = None,
+    required_anchor_edges: Iterable[str] | None = None,
 ) -> dict:
     """Write .rou.xml and compute the same fit report calibrate() returns.
 
@@ -2125,23 +2508,19 @@ def write_calibration_report(
 
     bounds_per_q is optional. The continuous
     LP/entropy solution respects bounds by construction, but
-    round_preserving_measured()'s integer ±1 nudges (needed to hit a
-    measured edge's EXACT target) have no visibility into bounds at all —
-    a route shared between a measured edge and a separately-bounded edge
-    can be nudged in a way that pushes the bounded edge's rounded total
-    outside its own [lower, upper].
+    The production integer stage jointly projects every supported measured
+    edge and every retained hard bound against the continuous route vector.
+    It first tries exact rounded sensor margins and enters the continuous
+    rung's declared measurement band only after exact infeasibility.  Sensor
+    registry order is canonicalised, so adding or reordering sensors cannot
+    grant one edge a greedy first/last claim on shared routes.
 
     The repair itself is gated on ``enforce_integer_bounds``, not merely on
     ``bounds_per_q is not None``: a caller passing bounds for DIAGNOSTIC
-    reporting only (enforce_integer_bounds=False — validate_sim.py's LOSO
-    fold calibration, which explicitly opts out of enforcement because
-    those bounds are wide assignment-prior bounds, not the narrow
-    structural bounds build_sumo_demand.py enforces) must get back
-    exactly the pre-repair counts it always has, not silently-repaired
-    ones — found in review 2026-07-12: the repair used to fire whenever
-    bounds were merely supplied, which would have altered LOSO's published
-    route counts (and therefore its GEH/recovery-ratio numbers) without
-    validate_sim.py ever asking for that. When enforce_integer_bounds=True
+    reporting only (enforce_integer_bounds=False) keeps those bounds out of
+    the projection; the measured margins are still reconciled jointly because
+    that is now the universal publication contract. When
+    enforce_integer_bounds=True
     (build_sumo_demand.py's real deployment calls), the writer DOES run a
     small constrained integer repair before reporting a violation, and
     remains a publication gate: route XML is written to a sibling temporary
@@ -2178,12 +2557,15 @@ def write_calibration_report(
     # hard bound; otherwise the pre-replacement ``achieved`` accounting can
     # pass while the route XML written to SUMO violates an unmeasured bound.
     protected_edges = set(measured_edges)
+    protected_edges.update(str(edge) for edge in (stability_edges or ()))
     if bounds_per_q is not None:
         protected_edges.update(
             edge for bounds in bounds_per_q for edge in bounds
         )
     replacement_index = purpose_replacement_index(shapes, protected_edges)
     purpose_allocation: list[dict] = []
+    anchor_edges = set(str(edge) for edge in (required_anchor_edges or ()))
+    unanchored_vehicles = 0
     vid = 0
     agents: list[dict] = []
     # Counts are deliberately shared across every quarter WITHIN A DAY: a
@@ -2197,7 +2579,31 @@ def write_calibration_report(
     # historical continuous behaviour for callers with no day structure.
     location_draw_ordinals: Counter = Counter()
     write_path = (out_path.with_suffix(out_path.suffix + ".tmp")
-                  if enforce_integer_bounds else out_path)
+                  if enforce_integer_bounds or anchor_edges else out_path)
+    # Resolve every gated quarter before opening the staging file.  A joint
+    # integer infeasibility must leave neither a partial XML file nor a stale
+    # ``.tmp`` sibling behind.  This also makes the inline and fork-precomputed
+    # paths share the same all-quarters-before-publication boundary.
+    effective_precomputed = precomputed_counts
+    if enforce_integer_bounds:
+        effective_precomputed = list(precomputed_counts or [None] * nq)
+        if len(effective_precomputed) != nq:
+            raise ValueError("precomputed_counts length differs from intervals")
+        for i, sol in enumerate(solutions):
+            if sol is None or effective_precomputed[i] is not None:
+                continue
+            purpose_mix = (purpose_targets[i]
+                           if i < len(purpose_targets) else Counter())
+            effective_precomputed[i] = quarter_publish_counts(
+                shapes, sol, targets_per_q[i],
+                bounds_per_q[i] if bounds_per_q is not None else None,
+                rungs[i] if rungs is not None and i < len(rungs) else None,
+                purpose_mix,
+                purpose_mixes_per_q is not None and bool(purpose_mix),
+                enforce_integer_bounds,
+                structure_groups,
+                stability_edges,
+            )
     with open(write_path, "w") as f:
         f.write("<routes>\n")
         for i in range(nq):
@@ -2209,14 +2615,14 @@ def write_calibration_report(
             purpose_mix = purpose_targets[i] if i < len(purpose_targets) else Counter()
             strict_purpose = purpose_mixes_per_q is not None and bool(purpose_mix)
             counts, purpose_margin_enforced = (
-                precomputed_counts[i] if precomputed_counts is not None
-                and precomputed_counts[i] is not None
+                effective_precomputed[i] if effective_precomputed is not None
+                and effective_precomputed[i] is not None
                 else quarter_publish_counts(
                     shapes, sol, targets_per_q[i],
                     bounds_per_q[i] if bounds_per_q is not None else None,
                     rungs[i] if rungs is not None and i < len(rungs) else None,
                     purpose_mix, strict_purpose, enforce_integer_bounds,
-                    structure_groups))
+                    structure_groups, stability_edges))
             # Spread ALL vehicles in this quarter across its full 15-minute
             # interval. The old per-route schedule put every one-vehicle
             # route at exactly :07:30, so thousands of independent routes
@@ -2265,6 +2671,8 @@ def write_calibration_report(
             # chosen by the integer solver, so every report/GEH/bound check
             # proves the exact XML published below.
             for cand in route_instances:
+                if anchor_edges and not anchor_edges.intersection(cand.edges):
+                    unanchored_vehicles += 1
                 for edge in set(cand.edges):
                     achieved.setdefault(edge, [0.0] * nq)
                     achieved[edge][i] += 1.0
@@ -2350,7 +2758,12 @@ def write_calibration_report(
             f"published ({first['edge']}@q{first['quarter']}: "
             f"{first['achieved']} outside [{first['bound_lo']}, {first['bound_hi']}])"
         )
-    if enforce_integer_bounds:
+    if anchor_edges and unanchored_vehicles:
+        write_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"{unanchored_vehicles} published vehicle(s) cross no registered "
+            "sensor; no route file was published")
+    if enforce_integer_bounds or anchor_edges:
         os.replace(write_path, out_path)
 
     # Publish agent provenance only after the route file passed the same
@@ -2400,6 +2813,37 @@ def write_calibration_report(
             mix_reallocation_vehicles += sum(abs(int(delta))
                                            for delta in deviation.values()) // 2
         replaced_routes += int(allocation.get("replaced_routes", 0))
+    integer_stability: dict[str, dict] = {}
+    for edge in sorted(set(stability_edges or ())):
+        residuals = []
+        continuous_total = 0.0
+        published_total = 0
+        for i, sol in enumerate(solutions):
+            if sol is None or edge in targets_per_q[i]:
+                continue
+            touching = [j for j, shape in enumerate(shapes)
+                        if edge in shape.edges]
+            if not touching:
+                continue
+            continuous = float(sol[touching].sum())
+            published = int(achieved.get(edge, [0.0] * nq)[i])
+            continuous_total += continuous
+            published_total += published
+            residuals.append(published - int(round(continuous)))
+        if residuals:
+            integer_stability[edge] = {
+                "quarters": len(residuals),
+                "continuous_total": round(continuous_total, 6),
+                "published_total": published_total,
+                "total_delta": round(published_total - continuous_total, 6),
+                "max_abs_quarter_residual": max(abs(v) for v in residuals),
+                "sum_abs_quarter_residual": sum(abs(v) for v in residuals),
+            }
+    observability = sensor_observability_certificate(
+        shapes,
+        {edge for targets in targets_per_q for edge in targets},
+        observability_groups or {},
+    )
     report = {"vehicles": vid, "infeasible_intervals": infeasible,
               "geh_ok": geh_ok, "geh_total": geh_all,
               "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
@@ -2407,6 +2851,14 @@ def write_calibration_report(
               "unserviceable_edges": unserviceable_edges,
               "bound_violations": bound_violations,
               "relaxed_bound_violations": relaxed_bound_violations,
+              "inactive_sensor_integer_stability": integer_stability,
+              "inactive_sensor_observability": observability,
+              "sensor_anchor_contract": {
+                  "required": bool(anchor_edges),
+                  "registered_edges": sorted(anchor_edges),
+                  "unanchored_vehicles": unanchored_vehicles,
+                  "pass": not unanchored_vehicles,
+              },
               "purpose_allocation": purpose_allocation,
               "purpose_allocation_summary": {
                   "quarters_with_incompatible_routes": sum(
@@ -2446,6 +2898,7 @@ def calibrate(
     purpose_departure_offset_s: float = 0.0,
     activity_purpose_shares_by_quarter: list[dict[str, float]] | None = None,
     through_share_target: float | None = None,
+    required_anchor_edges: Iterable[str] | None = None,
 ) -> dict:
     """Solve all intervals; write a .rou.xml; return a fit report.
 
@@ -2475,4 +2928,5 @@ def calibrate(
     return write_calibration_report(shapes, out_path, targets_per_q, solutions,
                                     integer_bounds_per_q if integer_bounds_per_q is not None else bounds_per_q,
                                     rungs, enforce_integer_bounds,
-                                    purpose_mixes_per_q=purpose_mixes)
+                                    purpose_mixes_per_q=purpose_mixes,
+                                    required_anchor_edges=required_anchor_edges)

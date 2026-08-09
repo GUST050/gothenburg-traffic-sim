@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "kind": "paired_loso_controlled_rounding_treatment_summary",
+  "evidence_class": "diagnostic_replay",
+  "date": "2025-09-16",
+  "generated_on": "2026-08-09",
+  "protocol": "loso_pfe_meso_v8_controlled_rounding",
+  "source": {
+    "manifest": "runs/loso-controlled-rounding-v8-20260809/manifest.json",
+    "manifest_sha256": "3e06cdb28a45d3276b5da4ae76969dc411e2a5cd6ac854aab97031bfe504904d",
+    "manifest_status": "complete",
+    "manifest_tracked_in_git": false,
+    "archived_artifacts_verified": 32,
+    "archived_artifact_hash_mismatches": 0,
+    "runner_sha256": "83ef5f6fd16f2e5ba6096498024f4468cd41ac22167b0230e5cd5d2454a3473e",
+    "loso_sha256": "5ead66e31f21a302c1bf629e4e5a8ac97befa2eff5afe2be9840c0fa81a2d17f",
+    "controlled_rounding_sha256": "dd80df294a0ed043bcc3c9de224d3ea3055b9d543b6622615d9c2f0e3ae0026d",
+    "decomposition_sha256": "0eded84ef60417a73c9c4e01cc0e3e930219050ad4e9cfc7370748a360ed6d24",
+    "v7_pair_sha256": "56d14aacdeee708f846321eb9a26280c91213fbe5f7647c3b3e4b85da8d25341",
+    "postpublication_decomposition": "validation/loso_controlled_rounding_postpublication_v1.json",
+    "postpublication_decomposition_sha256": "4434409d7351ac33ab8283497688b6534c7e8dcc2a5fcbc29e8bf21477ee5c78",
+    "postpublication_analysis_tool_sha256": "8dbc3fd536f95c765a1fa1dac802183985fe91c9608b4e8797cef7a64c48a1f3",
+    "related_station107_summary": "validation/loso_controlled_rounding_v8_station107_pair.json",
+    "related_station107_summary_sha256": "bd7d4ee7fcb233cd9653d055cf4117bc9ffa1190068074712a24afab39bda4dc"
+  },
+  "treatment": {
+    "description": "Replace the LOSO publisher's sequential largest-remainder plus four-pass initial repair with a joint integer projection. Preserve each active rounded measurement and the rounded interval total, minimise route-level L1 deviation from the continuous solution, then run the unchanged purpose, structure and held-bound publication repairs.",
+    "held_counts_used_to_set_treatment": false,
+    "production_pfe_source_changed": false,
+    "picker_trace_repeated": false,
+    "stations_screened": [
+      "134",
+      "2276"
+    ],
+    "station_107_excluded_reason": "At least one quarter has mutually inconsistent rounded active margins and interval total. A sensor-residual policy must be justified separately before this treatment is screened on station 107.",
+    "full_six_seed_campaign_run": false
+  },
+  "runs": [
+    {
+      "seed": 20260808,
+      "candidate_pool_sha256": "b5872d214d5af2c6ae4ed804fbfaa909712d3c406eb194f93b025e50ca5db272",
+      "demand_build_id": "25658a1d0d4c10afd406",
+      "loso_report_sha256": "85d06dc053ba366d3177a93b3b67c68af98841c3a8c8d108182d62ca5497ba00",
+      "stations": {
+        "134": {
+          "v7_ratio": 2.491,
+          "controlled_ratio": 1.496,
+          "ratio_delta": -0.995,
+          "excess_above_one_reduction_fraction": 0.667337,
+          "v7_geh_ok_pct": 33.3,
+          "controlled_geh_ok_pct": 54.2,
+          "max_abs_active_measurement_residual": 0,
+          "rounding_methods": {
+            "floor_ceil_l1": 94,
+            "general_l1": 2
+          }
+        },
+        "2276": {
+          "v7_ratio": 2.425,
+          "controlled_ratio": 1.868,
+          "ratio_delta": -0.557,
+          "excess_above_one_reduction_fraction": 0.390877,
+          "v7_geh_ok_pct": 25.0,
+          "controlled_geh_ok_pct": 16.7,
+          "max_abs_active_measurement_residual": 0,
+          "rounding_methods": {
+            "floor_ceil_l1": 93,
+            "general_l1": 3
+          }
+        }
+      }
+    },
+    {
+      "seed": 20260811,
+      "candidate_pool_sha256": "9f310ebfa2c0765757466dedcc9870b54f707f55aa3f55ca2f0b9c6d007b9edd",
+      "demand_build_id": "7f69eb9951fdbd401bf0",
+      "loso_report_sha256": "a5b096aeaa41e34df22a1ce40884cb085a93543912aff9a8d898b9acec8a0deb",
+      "stations": {
+        "134": {
+          "v7_ratio": 2.53,
+          "controlled_ratio": 1.59,
+          "ratio_delta": -0.94,
+          "excess_above_one_reduction_fraction": 0.614379,
+          "v7_geh_ok_pct": 29.2,
+          "controlled_geh_ok_pct": 45.8,
+          "max_abs_active_measurement_residual": 0,
+          "rounding_methods": {
+            "floor_ceil_l1": 95,
+            "general_l1": 1
+          }
+        },
+        "2276": {
+          "v7_ratio": 2.601,
+          "controlled_ratio": 1.893,
+          "ratio_delta": -0.708,
+          "excess_above_one_reduction_fraction": 0.442224,
+          "v7_geh_ok_pct": 12.5,
+          "controlled_geh_ok_pct": 25.0,
+          "max_abs_active_measurement_residual": 0,
+          "rounding_methods": {
+            "floor_ceil_l1": 93,
+            "general_l1": 3
+          }
+        }
+      }
+    }
+  ],
+  "decision": {
+    "root_cause_supported": true,
+    "quality_treatment": "retain_for_further_validation",
+    "reason": "The same non-held joint rounding rule sharply reduces daily overprediction for both problem stations in both contrasting seeds after the unchanged downstream publisher and SUMO. Post-publication decomposition shows different remaining mechanisms: purpose/structure/bound repair adds 1353/1598 held entries for 134, while it changes 2276 by only -30/-214. The remaining 2276 excess is already present in the joint active-sensor projection. Absolute quality is not acceptable and 2276 GEH remains poor.",
+    "run_six_seed_campaign_now": false,
+    "next_experiment": "For 134, jointly include continuously active purpose margins and independently defined structure/bound constraints in the integer projection so downstream repair cannot reintroduce held geometry. For 2276, test non-held route-support or regularisation treatments because downstream repair is not the cause. Station 107's separately screened rung-band treatment is quality-rejected; repair independently justified movement support before another picker treatment. Reuse the controlled-rounding matrix before any broader campaign."
+  },
+  "warming_compatibility": {
+    "production_bound_source_changed": false,
+    "production_pfe_source_changed": false,
+    "annual_plan_verification_required": true,
+    "expected_decision": "A"
+  }
+}

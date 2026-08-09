@@ -99,6 +99,7 @@ output — pfe.py is untouched).
 from __future__ import annotations
 
 import argparse
+import copy
 from collections import Counter, OrderedDict
 import hashlib
 import json
@@ -117,6 +118,7 @@ from shapely.geometry import Point, shape
 from shapely.strtree import STRtree
 
 from build_data import INNER_CITY_BBOX
+from traffic_sim.intake.sensors import load_registry
 from traffic_sim.simulation.runtime import sumo_home
 from dirsplit.geo import bearing_deg, is_ahead
 from demand.locations import (EndpointField, build_activity_fields,
@@ -126,6 +128,7 @@ SUMO_DIR   = Path("sumo")
 NET_PATH   = SUMO_DIR / "net.net.xml"
 GRAPH_PATH = Path("web/data/graph.graphml")
 DESO_DIR   = Path("data_in/deso")
+SENSOR_REGISTRY_PATH = Path("data_in/sensors.json")
 
 RESIDENTIAL = {"residential", "living_street"}
 GATE_WEIGHT = {          # proxy: approach-road class → relative through-flow
@@ -147,6 +150,53 @@ VIA_DETOUR_FRAC = 0.20
 # Keep the conditioned-destination acceleration bounded: cache pressure must
 # not become OS swapping on a smaller computer or as sensors are added.
 CONDITIONED_MASK_CACHE_MAX_BYTES = 96 * 1024 * 1024
+
+
+def registered_sensor_edges(
+    path: Path = SENSOR_REGISTRY_PATH,
+) -> set[str]:
+    """Return the reviewed physical sensor edges from the registry.
+
+    Candidate generation historically trusted only ``web/data/flows.json``.
+    That made a registry-only sensor change invisible to both generation and
+    the candidate cache until another pipeline happened to rebuild flows.
+    Warming must fail closed instead: a sensor is not onboarded until its
+    reviewed edges and flow-series edges agree exactly.
+    """
+    try:
+        registry = load_registry(Path(path))
+        registry.validate_data_sensors(
+            set(registry.records), require_coordinates=False)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError(f"invalid sensor registry {path}: {exc}") from exc
+    edges: set[str] = set()
+    for record in registry.records.values():
+        edges.update(record.approved_edge_ids)
+    return edges
+
+
+def validate_sensor_edge_contract(
+    flow_edges: set[str], registry_edges: set[str],
+) -> list[str]:
+    """Validate and canonicalise the pool's complete sensor-edge set."""
+    flow_edges = {str(edge) for edge in flow_edges}
+    registry_edges = {str(edge) for edge in registry_edges}
+    missing_flows = sorted(registry_edges - flow_edges)
+    unregistered_flows = sorted(flow_edges - registry_edges)
+    if missing_flows or unregistered_flows:
+        details = []
+        if missing_flows:
+            details.append("registered edges missing flow series: "
+                           + ", ".join(missing_flows))
+        if unregistered_flows:
+            details.append("flow edges absent from registry: "
+                           + ", ".join(unregistered_flows))
+        raise ValueError("sensor edge contract mismatch; " + "; ".join(details))
+    if not registry_edges:
+        raise ValueError("sensor edge contract is empty")
+    # Pool generation uses quota ties and packed bit positions. Canonical
+    # order prevents JSON/registry insertion order from changing route draws.
+    return sorted(registry_edges)
 
 
 class ConditionedMaskCache:
@@ -1617,6 +1667,72 @@ def replace_support_routes_from_requests(
     }
 
 
+def write_trip_subset(
+    source_path: Path, output_path: Path, requested_ids: set[str],
+) -> int:
+    """Write an exact subset of the generator's original trip requests.
+
+    The subset feeds the bounded deterministic fallback after diverse routes
+    fail physical filters. OD, sensor-via, departure and provenance identity
+    stay unchanged; only duarouter's random cost perturbation is removed.
+    """
+    source_root = ET.parse(source_path).getroot()
+    requested = {str(vehicle_id) for vehicle_id in requested_ids}
+    found: set[str] = set()
+    root = ET.Element(source_root.tag, source_root.attrib)
+    for child in source_root:
+        if child.tag != "trip":
+            root.append(copy.deepcopy(child))
+            continue
+        vehicle_id = str(child.get("id", ""))
+        if vehicle_id in requested:
+            if vehicle_id in found:
+                raise ValueError(f"duplicate trip id in source: {vehicle_id}")
+            found.add(vehicle_id)
+            root.append(copy.deepcopy(child))
+    missing = sorted(requested - found)
+    if missing:
+        raise ValueError(
+            "fallback requests are absent from generated trips: "
+            + ", ".join(missing[:10]))
+    ET.ElementTree(root).write(output_path)
+    return len(found)
+
+
+def merge_missing_routed_candidates(
+    primary_path: Path, fallback_path: Path,
+) -> list[str]:
+    """Add missing, already-validated fallback vehicles to ``primary``."""
+    primary_tree = ET.parse(primary_path)
+    primary_root = primary_tree.getroot()
+    primary_ids = {
+        str(vehicle.get("id", ""))
+        for vehicle in primary_root.findall("vehicle")
+    }
+    fallback_root = ET.parse(fallback_path).getroot()
+    seen_fallback: set[str] = set()
+    recovered: list[str] = []
+    for vehicle in fallback_root.findall("vehicle"):
+        vehicle_id = str(vehicle.get("id", ""))
+        if not vehicle_id or vehicle_id in seen_fallback:
+            raise ValueError(
+                f"invalid or duplicate fallback vehicle id: {vehicle_id!r}")
+        seen_fallback.add(vehicle_id)
+        if vehicle_id in primary_ids:
+            continue
+        primary_root.append(copy.deepcopy(vehicle))
+        primary_ids.add(vehicle_id)
+        recovered.append(vehicle_id)
+    vehicles = list(primary_root.findall("vehicle"))
+    for vehicle in vehicles:
+        primary_root.remove(vehicle)
+    vehicles.sort(key=lambda vehicle: (
+        float(vehicle.get("depart", "0")), str(vehicle.get("id", ""))))
+    primary_root.extend(vehicles)
+    primary_tree.write(primary_path)
+    return recovered
+
+
 def drop_uturn_routes(path: Path, exempt_ids: set[str] | None = None) -> None:
     """Direction-aware gates + a stiff turnaround penalty (see main()) cut
     literal U-turns from ~80% to ~10% of via-forced candidates — not zero,
@@ -1890,7 +2006,9 @@ def drop_excessive_detours(path: Path, G, max_stretch: float,
           f"it loops; this is the same mechanism without a repeated node)")
 
 
-def report_sensor_cross_hits(routed_path: Path, measured: list[str]) -> dict:
+def report_sensor_cross_hits(
+    routed_path: Path, measured: list[str], report_path: Path | None = None,
+) -> dict:
     """Diagnostic only (not wired into PFE weighting this pass) — a
     vehicle whose route naturally crosses MULTIPLE sensors is extra
     valuable (cross-sensor reinforcement, Gustav's framing when this
@@ -1907,8 +2025,9 @@ def report_sensor_cross_hits(routed_path: Path, measured: list[str]) -> dict:
     overlap to find) — kept cheap and separate from generation now so it
     doesn't complicate the yield-sensitive sampling logic there."""
     root = ET.parse(routed_path).getroot()
-    report: dict[str, dict[str, int]] = {
-        m: {"total": 0, "cross_1": 0, "cross_2": 0, "cross_3plus": 0}
+    report: dict[str, dict[str, int | set]] = {
+        m: {"total": 0, "unique_routes": set(), "unique_od_pairs": set(),
+            "cross_1": 0, "cross_2": 0, "cross_3plus": 0}
         for m in measured
     }
     for veh in root:
@@ -1920,15 +2039,68 @@ def report_sensor_cross_hits(routed_path: Path, measured: list[str]) -> dict:
         for m in hits:
             other_hits = len(hits) - 1
             report[m]["total"] += 1
+            report[m]["unique_routes"].add(tuple(route.get("edges").split()))
+            route_edges = route.get("edges").split()
+            if route_edges:
+                report[m]["unique_od_pairs"].add(
+                    (route_edges[0], route_edges[-1]))
             if other_hits == 1:
                 report[m]["cross_1"] += 1
             elif other_hits == 2:
                 report[m]["cross_2"] += 1
             elif other_hits >= 3:
                 report[m]["cross_3plus"] += 1
-    with open(SUMO_DIR / "sensor_coverage_report.json", "w") as f:
-        json.dump(report, f, indent=1)
-    return report
+    serializable = {
+        edge: {
+            **{key: value for key, value in values.items()
+               if key not in {"unique_routes", "unique_od_pairs"}},
+            "unique_routes": len(values["unique_routes"]),
+            "unique_od_pairs": len(values["unique_od_pairs"]),
+        }
+        for edge, values in report.items()
+    }
+    report_path = (Path(report_path) if report_path is not None
+                   else SUMO_DIR / "sensor_coverage_report.json")
+    with open(report_path, "w") as f:
+        json.dump(serializable, f, indent=1)
+    return serializable
+
+
+def unanchored_candidate_ids(
+    routed_path: Path, sensor_edges: set[str] | list[str],
+) -> list[str]:
+    """Return final pool candidates crossing no current registry edge."""
+    anchors = {str(edge) for edge in sensor_edges}
+    if not anchors:
+        raise ValueError("candidate sensor-anchor contract is empty")
+    unanchored: list[str] = []
+    for vehicle in ET.parse(routed_path).getroot().iter("vehicle"):
+        route = vehicle.find("route")
+        edges = set((route.get("edges") if route is not None else "").split())
+        if not anchors.intersection(edges):
+            unanchored.append(str(vehicle.get("id", "")))
+    return unanchored
+
+
+def sensor_pool_support_failures(
+    report: dict[str, dict[str, int]], min_per_sensor: int
+) -> dict[str, int]:
+    """Return sensor edges with too few distinct routed geometries.
+
+    The generation quota is only an input-side attempt count; routing and
+    integrity filters can remove those trips, while unrelated trips can add
+    incidental crossings.  Onboarding therefore gates the *final* candidate
+    pool that PFE will actually receive. Raw vehicle count is insufficient in
+    a multi-day build because repeating one day-type template can make one
+    physical route appear many times. The rule is data-independent and
+    automatically applies to every edge added to the measured sensor set.
+    """
+    floor = max(1, int(min_per_sensor))
+    return {
+        edge: int(values.get("unique_routes", 0))
+        for edge, values in sorted(report.items())
+        if int(values.get("unique_routes", 0)) < floor
+    }
 
 
 def upstream_downstream_gates(
@@ -3337,6 +3509,7 @@ def generate_day_block(
     is_weekend: bool, min_per_sensor: int, template_trips: list[tuple] | None = None,
     gravity_alpha: float = 0.0, date: str | None = None,
     pool_key: str | None = None,
+    template_profile: np.ndarray | None = None,
 ) -> tuple[list[tuple], list[float], dict[str, int], list[tuple]]:
     """Generate one calendar-day candidate block.
 
@@ -3346,20 +3519,32 @@ def generate_day_block(
     every day's measured/forecast departure-time signal.
 
     The two random streams are deliberately separate (stage B): geometry is
-    canonical per day type, departures are keyed by calendar date. A day's
-    candidates are therefore a function of the day itself, not of the window
-    it is being generated inside — the property the demand day-library needs.
+    canonical per day type, departures are keyed by calendar date.  Callers
+    that reuse a day-type pool pass its canonical fallback distribution as
+    ``template_profile``.  The real calendar-day ``profile`` must not leak
+    into geometry merely because that date happened to be the first block of
+    its type in a warming window.
     """
     rng = np.random.default_rng(day_block_seed(seed, date, day_index))
     raw_lengths: list[float] = []
     if template_trips is None:
+        geometry_profile = np.asarray(
+            template_profile if template_profile is not None else profile,
+            dtype=float)
+        if (geometry_profile.shape != (24,)
+                or not np.all(np.isfinite(geometry_profile))
+                or geometry_profile.sum() <= 0):
+            raise ValueError(
+                "template_profile must contain 24 finite positive-mass hours")
+        geometry_profile = geometry_profile / geometry_profile.sum()
         template_rng = np.random.default_rng(day_type_template_seed(
             seed, pool_key if pool_key is not None
             else ("weekend" if is_weekend else "weekday")))
         raw_trips, raw_lengths, short = generate_sensor_anchored_trips(
             template_rng, structure.G, structure.edges, structure.hmass, structure.amass,
             structure.entries, structure.exits, structure.entry_ids, structure.exit_ids,
-            structure.w_entry, structure.w_exit, profile, structure.measured,
+            structure.w_entry, structure.w_exit, geometry_profile,
+            structure.measured,
             n_total, through_fraction, cross_fraction, gravity_km, is_weekend,
             min_per_sensor, gravity_alpha=gravity_alpha,
             routing_costs=structure.routing_costs)
@@ -3596,9 +3781,10 @@ def main() -> None:
                         "per sensor; structurally poor-fit sensors correctly "
                         "end up under quota and well-connected ones absorb "
                         "the overflow (measured redraw-success rate on the "
-                        "real graph varies 1.3%%-100%% by sensor). This floor "
-                        "only guards against a sensor silently getting zero "
-                        "coverage.")
+                        "real graph varies 1.3%%-100%% by sensor). The final "
+                        "post-filter gate counts DISTINCT routed geometries, "
+                        "not repeated day-template vehicles; raw copies "
+                        "cannot make a thin new sensor pass.")
     ap.add_argument("--route-diversity", type=float,
                     default=DEFAULT_ROUTE_DIVERSITY,
                     help="duarouter --weights.random-factor: per-trip edge-"
@@ -3689,14 +3875,15 @@ def main() -> None:
     G = ox.load_graphml(GRAPH_PATH)
     try:
         sumo_edge_ids, routing_costs = load_sumo_routing_data(NET_PATH)
-        routing_connections = load_sumo_connection_graph(
-            NET_PATH, sumo_edge_ids, routing_costs)
-        fallback_connections = load_sumo_connection_graph(
-            NET_PATH, sumo_edge_ids, routing_costs, include_uturns=True)
     except (FileNotFoundError, ET.ParseError, ValueError) as exc:
         sys.exit(str(exc))
     with open("web/data/flows.json") as f:
-        measured = list(json.load(f)["flows"])
+        flow_edges = set(json.load(f)["flows"])
+    try:
+        measured = validate_sensor_edge_contract(
+            flow_edges, registered_sensor_edges())
+    except ValueError as exc:
+        sys.exit(str(exc))
     missing_sensor_edges = sorted(set(measured) - sumo_edge_ids)
     if missing_sensor_edges:
         sys.exit("measured sensor edges missing from SUMO net: "
@@ -3796,6 +3983,9 @@ def main() -> None:
             profile = pool_departure_shape(profile, args.pool_departure_floor)
             pool_key = str(block_spec.get(
                 "pool_key", "weekend" if block_spec.get("is_weekend") else "weekday"))
+            template_profile = pool_departure_shape(
+                daily_shape(bool(block_spec.get("is_weekend", False))),
+                args.pool_departure_floor)
             reused = pool_key in templates
             block, lengths, short, template = generate_day_block(
                 structure, profile, float(block_spec["offset_s"]),
@@ -3803,7 +3993,8 @@ def main() -> None:
                 args.through_fraction, args.cross_fraction, args.gravity_km,
                 bool(block_spec.get("is_weekend", False)), args.min_per_sensor,
                 templates.get(pool_key), gravity_alpha=args.gravity_alpha,
-                date=block_spec.get("date"), pool_key=pool_key)
+                date=block_spec.get("date"), pool_key=pool_key,
+                template_profile=template_profile)
             templates.setdefault(pool_key, template)
             multi_day_trips.extend(block)
             tour_lengths_km.extend(lengths)
@@ -3821,7 +4012,9 @@ def main() -> None:
             structure, shape_hourly, 0.0, "", args.seed, 0, args.n_total,
             args.through_fraction, args.cross_fraction, args.gravity_km,
             args.is_weekend, args.min_per_sensor,
-            gravity_alpha=args.gravity_alpha, date=args.date)
+            gravity_alpha=args.gravity_alpha, date=args.date,
+            template_profile=pool_departure_shape(
+                daily_shape(args.is_weekend), args.pool_departure_floor))
         trips = [
             (depart, from_edge, to_edge, via_edge, purpose, tour_id, leg)
             for _trip_id, depart, from_edge, to_edge, via_edge,
@@ -4028,6 +4221,10 @@ def main() -> None:
     if res.returncode != 0:
         print(res.stderr[-1500:])
         sys.exit("duarouter failed")
+    # duarouter implicitly writes a routeDistribution sidecar next to the
+    # requested output. No downstream stage consumes it; remove it immediately
+    # so a later validation failure cannot leak one large file per warm build.
+    out.with_suffix(".alt.xml").unlink(missing_ok=True)
     try:
         merge_report = replace_support_routes_from_requests(
             out, coverage_requests)
@@ -4063,6 +4260,71 @@ def main() -> None:
     drop_local_roundabout_detours(
         out, routing_G, args.max_local_stretch, routing_costs,
         exempt_ids=exact_support_ids)
+    # A diverse route can be physically invalid even when its grounded trip
+    # request is sound: randomised edge costs around a forced via may create a
+    # loop or an excessive detour.  Dropping those requests left real builds
+    # only ~0.3 percentage points above the final 75% supply floor. Re-route
+    # ONLY the missing requests without jitter, pass them through every same
+    # integrity/realism filter, then restore valid results. This is bounded
+    # recovery of independently generated OD support, not extra traffic and
+    # not a relaxation of a gate.
+    primary_ids = {
+        str(vehicle.get("id", ""))
+        for vehicle in ET.parse(out).getroot().findall("vehicle")
+    }
+    fallback_ids = set(candidate_meta) - primary_ids - exact_support_ids
+    recovered_ids: list[str] = []
+    if fallback_ids:
+        fallback_trips = SUMO_DIR / f"tours{args.out_suffix}.fallback.trips.xml"
+        fallback_out = SUMO_DIR / f"candidates{args.out_suffix}.fallback.rou.xml"
+        try:
+            write_trip_subset(trips_path, fallback_trips, fallback_ids)
+            fallback_cmd = list(router_prefix)
+            fallback_cmd[fallback_cmd.index("--route-files") + 1] = str(
+                fallback_trips)
+            fallback_cmd[fallback_cmd.index("-o") + 1] = str(fallback_out)
+            fallback_cmd[fallback_cmd.index("--weights.random-factor") + 1] = "1.0"
+            fallback_result = subprocess.run(
+                fallback_cmd, capture_output=True, text=True, timeout=300)
+            if fallback_result.returncode != 0:
+                print(fallback_result.stderr[-1500:])
+                sys.exit("deterministic candidate fallback routing failed")
+            fallback_integrity = validate_routed_candidates(
+                fallback_out, None, measured=measured,
+                sumo_edge_ids=sumo_edge_ids, intents_path=fallback_trips)
+            drop_uturn_routes(fallback_out)
+            drop_excessive_detours(
+                fallback_out, routing_G, args.max_stretch, routing_costs)
+            drop_local_roundabout_detours(
+                fallback_out, routing_G, args.max_local_stretch,
+                routing_costs)
+            recovered_ids = merge_missing_routed_candidates(out, fallback_out)
+            with open(meta_out) as f:
+                recovered_meta = json.load(f)
+            active_meta = recovered_meta.get("candidates")
+            if not isinstance(active_meta, dict):
+                raise ValueError("candidate metadata lost its candidates map")
+            for vehicle_id in recovered_ids:
+                record = candidate_meta.get(vehicle_id)
+                if not isinstance(record, dict):
+                    raise ValueError(
+                        f"recovered candidate {vehicle_id} has no provenance")
+                active_meta[vehicle_id] = record
+            with open(meta_out, "w") as f:
+                json.dump(recovered_meta, f, separators=(",", ":"))
+            print(f"  deterministic fallback: requested {len(fallback_ids)}, "
+                  f"integrity-kept {fallback_integrity['kept']}, restored "
+                  f"{len(recovered_ids)} physically valid candidate(s)")
+        except (ET.ParseError, OSError, ValueError) as exc:
+            sys.exit(f"candidate fallback recovery failed: {exc}")
+        finally:
+            fallback_trips.unlink(missing_ok=True)
+            fallback_out.unlink(missing_ok=True)
+            # duarouter implicitly writes a routeDistribution sidecar next to
+            # every routed output.  The fallback is a transient recovery pass;
+            # retaining this multi-megabyte file per build would leak disk
+            # throughout warming even though no later stage consumes it.
+            fallback_out.with_suffix(".alt.xml").unlink(missing_ok=True)
     # LAST of the route filters, deliberately: it reconciles the pairing the
     # three above break, so it has to see their combined survivors.
     if args.atomic_tours:
@@ -4100,16 +4362,36 @@ def main() -> None:
               f"{len(missing_route_support)}/{len(graph_edge_ids)} "
               f"({len(missing_route_support) / max(1, len(graph_edge_ids)):.1%})"
               " — zero baseline flow, closures there are no-ops")
-    cross_report = report_sensor_cross_hits(out, measured)
-    uncovered = sorted(m for m, report in cross_report.items()
-                       if report["total"] == 0)
-    if uncovered:
-        sys.exit("candidate pool has no valid route through measured edge(s): "
-                 + ", ".join(uncovered))
+    coverage_report_path = (
+        SUMO_DIR / f"sensor_coverage_report{args.out_suffix}.json")
+    cross_report = report_sensor_cross_hits(
+        out, measured, coverage_report_path)
+    unanchored_candidates = unanchored_candidate_ids(out, measured)
+    if unanchored_candidates:
+        sys.exit(
+            f"final candidate pool contains {len(unanchored_candidates)} "
+            "route(s) crossing no registered sensor; examples: "
+            + ", ".join(unanchored_candidates[:10]))
+    weak_support = sensor_pool_support_failures(
+        cross_report, args.min_per_sensor)
+    if weak_support:
+        sys.exit(
+            "candidate pool failed the final per-sensor support floor "
+            f"({max(1, args.min_per_sensor)} routes): {weak_support}. "
+            "Increase the pool or review the sensor/network mapping; "
+            "refusing to calibrate or warm an under-supported new sensor")
     print(f"Wrote {out}  ({final_count} routed candidates)")
-    print(f"  network edge support: {len(graph_edge_ids)}/{len(graph_edge_ids)}")
-    print(f"  sensor cross-hit diagnostic (sumo/sensor_coverage_report.json): "
-          f"{ {m: r['total'] for m, r in cross_report.items()} }")
+    covered_graph_edges = len(graph_edge_ids & routed_edge_support)
+    print(f"  network edge support: {covered_graph_edges}/{len(graph_edge_ids)}")
+    cross_summary = {
+        sensor: {
+            "total": values["total"],
+            "unique_routes": values["unique_routes"],
+        }
+        for sensor, values in cross_report.items()
+    }
+    print(f"  sensor cross-hit diagnostic ({coverage_report_path}): "
+          f"{cross_summary}")
     if short_quota:
         # Reprinted here, as the LAST thing main() prints — FOUND
         # 2026-07-10: build_sumo_demand.py's subprocess caller only shows

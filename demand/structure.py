@@ -17,6 +17,8 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
+from traffic_sim.demand.structure_caps import integer_structure_cap
+
 GEO_PATH = Path("web/data/network.geojson")
 
 # Keep PFE's structural validation independent of build_candidates.py.  That
@@ -628,14 +630,19 @@ def calibrated_structure_report(route_path: Path,
             violations = []
             for quarter, total in quarter_totals.items():
                 actual = int(short_by_quarter.get(quarter, 0))
-                limit = max(2.0, DEST_GROUP_CAP_MULT * pool_share * total)
-                if actual > limit + 1e-9:
-                    violations.append((int(quarter), actual, limit))
+                share_limit = max(
+                    2.0, DEST_GROUP_CAP_MULT * pool_share * total)
+                limit = integer_structure_cap(
+                    total, DEST_GROUP_CAP_MULT * pool_share)
+                if actual > limit:
+                    violations.append(
+                        (int(quarter), actual, limit, share_limit))
             calibrated_fit["under_1km_cap_audit"] = {
                 "pool_share": pool_share,
                 "violating_quarters": len(violations),
                 "max_excess_vehicles": round(
-                    max((actual - limit for _, actual, limit in violations),
+                    max((actual - limit
+                         for _, actual, limit, _share_limit in violations),
                         default=0.0),
                     3,
                 ),
@@ -643,19 +650,21 @@ def calibrated_structure_report(route_path: Path,
                     {
                         "quarter": quarter,
                         "actual": actual,
-                        "limit": round(limit, 3),
-                        "excess": round(actual - limit, 3),
+                        "limit": limit,
+                        "share_limit": round(share_limit, 3),
+                        "excess": actual - limit,
                     }
-                    for quarter, actual, limit in violations
+                    for quarter, actual, limit, share_limit in violations
                 ],
             }
             if violations:
                 flags.append(
                     "trips_under_1km_cap: "
                     f"{len(violations)} quarter(s) exceed the exact "
-                    f"{DEST_GROUP_CAP_MULT:.2f}x pool-share/floor-2 cap; "
+                    f"integer {DEST_GROUP_CAP_MULT:.2f}x pool-share/floor-2 "
+                    "cap; "
                     f"maximum excess "
-                    f"{max(actual - limit for _, actual, limit in violations):.2f} "
+                    f"{max(actual - limit for _, actual, limit, _share_limit in violations):.0f} "
                     "vehicle(s)"
                 )
     report["structure_flags"] = flags

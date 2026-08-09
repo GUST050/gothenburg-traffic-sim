@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "test": "all-sensor aggregate held-out volume",
+  "standard": "project diagnostic with a declared 10 percent limit",
+  "verdict": "pass",
+  "claim_scope": "total held-out traffic volume across all sensor locations",
+  "not_claimed": "equal accuracy at every individual sensor",
+  "stations_included": [
+    "107",
+    "1074",
+    "1076",
+    "133",
+    "134",
+    "2276"
+  ],
+  "station_count": 6,
+  "hourly_cases": 143,
+  "measured_total": 25761.0,
+  "simulated_total": 24761.0,
+  "ratio": 0.961,
+  "absolute_error": 1000.0,
+  "absolute_error_pct": 3.9,
+  "limit_pct": 10.0,
+  "all_stations_required": true
+}

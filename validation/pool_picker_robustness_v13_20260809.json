@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "evidence_id": "pool_picker_robustness_v13_20260809",
+  "evidence_class": "production_pool_build_and_targeted_same_window_loso_diagnostic",
+  "decision": {
+    "robustness_changes": "accepted_for_production",
+    "absolute_loso_improvement_claim": "not_accepted",
+    "reason": "The pool contracts, physical support and integer structure preservation improved, but the fresh temporal holdout still fails TAG and every held station remains structurally underidentified.",
+    "full_warming_population_started": false,
+    "bounded_warming_pilot_started": true,
+    "bounded_warming_pilot_succeeded_units": 2
+  },
+  "production_contracts": [
+    "The reviewed sensor registry and flow-series edge set must agree exactly and be non-empty.",
+    "Sensor edges are canonically sorted, so JSON insertion order cannot change pool draws or bit positions.",
+    "The sensor registry and its loader participate in the candidate-cache identity.",
+    "Day-type route geometry uses a canonical day-type profile; the first calendar day in a window cannot change the reusable template.",
+    "Every final candidate route and every finally published vehicle must cross at least one current registered sensor edge.",
+    "The per-sensor onboarding floor counts distinct physical route geometries, not repeated vehicles or day-template copies.",
+    "Routes rejected after randomized routing receive one deterministic reroute of the exact original OD/via request and must pass the same integrity, loop and detour filters.",
+    "Transient duarouter route-distribution sidecars are removed after candidate validation.",
+    "Path-size weights count each physical geometry once across purpose variants.",
+    "Network-support telemetry reports the true routed-edge intersection rather than a constant full-coverage numerator."
+  ],
+  "real_pool_builds": {
+    "seed_20260811": {
+      "requested_ordinary_candidates": 12000,
+      "primary_after_physical_filters": 9042,
+      "fallback_requests": 2958,
+      "fallback_integrity_kept": 2855,
+      "fallback_restored": 238,
+      "final_candidates": 9280,
+      "final_supply_fraction": 0.7733,
+      "unique_routes": 5964,
+      "unique_od_pairs": 3619,
+      "routed_network_edges": 3729,
+      "network_edges": 7125,
+      "duplicate_route_share": 0.3573,
+      "minimum_sensor_unique_routes": 516,
+      "unanchored_candidates": 0,
+      "orphaned_tour_legs": 1326,
+      "metadata_matches_route_ids": true,
+      "route_sha256": "074fa137cc33b3e6be281e83da83ef3a88182354b82c88107a1fd12553b3cc23",
+      "metadata_sha256": "f65072289f9ee8598e0f2d572842914dc2ecc9be099a0080b41174be0041d56c"
+    },
+    "seed_20260808": {
+      "requested_ordinary_candidates": 12000,
+      "primary_after_physical_filters": 9099,
+      "fallback_requests": 2901,
+      "fallback_restored": 210,
+      "final_candidates": 9309,
+      "final_supply_fraction": 0.7758,
+      "unique_routes": 5998,
+      "unique_od_pairs": 3691,
+      "routed_network_edges": 3769,
+      "network_edges": 7125,
+      "duplicate_route_share": 0.3557,
+      "minimum_sensor_unique_routes": 527,
+      "unanchored_candidates": 0,
+      "orphaned_tour_legs": 1342,
+      "metadata_matches_route_ids": true,
+      "route_sha256": "beb4628810f2f731e3b3a6fc5c64481b4037c104cef6bd62c327e2209d902db0",
+      "metadata_sha256": "c8e453c8281f224a2b3a8e17d41c8023722507d432afa72fcd4d8b6ec2799e49"
+    }
+  },
+  "fallback_effect_seed_20260811": {
+    "candidates_added": 238,
+    "unique_routes_added": 153,
+    "unique_od_pairs_added": 135,
+    "network_edges_added": 14,
+    "minimum_sensor_unique_routes_added": 11,
+    "safety_floor": 0.75,
+    "pre_fallback_supply_fraction": 0.7535,
+    "post_fallback_supply_fraction": 0.7733
+  },
+  "rejected_treatment": {
+    "name": "lower_route_diversity_from_2.0_to_1.5",
+    "reason": "It retained more vehicles but materially reduced physical variety and sensor support.",
+    "final_candidates": 9138,
+    "unique_routes": 4935,
+    "unique_od_pairs": 3484,
+    "routed_network_edges": 3604,
+    "duplicate_route_share": 0.4599,
+    "minimum_sensor_unique_routes": 390
+  },
+  "targeted_loso": {
+    "window": "2025-09-16T00:00:00/2025-09-17T00:00:00",
+    "protocol": "loso_pfe_meso_v11_observability_gate",
+    "held_observations_used_by_pool_or_picker": false,
+    "seed_20260811_pool": {
+      "station_107": {
+        "measured_total": 6407,
+        "simulated_total": 10535,
+        "ratio": 1.644,
+        "geh_lt_5_pct": 29.2,
+        "active_pfe_geh_lt_5_pct": 100.0,
+        "unanchored_published_vehicles": 0,
+        "observability": "underidentified",
+        "rank_gain": 1,
+        "previous_v11_ratio": 1.615,
+        "interpretation": "slightly_worse"
+      },
+      "station_134": {
+        "measured_total": 3141,
+        "simulated_total": 2650,
+        "ratio": 0.844,
+        "geh_lt_5_pct": 91.7,
+        "active_pfe_geh_lt_5_pct": 100.0,
+        "unanchored_published_vehicles": 0,
+        "observability": "underidentified",
+        "rank_gain": 1,
+        "old_pool_current_picker_ratio": 0.819,
+        "old_pool_current_picker_geh_lt_5_pct": 87.5,
+        "interpretation": "hourly_fit_improved_but_daily_ratio_mixed"
+      },
+      "raw_report_sha256": "2b939318f5412447050d910e66bf27ee1a89421c0fd935ac5c0da35510b1cad2"
+    },
+    "pool_seed_sensitivity_station_134": {
+      "pool_seed": 20260808,
+      "assignment_field_seed": 20260811,
+      "ratio": 0.884,
+      "geh_lt_5_pct": 91.7,
+      "observability": "underidentified",
+      "rank_gain": 1,
+      "classification": "pool_sensitivity_diagnostic_not_a_fully_paired_seed_release_test",
+      "raw_report_sha256": "2ab371ecfe1a640463d1b4db858b1195bad81475386548fdfdd007877142bccd"
+    },
+    "all_current_station_certificates": {
+      "stations": ["107", "1074", "1076", "133", "134", "2276"],
+      "status": "underidentified",
+      "rank_gain_each": 1
+    }
+  },
+  "fresh_temporal_holdout": {
+    "window": "2025-09-17T00:00:00/2025-09-18T00:00:00",
+    "candidate_pool_sha256": "dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26",
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "report_sha256": "ed4dadf436f9eb7d5c47fb6dfc59ebfbfa5a75755b231343f8a5304279e528c3",
+    "held_observations_used_by_pool_or_picker": false,
+    "stations": {
+      "107": {"ratio": 1.26, "geh_lt_5_pct": 66.7, "observability": "underidentified", "rank_gain": 1},
+      "1074": {"ratio": 0.706, "geh_lt_5_pct": 62.5, "observability": "underidentified", "rank_gain": 1},
+      "1076": {"ratio": 0.563, "geh_lt_5_pct": 29.2, "observability": "underidentified", "rank_gain": 1},
+      "133": {"ratio": 0.734, "geh_lt_5_pct": 60.9, "observability": "underidentified", "rank_gain": 1},
+      "134": {"ratio": 1.015, "geh_lt_5_pct": 95.8, "observability": "underidentified", "rank_gain": 1},
+      "2276": {"ratio": 1.249, "geh_lt_5_pct": 75.0, "observability": "underidentified", "rank_gain": 1}
+    },
+    "tag_diagnostic": {
+      "formal_certification": false,
+      "hourly_cases": 143,
+      "geh_lt_5_pct": 65.0,
+      "flow_difference_pct": 81.8,
+      "either_flow_difference_or_geh_pct": 82.5,
+      "guideline_pct": 85.0,
+      "verdict": "fail"
+    },
+    "decision": "Do not repeat all folds without independent movement observations; the rank-gain certificate proves the missing station total is not determined by the remaining sensor margins."
+  },
+  "verification": {
+    "focused_tests_passed": 333,
+    "focused_tests_failed": 0,
+    "focused_test_scope": "121 PFE tests plus 212 candidate-build and demand-provenance tests after the cumulative active-set repair",
+    "warming_plan_and_readiness_tests": {
+      "passed": 16,
+      "failed": 0
+    },
+    "warming_population_tests_before_long_prefetch_integration_case": {
+      "passed": 38,
+      "failed": 0,
+      "note": "The next case intentionally materialises 274 content-addressed units; it was interrupted for runtime, and no deadlock conclusion is claimed."
+    },
+    "full_repository_run": {
+      "status": "interrupted_after_long_integration_wait_at_72_percent",
+      "passed_before_interrupt": 2841,
+      "failed_before_interrupt": 102,
+      "skipped_before_interrupt": 20,
+      "failure_class": "pre_existing_frozen_benchmark_and_historical_monthly_warm_contract_drift_outside_pool_picker_scope"
+    },
+    "git_diff_check": "pass"
+  },
+  "source_sha256": {
+    "build_candidates.py": "19876d2ff6455e5e1193d86f40a6ac6f807c1b58ead5a021e1af62088d959241",
+    "build_sumo_demand.py": "540c6cfe6b3f1998e4c94ea3a8af5b6c6bd37b64d7c2996a18f820dd047209a5",
+    "demand/structure.py": "591e7dd21c65f08dd0fb73aa0c55256d1d2c1ca6dd686b03869ad76b3547ea38",
+    "traffic_sim/demand/pfe.py": "2bd8d183dada7162978af27c983a36a7cb3077dd2b91d8293a6390c725156bd6",
+    "traffic_sim/demand/structure_caps.py": "c7ee61ab4afeb29111b5fe8268d8d8b17db7db9cd0ab800454e40585c668658b"
+  },
+  "active_local_release": {
+    "status": "published",
+    "date": "2025-09-16",
+    "source": "historical",
+    "demand_build_key": "f59ea19f882259b4",
+    "build_id": "dbb44172f30778adf8c0",
+    "candidate_pool": {
+      "vehicles": 9338,
+      "metadata_records": 9338,
+      "unique_routes": 6013,
+      "unique_od_pairs": 3703,
+      "routed_network_edges": 3694,
+      "minimum_sensor_unique_routes": 551,
+      "unanchored_candidates": 0,
+      "sha256": "dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26"
+    },
+    "calibrated_variants": {
+      "q10": {"vehicles": 19845, "unanchored_vehicles": 0},
+      "q50": {"vehicles": 20836, "unanchored_vehicles": 0},
+      "q90": {"vehicles": 21749, "unanchored_vehicles": 0}
+    },
+    "pfe": {
+      "geh_lt_5_pct": 100.0,
+      "infeasible_intervals": 0
+    },
+    "calibrated_structure": {
+      "structure_flags": [],
+      "under_1km_violating_quarters": 0,
+      "under_1km_max_excess_vehicles": 0.0,
+      "trip_length_l1_vs_availability_corrected_target": 0.1977,
+      "destination_within_200m_pct": 3.8,
+      "random_edge_baseline_within_200m_pct": 1.9,
+      "onward_after_last_sensor_median_m": 2759.5,
+      "routes_without_sensor": 0
+    },
+    "sumo_baseline": {
+      "published_build_id_matches_demand": true,
+      "seeds": [1000, 1001, 1002],
+      "unfinished_vehicles": 0,
+      "teleports": 0,
+      "collisions": 0,
+      "raw_sensor_output_geh_lt_5_pct": 100.0,
+      "raw_sensor_output_max_geh": 1.639
+    },
+    "local_scenarios": {
+      "index_build_id_matches_demand": true,
+      "files": [
+        "baseline.json",
+        "close_60786979_3575001205_0+1455801464_18241874_0.json"
+      ],
+      "default_closure_build_id_matches_demand": true,
+      "default_closure_integrity": "verified_clean",
+      "default_closure_health_flags": []
+    },
+    "remaining_validation": [
+      "fresh temporal LOSO/TAG remains underidentified and is not accepted as an absolute validation claim",
+      "the two-day forecast pilot has a 0.05 km q50 purpose-median inversion; q10, q90 and the candidate pool retain the intended ordering, so no unmeasured tuning constraint was added"
+    ]
+  },
+  "warming_identity": {
+    "plan_content_key": "9b640a0c76e128207941330e9f72dde989ce838a4fe7aa9dad5c469528812720",
+    "preflight_content_key": "916e0f8460e6bbc076a026d987c078a07c6ecea05b52912f21fb04258be8fe90",
+    "preflight_status": "pass",
+    "planned_state_requests": 104685,
+    "full_population_started": false,
+    "bounded_pilot": {
+      "demand_build_key": "a1ea9baf7002a4b1",
+      "variant": "q10",
+      "attempts": 2,
+      "succeeded": 2,
+      "failed": 0,
+      "pending": 104683,
+      "resume_and_predecessor_extension_verified": true,
+      "demand_archive": "runs/demand-20260809-141847-137d9d28-cf2a",
+      "demand_archive_content_key": "bd2162bcf0e15df227072f1b1b12dc29eeb04bc2987e4fd740a1c8779a41d720",
+      "q50_structure_warning": "purpose_length_ordering: fritid median 2.86 km < arbete median 2.91 km",
+      "classification": "behavioural_warning_not_pool_integrity_failure"
+    }
+  }
+}

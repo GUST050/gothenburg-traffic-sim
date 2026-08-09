@@ -1,0 +1,118 @@
+{
+  "evidence_class": "diagnostic_replay",
+  "generated_at": "2026-08-09T07:04:01.342521+00:00",
+  "kind": "paired_loso_integer_margin_conflict_analysis",
+  "per_seed": {
+    "20260808": {
+      "candidate_pool_provenance": "candidate_cache/83f213b42ed9ed294a98c89e",
+      "candidate_pool_sha256": "b5872d214d5af2c6ae4ed804fbfaa909712d3c406eb194f93b025e50ca5db272",
+      "declared_1x_band_feasible_quarters": 96,
+      "deletion_minimal_conflict_counts": {
+        "26355153_91615277_0 + 26355153_96523321_0 + 26842525_26355153_0": 1
+      },
+      "demand_build_id": "25658a1d0d4c10afd406",
+      "exact_integer_margin_feasible_quarters": 95,
+      "exact_integer_margin_infeasible_quarters": 1,
+      "infeasible_quarters": [
+        {
+          "continuous_interval_total": 14.00027,
+          "declared_1x_band_feasible": true,
+          "deletion_minimal_conflict": [
+            "26355153_91615277_0",
+            "26355153_96523321_0",
+            "26842525_26355153_0"
+          ],
+          "integer_interval_total": 14,
+          "legacy_measurement_residuals_nonzero": {
+            "26355153_96523321_0": 3
+          },
+          "minimum_max_abs_measurement_residual": 1.0,
+          "minimum_residual_solution": {
+            "26355153_91615277_0": 0,
+            "26355153_96523321_0": 0,
+            "26842525_26355153_0": -1,
+            "30420757_30421744_0": 0,
+            "60790252_60790253_0": 0
+          },
+          "minimum_sum_abs_measurement_residual": 1.0,
+          "quarter": 11,
+          "relaxation_rung": "clean",
+          "targets": {
+            "26355153_91615277_0": 2.0,
+            "26355153_96523321_0": 1.0,
+            "26842525_26355153_0": 4.0,
+            "30420757_30421744_0": 1.0,
+            "60790252_60790253_0": 3.0
+          }
+        }
+      ],
+      "legacy_nonzero_residual_quarters": 7,
+      "quarters_analyzed": 96,
+      "station": "107"
+    },
+    "20260811": {
+      "candidate_pool_provenance": "live_pool",
+      "candidate_pool_sha256": "9f310ebfa2c0765757466dedcc9870b54f707f55aa3f55ca2f0b9c6d007b9edd",
+      "declared_1x_band_feasible_quarters": 96,
+      "deletion_minimal_conflict_counts": {
+        "26355153_91615277_0 + 26355153_96523321_0 + 26842525_26355153_0": 1
+      },
+      "demand_build_id": "7f69eb9951fdbd401bf0",
+      "exact_integer_margin_feasible_quarters": 95,
+      "exact_integer_margin_infeasible_quarters": 1,
+      "infeasible_quarters": [
+        {
+          "continuous_interval_total": 13.999998,
+          "declared_1x_band_feasible": true,
+          "deletion_minimal_conflict": [
+            "26355153_91615277_0",
+            "26355153_96523321_0",
+            "26842525_26355153_0"
+          ],
+          "integer_interval_total": 14,
+          "legacy_measurement_residuals_nonzero": {
+            "26355153_96523321_0": 3
+          },
+          "minimum_max_abs_measurement_residual": 1.0,
+          "minimum_residual_solution": {
+            "26355153_91615277_0": 0,
+            "26355153_96523321_0": 1,
+            "26842525_26355153_0": 0,
+            "30420757_30421744_0": 0,
+            "60790252_60790253_0": 0
+          },
+          "minimum_sum_abs_measurement_residual": 1.0,
+          "quarter": 11,
+          "relaxation_rung": "clean",
+          "targets": {
+            "26355153_91615277_0": 2.0,
+            "26355153_96523321_0": 1.0,
+            "26842525_26355153_0": 4.0,
+            "30420757_30421744_0": 1.0,
+            "60790252_60790253_0": 3.0
+          }
+        }
+      ],
+      "legacy_nonzero_residual_quarters": 34,
+      "quarters_analyzed": 96,
+      "station": "107"
+    }
+  },
+  "schema_version": 1,
+  "seeds": [
+    20260808,
+    20260811
+  ],
+  "semantics": {
+    "conflict": "deletion-minimal under one-at-a-time constraint removal; not guaranteed minimum-cardinality",
+    "declared_1x_band": "integer bounds derived from the production Level-1 PFE measurement tolerance; not fitted to held counts",
+    "exact": "each active target and interval total rounded separately"
+  },
+  "source": {
+    "analysis_tool_sha256": "7a0c552fb8ba74af8c99df220eaa4b53fa42b26e39783409a20ad8b1eeac6011",
+    "controlled_rounding_sha256": "8d0804a9638c6d8b83bdabd1e52a752e70cfce3aba9c3fc82e4cce61d49dc996",
+    "manifest": "runs/loso-picker-diagnostic-v1-20260808/manifest.json",
+    "manifest_sha256": "31fd5aeaeb92262fa7317c177d0cc15ab9079cacee4ade1bd3274a6dabdd998e"
+  },
+  "station": "107"
+}

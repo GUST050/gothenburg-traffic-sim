@@ -144,6 +144,169 @@ only when an existing public command or import still requires it. Fingerprint
 maps hash the canonical package files, so changing an implementation invalidates
 the relevant cache or published build.
 
+### LOSO integer-publication boundary
+
+Production update 2026-08-09: protocol
+`loso_pfe_meso_v11_observability_gate` supersedes v7-v10 for new evidence. The
+canonical publisher in `traffic_sim/demand/pfe.py` now solves one joint integer
+projection over every pool-supported active sensor, every retained hard bound
+and an exact continuously achieved purpose margin. Sensor keys are sorted, so
+registry insertion order cannot become a priority. It tries exact rounded
+sensor margins first, preserves the continuous interval total only when
+compatible, and enters only the continuous solver rung's declared measurement
+band after exact infeasibility. Unsupported sensor edges remain explicit pool
+coverage defects in the report instead of impossible empty equalities. Any
+remaining hard infeasibility closes the publication gate before a temporary
+route file is opened. The old validation-only v8 implementation remains for
+historical decomposition, not as a second production path.
+
+Adding a sensor therefore needs no rounding code change: its resolved edges
+enter the incidence constraints automatically. Integer publication also keeps
+every inactive registered sensor's rounded continuous margin as a lower-priority
+shadow constraint, without reading its held observation. This prevents purpose,
+structure and provenance repairs from arbitrarily moving an otherwise valid
+continuous held prediction.
+
+The vehicle-level sensor-anchor contract is checked again on the final route
+instances, after integer projection and purpose-route replacement. Every real
+demand build and LOSO fold passes the union of the current registry's resolved
+sensor edges to the publisher. If one final vehicle crosses none of them, the
+staging XML is deleted and no route file is published. The report records the
+resolved registry edges, the unanchored vehicle count and a pass/fail result.
+This is deliberately based on the full physical registry in LOSO: holding out
+a sensor hides its count, not the street or the traffic that crosses it.
+
+Two generic onboarding gates cover what rounding cannot solve. First,
+`build_candidates.py` requires every measured edge to retain at least
+`--min-per-sensor` **distinct physical route geometries** in the final routed
+pool; repeated vehicles and reused day-template copies cannot make a thin sensor
+pass. Every final candidate also has to cross at least one registered sensor
+edge before calibration starts. Second, every LOSO station receives an
+incidence-rank certificate against active sensor margins plus interval total. A
+rank gain means the held total is underidentified: the ratio remains useful
+diagnosis but cannot certify a new sensor contribution.
+`traffic_sim/intake/contribution.py` therefore refuses improvement claims under
+the v11 contract unless `onboarding_ready=true`. This does not invent
+information: it makes the irreducible limitation explicit and fail-closed.
+
+Pool/picker robustness update v13 closes the remaining pre-warming identity and
+support gaps generically. `data_in/sensors.json` and `web/data/flows.json` must
+name exactly the same non-empty reviewed edge set; both the registry and its
+loader are part of the candidate-cache key. Edges are sorted before quota and
+bit-mask construction, so registry/JSON insertion order cannot change the pool.
+The cache also fingerprints the exact `duarouter` executable bytes. A SUMO
+upgrade therefore cannot restore geometry produced by an older router and then
+publish it under the new runtime identity. This is material because SUMO's
+[routing changelog](https://sumo.dlr.de/docs/ChangeLog.html) records behavioural
+changes to randomised edge weights, while its
+[`duarouter` contract](https://sumo.dlr.de/docs/duarouter.html) defines both the
+`--weights.random-factor` semantics and the automatically generated alternative-
+route sidecar.
+The cache identity also records Python/platform and the NumPy, NetworkX, OSMnx
+and Shapely versions used by candidate generation. NumPy's
+[`Generator` contract](https://numpy.org/doc/stable/reference/random/generator.html)
+does not guarantee identical streams across versions, so source hashes and a
+fixed seed alone are not a complete pool identity. The calibrated-day library
+likewise binds Python/platform plus NumPy/SciPy/Numba and the complete canonical
+demand-source inventory. A newly added helper such as
+`traffic_sim/demand/structure_caps.py` can therefore no longer change picker
+semantics while matching an older stored day.
+Reusable route geometry is drawn from a canonical weekday/weekend departure
+profile, while each calendar day's measured or forecast profile controls only
+departures; the first date encountered in a multi-day window can no longer
+alter the template. These contracts fail closed automatically when a sensor is
+added, removed or re-snapped.
+
+Randomised duarouter costs can produce a loop or excessive detour from an
+otherwise grounded OD/via request. After the ordinary physical filters, v13
+reroutes only the missing original requests once with random factor 1.0 and
+applies the same endpoint, via, SUMO-edge, U-turn, global-detour and local-
+roundabout gates. Only surviving routes are merged; no traffic is invented and
+no realism gate is relaxed. The transient `.alt.xml` route-distribution files
+are deleted because no downstream stage consumes them. On the picker side,
+path-size overlap counts a physical route geometry once across all purpose
+variants, preventing provenance expansion from silently changing the route-
+choice prior.
+
+The targeted v11 107 screen preserved both component edges within zero vehicles
+per quarter of their rounded continuous shadow margins and produced ratio 1.615
+(GEH<5 29.2%). The v13 production-pool screen produced 1.644 at the same station,
+so v13 is not claimed as an absolute LOSO improvement. Station 134 moved from
+ratio 0.819/GEH<5 87.5% on the old pool with the current picker to
+0.844/91.7% on the v13 seed-20260811 pool: better hourly fit but mixed daily
+ratio. All six current stations remain structurally underidentified when
+individually held out (rank gain 1), so more runs alone cannot remove the
+missing information.
+
+The production pool result is nevertheless materially safer. Two real 12,000-
+request seeds retained 9,280 and 9,309 ordinary candidates after every gate,
+with 5,964/5,998 distinct routes, 3,619/3,691 OD pairs, 3,729/3,769 covered
+network edges, zero unanchored routes and a minimum of 516/527 distinct routes
+per sensor against the floor of 50. Deterministic recovery raised the first
+seed's final supply margin from 75.35% to 77.33% and added 153 distinct routes,
+135 OD pairs and 14 network edges. Lowering route diversity from 2.0 to 1.5 was
+rejected because it cut distinct routes to 4,935 and minimum sensor support to
+390 despite retaining more vehicles. Compact evidence is frozen in
+`validation/pool_picker_robustness_v13_20260809.json`.
+
+An explicit active-only anchor experiment was rejected: removing routes that
+cross only held station 107 reduced its recovery ratio to about 0.18. Those are
+real, sensor-observed movements whose observation is hidden only for scoring;
+deleting them changes the physical demand problem. A two-seed candidate-pool
+union was also rejected as a generic pool improvement: 107 worsened from 1.615
+to about 1.67 while 134 improved to about 1.03, demonstrating mixed allocation
+and volume inflation rather than a transferable correction.
+
+Because the sensor registry, `build_candidates.py` and
+`traffic_sim/demand/pfe.py` are production-bound demand inputs, any new sensor
+or implementation change invalidates the former annual warming plan/bank. The
+current replacement plan key is
+`66fb46d46e751b86bb1851be148e17a6d921288396b97868d0b28c73a4ee6177`;
+preflight `6f2d99700e06…` passes, but population is deliberately not started
+while absolute held-out quality remains rejected.
+
+LOSO fold solving and route publication are separate correctness boundaries.
+The continuous solver may retain assignment-field ceilings that model a held
+station as unmeasured, but measurement-preserving integer rounding and
+best-effort structure repair can move mass among routes with identical active
+training-sensor incidence and different held-edge incidence. Protocol
+`loso_pfe_meso_v7` therefore passes only the held-derived assignment ceilings
+to `write_calibration_report` as enforced integer bounds. Other wide assignment
+bounds remain continuous diagnostics, preserving the historical fold model.
+Retained-rung integer infeasibility fails closed and no partial fold route file
+is published. This is validation-only behavior in
+`traffic_sim/confidence/loso.py`; production PFE behavior is unchanged.
+
+Opt-in decomposition lives in
+`traffic_sim/confidence/picker_diagnostics.py`. It records the completed
+continuous solution without changing `pfe.py`, then
+`tools/analyze_loso_picker_diagnostics.py` reconstructs direct rounding and
+compares it with the exact published route and SUMO edge artifacts. Diagnostic
+replay is not release evidence and held counts never select constraints or
+treatments.
+
+Protocol `loso_pfe_meso_v8_controlled_rounding` is an opt-in validation
+treatment, not the production publisher. Its implementation lives in
+`traffic_sim/confidence/controlled_rounding.py`. For each quarter it jointly
+projects the continuous route×purpose vector to nonnegative integers while
+preserving active rounded sensor margins and the rounded interval total, then
+feeds that warm start through the unchanged purpose, structure and held-bound
+repair path. The held station is absent from the projection. LOSO temporarily
+substitutes this initial rounder only after its continuous worker pool closes,
+precomputes all publication counts, and restores the production helper in a
+`finally` block. `traffic_sim/demand/pfe.py` remains byte-unchanged.
+
+Exact integer margins are not always mutually feasible: station 107 exposes at
+least one such quarter. The validation module constrains any exact-infeasible
+solution to the continuous solver rung's already declared measurement band and
+minimises maximum residual, residual sum and route L1 lexicographically. Paired
+conflict analysis finds exactly quarter 11 in both station-107 seeds; its
+incoming target 4 conflicts with the two pool-supported outgoing targets 2+1,
+while the interval total is not part of the irreducible set. The band treatment
+is technically valid but quality-rejected (`1.333/2.001` versus v7
+`1.220/2.005`). Stations 134/2276 have exact feasible margins in the paired v8
+screen.
+
 ### Demand build identity
 
 `DemandBuildSpec` is the boundary contract for recalibration. It carries the
@@ -213,6 +376,19 @@ ladder (tol ×2, ×4, then without level-2 bounds) guarantees non-empty
 intervals. Gate: GEH < 5 at ≥ 85 % of measured hourly values — the FHWA
 calibration criterion. Current whole-day: 92–93 % GEH, delivery at
 measured edges mean 0.88, opposite-direction priors delivered 0.64–1.01.
+
+**Production integer structure contract (2026-08-09).** The continuous PFE
+solution and final integer route counts are separate boundaries. Optional
+origin/short-trip concentration groups are repaired jointly with retained
+sensor margins, hard bounds and purpose groups. Once a group overflows during
+one quarter's repair it remains in a cumulative active set for every later pass;
+otherwise fixing group B can silently re-break group A. The loop is finite:
+each useful pass activates a previously inactive group and the number of groups
+is fixed. Audit and solver both call
+`traffic_sim/demand/structure_caps.integer_structure_cap`, so a fractional
+share limit cannot be interpreted differently after integer publication. The
+active build `dbb44172f30778adf8c0` verifies zero under-1-km cap violations and
+no structure flags without changing sensor targets or accepting held counts.
 
 ### C — Candidate generation (`build_candidates.py`) — GROUNDED (2026-07-05)
 The route-candidate pool (what PFE selects among) is now the standard

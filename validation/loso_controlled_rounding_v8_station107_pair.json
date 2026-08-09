@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "kind": "paired_loso_controlled_rounding_station107_summary",
+  "evidence_class": "diagnostic_replay",
+  "date": "2025-09-16",
+  "generated_on": "2026-08-09",
+  "protocol": "loso_pfe_meso_v8_controlled_rounding",
+  "source": {
+    "manifest": "runs/loso-controlled-rounding-v8-station107-20260809/manifest.json",
+    "manifest_sha256": "a84503e805fbd0a8d165869aae22ca91808a260355461fcb084624eb6164c429",
+    "manifest_status": "complete",
+    "archived_artifacts_verified": 26,
+    "archived_artifact_hash_mismatches": 0,
+    "controlled_rounding_sha256": "65e4ee5660dd7f5f1841c532026072f3a306357c19c0dc0fb8ceb306153a0736",
+    "loso_sha256": "61989ed035fd17d90df89a4cc514fd8350cae4f5204b1b58d72b102ae3413510",
+    "runner_sha256": "83ef5f6fd16f2e5ba6096498024f4468cd41ac22167b0230e5cd5d2454a3473e",
+    "margin_conflict_report": "validation/loso_integer_margin_conflicts_v1.json",
+    "margin_conflict_report_sha256": "3d00026406b678561b50d7deccd96f849e26cd4ecc6e6f63d570e7d1c0493fad",
+    "margin_conflict_tool_sha256": "7a0c552fb8ba74af8c99df220eaa4b53fa42b26e39783409a20ad8b1eeac6011"
+  },
+  "treatment": {
+    "description": "Use exact joint active-sensor/interval-total controlled rounding where feasible. If exact integer margins are inconsistent, constrain the lexicographic minimum-residual solution to the already declared PFE measurement band for the continuous solver rung.",
+    "held_counts_used_to_set_treatment": false,
+    "production_pfe_source_changed": false,
+    "full_six_seed_campaign_run": false
+  },
+  "conflict_finding": {
+    "exact_infeasible_quarters_per_seed": 1,
+    "quarter": 11,
+    "same_in_both_seeds": true,
+    "deletion_minimal_conflict": [
+      "26355153_91615277_0",
+      "26355153_96523321_0",
+      "26842525_26355153_0"
+    ],
+    "targets": {
+      "26355153_91615277_0": 2,
+      "26355153_96523321_0": 1,
+      "26842525_26355153_0": 4
+    },
+    "interval_total_in_conflict": false,
+    "declared_1x_band_feasible_all_192_quarters": true,
+    "interpretation": "The pool-supported incoming station-133 movement has target 4 while its two supported outgoing junction branches total 3. This is a candidate-support/topology conflict, not an interval-total rounding conflict."
+  },
+  "runs": [
+    {
+      "seed": 20260808,
+      "candidate_pool_sha256": "b5872d214d5af2c6ae4ed804fbfaa909712d3c406eb194f93b025e50ca5db272",
+      "demand_build_id": "25658a1d0d4c10afd406",
+      "loso_report_sha256": "29f0e20fca35a8c034ab8ff23f8830586783bf28e1443a7c8a6429a6f122fb5a",
+      "v7_ratio": 1.22,
+      "controlled_ratio": 1.333,
+      "ratio_delta": 0.113,
+      "v7_geh_ok_pct": 66.7,
+      "controlled_geh_ok_pct": 54.2,
+      "max_abs_active_measurement_residual": 1,
+      "rounding_methods": {
+        "floor_ceil_l1": 93,
+        "general_l1": 2,
+        "measurement_band_lexicographic_l1": 1
+      }
+    },
+    {
+      "seed": 20260811,
+      "candidate_pool_sha256": "9f310ebfa2c0765757466dedcc9870b54f707f55aa3f55ca2f0b9c6d007b9edd",
+      "demand_build_id": "7f69eb9951fdbd401bf0",
+      "loso_report_sha256": "d42bce3b79c49fcef94b72bdf9ade62dbe8c50fcc332e45dcc37022ac6189068",
+      "v7_ratio": 2.005,
+      "controlled_ratio": 2.001,
+      "ratio_delta": -0.004,
+      "v7_geh_ok_pct": 20.8,
+      "controlled_geh_ok_pct": 25.0,
+      "max_abs_active_measurement_residual": 1,
+      "rounding_methods": {
+        "floor_ceil_l1": 94,
+        "general_l1": 1,
+        "measurement_band_lexicographic_l1": 1
+      }
+    }
+  ],
+  "decision": {
+    "integer_contract_treatment": "technically_valid",
+    "quality_treatment": "reject_for_station_107",
+    "reason": "The treatment limits the only unavoidable residual to one vehicle inside the pre-existing 1x measurement band and solves every other quarter exactly, but one seed worsens materially and the other is unchanged. It does not solve station 107's pool sensitivity or held-out quality.",
+    "run_six_seed_campaign": false,
+    "next_experiment": "Repair or diversify independently justified candidate movement support at node 26355153 and re-audit rank/nullity before any further station-107 picker treatment."
+  },
+  "warming_compatibility": {
+    "production_bound_source_changed": false,
+    "production_pfe_source_changed": false,
+    "expected_decision": "A"
+  }
+}

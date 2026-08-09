@@ -3985,3 +3985,15 @@ The project has reached its intended next level when:
   its actual information contribution.
 - Replacing the fast citywide mesoscopic model with citywide microscopic
   simulation.
+
+## Current supersession note — 2026-08-09
+
+The earlier statement that a full population was running describes a prior
+warming identity and is historical evidence, not current execution state.
+Production source changes created plan `9b640a0c…`; its preflight passes, but
+only two deliberately bounded q10 pilot units have been populated. The current
+status is 2 succeeded, 0 failed and 104,683 pending. Full population remains a
+separate decision. The active local demand build is `dbb44172f30778adf8c0`,
+with zero short-trip cap violations and zero unanchored vehicles. Fresh
+temporal LOSO remains structurally underidentified and fails the TAG-aligned
+aggregate, so no absolute validation claim is made.
