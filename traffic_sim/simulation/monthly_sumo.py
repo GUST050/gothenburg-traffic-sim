@@ -35,6 +35,13 @@ from traffic_sim.simulation.seed_worker_budget import (  # noqa: F401
     SEED_WORKER_BENCHMARK_RECORD,
     approved_seed_workers,
 )
+# PR D. The variant-to-route mapping and the interval-to-seconds conversion now
+# live in the process-free cost module, so the pre-SUMO and post-SUMO paths
+# cannot drift apart on "which file is q10" or "when is this edge shut".
+from traffic_sim.simulation.deterministic_disruption import (  # noqa: F401
+    VARIANT_FILENAMES,
+    closure_seconds as _deterministic_closure_seconds,
+)
 from traffic_sim.simulation.envelope import (
     EnvelopePolicy,
     RecoveryBucket,
@@ -69,11 +76,6 @@ from traffic_sim.simulation.warm_route_windows import (  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_BASELINE_CACHE = Path("runs") / "closure-search-baselines"
-VARIANT_FILENAMES = {
-    "q50": "calibrated.rou.xml",
-    "q10": "calibrated_v1.rou.xml",
-    "q90": "calibrated_v2.rou.xml",
-}
 WARM_POST_FLUSH_S = 3600
 
 
@@ -597,6 +599,7 @@ class ArchivedDemandSumoRunner:
         self.adjacency = rs.build_edge_graph(set(self.close_edges))
         self.freeflow = rs.edge_freeflow_times()
         self._disruption_cache: dict[str, tuple[Mapping[str, Any], ...]] = {}
+        self._deterministic_provider = None
         if self.include_disruption:
             self._disruption_adjacency = rs.build_edge_graph(set())
             (
@@ -905,27 +908,16 @@ class ArchivedDemandSumoRunner:
         self,
         schedule: ClosureSchedule,
     ) -> list[dict[str, Any]]:
-        closures = []
-        for interval in schedule.intervals:
-            begin = int(
-                (
-                    datetime.fromisoformat(interval.start_time) - self.epoch
-                ).total_seconds()
-            )
-            end = int(
-                (
-                    datetime.fromisoformat(interval.end_time) - self.epoch
-                ).total_seconds()
-            )
-            if begin < 0 or end <= begin or end > self.duration_s:
-                raise ValueError("closure interval lies outside demand archive")
-            for edge in self.close_edges:
-                closures.append({
-                    "edge_id": edge,
-                    "begin_s": begin,
-                    "end_s": end,
-                })
-        return closures
+        # ONE implementation, shared with the process-free provider (PR D).
+        # A pre-SUMO cost and a post-SUMO cost that disagreed about when the
+        # edge is shut would produce two different closures wearing the same
+        # schedule ID, and the equivalence gate is precisely what must catch
+        # that — so it must not be able to happen in the first place.
+        return _deterministic_closure_seconds(
+            self.spec, schedule,
+            epoch=self.epoch,
+            duration_s=self.duration_s,
+        )
 
     def _closure_disruption(
         self,
@@ -937,25 +929,42 @@ class ArchivedDemandSumoRunner:
         cached = self._disruption_cache.get(schedule.schedule_id)
         if cached is not None:
             return cached
-        closures = self._closure_seconds(schedule)
-        reports: list[Mapping[str, Any]] = []
-        for variant in DEMAND_VARIANTS:
-            report = rs.closure_disruption(
-                self.variants[variant],
-                set(self.close_edges),
-                closures,
-                self._disruption_edge_time,
-                self._disruption_edge_len,
-                adj=self._disruption_adjacency,
-            )
-            if report is None:
-                raise ValueError(
-                    f"closure disruption is unavailable for {variant}"
-                )
-            reports.append({"demand_variant": variant, **report})
-        result = tuple(reports)
+        # PR D: the SAME process-free computation the pre-SUMO cost uses. The
+        # plan asks for the two paths to be field-wise identical; the surest
+        # way to satisfy an equivalence gate is for there to be one path.
+        result = self.deterministic_disruption_provider().disruption(schedule)
         self._disruption_cache[schedule.schedule_id] = result
         return result
+
+    def deterministic_disruption_provider(self, *, cache=None):
+        """A process-free cost provider bound to THIS runner's archive.
+
+        Reuses the network tables this runner already built, so asking for a
+        deterministic cost never re-parses a 16 MB network, and never starts a
+        simulation.
+        """
+        from traffic_sim.simulation.deterministic_disruption import (
+            ArchiveDisruptionProvider,
+            NetworkCostModel,
+        )
+
+        if self._deterministic_provider is None or cache is not None:
+            network = object.__new__(NetworkCostModel)
+            network.network_path = Path(rs.NET_PATH)
+            network.network_sha256 = sha256_file(rs.NET_PATH)
+            network.adjacency = self._disruption_adjacency
+            network.edge_time = self._disruption_edge_time
+            network.edge_len = self._disruption_edge_len
+            provider = ArchiveDisruptionProvider(
+                self.spec,
+                archive=self.archive,
+                network=network,
+                cache=cache,
+            )
+            if cache is not None:
+                return provider
+            self._deterministic_provider = provider
+        return self._deterministic_provider
 
     def warm_interpreting_sources(self) -> dict:
         """Sources whose bytes change how a warm state or prefix is READ."""

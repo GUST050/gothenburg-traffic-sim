@@ -982,6 +982,47 @@ class MonthlyDemandResolverRunner:
             if callable(cleanup):
                 cleanup()
 
+    def archive_for(self, schedule: ClosureSchedule) -> Path:
+        """The immutable demand archive that covers this schedule's envelope.
+
+        PR D. Deterministic cost needs the ROUTE FILES, not a simulator, so the
+        resolver exposes the resolution result on its own. A caller can build a
+        process-free provider from it without ever constructing a SUMO runner
+        or opening a TraCI connection.
+        """
+        if self._prepared_schedule_ids is None:
+            raise RuntimeError("monthly demand resolver is not prepared")
+        key = self._schedule_build_keys.get(schedule.schedule_id)
+        if key is None:
+            raise ValueError("candidate was not part of the frozen shortlist")
+        return Path(self._runners[key].archive)
+
+    def deterministic_disruption_provider(
+        self,
+        schedule: ClosureSchedule,
+        *,
+        cache: Any = None,
+        network: Any = None,
+        unit_identity: Mapping[str, Any] | None = None,
+    ):
+        """A process-free cost provider for one schedule's archive.
+
+        Starts no SUMO, opens no TraCI connection and reads no simulation
+        outcome — it resolves the archive and delegates to
+        `deterministic_disruption.ArchiveDisruptionProvider`.
+        """
+        from traffic_sim.simulation.deterministic_disruption import (
+            ArchiveDisruptionProvider,
+        )
+
+        return ArchiveDisruptionProvider(
+            self.spec,
+            archive=self.archive_for(schedule),
+            network=network,
+            cache=cache,
+            unit_identity=unit_identity,
+        )
+
     def run_candidate(
         self,
         schedule: ClosureSchedule,
