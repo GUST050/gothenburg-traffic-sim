@@ -447,6 +447,27 @@ def _memory_gate(cases: list[Mapping[str, Any]],
         status = "open_fixed_import_cost_dominates"
     else:
         status = "failed"
+    if status == "open_fixed_import_cost_dominates":
+        fixed_import_reason = (
+            "the enumeration itself measures under the gate, but the "
+            "process total does not on the frozen baseline's own host: "
+            "importing independent_daily pulls finalist_decision and "
+            "therefore scipy, a fixed cost the v1 path pays identically and "
+            "that this PR does not touch. The process-total gate stays OPEN; "
+            "closing it requires reducing that fixed import cost or an "
+            "explicitly reviewed gate-contract change, not another "
+            "measurement"
+            if comparable
+            else
+            "the enumeration itself measures under the gate, but the "
+            "process total does not: importing independent_daily pulls "
+            "finalist_decision and therefore scipy, a fixed cost the v1 path "
+            "pays identically and that this PR does not touch. The gate is "
+            "stated as a process total, so it stays OPEN and must be "
+            "re-measured on the frozen baseline's own host"
+        )
+    else:
+        fixed_import_reason = ""
     return {
         "case_id": "six-month-720h",
         "gate_bytes": STREAMING_PEAK_RSS_GATE_BYTES,
@@ -467,13 +488,7 @@ def _memory_gate(cases: list[Mapping[str, Any]],
                 "measured under the gate, but on a host the frozen "
                 "Darwin/arm64 baseline cannot be compared against; the "
                 "hardware gate stays open for the dev machine"),
-            "open_fixed_import_cost_dominates": (
-                "the enumeration itself measures under the gate, but the "
-                "process total does not: importing independent_daily pulls "
-                "finalist_decision and therefore scipy, a fixed cost the v1 "
-                "path pays identically and that this PR does not touch. The "
-                "gate is stated as a process total, so it stays OPEN and must "
-                "be re-measured on the frozen baseline's own host"),
+            "open_fixed_import_cost_dominates": fixed_import_reason,
             "failed": (
                 "the streaming enumeration itself measured at or above the "
                 "gate"),

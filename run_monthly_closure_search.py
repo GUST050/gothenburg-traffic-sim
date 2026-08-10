@@ -39,6 +39,11 @@ from traffic_sim.simulation.independent_daily import (
     IndependentDailyRunner,
     IsolatedDailySumoRunner,
 )
+from traffic_sim.simulation.closure_preflight import (
+    ClosureSearchPreflight,
+    UnsupportedPreflightSpec,
+    preflight,
+)
 from traffic_sim.simulation.monthly_sumo import (
     ArchivedDemandSumoRunner,
     SEED_WORKER_BENCHMARK_RECORD,
@@ -147,12 +152,27 @@ def _independent_exhaustive_builder(
     maximum_candidates: int,
     maximum_daily_units: int,
     baseline_trip_duration_p99_s: int,
+    preflight_report: ClosureSearchPreflight | None = None,
 ) -> dict[str, Any]:
     spec = load_closure_search_spec(spec_path)
     if spec.interday_policy != "independent_daily_reset_v1":
         raise ValueError(
             "independent exhaustive screening requires the independent policy"
         )
+    report = preflight_report or _independent_exhaustive_preflight(
+        spec,
+        maximum_candidates=maximum_candidates,
+        maximum_daily_units=maximum_daily_units,
+        baseline_trip_duration_p99_s=baseline_trip_duration_p99_s,
+    )
+    if report is not None:
+        if report.search_content_key != spec.content_key:
+            raise ValueError(
+                "independent exhaustive preflight belongs to another search")
+        if (report.parent_schedule_limit != maximum_candidates
+                or report.daily_unit_limit != maximum_daily_units):
+            raise ValueError(
+                "independent exhaustive preflight uses different resource caps")
     from traffic_sim.simulation.independent_daily import daily_unit_records
 
     source_year = 2027 if spec.source == "forecast" else 2025
@@ -171,6 +191,12 @@ def _independent_exhaustive_builder(
     candidate_count = 0
     for schedule in iter_closure_schedules(spec):
         candidate_count += 1
+        if candidate_count > maximum_candidates:
+            raise ValueError(
+                f"independent exhaustive screening generated more than "
+                f"{maximum_candidates} parent schedules, above the explicit "
+                f"cap {maximum_candidates}"
+            )
         parent_units: list[str] = []
         for unit_id, _identity, build in daily_unit_records(spec, schedule):
             parent_units.append(unit_id)
@@ -226,6 +252,13 @@ def _independent_exhaustive_builder(
             })
         else:
             eligible_ids.append(schedule.schedule_id)
+    if report is not None and (
+        report.parent_schedule_count != candidate_count
+        or report.unique_daily_unit_count != len(evaluated_units)
+    ):
+        raise ValueError(
+            "independent exhaustive preflight disagrees with streamed "
+            "enumeration")
     if not eligible_ids:
         raise ValueError(
             "independent exhaustive screening has no schedules whose exact "
@@ -253,6 +286,55 @@ def _independent_exhaustive_builder(
         "maximum_daily_units": maximum_daily_units,
     }
     return payload
+
+
+def _independent_exhaustive_preflight(
+    spec,
+    *,
+    maximum_candidates: int,
+    maximum_daily_units: int,
+    baseline_trip_duration_p99_s: int,
+) -> ClosureSearchPreflight | None:
+    """Fail an over-budget independent search before ledger publication.
+
+    The exact PR-B preflight counts without constructing schedules.  Running
+    it before the monthly search workspace is opened prevents an over-budget
+    search from writing a potentially large candidate ledger only to discover
+    the unchanged parent/unit cap during screening.
+    """
+    if spec.interday_policy != "independent_daily_reset_v1":
+        raise ValueError(
+            "independent exhaustive screening requires the independent policy"
+        )
+    try:
+        report = preflight(
+            spec,
+            baseline_trip_duration_p99_s=baseline_trip_duration_p99_s,
+            envelope_policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
+            parent_schedule_limit=maximum_candidates,
+            daily_unit_limit=maximum_daily_units,
+        )
+    except UnsupportedPreflightSpec:
+        # The streaming path still supports legacy allocation policies whose
+        # exact closed-form preflight is deliberately unavailable.  Preserve
+        # that compatibility and enforce both caps while streaming below;
+        # supported policies get the earlier, allocation-free refusal.
+        return None
+    if report.parent_schedule_count > maximum_candidates:
+        raise ValueError(
+            f"independent exhaustive preflight counted "
+            f"{report.parent_schedule_count} parent schedules, above the "
+            f"explicit cap {maximum_candidates}"
+        )
+    if report.unique_daily_unit_count > maximum_daily_units:
+        raise ValueError(
+            f"independent exhaustive preflight counted "
+            f"{report.unique_daily_unit_count} unique daily SUMO units, "
+            f"above the explicit cap {maximum_daily_units}"
+        )
+    if report.parent_schedule_count == 0:
+        raise ValueError("independent exhaustive search has no legal schedules")
+    return report
 
 
 def parse_args() -> argparse.Namespace:
@@ -431,6 +513,20 @@ def main() -> None:
     try:
         spec = load_closure_search_spec(args.spec)
         policy = MonthlySearchPolicy.from_dict(_read(args.policy))
+        independent_preflight = (
+            _independent_exhaustive_preflight(
+                spec,
+                maximum_candidates=(
+                    args.independent_exhaustive_candidate_cap
+                ),
+                maximum_daily_units=args.independent_exhaustive_daily_cap,
+                baseline_trip_duration_p99_s=(
+                    args.baseline_trip_duration_p99_s
+                ),
+            )
+            if args.screening_mode == "independent-exhaustive"
+            else None
+        )
         study_key = _digest({
             "kind": "monthly_closure_search_study",
             "search_content_key": spec.content_key,
@@ -537,6 +633,7 @@ def main() -> None:
                 baseline_trip_duration_p99_s=(
                     args.baseline_trip_duration_p99_s
                 ),
+                preflight_report=independent_preflight,
             )
         result = run_monthly_search(
             spec,

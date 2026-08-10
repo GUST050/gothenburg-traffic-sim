@@ -7,77 +7,46 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `PR C (streaming closure schedules and versioned workspace
-  ledgers) is implemented, tested and measured on branch
-  claude/closure-streaming-ledgers-pr-c. One exit gate is deliberately left
-  open for the dev machine.`
-- Summary: `The enumeration no longer has to exist all at once.
-  iter_closure_schedules yields the IDENTICAL sequence lazily and
-  generate_closure_schedules is now tuple(iter_closure_schedules(spec)) — the
-  body yields where it appended, because schedule IDs and order are contract.
-  closure_ledgers.py writes three versioned NDJSON ledgers in one pass:
-  parents, unique daily units, and each parent's ordered unit IDs. The reverse
-  unit->parents graph is gone from the new path — it was only the inverse of
-  the relationship ledger and cost memory proportional to parents x days.
-  Publication is atomic per file with the MANIFEST LAST, so its presence is the
-  completion signal: no manifest means "never built" and is safely rebuilt,
-  while a manifest that disagrees with its ledgers on size, SHA-256 or row count
-  raises and stops. monthly_search reads a v1 candidate-ledger.json, a published
-  streaming manifest, or an unpublished build area, in that order, and holds
-  only a byte-offset ParentLedgerIndex.`
-- Files changed: `NEW traffic_sim/simulation/closure_ledgers.py,
-  tools/benchmark_closure_streaming.py,
-  validation/closure_search_streaming_v1.json, tests/test_closure_ledgers.py
-  (28), tests/test_benchmark_closure_streaming.py (28). MODIFIED
-  traffic_sim/core/closure_calendar.py (streaming API + wrapper),
-  traffic_sim/simulation/independent_daily.py (daily_unit_records,
-  daily_unit_schedule, StreamingDailyUnit, prepare_from_ledgers),
-  traffic_sim/simulation/monthly_search.py (candidate ledger, bounded
-  compatibility prepare), run_monthly_closure_search.py (both exhaustive
-  builders stream), tests/test_closure_calendar.py (12 new),
-  tests/test_benchmark_closure_search_scaling.py (intended baseline drift),
-  ARCHITECTURE.md, the scaling plan (section 9), TASKS.md, AGENT_NOTES.md.`
-- Checks: `tests/test_closure_ledgers.py 28 passed; test_closure_calendar.py 50;
-  test_benchmark_closure_streaming.py 28; test_benchmark_closure_search_scaling
-  34; combined closure/monthly/held-out/proxy suite 1,924 passed with 122
-  failures that reproduce IDENTICALLY (same test IDs) at the untouched base
-  commit 01a0b16 in a clean worktree — this container's gitignored
-  sumo/net.net.xml is not the dev machine's, which also makes
-  tools/screen_closure_survivability.py --verify differ in exactly the network
-  digest and the derived content key, with every measured value equal. Full API
-  suite 126 passed. git diff --check clean; no .partial file survives a
-  successful publication.`
-- Decisions and evidence: `validation/closure_search_streaming_v1.json is a
-  separate diagnostic_comparison record; PR A's baseline is NOT rewritten and
-  now correctly reports source drift on the four files PR C changed. Every case
-  is measured twice — v1 materialising and streaming — in fresh child
-  interpreters on the same host in the same run, because an RSS figure from one
-  OS is not evidence about another. Streaming peaks 1.98 MiB over the import
-  baseline for 720 h against 152.86 MiB materialising, and 5.76 MiB against
-  624.73 MiB for 360 h; all six cases agree semantically (2,186/5,676 and
-  11,813/23,349 reproduced). Byte equivalence with the pre-PR-C generator is
-  pinned by frozen to_dict() digests over five contract shapes, and ledger bytes
-  are reproduced under three PYTHONHASHSEED values in real child interpreters.
-  A 100,000-parent synthetic search leaves at most two parents reachable through
-  weak references afterwards.`
-- Blockers or risks: `The plan's under-64-MiB gate is a PROCESS TOTAL and is
-  reported open (open_fixed_import_cost_dominates), not passed: on this Linux
-  host a fresh interpreter that imports independent_daily — and therefore
-  finalist_decision and scipy — costs 99.9 MiB before any work, against an
-  inferred ~21 MiB on the frozen Darwin/arm64 baseline host. The enumeration
-  itself is 1.98 MiB. Moving the identity helpers to a scipy-free module would
-  lower the number without changing the real search process, which imports
-  finalist_decision anyway, so it was not done. Re-measure on the dev machine.`
-- Suggested next action: `Re-measure the 720 h streaming peak RSS on
-  Darwin/arm64 to close that gate, then PR D's process-free disruption
-  provider.`
-- Actor notes: `No frozen v1/v6/v9/v10 artifact was rewritten, no v11 created,
-  no held-out campaign run, no annual warming input touched, and the 10,000-unit
-  and 100,000-parent caps are unchanged — the 360 h case is still refused by the
-  unit cap, it simply no longer fails for want of memory first. One regression
-  was found and fixed inside this PR before measuring: building each daily
-  unit's schedule eagerly made decompose_schedules five times more expensive for
-  v1 callers, so the schedule is now built lazily, once per unique unit.`
+- Focus and status: `PR C was independently reviewed on
+  codex/review-closure-streaming-pr-c over Claude commit 1080ac7. Functional,
+  semantic, restart and integrity work is green; the explicit process-total
+  64-MiB exit gate remains open on comparable Darwin/arm64.`
+- Summary: `The streaming calendar and three manifest-last NDJSON ledgers are
+  sound and preserve v1 IDs/order/cache compatibility without the reverse
+  unit->parents graph. Review found that the product CLI still wrote the full
+  candidate ledger before independent-exhaustive screening discovered the
+  known cap. It now runs exact preflight before network identity, runner setup
+  or search-workspace publication; total parent and unit caps are enforced,
+  and supported preflight counts must match the streamed pass.`
+- Files changed: `Claude's PR C files plus review edits in
+  run_monthly_closure_search.py, tools/benchmark_closure_streaming.py,
+  tests/test_independent_daily.py, tests/test_benchmark_closure_streaming.py,
+  validation/closure_search_streaming_v1.json, ARCHITECTURE.md, the scaling
+  plan, TASKS.md and AGENT_NOTES.md.`
+- Checks: `Focused PR C set 161 passed; expanded closure/monthly/calendar/
+  preflight set 301 passed with one unrelated test_warm_horizon source-text
+  assertion deselected because it also fails at base 01a0b16;
+  API 126 passed with loopback permission; screen_closure_survivability
+  --verify reproduces byte-for-byte; git diff --check clean.`
+- Decisions and evidence: `The regenerated Darwin/arm64 diagnostic comparison
+  is source-hash and content-key consistent. All six cases agree semantically.
+  720 h: 2,186 parents / 5,676 units, streaming p95 7.425 s, 1.33 MiB over
+  imports, 78.02 MiB process total, versus 250.80 MiB materialising. 360 h:
+  11,813 / 23,349, streaming p95 30.474 s, 7.00 MiB over imports, versus
+  785.77 MiB materialising. PR A's frozen baseline was not rewritten.`
+- Blockers or risks: `open_fixed_import_cost_dominates is confirmed on the
+  comparable host, not pending remeasurement: fixed imports are 76.69 MiB, so
+  the 78.02-MiB process total cannot pass a 64-MiB gate even though enumeration
+  adds only 1.33 MiB. Closing it requires a real fixed-import reduction or an
+  explicitly reviewed gate-contract change. The review branch is local and has
+  not been merged or pushed.`
+- Suggested next action: `Decide whether to reduce real process import RSS for
+  the existing gate or explicitly revise the gate; after that, integrate PR C
+  and proceed to PR D.`
+- Actor notes: `No held-out campaign, SUMO comparison, annual warming input,
+  cap increase, policy/ranking change or frozen PR A baseline rewrite occurred.
+  Legacy exact_balanced_daily_v1 remains stream-compatible and falls back to
+  streaming cap checks because exact PR-B preflight intentionally refuses it.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History

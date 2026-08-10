@@ -10,23 +10,20 @@ owners, states and approval formulas are not active workflow rules. See
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
 - Current focus: `Closure-search scaling: PR C (streaming closure schedules and
-  versioned workspace ledgers) from the 2026-08-10 scaling plan`
-- Status: `PR C IMPLEMENTED, MEASURED AND GREEN, WITH ONE GATE HELD OPEN ON
-  PURPOSE. iter_closure_schedules streams the identical enumeration; three
-  versioned NDJSON ledgers replace the parent tuple, the unit tuple and the
-  reverse unit->parents graph; publication is atomic with the manifest last and
-  fails closed on corruption. Semantic counts are unchanged in all six frozen
-  cases (2,186/5,676 and 11,813/23,349). Streaming enumeration peaks at 1.98 MiB
-  over the import baseline for 720 h (materialising: 152.86 MiB) and 5.76 MiB
-  for 360 h (624.73 MiB), so 360 h no longer fails for memory — it is still
-  refused by the untouched 10,000-unit cap. The plan's under-64-MiB gate is
-  stated as a PROCESS TOTAL and is left OPEN: on this Linux host a fresh
-  interpreter that imports independent_daily (and therefore scipy) costs
-  99.9 MiB before any work, which the frozen Darwin/arm64 baseline cannot be
-  compared against.`
-- Suggested next action: `Re-measure the 720 h streaming peak RSS on the dev
-  Darwin/arm64 machine to close the last PR C gate, then PR D's process-free
-  disruption provider.`
+  versioned workspace ledgers), independently reviewed and corrected`
+- Status: `IMPLEMENTATION GREEN; ONE DOCUMENTED EXIT GATE REMAINS OPEN. Claude's
+  streaming calendar, atomic versioned ledgers, v1 compatibility and minimal
+  parent index are intact. Review added the missing exact preflight before an
+  independent-exhaustive product run can write ledgers, enforces the total
+  parent cap even when some parents are unavailable, and checks preflight counts
+  against the streamed enumeration. All six frozen cases retain identical
+  counts (2,186/5,676 and 11,813/23,349). On comparable Darwin/arm64, streaming
+  adds 1.33 MiB for 720 h and 7.00 MiB for 360 h, but the 720 h process total is
+  78.02 MiB, so the explicit under-64-MiB process gate is still OPEN.`
+- Suggested next action: `Choose and implement a real reduction of fixed import
+  RSS if the 64-MiB process-total gate must pass; otherwise review and explicitly
+  revise that gate before beginning PR D. Another measurement alone cannot close
+  it.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Do not use held observations in pool, picker or certificate.
   Do not weaken TAG/fit/provenance gates or promote pilot or diagnostic
@@ -35,11 +32,11 @@ owners, states and approval formulas are not active workflow rules. See
   equivalence and resource gates pass. Do not rewrite
   validation/closure_search_scaling_baseline_v1.json — its source drift on the
   four files PR C changed is intended evidence.`
-- Updated: `Claude implemented PR C on claude/closure-streaming-ledgers-pr-c.
-  Combined closure/monthly suite 1,924 passed with 122 pre-existing environment
-  failures reproduced identically at the untouched base commit 01a0b16 (this
-  container's gitignored sumo/net.net.xml differs from the dev machine's); API
-  suite 126 passed / 2026-08-10`
+- Updated: `Codex review branch codex/review-closure-streaming-pr-c over Claude
+  commit 1080ac7. Focused closure/monthly/preflight checks pass 301/301; API 126/126;
+  survivability artifact reproduces byte-for-byte. One unrelated brittle
+  warm-horizon source-text test also fails on base 01a0b16. Darwin comparison
+  artifact regenerated with current source hashes / 2026-08-10.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -47,8 +44,8 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### CLOSURE-SCALING-C — Streaming closure schedules and versioned ledgers
 
-- Status: `IMPLEMENTED, MEASURED AND TESTED; every PR C exit gate passes except
-  the process-total memory gate, which is held open for the dev machine.`
+- Status: `IMPLEMENTED, REVIEWED AND TESTED; semantic/restart gates pass, while
+  the comparable process-total memory gate remains open at 78.02 MiB.`
 - Objective and scope: `PR C only from
   docs/plans/CLOSURE_SEARCH_SCALING_AND_VALIDATION_PLAN_2026-08-10.md. Stream
   the calendar, write versioned NDJSON ledgers, and remove the full
@@ -63,14 +60,16 @@ owners, states and approval formulas are not active workflow rules. See
   unit->parents graph is gone from the new path; StreamingDailyUnit carries no
   parent list. monthly_search opens a v1 ledger, a published streaming manifest
   or an unpublished build area, in that order, and only ever builds a
-  byte-offset ParentLedgerIndex. run_monthly_closure_search screens in one
+  byte-offset ParentLedgerIndex. run_monthly_closure_search preflights supported
+  independent-exhaustive specs before ledger creation, then screens in one
   streaming pass.`
 - Context or checkpoints: `Unit identity comes from ONE implementation
   (daily_unit_records) shared by both paths, so a streamed unit hits the same v1
   cache entry — regression-tested end to end. Its schedule object is built
   lazily; building it eagerly made decompose_schedules five times more
-  expensive, which was found and fixed before measuring. 122 combined-suite
-  failures are pre-existing and reproduce identically at base commit 01a0b16.`
+  expensive, which was found and fixed before measuring. Review also fixed the
+  previously late cap refusal, a flaky small-fixture RSS assertion and a
+  misleading comparable-host gate explanation.`
 - Primary files: `NEW traffic_sim/simulation/closure_ledgers.py,
   tools/benchmark_closure_streaming.py,
   validation/closure_search_streaming_v1.json, tests/test_closure_ledgers.py,
@@ -79,8 +78,8 @@ owners, states and approval formulas are not active workflow rules. See
   traffic_sim/simulation/independent_daily.py,
   traffic_sim/simulation/monthly_search.py, run_monthly_closure_search.py,
   tests/test_closure_calendar.py,
-  tests/test_benchmark_closure_search_scaling.py, ARCHITECTURE.md, the scaling
-  plan (section 9, appended), TASKS.md, AGENT_NOTES.md`
+  tests/test_benchmark_closure_search_scaling.py, tests/test_independent_daily.py,
+  ARCHITECTURE.md, the scaling plan (section 9), TASKS.md, AGENT_NOTES.md`
 - Constraints and safety: `The 100,000-parent and 10,000-unit caps are
   unchanged and still refuse the 360 h case. Ranking, closure_cost_v1, pilot
   selection, finalist decision, teleport policy and survivability logic are
@@ -93,12 +92,11 @@ owners, states and approval formulas are not active workflow rules. See
   valid; restart idempotent; old v1 workspaces and caches still load; a
   100,000-parent synthetic search builds no object graph; 720 h streaming under
   64 MiB on comparable hardware.`
-- Useful checks: `pytest -q tests/test_closure_ledgers.py (28 passed);
-  tests/test_closure_calendar.py (50, 12 new); tests/test_benchmark_closure_streaming.py
-  (28); combined closure/monthly suite 1,924 passed with the 122 pre-existing
-  environment failures; full API suite 126 passed;
-  tools/screen_closure_survivability.py --verify (dev machine only — this
-  container's sumo/net.net.xml differs); git diff --check.`
+- Useful checks: `Focused PR C set 161 passed before final review additions;
+  expanded monthly/closure/calendar/preflight set 301 passed, one unrelated
+  base-existing brittle warm-horizon test deselected; benchmark contract included;
+  full API 126 passed with loopback permission; survivability byte verification
+  true; git diff --check clean.`
 <!-- ACTIVE_TASK_END -->
 
 ## History

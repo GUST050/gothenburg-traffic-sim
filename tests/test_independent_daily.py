@@ -18,7 +18,10 @@ from traffic_sim.simulation.independent_daily import (
     decompose_schedules,
 )
 from traffic_sim.simulation.monthly_search import canonical_seed, run_monthly_search
-from run_monthly_closure_search import _independent_exhaustive_builder
+from run_monthly_closure_search import (
+    _independent_exhaustive_builder,
+    _independent_exhaustive_preflight,
+)
 
 
 def _spec(**overrides):
@@ -539,6 +542,78 @@ def test_independent_exhaustive_screening_binds_unique_daily_work(tmp_path):
             maximum_daily_units=19,
             baseline_trip_duration_p99_s=1800,
         )
+
+
+def test_independent_exhaustive_preflight_rejects_before_enumeration():
+    spec = _spec(work_allocation_policy="exact_equal_daily_v1")
+
+    with pytest.raises(ValueError, match="preflight counted.*parent schedules"):
+        _independent_exhaustive_preflight(
+            spec,
+            maximum_candidates=1,
+            maximum_daily_units=100,
+            baseline_trip_duration_p99_s=1800,
+        )
+
+    with pytest.raises(ValueError, match="preflight counted.*daily SUMO units"):
+        _independent_exhaustive_preflight(
+            spec,
+            maximum_candidates=100,
+            maximum_daily_units=1,
+            baseline_trip_duration_p99_s=1800,
+        )
+
+
+def test_independent_cli_rejects_before_network_or_search_workspace(monkeypatch):
+    """The product path must use preflight before candidate-ledger creation."""
+    from types import SimpleNamespace
+
+    import run_monthly_closure_search as command
+    from tests.test_monthly_search import _policy
+
+    spec = _spec(work_allocation_policy="exact_equal_daily_v1")
+    args = SimpleNamespace(
+        baseline_trip_duration_p99_s=1800,
+        bounded_exhaustive_cap=12,
+        independent_exhaustive_candidate_cap=1,
+        independent_exhaustive_daily_cap=100,
+        seed_workers=1,
+        daily_workers=1,
+        warm_execution=False,
+        workspace_wait_s=0,
+        screening_mode="independent-exhaustive",
+        spec="unused-spec.json",
+        policy="unused-policy.json",
+    )
+
+    class Lock:
+        released = False
+
+        def __init__(self, _owner):
+            pass
+
+        def acquire(self, **_kwargs):
+            return True
+
+        def release(self):
+            Lock.released = True
+
+    monkeypatch.setattr(command, "parse_args", lambda: args)
+    monkeypatch.setattr(command, "approved_seed_workers", lambda: 1)
+    monkeypatch.setattr(command, "recover_live_demand_release", lambda: None)
+    monkeypatch.setattr(command, "WorkspaceLock", Lock)
+    monkeypatch.setattr(command, "load_closure_search_spec", lambda _path: spec)
+    monkeypatch.setattr(command, "_read", lambda _path: _policy().to_dict())
+    monkeypatch.setattr(
+        command,
+        "sha256_file",
+        lambda _path: (_ for _ in ()).throw(
+            AssertionError("network identity must not run before preflight")),
+    )
+
+    with pytest.raises(SystemExit, match="preflight counted.*parent schedules"):
+        command.main()
+    assert Lock.released is True
 
 
 def test_independent_screening_excludes_only_out_of_year_envelopes(tmp_path):

@@ -1219,6 +1219,15 @@ but explicitly and boundedly: above `MATERIALISED_SHORTLIST_LIMIT` (512) it
 raises instead of quietly allocating, because a silent fallback is how a memory
 gate stops meaning anything.
 
+The product CLI runs the exact read-only preflight before an independent-
+exhaustive search reaches network fingerprinting, runner construction or the
+monthly search workspace. Supported allocation policies therefore refuse an
+over-budget parent/unit population before writing the candidate ledgers. The
+legacy balanced allocation policy remains stream-compatible where its exact
+closed-form preflight is intentionally unsupported; its caps are enforced
+during streaming. Whenever an exact preflight exists, its final parent and
+unique-unit counts must equal the streamed enumeration or the run stops.
+
 **Measured (`validation/closure_search_streaming_v1.json`, PR C).** A separate
 diagnostic comparison record; PR A's baseline is NOT rewritten and now
 correctly reports source drift on the four files PR C changed. Every frozen
@@ -1226,7 +1235,9 @@ case is run twice in fresh child interpreters — v1 materialization and the
 streaming writer — on the same host in the same session, because a resident-
 memory figure from one operating system is not evidence about another. See the
 plan's PR C section for the numbers and for the exact status of the plan's
-under-64-MiB exit gate on non-baseline hardware.
+under-64-MiB exit gate. The comparable Darwin/arm64 measurement leaves that
+process-total gate open: streaming itself adds 1.33 MiB, but fixed imports put
+the process at 78.02 MiB. Another measurement alone cannot close it.
 
 **Unchanged.** The 100,000-parent and 10,000-unit caps, ranking,
 `closure_cost_v1`, pilot selection, finalist decision, teleport policy and

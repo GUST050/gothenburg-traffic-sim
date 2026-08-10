@@ -699,14 +699,18 @@ kördes inte om.
 
 | fall | föräldrar | dagsenheter | ström p95 | materialisera p95 | ström RSS över import | materialisera RSS över import |
 |---|---:|---:|---:|---:|---:|---:|
-| 720 h | 2 186 | 5 676 | 7,942 s | 7,085 s | **1,98 MiB** | 152,86 MiB |
-| 360 h | 11 813 | 23 349 | 32,185 s | 43,015 s | **5,76 MiB** | 624,73 MiB |
-| brute-force (4 fall) | 85–754 | 85–910 | 0,033–0,314 s | 0,021–0,296 s | 0,13–0,39 MiB | 0,85–8,70 MiB |
+| 720 h | 2 186 | 5 676 | 7,425 s | 6,541 s | **1,33 MiB** | 173,53 MiB |
+| 360 h | 11 813 | 23 349 | 30,474 s | 27,238 s | **7,00 MiB** | 708,88 MiB |
+| brute-force (4 fall) | 85–754 | 85–910 | 0,046–0,417 s | 0,040–0,364 s | 0,00 MiB* | 0,00–9,22 MiB |
+
+\* De små fallen stannar under värdens RSS-högvattenupplösning; den dynamiska
+smoke-fixturen kräver därför icke-negativa deltan, medan minnesminskningen
+krävs och mäts på de två namngivna sexmånadersfallen.
 
 Strömning byter minne mot väggtid, och det ska sägas rakt ut: den skriver
 29 MB (720 h) respektive 121 MB (360 h) NDJSON till disk, vilket
 minnesvägen inte betalar. På 720 h-fallet är materialisering därför en aning
-SNABBARE i median (6,91 s mot 7,87 s). Vinsten är minnet — och att ledgern
+SNABBARE i median (6,45 s mot 7,38 s). Vinsten är minnet — och att ledgern
 efteråt finns kvar som oföränderlig evidens i stället för att ha existerat
 bara i en process.
 
@@ -729,24 +733,36 @@ frysta digester över fem kontraktsformer plus ledgerbytes reproducerade under
 tre `PYTHONHASHSEED`-värden i riktiga barntolkar.
 
 360 h-fallet stoppas inte längre av minnesmaterialisering: **uppfyllt**. Det
-räknar upp 11 813 föräldrar och 23 349 enheter i 5,76 MiB över importbaslinjen,
-mot 624,73 MiB för v1-vägen (108× mindre).
+räknar upp 11 813 föräldrar och 23 349 enheter i 7,00 MiB över importbaslinjen,
+mot 708,88 MiB för v1-vägen (101× mindre).
 Det är fortfarande — avsiktligt — VÄGRAT av 10 000-enhetstaket, som PR C inte
 rör.
 
-720 h under 64 MiB: **ÖPPEN på den här maskinen, och lämnas öppen med flit.**
-Själva uppräkningen mäter 1,98 MiB, men processens totala topp är 101,9 MiB
+720 h under 64 MiB: **ÖPPEN även på den jämförbara Darwin/arm64-värden.**
+Själva uppräkningen mäter 1,33 MiB, men processens totala topp är 78,02 MiB
 eftersom en färsk tolk som importerar `independent_daily` — och därmed
-`finalist_decision` och scipy — kostar 99,9 MiB på den här Linux-värden mot
-uppskattningsvis ~21 MiB på den frysta Darwin/arm64-baslinjens värd (samma
-fasta kostnad betalas identiskt av v1-vägen). Grinden är formulerad som en
-processtotal, och en RSS-siffra från ett operativsystem är inte evidens om ett
-annat, så posten rapporterar `open_fixed_import_cost_dominates` i stället för
-ett godkännande den inte förtjänat. Den ska mätas om på utvecklingsmaskinen.
-Att flytta identitetshjälparna till en scipy-fri modul skulle sänka siffran men
-inte den verkliga processen — den riktiga sökprocessen importerar
-`finalist_decision` ändå för beslutet — och vore därför att optimera mätaren,
-inte produkten.
+`finalist_decision` och scipy — redan ligger på 76,69 MiB. Samma fasta kostnad
+betalas av v1-vägen, men grinden är formulerad som en processtotal och får inte
+godkännas genom att subtrahera den. Posten rapporterar därför ärligt
+`open_fixed_import_cost_dominates`. En ny mätning på samma värd kan inte stänga
+grinden; det kräver antingen minskad fast import-RSS i den verkliga processen
+eller en uttryckligt granskad ändring av grindkontraktet. Att bara flytta
+identitetshjälpar för benchmarken vore inte tillräckligt, eftersom den riktiga
+sökprocessen importerar `finalist_decision` för beslutet.
+
+### Reviewkorrigeringar efter implementationen
+
+Produktens `independent-exhaustive`-CLI kör nu den exakta PR B-preflighten före
+nätfingerprint, runnerkonstruktion och öppning/publicering av sökworkspace. Ett
+överbudgetfall stoppas därmed innan den stora candidate-ledgern skrivs.
+För legacy-allokeringspolicyn `exact_balanced_daily_v1`, vars exakta preflight
+avsiktligt är unsupported, bevaras kompatibiliteten och båda taken kontrolleras
+i den strömmande passagen. Preflightens antal jämförs mot den faktiska
+strömningen när den stöds; avvikelse stoppar körningen.
+
+Reviewn rättade även två benchmarkfel: en liten fixture får ligga under
+värdens RSS-upplösning, och en öppen processgrind på den jämförbara värden får
+inte beskrivas som om endast en ommätning återstod.
 
 ### Vad som INTE gjordes
 
