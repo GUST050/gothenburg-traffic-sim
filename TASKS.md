@@ -32,8 +32,9 @@ owners, states and approval formulas are not active workflow rules. See
   run_scenario.py, suggest_closure_time.py and monthly_sumo.py are bound, so
   MERGING this branch during a population run discards the units already built.`
 - Updated: `closure integrity stages 3-4 implemented on
-  claude/road-closing-improvement-v9sizg; 97 focused tests pass and two pinned
-  canary assertions were deliberately updated / 2026-08-10`
+  claude/road-closing-improvement-v9sizg; 108 focused tests pass, the full
+  suite matches a clean worktree of the same base failure-for-failure, and
+  three pinned canary assertions were deliberately updated / 2026-08-10`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -80,7 +81,7 @@ owners, states and approval formulas are not active workflow rules. See
   tests/test_closure_teleport_wiring.py tests/test_closure_teleport_probe.py
   tests/test_closure_survivability.py tests/test_closure_disruption.py
   tests/test_heldout_v10_freeze.py
-  tests/test_remeasure_closure_disqualification.py (105 passed);
+  tests/test_remeasure_closure_disqualification.py (108 passed);
   git diff --check.`
 <!-- ACTIVE_TASK_END -->
 

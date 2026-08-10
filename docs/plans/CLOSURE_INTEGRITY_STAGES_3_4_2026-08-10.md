@@ -231,10 +231,28 @@ python3 -m pytest tests/test_closure_teleport.py \
     tests/test_remeasure_closure_disqualification.py
 ```
 
-`test_closure_teleport_probe.py` starts real SUMO and skips when it is absent,
-so the suite still runs on a machine without it.
+108 passed. `test_closure_teleport_probe.py` starts real SUMO and skips when it
+is absent, so the suite still runs on a machine without it.
 
-Two existing pinned assertions were updated deliberately, each a canary whose
-whole purpose is to require a deliberate edit: the
-`EXACT_DEMAND_BINDING_CAMPAIGNS` set in `tests/test_monthly_proxy_runner.py`,
-and the drifted-source set in `tests/test_heldout_gate.py`.
+The full suite was run twice — once on a clean worktree of the same base, once
+on this branch — because this environment has no `sumo/` or `runs/` tree and so
+fails a large block of tests for reasons that have nothing to do with the
+change:
+
+```
+before   267 failed, 3818 passed, 20 skipped
+after    267 failed, 3917 passed, 20 skipped
+```
+
+Failure sets compared element by element: identical, apart from
+`test_serve.py::TestSuggestClosure::test_cancel_stops_suggestion_without_reporting_an_error`,
+which failed on the clean tree and passed here — a cancellation race, not a
+change in behaviour.
+
+THREE existing pinned assertions were updated deliberately, each a canary whose
+whole purpose is to require a deliberate edit rather than silently absorb drift:
+the `EXACT_DEMAND_BINDING_CAMPAIGNS` set in `tests/test_monthly_proxy_runner.py`,
+and the drifted-source sets in `tests/test_heldout_gate.py` and
+`tests/test_heldout_v6_freeze.py`. The last two record that
+`heldout_selection.py` has moved, which keeps the spent v6 campaign refused —
+exactly the property they exist to hold.

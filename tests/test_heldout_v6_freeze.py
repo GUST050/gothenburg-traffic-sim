@@ -280,6 +280,11 @@ class TestSourceFingerprintsAndReproduction:
         # objective, and the gate schema names the unit it bounds.
         "run_monthly_proxy_validation.py",
         "traffic_sim/simulation/proxy_validation.py",
+        # 2026-08-10, closure-integrity stage 4: heldout_selection gained
+        # `stream_closure_exposure`, which the v10 survivability precondition
+        # streams routes with, and the runner gained v10. v6 stays refused,
+        # which is the property this set exists to keep explicit.
+        "traffic_sim/simulation/heldout_selection.py",
     }
 
     def test_fingerprints_cover_the_executable_selection_path(self):

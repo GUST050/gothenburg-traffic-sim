@@ -26,17 +26,23 @@ which model may continue. See `AGENTS.md`.
   suggest_closure_time.py, traffic_sim/simulation/monthly_sumo.py,
   traffic_sim/simulation/heldout_selection.py, run_monthly_proxy_validation.py,
   tools/freeze_heldout_v10.py, tools/measure_closure_teleport_policy.py,
-  tools/remeasure_closure_disqualification.py, five new test modules,
+  tools/remeasure_closure_disqualification.py, signal_optimize.py,
+  tools/benchmark_persistent_sumo.py, six new test modules,
   tests/test_closure_disruption.py, tests/test_monthly_proxy_runner.py,
-  tests/test_heldout_gate.py, docs/plans/CLOSURE_INTEGRITY_STAGES_3_4_2026-08-10.md,
+  tests/test_heldout_gate.py, tests/test_heldout_v6_freeze.py,
+  validation/closure_teleport_mechanism_probe_v1.json,
+  docs/plans/CLOSURE_INTEGRITY_STAGES_3_4_2026-08-10.md,
   docs/README.md, docs/OPEN_ISSUES_2026-08-06.md, TASKS.md, AGENT_NOTES.md.`
-- Checks: `105 passed across the seven closure-focused modules, including a
+- Checks: `108 passed across the seven closure-focused modules, including a
   SUMO-backed probe that measures the mechanism rather than asserting it:
   default arm closed-edge throughput 1 / teleports 1 / unfinished 0, policy arm
-  0 / 0 / 1 (validation/closure_teleport_mechanism_probe_v1.json). Full suite
-  compared against a clean worktree of the same base. Two pinned canary
-  assertions updated deliberately (EXACT_DEMAND_BINDING_CAMPAIGNS gains v10;
-  the v6 drifted-source set gains heldout_selection.py).`
+  0 / 0 / 1 (validation/closure_teleport_mechanism_probe_v1.json). The full
+  suite was run on a clean worktree of the same base and on this branch —
+  267 failed / 3818 passed before, 267 failed / 3917 passed after, failure sets
+  identical element-for-element apart from one cancellation race that failed
+  before and passed after. Three pinned canary assertions updated deliberately
+  (EXACT_DEMAND_BINDING_CAMPAIGNS gains v10; the heldout_gate and v6-freeze
+  drifted-source sets gain heldout_selection.py).`
 - Decisions and evidence: `-1 rather than the plan's proposed finite threshold,
   because any finite value still teleports and stage 3's own gate requires
   throughput to reach zero. The BASELINE arm keeps SUMO's default so a paired
