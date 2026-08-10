@@ -50,7 +50,7 @@ from traffic_sim.simulation.heldout_selection import (
     ROUTE_FILES, VARIANT_OF, stream_closure_exposure)
 
 #: Version tag written into every artifact produced from this rule.
-RULE_VERSION = "survives_own_closure_v1"
+RULE_VERSION = "survives_own_closure_v2"
 
 #: An edge with no exposure at all in a variant, so the shape is uniform.
 _EMPTY_EXPOSURE = {"vehicles": 0, "denied_departures": 0, "resume_pairs": {}}
@@ -173,7 +173,7 @@ def real_predecessors(collapsed: Mapping[str, Sequence[str]]
 def successors_cut_off(edge_id: str,
                        collapsed: Mapping[str, Sequence[str]],
                        predecessors: Mapping[str, set]) -> tuple[str, ...]:
-    """Edges reachable ONLY through `edge_id` — pure topology, no demand.
+    """Successors unreachable from every approach once `edge_id` closes.
 
     This is the Skånegatan/Engelbrektsgatan shape recorded in `CLAUDE.md`:
     node 3575001205 had exactly ONE incoming connection in the whole network,
@@ -181,14 +181,35 @@ def successors_cut_off(edge_id: str,
     successor is severed regardless of what today's demand happens to use, and
     a demand-only check would miss it on any quarter where nothing drove there.
 
-    Deliberately one hop and not a component analysis: a successor that keeps
-    another real predecessor is reachable by definition, and one that keeps
-    none is unreachable by definition. Anything further is already covered by
-    the per-vehicle destination check, which is a full graph search.
+    The relevant start is the real edge immediately BEFORE the closure — the
+    same start used by the per-vehicle check and SUMO's live rerouter. Merely
+    finding another direct predecessor of the successor is insufficient: that
+    predecessor may itself be trapped behind the closure. A multi-source search
+    from all real approaches decides whether an actual topological detour
+    exists, while still requiring no demand.
+
+    An edge with no approach has only denied departures, which are reported but
+    deliberately do not gate. Self-loops and internally cyclic downstream
+    pockets do not create a detour unless an approach can really reach them.
     """
-    return tuple(sorted(
-        target for target in collapsed.get(edge_id, ())
-        if not (predecessors.get(target, set()) - {edge_id})))
+    targets = set(collapsed.get(edge_id, ())) - {edge_id}
+    approaches = set(predecessors.get(edge_id, set())) - {edge_id}
+    if not targets or not approaches:
+        return ()
+
+    closed_graph = without_edges(collapsed, {edge_id})
+    reached = set(approaches)
+    pending = list(approaches)
+    missing = targets - reached
+    # Stop as soon as every immediate successor has a real detour. This keeps
+    # the network-wide screen bounded on the common healthy case.
+    while pending and missing:
+        for target in closed_graph.get(pending.pop(), ()):
+            if target not in reached:
+                reached.add(target)
+                pending.append(target)
+                missing.discard(target)
+    return tuple(sorted(missing))
 
 
 def evaluate_edge(edge_id: str, *,

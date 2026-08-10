@@ -36,6 +36,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import platform
 import shutil
@@ -51,9 +52,63 @@ if str(ROOT) not in sys.path:
 import run_scenario as rs                                     # noqa: E402
 import suggest_closure_time as legacy                         # noqa: E402
 from traffic_sim.simulation import closure_teleport as ct     # noqa: E402
+from traffic_sim.core.fingerprint import sha256_file, sumo_version  # noqa: E402
 
 DEFAULT_OUT = ROOT / "validation" / "closure_teleport_policy_v1.json"
 ARM_LABELS = ("sumo_default", "policy")
+SOURCE_PATHS = {
+    "run_scenario.py": ROOT / "run_scenario.py",
+    "suggest_closure_time.py": ROOT / "suggest_closure_time.py",
+    "tools/measure_closure_teleport_policy.py": Path(__file__),
+    "traffic_sim/simulation/closure_teleport.py":
+        ROOT / "traffic_sim/simulation/closure_teleport.py",
+    "traffic_sim/simulation/metrics.py":
+        ROOT / "traffic_sim/simulation/metrics.py",
+}
+
+
+def _content_key(payload: dict) -> str:
+    body = {key: value for key, value in payload.items()
+            if key != "content_key"}
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def evidence_identity(home: Path, variants: list[Path]) -> dict:
+    """Exact files and runtime that give the paired result its meaning."""
+    inputs = {
+        "sumo/demand_meta.json": rs.SUMO_DIR / "demand_meta.json",
+        "sumo/net.net.xml": rs.NET_PATH,
+        "sumo/plain.edg.xml": rs.SUMO_DIR / "plain.edg.xml",
+        **{f"sumo/{path.name}": path for path in variants},
+    }
+    binary = home / "bin" / "sumo"
+    records = {
+        "inputs": {label: sha256_file(path)
+                   for label, path in sorted(inputs.items())},
+        # Absence is meaningful: run_scenario parses net.net.xml directly when
+        # this optional cache is absent, and consumes it when present/valid.
+        "optional_inputs": {
+            "sumo/network_metadata.json": sha256_file(
+                rs.SUMO_DIR / "network_metadata.json"),
+        },
+        "sources": {label: sha256_file(path)
+                    for label, path in sorted(SOURCE_PATHS.items())},
+        "sumo": {
+            "version": sumo_version(home),
+            "binary_sha256": sha256_file(binary),
+        },
+    }
+    missing = [label for section in ("inputs", "sources")
+               for label, digest in records[section].items()
+               if digest is None]
+    if records["sumo"]["binary_sha256"] is None:
+        missing.append("SUMO binary")
+    if missing:
+        raise SystemExit(
+            f"cannot bind Stage 3 evidence; missing inputs: {sorted(missing)}")
+    return records
 
 
 def parse_args(argv=None):
@@ -103,6 +158,7 @@ def run_arm(*, label, time_to_teleport_s, closures, close_edges, variants,
             rerouter_edges, seeds, seed_workers, workspace):
     """One arm: the same closure, differing only in the teleport option."""
     scratch: list[Path] = []
+    replications: list[dict] = []
     started = time.time()
     metrics, truncated, dropped, per_seed = legacy.simulate_closure(
         name=f"teleport-{label}", closures=closures, close_edges=close_edges,
@@ -111,6 +167,7 @@ def run_arm(*, label, time_to_teleport_s, closures, close_edges, variants,
         freeflow=freeflow, scratch=scratch, rerouter_edges=rerouter_edges,
         work_dir=workspace / f"arm-{label}", seed_workers=seed_workers,
         variant_labels=legacy.ROBUST_VARIANT_LABELS[:len(variants)],
+        replication_records=replications,
         time_to_teleport_s=time_to_teleport_s)
     return {
         "arm": label,
@@ -119,6 +176,7 @@ def run_arm(*, label, time_to_teleport_s, closures, close_edges, variants,
         "truncated_unreachable": truncated,
         "dropped_unreachable": dropped,
         "per_seed_time_loss_s": list(per_seed),
+        "replications": replications,
         "wall_seconds": round(time.time() - started, 2),
     }, metrics
 
@@ -136,6 +194,7 @@ def main(argv=None) -> int:
     n_intervals = int(meta["n_intervals"])
     duration_s = n_intervals * 900
     variants = rs.demand_variants(meta)
+    identity_at_start = evidence_identity(home, variants)
 
     close_edges = list(dict.fromkeys(args.edge))
     closures = [{"edge_id": edge, "begin_s": args.begin, "end_s": args.end}
@@ -198,6 +257,7 @@ def main(argv=None) -> int:
         "build_id": meta.get("build_id"),
         "n_intervals": n_intervals,
         "demand_variants": [path.name for path in variants],
+        "evidence_identity": identity_at_start,
         "detour_less_budget": {
             "vehicles_no_detour": detour_less,
             "vehicles_denied_departure":
@@ -216,6 +276,12 @@ def main(argv=None) -> int:
             "that case, which is what the plan asks for, and is not evidence "
             "that every closure behaves the same way."),
     }
+    identity_at_end = evidence_identity(home, variants)
+    if identity_at_end != identity_at_start:
+        raise SystemExit(
+            "Stage 3 inputs changed during the paired run; refusing to write "
+            "evidence for mixed identities")
+    payload["content_key"] = _content_key(payload)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     print(f"\nwrote {out_path}")

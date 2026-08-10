@@ -6,12 +6,12 @@ machine that can run `make sumo-net` — and it answers the question that decide
 whether a v10 freeze is worth attempting: are there at least four near-sensor
 candidates whose closure severs nobody?
 
-WHAT IT MEASURES.  For each edge, the successors that lose their only real
-predecessor once it closes. That is the Skånegatan/Engelbrektsgatan shape in
-`CLAUDE.md` — node 3575001205 has exactly ONE incoming connection in the whole
-network, so closing that edge structurally cut off everything downstream, and
-39 vehicles were then teleported through the closure because the live rerouter
-had nothing to offer them.
+WHAT IT MEASURES.  For each edge, whether any real approach immediately before
+the closure can still reach each immediate successor after the edge is removed.
+That is the Skånegatan/Engelbrektsgatan shape in `CLAUDE.md` — node 3575001205
+has exactly ONE incoming connection in the whole network, so closing that edge
+structurally cut off everything downstream, and 39 vehicles were then
+teleported through the closure because the live rerouter had nothing to offer.
 
 WHAT IT DOES NOT MEASURE.  Whether any vehicle actually wanted to go there. An
 edge that passes this screen can still strand real demand further along its
@@ -27,9 +27,9 @@ Run:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +39,9 @@ if str(ROOT) not in sys.path:
 from traffic_sim.core.fingerprint import sha256_file          # noqa: E402
 from traffic_sim.simulation import closure_survivability as cs  # noqa: E402
 
-DEFAULT_OUT = ROOT / "validation" / "closure_survivability_screen_v1.json"
+SCREEN_VERSION = 2
+MEASURED_AT = "2026-08-10"
+DEFAULT_OUT = ROOT / "validation" / "closure_survivability_screen_v2.json"
 
 #: The edge `CLAUDE.md` documents as structurally severing its downstream, used
 #: as a live self-check: a screen that cannot see its own motivating case is
@@ -52,7 +54,33 @@ def parse_args(argv=None):
     parser.add_argument("--out", default=str(DEFAULT_OUT), metavar="PATH")
     parser.add_argument("--stdout", action="store_true",
                         help="print the report instead of writing a file")
+    parser.add_argument("--verify", action="store_true",
+                        help="recompute and compare byte-for-byte; never write")
     return parser.parse_args(argv)
+
+
+def _content_key(payload: dict) -> str:
+    body = {key: value for key, value in payload.items()
+            if key != "content_key"}
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _known_case(collapsed, predecessors) -> tuple[str, ...]:
+    """Fail closed when the live self-check is absent or no longer severs."""
+    if KNOWN_SEVERING_EDGE not in collapsed:
+        raise SystemExit(
+            f"self-check failed: documented edge {KNOWN_SEVERING_EDGE} is "
+            "absent from the collapsed network")
+    cut_off = cs.successors_cut_off(
+        KNOWN_SEVERING_EDGE, collapsed, predecessors)
+    if not cut_off:
+        raise SystemExit(
+            f"self-check failed: closing {KNOWN_SEVERING_EDGE} cuts off "
+            "nothing, but CLAUDE.md records it as structurally severing its "
+            "downstream. The screen is not measuring what it claims to.")
+    return cut_off
 
 
 def screen() -> dict:
@@ -67,7 +95,6 @@ def screen() -> dict:
             f"with `make sumo-net` — it is derived deterministically from the "
             f"tracked web/data/graph.graphml.")
 
-    started = time.time()
     adjacency = rs.build_edge_graph(set())
     collapsed = cs.collapse_internal(adjacency)
     predecessors = cs.real_predecessors(collapsed)
@@ -77,12 +104,7 @@ def screen() -> dict:
     # a successor alive after its only real predecessor is removed, and it duly
     # reported zero severing edges across the whole network. Refusing to emit a
     # report unless the documented case is reproduced makes that failure loud.
-    known = cs.successors_cut_off(KNOWN_SEVERING_EDGE, collapsed, predecessors)
-    if KNOWN_SEVERING_EDGE in collapsed and not known:
-        raise SystemExit(
-            f"self-check failed: closing {KNOWN_SEVERING_EDGE} cuts off nothing, "
-            f"but CLAUDE.md records it as structurally severing its downstream. "
-            f"The screen is not measuring what it claims to.")
+    known = _known_case(collapsed, predecessors)
 
     network_rows = []
     for edge in sorted(collapsed):
@@ -108,14 +130,15 @@ def screen() -> dict:
         bucket = by_class.setdefault(row["road_class"], {"survive": 0, "fatal": 0})
         bucket["survive" if row["survives_topology"] else "fatal"] += 1
 
-    return {
+    report = {
         "schema_version": 1,
         "kind": "closure_survivability_topology_screen",
+        "screen_version": SCREEN_VERSION,
         "stage": "closure_integrity_plan_stage_4",
         "rule_version": cs.RULE_VERSION,
-        "measured_at": time.strftime("%Y-%m-%d"),
-        "question": ("which edges leave a successor with no remaining real "
-                     "predecessor once they close?"),
+        "measured_at": MEASURED_AT,
+        "question": ("which edges leave an immediate successor unreachable "
+                     "from every real approach once they close?"),
         "self_check": {
             "edge": KNOWN_SEVERING_EDGE,
             "successors_cut_off": list(known),
@@ -151,19 +174,38 @@ def screen() -> dict:
             "and it needs the canonical archived demand, which lives under the "
             "gitignored runs/ tree."),
         "sources": {
+            "run_scenario.py": sha256_file(ROOT / "run_scenario.py"),
+            "tools/freeze_heldout_v10.py": sha256_file(
+                ROOT / "tools/freeze_heldout_v10.py"),
+            "tools/screen_closure_survivability.py": sha256_file(
+                Path(__file__)),
+            "traffic_sim/simulation/closure_survivability.py": sha256_file(
+                ROOT / "traffic_sim/simulation/closure_survivability.py"),
             "web/data/graph.graphml": sha256_file(ROOT / "web/data/graph.graphml"),
             "web/data/network.geojson": sha256_file(ROOT / "web/data/network.geojson"),
             "sumo/net.net.xml": sha256_file(rs.NET_PATH),
         },
-        "wall_seconds": round(time.time() - started, 2),
         "severing_edges": network_rows,
     }
+    report["content_key"] = _content_key(report)
+    return report
 
 
 def main(argv=None) -> int:
     args = parse_args(argv)
     report = screen()
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if args.verify:
+        out = Path(args.out)
+        if not out.is_file():
+            raise SystemExit(f"cannot verify absent report: {out}")
+        stored = json.loads(out.read_text())
+        if stored.get("content_key") != _content_key(stored):
+            raise SystemExit(f"stored report content key is invalid: {out}")
+        if stored != report:
+            raise SystemExit(f"stored report does not reproduce: {out}")
+        print("reproduces byte-for-byte: True")
+        return 0
     if args.stdout:
         print(text)
     else:

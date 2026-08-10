@@ -1,0 +1,822 @@
+{
+  "campaign_version": "v10",
+  "canonical_demand": {
+    "build_id": "6be372d002835c406126",
+    "demand_build_key": "6ecedd258714e22c",
+    "designation": "the same archive v9 bound, by exact path and full identity; does not repair the globally ambiguous demand key",
+    "epoch_sim": "2027-07-15T00:00:00",
+    "file_sha256": {
+      "calibrated.rou.xml": "f56044f43cc0d877aeea89fe133d35a1fcbbd68cbcf55ae340ba935c4376e995",
+      "calibrated_v1.rou.xml": "d4d4bb11177fcfc8ce7c0fa1c52743bd4b7ed28b4ff2d180b50ed4b1f14b2ea3",
+      "calibrated_v2.rou.xml": "13419817b24834208a3331692535876b0a2d3e616280642407287b2029fe75ea",
+      "demand_meta.json": "ec735e6e930e559e75dff11e8e52d27330afa542616effe65ce8bb0030a39f37",
+      "manifest.json": "6727874f9b6860a2b43ec57a1d338279b10a95232df5955b5788a616e6210ba1"
+    },
+    "git_commit": "1cca0bd269c6ea15318ce47b50d70931f945d7b1",
+    "n_intervals": 480,
+    "path": "runs/demand-20260805-111829-65c27113-1c9e"
+  },
+  "content_key": "f5cd0ea928168352b15a7d53c0a05228c0a44fe01cb3ccfbf0a921f28c3c3546",
+  "exclusion_proof": {
+    "eligible_candidate_count": 23,
+    "intersection_with_prior": [],
+    "prior_heldout_edge_count": 54,
+    "refused_by_survivability_count": 22,
+    "shared_junctions_with_prior": 0
+  },
+  "expected_discriminating_case_count": 2,
+  "formula_version": "demand_exposure_v4_survivable",
+  "kind": "monthly_heldout_selection",
+  "physical_independence": {
+    "min_edge_length_m": 30.0,
+    "reverse_pairs": 0,
+    "rule": "no reverse direction and no shared junction among selected cases",
+    "shared_junctions": 0
+  },
+  "pilot_selection_does_not_read_proxy": true,
+  "practical_equivalence_vehicle_hours": 0.001,
+  "schema_version": 1,
+  "selected_edge_count": 5,
+  "selected_edges": [
+    {
+      "case_id": "v10-discriminating-tertiary-a",
+      "demand_features": {
+        "median_support": 1263,
+        "min_support": 629,
+        "schedule_ids": [
+          "closure-608c554b37fe5208c8bf",
+          "closure-e480e8b029e46ab7f6f6",
+          "closure-5c1b43d6a282c6668ccc",
+          "closure-b58eec0df58195566de1",
+          "closure-b98e9665a71c8bd38122",
+          "closure-863b034731f474273e4a",
+          "closure-b9335889fc12d4f77c7e",
+          "closure-8348f73f030bbb47225c",
+          "closure-ecf6558b6195e38939a6",
+          "closure-e1bf12a046c3ef46ca9c",
+          "closure-c29157a7a5f8c410672d",
+          "closure-37a5894054e286c994c7",
+          "closure-f7b31eea4a293c756446",
+          "closure-2263bb28346ef54334e7",
+          "closure-f48b4a2c837a18bc1fd0"
+        ],
+        "temporal_variation": 0.529049,
+        "window_exposure": {
+          "q10": [
+            957,
+            972,
+            984,
+            1064,
+            1084,
+            1119,
+            859,
+            887,
+            913,
+            629,
+            649,
+            678,
+            1260,
+            1295,
+            1325
+          ],
+          "q50": [
+            1271,
+            1310,
+            1330,
+            1245,
+            1291,
+            1354,
+            948,
+            998,
+            1051,
+            644,
+            680,
+            724,
+            1263,
+            1303,
+            1338
+          ],
+          "q90": [
+            1272,
+            1312,
+            1342,
+            1269,
+            1328,
+            1386,
+            973,
+            1026,
+            1071,
+            660,
+            710,
+            756,
+            1336,
+            1383,
+            1427
+          ]
+        }
+      },
+      "edge_id": "8709855498_91615275_0",
+      "expected_discriminating": true,
+      "rank_reason": "top-two temporal variation under demand_exposure_v4_survivable",
+      "structural": {
+        "dist_sensor_m": 294.7,
+        "junction_u": "8709855498",
+        "junction_v": "91615275",
+        "length_m": 323.0,
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_within_400m"
+      },
+      "survivability": {
+        "edge_id": "8709855498_91615275_0",
+        "per_variant": {
+          "q10": {
+            "denied_departures": 221,
+            "severed_destination": 0,
+            "vehicles": 8286
+          },
+          "q50": {
+            "denied_departures": 216,
+            "severed_destination": 0,
+            "vehicles": 10279
+          },
+          "q90": {
+            "denied_departures": 310,
+            "severed_destination": 0,
+            "vehicles": 10965
+          }
+        },
+        "rule_version": "survives_own_closure_v2",
+        "successors_cut_off": [],
+        "survives_own_closure": true,
+        "vehicles_crossing": 10965,
+        "vehicles_denied_departure": 310,
+        "vehicles_severed_destination": 0
+      }
+    },
+    {
+      "case_id": "v10-discriminating-tertiary-b",
+      "demand_features": {
+        "median_support": 393,
+        "min_support": 248,
+        "schedule_ids": [
+          "closure-87ad42071dbbfe78445e",
+          "closure-36e5c20f03bd38da393c",
+          "closure-318f3e674e38e5f355b8",
+          "closure-bbab1b1a394d24b342d8",
+          "closure-e03e546b14f4531b845a",
+          "closure-ddc508d2daea06bd7ee9",
+          "closure-81e784c1e22be40d78f3",
+          "closure-5c35ea1ae52e0cf752da",
+          "closure-43bf29a70356a12a85ba",
+          "closure-c7a1c28661dde479171c",
+          "closure-b713e56feb4c9df08327",
+          "closure-f80bca09a687a23897fd",
+          "closure-116ce76e602fe47f02e2",
+          "closure-92c1babf68debdbdc18c",
+          "closure-103da4cbe9c4a49b91f1"
+        ],
+        "temporal_variation": 0.494686,
+        "window_exposure": {
+          "q10": [
+            863,
+            894,
+            904,
+            577,
+            594,
+            601,
+            415,
+            453,
+            470,
+            303,
+            316,
+            329,
+            550,
+            578,
+            602
+          ],
+          "q50": [
+            463,
+            478,
+            500,
+            474,
+            504,
+            503,
+            303,
+            323,
+            319,
+            288,
+            300,
+            298,
+            364,
+            393,
+            393
+          ],
+          "q90": [
+            321,
+            371,
+            369,
+            407,
+            403,
+            406,
+            274,
+            296,
+            304,
+            248,
+            253,
+            268,
+            319,
+            321,
+            316
+          ]
+        }
+      },
+      "edge_id": "3473721571_25734041_0",
+      "expected_discriminating": true,
+      "rank_reason": "top-two temporal variation under demand_exposure_v4_survivable",
+      "structural": {
+        "dist_sensor_m": 388.3,
+        "junction_u": "3473721571",
+        "junction_v": "25734041",
+        "length_m": 180.4,
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_within_400m"
+      },
+      "survivability": {
+        "edge_id": "3473721571_25734041_0",
+        "per_variant": {
+          "q10": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 4789
+          },
+          "q50": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 3869
+          },
+          "q90": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 3025
+          }
+        },
+        "rule_version": "survives_own_closure_v2",
+        "successors_cut_off": [],
+        "survives_own_closure": true,
+        "vehicles_crossing": 4789,
+        "vehicles_denied_departure": 0,
+        "vehicles_severed_destination": 0
+      }
+    },
+    {
+      "case_id": "v10-control-tertiary-1",
+      "demand_features": {
+        "median_support": 1367,
+        "min_support": 779,
+        "schedule_ids": [
+          "closure-73c1ac6a00f00648235a",
+          "closure-c6e23c845bf99850d498",
+          "closure-7e5fd23ef6c91b39b6ce",
+          "closure-c9463937d70e3e66e561",
+          "closure-0174c5cfc9be6e1ff91b",
+          "closure-d9658a920e391565cc94",
+          "closure-9be4005d159044db507f",
+          "closure-2c20afc6baebd288e915",
+          "closure-8acb42376955aabbd73d",
+          "closure-5ec10e76b227b55b0ea8",
+          "closure-729281a37652c8ebca28",
+          "closure-7eb3ae914eb854f92b01",
+          "closure-53da4fedbe1db5eab6bd",
+          "closure-40384c569784315e575c",
+          "closure-b17e95e3b1bd903b4408"
+        ],
+        "temporal_variation": 0.464237,
+        "window_exposure": {
+          "q10": [
+            1389,
+            1423,
+            1454,
+            1367,
+            1403,
+            1436,
+            983,
+            1016,
+            1046,
+            779,
+            811,
+            841,
+            1349,
+            1386,
+            1418
+          ],
+          "q50": [
+            1389,
+            1423,
+            1454,
+            1367,
+            1403,
+            1436,
+            983,
+            1016,
+            1046,
+            779,
+            811,
+            841,
+            1349,
+            1386,
+            1418
+          ],
+          "q90": [
+            1389,
+            1423,
+            1454,
+            1367,
+            1403,
+            1436,
+            983,
+            1016,
+            1046,
+            779,
+            811,
+            841,
+            1349,
+            1386,
+            1418
+          ]
+        }
+      },
+      "edge_id": "26842525_26355153_0",
+      "expected_discriminating": false,
+      "rank_reason": "eligible control under demand_exposure_v4_survivable",
+      "structural": {
+        "dist_sensor_m": 11.0,
+        "junction_u": "26842525",
+        "junction_v": "26355153",
+        "length_m": 60.1,
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_within_400m"
+      },
+      "survivability": {
+        "edge_id": "26842525_26355153_0",
+        "per_variant": {
+          "q10": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 828
+          },
+          "q50": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 741
+          },
+          "q90": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 638
+          }
+        },
+        "rule_version": "survives_own_closure_v2",
+        "successors_cut_off": [],
+        "survives_own_closure": true,
+        "vehicles_crossing": 828,
+        "vehicles_denied_departure": 0,
+        "vehicles_severed_destination": 0
+      }
+    },
+    {
+      "case_id": "v10-control-tertiary-2",
+      "demand_features": {
+        "median_support": 1472,
+        "min_support": 757,
+        "schedule_ids": [
+          "closure-2eb5242fdeedfb35514a",
+          "closure-0f6b0a919bad31fbc64a",
+          "closure-9637704050482f612349",
+          "closure-5302d9f2fc76f45836a2",
+          "closure-8b4f26a0356bb6f39009",
+          "closure-243d849e8066140b1dba",
+          "closure-5797e7c0081de73f6c05",
+          "closure-0cbc1f92f591aa2e1599",
+          "closure-ae794d554d9c8440f439",
+          "closure-ec3161254a90bf66daaa",
+          "closure-9e6fb8b5fe58b4267c37",
+          "closure-1b9f61e673e09fa21a83",
+          "closure-8f365aff4a70bcc2c4b1",
+          "closure-decc0c5f1689b370691b",
+          "closure-d224102392455422cecf"
+        ],
+        "temporal_variation": 0.46259,
+        "window_exposure": {
+          "q10": [
+            1259,
+            1277,
+            1298,
+            1294,
+            1282,
+            1293,
+            1083,
+            1115,
+            1143,
+            757,
+            791,
+            805,
+            1182,
+            1197,
+            1237
+          ],
+          "q50": [
+            1572,
+            1591,
+            1603,
+            1570,
+            1579,
+            1598,
+            1234,
+            1261,
+            1296,
+            800,
+            835,
+            845,
+            1584,
+            1611,
+            1652
+          ],
+          "q90": [
+            1648,
+            1663,
+            1709,
+            1447,
+            1472,
+            1475,
+            1146,
+            1185,
+            1228,
+            931,
+            937,
+            958,
+            1581,
+            1592,
+            1632
+          ]
+        }
+      },
+      "edge_id": "30420904_60789862_0",
+      "expected_discriminating": false,
+      "rank_reason": "eligible control under demand_exposure_v4_survivable",
+      "structural": {
+        "dist_sensor_m": 247.6,
+        "junction_u": "30420904",
+        "junction_v": "60789862",
+        "length_m": 71.8,
+        "road_class": "tertiary",
+        "sensor_distance_band": "near_within_400m"
+      },
+      "survivability": {
+        "edge_id": "30420904_60789862_0",
+        "per_variant": {
+          "q10": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 5224
+          },
+          "q50": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 5157
+          },
+          "q90": {
+            "denied_departures": 0,
+            "severed_destination": 0,
+            "vehicles": 4957
+          }
+        },
+        "rule_version": "survives_own_closure_v2",
+        "successors_cut_off": [],
+        "survives_own_closure": true,
+        "vehicles_crossing": 5224,
+        "vehicles_denied_departure": 0,
+        "vehicles_severed_destination": 0
+      }
+    },
+    {
+      "case_id": "v10-control-secondary-3",
+      "demand_features": {
+        "median_support": 854,
+        "min_support": 496,
+        "schedule_ids": [
+          "closure-56f518d5cbdffd431a5e",
+          "closure-81ef7d6ac0ea46c8f469",
+          "closure-94367852aafab299b046",
+          "closure-7194d54f603a2849dddf",
+          "closure-e2a5ca5ecb65add2342b",
+          "closure-0d70d0f3f96b2c4847d9",
+          "closure-f980875011527bafb5a8",
+          "closure-fb8b5f6f5d486f9dc221",
+          "closure-5f50c7cb2ff8e42a9498",
+          "closure-ccd27ad7595859388fdd",
+          "closure-ff950f7dcad2721b90d1",
+          "closure-6019713772f12109799a",
+          "closure-2587263b5d748ab83ed9",
+          "closure-23a9e08411feda8f85a8",
+          "closure-854792e06474c9edf50a"
+        ],
+        "temporal_variation": 0.436698,
+        "window_exposure": {
+          "q10": [
+            887,
+            900,
+            893,
+            836,
+            854,
+            869,
+            629,
+            652,
+            665,
+            496,
+            524,
+            541,
+            933,
+            954,
+            974
+          ],
+          "q50": [
+            915,
+            941,
+            956,
+            778,
+            792,
+            823,
+            741,
+            752,
+            778,
+            609,
+            622,
+            642,
+            924,
+            953,
+            963
+          ],
+          "q90": [
+            1030,
+            1045,
+            1067,
+            930,
+            943,
+            971,
+            788,
+            812,
+            838,
+            585,
+            613,
+            643,
+            941,
+            983,
+            975
+          ]
+        }
+      },
+      "edge_id": "7532496152_1338661557_0",
+      "expected_discriminating": false,
+      "rank_reason": "eligible control under demand_exposure_v4_survivable",
+      "structural": {
+        "dist_sensor_m": 279.1,
+        "junction_u": "7532496152",
+        "junction_v": "1338661557",
+        "length_m": 353.9,
+        "road_class": "secondary",
+        "sensor_distance_band": "near_within_400m"
+      },
+      "survivability": {
+        "edge_id": "7532496152_1338661557_0",
+        "per_variant": {
+          "q10": {
+            "denied_departures": 57,
+            "severed_destination": 0,
+            "vehicles": 817
+          },
+          "q50": {
+            "denied_departures": 95,
+            "severed_destination": 0,
+            "vehicles": 901
+          },
+          "q90": {
+            "denied_departures": 132,
+            "severed_destination": 0,
+            "vehicles": 932
+          }
+        },
+        "rule_version": "survives_own_closure_v2",
+        "successors_cut_off": [],
+        "survives_own_closure": true,
+        "vehicles_crossing": 932,
+        "vehicles_denied_departure": 132,
+        "vehicles_severed_destination": 0
+      }
+    }
+  ],
+  "selection_method": "canonical_demand_exposure_pre_outcome",
+  "selection_reads_outcomes": false,
+  "source_fingerprints": {
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "web/data/network.geojson": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+  },
+  "status": "selection_frozen_pre_outcome",
+  "survivability": {
+    "min_surviving_cases": 4,
+    "refused": [
+      {
+        "edge_id": "1304282393_60789851_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "60789851_7532496128_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "1338661486_559960490_0",
+        "road_class": "secondary",
+        "successors_cut_off": [
+          "559960490_1305379743_0"
+        ],
+        "vehicles_severed_destination": 9688
+      },
+      {
+        "edge_id": "1455801454_366911_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "366911_1305697326_0",
+          "366911_1455801454_0",
+          "366911_30420899_0",
+          "366911_60128120_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "1463940578_1455801454_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "1455801454_366911_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "2395027712_135705883_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "135705883_25581714_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "2395027712_25734040_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "25734040_2395027712_0",
+          "25734040_25734039_0",
+          "25734040_96527131_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "2395027723_2395027712_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "2395027712_25734040_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "2395027738_30420895_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "30420895_10248537886_0",
+          "30420895_1705153399_0",
+          "30420895_2395027738_0"
+        ],
+        "vehicles_severed_destination": 42
+      },
+      {
+        "edge_id": "25734040_2395027712_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "2395027712_135705883_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "30420757_30421744_0",
+        "road_class": "secondary",
+        "successors_cut_off": [
+          "30421744_7532496188_0",
+          "30421744_8722747991_0"
+        ],
+        "vehicles_severed_destination": 81
+      },
+      {
+        "edge_id": "30420895_2395027738_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "2395027738_2395027728_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "30420898_8722747939_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "8722747939_8722747919_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "3575001214_1455778248_0",
+        "road_class": "secondary",
+        "successors_cut_off": [
+          "1455778248_1455778254_0",
+          "1455778248_60786990_0"
+        ],
+        "vehicles_severed_destination": 206
+      },
+      {
+        "edge_id": "366911_1455801454_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "1455801454_1455801464_0"
+        ],
+        "vehicles_severed_destination": 70
+      },
+      {
+        "edge_id": "559960490_1305379743_0",
+        "road_class": "secondary",
+        "successors_cut_off": [
+          "1305379743_1305379746_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "60786979_3575001205_0",
+        "road_class": "secondary",
+        "successors_cut_off": [
+          "3575001205_3575001214_0",
+          "3575001205_9037093042_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "60789851_1304282393_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "1304282393_301653258_0",
+          "1304282393_60789851_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "60789851_7532496128_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "7532496128_301653130_0",
+          "7532496128_7532496138_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "8722747921_8722747939_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "8722747939_30420898_0"
+        ],
+        "vehicles_severed_destination": 1910
+      },
+      {
+        "edge_id": "8722747939_30420898_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "30420898_30420899_0",
+          "30420898_8722747939_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "8722747939_8722747919_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "8722747919_1913168786_0",
+          "8722747919_8722747922_0"
+        ],
+        "vehicles_severed_destination": 0
+      },
+      {
+        "edge_id": "91615275_8710974792_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "8710974792_1759741980_0",
+          "8710974792_91615277_0"
+        ],
+        "vehicles_severed_destination": 0
+      }
+    ],
+    "rule_version": "survives_own_closure_v2",
+    "surviving_selected_cases": 5
+  }
+}

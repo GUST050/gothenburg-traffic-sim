@@ -295,9 +295,11 @@ class TestInternalJunctionEdges:
 
     # only_way_in -> :j_0 -> downstream, plus an unrelated pair
     RAW = {
+        "approach": ["only_way_in"],
         "only_way_in": [":j_0"],
         ":j_0": ["downstream"],
         "downstream": [],
+        "approach_other": ["other", "second_way_in"],
         "other": [":j_1"],
         ":j_1": ["shared"],
         "second_way_in": [":j_2"],
@@ -321,6 +323,53 @@ class TestInternalJunctionEdges:
         collapsed = csv.collapse_internal(self.RAW)
         predecessors = csv.real_predecessors(collapsed)
         assert csv.successors_cut_off("other", collapsed, predecessors) == ()
+
+    def test_an_unreachable_second_predecessor_is_not_a_detour(self):
+        raw = {
+            "approach": ["closed"],
+            "closed": ["target"],
+            "trapped": ["target"],
+            "target": [],
+        }
+        collapsed, predecessors = _topology(raw)
+        assert csv.successors_cut_off("closed", collapsed, predecessors) == \
+            ("target",)
+
+    def test_a_self_loop_is_not_a_detour(self):
+        raw = {
+            "approach": ["closed"],
+            "closed": ["target"],
+            "target": ["target"],
+        }
+        collapsed, predecessors = _topology(raw)
+        assert csv.successors_cut_off("closed", collapsed, predecessors) == \
+            ("target",)
+
+    def test_an_internal_cycle_is_not_a_detour(self):
+        raw = {
+            "approach": ["closed"],
+            "closed": ["target"],
+            "target": ["cycle"],
+            "cycle": ["target"],
+        }
+        collapsed, predecessors = _topology(raw)
+        assert csv.successors_cut_off("closed", collapsed, predecessors) == \
+            ("target",)
+
+    def test_a_reachable_bypass_into_a_cycle_survives(self):
+        raw = {
+            "approach": ["closed", "bypass"],
+            "closed": ["target"],
+            "bypass": ["cycle"],
+            "target": ["cycle"],
+            "cycle": ["target"],
+        }
+        collapsed, predecessors = _topology(raw)
+        assert csv.successors_cut_off("closed", collapsed, predecessors) == ()
+
+    def test_no_approach_means_denied_departures_only(self):
+        collapsed, predecessors = _topology({"closed": ["target"]})
+        assert csv.successors_cut_off("closed", collapsed, predecessors) == ()
 
     def test_the_raw_graph_would_have_answered_wrongly(self):
         """The defect itself, pinned: asked on the uncollapsed graph, the

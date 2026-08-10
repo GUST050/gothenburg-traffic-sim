@@ -1,9 +1,9 @@
 # Closure integrity, stages 3 and 4 — implementation record
 
-**Date:** 2026-08-10 · **Status:** implemented and unit-tested; the two
-measured gates are UNRUN, because they need SUMO plus the canonical demand
-archive. Read with `docs/plans/CLOSURE_INTEGRITY_PLAN_2026-08-05.md`, which
-this closes out.
+**Date:** 2026-08-10 · **Status:** implemented, measured and frozen. Stage 3's
+paired real-SUMO gate passes and held-out v10 is frozen and byte-reproducible.
+Read with `docs/plans/CLOSURE_INTEGRITY_PLAN_2026-08-05.md`, which this closes
+out.
 
 ---
 
@@ -13,8 +13,8 @@ this closes out.
 | --- | --- | --- |
 | 1 — measure the leak mechanism | done, premise REVISED (`d07e586`) | unchanged |
 | 2 — rerouter reach sweep | done, no change adopted (`a32006d`) | unchanged |
-| 3 — teleport policy for closure runs | open | **implemented; mechanism measured on a synthetic probe, gate on real demand unrun** |
-| 4 — v10 selection precondition | open | **implemented; topology half measured (gate achievable), freeze unrun** |
+| 3 — teleport policy for closure runs | open | **implemented; paired gate passes on canonical q10/q50/q90 demand** |
+| 4 — v10 selection precondition | open | **implemented; corrected topology screen measured and v10 frozen/reproduced** |
 | 5 — warming | superseded by `WARMING_PLAN_2026-08-05.md` | unchanged |
 | unplanned finding (21/61) | open, "not re-measured" | **re-score tool built; unrun** |
 
@@ -101,13 +101,21 @@ boundary cannot be blamed on the closure. The raw `entered` it was reading was
 a legitimate post-reopening entry. The probe now closes the edge for the whole
 run, and the test says so in a comment, because that mistake is easy to repeat.
 
-**The gate, unrun.** `closure_teleport.evaluate_stage3_gate` implements the
-plan's wording exactly — throughput measured and zero, no teleports, and the
-unfinished/dropped population growing by no more than the demand-side
-`vehicles_no_detour` budget. `None` throughput fails: "we never looked" is not
-"we looked and it was zero". `tools/measure_closure_teleport_policy.py` runs one
-closure twice on the same demand and seeds, differing only in the option, and
-writes `validation/closure_teleport_policy_v1.json`.
+**The gate passes on canonical demand.**
+`validation/closure_teleport_policy_v1.json` binds the exact q50/q10/q90 route
+files, network, plain-edge input, SUMO binary/version and every executed source.
+It records identical seed/variant identities in both arms and carries an
+integrity-checked content key. The default arm must first exhibit positive
+measured throughput and a teleport; a zero-to-zero comparison cannot pass.
+
+| arm | closed-edge throughput | teleports | unfinished | inserted |
+| --- | ---: | ---: | ---: | ---: |
+| SUMO default | **1** | **1** | 0 | 86,807 |
+| `--time-to-teleport -1` | **0** | **0** | 0 | 86,807 |
+
+The detour-less budget and observed stuck growth were both zero. Every gate
+check passed for seeds `1000/q50`, `1001/q10`, `1002/q90`. Missing, negative or
+identity-drifted measurements fail closed.
 
 ```
 python3 tools/measure_closure_teleport_policy.py \
@@ -163,24 +171,22 @@ fingerprints `run_monthly_proxy_validation.py`, so registering afterwards would
 change the digest the frozen manifest recorded.
 
 **The topology half is MEASURED** ·
-`validation/closure_survivability_screen_v1.json`. `sumo/net.net.xml` is
+`validation/closure_survivability_screen_v2.json`. `sumo/net.net.xml` is
 gitignored but derived deterministically from the tracked graph, so
 `make sumo-net` reconstructs it and the topology half of the rule can be
 answered without any demand at all:
 
 ```
-network : 1285 / 7101 edges (18.1%) sever a successor when closed
-pool    :   35 /   46 near-sensor candidates survive the topology screen
-            secondary  8 survive / 2 fatal
-            tertiary  27 survive / 9 fatal
+network : 2066 / 7101 edges (29.1%) sever a successor when closed
+pool    :   24 /   46 near-sensor candidates survive the topology screen
+            secondary  5 survive / 5 fatal
+            tertiary  19 survive / 17 fatal
 stage 4 gate achievable (>= 4 survivors): TRUE
 ```
 
 So the Stage 4 gate is achievable before a single SUMO run — which is exactly
-what the plan wanted it to establish. 18.1% network-wide is also a useful
-number in its own right: closing a random inner-city edge severs somebody
-roughly one time in five, and that is the population v9's selection had no way
-to see.
+what the plan wanted it to establish. The network-wide share is a topology
+fact, not a probability estimate for a random real-world closure.
 
 *The first version of this screen reported ZERO severing edges, everywhere.*
 It ran the one-hop question against `build_edge_graph`'s raw output, where SUMO
@@ -190,13 +196,19 @@ points at B, so B looks reachable when nothing can get to it. The check was
 inert, and it was caught by asking it about `60786979_3575001205_0`, the edge
 `CLAUDE.md` documents as severing its downstream because node 3575001205 has
 one incoming connection in the whole network. `collapse_internal` now resolves
-those hops, the screen refuses to emit a report unless that known case
-reproduces, and five regression tests pin the defect — including one that
-asserts the raw graph gives the wrong answer.
+those hops.
 
-`reachable()` is deliberately NOT given the collapsed graph: path-finding must
-traverse internals, and already does so correctly. Only the one-hop predecessor
-question needed them removed.
+Review then found a second defect: the corrected v1 screen treated any other
+direct predecessor as a detour even when the closure's own approach could not
+reach it. v2 searches from every real edge immediately before the closure to
+the immediate successors after removing the closed edge. Self-loops, trapped
+cycles and unreachable second predecessors therefore cannot masquerade as
+access. The screen refuses to emit a report if the documented case is absent
+or no longer reproduces, fingerprints its own executed code, carries a content
+key and reproduces byte-for-byte. v1 is preserved as superseded evidence.
+
+Demand reachability deliberately keeps SUMO's raw graph; only the topology
+screen collapses internal junction hops before its approach-to-successor search.
 
 **Corroborated against the one closure that has a tracked record.**
 `web/data/scenarios/close_60786979_3575001205_0+1455801464_18241874_0.json` is a
@@ -220,14 +232,19 @@ evidence that Stage 3 was unnecessary.
 That artifact also confirms the change is backward-compatible: it predates the
 policy, carries no `teleport_policy` field, and still reads correctly.
 
-**The freeze, unrun.** It needs the canonical archive under `runs/`, which is
-not tracked and cannot be reconstructed — it is bound by exact path and
-SHA-256. On a machine that has it:
+**The freeze is complete.** The dev machine carried v9's canonical archive at
+the exact bound path with all five SHA-256 digests intact. The corrected rule
+refused 22 candidates, selected five independent cases (including both road
+classes), and froze 75 schedules. Manifest key:
+`c10b2dc9fbf8f0a9ad75d648224e1fdd0f43998c850590349678bf89cb07d5d7`.
 
 ```
-python3 tools/freeze_heldout_v10.py --dry-run    # compose and report, writes nothing
-python3 tools/freeze_heldout_v10.py              # publish the three artifacts
+python3 tools/freeze_heldout_v10.py --verify
 ```
+
+The three frozen artifacts reproduce byte-for-byte. The manifest fingerprints
+`run_scenario.py` as well as both closure modules, so graph, reachability and
+teleport semantics cannot drift under the frozen campaign.
 
 The refusal path is as important as the selection: fewer than
 `MIN_SURVIVING_CASES = 4` survivors is a refusal, not a smaller campaign, so
@@ -272,40 +289,29 @@ plan-bound sources. Merging this while a population run is active discards the
 units already built, not just the run — `WARMING_PLAN_2026-08-05.md` has the
 constraint table. Land it between runs, or regenerate the plan afterwards.
 
-**Stage 3's gate on real demand is unrun, and cannot be run in this
-environment.** Nothing here claims the leak is fixed on the Gothenburg network.
-It claims the mechanism is removed by construction, demonstrated against real
-SUMO on a synthetic case, and that the measurement which would decide it is
-built. Until `validation/closure_teleport_policy_v1.json` exists, Stage 3 is
-implemented and undecided.
-
-The blocker was located rather than assumed. `sumo/net.net.xml` rebuilds fine
-from the tracked graph, and `estimate_directions.py` produces a direction split,
-but `build_sumo_demand.py` stops inside `build_candidates.py`: the candidate
-pool needs OSM building footprints and POIs from `overpass-api.de`, which this
-environment's network policy denies (`403` on CONNECT, confirmed against the
-proxy's own status endpoint). `data_in/deso/` carries the population and DeSO
-geometry but not the POI/building layers. So there is no calibrated demand
-here, and a demand invented to work around that would be fabricated evidence.
-
-**Stage 4's freeze is unrun for a different and permanent reason.** It binds the
-canonical archive by exact path and SHA-256. That archive cannot be
-reconstructed — only copied from the machine that produced it.
+**Both gates are now decided.** Claude's remote environment could neither reach
+Overpass nor see the gitignored canonical archive. Those were real limitations
+there, but not project-wide blockers: the dev machine already held the exact
+archive. No replacement demand was built or invented.
 
 ## Checks
 
 ```
 python3 -m pytest tests/test_closure_teleport.py \
+    tests/test_closure_teleport_measurement.py \
     tests/test_closure_teleport_wiring.py \
     tests/test_closure_teleport_probe.py \
     tests/test_closure_survivability.py \
+    tests/test_closure_survivability_screen.py \
     tests/test_closure_disruption.py \
     tests/test_heldout_v10_freeze.py \
     tests/test_remeasure_closure_disqualification.py
 ```
 
-108 passed. `test_closure_teleport_probe.py` starts real SUMO and skips when it
-is absent, so the suite still runs on a machine without it.
+128 passed, 5 skipped. `test_closure_teleport_probe.py` starts real SUMO and
+skips when its synthetic fixture runtime is unavailable, so the suite still
+runs without it. A broader closure/monthly/signal integration run passed 414
+tests with 12 artifact-dependent tests deliberately deselected.
 
 The full suite was run twice — once on a clean worktree of the same base, once
 on this branch — because this environment has no `sumo/` or `runs/` tree and so

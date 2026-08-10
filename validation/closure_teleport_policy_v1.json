@@ -1,0 +1,248 @@
+{
+  "arms": [
+    {
+      "arm": "sumo_default",
+      "dropped_unreachable": 0,
+      "metrics": {
+        "closed_edge_throughput": 1,
+        "dropped_unreachable": 0,
+        "inserted": 86807,
+        "loaded": 86807,
+        "max_queue_vehicles": 3,
+        "running_at_end": 0,
+        "teleport_reasons": {
+          "jam": 1,
+          "wrongLane": 0,
+          "yield": 0
+        },
+        "teleport_total": 1,
+        "total_time_loss_s": 612108.7700000053,
+        "trip_count": 86807,
+        "truncated_unreachable": 0,
+        "unfinished_trips": 0,
+        "unfinished_waiting_trips": 0,
+        "waiting_at_end": 0
+      },
+      "per_seed_time_loss_s": [
+        616313.9200000055,
+        567345.3100000046,
+        652667.0800000054
+      ],
+      "replications": [
+        {
+          "demand_variant": "q50",
+          "dropped_unreachable": 0,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleport_total": 1,
+          "total_time_loss_s": 616313.9200000055,
+          "truncated_unreachable": 0,
+          "unfinished_trips": 0,
+          "unfinished_waiting_trips": 0,
+          "variant_index": 0,
+          "waiting_at_end": 0
+        },
+        {
+          "demand_variant": "q10",
+          "dropped_unreachable": 0,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleport_total": 0,
+          "total_time_loss_s": 567345.3100000046,
+          "truncated_unreachable": 0,
+          "unfinished_trips": 0,
+          "unfinished_waiting_trips": 0,
+          "variant_index": 1,
+          "waiting_at_end": 0
+        },
+        {
+          "demand_variant": "q90",
+          "dropped_unreachable": 0,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleport_total": 0,
+          "total_time_loss_s": 652667.0800000054,
+          "truncated_unreachable": 0,
+          "unfinished_trips": 0,
+          "unfinished_waiting_trips": 0,
+          "variant_index": 2,
+          "waiting_at_end": 0
+        }
+      ],
+      "teleport_policy": {
+        "basis": "SUMO stuck-vehicle relocation is active; a teleport may carry a vehicle past a closed edge and register as throughput",
+        "label": "sumo_default_300s",
+        "policy_version": "closure_teleport_v1",
+        "teleport_count_is_informative": true,
+        "teleporting_enabled": true,
+        "time_to_teleport_s": null
+      },
+      "truncated_unreachable": 0,
+      "wall_seconds": 50.65
+    },
+    {
+      "arm": "policy",
+      "dropped_unreachable": 0,
+      "metrics": {
+        "closed_edge_throughput": 0,
+        "dropped_unreachable": 0,
+        "inserted": 86807,
+        "loaded": 86807,
+        "max_queue_vehicles": 3,
+        "running_at_end": 0,
+        "teleport_reasons": {
+          "jam": 0,
+          "wrongLane": 0,
+          "yield": 0
+        },
+        "teleport_total": 0,
+        "total_time_loss_s": 621181.403333338,
+        "trip_count": 86807,
+        "truncated_unreachable": 0,
+        "unfinished_trips": 0,
+        "unfinished_waiting_trips": 0,
+        "waiting_at_end": 0
+      },
+      "per_seed_time_loss_s": [
+        643489.0500000041,
+        567330.0400000048,
+        652725.1200000051
+      ],
+      "replications": [
+        {
+          "demand_variant": "q50",
+          "dropped_unreachable": 0,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleport_total": 0,
+          "total_time_loss_s": 643489.0500000041,
+          "truncated_unreachable": 0,
+          "unfinished_trips": 0,
+          "unfinished_waiting_trips": 0,
+          "variant_index": 0,
+          "waiting_at_end": 0
+        },
+        {
+          "demand_variant": "q10",
+          "dropped_unreachable": 0,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleport_total": 0,
+          "total_time_loss_s": 567330.0400000048,
+          "truncated_unreachable": 0,
+          "unfinished_trips": 0,
+          "unfinished_waiting_trips": 0,
+          "variant_index": 1,
+          "waiting_at_end": 0
+        },
+        {
+          "demand_variant": "q90",
+          "dropped_unreachable": 0,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleport_total": 0,
+          "total_time_loss_s": 652725.1200000051,
+          "truncated_unreachable": 0,
+          "unfinished_trips": 0,
+          "unfinished_waiting_trips": 0,
+          "variant_index": 2,
+          "waiting_at_end": 0
+        }
+      ],
+      "teleport_policy": {
+        "basis": "closure runs disable SUMO teleporting: Stage 1 measured a teleport as the necessary condition for closed-edge throughput (validation/closure_leak_mechanism_v1.json), and Stage 2 refuted rerouter reach as the lever (validation/rerouter_radius_sweep_v1.json)",
+        "label": "disabled",
+        "policy_version": "closure_teleport_v1",
+        "teleport_count_is_informative": false,
+        "teleporting_enabled": false,
+        "time_to_teleport_s": -1
+      },
+      "truncated_unreachable": 0,
+      "wall_seconds": 54.72
+    }
+  ],
+  "build_id": "6be372d002835c406126",
+  "closed_edges": [
+    "7532496160_7532496129_0"
+  ],
+  "closure_window_s": [
+    25200,
+    54000
+  ],
+  "content_key": "e3717ac13e21f85638d554ff7592adf8ac35357ec41420cd118bf54263c93b1c",
+  "demand_build_key": "6ecedd258714e22c",
+  "demand_variants": [
+    "calibrated.rou.xml",
+    "calibrated_v1.rou.xml",
+    "calibrated_v2.rou.xml"
+  ],
+  "detour_less_budget": {
+    "basis": "calibrated baseline routes; cheapest legal path with vs without the closure, free-flow cost",
+    "vehicles_denied_departure": 0,
+    "vehicles_no_detour": 0,
+    "vehicles_severed_destination": 0
+  },
+  "evidence_identity": {
+    "inputs": {
+      "sumo/calibrated.rou.xml": "f56044f43cc0d877aeea89fe133d35a1fcbbd68cbcf55ae340ba935c4376e995",
+      "sumo/calibrated_v1.rou.xml": "d4d4bb11177fcfc8ce7c0fa1c52743bd4b7ed28b4ff2d180b50ed4b1f14b2ea3",
+      "sumo/calibrated_v2.rou.xml": "13419817b24834208a3331692535876b0a2d3e616280642407287b2029fe75ea",
+      "sumo/demand_meta.json": "ec735e6e930e559e75dff11e8e52d27330afa542616effe65ce8bb0030a39f37",
+      "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+      "sumo/plain.edg.xml": "e4a09cf9d5425ade49f441b51fb1438e8ae1f6ea0a9b59e51e42b20aa7365fb0"
+    },
+    "optional_inputs": {
+      "sumo/network_metadata.json": null
+    },
+    "sources": {
+      "run_scenario.py": "d552557c878e68dc37b897d119648293ae08027d3adbce4c6e12a26baee0e3c9",
+      "suggest_closure_time.py": "452b241a6d79829e81a237ae982a5d29eb26989543def3f63efaaf5c741ea45b",
+      "tools/measure_closure_teleport_policy.py": "bd78ee22c34629c815e67c1e27162b9cd7d208498f99339bf2aa480cb0725fc3",
+      "traffic_sim/simulation/closure_teleport.py": "1f7a1eebd37ff6396cfd24dc0c4d9d8b928a9a5f788045a96667f18484363057",
+      "traffic_sim/simulation/metrics.py": "7f8eac6f834de7f5c22b4b47bfa6a36a4e3596b7fa3f40dbd2e7a256de11a71d"
+    },
+    "sumo": {
+      "binary_sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a",
+      "version": "Eclipse SUMO sumo 1.27.1\n Build features: Darwin-23.6.0 arm64 AppleClang 15.0.0.15000309 Release FMI Proj GUI FMT Intl SWIG Parquet Eigen GDAL GL2PS JuPedSim\n Copyright (C) 2001-2026 German Aerospace Center (DLR) and others; https://sumo.dlr.de\n\nEclipse SUMO sumo 1.27.1 is part of SUMO.\nThis program and the accompanying materials\nare made available under the terms of the Eclipse Public License v2.0\nwhich accompanies this distribution, and is available at\nhttp://www.eclipse.org/legal/epl-v20.html\nThis program may also be made available under the following Secondary\nLicenses when the conditions for such availability set forth in the Eclipse\nPublic License 2.0 are satisfied: GNU General Public License, version 2\nor later which is available at\nhttps://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html\nSPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later"
+    }
+  },
+  "gate": {
+    "checks": {
+      "baseline_exhibits_leak": true,
+      "baseline_exhibits_teleport_mechanism": true,
+      "baseline_throughput_measured": true,
+      "no_teleports": true,
+      "stuck_growth_within_detour_less": true,
+      "throughput_is_zero": true,
+      "throughput_measured": true,
+      "throughput_reduced_to_zero": true
+    },
+    "gate": "the default arm exhibits the measured teleport/leak mechanism, closed-edge throughput then falls to zero under the policy, and the unfinished/dropped population grows by no more than the genuinely detour-less vehicle count",
+    "kind": "closure_teleport_stage3_gate",
+    "measured": {
+      "closed_edge_throughput_after": 0,
+      "closed_edge_throughput_before": 1,
+      "detour_less_vehicles": 0,
+      "stuck_after": 0,
+      "stuck_before": 0,
+      "stuck_growth": 0,
+      "teleports_after": 0,
+      "teleports_before": 1
+    },
+    "passed": true,
+    "policy_version": "closure_teleport_v1",
+    "schema_version": 1
+  },
+  "kind": "closure_teleport_policy_measurement",
+  "limitation": "one closure on one demand build. It decides the Stage 3 gate for that case, which is what the plan asks for, and is not evidence that every closure behaves the same way.",
+  "measured_at": "2026-08-10",
+  "n_intervals": 480,
+  "platform": {
+    "machine": "arm64",
+    "python": "3.9.6",
+    "system": "Darwin"
+  },
+  "schema_version": 1,
+  "seeds": 3,
+  "stage": "closure_integrity_plan_stage_3"
+}

@@ -223,3 +223,4 @@ class TestSurvivabilityProbeBinding:
         source = inspect.getsource(v10.compose)
         assert "traffic_sim/simulation/closure_teleport.py" in source
         assert "traffic_sim/simulation/closure_survivability.py" in source
+        assert '"run_scenario.py"' in source

@@ -1,0 +1,52 @@
+{
+  "campaign_version": "v10",
+  "content_key": "e69c13152cd90b54359f556aed4d61fee7ee6d33311874470d3d162918568af2",
+  "identity": {
+    "gate_semantics": "identical to v4/v5/v9; no threshold moved",
+    "outcome_identity": "untouched-v6-only",
+    "policy_content_key_algorithm": "sha256-canonical-policy-body",
+    "source_identity": "monthly-proxy-v10-stratified-shortlist-v3"
+  },
+  "kind": "monthly_proxy_validation_policy",
+  "schema_version": 1,
+  "selection_formula": {
+    "eligibility": "exposure >= 10 vehicles in every variant and window, AND the edge survives its own closure under survives_own_closure_v2",
+    "eligibility_rationale": "v9's exposure floor is unchanged and keeps the ranking signal from selecting its own degenerate cases; the survivability condition is added because v9 failed ranking_case_fraction with three of five cases producing zero eligible schedules \u2014 selection had proved the edges carried demand but never asked whether closing them strands anyone",
+    "expected_discriminating": "the top two by that ranking",
+    "inputs": "canonical archived demand routes, tracked topology and the derived SUMO connection graph only",
+    "not_a_prediction": "a selection signal only; it does not guarantee a SUMO objective spread",
+    "ranking": "mean relative temporal range, then median support, then edge id",
+    "raw_evidence": "each selected case records schedule_ids, the q10/q50/q90 vehicle exposure for every one of those windows in the same order, and its full survivability report",
+    "reads_outcomes": false,
+    "recomputation": "per variant let low=min(window_exposure) and high=max(window_exposure); temporal_variation = mean over q50,q10,q90 of (high-low)/high, rounded to 6dp; median_support = median over variants of median(window_exposure), rounded to 3dp; min_support = min over variants of low; eligibility requires low>=10 everywhere AND survives_own_closure",
+    "survivability_rule": {
+      "disqualifies": "any vehicle crossing the edge whose destination becomes unreachable once the edge is removed, measured from the edge immediately before the closure on that vehicle's own route; or any successor left with the closed edge as its only incoming connection",
+      "does_not_disqualify": "denied departures (routes starting on the edge). Every street with departures has some, so gating on them would refuse to close any real street \u2014 the mistake C1 fixed on 2026-08-06. They are recorded per candidate instead.",
+      "version": "survives_own_closure_v2",
+      "worst_variant": "an edge that severs under ANY of q50/q10/q90 is refused"
+    },
+    "version": "demand_exposure_v4_survivable"
+  },
+  "shortlist_version": "stratified_shortlist_v3",
+  "status": "design_frozen_pre_outcome",
+  "thresholds": {
+    "discriminating_practical_winner_recall_minimum": 0.9,
+    "failure_disqualification_recall_minimum": 0.6,
+    "minimum_discriminating_case_fraction": 0.4,
+    "p90_normalized_shortlist_regret_maximum": 0.1,
+    "practical_equivalence_vehicle_hours": 0.001,
+    "practical_winner_recall_minimum": 0.9
+  },
+  "topology_rules": {
+    "excludes": "every prior campaign edge, its reverse and shared-junction neighbours",
+    "max_sensor_distance_m": 400.0,
+    "min_edge_length_m": 30.0,
+    "min_surviving_cases": 4,
+    "min_window_support": 10,
+    "road_class": [
+      "secondary",
+      "tertiary"
+    ],
+    "survives_own_closure": true
+  }
+}

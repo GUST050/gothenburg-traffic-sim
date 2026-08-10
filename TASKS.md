@@ -11,30 +11,23 @@ owners, states and approval formulas are not active workflow rules. See
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
 - Current focus: `Closure integrity stages 3-4, on a branch, alongside the
   running annual warming`
-- Status: `IMPLEMENTED, TWO GATES UNRUN. Closure runs now disable SUMO
-  teleporting (the necessary condition stage 1 measured for closed-edge
-  throughput), with the policy recorded beside every integrity verdict so a
-  zero teleport count cannot be read as a healthy run. Held-out v10 adds a
-  pre-outcome "the edge must survive its own closure" condition and is
-  registered for exact demand binding before its freeze. Neither the stage 3
-  paired measurement nor the v10 freeze has been run: both need SUMO plus the
-  canonical demand archive, and this container has neither. The annual warming
-  plan 38d91d22… continues untouched on the dev machine.`
-- Suggested next action: `On the dev machine, and BETWEEN warming runs: run
-  tools/measure_closure_teleport_policy.py for the stage 3 gate, then
-  tools/freeze_heldout_v10.py --dry-run before freezing. Also run
-  tools/remeasure_closure_disqualification.py against the stored v9 outcomes —
-  that one needs no SUMO.`
+- Status: `DONE. The Stage 3 paired gate passes on exact q50/q10/q90 demand:
+  default throughput/teleports 1/1, policy 0/0, stuck growth 0 within budget 0.
+  The corrected v2 topology screen finds 24/46 pool survivors and reproduces
+  byte-for-byte. Held-out v10 is frozen with five cases / 75 schedules, refuses
+  22 candidates by survivability, and reproduces byte-for-byte.`
+- Suggested next action: `Integrate only BETWEEN warming runs because the
+  plan-bound simulation source identity changes. The optional historical v9
+  re-score can still be run separately; it is a projection, not a gate.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Do not use held observations in pool, picker or certificate.
   Do not weaken TAG/fit/provenance gates or promote pilot artifacts as release
   evidence. Do not edit annual plan-bound inputs while warming is active —
   run_scenario.py, suggest_closure_time.py and monthly_sumo.py are bound, so
   MERGING this branch during a population run discards the units already built.`
-- Updated: `closure integrity stages 3-4 implemented on
-  claude/road-closing-improvement-v9sizg; 108 focused tests pass, the full
-  suite matches a clean worktree of the same base failure-for-failure, and
-  three pinned canary assertions were deliberately updated / 2026-08-10`
+- Updated: `latest Claude push reviewed and corrected on
+  codex/review-road-closing-v9sizg-latest; Stage 3 passes, Stage 4/v10 is frozen
+  and reproducible, and evidence/provenance gaps are closed / 2026-08-10`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -42,9 +35,7 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### CLOSURE-INTEGRITY-34 — Stages 3 and 4 of the closure-integrity plan
 
-- Status: `IMPLEMENTED. Stage 4's topology half is MEASURED and its gate is
-  achievable; stage 3's gate on real demand and the v10 freeze remain unrun for
-  located, documented reasons.`
+- Status: `DONE; Stage 3 passes and Stage 4/v10 is frozen and reproducible.`
 - Objective and scope: `Close out
   docs/plans/CLOSURE_INTEGRITY_PLAN_2026-08-05.md. Stages 1-2 were already
   measured and revised/refuted its premises; this delivers stage 3 (an explicit
@@ -58,38 +49,34 @@ owners, states and approval formulas are not active workflow rules. See
   that severs a destination or cuts off a successor, inherits everything else
   from v9 unchanged, and is registered for exact demand binding BEFORE its
   freeze.`
-- Context or checkpoints: `Stage 3's mechanism is measured against real SUMO on
-  the eight-edge c1 probe (validation/closure_teleport_mechanism_probe_v1.json):
-  default arm throughput 1 / teleports 1 / unfinished 0, policy arm 0 / 0 / 1.
-  Stage 4's topology half is measured on the real network rebuilt from the
-  tracked graph (validation/closure_survivability_screen_v1.json): 1285/7101
-  edges sever a successor when closed, 35 of 46 near-sensor candidates survive,
-  so the >=4 gate is achievable. Blockers located, not assumed: stage 3's real
-  gate needs calibrated demand, and build_candidates.py cannot build the pool
-  because overpass-api.de is denied by this environment's network policy; the
-  v10 freeze binds an archive by SHA-256 that can only be copied, never
-  rebuilt.`
+- Context or checkpoints: `validation/closure_teleport_policy_v1.json records
+  the passing paired Stage 3 gate with exact input/source/SUMO identity and
+  matched seeds. validation/closure_survivability_screen_v2.json supersedes v1:
+  2066/7101 network edges are fatal, 24/46 pool candidates survive, and the
+  content-keyed report reproduces. The v10 manifest key is
+  c10b2dc9fbf8f0a9ad75d648224e1fdd0f43998c850590349678bf89cb07d5d7.`
 - Primary files: `traffic_sim/simulation/closure_teleport.py,
   traffic_sim/simulation/closure_survivability.py, run_scenario.py,
   suggest_closure_time.py, traffic_sim/simulation/monthly_sumo.py,
   traffic_sim/simulation/heldout_selection.py, run_monthly_proxy_validation.py,
   tools/freeze_heldout_v10.py, tools/measure_closure_teleport_policy.py,
+  tools/screen_closure_survivability.py,
   tools/remeasure_closure_disqualification.py`
 - Constraints and safety: `Option D of the plan (stop counting teleport-induced
   entries as leaks) stays rejected — nothing here loosens a measurement. The
   baseline arm keeps SUMO's default teleporting, so a paired study retains a
   live integrity signal. Merging during an active warming run discards its
   built units.`
-- Acceptance criteria: `Stage 3 is decided by
-  validation/closure_teleport_policy_v1.json: throughput measured and zero, no
-  teleports, and the unfinished/dropped population growing by no more than the
-  demand-side vehicles_no_detour budget. Stage 4 is decided by a v10 freeze
-  carrying at least four surviving cases.`
+- Acceptance criteria: `Met. Stage 3's non-vacuous paired gate passes with
+  measured zero policy throughput/teleports and bounded stuck growth. Stage 4
+  has five surviving frozen cases and all artifacts reproduce.`
 - Useful checks: `pytest -q tests/test_closure_teleport.py
+  tests/test_closure_teleport_measurement.py
   tests/test_closure_teleport_wiring.py tests/test_closure_teleport_probe.py
-  tests/test_closure_survivability.py tests/test_closure_disruption.py
+  tests/test_closure_survivability.py
+  tests/test_closure_survivability_screen.py tests/test_closure_disruption.py
   tests/test_heldout_v10_freeze.py
-  tests/test_remeasure_closure_disqualification.py (108 passed);
+  tests/test_remeasure_closure_disqualification.py (128 passed, 5 skipped);
   git diff --check.`
 <!-- ACTIVE_TASK_END -->
 

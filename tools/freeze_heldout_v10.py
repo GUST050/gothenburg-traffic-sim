@@ -483,6 +483,7 @@ def compose():
         "traffic_sim/simulation/closure_survivability.py",
         "traffic_sim/simulation/closure_teleport.py",
         "traffic_sim/core/closure_calendar.py",
+        "run_scenario.py",
         "run_monthly_proxy_validation.py",
         "tools/freeze_heldout_v9.py",
         "tools/freeze_heldout_v10.py",

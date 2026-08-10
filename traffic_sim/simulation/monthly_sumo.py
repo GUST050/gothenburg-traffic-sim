@@ -671,6 +671,10 @@ class ArchivedDemandSumoRunner:
                 Path(__file__),
             ),
             (
+                "traffic_sim/simulation/closure_teleport.py",
+                Path("traffic_sim/simulation/closure_teleport.py"),
+            ),
+            (
                 "traffic_sim/simulation/monthly_demand.py",
                 Path("traffic_sim/simulation/monthly_demand.py"),
             ),
@@ -717,6 +721,7 @@ class ArchivedDemandSumoRunner:
         ]
         simulation_source_labels = {
             "traffic_sim/simulation/monthly_sumo.py",
+            "traffic_sim/simulation/closure_teleport.py",
             "traffic_sim/simulation/monthly_demand.py",
             "suggest_closure_time.py",
             "run_scenario.py",

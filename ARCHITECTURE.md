@@ -144,6 +144,23 @@ only when an existing public command or import still requires it. Fingerprint
 maps hash the canonical package files, so changing an implementation invalidates
 the relevant cache or published build.
 
+### Closure-integrity boundary
+
+Closure simulations take their SUMO teleport policy from
+`traffic_sim/simulation/closure_teleport.py` and pass
+`--time-to-teleport -1`; non-closure and paired baseline arms retain SUMO's
+default. Stage 3 passes only when the default arm first exhibits measured
+positive closed-edge throughput with a teleport and the identical policy arm
+reduces both to measured zero within the detour-less unfinished-trip budget.
+
+Held-out closure selection also requires the edge to survive its own closure.
+SUMO internal junction edges are collapsed only for this topology probe, which
+searches from the real edges immediately before the closure to its immediate
+successors after removal. Demand reachability continues on SUMO's raw graph.
+Denied departures are reported access impact and do not gate. Monthly result
+identity fingerprints the teleport module; held-out v10 fingerprints
+`run_scenario.py` and both closure modules.
+
 ### LOSO integer-publication boundary
 
 Production update 2026-08-09: protocol

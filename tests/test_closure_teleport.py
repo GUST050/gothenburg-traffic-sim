@@ -126,6 +126,31 @@ class TestStage3Gate:
         assert gate["passed"] is False
         assert gate["checks"]["throughput_measured"] is False
 
+    def test_a_zero_to_zero_comparison_cannot_pass_as_an_improvement(self):
+        before = _metrics(teleport_total=0, closed_edge_throughput=0)
+        gate = ct.evaluate_stage3_gate(before=before, after=_metrics(),
+                                       detour_less_vehicles=0)
+        assert gate["passed"] is False
+        assert gate["checks"]["baseline_exhibits_leak"] is False
+        assert gate["checks"]["baseline_exhibits_teleport_mechanism"] is False
+
+    def test_unmeasured_baseline_cannot_pass_as_a_reduction(self):
+        before = _metrics(teleport_total=1, closed_edge_throughput=None)
+        gate = ct.evaluate_stage3_gate(before=before, after=_metrics(),
+                                       detour_less_vehicles=0)
+        assert gate["passed"] is False
+        assert gate["checks"]["baseline_throughput_measured"] is False
+
+    @pytest.mark.parametrize("field", [
+        "unfinished_trips", "dropped_unreachable", "teleport_total",
+        "closed_edge_throughput",
+    ])
+    def test_negative_measured_counts_are_refused(self, field):
+        with pytest.raises(ct.ClosureTeleportPolicyError):
+            ct.evaluate_stage3_gate(
+                before=_metrics(teleport_total=1, closed_edge_throughput=1),
+                after=_metrics(**{field: -1}), detour_less_vehicles=0)
+
     def test_a_surviving_teleport_fails_the_gate(self):
         after = _metrics(teleport_total=1)
         gate = ct.evaluate_stage3_gate(before=_metrics(), after=after,

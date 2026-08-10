@@ -62,7 +62,7 @@ decision was made.
 | file | status |
 | --- | --- |
 | `WARMING_PLAN_2026-08-05.md` | current warming plan and operations card |
-| `CLOSURE_INTEGRITY_PLAN_2026-08-05.md` | closed out by `CLOSURE_INTEGRITY_STAGES_3_4_2026-08-10.md`. Stages 1-2 measured (premises revised/refuted), 3-4 implemented with both gates still unrun, 5 superseded by the warming plan |
+| `CLOSURE_INTEGRITY_PLAN_2026-08-05.md` | closed out by `CLOSURE_INTEGRITY_STAGES_3_4_2026-08-10.md`. Stages 1-2 measured (premises revised/refuted), Stage 3 passes its paired real-SUMO gate, Stage 4/v10 is frozen and reproducible, 5 superseded by the warming plan |
 | `CLOSURE_INTEGRITY_STAGES_3_4_2026-08-10.md` | current: what stages 3-4 implement, what it costs, and the two measurements that decide them |
 | `DATA_REQUEST_2026-07.md` | NOT SENT. A record only — the no-more-external-data decision (2026-07-20) is permanent |
 | `PROJECT_CONTEXT_OLD_AGENTS.md` | superseded by `CLAUDE.md` and `AGENTS.md` |

@@ -114,10 +114,15 @@ def test_archive_identity_and_envelope_are_validated(
         "traffic_sim/core/closure_calendar.py",
         "traffic_sim/simulation/monthly_search.py",
         "traffic_sim/simulation/monthly_sumo.py",
+        "traffic_sim/simulation/closure_teleport.py",
         "traffic_sim/simulation/pilot_selection.py",
         "traffic_sim/simulation/finalist_decision.py",
         "traffic_sim/simulation/search_workspace.py",
     } <= labels
+    simulation_labels = {
+        item["label"] for item in runner.simulation_source_records
+    }
+    assert "traffic_sim/simulation/closure_teleport.py" in simulation_labels
     assert "git_commit_at_run" not in provenance
     assert provenance["source_digest"] != (
         provenance["simulation_source_digest"]

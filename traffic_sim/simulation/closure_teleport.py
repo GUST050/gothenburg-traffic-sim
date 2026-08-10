@@ -172,9 +172,10 @@ def _stuck_population(metrics: Mapping[str, Any] | Any) -> int:
             value = metrics[name]
         else:
             value = getattr(metrics, name)
-        if isinstance(value, bool) or not isinstance(value, int):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ClosureTeleportPolicyError(
-                f"metrics field {name!r} must be an int, got {value!r}")
+                f"metrics field {name!r} must be a non-negative int, "
+                f"got {value!r}")
         return value
 
     return read("unfinished_trips") + read("dropped_unreachable")
@@ -182,8 +183,15 @@ def _stuck_population(metrics: Mapping[str, Any] | Any) -> int:
 
 def _throughput(metrics: Mapping[str, Any] | Any) -> int | None:
     if isinstance(metrics, Mapping):
-        return metrics.get("closed_edge_throughput")
-    return getattr(metrics, "closed_edge_throughput", None)
+        value = metrics.get("closed_edge_throughput")
+    else:
+        value = getattr(metrics, "closed_edge_throughput", None)
+    if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0):
+        raise ClosureTeleportPolicyError(
+            "metrics field 'closed_edge_throughput' must be None or a "
+            f"non-negative int, got {value!r}")
+    return value
 
 
 def _teleports(metrics: Mapping[str, Any] | Any) -> int:
@@ -191,9 +199,10 @@ def _teleports(metrics: Mapping[str, Any] | Any) -> int:
         value = metrics.get("teleport_total")
     else:
         value = getattr(metrics, "teleport_total", None)
-    if isinstance(value, bool) or not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ClosureTeleportPolicyError(
-            f"metrics field 'teleport_total' must be an int, got {value!r}")
+            "metrics field 'teleport_total' must be a non-negative int, "
+            f"got {value!r}")
     return value
 
 
@@ -228,10 +237,19 @@ def evaluate_stage3_gate(*, before: Mapping[str, Any] | Any,
     stuck_after = _stuck_population(after)
     stuck_growth = stuck_after - stuck_before
 
+    teleports_before = _teleports(before)
+    teleports_after = _teleports(after)
     checks = {
+        "baseline_throughput_measured": before_throughput is not None,
+        "baseline_exhibits_leak": (
+            before_throughput is not None and before_throughput > 0),
+        "baseline_exhibits_teleport_mechanism": teleports_before > 0,
         "throughput_measured": after_throughput is not None,
         "throughput_is_zero": after_throughput == 0,
-        "no_teleports": _teleports(after) == 0,
+        "throughput_reduced_to_zero": (
+            before_throughput is not None and before_throughput > 0 and
+            after_throughput == 0),
+        "no_teleports": teleports_after == 0,
         "stuck_growth_within_detour_less": stuck_growth <= detour_less_vehicles,
     }
     return {
@@ -243,15 +261,16 @@ def evaluate_stage3_gate(*, before: Mapping[str, Any] | Any,
         "measured": {
             "closed_edge_throughput_before": before_throughput,
             "closed_edge_throughput_after": after_throughput,
-            "teleports_before": _teleports(before),
-            "teleports_after": _teleports(after),
+            "teleports_before": teleports_before,
+            "teleports_after": teleports_after,
             "stuck_before": stuck_before,
             "stuck_after": stuck_after,
             "stuck_growth": stuck_growth,
             "detour_less_vehicles": detour_less_vehicles,
         },
         "gate": (
-            "closed-edge throughput falls to zero (measured, not absent) and "
+            "the default arm exhibits the measured teleport/leak mechanism, "
+            "closed-edge throughput then falls to zero under the policy, and "
             "the unfinished/dropped population grows by no more than the "
             "genuinely detour-less vehicle count"),
     }
