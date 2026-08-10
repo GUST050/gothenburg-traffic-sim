@@ -136,7 +136,7 @@
                 note.textContent = 'Valideringsrapporten anger inget bygge-id '
                   + '— den kan inte kopplas till detta jobb.';
               } else if (report.demand_build_id === spec.demand_build_id) {
-                note.textContent = '🛡 Valideringsrapporten gäller detta bygge '
+                note.textContent = 'Valideringsrapporten gäller detta bygge '
                   + `(${report.demand_build_id.slice(0, 12)}, `
                   + `${report.overall}).`;
               } else {
@@ -770,7 +770,7 @@
             ? V_MARK.missing
             : (V_MARK[r.overall] || V_MARK.missing);
           validationBtn.hidden = false;
-          validationBtn.innerHTML = `🛡 Validering <span class="${cls}">${mark}</span>`;
+          validationBtn.innerHTML = `Validering <span class="${cls}">${mark}</span>`;
           const rows = Object.entries(r.sections).map(([name, s]) => {
             const [m, c] = V_MARK[s.status] || V_MARK.missing;
             return `<tr><td class="${c}">${m}</td>`
@@ -1486,7 +1486,7 @@
             alert('Signaloptimeringen misslyckades: ' + e.message);
           } finally {
             btnOptimize.disabled = false;
-            btnOptimize.textContent = '⚡ Optimera signaler';
+            btnOptimize.textContent = 'Optimera signaler';
           }
         });
 

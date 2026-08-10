@@ -32,7 +32,7 @@ const Controls = (() => {
   function setFill(slider) {
     const pct = (100 * (slider.value - slider.min)) / (slider.max - slider.min);
     slider.style.background =
-      `linear-gradient(to right, #3b82f6 0% ${pct}%, #1c2740 ${pct}% 100%)`;
+      `linear-gradient(to right, #39749e 0% ${pct}%, #3a4652 ${pct}% 100%)`;
   }
 
   // Reads current State fresh (not from an event payload) so it can be
@@ -72,6 +72,8 @@ const Controls = (() => {
     const play = State.playing ? '⏸' : '▶';
     if (_displayCache.play !== play) {
       _playBtn.textContent = play;
+      _playBtn.setAttribute('aria-label', State.playing
+        ? 'Pausa simuleringen' : 'Spela simuleringen');
       _displayCache.play = play;
     }
 

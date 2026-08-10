@@ -60,6 +60,27 @@ def test_web_has_one_road_closure_workspace_and_orchestrator():
         assert endpoint in app
 
 
+def test_web_shell_is_desktop_only_and_uses_the_professional_palette():
+    root = Path(__file__).parent.parent
+    html = (root / "web" / "index.html").read_text()
+    controls = (root / "web" / "controls.js").read_text()
+
+    assert "min-width: 1180px" in html
+    assert "grid-template-columns: repeat(4" in html
+    assert "@media (max-width" not in html
+    assert "--sim:        #39749e" in html
+    assert "#39749e 0%" in controls
+    for decorative_token in (
+            "#7c3aed", "#a78bfa", "backdrop-filter",
+            "linear-gradient(to top", "linear-gradient(135deg",
+            "border-radius: 999", "transform: translateY"):
+        assert decorative_token not in html
+    for decorative_icon in ("🛡", "📅", "🕐", "📆", "⚡"):
+        assert decorative_icon not in html
+    assert 'controls.js?v=12' in html
+    assert 'app.js?v=18' in html
+
+
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
                           analysis_window=True):
     spec = {

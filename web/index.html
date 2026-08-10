@@ -10,25 +10,26 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     :root {
-      --panel:      rgba(11, 14, 26, 0.92);
-      --panel-2:    rgba(20, 27, 45, 0.85);
-      --panel-line: rgba(148, 163, 184, 0.14);
-      --ink:        #e8edf5;
-      --ink-2:      #94a3b8;
-      --ink-3:      #5b6b82;
-      --accent:     #3b82f6;
-      --accent-2:   #60a5fa;
-      --sim:        #7c3aed;
-      --sim-2:      #a78bfa;
-      --danger:     #dc2626;
-      --track:      #1c2740;
-      --line:       #d1d5db;
+      --panel:      #18212b;
+      --panel-2:    #202b36;
+      --panel-line: #364452;
+      --ink:        #f3f5f7;
+      --ink-2:      #b8c1ca;
+      --ink-3:      #818d99;
+      --accent:     #39749e;
+      --accent-2:   #86a9c1;
+      --sim:        #39749e;
+      --sim-2:      #a9c2d4;
+      --danger:     #b44545;
+      --track:      #3a4652;
+      --line:       #d4dae0;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       height: 100%;
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      background: #0b0e1a;
+      background: #111820;
+      min-width: 1180px;
     }
     /* Flex column so #controls can grow (Simulering panel adds a row)
        without ever overlapping or leaving a gap under the map — no
@@ -44,7 +45,7 @@
       position: absolute; top: 14px; left: 14px; z-index: 1100;
       display: flex; align-items: center; gap: 10px;
       background: var(--panel); border: 1px solid var(--panel-line);
-      border-radius: 8px; padding: 7px 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.32);
+      border-radius: 4px; padding: 6px 9px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
     #workspace-nav button {
       border: 0; background: transparent; color: var(--ink); font-size: 1rem;
@@ -54,70 +55,68 @@
     body[data-task="home"] #workspace-nav { display: none; }
     #task-home {
       position: absolute; inset: 0; z-index: 1050; display: grid;
-      place-items: center; padding: 24px; background: rgba(7, 10, 19, 0.9);
+      place-items: center; padding: 40px; background: #eef1f4;
     }
     #task-home[hidden] { display: none; }
-    .task-home-inner { width: min(960px, 100%); }
-    .task-home-title { color: var(--ink); font-size: 1.45rem; font-weight: 750; }
-    .task-home-subtitle { color: var(--ink-2); font-size: 0.78rem; margin-top: 6px; }
+    .task-home-inner { width: 1100px; }
+    .task-home-title { color: #17212b; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; }
+    .task-home-subtitle { color: #66727e; font-size: 0.82rem; margin-top: 7px; }
     #task-grid {
-      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
-      margin-top: 22px;
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
+      margin-top: 28px;
     }
     .task-card {
-      min-height: 118px; text-align: left; color: var(--ink); cursor: pointer;
-      background: rgba(20, 27, 45, 0.96); border: 1px solid var(--panel-line);
-      border-radius: 8px; padding: 16px; transition: border-color .15s, background .15s, transform .15s;
+      min-height: 104px; text-align: left; color: #17212b; cursor: pointer;
+      background: #fff; border: 1px solid #d5dce3;
+      border-radius: 5px; padding: 17px 18px; transition: border-color .12s, background .12s;
     }
-    .task-card:hover { border-color: var(--accent-2); background: rgba(31, 43, 70, 0.98); transform: translateY(-2px); }
-    .task-card-icon { color: var(--accent-2); font-size: 1.05rem; }
-    .task-card strong { display: block; margin-top: 14px; font-size: 0.86rem; }
-    .task-card span { display: block; margin-top: 4px; color: var(--ink-2); font-size: 0.68rem; }
+    .task-card:hover { border-color: #7d9bb1; background: #f8fafb; }
+    .task-card-icon {
+      color: #647585; font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 0.09em; text-transform: uppercase;
+    }
+    .task-card strong { display: block; margin-top: 18px; font-size: 0.86rem; font-weight: 650; }
+    .task-card span:not(.task-card-icon) { display: block; margin-top: 4px; color: #6e7984; font-size: 0.7rem; }
     #history-panel {
-      margin-top: 22px; background: rgba(20, 27, 45, 0.96);
-      border: 1px solid var(--panel-line); border-radius: 8px;
-      padding: 14px; color: var(--ink); max-height: 52vh; overflow: auto;
+      margin-top: 22px; background: #fff;
+      border: 1px solid #d5dce3; border-radius: 5px;
+      padding: 16px; color: #17212b; max-height: 52vh; overflow: auto;
     }
     #history-panel[hidden] { display: none; }
     #history-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     #history-body { margin-top: 10px; font-size: 0.72rem; }
     #history-body table { width: 100%; border-collapse: collapse; }
-    #history-body td { padding: 6px 8px; border-top: 1px solid var(--panel-line); color: var(--ink-2); }
+    #history-body td { padding: 7px 8px; border-top: 1px solid #e4e8ec; color: #56616c; }
     #history-body .history-running { color: #f59e0b; font-weight: 700; }
     #history-body .history-succeeded { color: #4ade80; font-weight: 700; }
     #history-body .history-failed, #history-body .history-orphaned { color: #f87171; font-weight: 700; }
     /* Phase 6: a result must be traceable to the exact spec/build/job that
        produced it, without hand-querying the API. */
     #history-body tr.history-row { cursor: pointer; }
-    #history-body tr.history-row:hover td { background: rgba(96, 165, 250, 0.08); }
+    #history-body tr.history-row:hover td { background: #f3f6f8; }
     #history-detail {
       margin-top: 12px; border-top: 1px solid var(--panel-line); padding-top: 10px;
     }
     #history-detail[hidden] { display: none; }
     #history-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    #history-detail-title { color: var(--ink); font-size: 0.76rem; }
-    #history-detail-body { margin-top: 8px; font-size: 0.7rem; color: var(--ink-2); }
+    #history-detail-title { color: #17212b; font-size: 0.76rem; }
+    #history-detail-body { margin-top: 8px; font-size: 0.7rem; color: #56616c; }
     #history-detail-body dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; }
-    #history-detail-body dt { color: var(--ink-3); }
-    #history-detail-body dd { color: var(--ink-2); word-break: break-all; }
+    #history-detail-body dt { color: #7b8792; }
+    #history-detail-body dd { color: #56616c; word-break: break-all; }
     #history-detail-body pre {
       margin-top: 8px; padding: 8px; max-height: 220px; overflow: auto;
-      background: rgba(15, 23, 42, 0.75); border: 1px solid var(--panel-line);
-      border-radius: 6px; color: var(--ink-2); font-size: 0.66rem; white-space: pre;
-    }
-    @media (max-width: 700px) {
-      #task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .task-card { min-height: 100px; }
-      #workspace-nav { top: 10px; left: 10px; }
+      background: #f5f7f9; border: 1px solid #dfe4e9;
+      border-radius: 4px; color: #4d5964; font-size: 0.66rem; white-space: pre;
     }
 
     /* ── Title chip ─────────────────────────────────────────────────────── */
     #brand {
       position: absolute; top: 14px; left: 56px; z-index: 1000;
-      background: var(--panel); backdrop-filter: blur(12px);
-      border: 1px solid var(--panel-line); border-radius: 12px;
-      padding: 10px 16px; pointer-events: none;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      background: var(--panel);
+      border: 1px solid var(--panel-line); border-radius: 5px;
+      padding: 9px 14px; pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
     #brand h1 { font-size: 0.95rem; font-weight: 700; color: var(--ink); letter-spacing: 0.01em; }
     #brand p  { font-size: 0.68rem; color: var(--ink-3); margin-top: 2px; }
@@ -125,27 +124,25 @@
     /* ── Control panel ──────────────────────────────────────────────────── */
     #controls {
       position: relative; z-index: 900; flex: 0 0 auto;
-      background: linear-gradient(to top, #0a0d18 40%, var(--panel));
-      backdrop-filter: blur(14px);
+      background: var(--panel);
       color: var(--ink);
       display: flex; flex-direction: column;
-      gap: 10px; padding: 12px 26px 14px;
+      gap: 10px; padding: 12px 24px 14px;
       border-top: 1px solid var(--panel-line);
     }
 
     #playback-row { display: flex; align-items: center; gap: 16px; }
 
     #play-btn {
-      background: linear-gradient(135deg, #2563eb, var(--accent));
-      border: none; color: #fff;
-      font-size: 1.05rem; width: 44px; height: 44px; border-radius: 50%;
+      background: var(--accent);
+      border: 1px solid #4e82a8; color: #fff;
+      font-size: 0.92rem; width: 40px; height: 40px; border-radius: 4px;
       cursor: pointer; flex-shrink: 0;
-      box-shadow: 0 4px 18px rgba(59,130,246,0.4);
-      transition: transform 0.12s, box-shadow 0.12s;
+      transition: background 0.12s, border-color 0.12s;
       display: flex; align-items: center; justify-content: center;
     }
-    #play-btn:hover  { transform: scale(1.07); box-shadow: 0 6px 22px rgba(59,130,246,0.55); }
-    #play-btn:active { transform: scale(0.97); }
+    #play-btn:hover { background: #32698f; border-color: #6d96b3; }
+    #play-btn:active { background: #2b5d7f; }
 
     #time-display { display: flex; flex-direction: column; min-width: 190px; gap: 1px; }
     #td-clock {
@@ -159,11 +156,11 @@
     .seg {
       display: flex; gap: 2px;
       background: rgba(15, 23, 42, 0.8); border: 1px solid var(--panel-line);
-      border-radius: 9px; padding: 3px;
+      border-radius: 4px; padding: 2px;
     }
     .seg button {
       background: transparent; border: none; color: var(--ink-3);
-      font-size: 0.76rem; font-weight: 600; padding: 6px 12px; border-radius: 6px;
+      font-size: 0.76rem; font-weight: 600; padding: 6px 12px; border-radius: 3px;
       cursor: pointer; transition: background 0.15s, color 0.15s; white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
@@ -182,23 +179,23 @@
       display: none;
       align-items: center; gap: 12px; flex-wrap: wrap;
       background: var(--panel-2);
-      border: 1px solid rgba(124, 58, 237, 0.28);
+      border: 1px solid var(--panel-line);
       border-left: 3px solid var(--sim);
-      border-radius: 10px;
+      border-radius: 4px;
       padding: 8px 14px;
     }
     #sim-panel.show { display: flex; }
 
     #scen-select {
       background: rgba(15, 23, 42, 0.85); color: var(--ink);
-      border: 1px solid var(--panel-line); border-radius: 8px;
+      border: 1px solid var(--panel-line); border-radius: 4px;
       padding: 6px 10px; font-size: 0.76rem; cursor: pointer;
       max-width: 280px; flex: 1;
     }
 
     .action-btn {
       background: rgba(15, 23, 42, 0.85); color: var(--ink-2);
-      border: 1px solid var(--panel-line); border-radius: 8px;
+      border: 1px solid var(--panel-line); border-radius: 4px;
       padding: 6px 12px; font-size: 0.76rem; font-weight: 600;
       cursor: pointer; white-space: nowrap;
       transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -215,8 +212,8 @@
     #pick-banner.show { display: flex; }
     #pick-banner .hint { font-size: 0.76rem; color: var(--sim-2); font-weight: 600; }
     #pick-count {
-      background: rgba(124,58,237,0.18); color: var(--sim-2);
-      border-radius: 999px; padding: 2px 9px; font-size: 0.72rem; font-weight: 700;
+      background: #2b3d4b; color: var(--sim-2);
+      border-radius: 3px; padding: 2px 8px; font-size: 0.72rem; font-weight: 700;
       font-variant-numeric: tabular-nums;
     }
     .action-btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
@@ -228,7 +225,7 @@
     #day-banner .hint { font-size: 0.76rem; color: var(--sim-2); font-weight: 600; }
     #new-date-input, #new-days-input {
       background: rgba(15, 23, 42, 0.85); color: var(--ink);
-      border: 1px solid var(--panel-line); border-radius: 8px;
+      border: 1px solid var(--panel-line); border-radius: 4px;
       padding: 5px 9px; font-size: 0.76rem;
       color-scheme: dark;
     }
@@ -262,7 +259,7 @@
     #suggest-banner .hint { font-size: 0.76rem; color: var(--sim-2); font-weight: 600; }
     #suggest-duration-input {
       background: rgba(15, 23, 42, 0.85); color: var(--ink);
-      border: 1px solid var(--panel-line); border-radius: 8px;
+      border: 1px solid var(--panel-line); border-radius: 4px;
       padding: 5px 9px; font-size: 0.76rem; width: 3.6em;
       color-scheme: dark;
     }
@@ -277,7 +274,7 @@
     #monthly-banner input[type="date"], #monthly-banner input[type="time"],
     #monthly-banner input[type="number"] {
       background: rgba(15, 23, 42, 0.85); color: var(--ink);
-      border: 1px solid var(--panel-line); border-radius: 8px;
+      border: 1px solid var(--panel-line); border-radius: 4px;
       padding: 4px 7px; font-size: 0.72rem; color-scheme: dark;
     }
     #monthly-banner input[type="number"] { width: 3.4em; }
@@ -293,9 +290,9 @@
       display: none;
       position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
       z-index: 1000; width: min(720px, 92vw); max-height: 55vh;
-      background: var(--panel); backdrop-filter: blur(12px);
-      border: 1px solid var(--panel-line); border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      background: var(--panel);
+      border: 1px solid var(--panel-line); border-radius: 6px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.28);
       flex-direction: column; overflow: hidden;
     }
     #suggest-results.show, #monthly-results.show { display: flex; }
@@ -320,15 +317,15 @@
     #suggest-results-table tr.disqualified td, #monthly-results-table tr.disqualified td { opacity: 0.5; }
     #suggest-results-table tr.outside-topk td:first-child { color: var(--ink-3); }
     .sr-load-btn {
-      background: var(--sim); color: #fff; border: none; border-radius: 6px;
+      background: var(--sim); color: #fff; border: none; border-radius: 3px;
       padding: 3px 9px; font-size: 0.68rem; font-weight: 600; cursor: pointer;
     }
     .sr-load-btn:disabled { opacity: 0.5; cursor: wait; }
     .sr-tag {
       display: inline-block; font-size: 0.62rem; font-weight: 700;
-      padding: 1px 6px; border-radius: 999px; margin-left: 4px;
+      padding: 1px 6px; border-radius: 3px; margin-left: 4px;
     }
-    .sr-tag.rank { background: rgba(124,58,237,0.2); color: var(--sim-2); }
+    .sr-tag.rank { background: #2b3d4b; color: var(--sim-2); }
     .sr-tag.disq { background: rgba(220,38,38,0.2); color: #f87171; }
 
     /* ── Signal-optimization results (IMPROVEMENT_PLAN.md D5) — same floating-panel
@@ -338,9 +335,9 @@
       display: none;
       position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
       z-index: 1000; width: min(760px, 92vw); max-height: 60vh;
-      background: var(--panel); backdrop-filter: blur(12px);
-      border: 1px solid var(--panel-line); border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      background: var(--panel);
+      border: 1px solid var(--panel-line); border-radius: 6px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.28);
       flex-direction: column; overflow: hidden;
     }
     #optimize-results.show { display: flex; }
@@ -399,25 +396,23 @@
       -webkit-appearance: none; appearance: none;
       width: 15px; height: 15px; border-radius: 50%;
       background: #fff; border: 3px solid var(--accent);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-      transition: transform 0.1s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.35);
     }
-    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
     input[type=range]::-moz-range-thumb {
       width: 15px; height: 15px; border-radius: 50%;
       background: #fff; border: 3px solid var(--accent);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.35);
     }
 
     /* ── Legend ─────────────────────────────────────────────────────────── */
     #legend {
       position: absolute; top: 14px; right: 14px; z-index: 1000;
-      background: var(--panel); backdrop-filter: blur(12px);
+      background: var(--panel);
       border: 1px solid var(--panel-line);
-      border-radius: 12px; padding: 14px 16px;
+      border-radius: 5px; padding: 13px 15px;
       color: #cbd5e1; font-size: 0.74rem;
       pointer-events: none; width: 205px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
     .legend-title {
       font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
@@ -464,11 +459,11 @@
       background: rgba(255, 255, 255, 0.97) !important;
       border: 1px solid #e5e7eb !important;
       color: #111827 !important;
-      border-radius: 10px !important;
+      border-radius: 4px !important;
       font-size: 0.82rem !important;
       line-height: 1.7 !important;
       padding: 9px 13px !important;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.18) !important;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.16) !important;
     }
     .leaflet-tooltip::before { display: none; }
 
@@ -556,16 +551,16 @@
   </nav>
   <section id="task-home" aria-label="Välj arbetsyta">
     <div class="task-home-inner">
-      <h1 class="task-home-title">Göteborg Trafik</h1>
-      <p class="task-home-subtitle">Välj en arbetsyta</p>
+      <h1 class="task-home-title">Göteborgs trafikmodell</h1>
+      <p class="task-home-subtitle">Analys, prognos och simulering för innerstaden</p>
       <div id="task-grid">
-        <button class="task-card" data-task="traffic"><span class="task-card-icon">↗</span><strong>Historisk trafik</strong><span>2025 flöden</span></button>
-        <button class="task-card" data-task="forecast"><span class="task-card-icon">↗</span><strong>Prognos</strong><span>2027 flöden</span></button>
-        <button class="task-card" data-task="scenario"><span class="task-card-icon">▣</span><strong>Scenario</strong><span>Visa simulering</span></button>
-        <button class="task-card" data-task="demand"><span class="task-card-icon">▦</span><strong>Simulera datum</strong><span>En dag eller flera</span></button>
-        <button class="task-card" data-task="closure"><span class="task-card-icon">×</span><strong>Vägavstängning</strong><span>Simulera eller optimera tid</span></button>
-        <button class="task-card" data-task="signals"><span class="task-card-icon">≡</span><strong>Optimera signaler</strong><span>Grönt och rött</span></button>
-        <button class="task-card" data-task="history"><span class="task-card-icon">▤</span><strong>Körhistorik</strong><span>Studier och jobb</span></button>
+        <button class="task-card" data-task="traffic"><span class="task-card-icon">Data</span><strong>Historisk trafik</strong><span>Observerade flöden 2025</span></button>
+        <button class="task-card" data-task="forecast"><span class="task-card-icon">Prognos</span><strong>Framtida trafik</strong><span>Beräknade flöden 2027</span></button>
+        <button class="task-card" data-task="scenario"><span class="task-card-icon">Scenario</span><strong>Visa simulering</strong><span>Granska ett befintligt scenario</span></button>
+        <button class="task-card" data-task="demand"><span class="task-card-icon">Körning</span><strong>Simulera datum</strong><span>Beräkna en dag eller period</span></button>
+        <button class="task-card" data-task="closure"><span class="task-card-icon">Analys</span><strong>Vägavstängning</strong><span>Testa påverkan och lämplig tid</span></button>
+        <button class="task-card" data-task="signals"><span class="task-card-icon">Optimering</span><strong>Trafiksignaler</strong><span>Analysera gröntider och rödtider</span></button>
+        <button class="task-card" data-task="history"><span class="task-card-icon">Historik</span><strong>Körhistorik</strong><span>Utförda studier och jobb</span></button>
       </div>
       <div id="history-panel" hidden>
         <div id="history-head"><strong>Senaste körningar</strong><button id="history-back" class="action-btn">Tillbaka</button></div>
@@ -582,8 +577,8 @@
   </section>
 
   <div id="brand">
-    <h1>Göteborgs trafikflöde</h1>
-    <p>Innerstaden · 6 sensorer · 15-min data · noggrannhet = närhet till mätpunkt</p>
+    <h1>Göteborgs trafikmodell</h1>
+    <p>Innerstaden · 6 sensorer · 15-minutersintervall</p>
   </div>
 
   <div id="legend">
@@ -650,7 +645,7 @@
 
   <div id="controls">
     <div id="playback-row">
-      <button id="play-btn" title="Spela / pausa (mellanslag)">▶</button>
+      <button id="play-btn" title="Spela eller pausa (mellanslag)" aria-label="Spela simuleringen">▶</button>
       <div id="time-display">
         <span id="td-clock">—</span>
         <span id="td-date">—</span>
@@ -696,17 +691,17 @@
       <button id="close-mode-btn" class="action-btn"
               title="Klicka på vägar i kartan för att simulera en avstängning">Simulera vald tid</button>
       <button id="change-day-btn" class="action-btn"
-              title="Kalibrera om simuleringen mot ett annat datum (tar ~6 min)">📅 Byt dag</button>
+              title="Kalibrera om simuleringen mot ett annat datum (tar ~6 min)">Byt dag</button>
       <button id="suggest-mode-btn" class="action-btn"
-              title="Klicka på en väg för att hitta den bästa tiden att stänga den">🕐 Optimera inom aktiv dag</button>
+              title="Klicka på en väg för att hitta den bästa tiden att stänga den">Optimera aktiv dag</button>
       <button id="monthly-mode-btn" class="action-btn"
-              title="Sök den minst störande arbetsperioden över ett datumintervall — varje kandidat verifieras i SUMO">📆 Bästa arbetsperiod</button>
+              title="Sök den minst störande arbetsperioden över ett datumintervall — varje kandidat verifieras i SUMO">Bästa arbetsperiod</button>
       <button id="optimize-signals-btn" class="action-btn"
-              title="Optimera trafikljusen för det valda scenariot (~2-5 min, syntetiska ljusprogram)">⚡ Optimera signaler</button>
+              title="Optimera trafikljusen för det valda scenariot (~2-5 min, syntetiska ljusprogram)">Optimera signaler</button>
       <!-- G3: assembled validation report (web/data/validation.json) —
            every gate the pipeline runs, visible without reading logs. -->
       <button id="validation-btn" class="action-btn" hidden
-              title="Alla valideringsgrindar för det aktiva bygget">🛡 Validering</button>
+              title="Alla valideringsgrindar för det aktiva bygget">Validering</button>
       <button id="sensor-audit-btn" class="action-btn" hidden
               title="Jämför sensorunderlag, kalibreringsmål och SUMO-passager per riktning">Sensorflöden</button>
 
@@ -899,8 +894,8 @@
   <script src="state.js?v=11"></script>
   <script src="provider.js?v=14"></script>
   <script src="render.js?v=15"></script>
-  <script src="controls.js?v=11"></script>
+  <script src="controls.js?v=12"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
