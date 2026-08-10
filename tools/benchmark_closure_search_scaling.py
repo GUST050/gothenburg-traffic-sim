@@ -39,6 +39,7 @@ Run:  python3 tools/benchmark_closure_search_scaling.py [--repeats 5] [--out PAT
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import platform
@@ -50,6 +51,7 @@ import sys
 import tempfile
 import time
 import tracemalloc
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -81,6 +83,8 @@ BOUND_SOURCES = (
     "traffic_sim/simulation/closure_teleport.py",
     "traffic_sim/simulation/closure_survivability.py",
     "run_monthly_closure_search.py",
+    "run_scenario.py",
+    "suggest_closure_time.py",
     "tools/benchmark_closure_search_scaling.py",
 )
 
@@ -98,6 +102,7 @@ ROUTE_FILES = (
 )
 
 NETWORK_FILE = "sumo/net.net.xml"
+DEMAND_META_FILE = "sumo/demand_meta.json"
 
 
 def _sha256(path: Path) -> str | None:
@@ -148,6 +153,7 @@ def _six_month_case(hours: int, case_id: str, note: str) -> dict[str, Any]:
 def _brute_force_case(case_id: str, *, days: int, work_minutes: int,
                       max_days: int, weekdays: Sequence[int],
                       blackouts: Sequence[str] = (),
+                      start_date: str = "2027-04-05",
                       note: str = "") -> dict[str, Any]:
     """A small case whose exhaustive enumeration is cheap enough to trust.
 
@@ -157,7 +163,7 @@ def _brute_force_case(case_id: str, *, days: int, work_minutes: int,
     """
     from datetime import date, timedelta
 
-    start = date(2027, 4, 5)
+    start = date.fromisoformat(start_date)
     return {
         "case_id": case_id,
         "kind": "small_brute_force",
@@ -207,6 +213,7 @@ def benchmark_cases() -> tuple[dict[str, Any], ...]:
         _brute_force_case(
             "brute-force-dst", days=10, work_minutes=480, max_days=3,
             weekdays=(0, 1, 2, 3, 4, 5, 6),
+            start_date="2027-10-25",
             note="spans the autumn DST transition date"),
     )
 
@@ -240,6 +247,34 @@ def _measure(label: str, call: Callable[[], Any], *, repeats: int
         "min_s": round(ordered[0], 6),
         "max_s": round(ordered[-1], 6),
         "peak_traced_bytes": int(peak),
+    }, result
+
+
+def _measure_wall(label: str, call: Callable[[], Any], *, repeats: int
+                  ) -> tuple[dict[str, Any], Any]:
+    """Measure an external phase without an unreported sixth execution.
+
+    `_measure` makes one extra call under tracemalloc. That is appropriate for
+    pure in-process phases, but a SUMO call is expensive and its memory lives
+    in a child process. Running a sixth simulation while claiming five would
+    make both the cost and the stated repetition count misleading.
+    """
+    durations: list[float] = []
+    result = None
+    for _ in range(repeats):
+        started = time.perf_counter()
+        result = call()
+        durations.append(time.perf_counter() - started)
+    ordered = sorted(durations)
+    index = max(0, int(round(0.95 * (len(ordered) - 1))))
+    return {
+        "phase": label,
+        "status": "measured",
+        "repeats": repeats,
+        "median_s": round(statistics.median(ordered), 6),
+        "p95_s": round(ordered[index], 6),
+        "min_s": round(ordered[0], 6),
+        "max_s": round(ordered[-1], 6),
     }, result
 
 
@@ -287,7 +322,7 @@ import json, resource, sys
 sys.path.insert(0, __ROOT__)
 
 def peak_rss_bytes():
-    # /proc VmHWM, NOT getrusage. Linux carries `ru_maxrss` across fork+exec
+    # Prefer /proc VmHWM. Linux carries `ru_maxrss` across fork+exec
     # (it lives on signal_struct, which survives the mm swap), so a child
     # launched from a large parent reports the PARENT's high-water mark. That
     # is not a subtle inaccuracy: measured here, every case inherited 997 MiB
@@ -299,7 +334,10 @@ def peak_rss_bytes():
                 return int(line.split()[1]) * 1024
     except OSError:
         pass
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # Python exposes bytes on macOS and KiB on Linux/other supported hosts.
+    # Multiplying the Darwin value made a 19 MiB child look like 19 GiB.
+    return int(value if sys.platform == "darwin" else value * 1024)
 
 from traffic_sim.core.contracts import ClosureSearchSpec
 spec = ClosureSearchSpec.from_dict(json.loads(sys.argv[2]))
@@ -341,9 +379,10 @@ def _isolated_peak_rss(spec_payload: Mapping[str, Any], mode: str
     return {
         "status": "measured",
         "peak_rss_bytes": int(payload["peak_rss_bytes"]),
-        "basis": ("VmHWM of a fresh interpreter that imported the modules and "
-                  "ran only this case; getrusage is deliberately not used "
-                  "because Linux carries ru_maxrss across fork+exec"),
+        "basis": ("high-water RSS of a fresh interpreter that imported the "
+                  "modules and ran only this case; /proc VmHWM is preferred "
+                  "when available, otherwise getrusage is normalized for the "
+                  "host platform"),
     }
 
 
@@ -356,15 +395,28 @@ def _process_peak_rss_bytes() -> int:
                     return int(line.split()[1]) * 1024
     except OSError:
         pass
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return int(value if platform.system() == "Darwin" else value * 1024)
 
 
-def _sumo_version() -> str | None:
-    binary = shutil.which("sumo")
+def _sumo_binary() -> Path | None:
+    discovered = shutil.which("sumo")
+    if discovered is not None:
+        return Path(discovered).resolve()
+    try:
+        import run_scenario as rs
+        candidate = Path(rs.sumo_home()) / "bin" / "sumo"
+    except (ImportError, OSError, RuntimeError):
+        return None
+    return candidate.resolve() if candidate.is_file() else None
+
+
+def _sumo_version(binary: Path | None = None) -> str | None:
+    binary = binary or _sumo_binary()
     if binary is None:
         return None
     try:
-        completed = subprocess.run([binary, "--version"], capture_output=True,
+        completed = subprocess.run([str(binary), "--version"], capture_output=True,
                                    text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -374,6 +426,7 @@ def _sumo_version() -> str | None:
 
 def _identities() -> dict[str, Any]:
     routes = {name: _sha256(ROOT / name) for name in ROUTE_FILES}
+    sumo_binary = _sumo_binary()
     return {
         "python": {
             "version": platform.python_version(),
@@ -384,7 +437,15 @@ def _identities() -> dict[str, Any]:
             "machine": platform.machine(),
             "release": platform.release(),
         },
-        "sumo_version": _sumo_version(),
+        "sumo_version": _sumo_version(sumo_binary),
+        "sumo_binary": {
+            "path": None if sumo_binary is None else str(sumo_binary),
+            "sha256": None if sumo_binary is None else _sha256(sumo_binary),
+        },
+        "demand_meta": {
+            "path": DEMAND_META_FILE,
+            "sha256": _sha256(ROOT / DEMAND_META_FILE),
+        },
         "network": {
             "path": NETWORK_FILE,
             "sha256": _sha256(ROOT / NETWORK_FILE),
@@ -396,6 +457,148 @@ def _identities() -> dict[str, Any]:
         "sources": {
             name: _sha256(ROOT / name) for name in BOUND_SOURCES
         },
+    }
+
+
+def _representative_closure(case: Mapping[str, Any]) -> tuple[
+        ClosureSearchSpec, Any, list[dict[str, Any]]]:
+    """One real daily unit from a frozen case, expressed on a demand day."""
+    spec = ClosureSearchSpec.from_dict(dict(case["spec"]))
+    schedules = generate_closure_schedules(spec)
+    if not schedules or not schedules[0].intervals:
+        raise ValueError("representative scaling case has no closure interval")
+    interval = schedules[0].intervals[0]
+    start = datetime.fromisoformat(interval.start_time)
+    end = datetime.fromisoformat(interval.end_time)
+    begin_s = start.hour * 3600 + start.minute * 60 + start.second
+    end_s = begin_s + int((end - start).total_seconds())
+    if not 0 <= begin_s < end_s <= 24 * 3600:
+        raise ValueError("representative daily closure must fit one demand day")
+    closures = [
+        {"edge_id": edge, "begin_s": begin_s, "end_s": end_s}
+        for edge in spec.directed_edges
+    ]
+    return spec, schedules[0], closures
+
+
+def _external_phase_probe(case: Mapping[str, Any], *, repeats: int,
+                          scratch: Path, identities: Mapping[str, Any],
+                          execute: bool) -> dict[str, Any]:
+    """Measure the two route/SUMO phases PR A explicitly requires.
+
+    The probe is opt-in because it creates diagnostic SUMO outcomes. Every run
+    lives below the benchmark's private temporary root and is deleted before
+    return. The frozen record binds all inputs and states the exact scope: one
+    q50 daily-unit simulation per repetition, while deterministic disruption
+    evaluates q10/q50/q90.
+    """
+    if not execute:
+        reason = (
+            "external phases were not authorized; run with "
+            "--execute-external-phases to measure the required diagnostic "
+            "cost and SUMO wall-time probe")
+        return {
+            "scope": "one representative daily unit",
+            "deterministic_cost": _unmeasured("deterministic_cost", reason),
+            "sumo_wall_time": _unmeasured("sumo_wall_time", reason),
+        }
+
+    missing = [name for name, digest in identities["routes"].items()
+               if digest is None]
+    if identities["network"]["sha256"] is None:
+        missing.append(NETWORK_FILE)
+    if identities["demand_meta"]["sha256"] is None:
+        missing.append(DEMAND_META_FILE)
+    if identities["sumo_binary"]["sha256"] is None:
+        missing.append("SUMO binary")
+    if missing:
+        reason = "required external input is absent: " + ", ".join(missing)
+        return {
+            "scope": "one representative daily unit",
+            "deterministic_cost": _unmeasured("deterministic_cost", reason),
+            "sumo_wall_time": _unmeasured("sumo_wall_time", reason),
+        }
+
+    import run_scenario as rs
+    import suggest_closure_time as legacy
+
+    spec, schedule, closures = _representative_closure(case)
+    route_paths = [ROOT / name for name in ROUTE_FILES]
+    closed = set(spec.directed_edges)
+    edge_time, edge_len = rs.free_flow_edge_cost()
+    full_adjacency = rs.build_edge_graph(set())
+
+    def deterministic_call() -> dict[str, Any]:
+        report = rs.closure_disruption_across_variants(
+            route_paths, closed, closures, edge_time, edge_len,
+            adj=full_adjacency)
+        if report is None:
+            raise RuntimeError("deterministic disruption produced no report")
+        return report
+
+    deterministic, disruption = _measure_wall(
+        "deterministic_cost", deterministic_call, repeats=repeats)
+    deterministic.update({
+        "scope": "q10/q50/q90 disruption for one representative daily unit",
+        "schedule_id": schedule.schedule_id,
+        "result_sha256": _content_key(disruption),
+    })
+
+    metadata = json.loads((ROOT / DEMAND_META_FILE).read_text())
+    n_intervals = int(metadata.get("n_intervals", 0))
+    if n_intervals <= 0:
+        raise ValueError("demand_meta.n_intervals must be positive")
+    duration_s = n_intervals * 900
+    if any(item["end_s"] > duration_s for item in closures):
+        raise ValueError("representative closure lies outside SUMO demand")
+    adjacency = rs.build_edge_graph(closed)
+    freeflow = rs.edge_freeflow_times()
+    invocation = 0
+
+    def sumo_call() -> dict[str, Any]:
+        nonlocal invocation
+        invocation += 1
+        work_dir = scratch / f"sumo-probe-{invocation}"
+        scratch_paths: list[Path] = []
+        try:
+            metrics, truncated, dropped, _raw = legacy.simulate_closure(
+                name=f"scaling-probe-{invocation}",
+                closures=closures,
+                close_edges=list(spec.directed_edges),
+                variants=[ROOT / ROUTE_FILES[0]],
+                seeds=1,
+                n_intervals=n_intervals,
+                duration_s=duration_s,
+                home=rs.sumo_home(),
+                micro=False,
+                adj=adjacency,
+                freeflow=freeflow,
+                scratch=scratch_paths,
+                work_dir=work_dir,
+                seed_workers=1,
+                seed_start=1000,
+                variant_labels=["q50"],
+            )
+            return {
+                "metrics": dataclasses.asdict(metrics),
+                "truncated_unreachable": truncated,
+                "dropped_unreachable": dropped,
+            }
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+    sumo_wall, sumo_result = _measure_wall(
+        "sumo_wall_time", sumo_call, repeats=repeats)
+    sumo_wall.update({
+        "scope": "one q50 daily-unit closure, one seed per repetition",
+        "schedule_id": schedule.schedule_id,
+        "result_sha256": _content_key(sumo_result),
+        "diagnostic_outcomes_removed": True,
+    })
+    return {
+        "scope": "one representative daily unit from six-month-720h",
+        "deterministic_cost": deterministic,
+        "sumo_wall_time": sumo_wall,
     }
 
 
@@ -518,7 +721,8 @@ def run_case(case: Mapping[str, Any], *, repeats: int, scratch: Path,
     }
 
 
-def build_record(*, repeats: int) -> dict[str, Any]:
+def build_record(*, repeats: int,
+                 execute_external_phases: bool = False) -> dict[str, Any]:
     if repeats < MINIMUM_REPEATS:
         raise SystemExit(
             f"--repeats must be at least {MINIMUM_REPEATS}; the plan requires "
@@ -532,6 +736,9 @@ def build_record(*, repeats: int) -> dict[str, Any]:
             print(f"  {case['case_id']} …", flush=True)
             results.append(run_case(case, repeats=repeats, scratch=scratch,
                                     identities=identities))
+        external_probe = _external_phase_probe(
+            cases[0], repeats=repeats, scratch=scratch,
+            identities=identities, execute=execute_external_phases)
     # Cumulative across every case this process ran — explicitly NOT a
     # per-case figure; those live under each case's "peak_rss".
     peak_rss_bytes = _process_peak_rss_bytes()
@@ -550,6 +757,7 @@ def build_record(*, repeats: int) -> dict[str, Any]:
         },
         "measured_at": time.strftime("%Y-%m-%d"),
         "repeats": repeats,
+        "external_phases_requested": bool(execute_external_phases),
         "identities": identities,
         "process_peak_rss_bytes": int(peak_rss_bytes),
         "process_peak_rss_note": (
@@ -562,6 +770,7 @@ def build_record(*, repeats: int) -> dict[str, Any]:
                                     "validation/ (except this record)"],
         },
         "cases": results,
+        "external_phase_probe": external_probe,
     }
     # Content-addressed over INPUTS only: timings legitimately differ between
     # runs, identities must not. Two records sharing this key are comparable.
@@ -570,6 +779,7 @@ def build_record(*, repeats: int) -> dict[str, Any]:
         "identities": identities,
         "cases": [case["spec"] for case in cases],
         "repeats": repeats,
+        "external_phases_requested": bool(execute_external_phases),
     })
     return record
 
@@ -581,6 +791,11 @@ def main(argv=None) -> int:
     parser.add_argument("--out", default=str(DEFAULT_OUT), metavar="PATH")
     parser.add_argument("--stdout", action="store_true",
                         help="print the record instead of writing it")
+    parser.add_argument(
+        "--execute-external-phases", action="store_true",
+        help=("run the identity-bound deterministic-cost and SUMO wall-time "
+              "probe inside the private scratch root"),
+    )
     args = parser.parse_args(argv)
 
     # Destination checked BEFORE any measurement. Refusing after a six-month
@@ -594,7 +809,10 @@ def main(argv=None) -> int:
             f"refusing to overwrite the frozen baseline at {out}; remove it "
             f"deliberately to re-freeze")
 
-    record = build_record(repeats=args.repeats)
+    record = build_record(
+        repeats=args.repeats,
+        execute_external_phases=args.execute_external_phases,
+    )
     text = json.dumps(record, indent=2, sort_keys=True) + "\n"
     if args.stdout:
         print(text)

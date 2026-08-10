@@ -89,6 +89,13 @@ class TestCaseSet:
         for case in bench.benchmark_cases():
             ClosureSearchSpec.from_dict(dict(case["spec"]))
 
+    def test_the_dst_fixture_really_spans_the_autumn_transition(self):
+        case = next(item for item in bench.benchmark_cases()
+                    if item["case_id"] == "brute-force-dst")
+        spec = case["spec"]
+        assert spec["permitted_date_start"] <= "2027-10-31"
+        assert spec["permitted_date_end"] >= "2027-10-31"
+
 
 class TestRepeats:
     def test_fewer_than_five_repeats_is_refused(self):
@@ -128,8 +135,7 @@ class TestUnmeasuredPhases:
 
     def test_sumo_wall_time_stays_unmeasured_even_with_routes_present(
             self, tmp_path):
-        """Timing a real SUMO run would create simulation outcomes, which this
-        read-only baseline must not do."""
+        """Per-case sizing stays pure; the opt-in external probe owns SUMO."""
         identities = dict(bench._identities())
         identities["routes"] = {name: "0" * 64 for name in bench.ROUTE_FILES}
         result = bench.run_case(_small_case(), repeats=5, scratch=tmp_path,
@@ -137,6 +143,16 @@ class TestUnmeasuredPhases:
         phases = {phase["phase"]: phase for phase in result["phases"]}
         assert phases["sumo_wall_time"]["status"] == "unmeasured"
         assert "outcomes" in phases["sumo_wall_time"]["reason"]
+
+    def test_external_probe_is_explicitly_unmeasured_without_authorization(
+            self, tmp_path):
+        probe = bench._external_phase_probe(
+            _small_case(), repeats=5, scratch=tmp_path,
+            identities=bench._identities(), execute=False)
+        assert probe["deterministic_cost"]["status"] == "unmeasured"
+        assert probe["sumo_wall_time"]["status"] == "unmeasured"
+        assert "--execute-external-phases" in (
+            probe["sumo_wall_time"]["reason"])
 
 
 class TestPhaseSeparation:
@@ -230,6 +246,9 @@ class TestRecordContract:
         identities = small_record["identities"]
         assert identities["python"]["version"]
         assert "sumo_version" in identities
+        assert set(identities["sumo_binary"]) == {"path", "sha256"}
+        assert identities["demand_meta"]["path"] == bench.DEMAND_META_FILE
+        assert "sha256" in identities["demand_meta"]
         assert identities["network"]["path"] == "sumo/net.net.xml"
         assert set(identities["routes"]) == set(bench.ROUTE_FILES)
         assert set(identities["policies"]) == set(bench.BOUND_POLICIES)
@@ -254,6 +273,7 @@ class TestRecordContract:
             "identities": small_record["identities"],
             "cases": [_small_case()["spec"]],
             "repeats": 5,
+            "external_phases_requested": False,
         })
         assert identical == small_record["input_content_key"]
         changed = bench._content_key({
@@ -261,6 +281,7 @@ class TestRecordContract:
             "identities": small_record["identities"],
             "cases": [{**_small_case()["spec"], "required_work_minutes": 495}],
             "repeats": 5,
+            "external_phases_requested": False,
         })
         assert changed != small_record["input_content_key"]
 
@@ -280,6 +301,21 @@ class TestFrozenArtifact:
         record = json.loads(self.PATH.read_text())
         assert record["schema"] == "closure_search_scaling_baseline_v1"
         assert record["evidence_class"] == "diagnostic_baseline"
+
+    def test_frozen_input_key_and_tracked_sources_recompute(self):
+        record = json.loads(self.PATH.read_text())
+        expected = bench._content_key({
+            "schema": bench.SCHEMA,
+            "identities": record["identities"],
+            "cases": [case["spec"] for case in bench.benchmark_cases()],
+            "repeats": record["repeats"],
+            "external_phases_requested":
+                record["external_phases_requested"],
+        })
+        assert record["input_content_key"] == expected
+        assert record["identities"]["sources"] == {
+            name: bench._sha256(ROOT / name) for name in bench.BOUND_SOURCES
+        }
 
     def test_it_covers_every_frozen_case(self):
         record = json.loads(self.PATH.read_text())
@@ -323,3 +359,15 @@ class TestFrozenArtifact:
                    for case in record["cases"]}
         assert classes["six-month-360h"] == "over_resource_budget"
         assert classes["six-month-720h"] == "large_but_runnable"
+
+    def test_required_external_phases_were_measured(self):
+        record = json.loads(self.PATH.read_text())
+        assert record["external_phases_requested"] is True
+        assert record["identities"]["sumo_binary"]["sha256"]
+        assert record["identities"]["demand_meta"]["sha256"]
+        assert all(record["identities"]["routes"].values())
+        probe = record["external_phase_probe"]
+        assert probe["deterministic_cost"]["status"] == "measured"
+        assert probe["sumo_wall_time"]["status"] == "measured"
+        assert probe["deterministic_cost"]["repeats"] >= 5
+        assert probe["sumo_wall_time"]["repeats"] >= 5

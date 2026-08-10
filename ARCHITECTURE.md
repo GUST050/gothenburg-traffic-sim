@@ -1121,12 +1121,17 @@ the date range, requested work hours and workday cap editable.  The existing
 100,000-parent and 10,000-unit caps are REPORTED, never raised or bypassed.
 
 Measured on the plan's two documented six-month cases, and matching their
-recorded sizes exactly (2,186/5,676 and 11,813/23,349): preflight p95 0.019 s
-at 19.0 MiB and 0.310 s at 21.7 MiB, against 3.74 s/191.8 MiB and 15.30 s/
-467.9 MiB to materialize the same searches.  Both PR B exit gates (p95 ≤ 3 s,
+recorded sizes exactly (2,186/5,676 and 11,813/23,349): preflight p95 0.0147 s
+at 16.4 MiB and 0.0514 s at 21.8 MiB, against 2.90 s/175.5 MiB and 12.10 s/
+489.9 MiB to materialize the same searches. Both PR B exit gates (p95 ≤ 3 s,
 peak RSS ≤ 32 MiB) pass.  `validation/closure_search_scaling_baseline_v1.json`
 (PR A) freezes those references with exact Python, SUMO, network, route, policy
 and source identities; it is diagnostic baseline evidence and opens no gate.
+Its opt-in external arm also measures q10/q50/q90 deterministic disruption
+(p95 12.799 s) and one q50 SUMO daily unit (p95 9.040 s), five repetitions
+each. Diagnostic SUMO outputs live only in a private temporary root and are
+removed after every repetition. Known cache counts exclude units whose exact
+envelope cannot execute inside the demand year.
 
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %

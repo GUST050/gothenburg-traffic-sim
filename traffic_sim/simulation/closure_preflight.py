@@ -426,7 +426,7 @@ def preflight(
     source_start = date(demand_year, 1, 1)
     source_end = date(demand_year + 1, 1, 1)
     shapes: dict[tuple[int, int], _EnvelopeShape] = {}
-    outside_year = 0
+    unavailable_units: set[tuple[date, int, int]] = set()
     if unique_units:
         first_unit_date = min(day for day, _s, _d in unique_units)
         last_unit_date = max(day for day, _s, _d in unique_units)
@@ -448,10 +448,10 @@ def preflight(
         envelope_start = work_date - timedelta(days=shape.days_before)
         envelope_end = work_date + timedelta(days=shape.days_after)
         if not shape.valid:
-            outside_year += 1
+            unavailable_units.add((work_date, start_minute, duration))
             continue
         if envelope_start < source_start or envelope_end > source_end:
-            outside_year += 1
+            unavailable_units.add((work_date, start_minute, duration))
             continue
         # The envelope must not span an excluded DST transition date either;
         # `build_simulation_envelope` raises on that, which the search records
@@ -460,10 +460,12 @@ def preflight(
             (envelope_start + timedelta(days=offset)) in transitions
             for offset in range((envelope_end - envelope_start).days)
         ):
-            outside_year += 1
+            unavailable_units.add((work_date, start_minute, duration))
 
     unit_count = len(unique_units)
-    executable = unit_count - outside_year
+    outside_year = len(unavailable_units)
+    executable_units = unique_units - unavailable_units
+    executable = len(executable_units)
 
     # ── cache ────────────────────────────────────────────────────────────────
     hits = misses = 0
@@ -475,7 +477,10 @@ def preflight(
     if cache_root is not None and unit_cache_keys is not None:
         root = Path(cache_root)
         hits = misses = unknown = 0
-        for work_date, start_minute, duration in sorted(unique_units):
+        # Cache state is meaningful only for units the real runner can execute.
+        # Counting an out-of-year unit as a hit could otherwise subtract it
+        # twice and make the estimated SUMO workload negative or too small.
+        for work_date, start_minute, duration in sorted(executable_units):
             identity = _unit_lookup_key(work_date, start_minute, duration)
             key = unit_cache_keys.get(identity)
             if key is None:

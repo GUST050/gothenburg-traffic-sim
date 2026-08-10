@@ -389,6 +389,40 @@ class TestCacheReporting:
             report.executable_daily_unit_count - report.cache_hits)
         assert _unit_lookup_key(date(2027, 3, 1), 360, 480)[0] == "2027-03-01"
 
+    def test_known_cache_counts_exclude_unexecutable_units(self, tmp_path):
+        """Out-of-year units never reach SUMO and therefore cannot be hits.
+
+        Regression: the known-identity arm probed every generated unit while
+        the unknown arm correctly used only executable units. A cached file for
+        a 31 December unit could then understate estimated work, even below
+        zero when most units lay outside the demand year.
+        """
+        spec = make_spec(
+            permitted_date_start="2027-12-30",
+            permitted_date_end="2027-12-31",
+            band=("18:00", "23:00"),
+            required_work_minutes=240,
+            allowed_weekdays=[0, 1, 2, 3, 4, 5, 6],
+            max_consecutive_start_days=1,
+        )
+        units, _ = decompose_schedules(spec, generate_closure_schedules(spec))
+        keys = {}
+        for index, unit in enumerate(units):
+            identity = unit.identity
+            key = f"{index:064x}"
+            keys[(identity["work_date"], identity["start_time"],
+                  identity["end_time"], identity["duration_minutes"])] = key
+            entry = tmp_path / key[:2] / f"{key}.json"
+            entry.parent.mkdir(parents=True, exist_ok=True)
+            entry.write_text("{}")
+
+        report = preflight(spec, cache_root=tmp_path, unit_cache_keys=keys)
+
+        assert report.units_outside_demand_year > 0
+        assert report.cache_hits == report.executable_daily_unit_count
+        assert report.cache_misses == report.cache_unknown == 0
+        assert report.estimated_sumo_daily_units == 0
+
     def test_estimated_workload_names_its_basis(self):
         report = preflight(make_spec())
         assert "seed and demand-variant repetitions" in report.estimation_basis
