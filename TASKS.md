@@ -42,7 +42,9 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### CLOSURE-INTEGRITY-34 — Stages 3 and 4 of the closure-integrity plan
 
-- Status: `IMPLEMENTED; the two measured gates are UNRUN`
+- Status: `IMPLEMENTED. Stage 4's topology half is MEASURED and its gate is
+  achievable; stage 3's gate on real demand and the v10 freeze remain unrun for
+  located, documented reasons.`
 - Objective and scope: `Close out
   docs/plans/CLOSURE_INTEGRITY_PLAN_2026-08-05.md. Stages 1-2 were already
   measured and revised/refuted its premises; this delivers stage 3 (an explicit
@@ -56,11 +58,17 @@ owners, states and approval formulas are not active workflow rules. See
   that severs a destination or cuts off a successor, inherits everything else
   from v9 unchanged, and is registered for exact demand binding BEFORE its
   freeze.`
-- Context or checkpoints: `The MECHANISM is measured against real SUMO on the
-  eight-edge c1 probe (validation/closure_teleport_mechanism_probe_v1.json):
+- Context or checkpoints: `Stage 3's mechanism is measured against real SUMO on
+  the eight-edge c1 probe (validation/closure_teleport_mechanism_probe_v1.json):
   default arm throughput 1 / teleports 1 / unfinished 0, policy arm 0 / 0 / 1.
-  Neither GATE can be decided here: sumo/ and runs/ are gitignored, so there is
-  no calibrated demand and no canonical archive.`
+  Stage 4's topology half is measured on the real network rebuilt from the
+  tracked graph (validation/closure_survivability_screen_v1.json): 1285/7101
+  edges sever a successor when closed, 35 of 46 near-sensor candidates survive,
+  so the >=4 gate is achievable. Blockers located, not assumed: stage 3's real
+  gate needs calibrated demand, and build_candidates.py cannot build the pool
+  because overpass-api.de is denied by this environment's network policy; the
+  v10 freeze binds an archive by SHA-256 that can only be copied, never
+  rebuilt.`
 - Primary files: `traffic_sim/simulation/closure_teleport.py,
   traffic_sim/simulation/closure_survivability.py, run_scenario.py,
   suggest_closure_time.py, traffic_sim/simulation/monthly_sumo.py,

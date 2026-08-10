@@ -198,6 +198,28 @@ asserts the raw graph gives the wrong answer.
 traverse internals, and already does so correctly. Only the one-hop predecessor
 question needed them removed.
 
+**Corroborated against the one closure that has a tracked record.**
+`web/data/scenarios/close_60786979_3575001205_0+1455801464_18241874_0.json` is a
+real three-seed run of a closure that includes the edge the screen calls fatal:
+
+```
+truncated_vehicles            5      vehicles_no_detour           3
+active_closure_edge_entries   0      teleports per seed     0, 0, 0
+closure_integrity                    verified_clean
+```
+
+The screen and the run agree: the edge severs, and the run shows exactly the
+corresponding population — five vehicles shortened before departure and three
+with no detour at all. It also shows why that particular closure was already
+clean without Stage 3: `truncate_stranded_vehicles` had removed the severed
+vehicles up front, so nothing was left to get stuck and teleported. The leak
+the plan is about appears on the closures where that filter does not catch
+everything — 35 of v9's 75 schedules. This is corroboration of the screen, not
+evidence that Stage 3 was unnecessary.
+
+That artifact also confirms the change is backward-compatible: it predates the
+policy, carries no `teleport_policy` field, and still reads correctly.
+
 **The freeze, unrun.** It needs the canonical archive under `runs/`, which is
 not tracked and cannot be reconstructed — it is bound by exact path and
 SHA-256. On a machine that has it:
@@ -250,11 +272,25 @@ plan-bound sources. Merging this while a population run is active discards the
 units already built, not just the run — `WARMING_PLAN_2026-08-05.md` has the
 constraint table. Land it between runs, or regenerate the plan afterwards.
 
-**Two gates are unrun.** Nothing here claims the leak is fixed. It claims the
-mechanism is removed by construction and the measurement that would prove it is
-built and ready. Until
-`validation/closure_teleport_policy_v1.json` exists, Stage 3 is implemented and
-undecided.
+**Stage 3's gate on real demand is unrun, and cannot be run in this
+environment.** Nothing here claims the leak is fixed on the Gothenburg network.
+It claims the mechanism is removed by construction, demonstrated against real
+SUMO on a synthetic case, and that the measurement which would decide it is
+built. Until `validation/closure_teleport_policy_v1.json` exists, Stage 3 is
+implemented and undecided.
+
+The blocker was located rather than assumed. `sumo/net.net.xml` rebuilds fine
+from the tracked graph, and `estimate_directions.py` produces a direction split,
+but `build_sumo_demand.py` stops inside `build_candidates.py`: the candidate
+pool needs OSM building footprints and POIs from `overpass-api.de`, which this
+environment's network policy denies (`403` on CONNECT, confirmed against the
+proxy's own status endpoint). `data_in/deso/` carries the population and DeSO
+geometry but not the POI/building layers. So there is no calibrated demand
+here, and a demand invented to work around that would be fabricated evidence.
+
+**Stage 4's freeze is unrun for a different and permanent reason.** It binds the
+canonical archive by exact path and SHA-256. That archive cannot be
+reconstructed — only copied from the machine that produced it.
 
 ## Checks
 

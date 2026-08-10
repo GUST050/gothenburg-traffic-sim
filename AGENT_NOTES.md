@@ -50,8 +50,12 @@ which model may continue. See `AGENTS.md`.
   constant, so the warm arm stays an optimisation of an equivalent cold arm.
   MAX_CLOSURE_WAIT_S was separated from the teleport option: it models a driver
   who parks short of an eight-hour closure, not a simulator setting.`
-- Blockers or risks: `Neither gate is decided — sumo/ and runs/ are gitignored,
-  so there is no network and no canonical demand archive here. The teleport
+- Blockers or risks: `Stage 4's topology half is decided (gate achievable);
+  stage 3's real-demand gate and the v10 freeze are not. The network rebuilds
+  from the tracked graph, but build_candidates.py cannot build a candidate pool
+  because overpass-api.de is denied by this environment's network policy, so
+  there is no calibrated demand and inventing one would be fabricated evidence.
+  The v10 archive is bound by SHA-256 and can only be copied, never rebuilt. The teleport
   policy is an input to results exactly as REROUTER_RADIUS_M is, so existing
   scenario outputs are not comparable to new ones. run_scenario.py,
   suggest_closure_time.py and monthly_sumo.py are annual-plan-bound: merging
