@@ -1235,9 +1235,26 @@ case is run twice in fresh child interpreters — v1 materialization and the
 streaming writer — on the same host in the same session, because a resident-
 memory figure from one operating system is not evidence about another. See the
 plan's PR C section for the numbers and for the exact status of the plan's
-under-64-MiB exit gate. The comparable Darwin/arm64 measurement leaves that
-process-total gate open: streaming itself adds 1.33 MiB, but fixed imports put
-the process at 78.02 MiB. Another measurement alone cannot close it.
+under-64-MiB exit gate.
+
+**Import cost is part of the contract.** The gate is a claim about a PROCESS,
+so what the process imports is part of what it measures. `finalist_decision`
+needs SciPy for exactly one t-quantile inside a confidence half-width, but it
+imported it at module scope, and `independent_daily` imports
+`finalist_decision` — so enumeration, preflight, ledger writing and cost
+ordering each paid 81.7 MiB for a distribution they never evaluate. The import
+is now lazy (`_student_t_ppf`), with the same call and the same numerics.
+`approved_seed_workers` and `SEED_WORKER_BENCHMARK_RECORD` moved unchanged into
+`traffic_sim/simulation/seed_worker_budget.py`, a module with no simulation
+dependency, and `monthly_sumo` re-exports both; the closure-search CLI reads
+the budget, the spec, the policy and the exact preflight before importing the
+SUMO stack at all, so an over-budget search is refused in about 22 MiB instead
+of after ~110 MiB of numpy/pandas/SciPy and a wait for the shared demand lock.
+Measured: the search import chain 99.96 → 21.62 MiB, the CLI 130.60 → 21.68
+MiB, the 720-hour streaming process total ~102 → 23.25 MiB on Linux/x86_64.
+`tests/test_search_import_cost.py` pins this in real child interpreters. The
+gate itself stays OPEN — the frozen reference is Darwin/arm64 — but it is now
+closable by a measurement rather than structurally out of reach.
 
 **Unchanged.** The 100,000-parent and 10,000-unit caps, ranking,
 `closure_cost_v1`, pilot selection, finalist decision, teleport policy and

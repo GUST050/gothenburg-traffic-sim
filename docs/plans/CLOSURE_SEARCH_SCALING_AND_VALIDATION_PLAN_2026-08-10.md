@@ -738,17 +738,8 @@ mot 708,88 MiB för v1-vägen (101× mindre).
 Det är fortfarande — avsiktligt — VÄGRAT av 10 000-enhetstaket, som PR C inte
 rör.
 
-720 h under 64 MiB: **ÖPPEN även på den jämförbara Darwin/arm64-värden.**
-Själva uppräkningen mäter 1,33 MiB, men processens totala topp är 78,02 MiB
-eftersom en färsk tolk som importerar `independent_daily` — och därmed
-`finalist_decision` och scipy — redan ligger på 76,69 MiB. Samma fasta kostnad
-betalas av v1-vägen, men grinden är formulerad som en processtotal och får inte
-godkännas genom att subtrahera den. Posten rapporterar därför ärligt
-`open_fixed_import_cost_dominates`. En ny mätning på samma värd kan inte stänga
-grinden; det kräver antingen minskad fast import-RSS i den verkliga processen
-eller en uttryckligt granskad ändring av grindkontraktet. Att bara flytta
-identitetshjälpar för benchmarken vore inte tillräckligt, eftersom den riktiga
-sökprocessen importerar `finalist_decision` för beslutet.
+720 h under 64 MiB: **den fasta importkostnaden är nu åtgärdad; grinden
+väntar på en mätning på Darwin/arm64.** Se avsnitt 10.
 
 ### Reviewkorrigeringar efter implementationen
 
@@ -771,3 +762,85 @@ pilotval, finalistbeslut, teleport-policy och survivability är orörda.
 10 000-enhetstaket och 100 000-föräldratak är oförändrade. Inget fryst v1-,
 v6-, v9- eller v10-artefakt skrevs om, ingen v11 skapades, ingen
 held-out-kampanj kördes och ingen årlig uppvärmningsindata rördes.
+
+---
+
+## 10. Steg 0 efter PR C: den fasta importkostnaden (2026-08-10)
+
+Avsnitt 1–9 är oförändrade. Detta avsnitt beskriver arbetet som gjordes för att
+PR C:s processtotalgrind ska KUNNA stängas av en mätning i stället för att vara
+strukturellt omöjlig.
+
+### Vad mätningen visade
+
+Importkedjan profilerades i en färsk tolk, modul för modul, på mätvärden
+(Linux/x86_64):
+
+| import | RSS efter | tillägg |
+|---|---:|---:|
+| tom tolk | 7,64 MiB | — |
+| `traffic_sim.core.contracts` | 17,06 MiB | +9,41 |
+| `closure_calendar`, `closure_preflight`, `closure_ledgers` | 17,72 MiB | +0,66 |
+| **`finalist_decision`** | **99,40 MiB** | **+81,68** |
+| `independent_daily`, `monthly_search` | 99,96 MiB | +0,56 |
+
+Hela processtotalen var alltså EN rad: `from scipy.stats import t as
+student_t` på modulnivå i `finalist_decision.py`. SciPy används på exakt ett
+ställe — en t-kvantil i en konfidensbredd — och `independent_daily` importerar
+`finalist_decision`, så uppräkning, preflight, ledgerskrivning och
+kostnadsordning betalade 81,68 MiB för en fördelning de aldrig utvärderar.
+
+Produktens CLI var värre. `run_monthly_closure_search.py` importerade
+`monthly_demand` och `monthly_sumo` på modulnivå, vilka når `run_scenario`
+(pandas, +59,4 MiB) och `suggest_closure_time` (SciPy, +61,9 MiB):
+**130,6 MiB innan `main()` ens börjat**, även för en körning som den exakta
+preflighten omedelbart vägrar.
+
+### Vad som ändrades
+
+1. `finalist_decision._student_t_ppf()` importerar SciPy **lazily**. Anropet
+   och numeriken är oförändrade — samma `scipy.stats.t.ppf` — bara tidpunkten
+   är ny. En konfidensbredd betalar fortfarande för SciPy, exakt där den
+   beräknas.
+2. `approved_seed_workers` och `SEED_WORKER_BENCHMARK_RECORD` flyttades
+   oförändrade till `traffic_sim/simulation/seed_worker_budget.py`, en modul
+   utan simuleringsberoenden. `monthly_sumo` re-exporterar båda namnen, så
+   ingen befintlig importör påverkas.
+3. `run_monthly_closure_search.py` importerar SUMO-sidan via
+   `_simulation_backends()` först när en simulering blir verklig, och läser
+   spec/policy och kör den exakta preflighten INNAN dess — och innan
+   demand-workspace-låset tas.
+
+Exakt beteende, cache-ID:n, schema-ID:n, kostnader och finalistbeslut är
+oförändrade. `tests/test_finalist_decision.py` och
+`tests/test_pilot_selection.py` (50 tester) passerar oförändrade.
+
+### Mätt effekt
+
+| process | före | efter |
+|---|---:|---:|
+| hela sökimportkedjan | 99,96 MiB | **21,62 MiB** |
+| produktens CLI vid import | 130,60 MiB | **21,68 MiB** |
+| 720 h strömmande, processtotal | ~102 MiB (Linux) | **23,25 MiB** (Linux) |
+
+`tests/test_search_import_cost.py` kör riktiga barntolkar och kräver att
+uppräkning, preflight och ledgerskrivning aldrig laddar SciPy, samt att
+t-kvantilen fortfarande gör det där den används.
+
+### Grindens status
+
+På mätvärden (Linux/x86_64) är 720 h-processtotalen nu 23,25 MiB mot taket
+64 MiB, och `imported_scipy` är `false` i strömningsbarnet. Posten rapporterar
+`open_pending_baseline_host`: **grinden är fortfarande ÖPPEN**, eftersom den
+frysta referensen togs på Darwin/arm64 och en RSS-siffra från ett
+operativsystem inte är evidens om ett annat.
+
+Skillnaden mot före: grinden kan nu stängas av en mätning. Tidigare var
+fixkostnaden 76,69 MiB av 78,02 MiB på den jämförbara värden, vilket ingen
+mätning kunde klara.
+
+Exakt kommando för att stänga den på utvecklingsmaskinen:
+
+    python3 tools/benchmark_closure_streaming.py --repeats 5 --overwrite
+
+och läs `validation/closure_search_streaming_v1.json` → `memory_gate.status`.

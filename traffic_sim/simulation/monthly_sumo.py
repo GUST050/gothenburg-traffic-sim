@@ -28,6 +28,13 @@ from traffic_sim.core.contracts import (
 from traffic_sim.core.fingerprint import sha256_file, sumo_version
 from traffic_sim.simulation import closure_teleport
 from traffic_sim.simulation import metrics as closure_metrics
+# Re-exported so every existing importer of these two names is unchanged.
+# They live in a dependency-free module because the closure-search CLI reads
+# the seed-worker budget before any simulation stack needs to exist.
+from traffic_sim.simulation.seed_worker_budget import (  # noqa: F401
+    SEED_WORKER_BENCHMARK_RECORD,
+    approved_seed_workers,
+)
 from traffic_sim.simulation.envelope import (
     EnvelopePolicy,
     RecoveryBucket,
@@ -62,9 +69,6 @@ from traffic_sim.simulation.warm_route_windows import (  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_BASELINE_CACHE = Path("runs") / "closure-search-baselines"
-SEED_WORKER_BENCHMARK_RECORD = (
-    Path("validation") / "a2_parallel_seed_benchmark_v1.json"
-)
 VARIANT_FILENAMES = {
     "q50": "calibrated.rou.xml",
     "q10": "calibrated_v1.rou.xml",
@@ -191,37 +195,6 @@ def _read_warm_edgedata_time_loss(path: Path) -> tuple[RecoveryBucket, ...]:
 
 def _buckets_to_dict(values: tuple[RecoveryBucket, ...]) -> list[dict[str, Any]]:
     return [dataclasses.asdict(value) for value in values]
-
-
-def approved_seed_workers(path: Path | None = None) -> int:
-    """How many concurrent SUMO seeds the recorded benchmark approves.
-
-    Fail closed at 1 (today's proven behaviour) unless a benchmark record
-    exists that actually demonstrates what the speed plan's stage-A2 gate
-    asks for: identical evidence between serial and parallel execution, and
-    a measured peak memory that fits the machine. A record that merely
-    asserts a number, without those two facts, unlocks nothing.
-    """
-    try:
-        record = json.loads(
-            Path(path if path is not None else SEED_WORKER_BENCHMARK_RECORD)
-            .read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
-        return 1
-    approved = record.get("approved_seed_workers")
-    if (
-        not isinstance(record, dict)
-        or record.get("kind") != "monthly_seed_worker_benchmark_record"
-        or record.get("gate_status") != "pass"
-        or record.get("evidence_identical") is not True
-        or record.get("peak_rss_within_budget") is not True
-        or isinstance(approved, bool)
-        or not isinstance(approved, int)
-        or approved < 1
-    ):
-        return 1
-    return approved
 
 
 def _buckets_from_dict(values: Any) -> tuple[RecoveryBucket, ...]:

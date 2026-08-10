@@ -565,7 +565,13 @@ def test_independent_exhaustive_preflight_rejects_before_enumeration():
 
 
 def test_independent_cli_rejects_before_network_or_search_workspace(monkeypatch):
-    """The product path must use preflight before candidate-ledger creation."""
+    """The product path must use preflight before candidate-ledger creation.
+
+    Strengthened alongside the import split: the refusal now has to happen
+    before the demand workspace lock is taken AND before the SUMO-side stack is
+    imported at all, so an over-budget search costs a preflight rather than
+    ~110 MiB of numpy/pandas/SciPy and a wait for a lock a real build may hold.
+    """
     from types import SimpleNamespace
 
     import run_monthly_closure_search as command
@@ -598,9 +604,11 @@ def test_independent_cli_rejects_before_network_or_search_workspace(monkeypatch)
         def release(self):
             Lock.released = True
 
+    acquired: list[bool] = []
+    Lock.acquire = lambda self, **_kwargs: (acquired.append(True) or True)
+
     monkeypatch.setattr(command, "parse_args", lambda: args)
     monkeypatch.setattr(command, "approved_seed_workers", lambda: 1)
-    monkeypatch.setattr(command, "recover_live_demand_release", lambda: None)
     monkeypatch.setattr(command, "WorkspaceLock", Lock)
     monkeypatch.setattr(command, "load_closure_search_spec", lambda _path: spec)
     monkeypatch.setattr(command, "_read", lambda _path: _policy().to_dict())
@@ -610,10 +618,18 @@ def test_independent_cli_rejects_before_network_or_search_workspace(monkeypatch)
         lambda _path: (_ for _ in ()).throw(
             AssertionError("network identity must not run before preflight")),
     )
+    monkeypatch.setattr(
+        command,
+        "_simulation_backends",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("the SUMO stack must not be imported before "
+                           "preflight")),
+    )
 
     with pytest.raises(SystemExit, match="preflight counted.*parent schedules"):
         command.main()
-    assert Lock.released is True
+    assert acquired == [], "the demand lock must not be taken for a refusal"
+    assert Lock.released is False
 
 
 def test_independent_screening_excludes_only_out_of_year_envelopes(tmp_path):

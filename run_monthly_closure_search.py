@@ -12,10 +12,6 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from screen_monthly_closures import build_screening_artifact
-from traffic_sim.simulation.monthly_proxy import (
-    HELD_OUT_VALIDATED_SHORTLIST_POLICY,
-)
 from traffic_sim.core.closure_calendar import iter_closure_schedules
 from traffic_sim.core.contracts import (
     load_closure_search_spec,
@@ -25,10 +21,6 @@ from traffic_sim.simulation.workspace import WorkspaceLock
 from traffic_sim.simulation.monthly_search import (
     MonthlySearchPolicy,
     run_monthly_search,
-)
-from traffic_sim.simulation.monthly_demand import (
-    MonthlyDemandResolverRunner,
-    recover_live_demand_release,
 )
 from traffic_sim.simulation.envelope import (
     EnvelopePolicy,
@@ -44,12 +36,52 @@ from traffic_sim.simulation.closure_preflight import (
     UnsupportedPreflightSpec,
     preflight,
 )
-from traffic_sim.simulation.monthly_sumo import (
-    ArchivedDemandSumoRunner,
+# The seed-worker budget is a JSON reader, and it is consulted before any
+# simulation exists. Importing it from `monthly_sumo` pulled in run_scenario
+# (pandas) and suggest_closure_time (SciPy) — about 110 MiB — on every run,
+# including one the exact preflight then refuses.
+from traffic_sim.simulation.seed_worker_budget import (
     SEED_WORKER_BENCHMARK_RECORD,
     approved_seed_workers,
 )
 from traffic_sim.simulation.search_workspace import DEFAULT_ROOT
+
+
+def _simulation_backends():
+    """Import the SUMO-side stack, lazily.
+
+    `monthly_sumo` and `monthly_demand` reach run_scenario and
+    suggest_closure_time, whose module-scope numpy/pandas/SciPy imports cost
+    ~110 MiB. Nothing in argument validation, the exact preflight or the
+    streaming enumeration needs any of it, so a search that is refused before
+    it starts must not pay for it. Imported here, in one place, so the cost is
+    incurred exactly once and exactly where a simulation becomes real.
+    """
+    from traffic_sim.simulation.monthly_demand import (
+        MonthlyDemandResolverRunner,
+        recover_live_demand_release,
+    )
+    from traffic_sim.simulation.monthly_sumo import ArchivedDemandSumoRunner
+
+    return (ArchivedDemandSumoRunner, MonthlyDemandResolverRunner,
+            recover_live_demand_release)
+
+
+def _proxy_screen_builder(path, **kwargs):
+    """Frozen-campaign proxy screening, imported on use.
+
+    `screen_monthly_closures` is only needed by --screening-mode=proxy.
+    """
+    from screen_monthly_closures import build_screening_artifact
+    from traffic_sim.simulation.monthly_proxy import (
+        HELD_OUT_VALIDATED_SHORTLIST_POLICY,
+    )
+
+    return build_screening_artifact(
+        path,
+        policy=HELD_OUT_VALIDATED_SHORTLIST_POLICY,
+        **kwargs,
+    )
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -491,7 +523,35 @@ def main() -> None:
             "parallel seed workers and parallel daily workers cannot be "
             "combined; that would multiply the approved SUMO process ceiling"
         )
+    # Read the inputs and SIZE the search before anything expensive exists.
+    # The exact preflight is read-only calendar arithmetic: it needs no demand
+    # workspace, no network identity and no simulation stack. Running it here
+    # means an over-budget search — the late surprise the scaling plan set out
+    # to remove — is refused in about 22 MiB, instead of after ~110 MiB of
+    # numeric imports and a wait for the shared demand lock.
+    try:
+        spec = load_closure_search_spec(args.spec)
+        policy = MonthlySearchPolicy.from_dict(_read(args.policy))
+        independent_preflight = (
+            _independent_exhaustive_preflight(
+                spec,
+                maximum_candidates=(
+                    args.independent_exhaustive_candidate_cap
+                ),
+                maximum_daily_units=args.independent_exhaustive_daily_cap,
+                baseline_trip_duration_p99_s=(
+                    args.baseline_trip_duration_p99_s
+                ),
+            )
+            if args.screening_mode == "independent-exhaustive"
+            else None
+        )
+    except (OSError, ValueError, RuntimeError, KeyError) as exc:
+        raise SystemExit(str(exc)) from exc
+
     runner = None
+    (ArchivedDemandSumoRunner, MonthlyDemandResolverRunner,
+     recover_live_demand_release) = _simulation_backends()
     recovered = recover_live_demand_release()
     if recovered is not None:
         print(
@@ -511,22 +571,6 @@ def main() -> None:
             f"demand workspace busy: {workspace.holder_description()}; "
             "wait for it, stop it, or raise --workspace-wait-s")
     try:
-        spec = load_closure_search_spec(args.spec)
-        policy = MonthlySearchPolicy.from_dict(_read(args.policy))
-        independent_preflight = (
-            _independent_exhaustive_preflight(
-                spec,
-                maximum_candidates=(
-                    args.independent_exhaustive_candidate_cap
-                ),
-                maximum_daily_units=args.independent_exhaustive_daily_cap,
-                baseline_trip_duration_p99_s=(
-                    args.baseline_trip_duration_p99_s
-                ),
-            )
-            if args.screening_mode == "independent-exhaustive"
-            else None
-        )
         study_key = _digest({
             "kind": "monthly_closure_search_study",
             "search_content_key": spec.content_key,
@@ -608,10 +652,9 @@ def main() -> None:
             # road_domain_status matches the
             # validation runner (in_domain); per-worksite coverage scoring
             # is a future refinement the gate did not cover.
-            screen_builder = lambda path: build_screening_artifact(
+            screen_builder = lambda path: _proxy_screen_builder(
                 path,
                 road_domain_status="in_domain",
-                policy=HELD_OUT_VALIDATED_SHORTLIST_POLICY,
             )
         elif args.screening_mode == "bounded-exhaustive":
             screen_builder = lambda path: _bounded_exhaustive_builder(

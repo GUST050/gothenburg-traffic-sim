@@ -24,7 +24,29 @@ import math
 from statistics import mean, median, stdev
 from typing import Any, Mapping, Sequence
 
-from scipy.stats import t as student_t
+
+def _student_t_ppf(probability: float, degrees_of_freedom: int) -> float:
+    """Student-t inverse CDF, importing SciPy only when one is needed.
+
+    The call and its numerics are unchanged — this is the same
+    ``scipy.stats.t.ppf`` the module always used.  What changed is WHEN SciPy
+    loads.
+
+    Importing it at module scope cost 81.7 MiB of resident memory in every
+    process that so much as touched this module, and this module is imported
+    transitively by `independent_daily` and therefore by the closure search's
+    enumeration, preflight, ledger and cost-ordering phases — none of which
+    computes a confidence interval.  Measured on the frozen PR C comparison,
+    that single import was the whole reason a 720-hour streaming run whose own
+    enumeration costs 1.98 MiB reported a ~102 MiB process total and could not
+    meet the plan's 64 MiB gate.
+
+    A confidence interval still pays for SciPy, once, exactly where it is
+    computed.
+    """
+    from scipy.stats import t as student_t  # noqa: PLC0415
+
+    return float(student_t.ppf(probability, degrees_of_freedom))
 
 
 SCHEMA_VERSION = 1
@@ -529,9 +551,7 @@ def _variant_statistics(
         # unadjusted pairwise tests.
         family_alpha = 1.0 - policy.confidence_level
         point_alpha = family_alpha / max(1, simultaneous_comparisons)
-        critical = float(
-            student_t.ppf(1.0 - point_alpha / 2.0, n_pairs - 1)
-        )
+        critical = _student_t_ppf(1.0 - point_alpha / 2.0, n_pairs - 1)
         half_width = critical * stdev(deltas) / math.sqrt(n_pairs)
     return VariantStatistics(
         demand_variant=demand_variant,

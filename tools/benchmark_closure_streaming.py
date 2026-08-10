@@ -88,6 +88,9 @@ BOUND_SOURCES = (
     "traffic_sim/core/contracts.py",
     "traffic_sim/simulation/closure_ledgers.py",
     "traffic_sim/simulation/closure_preflight.py",
+    # The module whose module-scope SciPy import WAS the process total this
+    # record reports; its bytes decide what the memory figure means.
+    "traffic_sim/simulation/finalist_decision.py",
     "traffic_sim/simulation/independent_daily.py",
     "traffic_sim/simulation/monthly_search.py",
     "run_monthly_closure_search.py",
