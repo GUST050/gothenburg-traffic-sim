@@ -85,8 +85,7 @@ def _evaluate(tmp_path, edge, vehicles, *, variants=None):
         exposure[VARIANT_OF[filename]] = found.get(edge, csv._EMPTY_EXPOSURE)
     return csv.evaluate_edge(
         edge, exposure_by_variant=exposure,
-        adjacency_with=build_adjacency(set()),
-        build_adjacency=build_adjacency, reachable=reachable)
+        adjacency_with=build_adjacency(set()), reachable=reachable)
 
 
 class TestSeparationOfAccessFromTopology:
@@ -156,7 +155,6 @@ class TestVariantReduction:
         with pytest.raises(ValueError):
             csv.evaluate_edge("B", exposure_by_variant={},
                               adjacency_with=build_adjacency(set()),
-                              build_adjacency=build_adjacency,
                               reachable=reachable)
 
 
@@ -249,3 +247,30 @@ class TestSerialization:
         assert payload["survives_own_closure"] is True
         assert "vehicles_denied_departure" in payload
         assert "vehicles_severed_destination" in payload
+
+
+class TestDerivedClosedGraph:
+    """The closed graph is derived from the unclosed one, not rebuilt.
+
+    Rebuilding calls `run_scenario.build_edge_graph`, which re-reads and
+    re-hashes the whole SUMO network every time — sixty candidates would hash a
+    multi-megabyte file sixty times to remove one edge each. The derivation
+    must therefore reproduce that builder's output exactly, including its
+    omission rule, or the two graphs quietly diverge.
+    """
+
+    def test_it_matches_the_reference_builder(self):
+        for banned in ({"B"}, {"C"}, {"D"}, {"B", "C"}, set()):
+            assert csv.without_edges(build_adjacency(set()), banned) == {
+                source: targets
+                for source, targets in build_adjacency(banned).items()
+                if targets}, banned
+
+    def test_a_source_whose_every_target_is_banned_is_omitted(self):
+        """`build_edge_graph` creates the key only inside its per-target test,
+        so an all-banned source disappears rather than keeping an empty list."""
+        adjacency = {"only": ["gone"], "kept": ["gone", "stays"]}
+        assert csv.without_edges(adjacency, {"gone"}) == {"kept": ["stays"]}
+
+    def test_a_banned_source_is_dropped_entirely(self):
+        assert csv.without_edges({"a": ["b"], "b": ["c"]}, {"a"}) == {"b": ["c"]}

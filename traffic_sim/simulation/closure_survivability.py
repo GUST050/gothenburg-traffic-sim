@@ -84,6 +84,31 @@ class SurvivabilityReport:
         }
 
 
+def without_edges(adjacency: Mapping[str, Sequence[str]],
+                  banned: set) -> dict[str, list[str]]:
+    """`adjacency` with `banned` removed from both ends of every connection.
+
+    Reproduces `run_scenario.build_edge_graph(banned)` exactly, INCLUDING its
+    omission rule: a source whose every target is banned disappears rather than
+    keeping an empty list, because that builder only creates the key inside the
+    per-target test. Both are equivalent to `reachable`, which reads through
+    `adj.get(...)` — but "equivalent if you look closely" is how two graphs
+    quietly diverge, so the rule is reproduced rather than relied upon.
+
+    Deriving beats rebuilding: `build_edge_graph` re-reads and re-hashes
+    net.net.xml on every call, so a sixty-candidate pool would hash a
+    multi-megabyte network sixty times to remove one edge each time.
+    """
+    out: dict[str, list[str]] = {}
+    for source, targets in adjacency.items():
+        if source in banned:
+            continue
+        kept = [target for target in targets if target not in banned]
+        if kept:
+            out[source] = kept
+    return out
+
+
 def successors_cut_off(edge_id: str,
                        adjacency_with: Mapping[str, Sequence[str]],
                        adjacency_without: Mapping[str, Sequence[str]]
@@ -114,17 +139,16 @@ def successors_cut_off(edge_id: str,
 def evaluate_edge(edge_id: str, *,
                   exposure_by_variant: Mapping[str, Mapping],
                   adjacency_with: Mapping[str, Sequence[str]],
-                  build_adjacency: Callable[[set], Mapping[str, Sequence[str]]],
                   reachable: Callable[..., bool]) -> SurvivabilityReport:
-    """Decide one edge from already-streamed exposure.
+    """Decide one edge from already-streamed exposure and the unclosed graph.
 
-    `build_adjacency` and `reachable` are injected rather than imported so the
-    rule is testable on a hand-built graph and so the caller controls which
-    network the probe runs against — but production supplies
-    `run_scenario.build_edge_graph`/`run_scenario.reachable`, i.e. the SAME
-    connection graph the closure filter and SUMO's own router use. A second,
-    independently written reachability implementation would be free to disagree
-    with the simulation, which is the one thing this check may not do.
+    `reachable` is injected rather than imported so the rule is testable on a
+    hand-built graph and so the caller controls which network the probe runs
+    against — but production supplies `run_scenario.reachable` over
+    `run_scenario.build_edge_graph`'s output, i.e. the SAME connection graph the
+    closure filter and SUMO's own router use. A second, independently written
+    reachability implementation would be free to disagree with the simulation,
+    which is the one thing this check may not do.
 
     WORST VARIANT WINS. q10/q50/q90 are three plausible directional assignments
     of the same measured counts; an edge that severs someone under any of them
@@ -134,7 +158,7 @@ def evaluate_edge(edge_id: str, *,
     if not exposure_by_variant:
         raise ValueError(f"no demand variant was supplied for {edge_id}")
     closed = {edge_id}
-    adjacency_without = build_adjacency(set(closed))
+    adjacency_without = without_edges(adjacency_with, closed)
     cut_off = successors_cut_off(edge_id, adjacency_with, adjacency_without)
 
     # One reachability answer per DISTINCT approach/destination pair, shared
@@ -180,8 +204,8 @@ def evaluate_pool(edge_ids: Sequence[str], *, archive_path: Path,
     Each route file is streamed ONCE for every candidate at the same time — a
     per-edge pass over a 16 000-vehicle route set, times three variants, times
     a pool of sixty, is work for nothing. The unclosed adjacency is likewise
-    built once; only the per-candidate closed graph is rebuilt, because that is
-    the only part that differs.
+    built once and each candidate's closed graph derived from it, for the same
+    reason: `build_adjacency` re-hashes the whole SUMO network on every call.
     """
     archive_path = Path(archive_path)
     paths = [archive_path / name for name in route_files]
@@ -202,6 +226,5 @@ def evaluate_pool(edge_ids: Sequence[str], *, archive_path: Path,
     return {edge: evaluate_edge(edge,
                                 exposure_by_variant=streamed[edge],
                                 adjacency_with=adjacency_with,
-                                build_adjacency=build_adjacency,
                                 reachable=reachable)
             for edge in wanted}
