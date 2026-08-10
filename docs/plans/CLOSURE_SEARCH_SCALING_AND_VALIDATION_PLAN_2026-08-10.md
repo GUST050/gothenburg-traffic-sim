@@ -532,3 +532,98 @@ Nästa implementation ska börja med PR A och PR B:
 
 Detta ger omedelbar användarnytta och en säker mätgrund för de mer ingripande
 ändringarna, utan att röra rangordning, SUMO-resultat eller releasepolicy.
+
+
+---
+
+## 8. Uppmätt resultat: PR A och PR B (2026-08-10)
+
+Tillagt efter genomförandet. Avsnitt 1–7 är oförändrade; inget historiskt
+resonemang och ingen tidigare slutsats har skrivits om.
+
+### PR A — fryst baslinje
+
+`tools/benchmark_closure_search_scaling.py` →
+`validation/closure_search_scaling_baseline_v1.json`. Sex fall: planens två
+sexmånadersfall plus fyra små brute-force-fall (en arbetsdag, rullande period
+över helg, blackout-delad körning, DST-övergång). Fem repetitioner per fas,
+median och p95. Baslinjen binder Python, SUMO, nät, rutter, policy och
+källkodshashar — inklusive `closure_teleport.py` och
+`closure_survivability.py`, eftersom de avgör vad en stängningskörning ÄR.
+Posten är innehållsadresserad över sina INDATA (`input_content_key`), inte
+över mätvärdena, som legitimt varierar mellan körningar. Den är märkt
+`diagnostic_baseline` och öppnar ingen grind.
+
+| fall | föräldrar | dagsenheter | kalender p95 | preflight p95 | RSS materialisera | RSS preflight |
+|---|---:|---:|---:|---:|---:|---:|
+| 720 h | 2 186 | 5 676 | 3,741 s | 0,0191 s | 191,8 MiB | 19,0 MiB |
+| 360 h | 11 813 | 23 349 | 15,296 s | 0,3099 s | 467,9 MiB | 21,7 MiB |
+| brute-force (4 fall) | 85–754 | 85–910 | 0,006–0,081 s | 0,001–0,004 s | 102–105 MiB | 18,0–18,1 MiB |
+
+Antalen reproducerar avsnitt 2:s tabell exakt (2 186/5 676 och 11 813/23 349),
+vilket är vad som gör posten till samma referens. Varje fall registrerar också
+`semantic_agreement`: preflightens antal jämförs mot generatorns och båda
+sparas, så en framtida snabbare väg som ändrar ett antal faller här istället
+för att läsas som en förbättring.
+
+RSS mäts PER FALL i en egen tolk. Föräldraprocessens topp är kumulativ över
+alla fall och är märkt som sådan. Not: materialiseringssiffran innehåller
+tolkens och importernas ~102 MiB grundnivå, så 720 h-fallets eget påslag är
+cirka 90 MiB — samma storleksordning som avsnitt 2:s uppmätta 90 MiB.
+
+**Faser som INTE mättes**, med skäl i posten istället för nollor:
+`deterministic_cost` och `sumo_wall_time` kräver kalibrerade demand-rutter,
+som saknas i denna miljö (`build_candidates.py` behöver OSM-byggnader och
+POI:er från `overpass-api.de`, som nätverkspolicyn nekar). `sumo_wall_time`
+förblir dessutom omätt även med rutter: att tidta en riktig SUMO-körning
+skapar utfall, vilket en read-only baslinje inte får göra — den hör till
+PR G. Exit-grinden "mätningen får inte skriva i befintliga evidence-rötter"
+hålls av en privat temporär rot som tas bort efteråt.
+
+### PR B — exakt read-only preflight
+
+`traffic_sim/simulation/closure_preflight.py` + `POST
+/api/monthly_search/preflight` + UI-visning före start.
+
+**Exit-grinden är uppfylld:** exakta antal i samtliga fixtures, och
+sexmånaderspreflight p95 0,019 s / 0,310 s mot taket 3 s, topp-RSS 19,0 /
+21,7 MiB mot taket 32 MiB.
+
+Räkningen är en run-length-identitet i stället för en objektvandring: en
+maximal följd av `L` användbara datum innehåller `max(0, L - n + 1)` fönster
+av längd `n`. Det ger 40 (dagantal, starttid)-par över ~130 möjliga datum för
+sexmånadersfallen, i stället för tiotusentals objekt. `exact_equal_daily_v1`
+räknas på den behörighetsindexerade axeln och `equal_daily_rounded_v1` på
+kalenderaxeln, eftersom generatorn stegar olika under de två.
+
+Exaktheten är differentialtestad mot den riktiga generatorn och den riktiga
+dagsuppdelningen: 40 slumpade kontrakt plus årsskifte, skottdag, båda
+DST-övergångarna, blackout-datum, nattband över midnatt och planens
+07:30–15:15 inom 06:00–18:00. Kuvertklassificeringen (warm-up/recovery
+utanför demandåret) jämförs mot `build_simulation_envelope` självt.
+
+`exact_balanced_daily_v1` skapar upp till 4 096 varaktighetsmönster vars
+giltighet varierar med positionen i fönstret. Den VÄGRAS
+(`UnsupportedPreflightSpec` → HTTP 422) i stället för att approximeras: ett
+tal som utger sig för att vara exakt utan att vara det vore sämre än ingen
+uppskattning alls.
+
+**Cacheläget är `unknown`, inte en falsk miss.** Den dagliga
+backend-identiteten som cachen nycklas på existerar först efter att
+demand-resolvern förberett ett arkiv, vilket en read-only-anrop inte får
+göra. Att kalla varje enhet en miss skulle underskatta cachen; att kalla dem
+träffar skulle överskatta den. Ett tredje läge redovisas därför explicit,
+och en anropare som redan känner identiteterna får exakta träffar/missar.
+
+**Resursgränsen är oförändrad.** Preflighten RAPPORTERAR mot 100 000
+föräldrar och 10 000 dagsenheter; den höjer dem inte. 360 h-fallet klassas
+`over_resource_budget` före start — precis den sena överraskning avsnitt 2
+beskriver — och UI:t vägrar starta det men lämnar datumintervall, arbetstimmar
+och dagtak redigerbara.
+
+### Vad som INTE gjordes
+
+PR C (strömmande ledgers), PR D–F och allt som rör rangordning, SUMO-utfall
+eller releasepolicy är orörda. Ingen v11 skapades och ingen held-out-kampanj
+kördes. `validation/monthly_proxy_manifest_v10.json` är avsiktligt oförändrad
+historisk evidens för 03ca5d7 och rapporterar fortsatt källdrift.

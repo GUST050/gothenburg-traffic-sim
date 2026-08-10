@@ -9,91 +9,78 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Objective-aligned rolling road-closure period optimization
-  across multi-month ranges, with the completed closure-integrity fix now
-  integrated into the current branch`
-- Status: `CLOSURE INTEGRITY INTEGRATED; MULTI-MONTH V2 IMPLEMENTED AND COMBINED
-  TESTS GREEN. The branch now contains the reviewed Stage 3 teleport policy,
-  corrected Stage 4 survivability screen and frozen held-out v10. The local
-  rolling-period work was reapplied above it without code conflicts. It compares
-  periods of up to 90 workdays across month boundaries with one fixed daily
-  closure window and keeps policy v2 provisional. The historical v10 manifest
-  correctly reports source drift against the still-uncommitted rolling changes;
-  it was not rewritten.`
-- Suggested next action: `Execute PR A/B from
-  docs/plans/CLOSURE_SEARCH_SCALING_AND_VALIDATION_PLAN_2026-08-10.md: freeze
-  the scaling baseline, implement the exact read-only preflight, differential-
-  test it against calendar enumeration, and expose it in API/UI. Then proceed
-  to streaming ledgers and pre-SUMO deterministic cost ordering before the
-  discriminating policy benchmark.`
+- Current focus: `Closure-search scaling: PR A (frozen baseline) and PR B
+  (exact read-only preflight) from the 2026-08-10 scaling plan`
+- Status: `PR A AND PR B IMPLEMENTED, MEASURED AND GREEN. The preflight counts
+  a search exactly without materializing a ClosureSchedule and reproduces the
+  plan's own six-month figures (2,186/5,676 and 11,813/23,349). Both PR B exit
+  gates pass: p95 0.019 s / 0.310 s against a 3 s ceiling, peak RSS 19.0 /
+  21.7 MiB against 32 MiB. POST /api/monthly_search/preflight is read-only and
+  proven artifact-free; the UI refuses an over-budget search before any job
+  exists and leaves every input editable. The 10,000-unit cap is reported, not
+  raised. PR C onwards is untouched.`
+- Suggested next action: `PR C — streaming ledgers and the memory gate, using
+  validation/closure_search_scaling_baseline_v1.json as the reference (720 h
+  materialization is 191.8 MiB today against the plan's under-64-MiB exit
+  gate). Then PR D's process-free disruption provider.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Do not use held observations in pool, picker or certificate.
   Do not weaken TAG/fit/provenance gates or promote pilot artifacts as release
   evidence. Do not edit annual plan-bound inputs while warming is active. Do
   not raise the 10,000-unit cap before streaming/cost-ordering equivalence and
-  resource gates pass.`
-- Updated: `Closure commits 11fc68b..03ca5d7 fast-forward-integrated while no
-  warming/SUMO process was active; local rolling-period work restored above the
-  integration. Combined verification passes: 531 focused tests plus 115 API
-  tests; 5 skipped and the known historical v6 drift check deselected. The v2
-  survivability artifact reproduces byte-for-byte / 2026-08-10`
+  resource gates pass — the preflight reports it and must never bypass it.`
+- Updated: `PR A/B on claude/closure-scaling-preflight-pr-a-b from 3bb2fa3;
+  362 focused + 112 closure-integrity + 126 API tests pass, 2 pre-existing
+  failures need the gitignored runs/ tree / 2026-08-10`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### CLOSURE-OBJECTIVE-V2 — Align ranking and compare rolling periods
+### CLOSURE-SCALING-AB — Frozen scaling baseline and exact read-only preflight
 
-- Status: `IMPLEMENTED, including multi-month rolling periods; first isolated
-  benchmark passed diagnostically; closure-integrity dependency integrated;
-  combined verification, scaling execution, discriminating benchmark and
-  held-out validation pending`
-- Objective and scope: `Prevent the pilot from discarding the true
-  closure-cost winner, bind the objective explicitly in policy, and carry
-  deterministic q10/q50/q90 disruption evidence through monthly and
-  independent-day execution without rewriting v1 evidence. Allow the user to
-  compare periods from eight through 90 workdays across several months without forcing
-  any schedule into a calendar week, while keeping the exact same start and
-  end time on every selected workday.`
-- Completion outcome: `Pilot and final selection both use worst-variant added
-  vehicle-hours, then exact added-distance/affected-vehicle tie-breakers;
-  no-detour candidates are refused and missing v2 evidence fails closed.`
-- Context or checkpoints: `The tracked v1 golden content key is preserved.
-  The pinned benchmark in validation/monthly_search_v2_benchmark_v1.json ran
-  on the original immutable archive, produced result SHA-256 a7ee1242… and
-  resumed without new work. Two lower-cost candidates failed the teleport hard
-  gate, leaving only one viable candidate; therefore it verifies execution but
-  cannot calibrate an equivalence band or license production/UI claims. The
-  closure-integrity implementation is now part of this branch: closure runs use
-  the explicit no-teleport policy and held-out v10 filters topologically fatal
-  candidates. That v10 artifact remains immutable historical evidence for
-  03ca5d7: current rolling changes alter its fingerprinted closure_calendar.py
-  and monthly_search.py, so a future untouched campaign must use a new version
-  after those sources stabilize. The scaling plan first adds exact preflight
-  and streaming ledgers, then proves a deterministic cost-ordered SUMO scan
-  against exhaustive selection.`
-- Primary files: `traffic_sim/simulation/{pilot_selection,finalist_decision,
-  monthly_search,monthly_sumo,monthly_demand,independent_daily,
-  period_comparison}.py,
-  suggest_closure_time.py, run_monthly_closure_search.py,
-  validation/monthly_search_policy_v2.json,
-  tools/run_monthly_v2_benchmark.py,
-  validation/monthly_search_v2_benchmark_{plan_v1,v1}.json,
-  docs/plans/CLOSURE_SEARCH_SCALING_AND_VALIDATION_PLAN_2026-08-10.md`
-- Constraints and safety: `Do not alter annual warming inputs/artifacts. Do not
-  promote v2 until a named benchmark and new untouched held-out evidence pass.
-  Keep closure teleport/survivability provenance in all derived cache keys.`
-- Acceptance criteria: `Objective is identical in pilot and final; monthly and
-  daily evidence survives serialization/cache boundaries; rolling periods may
-  cross week/month boundaries and retain exact dates; exact secondary ties
-  resolve; legacy v1 identity remains stable; regression tests pass.`
-- Useful checks: `pytest objective/monthly/daily/SUMO/period/benchmark tests
-  plus closure-integrity suites (531 passed, 5 skipped, historical v6 drift
-  check deselected); full test_serve.py with loopback allowed (115 passed);
-  survivability v2 byte verification and git diff --check pass. Benchmark wall
-  318.18 s; completed-result reload 0.0 s and identical a7ee1242… result hash.
-  v10 --verify intentionally reports manifest source drift until the rolling
-  changes receive a new immutable held-out campaign.`
+- Status: `IMPLEMENTED AND MEASURED; both PR B exit gates pass. One verification
+  gate could not be closed in this environment — see checkpoints.`
+- Objective and scope: `PR A and PR B only from
+  docs/plans/CLOSURE_SEARCH_SCALING_AND_VALIDATION_PLAN_2026-08-10.md. Freeze a
+  comparable performance/semantic baseline, then show a search's exact size
+  before it starts. No streaming ledgers, no cost ordering, no ranking, SUMO or
+  release change.`
+- Completion outcome: `closure_preflight.py counts parents, per-workday-count
+  groups, unique (date, start, end, road) units, out-of-demand-year units and
+  cache hits/misses/unknown from a run-length identity rather than an object
+  walk. POST /api/monthly_search/preflight exposes it read-only; the UI shows
+  normal / large_but_runnable / over_resource_budget before start and refuses
+  the last. benchmark_closure_search_scaling.py freezes six cases with exact
+  Python, SUMO, network, route, policy and source identities.`
+- Context or checkpoints: `Exactness is differential-tested against the real
+  generator and decomposition, including 40 randomized contracts, year
+  boundaries, leap days, both DST transitions, blackouts, overnight bands and
+  the plan's 07:30-15:15 case. exact_balanced_daily_v1 is REFUSED (422), not
+  approximated. UNCLOSED GATE: tools/screen_closure_survivability.py --verify
+  does not reproduce here, and does not at the untouched base commit either —
+  sumo/net.net.xml is gitignored and was rebuilt locally, so only its digest
+  and the derived content key differ while every measured value is identical.`
+- Primary files: `traffic_sim/simulation/closure_preflight.py,
+  tools/benchmark_closure_search_scaling.py,
+  validation/closure_search_scaling_baseline_v1.json, serve.py, web/app.js,
+  web/index.html, tests/test_closure_preflight.py,
+  tests/test_benchmark_closure_search_scaling.py, tests/test_serve.py,
+  ARCHITECTURE.md, the scaling plan`
+- Constraints and safety: `The preflight reports the 100,000-parent and
+  10,000-unit caps and never raises or bypasses them. It builds no demand,
+  starts no SUMO, creates no job or artifact and takes no simulation lock.
+  Closure teleport and survivability sources stay bound in the baseline's
+  identity set. No frozen v1/v6/v9/v10 artifact was rewritten and no v11 was
+  created.`
+- Acceptance criteria: `Preflight counts equal exhaustive enumeration on every
+  fixture; six-month p95 <= 3 s and peak RSS <= 32 MiB; the endpoint creates no
+  artifact; the UI lets the user re-plan after seeing the estimate.`
+- Useful checks: `pytest -q tests/test_closure_preflight.py (71 passed);
+  focused preflight/calendar/monthly/period/independent-daily/benchmark set
+  (362 passed, 2 pre-existing failures needing runs/); closure teleport and
+  survivability regressions (112 passed); tests/test_serve.py (126 passed);
+  git diff --check clean.`
 <!-- ACTIVE_TASK_END -->
 
 ## History

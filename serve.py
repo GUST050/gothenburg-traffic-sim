@@ -158,6 +158,10 @@ from traffic_sim.core.contracts import (ClosureSearchSpec, DemandBuildSpec,
                                          write_scenario_spec)
 from traffic_sim.simulation.monthly_search import (MonthlySearchPolicy,
                                                    load_passing_heldout_gate)
+from traffic_sim.simulation.closure_preflight import (
+    UnsupportedPreflightSpec, preflight as closure_preflight)
+from traffic_sim.simulation.independent_daily import (
+    INDEPENDENT_DAILY_ENVELOPE_POLICY)
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import assess_output_fit
 from traffic_sim.simulation.trajectory_contract import (
@@ -1235,6 +1239,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self._optimize_signals()
         if self.path.startswith("/api/monthly_search/status"):
             return self._json(405, {"error": "statusläsning använder GET"})
+        # Ordered BEFORE the generic prefix: preflight is a read-only sibling of
+        # the job endpoint, and falling through to _monthly_search would start
+        # the very search the estimate exists to let the user reconsider.
+        if self.path.startswith("/api/monthly_search/preflight"):
+            return self._monthly_search_preflight()
         if self.path.startswith("/api/monthly_search"):
             return self._monthly_search()
         return self._json(404, {"error": "okänd endpoint"})
@@ -1998,6 +2007,57 @@ class Handler(SimpleHTTPRequestHandler):
         if state.get("status") in {"running", "cancelling"}:
             state["elapsed_s"] = round(time.time() - state["started_at"])
         return self._json(200, state)
+
+    def _monthly_search_preflight(self) -> None:
+        """Exact size of a search, computed WITHOUT starting anything.
+
+        PR B of the scaling plan. A valid six-month, 360-hour search enumerates
+        23,349 unique daily units and is then refused by the 10,000-unit cap —
+        correctly, but only after the user has waited. This answers the same
+        question first, exactly, so the date range, requested work time or
+        workday cap can be changed before any job exists.
+
+        STRICTLY READ-ONLY, and structurally so rather than by promise: it
+        takes no simulation lock, starts no thread, begins no job record,
+        writes no spec file and never reaches the demand resolver. The daily
+        backend identity that the result cache is keyed on only exists after
+        that resolver has prepared (and possibly built) an archive, so cache
+        figures come back as `unknown` rather than as an invented miss.
+        """
+        try:
+            body = self._json_body()
+        except ValueError as exc:
+            return self._json(400, {"error": str(exc)})
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        structured = body.get("closure_search_spec")
+        if structured is None or qs or set(body) != {"closure_search_spec"}:
+            return self._json(400, {"error":
+                "POST-kroppen måste vara exakt "
+                "{\"closure_search_spec\": {...}}"})
+        try:
+            spec = ClosureSearchSpec.from_dict(structured)
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            return self._json(400, {"error": f"ogiltig ClosureSearchSpec: {exc}"})
+        unknown = [e for e in spec.directed_edges if e not in known_edges()]
+        if unknown:
+            return self._json(400, {"error": f"okända kanter: {unknown}"})
+        if not self._require_supported_closure_edges(list(spec.directed_edges)):
+            return
+        try:
+            report = closure_preflight(
+                spec,
+                # The same frozen warm-up basis the real search is started
+                # with, so the estimate describes the run the user would get.
+                baseline_trip_duration_p99_s=MONTHLY_BASELINE_TRIP_P99_S,
+                envelope_policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
+            )
+        except UnsupportedPreflightSpec as exc:
+            # Refused rather than approximated: a number that claims to be
+            # exact and is not would be worse than no estimate at all.
+            return self._json(422, {"error": str(exc)})
+        except (TypeError, ValueError) as exc:
+            return self._json(400, {"error": f"preflight misslyckades: {exc}"})
+        return self._json(200, report.to_dict())
 
     def _monthly_search(self) -> None:
         # Phase 4 step 6 (IMPROVEMENT_PLAN.md "Persistence, API, and UI").

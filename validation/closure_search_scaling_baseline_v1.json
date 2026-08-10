@@ -1,0 +1,887 @@
+{
+  "cases": [
+    {
+      "artifact_bytes": {
+        "daily_units_json_bytes": 10799945,
+        "parent_schedules_json_bytes": 17209559
+      },
+      "case_content_key": "8be9da8a9ea1b36ff52fcc5acbffea33b54be54016d2bda8a7604fa934e6c663",
+      "case_id": "six-month-720h",
+      "counts": {
+        "eligible_workday_count": 129,
+        "parent_schedule_count": 2186,
+        "parent_schedules_by_workday_count": {
+          "60": 70,
+          "64": 264,
+          "72": 522,
+          "80": 650,
+          "90": 680
+        },
+        "parent_to_unit_edges": 171880,
+        "size_class": "large_but_runnable",
+        "unique_daily_unit_count": 5676,
+        "units_outside_demand_year": 0,
+        "valid_workday_counts": [
+          60,
+          64,
+          72,
+          80,
+          90
+        ]
+      },
+      "kind": "six_month_rolling",
+      "note": "plan section 2, runnable under the 10,000-unit cap",
+      "peak_rss": {
+        "materialize_calendar_and_units": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 201093120,
+          "status": "measured"
+        },
+        "preflight_only": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 19922944,
+          "status": "measured"
+        }
+      },
+      "phases": [
+        {
+          "max_s": 3.741209,
+          "median_s": 3.633057,
+          "min_s": 3.478668,
+          "p95_s": 3.741209,
+          "parent_schedule_count": 2186,
+          "peak_traced_bytes": 52677226,
+          "phase": "calendar_generation",
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "max_s": 3.42748,
+          "median_s": 3.29844,
+          "min_s": 3.066513,
+          "p95_s": 3.42748,
+          "peak_traced_bytes": 29139528,
+          "phase": "daily_unit_decomposition",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 5676
+        },
+        {
+          "max_s": 0.019115,
+          "median_s": 0.01531,
+          "min_s": 0.015191,
+          "p95_s": 0.019115,
+          "parent_schedule_count": 2186,
+          "peak_traced_bytes": 861202,
+          "phase": "preflight",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 5676
+        },
+        {
+          "basis": "existence probe of the content-addressed daily cache path, run against a private temporary root seeded with half the entries",
+          "max_s": 0.073227,
+          "median_s": 0.050408,
+          "min_s": 0.049777,
+          "p95_s": 0.073227,
+          "peak_traced_bytes": 1924075,
+          "phase": "cache_lookup",
+          "present_entries": 2838,
+          "probed_entries": 5676,
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "phase": "deterministic_cost",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        },
+        {
+          "phase": "sumo_wall_time",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        }
+      ],
+      "semantic_agreement": {
+        "generator_parent_schedule_count": 2186,
+        "generator_unique_daily_unit_count": 5676,
+        "parent_schedule_count_matches": true,
+        "preflight_parent_schedule_count": 2186,
+        "preflight_unique_daily_unit_count": 5676,
+        "unique_daily_unit_count_matches": true
+      },
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "demand_build_id": "scaling-baseline",
+        "directed_edges": [
+          "60786979_3575001205_0"
+        ],
+        "interday_policy": "independent_daily_reset_v1",
+        "max_consecutive_start_days": 90,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "18:00"
+        },
+        "permitted_date_end": "2027-06-30",
+        "permitted_date_start": "2027-01-01",
+        "required_work_minutes": 43200,
+        "search_id": "six-month-720h",
+        "source": "forecast",
+        "work_allocation_policy": "exact_equal_daily_v1"
+      }
+    },
+    {
+      "artifact_bytes": {
+        "daily_units_json_bytes": 44255340,
+        "parent_schedules_json_bytes": 71404375
+      },
+      "case_content_key": "7f5d38bd421714cba9fedc110e08bf1fa2aef103c21cfa6c22660fbcc769211b",
+      "case_id": "six-month-360h",
+      "counts": {
+        "eligible_workday_count": 129,
+        "parent_schedule_count": 11813,
+        "parent_schedules_by_workday_count": {
+          "30": 100,
+          "32": 392,
+          "36": 846,
+          "40": 1170,
+          "45": 1445,
+          "48": 1558,
+          "60": 1750,
+          "72": 1682,
+          "80": 1550,
+          "90": 1320
+        },
+        "parent_to_unit_edges": 701513,
+        "size_class": "over_resource_budget",
+        "unique_daily_unit_count": 23349,
+        "units_outside_demand_year": 0,
+        "valid_workday_counts": [
+          30,
+          32,
+          36,
+          40,
+          45,
+          48,
+          60,
+          72,
+          80,
+          90
+        ]
+      },
+      "kind": "six_month_rolling",
+      "note": "plan section 2, valid but refused by the 10,000-unit cap",
+      "peak_rss": {
+        "materialize_calendar_and_units": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 490598400,
+          "status": "measured"
+        },
+        "preflight_only": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 22765568,
+          "status": "measured"
+        }
+      },
+      "phases": [
+        {
+          "max_s": 15.296376,
+          "median_s": 14.967794,
+          "min_s": 14.866931,
+          "p95_s": 15.296376,
+          "parent_schedule_count": 11813,
+          "peak_traced_bytes": 215916433,
+          "phase": "calendar_generation",
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "max_s": 13.97629,
+          "median_s": 13.825767,
+          "min_s": 13.18787,
+          "p95_s": 13.97629,
+          "peak_traced_bytes": 119927306,
+          "phase": "daily_unit_decomposition",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 23349
+        },
+        {
+          "max_s": 0.309909,
+          "median_s": 0.071045,
+          "min_s": 0.068668,
+          "p95_s": 0.309909,
+          "parent_schedule_count": 11813,
+          "peak_traced_bytes": 3776300,
+          "phase": "preflight",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 23349
+        },
+        {
+          "basis": "existence probe of the content-addressed daily cache path, run against a private temporary root seeded with half the entries",
+          "max_s": 0.313835,
+          "median_s": 0.21804,
+          "min_s": 0.206546,
+          "p95_s": 0.313835,
+          "peak_traced_bytes": 1924075,
+          "phase": "cache_lookup",
+          "present_entries": 11675,
+          "probed_entries": 23349,
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "phase": "deterministic_cost",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        },
+        {
+          "phase": "sumo_wall_time",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        }
+      ],
+      "semantic_agreement": {
+        "generator_parent_schedule_count": 11813,
+        "generator_unique_daily_unit_count": 23349,
+        "parent_schedule_count_matches": true,
+        "preflight_parent_schedule_count": 11813,
+        "preflight_unique_daily_unit_count": 23349,
+        "unique_daily_unit_count_matches": true
+      },
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "demand_build_id": "scaling-baseline",
+        "directed_edges": [
+          "60786979_3575001205_0"
+        ],
+        "interday_policy": "independent_daily_reset_v1",
+        "max_consecutive_start_days": 90,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "period_comparison_policy": "rolling_period_v1",
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "18:00"
+        },
+        "permitted_date_end": "2027-06-30",
+        "permitted_date_start": "2027-01-01",
+        "required_work_minutes": 21600,
+        "search_id": "six-month-360h",
+        "source": "forecast",
+        "work_allocation_policy": "exact_equal_daily_v1"
+      }
+    },
+    {
+      "artifact_bytes": {
+        "daily_units_json_bytes": 84576,
+        "parent_schedules_json_bytes": 41736
+      },
+      "case_content_key": "d4a3b0e8d76dca2192ec8995e13b6ead0eaaad8d1b3db5f6cceb7a2941f87592",
+      "case_id": "brute-force-single-day",
+      "counts": {
+        "eligible_workday_count": 5,
+        "parent_schedule_count": 85,
+        "parent_schedules_by_workday_count": {
+          "1": 85
+        },
+        "parent_to_unit_edges": 85,
+        "size_class": "normal",
+        "unique_daily_unit_count": 85,
+        "units_outside_demand_year": 0,
+        "valid_workday_counts": [
+          1
+        ]
+      },
+      "kind": "small_brute_force",
+      "note": "one workday, weekdays only",
+      "peak_rss": {
+        "materialize_calendar_and_units": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 107175936,
+          "status": "measured"
+        },
+        "preflight_only": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 18911232,
+          "status": "measured"
+        }
+      },
+      "phases": [
+        {
+          "max_s": 0.006303,
+          "median_s": 0.005933,
+          "min_s": 0.005523,
+          "p95_s": 0.006303,
+          "parent_schedule_count": 85,
+          "peak_traced_bytes": 75812,
+          "phase": "calendar_generation",
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "max_s": 0.014897,
+          "median_s": 0.01239,
+          "min_s": 0.011634,
+          "p95_s": 0.014897,
+          "peak_traced_bytes": 135423,
+          "phase": "daily_unit_decomposition",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 85
+        },
+        {
+          "max_s": 0.001148,
+          "median_s": 0.000632,
+          "min_s": 0.000571,
+          "p95_s": 0.001148,
+          "parent_schedule_count": 85,
+          "peak_traced_bytes": 19978,
+          "phase": "preflight",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 85
+        },
+        {
+          "basis": "existence probe of the content-addressed daily cache path, run against a private temporary root seeded with half the entries",
+          "max_s": 0.001431,
+          "median_s": 0.00107,
+          "min_s": 0.001014,
+          "p95_s": 0.001431,
+          "peak_traced_bytes": 1675,
+          "phase": "cache_lookup",
+          "present_entries": 43,
+          "probed_entries": 85,
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "phase": "deterministic_cost",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        },
+        {
+          "phase": "sumo_wall_time",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        }
+      ],
+      "semantic_agreement": {
+        "generator_parent_schedule_count": 85,
+        "generator_unique_daily_unit_count": 85,
+        "parent_schedule_count_matches": true,
+        "preflight_parent_schedule_count": 85,
+        "preflight_unique_daily_unit_count": 85,
+        "unique_daily_unit_count_matches": true
+      },
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "demand_build_id": "scaling-baseline",
+        "directed_edges": [
+          "60786979_3575001205_0"
+        ],
+        "interday_policy": "independent_daily_reset_v1",
+        "max_consecutive_start_days": 1,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "18:00"
+        },
+        "permitted_date_end": "2027-04-11",
+        "permitted_date_start": "2027-04-05",
+        "required_work_minutes": 480,
+        "search_id": "brute-force-single-day",
+        "source": "forecast",
+        "work_allocation_policy": "exact_equal_daily_v1"
+      }
+    },
+    {
+      "artifact_bytes": {
+        "daily_units_json_bytes": 936513,
+        "parent_schedules_json_bytes": 480225
+      },
+      "case_content_key": "8675af54bfadf60cb3e5144065b91023d4db3f88c010264c3fc73e16f9c1ed74",
+      "case_id": "brute-force-multi-day",
+      "counts": {
+        "eligible_workday_count": 10,
+        "parent_schedule_count": 754,
+        "parent_schedules_by_workday_count": {
+          "1": 170,
+          "2": 297,
+          "4": 287
+        },
+        "parent_to_unit_edges": 1912,
+        "size_class": "normal",
+        "unique_daily_unit_count": 910,
+        "units_outside_demand_year": 0,
+        "valid_workday_counts": [
+          1,
+          2,
+          4
+        ]
+      },
+      "kind": "small_brute_force",
+      "note": "rolling period crossing a weekend",
+      "peak_rss": {
+        "materialize_calendar_and_units": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 110247936,
+          "status": "measured"
+        },
+        "preflight_only": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 19009536,
+          "status": "measured"
+        }
+      },
+      "phases": [
+        {
+          "max_s": 0.080551,
+          "median_s": 0.078212,
+          "min_s": 0.073347,
+          "p95_s": 0.080551,
+          "parent_schedule_count": 754,
+          "peak_traced_bytes": 922245,
+          "phase": "calendar_generation",
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "max_s": 0.139516,
+          "median_s": 0.137746,
+          "min_s": 0.135446,
+          "p95_s": 0.139516,
+          "peak_traced_bytes": 1562116,
+          "phase": "daily_unit_decomposition",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 910
+        },
+        {
+          "max_s": 0.003401,
+          "median_s": 0.003091,
+          "min_s": 0.002928,
+          "p95_s": 0.003401,
+          "parent_schedule_count": 754,
+          "peak_traced_bytes": 58944,
+          "phase": "preflight",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 910
+        },
+        {
+          "basis": "existence probe of the content-addressed daily cache path, run against a private temporary root seeded with half the entries",
+          "max_s": 0.011235,
+          "median_s": 0.008049,
+          "min_s": 0.007507,
+          "p95_s": 0.011235,
+          "peak_traced_bytes": 1673,
+          "phase": "cache_lookup",
+          "present_entries": 455,
+          "probed_entries": 910,
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "phase": "deterministic_cost",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        },
+        {
+          "phase": "sumo_wall_time",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        }
+      ],
+      "semantic_agreement": {
+        "generator_parent_schedule_count": 754,
+        "generator_unique_daily_unit_count": 910,
+        "parent_schedule_count_matches": true,
+        "preflight_parent_schedule_count": 754,
+        "preflight_unique_daily_unit_count": 910,
+        "unique_daily_unit_count_matches": true
+      },
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "blackout_dates": [],
+        "demand_build_id": "scaling-baseline",
+        "directed_edges": [
+          "60786979_3575001205_0"
+        ],
+        "interday_policy": "independent_daily_reset_v1",
+        "max_consecutive_start_days": 4,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "18:00"
+        },
+        "permitted_date_end": "2027-04-18",
+        "permitted_date_start": "2027-04-05",
+        "required_work_minutes": 480,
+        "search_id": "brute-force-multi-day",
+        "source": "forecast",
+        "work_allocation_policy": "exact_equal_daily_v1"
+      }
+    },
+    {
+      "artifact_bytes": {
+        "daily_units_json_bytes": 607231,
+        "parent_schedules_json_bytes": 312883
+      },
+      "case_content_key": "31b39d46143a667755d58bc04d2f0b55bb47eaa63d0aeb40d7a237a390c7b5a8",
+      "case_id": "brute-force-blackout",
+      "counts": {
+        "eligible_workday_count": 12,
+        "parent_schedule_count": 567,
+        "parent_schedules_by_workday_count": {
+          "1": 204,
+          "2": 363
+        },
+        "parent_to_unit_edges": 930,
+        "size_class": "normal",
+        "unique_daily_unit_count": 600,
+        "units_outside_demand_year": 0,
+        "valid_workday_counts": [
+          1,
+          2
+        ]
+      },
+      "kind": "small_brute_force",
+      "note": "blackouts split the eligible run",
+      "peak_rss": {
+        "materialize_calendar_and_units": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 108822528,
+          "status": "measured"
+        },
+        "preflight_only": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 19009536,
+          "status": "measured"
+        }
+      },
+      "phases": [
+        {
+          "max_s": 0.045814,
+          "median_s": 0.043244,
+          "min_s": 0.042386,
+          "p95_s": 0.045814,
+          "parent_schedule_count": 567,
+          "peak_traced_bytes": 551573,
+          "phase": "calendar_generation",
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "max_s": 0.121571,
+          "median_s": 0.086888,
+          "min_s": 0.08371,
+          "p95_s": 0.121571,
+          "peak_traced_bytes": 1001216,
+          "phase": "daily_unit_decomposition",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 600
+        },
+        {
+          "max_s": 0.002492,
+          "median_s": 0.002147,
+          "min_s": 0.002066,
+          "p95_s": 0.002492,
+          "parent_schedule_count": 567,
+          "peak_traced_bytes": 51551,
+          "phase": "preflight",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 600
+        },
+        {
+          "basis": "existence probe of the content-addressed daily cache path, run against a private temporary root seeded with half the entries",
+          "max_s": 0.007982,
+          "median_s": 0.005402,
+          "min_s": 0.005211,
+          "p95_s": 0.007982,
+          "peak_traced_bytes": 1671,
+          "phase": "cache_lookup",
+          "present_entries": 300,
+          "probed_entries": 600,
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "phase": "deterministic_cost",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        },
+        {
+          "phase": "sumo_wall_time",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        }
+      ],
+      "semantic_agreement": {
+        "generator_parent_schedule_count": 567,
+        "generator_unique_daily_unit_count": 600,
+        "parent_schedule_count_matches": true,
+        "preflight_parent_schedule_count": 567,
+        "preflight_unique_daily_unit_count": 600,
+        "unique_daily_unit_count_matches": true
+      },
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "blackout_dates": [
+          "2027-04-09",
+          "2027-04-14"
+        ],
+        "demand_build_id": "scaling-baseline",
+        "directed_edges": [
+          "60786979_3575001205_0"
+        ],
+        "interday_policy": "independent_daily_reset_v1",
+        "max_consecutive_start_days": 3,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "18:00"
+        },
+        "permitted_date_end": "2027-04-18",
+        "permitted_date_start": "2027-04-05",
+        "required_work_minutes": 480,
+        "search_id": "brute-force-blackout",
+        "source": "forecast",
+        "work_allocation_policy": "exact_equal_daily_v1"
+      }
+    },
+    {
+      "artifact_bytes": {
+        "daily_units_json_bytes": 556458,
+        "parent_schedules_json_bytes": 285198
+      },
+      "case_content_key": "869cd369e3572998aa382766912f31f07c0c077dfa5912ae25d423042efadf4b",
+      "case_id": "brute-force-dst",
+      "counts": {
+        "eligible_workday_count": 11,
+        "parent_schedule_count": 517,
+        "parent_schedules_by_workday_count": {
+          "1": 187,
+          "2": 330
+        },
+        "parent_to_unit_edges": 847,
+        "size_class": "normal",
+        "unique_daily_unit_count": 550,
+        "units_outside_demand_year": 0,
+        "valid_workday_counts": [
+          1,
+          2
+        ]
+      },
+      "kind": "small_brute_force",
+      "note": "spans the autumn DST transition date",
+      "peak_rss": {
+        "materialize_calendar_and_units": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 108851200,
+          "status": "measured"
+        },
+        "preflight_only": {
+          "basis": "VmHWM of a fresh interpreter that imported the modules and ran only this case; getrusage is deliberately not used because Linux carries ru_maxrss across fork+exec",
+          "peak_rss_bytes": 18989056,
+          "status": "measured"
+        }
+      },
+      "phases": [
+        {
+          "max_s": 0.042428,
+          "median_s": 0.040393,
+          "min_s": 0.039702,
+          "p95_s": 0.042428,
+          "parent_schedule_count": 517,
+          "peak_traced_bytes": 502878,
+          "phase": "calendar_generation",
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "max_s": 0.081128,
+          "median_s": 0.078494,
+          "min_s": 0.078332,
+          "p95_s": 0.081128,
+          "peak_traced_bytes": 919528,
+          "phase": "daily_unit_decomposition",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 550
+        },
+        {
+          "max_s": 0.002109,
+          "median_s": 0.001945,
+          "min_s": 0.001875,
+          "p95_s": 0.002109,
+          "parent_schedule_count": 517,
+          "peak_traced_bytes": 51232,
+          "phase": "preflight",
+          "repeats": 5,
+          "status": "measured",
+          "unique_daily_unit_count": 550
+        },
+        {
+          "basis": "existence probe of the content-addressed daily cache path, run against a private temporary root seeded with half the entries",
+          "max_s": 0.006549,
+          "median_s": 0.004901,
+          "min_s": 0.004599,
+          "p95_s": 0.006549,
+          "peak_traced_bytes": 1661,
+          "phase": "cache_lookup",
+          "present_entries": 275,
+          "probed_entries": 550,
+          "repeats": 5,
+          "status": "measured"
+        },
+        {
+          "phase": "deterministic_cost",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        },
+        {
+          "phase": "sumo_wall_time",
+          "reason": "calibrated demand routes are absent (sumo/calibrated.rou.xml, sumo/calibrated_v1.rou.xml, sumo/calibrated_v2.rou.xml); closure_cost_v1 is computed from the q10/q50/q90 route files and the network, so it cannot be measured without them",
+          "status": "unmeasured"
+        }
+      ],
+      "semantic_agreement": {
+        "generator_parent_schedule_count": 517,
+        "generator_unique_daily_unit_count": 550,
+        "parent_schedule_count_matches": true,
+        "preflight_parent_schedule_count": 517,
+        "preflight_unique_daily_unit_count": 550,
+        "unique_daily_unit_count_matches": true
+      },
+      "spec": {
+        "allowed_weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "blackout_dates": [],
+        "demand_build_id": "scaling-baseline",
+        "directed_edges": [
+          "60786979_3575001205_0"
+        ],
+        "interday_policy": "independent_daily_reset_v1",
+        "max_consecutive_start_days": 3,
+        "objective_profile": "displaced_vehicles_and_detour_v1",
+        "permitted_daily_band": {
+          "earliest_start": "06:00",
+          "latest_end": "18:00"
+        },
+        "permitted_date_end": "2027-04-15",
+        "permitted_date_start": "2027-04-05",
+        "required_work_minutes": 480,
+        "search_id": "brute-force-dst",
+        "source": "forecast",
+        "work_allocation_policy": "exact_equal_daily_v1"
+      }
+    }
+  ],
+  "claim_boundary": {
+    "opens_no_gate": true,
+    "reason": "a performance reference frozen before the scaling changes; it ranks no closure, verifies no schedule and licenses no claim",
+    "release_evidence": false
+  },
+  "evidence_class": "diagnostic_baseline",
+  "identities": {
+    "network": {
+      "path": "sumo/net.net.xml",
+      "sha256": "64d7a909d93633b227f4706612092cad618a7d574ef42d65d03e9aca6b43dd94"
+    },
+    "platform": {
+      "machine": "x86_64",
+      "release": "6.18.5-fc-v20",
+      "system": "Linux"
+    },
+    "policies": {
+      "validation/monthly_search_policy_v1.json": "cd18b2a4d4ec9149e2d4191eebb76738ca5c9a6871f0fe84b6a1ffacd4666298",
+      "validation/monthly_search_policy_v2.json": "249a98a95d10be3fbeeaceb2fc071ef1aa5f43b9d15b2cfa9023994f742be83d"
+    },
+    "python": {
+      "implementation": "CPython",
+      "version": "3.11.15"
+    },
+    "routes": {
+      "sumo/calibrated.rou.xml": null,
+      "sumo/calibrated_v1.rou.xml": null,
+      "sumo/calibrated_v2.rou.xml": null
+    },
+    "sources": {
+      "run_monthly_closure_search.py": "2a3bb7055f0720fceac7d5af47100322b5e564cf64a2d1b27d1c2322a1a89901",
+      "tools/benchmark_closure_search_scaling.py": "ce9ed95c6af1adc58b2334fa8162a899a000fc82d093e61511880aeab5619c5c",
+      "traffic_sim/core/closure_calendar.py": "e4b09dc5803e7ac9b020f5c1c8dfd11f533bb42471b0f39b04199e59ec2fc0aa",
+      "traffic_sim/core/contracts.py": "d7a7aa6bddf1288aaf28cb014b2d636e68ce719b67a8909b24534c5086a437c6",
+      "traffic_sim/simulation/closure_preflight.py": "9919346a2d51a5f08bd4f805b84c01e8e10a2eaea1dba1ebf452c72c3a77c02f",
+      "traffic_sim/simulation/closure_ranking.py": "f47b4193bd62a6bfc8c2d15a0532af0314e25d481186dc2af17feed933ee389d",
+      "traffic_sim/simulation/closure_survivability.py": "531b7c9c8e1a966329a07c2fb78d0bad4f3a77eaaf17567d57423343eb81a655",
+      "traffic_sim/simulation/closure_teleport.py": "1f7a1eebd37ff6396cfd24dc0c4d9d8b928a9a5f788045a96667f18484363057",
+      "traffic_sim/simulation/envelope.py": "d322323d8be0c20e73f10f5f9829ccf1c44382ae81a88bacc7b1cb02dd9ccd79",
+      "traffic_sim/simulation/independent_daily.py": "fa2ac40370a068ca832069b78fcc78689748c600f8d017c145307f69b07b4974",
+      "traffic_sim/simulation/monthly_search.py": "9650da03786edb6b6fb5834f2f59bc1cd372e68572d902e2d3513b695b8b05a6"
+    },
+    "sumo_version": "Eclipse SUMO sumo 1.27.1"
+  },
+  "input_content_key": "61afd64c3c2c33f3dfda6cdcff9db2a1967b1b4dbcdf8aa21f878c198888af08",
+  "isolation": {
+    "roots_never_touched": [
+      "runs/",
+      "sumo/",
+      "web/data/",
+      "validation/ (except this record)"
+    ],
+    "scratch_root": "private temporary directory, removed after the run",
+    "wrote_into_evidence_roots": false
+  },
+  "kind": "closure_search_scaling_baseline",
+  "measured_at": "2026-08-10",
+  "process_peak_rss_bytes": 1045942272,
+  "process_peak_rss_note": "cumulative high-water mark of the whole benchmark process across every case; per-case figures are under cases[].peak_rss",
+  "repeats": 5,
+  "schema": "closure_search_scaling_baseline_v1",
+  "stage": "closure_search_scaling_plan_step_0"
+}

@@ -282,6 +282,10 @@
       min-width: 30px; padding: 4px 6px; font-size: 0.68rem;
     }
     #monthly-progress-hint { font-size: 0.72rem; color: var(--ink-3); }
+    #monthly-preflight { font-size: 0.72rem; color: var(--ink-3); }
+    #monthly-preflight.normal { color: var(--ink-3); }
+    #monthly-preflight.large_but_runnable { color: #f59e0b; }
+    #monthly-preflight.over_resource_budget { color: #f87171; font-weight: 600; }
 
     /* ── Suggest-closure-time results — a floating panel, distinct from
          the horizontal sim-panel because it needs real table space.
@@ -777,6 +781,9 @@
           <button data-day="6">Sö</button>
         </div>
         <span id="monthly-progress-hint" hidden></span>
+        <!-- PR B: the exact read-only size estimate, shown before a job can
+             start so the range, work hours or workday cap can still change. -->
+        <span id="monthly-preflight" hidden></span>
         <button id="monthly-run-btn" class="action-btn primary" disabled>Sök arbetsperiod</button>
         <button id="monthly-cancel-btn" class="action-btn">Avbryt</button>
       </div>
@@ -903,6 +910,6 @@
   <script src="render.js?v=15"></script>
   <script src="controls.js?v=12"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>

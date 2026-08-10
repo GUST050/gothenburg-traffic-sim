@@ -1158,6 +1158,7 @@
         const monthlyPeriodMode = document.getElementById('monthly-period-mode');
         const monthlyWeekdays   = document.getElementById('monthly-weekdays');
         const monthlyProgress   = document.getElementById('monthly-progress-hint');
+        const monthlyPreflight  = document.getElementById('monthly-preflight');
         const btnMonthlyRun     = document.getElementById('monthly-run-btn');
         const btnMonthlyCancel  = document.getElementById('monthly-cancel-btn');
         const monthlyResults      = document.getElementById('monthly-results');
@@ -2394,25 +2395,85 @@
           return null;
         }
 
+        // PR B: the EXACT size of the search, read-only, before anything
+        // starts. Replaces a range/day-count heuristic that could only guess.
+        // A refusal here costs nothing and leaves every input editable; the
+        // old behaviour was to discover the 10 000-unit cap after the
+        // enumeration had already run.
+        async function monthlyPreflightReport(spec) {
+          const res = await fetch('/api/monthly_search/preflight', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ closure_search_spec: spec }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+          return body;
+        }
+
+        function renderMonthlyPreflight(report) {
+          const days = (report.valid_workday_counts || []);
+          const span = days.length
+            ? (days.length === 1 ? `${days[0]} arbetsdagar`
+                                 : `${days[0]}–${days[days.length - 1]} arbetsdagar`)
+            : 'inga giltiga dagantal';
+          const parts = [
+            `${report.parent_schedule_count} perioder (${span})`,
+            `${report.unique_daily_unit_count} unika dagsenheter`,
+          ];
+          if (report.units_outside_demand_year) {
+            parts.push(`${report.units_outside_demand_year} utanför demandåret`);
+          }
+          monthlyPreflight.className = report.size_class || '';
+          monthlyPreflight.textContent = parts.join(' · ');
+          monthlyPreflight.hidden = false;
+        }
+
         btnMonthlyRun.addEventListener('click', async () => {
           const spec = monthlyClosureSearchSpec([...selected]);
           const problem = validateMonthlySpec(spec);
           if (problem) return alert(problem);
-          // The independent-day engine reuses exact daily SUMO evidence across
-          // overlapping schedules. A first search may still need uncached
-          // daily runs; repeating or widening it can be much faster.
-          const rangeDays = Math.round((Date.parse(spec.permitted_date_end)
-            - Date.parse(spec.permitted_date_start)) / 86400000) + 1;
-          if (spec.max_consecutive_start_days > 7 || rangeDays > 31) {
+
+          let report;
+          btnMonthlyRun.disabled = true;
+          btnMonthlyRun.textContent = 'Beräknar omfattning…';
+          try {
+            report = await monthlyPreflightReport(spec);
+          } catch (e) {
+            monthlyPreflight.hidden = true;
+            alert('Omfattningen kunde inte beräknas: ' + e.message);
+            return;
+          } finally {
+            btnMonthlyRun.textContent = 'Sök arbetsperiod';
+            refreshCloseUI();
+          }
+          renderMonthlyPreflight(report);
+
+          if (report.size_class === 'over_resource_budget') {
+            // Refused BEFORE any job exists, and the inputs stay as they are so
+            // the user can shorten the range, change the requested work time or
+            // lower the workday cap and ask again.
+            alert('Sökningen är för stor för den nuvarande resursgränsen:\n\n'
+              + (report.limit_reasons || []).join('\n')
+              + '\n\nMinska datumintervallet, ändra antal arbetstimmar eller '
+              + 'sänk taket för antal arbetsdagar och försök igen.');
+            return;
+          }
+          if (report.parent_schedule_count === 0) {
+            alert('Inget schema uppfyller villkoren. Kontrollera tillåtet '
+              + 'tidsfönster, arbetstid och antal arbetsdagar.');
+            return;
+          }
+          if (report.size_class === 'large_but_runnable') {
             if (!confirm(
-                `Stor sökning: ${rangeDays} dagars intervall, upp till `
-                + `${spec.max_consecutive_start_days} arbetsdagar. Sökningen `
-                + 'använder datumriktig trafik och återanvänder identiska '
-                + 'dag/resultat, men en helt ny period kan fortfarande ta tid '
-                + 'att köra i SUMO. Trafikläget återställs mellan arbetsdagar '
-                + 'enligt det valda snabbläget. Jobbet är återupptagbart '
-                + '— du kan stänga fliken och starta samma sökning igen. '
-                + 'Fortsätta?')) return;
+                `Stor men körbar sökning: ${report.parent_schedule_count} `
+                + `perioder och ${report.unique_daily_unit_count} unika `
+                + 'dagsenheter. Sökningen använder datumriktig trafik och '
+                + 'återanvänder identiska dagsresultat, men en helt ny period '
+                + 'kan ta tid att köra i SUMO. Trafikläget återställs mellan '
+                + 'arbetsdagar enligt det valda snabbläget. Jobbet är '
+                + 'återupptagbart — du kan stänga fliken och starta samma '
+                + 'sökning igen. Fortsätta?')) return;
           }
           lastMonthlySpec = spec;
           monthlyJobRunning = true;

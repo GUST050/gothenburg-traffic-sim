@@ -1081,6 +1081,53 @@ and reloaded byte-identically. This is diagnostic, not a policy freeze: the two
 lower-cost windows failed the teleport hard gate, so only one candidate was
 viable and no practical-equivalence tolerance could be calibrated.
 
+#### Read-only search preflight (`closure_preflight.py`) — PR B, BUILT
+
+`traffic_sim/simulation/closure_preflight.py` sizes a rolling closure search
+EXACTLY, before any job exists, without materializing a single
+`ClosureSchedule`.  The versioned `ClosureSearchPreflight` contract
+(`closure_search_preflight_v1`) reports valid workday counts, parent schedules
+grouped by workday count, unique `(date, start, end, road)` daily units, units
+whose warm-up or recovery falls outside the downloaded demand year, known cache
+hits/misses, `cache_unknown`, an estimated SUMO workload with its estimation
+basis, and a `size_class` of `normal`, `large_but_runnable` or
+`over_resource_budget`.
+
+It reproduces the production calendar semantics rather than approximating them:
+15-minute alignment, the configured timezone and DST policy, allowed weekdays,
+blackout dates, exact equal daily shifts, up to 90 workdays, rolling periods
+that may cross weeks, months and years, and one identical start/end clock time
+on every selected workday.  Counting is a run-length identity — a maximal run
+of `L` usable dates contains `max(0, L - n + 1)` windows of length `n` — which
+is why it needs no objects.  `equal_daily_rounded_v1` counts on the
+calendar-date axis and `exact_equal_daily_v1` on the eligible-date axis,
+because the generator advances differently under each.  Exactness is
+differential-tested against `generate_closure_schedules` and
+`decompose_schedules`, including 40 randomized contracts, year boundaries, leap
+days, both DST transitions, blackouts, overnight bands and the plan's
+07:30–15:15 closure inside a 06:00–18:00 band.  `exact_balanced_daily_v1`
+creates up to 4096 duration patterns whose validity varies by position inside
+the window; it is REFUSED (`UnsupportedPreflightSpec`) rather than approximated.
+
+`POST /api/monthly_search/preflight` exposes it and is strictly read-only: it
+builds no demand, starts no SUMO, creates no job, spec file, run, cache or
+evidence artifact, and takes no simulation lock — so an estimate can be
+obtained while another job runs.  The daily backend identity that the result
+cache is keyed on only exists after the demand resolver has prepared an
+archive, which a read-only call must not do, so the endpoint reports
+`cache_unknown` rather than an invented miss.  The web UI shows the estimate
+before start, refuses to launch an `over_resource_budget` search, and leaves
+the date range, requested work hours and workday cap editable.  The existing
+100,000-parent and 10,000-unit caps are REPORTED, never raised or bypassed.
+
+Measured on the plan's two documented six-month cases, and matching their
+recorded sizes exactly (2,186/5,676 and 11,813/23,349): preflight p95 0.019 s
+at 19.0 MiB and 0.310 s at 21.7 MiB, against 3.74 s/191.8 MiB and 15.30 s/
+467.9 MiB to materialize the same searches.  Both PR B exit gates (p95 ≤ 3 s,
+peak RSS ≤ 32 MiB) pass.  `validation/closure_search_scaling_baseline_v1.json`
+(PR A) freezes those references with exact Python, SUMO, network, route, policy
+and source identities; it is diagnostic baseline evidence and opens no gate.
+
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
 of a hidden station's traffic (range 0.06–0.83). CONFOUND WARNING (missing

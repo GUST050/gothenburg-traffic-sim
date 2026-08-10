@@ -78,7 +78,9 @@ def test_web_shell_is_desktop_only_and_uses_the_professional_palette():
     for decorative_icon in ("🛡", "📅", "🕐", "📆", "⚡"):
         assert decorative_icon not in html
     assert 'controls.js?v=12' in html
-    assert 'app.js?v=18' in html
+    # Bumped with the PR B preflight display so a cached bundle cannot hide
+    # the new estimate; the pin exists to force exactly this deliberate edit.
+    assert 'app.js?v=19' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
@@ -510,6 +512,156 @@ def _monthly_result(search_id):
             "reason": "a new untouched monthly held-out release gate has "
                       "not passed"},
     }
+
+
+class TestMonthlySearchPreflight:
+    """PR B: an exact, strictly read-only size estimate before job start.
+
+    The point of the endpoint is that a user learns a six-month 360-hour search
+    is over budget BEFORE waiting for the enumeration that would refuse it. So
+    the tests care about two things: the numbers are the real ones, and asking
+    for them changes nothing on disk or in the server's state.
+    """
+
+    def _preflight_spec(self, **overrides):
+        spec = _closure_search_spec("monthly-preflight-test")
+        spec.update({
+            "permitted_date_start": "2027-07-01",
+            "permitted_date_end": "2027-07-31",
+            "required_work_minutes": 480,
+            "max_consecutive_start_days": 4,
+            "permitted_daily_band": {"earliest_start": "06:00",
+                                     "latest_end": "18:00"},
+            "allowed_weekdays": [0, 1, 2, 3, 4],
+            "interday_policy": "independent_daily_reset_v1",
+            "work_allocation_policy": "exact_equal_daily_v1",
+            "objective_profile": "displaced_vehicles_and_detour_v1",
+        })
+        spec.update(overrides)
+        return spec
+
+    def test_returns_the_exact_counts_the_generator_would_produce(self, base_url):
+        from traffic_sim.core.closure_calendar import generate_closure_schedules
+        from traffic_sim.core.contracts import ClosureSearchSpec
+        from traffic_sim.simulation.independent_daily import decompose_schedules
+        payload = self._preflight_spec()
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": payload})
+        assert status == 200, body
+        spec = ClosureSearchSpec.from_dict(payload)
+        schedules = generate_closure_schedules(spec)
+        units, _ = decompose_schedules(spec, schedules)
+        assert body["parent_schedule_count"] == len(schedules)
+        assert body["unique_daily_unit_count"] == len(units)
+        assert body["schema"] == "closure_search_preflight_v1"
+        assert body["exact"] is True
+
+    def test_reports_the_size_class_and_the_unchanged_caps(self, base_url):
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec()})
+        assert status == 200
+        assert body["size_class"] in {
+            "normal", "large_but_runnable", "over_resource_budget"}
+        # PR B must not raise or bypass the existing resource limit.
+        assert body["limits"] == {"parent_schedule_limit": 100000,
+                                  "daily_unit_limit": 10000}
+
+    def test_an_over_budget_search_is_reported_not_started(self, base_url):
+        """The case the plan names: a valid contract the cap will refuse."""
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec(
+                permitted_date_start="2027-01-01",
+                permitted_date_end="2027-06-30",
+                required_work_minutes=360 * 60,
+                max_consecutive_start_days=90)})
+        assert status == 200
+        assert body["size_class"] == "over_resource_budget"
+        assert body["limit_reasons"]
+        assert not serve._sim_lock.locked()
+        _, state = get_json(f"{base_url}/api/monthly_search/status")
+        assert state.get("status") != "running"
+
+    def test_cache_is_unknown_rather_than_a_false_miss(self, base_url):
+        """A read-only preflight cannot resolve the daily backend identity the
+        cache is keyed on, and must say so instead of guessing."""
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec()})
+        assert status == 200
+        assert body["cache"]["unknown"] == body["executable_daily_unit_count"]
+        assert body["cache"]["hits"] == 0 and body["cache"]["misses"] == 0
+        assert "cache_unknown" in body["cache"]["basis"]
+
+    def test_it_creates_no_run_demand_or_evidence_artifact(
+            self, base_url, tmp_path):
+        """The strict read-only claim, checked against the filesystem rather
+        than asserted: nothing under the search, spec or workspace roots may
+        appear because someone asked for an estimate."""
+        watched = [serve.MONTHLY_SEARCH_ROOT, serve.CLOSURE_SEARCH_SPEC_DIR]
+        before = []
+        for root in watched:
+            before.append(sorted(str(p) for p in Path(root).rglob("*"))
+                          if Path(root).exists() else None)
+        status, _ = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec()})
+        assert status == 200
+        for root, snapshot in zip(watched, before):
+            after = (sorted(str(p) for p in Path(root).rglob("*"))
+                     if Path(root).exists() else None)
+            assert after == snapshot, f"preflight touched {root}"
+
+    def test_it_starts_no_job_and_takes_no_lock(self, base_url):
+        status, _ = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec()})
+        assert status == 200
+        assert not serve._sim_lock.locked()
+
+    def test_it_answers_while_another_job_holds_the_lock(self, base_url):
+        """Read-only means read-only: an estimate must not queue behind a
+        running simulation, or the user cannot re-plan while one runs."""
+        serve._sim_lock.acquire()
+        try:
+            status, _ = post_json_or_error(
+                f"{base_url}/api/monthly_search/preflight",
+                payload={"closure_search_spec": self._preflight_spec()})
+            assert status == 200
+        finally:
+            serve._sim_lock.release()
+
+    def test_requires_exact_spec_body(self, base_url):
+        assert post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight")[0] == 400
+        status, _ = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec(),
+                     "policy": {"sneaky": True}})
+        assert status == 400
+
+    def test_unknown_edges_are_refused(self, base_url):
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec(
+                directed_edges=["not_an_edge_9"])})
+        assert status == 400
+        assert "not_an_edge_9" in body["error"]
+
+    def test_an_unsupported_allocation_policy_is_refused_not_estimated(
+            self, base_url):
+        status, body = post_json_or_error(
+            f"{base_url}/api/monthly_search/preflight",
+            payload={"closure_search_spec": self._preflight_spec(
+                work_allocation_policy="exact_balanced_daily_v1")})
+        assert status == 422
+        assert "exact preflight" in body["error"]
+
+    def test_get_is_refused(self, base_url):
+        assert get_json_or_error(
+            f"{base_url}/api/monthly_search/preflight")[0] == 405
 
 
 class TestMonthlySearch:
