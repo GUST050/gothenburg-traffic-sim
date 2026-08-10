@@ -10,13 +10,13 @@ import os
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from screen_monthly_closures import build_screening_artifact
 from traffic_sim.simulation.monthly_proxy import (
     HELD_OUT_VALIDATED_SHORTLIST_POLICY,
 )
-from traffic_sim.core.closure_calendar import generate_closure_schedules
+from traffic_sim.core.closure_calendar import iter_closure_schedules
 from traffic_sim.core.contracts import (
     load_closure_search_spec,
 )
@@ -71,16 +71,22 @@ def _bounded_exhaustive_builder(
     proxy_version: str = "bounded_exhaustive_sumo_v1",
 ) -> dict[str, Any]:
     spec = load_closure_search_spec(spec_path)
-    schedules = generate_closure_schedules(spec)
-    if len(schedules) > maximum_candidates:
-        raise ValueError(
-            f"independent exhaustive screening generated {len(schedules)} "
-            f"candidates, above the explicit cap {maximum_candidates}"
-        )
+    # PR C: stream and stop at the cap.  Materialising first and checking the
+    # length afterwards paid the full memory cost of exactly the searches the
+    # cap exists to refuse.
+    schedule_ids: list[str] = []
+    for schedule in iter_closure_schedules(spec):
+        schedule_ids.append(schedule.schedule_id)
+        if len(schedule_ids) > maximum_candidates:
+            raise ValueError(
+                f"independent exhaustive screening generated more than "
+                f"{maximum_candidates} candidates, above the explicit cap "
+                f"{maximum_candidates}"
+            )
     return _exhaustive_payload(
         spec_path,
         spec=spec,
-        schedules=schedules,
+        schedule_ids=schedule_ids,
         maximum_candidates=maximum_candidates,
         proxy_version=proxy_version,
     )
@@ -90,13 +96,13 @@ def _exhaustive_payload(
     spec_path: Path,
     *,
     spec,
-    schedules,
+    schedule_ids: Sequence[str],
     maximum_candidates: int,
     proxy_version: str,
 ) -> dict[str, Any]:
-    if len(schedules) > maximum_candidates:
+    if len(schedule_ids) > maximum_candidates:
         raise ValueError(
-            f"bounded exhaustive screening generated {len(schedules)} "
+            f"bounded exhaustive screening generated {len(schedule_ids)} "
             f"candidates, above the explicit cap {maximum_candidates}"
         )
     return {
@@ -110,7 +116,7 @@ def _exhaustive_payload(
             "ui_exposure_allowed": False,
             "reason": "golden/diagnostic bounded exhaustive SUMO screening",
         },
-        "candidate_count": len(schedules),
+        "candidate_count": len(schedule_ids),
         "scoreable_candidate_count": 0,
         "unavailable_candidates": [],
         "ranked_candidates": [],
@@ -119,11 +125,11 @@ def _exhaustive_payload(
             "selection_complete": True,
             "entries": [
                 {
-                    "schedule_id": schedule.schedule_id,
+                    "schedule_id": schedule_id,
                     "selection_reasons": ["bounded_exhaustive"],
                     "proxy_rank": None,
                 }
-                for schedule in schedules
+                for schedule_id in schedule_ids
             ],
         },
         "input_fingerprints": {
@@ -147,45 +153,63 @@ def _independent_exhaustive_builder(
         raise ValueError(
             "independent exhaustive screening requires the independent policy"
         )
-    schedules = generate_closure_schedules(spec)
-    from traffic_sim.simulation.independent_daily import decompose_schedules
-    units, parents = decompose_schedules(spec, schedules)
-    if len(units) > maximum_daily_units:
-        raise ValueError(
-            f"independent exhaustive screening generated {len(units)} unique "
-            f"daily SUMO units, above the explicit cap {maximum_daily_units}"
-        )
+    from traffic_sim.simulation.independent_daily import daily_unit_records
+
     source_year = 2027 if spec.source == "forecast" else 2025
     source_start = date(source_year, 1, 1)
     source_end = date(source_year + 1, 1, 1)
-    unavailable_units: dict[str, str] = {}
-    for unit in units:
-        try:
-            envelope = build_simulation_envelope(
-                spec,
-                unit.schedule,
-                baseline_trip_duration_p99_s=(
-                    baseline_trip_duration_p99_s
-                ),
-                policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
-            )
-        except ValueError as exc:
-            unavailable_units[unit.unit_id] = str(exc)
-            continue
-        envelope_start = date.fromisoformat(envelope.scenario_start[:10])
-        envelope_end = date.fromisoformat(envelope.scenario_end[:10])
-        if envelope_start < source_start or envelope_end > source_end:
-            unavailable_units[unit.unit_id] = (
-                "exact warm-up/recovery envelope lies outside the "
-                f"downloaded {source_year} {spec.source} demand year"
-            )
 
+    # PR C: one streaming pass instead of a full parent tuple, a full unit
+    # tuple and the reverse unit->parents graph.  Each parent is enumerated,
+    # its own ordered units are checked, and the parent is released.  The only
+    # retained state is per-UNIQUE-unit — the same thing the 10,000-unit cap
+    # bounds — plus the IDs of the eligible parents.
+    unavailable_units: dict[str, str] = {}
+    evaluated_units: set[str] = set()
     unavailable_candidates = []
-    eligible_schedules = []
-    for schedule in schedules:
+    eligible_ids: list[str] = []
+    candidate_count = 0
+    for schedule in iter_closure_schedules(spec):
+        candidate_count += 1
+        parent_units: list[str] = []
+        for unit_id, _identity, build in daily_unit_records(spec, schedule):
+            parent_units.append(unit_id)
+            if unit_id in evaluated_units:
+                continue
+            evaluated_units.add(unit_id)
+            # A schedule object is built only for a NEW unique unit, which is
+            # also the only place an envelope needs checking.
+            daily = build()
+            if len(evaluated_units) > maximum_daily_units:
+                raise ValueError(
+                    f"independent exhaustive screening generated more than "
+                    f"{maximum_daily_units} unique daily SUMO units, above "
+                    f"the explicit cap {maximum_daily_units}"
+                )
+            try:
+                envelope = build_simulation_envelope(
+                    spec,
+                    daily,
+                    baseline_trip_duration_p99_s=(
+                        baseline_trip_duration_p99_s
+                    ),
+                    policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
+                )
+            except ValueError as exc:
+                unavailable_units[unit_id] = str(exc)
+                continue
+            envelope_start = date.fromisoformat(envelope.scenario_start[:10])
+            envelope_end = date.fromisoformat(envelope.scenario_end[:10])
+            if envelope_start < source_start or envelope_end > source_end:
+                unavailable_units[unit_id] = (
+                    "exact warm-up/recovery envelope lies outside the "
+                    f"downloaded {source_year} {spec.source} demand year"
+                )
+        if len(set(parent_units)) != len(parent_units):
+            raise ValueError("independent parent repeats a daily unit")
         failed = [
             (unit_id, unavailable_units[unit_id])
-            for unit_id in parents[schedule.schedule_id]
+            for unit_id in parent_units
             if unit_id in unavailable_units
         ]
         if failed:
@@ -201,8 +225,8 @@ def _independent_exhaustive_builder(
                 "coverage": None,
             })
         else:
-            eligible_schedules.append(schedule)
-    if not eligible_schedules:
+            eligible_ids.append(schedule.schedule_id)
+    if not eligible_ids:
         raise ValueError(
             "independent exhaustive screening has no schedules whose exact "
             "warm-up and recovery fit the downloaded demand year"
@@ -211,19 +235,19 @@ def _independent_exhaustive_builder(
     payload = _exhaustive_payload(
         spec_path,
         spec=spec,
-        schedules=eligible_schedules,
+        schedule_ids=eligible_ids,
         maximum_candidates=maximum_candidates,
         proxy_version="independent_daily_exhaustive_sumo_v1",
     )
-    payload["candidate_count"] = len(schedules)
-    payload["scoreable_candidate_count"] = len(eligible_schedules)
+    payload["candidate_count"] = candidate_count
+    payload["scoreable_candidate_count"] = len(eligible_ids)
     payload["unavailable_candidates"] = unavailable_candidates
     payload["independent_daily_execution"] = {
         "interday_policy": spec.interday_policy,
         "work_allocation_policy": spec.work_allocation_policy,
-        "unique_daily_unit_count": len(units),
+        "unique_daily_unit_count": len(evaluated_units),
         "executable_daily_unit_count": (
-            len(units) - len(unavailable_units)
+            len(evaluated_units) - len(unavailable_units)
         ),
         "unavailable_daily_unit_count": len(unavailable_units),
         "maximum_daily_units": maximum_daily_units,

@@ -10,6 +10,7 @@ a private scratch root.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -302,6 +303,18 @@ class TestFrozenArtifact:
         assert record["schema"] == "closure_search_scaling_baseline_v1"
         assert record["evidence_class"] == "diagnostic_baseline"
 
+    #: Sources PR C rewrote (streaming calendar, ledger decomposition, ledger
+    #: integration). The baseline is PR A's HISTORY and is never rewritten, so
+    #: it necessarily reports drift on exactly these files — that is the record
+    #: doing its job. Every other bound source must still match, or the
+    #: baseline's timings would silently be about different code.
+    PR_C_DRIFTED_SOURCES = frozenset({
+        "traffic_sim/core/closure_calendar.py",
+        "traffic_sim/simulation/independent_daily.py",
+        "traffic_sim/simulation/monthly_search.py",
+        "run_monthly_closure_search.py",
+    })
+
     def test_frozen_input_key_and_tracked_sources_recompute(self):
         record = json.loads(self.PATH.read_text())
         expected = bench._content_key({
@@ -313,9 +326,32 @@ class TestFrozenArtifact:
                 record["external_phases_requested"],
         })
         assert record["input_content_key"] == expected
-        assert record["identities"]["sources"] == {
-            name: bench._sha256(ROOT / name) for name in bench.BOUND_SOURCES
+
+        stored = record["identities"]["sources"]
+        assert set(stored) == set(bench.BOUND_SOURCES)
+        unchanged = {
+            name: bench._sha256(ROOT / name)
+            for name in bench.BOUND_SOURCES
+            if name not in self.PR_C_DRIFTED_SOURCES
         }
+        assert {name: stored[name] for name in unchanged} == unchanged
+        for name in self.PR_C_DRIFTED_SOURCES:
+            assert re.fullmatch(r"[0-9a-f]{64}", stored[name]), name
+
+    def test_the_baseline_is_history_and_reports_pr_c_source_drift(self):
+        """Drift on the PR C sources is expected evidence, not a defect.
+
+        Stated as its own test so a reader of the suite learns WHY the record
+        no longer matches the tree, instead of finding a weakened equality
+        assertion and guessing.
+        """
+        record = json.loads(self.PATH.read_text())
+        stored = record["identities"]["sources"]
+        drifted = {
+            name for name in bench.BOUND_SOURCES
+            if stored[name] != bench._sha256(ROOT / name)
+        }
+        assert drifted == set(self.PR_C_DRIFTED_SOURCES)
 
     def test_it_covers_every_frozen_case(self):
         record = json.loads(self.PATH.read_text())

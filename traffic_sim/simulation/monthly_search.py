@@ -13,16 +13,20 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import tempfile
+from collections.abc import Mapping as MappingABC
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence
 
-from traffic_sim.core.closure_calendar import generate_closure_schedules
+from traffic_sim.core.closure_calendar import iter_closure_schedules
 from traffic_sim.core.contracts import (
     ClosureSchedule,
     ClosureSearchSpec,
 )
+from traffic_sim.simulation import closure_ledgers
+from traffic_sim.simulation.independent_daily import daily_unit_records
 from traffic_sim.simulation.finalist_decision import (
     CandidateEvidence,
     DEMAND_VARIANTS,
@@ -49,6 +53,20 @@ from traffic_sim.simulation.period_comparison import build_period_comparison
 SCHEMA_VERSION = 1
 POLICY_STATUSES = frozenset({"provisional", "golden_frozen"})
 RANKING_OBJECTIVES = frozenset({"legacy_time_loss_v1", "closure_cost_v1"})
+# PR C.  The streaming enumeration lives in a workspace-owned directory OUTSIDE
+# ``artifacts/``: workspace verification requires every file under
+# ``artifacts/`` to be individually ledgered, but the three NDJSON files are one
+# indivisible set whose completion signal is their manifest.  Publishing the
+# manifest — and only the manifest — as a single artifact makes the workspace
+# see one atomic publication instead of four independently interruptible ones.
+LEDGER_DIRNAME = "ledgers"
+LEDGER_MANIFEST_ARTIFACT = "candidate-ledger-manifest.json"
+LEDGER_ARTIFACT_KIND = "closure_schedule_ledger_v2"
+# A backend that cannot read the ledgers needs every shortlisted parent as an
+# object.  That is the pre-PR-C behaviour and is fine for a bounded proxy
+# shortlist; above this many schedules it is refused rather than silently
+# materialised, so the memory gate cannot be lost to a fallback.
+MATERIALISED_SHORTLIST_LIMIT = 512
 # The tracked held-out release gate (IMPROVEMENT_PLAN.md Phase 4).  When
 # this record exists, is well-formed and says "pass", the pre-registered
 # release contract is satisfied: the pilot/finalist policy is golden-frozen
@@ -384,10 +402,115 @@ def _publish_json(
     return dict(payload)
 
 
-def _schedule_ledger(
+class _MaterialisedCandidates(MappingABC):
+    """Every parent schedule in memory — the pre-PR-C representation.
+
+    Kept for two callers only: a workspace whose enumeration was published
+    before PR C (``candidate-ledger.json``), and the small explicit
+    compatibility path in :func:`_prepare_shortlist`.  New workspaces stream.
+    """
+
+    schema = "closure_schedule_ledger_v1"
+    version = SCHEMA_VERSION
+    ledger_directory: Path | None = None
+
+    def __init__(self, schedules: Sequence[ClosureSchedule]) -> None:
+        self._schedules: dict[str, ClosureSchedule] = {}
+        for item in schedules:
+            if item.schedule_id in self._schedules:
+                raise ValueError("schedule ledger repeats a parent schedule")
+            self._schedules[item.schedule_id] = item
+
+    def __getitem__(self, schedule_id: str) -> ClosureSchedule:
+        return self._schedules[schedule_id]
+
+    def __contains__(self, schedule_id: object) -> bool:
+        return schedule_id in self._schedules
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._schedules)
+
+    def __len__(self) -> int:
+        return len(self._schedules)
+
+
+class _StreamingCandidates(MappingABC):
+    """Parent schedules read on demand from the published NDJSON ledgers.
+
+    Holds byte offsets, not schedules.  Every consumer in this module already
+    speaks ``Mapping[str, ClosureSchedule]``, so nothing downstream changes:
+    a lookup seeks and parses one row instead of reading a dict entry.
+    """
+
+    schema = closure_ledgers.LEDGER_SCHEMA
+    version = closure_ledgers.LEDGER_VERSION
+
+    def __init__(
+        self,
+        directory: Path,
+        manifest: closure_ledgers.LedgerManifest,
+    ) -> None:
+        self.ledger_directory = Path(directory)
+        self.manifest = manifest
+        self._index = closure_ledgers.ParentLedgerIndex(directory)
+        if len(self._index) != manifest.parent_count:
+            raise closure_ledgers.LedgerCorrupt(
+                f"parent ledger holds {len(self._index)} schedules, manifest "
+                f"froze {manifest.parent_count}")
+
+    def __getitem__(self, schedule_id: str) -> ClosureSchedule:
+        return self._index[schedule_id]
+
+    def __contains__(self, schedule_id: object) -> bool:
+        # Explicit, because `Mapping.__contains__` answers by CALLING
+        # ``__getitem__`` and catching KeyError — which here means seeking to a
+        # row, parsing it and constructing a schedule just to say "yes".
+        # Screening asks this once per shortlisted ID, so on an exhaustive
+        # search that default would parse the whole population.
+        return schedule_id in self._index
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._index.ids())
+
+    def __len__(self) -> int:
+        return len(self._index)
+
+
+def _ledger_unit_records(
+    spec: ClosureSearchSpec,
+    parent: ClosureSchedule,
+) -> Sequence[tuple[str, Mapping[str, Any], Callable[[], ClosureSchedule]]]:
+    """Daily units for the ledger, or none when the policy has no daily units.
+
+    Only ``independent_daily_reset_v1`` decomposes a parent into independent
+    daily SUMO units.  Under any other interday policy the parent IS the unit
+    of execution, so the unit and relationship ledgers stay empty rather than
+    inventing a decomposition the executor would never use.
+    """
+    if spec.interday_policy != "independent_daily_reset_v1":
+        return ()
+    return daily_unit_records(spec, parent)
+
+
+def _candidate_ledger(
     workspace: SearchWorkspace,
     spec: ClosureSearchSpec,
-) -> tuple[ClosureSchedule, ...]:
+) -> _MaterialisedCandidates | _StreamingCandidates:
+    """Open — or build once — this search's immutable enumeration.
+
+    Three states, in priority order:
+
+    1. A pre-PR-C ``closure_schedule_ledger`` artifact: an old workspace, read
+       exactly as it was written.  Old searches must stay resumable.
+    2. A published streaming manifest: FROZEN evidence.  It is verified, and a
+       digest or count mismatch raises rather than rebuilding — regenerating
+       would destroy the only trace that a completed artifact was damaged.
+    3. Neither: enumerate lazily into ``ledgers/`` and publish the manifest as
+       the single workspace artifact.  Files already sitting there belong to an
+       interrupted, never-published build; they are validated if they happen to
+       be complete and otherwise rebuilt, which is safe precisely because
+       nothing has declared them finished.
+    """
     records = _artifact_records(workspace, kind="closure_schedule_ledger")
     if records:
         if len(records) != 1:
@@ -397,39 +520,121 @@ def _schedule_ledger(
             ClosureSchedule.from_dict(item)
             for item in payload.get("schedules", ())
         )
-    else:
-        schedules = generate_closure_schedules(spec)
-        if not schedules:
-            raise ValueError("closure search has no legal schedules")
-        payload = {
-            "schema_version": SCHEMA_VERSION,
-            "kind": "closure_schedule_ledger",
-            "search_content_key": spec.content_key,
-            "candidate_count": len(schedules),
-            "schedules": [item.to_dict() for item in schedules],
-        }
-        _publish_json(
-            workspace,
-            payload,
-            "candidate-ledger.json",
-            kind="closure_schedule_ledger",
+        if not schedules or any(
+            item.search_content_key != spec.content_key for item in schedules
+        ):
+            raise ValueError("schedule ledger does not belong to this search")
+        return _MaterialisedCandidates(schedules)
+
+    directory = workspace.directory / LEDGER_DIRNAME
+    published = _artifact_records(workspace, kind=LEDGER_ARTIFACT_KIND)
+    if published:
+        if len(published) != 1:
+            raise ValueError("workspace has duplicate schedule ledgers")
+        frozen = _read_artifact(workspace, published[0])
+        manifest = closure_ledgers.verify_ledgers(
+            directory,
+            expected_search_content_key=spec.content_key,
+        )
+        if frozen.get("content_key") != manifest.key:
+            raise closure_ledgers.LedgerCorrupt(
+                "published ledger manifest does not describe these ledgers")
+        return _StreamingCandidates(directory, manifest)
+
+    manifest = None
+    if directory.is_dir():
+        try:
+            manifest = closure_ledgers.verify_ledgers(
+                directory,
+                expected_search_content_key=spec.content_key,
+            )
+        except closure_ledgers.LedgerError:
+            # Unpublished ledgers are a build area, not evidence: an
+            # interrupted write is rebuilt from the same deterministic
+            # enumeration.  Fail-closed applies from publication onward.
+            manifest = None
+    if manifest is None:
+        manifest = closure_ledgers.write_ledgers(
+            directory,
+            spec,
+            iter_closure_schedules(spec),
+            unit_records=_ledger_unit_records,
             provenance={
-                "search_content_key": spec.content_key,
-                "candidate_count": len(schedules),
+                "search_id": spec.search_id,
+                "interday_policy": spec.interday_policy,
+                "work_allocation_policy": spec.work_allocation_policy,
+                "source": spec.source,
             },
         )
-    if (
-        not schedules
-        or any(item.search_content_key != spec.content_key for item in schedules)
-    ):
-        raise ValueError("schedule ledger does not belong to this search")
-    return schedules
+    if manifest.parent_count == 0:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise ValueError("closure search has no legal schedules")
+
+    _publish_json(
+        workspace,
+        manifest.to_dict(),
+        LEDGER_MANIFEST_ARTIFACT,
+        kind=LEDGER_ARTIFACT_KIND,
+        provenance={
+            "search_content_key": spec.content_key,
+            "candidate_count": manifest.parent_count,
+            "unique_daily_unit_count": manifest.unique_unit_count,
+            # New workspaces declare the ledger contract they were built
+            # with, so a future schema can refuse an old directory instead
+            # of misreading it.
+            "ledger_schema": manifest.schema,
+            "ledger_version": manifest.version,
+            "ledger_directory": LEDGER_DIRNAME,
+            "ledger_manifest_content_key": manifest.key,
+        },
+    )
+    return _StreamingCandidates(directory, manifest)
+
+
+def _prepare_shortlist(
+    runner: CandidateRunner,
+    candidates: _MaterialisedCandidates | _StreamingCandidates,
+    shortlist_ids: Sequence[str],
+) -> None:
+    """Hand the backend its shortlist without materialising the population.
+
+    An independent exhaustive search shortlists EVERY parent, so building
+    ``[candidates[i] for i in shortlist_ids]`` would reintroduce exactly the
+    object graph PR C removes.  A runner that can read the ledgers is given
+    the directory instead.
+
+    The materialising path survives for old runners, but on a streaming
+    workspace it is explicit and bounded: above ``MATERIALISED_SHORTLIST_LIMIT``
+    it raises instead of quietly allocating, because a silent fallback is how a
+    memory gate stops meaning anything.
+
+    A PRE-PR-C workspace is exempt, deliberately.  Reading its
+    ``candidate-ledger.json`` already put every parent in memory, so refusing to
+    build a list of references to objects that are all alive anyway would break
+    a resumable old search without saving a byte.
+    """
+    from_ledgers = getattr(runner, "prepare_from_ledgers", None)
+    directory = candidates.ledger_directory
+    if callable(from_ledgers) and directory is not None:
+        from_ledgers(directory, tuple(shortlist_ids))
+        return
+    prepare = getattr(runner, "prepare", None)
+    if prepare is None:
+        return
+    if directory is not None and len(shortlist_ids) > MATERIALISED_SHORTLIST_LIMIT:
+        raise ValueError(
+            f"shortlist of {len(shortlist_ids)} schedules exceeds the "
+            f"materialising compatibility limit "
+            f"{MATERIALISED_SHORTLIST_LIMIT}: this backend has no "
+            f"prepare_from_ledgers and this search streams its ledgers"
+        )
+    prepare([candidates[candidate_id] for candidate_id in shortlist_ids])
 
 
 def _screening_artifact(
     workspace: SearchWorkspace,
     spec: ClosureSearchSpec,
-    schedules: Sequence[ClosureSchedule],
+    candidates: Mapping[str, ClosureSchedule],
     screen_builder: ScreenBuilder,
 ) -> dict[str, Any]:
     records = _artifact_records(workspace, kind="monthly_proxy_screening")
@@ -446,12 +651,16 @@ def _screening_artifact(
     search = payload.get("search")
     if not isinstance(search, Mapping) or search.get("content_key") != spec.content_key:
         raise ValueError("monthly screening artifact belongs to another search")
-    schedule_ids = {item.schedule_id for item in schedules}
     entries = (payload.get("shortlist") or {}).get("entries")
     if not isinstance(entries, list) or not entries:
         raise ValueError("monthly screening shortlist is empty")
     selected = [str(item.get("schedule_id", "")) for item in entries]
-    if len(selected) != len(set(selected)) or not set(selected) <= schedule_ids:
+    # Membership only: asking the ledger whether it knows an ID costs one
+    # dict lookup, whereas building the set of every parent's schedule_id
+    # would walk the population the streaming path exists to avoid.
+    if len(selected) != len(set(selected)) or any(
+        candidate_id not in candidates for candidate_id in selected
+    ):
         raise ValueError("monthly screening shortlist has invalid schedule IDs")
     if should_publish:
         _publish_json(
@@ -923,8 +1132,7 @@ def run_monthly_search(
         phase = "enumerate"
         if workspace.status == "running":
             workspace.update_progress(phase)
-        schedule_values = _schedule_ledger(workspace, spec)
-        schedules = {item.schedule_id: item for item in schedule_values}
+        schedules = _candidate_ledger(workspace, spec)
 
         phase = "screen"
         if workspace.status == "running":
@@ -932,15 +1140,12 @@ def run_monthly_search(
         screening = _screening_artifact(
             workspace,
             spec,
-            schedule_values,
+            schedules,
             screen_builder,
         )
         shortlist_ids = [
             str(item["schedule_id"])
             for item in screening["shortlist"]["entries"]
-        ]
-        shortlisted_schedules = [
-            schedules[candidate_id] for candidate_id in shortlist_ids
         ]
 
         phase = "prepare_backend"
@@ -948,11 +1153,9 @@ def run_monthly_search(
             workspace.update_progress(
                 phase,
                 completed=0,
-                total=len(shortlisted_schedules),
+                total=len(shortlist_ids),
             )
-        prepare = getattr(runner, "prepare", None)
-        if prepare is not None:
-            prepare(shortlisted_schedules)
+        _prepare_shortlist(runner, schedules, shortlist_ids)
         backend_provenance = _backend_provenance(workspace, runner)
         final_records = _artifact_records(
             workspace,

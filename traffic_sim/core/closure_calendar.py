@@ -13,7 +13,7 @@ import itertools
 import json
 import math
 from datetime import date, datetime, time, timedelta
-from typing import Mapping, Sequence
+from typing import Iterator, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
 from .contracts import (
@@ -99,23 +99,42 @@ def _schedule_id(payload: Mapping[str, object]) -> str:
     return f"closure-{digest}"
 
 
-def generate_closure_schedules(
+def iter_closure_schedules(
     spec: ClosureSearchSpec,
-) -> tuple[ClosureSchedule, ...]:
-    """Enumerate every legal same-time recurring schedule for ``spec``.
+) -> Iterator[ClosureSchedule]:
+    """Yield every legal same-time recurring schedule for ``spec``, lazily.
 
     Required work is divided equally across ``n`` consecutive start dates and
     rounded upward to the 15-minute resolution separately for each possible
     day count.  Under the frozen version-1 assumption the scheduled work and
     closure durations are identical.
+
+    PR C of `docs/plans/CLOSURE_SEARCH_SCALING_AND_VALIDATION_PLAN_2026-08-10.md`.
+    The six-month 360-hour case materialises 11,813 parent schedules at
+    489.9 MiB before anything can look at the first one; streaming lets a
+    consumer write each schedule to a ledger and release it.
+
+    The enumeration body below is the ORIGINAL one, unchanged except that it
+    yields where it used to append. That is deliberate rather than tidy: the
+    schedule IDs, the interval order and the canonical order of the whole
+    sequence are contract, so re-deriving them would risk exactly the drift
+    this refactor must not cause. `generate_closure_schedules` is now a
+    wrapper that materialises this iterator, so the two cannot diverge.
+
+    The spec type check runs EAGERLY, before any generator is returned, so a
+    bad argument still raises at the call site as it always did.
     """
     if not isinstance(spec, ClosureSearchSpec):
         raise TypeError("spec must be a ClosureSearchSpec")
+    return _iter_closure_schedules(spec)
 
+
+def _iter_closure_schedules(
+    spec: ClosureSearchSpec,
+) -> Iterator[ClosureSchedule]:
     permitted_start = _calendar_date(spec.permitted_date_start)
     permitted_end = _calendar_date(spec.permitted_date_end)
     search_content_key = spec.content_key
-    schedules: list[ClosureSchedule] = []
     blackout_dates = set(spec.blackout_dates)
     allowed_dates: set[date] = set()
     candidate_date = permitted_start
@@ -280,7 +299,7 @@ def generate_closure_schedules(
                                 item.isoformat() for item in work_dates
                             ],
                         })
-                    schedules.append(
+                    yield (
                         ClosureSchedule(
                             schedule_id=_schedule_id(identity),
                             search_content_key=search_content_key,
@@ -300,7 +319,18 @@ def generate_closure_schedules(
                     )
         first_work_date += timedelta(days=1)
 
-    return tuple(schedules)
+
+def generate_closure_schedules(
+    spec: ClosureSearchSpec,
+) -> tuple[ClosureSchedule, ...]:
+    """Materialise every legal schedule for ``spec``.
+
+    Backward-compatible wrapper over `iter_closure_schedules`, kept because
+    caches, frozen campaign tooling and every pre-PR-C caller expect a tuple.
+    New execution paths should stream instead: this call is exactly the
+    materialisation PR C exists to avoid on large searches.
+    """
+    return tuple(iter_closure_schedules(spec))
 
 
 def expand_schedule_closures(

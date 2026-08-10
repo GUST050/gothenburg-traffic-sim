@@ -1133,6 +1133,106 @@ each. Diagnostic SUMO outputs live only in a private temporary root and are
 removed after every repetition. Known cache counts exclude units whose exact
 envelope cannot execute inside the demand year.
 
+#### Streaming closure ledgers (`closure_ledgers.py`) — PR C, BUILT
+
+The preflight above answers "how big is this search" without objects. PR C
+does the same for the search that actually runs.
+
+**The streaming calendar.** `iter_closure_schedules(spec)` yields every legal
+schedule lazily, in the identical canonical order.
+`generate_closure_schedules(spec)` is now `tuple(iter_closure_schedules(spec))`
+— a backward-compatible wrapper, still the API for old callers and small
+searches. The enumeration body is unchanged; it yields where it appended. Its
+argument type check stays EAGER, so a bad call still fails at the call site
+rather than at first iteration. Byte equivalence with the pre-PR-C generator is
+pinned by frozen `to_dict()` digests over five contract shapes
+(`tests/test_closure_calendar.py`), and ledger bytes are re-derived under three
+`PYTHONHASHSEED` values in real child interpreters, because an in-process test
+cannot change string hashing after start-up.
+
+**Ownership.** A search's enumeration lives in exactly one place:
+`runs/closure-search/<search_id>/ledgers/`, written by
+`traffic_sim/simulation/closure_ledgers.py` and owned by that search alone.
+Three NDJSON files, one canonical row each:
+
+    parents.ndjson       one row per parent ClosureSchedule
+    units.ndjson         one row per UNIQUE daily unit
+    parent_units.ndjson  one row per parent: its ordered daily-unit IDs
+
+The reverse unit→parents graph is GONE from this path. It was only ever the
+inverse of `parent_units.ndjson`, and materializing it cost memory proportional
+to parents×days rather than to either. `DailyClosureUnit` keeps its
+`parent_schedule_ids` for v1 callers, caches and workspaces; the streaming path
+uses `StreamingDailyUnit`, which carries `unit_id`, `schedule` and `identity`
+and nothing else. Both get their identity from ONE implementation,
+`independent_daily.daily_unit_records`, so a streamed unit ID can never drift
+from a cached one — two implementations of a content-addressed ID is exactly
+how a cache silently stops hitting, and nothing would report it. That function
+returns the unit's schedule behind a deferred `build` callable, because a
+parent contributes one record per interval while only a UNIQUE unit needs a
+schedule object: 171,880 records against 5,676 units on the 720-hour case, at
+85 µs to build against 11 µs for the identity. Building eagerly made
+`decompose_schedules` five times more expensive for v1 callers; every caller
+now builds exactly where it deduplicates.
+
+**Versioning.** `closure_search_ledgers_v1`, version 1, declared in the
+manifest and again in the workspace artifact's provenance
+(`ledger_schema`, `ledger_version`, `ledger_directory`,
+`ledger_manifest_content_key`). A future schema refuses an old directory
+instead of misreading it.
+
+**Atomic publication, manifest last.** Every ledger is written to a
+`.partial` file in the same directory, flushed, fsynced, `os.replace`d into
+place, and the directory itself fsynced. `ledgers.manifest.json` — schema,
+version, search content key, provenance, per-file rows/bytes/SHA-256, the three
+counts, status and its own content key — is published LAST and atomically. Its
+presence is the completion signal.
+
+**Two failure modes, deliberately different.** No manifest raises
+`LedgerIncomplete`: nothing ever declared the ledgers finished, so rebuilding
+is safe and correct. A manifest that does not match its ledgers raises
+`LedgerCorrupt` and the caller stops. Size, SHA-256 AND row count are all
+checked — size alone misses an equal-length corruption, the digest alone does
+not localize a truncation, and the row count is what a caller actually
+iterates. A completed ledger that no longer matches its own digest is not a
+rebuildable scratch file; regenerating it would destroy the only evidence that
+something damaged a frozen artifact.
+
+**Restart and compatibility.** `monthly_search._candidate_ledger` opens a
+search's enumeration in three states, in priority order: a pre-PR-C
+`closure_schedule_ledger` artifact (`candidate-ledger.json`) is read exactly as
+it was written, so old workspaces stay resumable; a published streaming
+manifest is verified and fails closed; neither means the directory is an
+unpublished build area, validated if complete and otherwise rebuilt. The
+freeze starts at publication, not at write. Restart is idempotent: a second run
+re-reads byte-identical ledgers and publishes no second artifact.
+
+**Only the minimum index.** `ParentLedgerIndex` holds a byte offset per
+schedule ID — roughly a hundred bytes each instead of a schedule and its up-to-
+90 intervals — and parses one row on demand, so screening membership, pilot
+lookups and the period comparison all work through the ordinary
+`Mapping[str, ClosureSchedule]` seam they already used.
+`IndependentDailyRunner.prepare_from_ledgers(directory, parent_ids)` reads only
+the shortlisted parents' relationships and only the units those reference.
+A backend without `prepare_from_ledgers` still gets a materialized shortlist,
+but explicitly and boundedly: above `MATERIALISED_SHORTLIST_LIMIT` (512) it
+raises instead of quietly allocating, because a silent fallback is how a memory
+gate stops meaning anything.
+
+**Measured (`validation/closure_search_streaming_v1.json`, PR C).** A separate
+diagnostic comparison record; PR A's baseline is NOT rewritten and now
+correctly reports source drift on the four files PR C changed. Every frozen
+case is run twice in fresh child interpreters — v1 materialization and the
+streaming writer — on the same host in the same session, because a resident-
+memory figure from one operating system is not evidence about another. See the
+plan's PR C section for the numbers and for the exact status of the plan's
+under-64-MiB exit gate on non-baseline hardware.
+
+**Unchanged.** The 100,000-parent and 10,000-unit caps, ranking,
+`closure_cost_v1`, pilot selection, finalist decision, teleport policy and
+survivability logic are untouched. The 360-hour six-month case is still refused
+by the unit cap; it simply no longer fails for want of memory first.
+
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
 of a hidden station's traffic (range 0.06–0.83). CONFOUND WARNING (missing

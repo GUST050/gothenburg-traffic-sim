@@ -6,6 +6,7 @@ import pytest
 from traffic_sim.core.closure_calendar import (
     expand_schedule_closures,
     generate_closure_schedules,
+    iter_closure_schedules,
     is_dst_transition_date,
     validate_connected_worksite,
 )
@@ -627,3 +628,203 @@ def test_worksite_connectivity_ignores_edge_direction():
         validate_connected_worksite(("a_b_0", "x_y_0"), endpoints)
     with pytest.raises(ValueError, match="missing"):
         validate_connected_worksite(("unknown",), endpoints)
+
+
+# ---------------------------------------------------------------------------
+# PR C: the streaming calendar API must be the SAME enumeration, not a similar
+# one. Everything downstream — schedule IDs, workspace ledgers, daily-unit
+# cache keys — is content-addressed off these bytes, so "equivalent" is not
+# good enough; it has to be identical.
+# ---------------------------------------------------------------------------
+
+#: sha256 over the canonical JSON of every schedule's ``to_dict()``, measured
+#: with the PRE-PR-C implementation (commit 01a0b16, before
+#: ``iter_closure_schedules`` existed). These pin the enumeration itself, so a
+#: future refactor of the generator cannot quietly renumber a search.
+_FROZEN_ENUMERATIONS = {
+    "rounded": (662,
+                "af4f60e8d4ddd5ab30d88abf21d24a3b8595617c52288b5930f70df84ae9dbe1"),
+    "exact_equal": (467,
+                    "2eea6ec72bfdf049ed8ffa2b5779f6e0c254fd97ca261cd5b965af13446f275a"),
+    "overnight": (496,
+                  "fe85e1516b3f6b3458b0f6e379f814d5e5c412f2667f2fc761d6670d535ff5d0"),
+    "blackout_dst": (377,
+                     "8d49b7186dad4ca5ad3d5f39febd9045b909ab9e29cc05ac16b43c1c2be88e00"),
+    "exact_0730": (144,
+                   "b6194855f8aa31d997ddc99bf136f6b6a60ead894538e743284ad107ddea7cd2"),
+}
+
+
+def _frozen_spec(name):
+    base = dict(
+        search_id="digest-case",
+        permitted_date_start="2027-04-05",
+        permitted_date_end="2027-04-16",
+        required_work_minutes=8 * 60,
+        max_consecutive_start_days=3,
+        permitted_daily_band=DailyTimeBand("06:00", "18:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4),
+    )
+    if name == "exact_equal":
+        base.update(interday_policy="independent_daily_reset_v1",
+                    work_allocation_policy="exact_equal_daily_v1",
+                    period_comparison_policy="rolling_period_v1")
+    elif name == "overnight":
+        base.update(permitted_daily_band=DailyTimeBand("20:00", "06:00"),
+                    required_work_minutes=6 * 60,
+                    max_consecutive_start_days=2,
+                    allowed_weekdays=(0, 1, 2, 3, 4, 5, 6))
+    elif name == "blackout_dst":
+        base.update(permitted_date_start="2027-10-24",
+                    permitted_date_end="2027-11-02",
+                    blackout_dates=("2027-10-28",),
+                    allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
+                    max_consecutive_start_days=3)
+    elif name == "exact_0730":
+        base.update(required_work_minutes=int(7.75 * 60) * 3,
+                    max_consecutive_start_days=3,
+                    interday_policy="independent_daily_reset_v1",
+                    work_allocation_policy="exact_equal_daily_v1")
+    return _spec(**base)
+
+
+@pytest.mark.parametrize("name", sorted(_FROZEN_ENUMERATIONS))
+def test_streaming_enumeration_is_byte_identical_to_the_frozen_generator(name):
+    import hashlib
+    import json
+
+    expected_count, expected_digest = _FROZEN_ENUMERATIONS[name]
+    spec = _frozen_spec(name)
+
+    materialized = generate_closure_schedules(spec)
+    streamed = tuple(iter_closure_schedules(spec))
+
+    assert streamed == materialized
+    assert [item.schedule_id for item in streamed] == [
+        item.schedule_id for item in materialized
+    ]
+    assert len(streamed) == expected_count
+    payload = json.dumps([item.to_dict() for item in streamed],
+                         sort_keys=True, separators=(",", ":"))
+    assert hashlib.sha256(payload.encode("utf-8")).hexdigest() == expected_digest
+
+
+def test_iteration_is_lazy_and_the_wrapper_is_the_only_materialisation(
+    monkeypatch,
+):
+    """A prefix must cost a prefix.
+
+    Counting constructed schedules rather than timing or measuring memory: it
+    is exact, and it is the property that actually matters — a lazy API that
+    still enumerated everything before yielding the first item would pass a
+    timing test on a fast machine and fail the memory gate on a real search.
+    """
+    import itertools
+
+    from traffic_sim.core import closure_calendar as calendar
+
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-02-26",
+        required_work_minutes=200 * 60,
+        max_consecutive_start_days=30,
+        permitted_daily_band=DailyTimeBand("06:00", "18:00"),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+        period_comparison_policy="rolling_period_v1",
+    )
+
+    built: list[int] = []
+    real = calendar.ClosureSchedule
+
+    def counting(*args, **kwargs):
+        built.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(calendar, "ClosureSchedule", counting)
+
+    stream = calendar.iter_closure_schedules(spec)
+    assert not isinstance(stream, (list, tuple))
+    prefix = tuple(itertools.islice(stream, 5))
+    assert len(prefix) == 5
+    assert len(built) == 5, (
+        f"a five-schedule prefix built {len(built)} schedules; the API is "
+        "not lazy")
+
+    built.clear()
+    everything = calendar.generate_closure_schedules(spec)
+    assert len(everything) > 400
+    assert len(built) == len(everything)
+    assert prefix == everything[:5]
+
+
+def test_streaming_wrapper_still_rejects_a_bad_spec_at_the_call_site():
+    """A generator that defers its argument check reports the error nowhere.
+
+    The type check has to run before the generator is returned, or a caller
+    passing the wrong object sees the failure at first iteration — often in a
+    different function entirely.
+    """
+    with pytest.raises(TypeError, match="ClosureSearchSpec"):
+        iter_closure_schedules({"search_id": "not-a-spec"})
+    with pytest.raises(TypeError, match="ClosureSearchSpec"):
+        generate_closure_schedules({"search_id": "not-a-spec"})
+
+
+def test_streaming_keeps_the_0730_case_periods_and_identical_daily_times():
+    """The plan's worked example, read off the streaming API.
+
+    07:30-15:15 inside a 06:00-18:00 band, three workdays, one exact equal
+    daily shift; the period may cross a weekend and every selected workday
+    uses the same start and end clock time.
+    """
+    spec = _spec(
+        permitted_date_start="2027-04-05",
+        permitted_date_end="2027-04-16",
+        required_work_minutes=int(7.75 * 60) * 3,
+        max_consecutive_start_days=3,
+        permitted_daily_band=DailyTimeBand("06:00", "18:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+    )
+
+    streamed = list(iter_closure_schedules(spec))
+    example = [
+        item for item in streamed
+        if item.daily_start == "07:30" and item.daily_end == "15:15"
+        and item.first_work_date == "2027-04-08"
+    ]
+    assert example, "the plan's 07:30-15:15 case must remain enumerable"
+    schedule = example[0]
+    assert schedule.day_count == 3
+    dates = [item.work_date for item in schedule.intervals]
+    # Thursday, Friday, then Monday: a rolling period crossing a weekend.
+    assert dates == ["2027-04-08", "2027-04-09", "2027-04-12"]
+    assert {item.start_time[11:] for item in schedule.intervals} == {"07:30:00"}
+    assert {item.end_time[11:] for item in schedule.intervals} == {"15:15:00"}
+
+    for item in streamed:
+        assert {value.start_time[11:] for value in item.intervals} == {
+            item.daily_start + ":00"
+        }
+
+    across_months = list(iter_closure_schedules(_spec(
+        permitted_date_start="2027-04-26",
+        permitted_date_end="2027-05-07",
+        required_work_minutes=int(7.75 * 60) * 4,
+        max_consecutive_start_days=4,
+        permitted_daily_band=DailyTimeBand("06:00", "18:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+    )))
+    crossing = [
+        item for item in across_months
+        if item.intervals[0].work_date[:7] != item.intervals[-1].work_date[:7]
+    ]
+    assert crossing, "streamed periods must still cross a month boundary"
+    assert any(
+        item.intervals[0].work_date[:4] == item.intervals[-1].work_date[:4]
+        for item in crossing
+    )

@@ -20,7 +20,8 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from functools import partial
+from typing import Any, Callable, Mapping, Sequence
 
 from traffic_sim.core.contracts import (
     ClosureInterval,
@@ -135,6 +136,33 @@ class DailyClosureUnit:
         }
 
 
+@dataclass(frozen=True)
+class StreamingDailyUnit:
+    """A daily unit read from a ledger, carrying NO parent list.
+
+    PR C. `DailyClosureUnit` stores every parent that references a unit, which
+    is the reverse graph the streaming path exists to remove: its size grows
+    with parents x days rather than with either. The forward relationship lives
+    once in `parent_units.ndjson` instead.
+
+    Execution never needed the reverse direction — `run_candidate` reads
+    `unit_id`, `identity` and `schedule` only — so this type carries exactly
+    those and keeps the same content-addressed ID guard, which is what makes a
+    streamed unit hit the SAME v1 cache entry.
+    """
+
+    unit_id: str
+    schedule: ClosureSchedule
+    identity: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        if self.unit_id != "daily-unit-" + _canonical_digest(self.identity,
+                                                             length=24):
+            raise ValueError("daily unit ID does not match its identity")
+        if self.schedule.day_count != 1 or len(self.schedule.intervals) != 1:
+            raise ValueError("daily unit schedule must contain exactly one interval")
+
+
 def daily_unit_identity(
     spec: ClosureSearchSpec,
     interval: ClosureInterval,
@@ -157,6 +185,58 @@ def daily_unit_identity(
     }
 
 
+def daily_unit_schedule(
+    spec: ClosureSearchSpec,
+    interval: ClosureInterval,
+) -> ClosureSchedule:
+    """The one-day `ClosureSchedule` a daily unit executes."""
+    return ClosureSchedule(
+        schedule_id=_daily_schedule_id(spec.content_key, interval),
+        search_content_key=spec.content_key,
+        first_work_date=interval.work_date,
+        day_count=1,
+        daily_start=interval.start_time[11:16],
+        daily_end=_end_label(interval),
+        required_work_minutes=interval.duration_minutes,
+        scheduled_work_minutes=interval.duration_minutes,
+        actual_closed_minutes=interval.duration_minutes,
+        rounding_overshoot_minutes=0,
+        intervals=(interval,),
+    )
+
+
+def daily_unit_records(
+    spec: ClosureSearchSpec,
+    parent: ClosureSchedule,
+) -> tuple[tuple[str, dict[str, Any], Callable[[], ClosureSchedule]], ...]:
+    """One parent's ordered ``(unit_id, identity, build_schedule)`` triples.
+
+    Factored out of `decompose_schedules` for PR C so the streaming ledger
+    path and the v1 materialising path compute unit identity through ONE
+    implementation. Two implementations of a content-addressed ID is how a
+    cache silently stops hitting: the streaming path would write units the
+    v1 cache could never find, and nothing would report it — every unit would
+    simply look uncached and be simulated again.
+
+    The schedule is DEFERRED behind `build_schedule`, and that is not a style
+    choice. A parent contributes one record per interval, but only a UNIQUE
+    unit needs a schedule object: on the plan's 720-hour case that is 171,880
+    records against 5,676 units, and building eagerly cost 85 µs each against
+    11 µs for the identity — five times the whole measured decomposition.
+    Every caller therefore calls it exactly where it deduplicates.
+
+    Order is the parent's own interval order, which is what the parent-to-unit
+    relationship ledger records and what aggregation replays.
+    """
+    records = []
+    for interval in parent.intervals:
+        identity = daily_unit_identity(spec, interval)
+        unit_id = "daily-unit-" + _canonical_digest(identity, length=24)
+        records.append(
+            (unit_id, identity, partial(daily_unit_schedule, spec, interval)))
+    return tuple(records)
+
+
 def decompose_schedules(
     spec: ClosureSearchSpec,
     schedules: Sequence[ClosureSchedule],
@@ -172,13 +252,14 @@ def decompose_schedules(
         if parent.search_content_key != spec.content_key:
             raise ValueError("parent schedule belongs to another search")
         unit_ids: list[str] = []
-        for interval in parent.intervals:
-            identity = daily_unit_identity(spec, interval)
-            unit_id = "daily-unit-" + _canonical_digest(identity, length=24)
+        for (unit_id, identity, build), interval in zip(
+            daily_unit_records(spec, parent), parent.intervals
+        ):
             unit_ids.append(unit_id)
             record = records.setdefault(
                 unit_id,
-                {"identity": identity, "interval": interval, "parents": []},
+                {"identity": identity, "interval": interval,
+                 "build": build, "parents": []},
             )
             if record["identity"] != identity:
                 raise ValueError("daily unit digest collision")
@@ -190,20 +271,8 @@ def decompose_schedules(
     units: list[DailyClosureUnit] = []
     for unit_id in sorted(records):
         record = records[unit_id]
-        interval = record["interval"]
-        daily = ClosureSchedule(
-            schedule_id=_daily_schedule_id(spec.content_key, interval),
-            search_content_key=spec.content_key,
-            first_work_date=interval.work_date,
-            day_count=1,
-            daily_start=interval.start_time[11:16],
-            daily_end=_end_label(interval),
-            required_work_minutes=interval.duration_minutes,
-            scheduled_work_minutes=interval.duration_minutes,
-            actual_closed_minutes=interval.duration_minutes,
-            rounding_overshoot_minutes=0,
-            intervals=(interval,),
-        )
+        # Built ONCE per unique unit, exactly as before PR C.
+        daily = record["build"]()
         units.append(DailyClosureUnit(
             unit_id=unit_id,
             schedule=daily,
@@ -646,6 +715,89 @@ class IndependentDailyRunner:
         })
         self._unit_backend_digests = unit_backend_digests
         self._units = {item.unit_id: item for item in units}
+        self._parents = parents
+        self._prepared_parent_ids = parent_ids
+
+    def prepare_from_ledgers(
+        self,
+        directory: Path,
+        parent_schedule_ids: Sequence[str],
+    ) -> None:
+        """Prepare from streaming ledgers instead of a parent schedule tuple.
+
+        PR C's execution seam. `prepare` takes every parent as an object and
+        rebuilds the unit set — and the reverse unit->parents graph — in
+        memory. This reads the already-published ledgers instead: unique units
+        come from `units.ndjson`, and the forward parent->units relationship
+        from `parent_units.ndjson`, so nothing reconstructs the graph.
+
+        Only the shortlisted parents' relationships are retained, and only the
+        units those parents actually reference. That is the minimum index the
+        pilot and finalist phases need to run a candidate.
+
+        Unit IDs are the SAME content-addressed IDs `decompose_schedules`
+        produces (both go through `daily_unit_records`), so a search that
+        switches to the streaming path still hits every v1 cache entry.
+        """
+        from traffic_sim.simulation import closure_ledgers  # noqa: PLC0415
+
+        parent_ids = tuple(parent_schedule_ids)
+        if self._prepared_parent_ids is not None:
+            if parent_ids != self._prepared_parent_ids:
+                raise ValueError(
+                    "independent runner was prepared for another shortlist")
+            return
+        wanted = set(parent_ids)
+        if len(wanted) != len(parent_ids):
+            raise ValueError("independent shortlist repeats a parent schedule")
+
+        parents: dict[str, tuple[str, ...]] = {}
+        needed: set[str] = set()
+        for row in closure_ledgers.iter_parent_unit_rows(directory):
+            parent_id = str(row["parent_schedule_id"])
+            if parent_id not in wanted:
+                continue
+            unit_ids = tuple(str(value) for value in row["unit_ids"])
+            if len(set(unit_ids)) != len(unit_ids):
+                raise ValueError("independent parent repeats a daily unit")
+            parents[parent_id] = unit_ids
+            needed.update(unit_ids)
+        missing = sorted(wanted - set(parents))
+        if missing:
+            raise ValueError(
+                f"parent-unit ledger does not cover {len(missing)} shortlisted "
+                f"schedule(s), first {missing[0]}")
+
+        units: dict[str, StreamingDailyUnit] = {}
+        for row in closure_ledgers.iter_unit_rows(directory):
+            unit_id = str(row["unit_id"])
+            if unit_id not in needed:
+                continue
+            units[unit_id] = StreamingDailyUnit(
+                unit_id=unit_id,
+                schedule=ClosureSchedule.from_dict(row["schedule"]),
+                identity=dict(row["identity"]),
+            )
+        absent = sorted(needed - set(units))
+        if absent:
+            raise ValueError(
+                f"unit ledger is missing {len(absent)} referenced unit(s), "
+                f"first {absent[0]}")
+
+        ordered = [units[unit_id] for unit_id in sorted(units)]
+        self.daily_runner.prepare([item.schedule for item in ordered])
+        unit_backend_digests = {
+            item.unit_id: _canonical_digest(
+                self._candidate_backend_identity(item)
+            )
+            for item in ordered
+        }
+        self._backend_digest = _canonical_digest({
+            "kind": BACKEND_KIND,
+            "unit_backends": unit_backend_digests,
+        })
+        self._unit_backend_digests = unit_backend_digests
+        self._units = {item.unit_id: item for item in ordered}
         self._parents = parents
         self._prepared_parent_ids = parent_ids
 

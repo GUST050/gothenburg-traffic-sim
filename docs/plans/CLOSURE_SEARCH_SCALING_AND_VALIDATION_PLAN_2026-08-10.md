@@ -634,3 +634,124 @@ diagnostisk och dess temporära utfall tas bort. Ingen v11 skapades och ingen
 held-out-kampanj kördes. `validation/monthly_proxy_manifest_v10.json` är
 avsiktligt oförändrad historisk evidens för 03ca5d7 och rapporterar fortsatt
 källdrift.
+
+---
+
+## 9. Uppmätt resultat: PR C (2026-08-10)
+
+Tillagt efter genomförandet av steg 2. Avsnitt 1–8 är oförändrade; PR A:s och
+PR B:s historiska mätningar har inte skrivits om.
+
+### Vad som byggdes
+
+`iter_closure_schedules(spec)` i `closure_calendar.py` ger scheman lat i
+identisk kanonisk ordning; `generate_closure_schedules(spec)` är nu
+`tuple(iter_closure_schedules(spec))` och behålls för cachar, frysta
+kampanjverktyg och alla tidigare anropare. Uppräkningskroppen är oförändrad —
+den `yield`:ar där den tidigare `append`:ade — eftersom schema-ID:n,
+intervallordning och sekvensordning är kontrakt.
+
+`traffic_sim/simulation/closure_ledgers.py` skriver tre NDJSON-ledgers i en
+strömmande pass: `parents.ndjson`, `units.ndjson` (en rad per UNIK dagsenhet)
+och `parent_units.ndjson` (en rad per parent med dess ordnade unit-ID:n). Den
+omvända unit→parents-grafen finns inte längre i den nya vägen; den var bara
+inversen av relationsledgern och kostade minne proportionellt mot
+parents×dagar. Enda index i minnet under skrivningen är mängden redan skrivna
+unit-ID:n. `StreamingDailyUnit` bär `unit_id`, `schedule` och `identity` —
+inget föräldrafält. `DailyClosureUnit` är oförändrad för v1-anropare.
+
+Identiteten beräknas genom EN implementation, `daily_unit_records`, som både
+v1-vägen och strömningsvägen använder. Schemaobjektet byggs SENT, bakom en
+`build`-callable: en parent bidrar med en post per intervall men bara en unik
+enhet behöver ett schemaobjekt (171 880 poster mot 5 676 enheter i 720 h-fallet,
+85 µs mot 11 µs styck). Att bygga det ivrigt gjorde `decompose_schedules` fem
+gånger dyrare — en regression i v1-vägen som upptäcktes och åtgärdades innan
+mätningen; efter fixen kostar dekompositionen 3,56 s för 720 h-fallet på
+mätmaskinen, i nivå med baslinjens 3,55 s.
+
+Publicering är atomisk och ordnad: varje ledger skrivs till `.partial`,
+flushas, fsync:as, `os.replace`:as och katalogen fsync:as; manifestet
+publiceras SIST och dess närvaro är färdigsignalen. Saknat manifest ⇒
+`LedgerIncomplete` (säkert att bygga om). Manifest som inte stämmer med sina
+ledgers ⇒ `LedgerCorrupt` och stopp — storlek, SHA-256 OCH radantal kontrolleras
+var för sig.
+
+`monthly_search._candidate_ledger` öppnar uppräkningen i tre lägen: gammal
+`candidate-ledger.json` läses precis som den skrevs, publicerat manifest
+verifieras och failar stängt, och en opublicerad katalog är ett byggområde som
+byggs om. `ParentLedgerIndex` håller byte-offset per schema-ID i stället för
+objekt, så screening, pilot och periodjämförelse arbetar mot samma
+`Mapping[str, ClosureSchedule]`-söm som förut.
+`IndependentDailyRunner.prepare_from_ledgers` läser bara kortlistans parents och
+de enheter de refererar. En backend utan den metoden får fortfarande en
+materialiserad kortlista, men bara under `MATERIALISED_SHORTLIST_LIMIT` (512) —
+över det vägrar den i stället för att tyst falla tillbaka.
+
+### Mätning
+
+`tools/benchmark_closure_streaming.py` →
+`validation/closure_search_streaming_v1.json` (`diagnostic_comparison`, öppnar
+ingen grind). Samma sex frysta fall, fem repetitioner, varje fall kört BÅDE
+materialiserande och strömmande i en egen färsk tolk på SAMMA värd i samma
+körning. PR A:s baslinje skrivs inte om och rapporterar nu avsiktlig källdrift
+på de fyra filer PR C ändrade; dess externa SUMO- och deterministic_cost-armar
+kördes inte om.
+
+| fall | föräldrar | dagsenheter | ström p95 | materialisera p95 | ström RSS över import | materialisera RSS över import |
+|---|---:|---:|---:|---:|---:|---:|
+| 720 h | 2 186 | 5 676 | 7,942 s | 7,085 s | **1,98 MiB** | 152,86 MiB |
+| 360 h | 11 813 | 23 349 | 32,185 s | 43,015 s | **5,76 MiB** | 624,73 MiB |
+| brute-force (4 fall) | 85–754 | 85–910 | 0,033–0,314 s | 0,021–0,296 s | 0,13–0,39 MiB | 0,85–8,70 MiB |
+
+Strömning byter minne mot väggtid, och det ska sägas rakt ut: den skriver
+29 MB (720 h) respektive 121 MB (360 h) NDJSON till disk, vilket
+minnesvägen inte betalar. På 720 h-fallet är materialisering därför en aning
+SNABBARE i median (6,91 s mot 7,87 s). Vinsten är minnet — och att ledgern
+efteråt finns kvar som oföränderlig evidens i stället för att ha existerat
+bara i en process.
+
+Antalen är identiska med PR A:s och avsnitt 2:s tabell (2 186/5 676 och
+11 813/23 349) och `semantic_agreement.all_match` är sant i samtliga sex fall.
+Byte-ekvivalensen mellan iterator och wrapper är låst i testsviten med frysta
+`to_dict()`-digester tagna med implementationen FÖRE PR C, inte i den här
+posten: en prestandapost ska inte vara enda stället där en korrekthetsegenskap
+kontrolleras.
+
+Ledgerstorlekar för 720 h: `parents.ndjson` 2 186 rader / 17 209 558 B,
+`units.ndjson` 5 676 rader / 5 335 440 B, `parent_units.ndjson` 2 186 rader /
+6 677 902 B. För 360 h: 11 813 / 71 404 374 B, 23 349 / 21 948 060 B och
+11 813 / 27 448 965 B.
+
+### Exit-grinden: en del uppfylld, en del ÖPPEN
+
+Samma schema-ID:n och samma ordning som före ändringen: **uppfyllt**, låst av
+frysta digester över fem kontraktsformer plus ledgerbytes reproducerade under
+tre `PYTHONHASHSEED`-värden i riktiga barntolkar.
+
+360 h-fallet stoppas inte längre av minnesmaterialisering: **uppfyllt**. Det
+räknar upp 11 813 föräldrar och 23 349 enheter i 5,76 MiB över importbaslinjen,
+mot 624,73 MiB för v1-vägen (108× mindre).
+Det är fortfarande — avsiktligt — VÄGRAT av 10 000-enhetstaket, som PR C inte
+rör.
+
+720 h under 64 MiB: **ÖPPEN på den här maskinen, och lämnas öppen med flit.**
+Själva uppräkningen mäter 1,98 MiB, men processens totala topp är 101,9 MiB
+eftersom en färsk tolk som importerar `independent_daily` — och därmed
+`finalist_decision` och scipy — kostar 99,9 MiB på den här Linux-värden mot
+uppskattningsvis ~21 MiB på den frysta Darwin/arm64-baslinjens värd (samma
+fasta kostnad betalas identiskt av v1-vägen). Grinden är formulerad som en
+processtotal, och en RSS-siffra från ett operativsystem är inte evidens om ett
+annat, så posten rapporterar `open_fixed_import_cost_dominates` i stället för
+ett godkännande den inte förtjänat. Den ska mätas om på utvecklingsmaskinen.
+Att flytta identitetshjälparna till en scipy-fri modul skulle sänka siffran men
+inte den verkliga processen — den riktiga sökprocessen importerar
+`finalist_decision` ändå för beslutet — och vore därför att optimera mätaren,
+inte produkten.
+
+### Vad som INTE gjordes
+
+PR D–F, kostnadsordning, policy v3, rangordning, `closure_cost_v1`,
+pilotval, finalistbeslut, teleport-policy och survivability är orörda.
+10 000-enhetstaket och 100 000-föräldratak är oförändrade. Inget fryst v1-,
+v6-, v9- eller v10-artefakt skrevs om, ingen v11 skapades, ingen
+held-out-kampanj kördes och ingen årlig uppvärmningsindata rördes.
