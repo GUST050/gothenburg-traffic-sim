@@ -58,6 +58,22 @@ def _candidate(
     )
 
 
+def _costed(
+    candidate_id, deltas, *, hours, metres=0, affected=0, no_detour=0
+):
+    candidate = _candidate(candidate_id, deltas)
+    return CandidateEvidence(
+        candidate_id=candidate.candidate_id,
+        observations=candidate.observations,
+        disruption=({
+            "added_vehicle_hours": hours,
+            "added_metres_total": metres,
+            "vehicles_affected": affected,
+            "vehicles_no_detour": no_detour,
+        },),
+    )
+
+
 def test_retains_minimum_and_candidates_inside_worst_variant_band():
     result = select_pilot_finalists(
         [
@@ -88,6 +104,57 @@ def test_pilot_score_is_worst_demand_variant_not_pooled_average():
     )
     assert fragile.worst_variant == "q90"
     assert fragile.worst_variant_delta_s == 40
+
+
+def test_closure_cost_objective_prevents_pilot_from_discarding_true_best():
+    result = select_pilot_finalists(
+        [
+            _costed("cheap", (100, 100, 100), hours=1.0),
+            _costed("dear", (1, 1, 1), hours=10.0),
+        ],
+        _policy(retention_band_s=0, minimum_finalists=1),
+        ranking_objective="closure_cost_v1",
+    )
+
+    assert result.selected_ids == ("cheap",)
+    assert result.method == "deterministic_closure_cost_pilot_v1"
+
+
+def test_explicit_closure_cost_objective_fails_closed_without_disruption():
+    with pytest.raises(ValueError, match="requires disruption evidence"):
+        select_pilot_finalists(
+            [_candidate("plain")],
+            _policy(minimum_finalists=1),
+            ranking_objective="closure_cost_v1",
+        )
+
+
+def test_closure_cost_pilot_marks_no_detour_candidate_ineligible():
+    result = select_pilot_finalists(
+        [
+            _costed(
+                "severing", (1, 1, 1), hours=0, no_detour=1
+            ),
+            _costed("ok", (100, 100, 100), hours=10),
+        ],
+        _policy(minimum_finalists=1),
+        ranking_objective="closure_cost_v1",
+    )
+
+    assert result.selected_ids == ("ok",)
+    refused = next(
+        item for item in result.candidates
+        if item.candidate_id == "severing"
+    )
+    assert refused.eligible is False
+    assert refused.hard_failures == ("vehicles_no_detour",)
+    assert refused.closure_cost is not None
+    assert refused.closure_cost.vehicles_no_detour == 1
+    accepted = next(
+        item for item in result.candidates if item.candidate_id == "ok"
+    )
+    assert accepted.closure_cost is not None
+    assert accepted.closure_cost.added_vehicle_hours == 10
 
 
 def test_missing_variant_is_incomplete_and_requests_exact_pair():

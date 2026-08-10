@@ -43,10 +43,12 @@ from traffic_sim.simulation.search_workspace import (
     SearchWorkspace,
     open_search_workspace,
 )
+from traffic_sim.simulation.period_comparison import build_period_comparison
 
 
 SCHEMA_VERSION = 1
 POLICY_STATUSES = frozenset({"provisional", "golden_frozen"})
+RANKING_OBJECTIVES = frozenset({"legacy_time_loss_v1", "closure_cost_v1"})
 # The tracked held-out release gate (IMPROVEMENT_PLAN.md Phase 4).  When
 # this record exists, is well-formed and says "pass", the pre-registered
 # release contract is satisfied: the pilot/finalist policy is golden-frozen
@@ -172,6 +174,7 @@ class MonthlySearchPolicy:
     status: str
     pilot: PilotPolicy
     finalist: FinalistPolicy
+    objective_method: str = "legacy_time_loss_v1"
 
     def __post_init__(self) -> None:
         if not isinstance(self.policy_id, str) or not self.policy_id.strip():
@@ -181,6 +184,11 @@ class MonthlySearchPolicy:
         if self.status not in POLICY_STATUSES:
             raise ValueError(
                 f"monthly policy status must be one of {sorted(POLICY_STATUSES)}"
+            )
+        if self.objective_method not in RANKING_OBJECTIVES:
+            raise ValueError(
+                "monthly objective_method must be one of "
+                f"{sorted(RANKING_OBJECTIVES)}"
             )
         if self.pilot.variants != self.finalist.variants:
             raise ValueError("pilot and finalist demand variants must match")
@@ -196,6 +204,16 @@ class MonthlySearchPolicy:
         return _canonical_digest(self.to_dict(include_content_key=False))
 
     def to_dict(self, *, include_content_key: bool = True) -> dict[str, Any]:
+        finalist = asdict(self.finalist)
+        # The original v1 policy predates this explicit field. Keep its
+        # canonical bytes stable so a compatibility addition cannot rewrite
+        # a frozen golden identity. New objective-aligned policies serialize
+        # the field and receive a distinct content key.
+        if (
+            self.objective_method == "legacy_time_loss_v1"
+            and finalist.get("practical_equivalence_vehicle_hours") == 0.0
+        ):
+            finalist.pop("practical_equivalence_vehicle_hours", None)
         payload = {
             "schema_version": SCHEMA_VERSION,
             "kind": "monthly_closure_search_policy",
@@ -203,8 +221,10 @@ class MonthlySearchPolicy:
             "benchmark_id": self.benchmark_id,
             "status": self.status,
             "pilot": asdict(self.pilot),
-            "finalist": asdict(self.finalist),
+            "finalist": finalist,
         }
+        if self.objective_method != "legacy_time_loss_v1":
+            payload["objective_method"] = self.objective_method
         if include_content_key:
             payload["content_key"] = self.content_key
         return payload
@@ -227,6 +247,9 @@ class MonthlySearchPolicy:
             status=str(raw.get("status", "")),
             pilot=PilotPolicy(**pilot_raw),
             finalist=FinalistPolicy(**finalist_raw),
+            objective_method=str(
+                raw.get("objective_method", "legacy_time_loss_v1")
+            ),
         )
         supplied = raw.get("content_key")
         if supplied is not None and supplied != policy.content_key:
@@ -293,6 +316,7 @@ def evidence_to_dict(
         },
         "hard_failures": list(evidence.hard_failures),
         "observations": [asdict(item) for item in evidence.observations],
+        "disruption": [dict(item) for item in evidence.disruption],
     }
 
 
@@ -313,6 +337,7 @@ def evidence_from_dict(raw: Mapping[str, Any]) -> CandidateEvidence:
         candidate_id=candidate_id,
         observations=observations,
         hard_failures=tuple(str(item) for item in raw.get("hard_failures", ())),
+        disruption=tuple(dict(item) for item in raw.get("disruption", ())),
     )
 
 
@@ -646,6 +671,22 @@ def _final_result(
     )
     response_schedule_ids = shortlist_ids
     response_pilot_selection = dict(pilot_selection)
+    period_comparison = (
+        build_period_comparison(
+            schedules,
+            shortlist_ids,
+            pilot_selection,
+            winner_id=winner_id,
+            tie_ids=tie_ids,
+            unavailable_count=len(
+                screening.get("unavailable_candidates") or ()
+            ),
+            objective_method=policy.objective_method,
+            final_decision=decision,
+        )
+        if spec.period_comparison_policy == "rolling_period_v1"
+        else None
+    )
     if independent_exhaustive:
         # The immutable workspace already contains the complete schedule
         # ledger and pilot-selection statistics. Copying tens of thousands of
@@ -702,10 +743,13 @@ def _final_result(
         },
         "pilot_selection": response_pilot_selection,
         "robust_decision": dict(decision) if decision is not None else None,
+        "period_comparison": period_comparison,
         "claim_boundary": _claim_boundary(
             screening,
             decision_status,
             heldout_gate=load_passing_heldout_gate(),
+            policy_status=policy.status,
+            objective_method=policy.objective_method,
         ),
     }
 
@@ -715,6 +759,8 @@ def _claim_boundary(
     decision_status: str,
     *,
     heldout_gate: Mapping[str, Any] | None,
+    policy_status: str = "golden_frozen",
+    objective_method: str = "legacy_time_loss_v1",
 ) -> dict[str, Any]:
     """Evidence-level honesty labels for one monthly result.
 
@@ -744,7 +790,13 @@ def _claim_boundary(
     independent_complete = (
         not independent_exhaustive or unavailable_count == 0
     )
+    release_policy_ready = (
+        policy_status == "golden_frozen"
+        or objective_method != "closure_cost_v1"
+    )
     validated_proxy = (
+        release_policy_ready
+        and
         heldout_gate is not None
         and not exhaustive
         and proxy_version == heldout_gate.get("proxy_version")
@@ -755,13 +807,26 @@ def _claim_boundary(
         == "independent_daily_reset_v1"
     )
     released = (
+        release_policy_ready
+        and
         exhaustive
         and heldout_gate is not None
         and (not independent_exhaustive or (
             independent_gate and independent_complete
         ))
     ) or validated_proxy
-    if exhaustive:
+    if not release_policy_ready:
+        scope = (
+            "sumo_verified_independent_daily_exhaustive"
+            if independent_exhaustive and independent_complete
+            else "sumo_verified_analysis"
+        )
+        reason = (
+            f"policy status {policy_status}: SUMO evidence may be shown as "
+            "analysis, but the global-best claim requires a golden-frozen "
+            "policy and its matching held-out release gate"
+        )
+    elif exhaustive:
         scope = (
             (
                 "sumo_verified_independent_daily_exhaustive"
@@ -966,6 +1031,10 @@ def run_monthly_search(
         pilot_selection = select_pilot_finalists(
             pilot_evidence,
             policy.pilot,
+            ranking_objective=policy.objective_method,
+            practical_equivalence_vehicle_hours=(
+                policy.finalist.practical_equivalence_vehicle_hours
+            ),
         )
         pilot_payload = pilot_selection.to_dict()
         pilot_selection_records = _artifact_records(
@@ -1046,6 +1115,7 @@ def run_monthly_search(
                         for candidate_id in pilot_selection.selected_ids
                     ],
                     policy.finalist,
+                    ranking_objective=policy.objective_method,
                 )
                 decision_payload = decision.to_dict()
                 existing_decisions = _artifact_records(

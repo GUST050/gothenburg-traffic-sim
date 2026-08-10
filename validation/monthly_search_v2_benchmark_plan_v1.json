@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "kind": "monthly_search_v2_benchmark_plan",
+  "benchmark_id": "monthly-closure-cost-objective-benchmark-v1",
+  "status": "planned_diagnostic",
+  "purpose": "Benchmark the provisional closure_cost_v1 policy on the original immutable golden monthly archive; this is development evidence, not held-out or release evidence.",
+  "command": "PYTHONDONTWRITEBYTECODE=1 python3 tools/run_monthly_v2_benchmark.py",
+  "baseline_trip_duration_p99_s": 3600,
+  "maximum_candidates": 3,
+  "archive_digest": "237e44b1ce24d79e36e7ed8a4bf44a3b9fe3a993e598d4c255a9910e4302ddcd",
+  "inputs": {
+    "search_spec": {
+      "path": "validation/golden_monthly_search_spec_v6.json",
+      "sha256": "093c7e92bc0b471ae56a2711e6cab99e20ab9c6d4abc2a2ded5be3d81b1ec0b9"
+    },
+    "policy": {
+      "path": "validation/monthly_search_policy_v2.json",
+      "sha256": "249a98a95d10be3fbeeaceb2fc071ef1aa5f43b9d15b2cfa9023994f742be83d"
+    },
+    "benchmark_runner": {
+      "path": "tools/run_monthly_v2_benchmark.py",
+      "sha256": "5cadf422a7fbde515457289bc4e1c200a17ffb4460116b618706d3778c4d0453"
+    },
+    "archive_manifest": {
+      "path": "runs/releases/golden-2025-09-16-v1/normal/manifest.json",
+      "sha256": "7bb4b63254785eb4ff09f8f942839eea150fe726c3f234a47821703e2c738fe7"
+    },
+    "demand_meta": {
+      "path": "runs/releases/golden-2025-09-16-v1/normal/demand_meta.json",
+      "sha256": "7496115dafd026ae9f15b0ea8380b1be1a0e5a16b59afe6ff6a5db9d15c7a710"
+    },
+    "demand_routes_q10": {
+      "path": "runs/releases/golden-2025-09-16-v1/normal/calibrated_v1.rou.xml",
+      "sha256": "30472d6a3aadde5ba31893e2be1277f3f5abaa962f08870cfbffdcb3afcb12a0"
+    },
+    "demand_routes_q50": {
+      "path": "runs/releases/golden-2025-09-16-v1/normal/calibrated.rou.xml",
+      "sha256": "0a0cdad78d06245be71d716bf23ea7dee804496c96e36919d7c5027c0979039b"
+    },
+    "demand_routes_q90": {
+      "path": "runs/releases/golden-2025-09-16-v1/normal/calibrated_v2.rou.xml",
+      "sha256": "2a4124f5795f6b425a01dda45581c5f844a1c5b830a1b0f5357affff476b4239"
+    },
+    "sumo_network": {
+      "path": "sumo/net.net.xml",
+      "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+    }
+  },
+  "outputs": {
+    "search_root": "runs/closure-objective-v2-benchmark-v1/search",
+    "baseline_cache": "runs/closure-objective-v2-benchmark-v1/baseline-cache"
+  },
+  "safety": {
+    "execution_mode": "cold",
+    "seed_workers": 1,
+    "shared_demand_workspace_used": false,
+    "annual_warming_inputs_mutated": false,
+    "release_evidence": false,
+    "heldout_evidence": false
+  }
+}

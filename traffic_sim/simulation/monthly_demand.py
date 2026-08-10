@@ -632,6 +632,7 @@ class MonthlyDemandResolverRunner:
         seed_workers: int = 1,
         envelope_policy: EnvelopePolicy = EnvelopePolicy(),
         build_missing: bool = True,
+        include_disruption: bool = False,
         warm_execution: bool = False,
         boundary_controller=None,
         demand_builder: DemandBuilder = build_demand_archive,
@@ -656,6 +657,9 @@ class MonthlyDemandResolverRunner:
         self.seed_workers = seed_workers
         self.envelope_policy = envelope_policy
         self.build_missing = bool(build_missing)
+        if include_disruption is not False and include_disruption is not True:
+            raise ValueError("include_disruption must be a bool")
+        self.include_disruption = bool(include_disruption)
         if warm_execution is not False and warm_execution is not True:
             raise ValueError("warm_execution must be a bool")
         if warm_execution and boundary_controller is None:
@@ -847,6 +851,7 @@ class MonthlyDemandResolverRunner:
                 seed_workers=self.seed_workers,
                 envelope_policy=self.envelope_policy,
                 expected_demand_spec=required,
+                include_disruption=self.include_disruption,
                 warm_execution=self.warm_execution,
                 boundary_controller=self.boundary_controller,
             )
@@ -878,6 +883,19 @@ class MonthlyDemandResolverRunner:
                 raise ValueError(
                     f"monthly envelope backends disagree on {field}"
                 )
+        ranking_objective_evidence = child[0].get(
+            "ranking_objective_evidence", "legacy_time_loss_v1"
+        )
+        if any(
+            item.get(
+                "ranking_objective_evidence", "legacy_time_loss_v1"
+            ) != ranking_objective_evidence
+            for item in child[1:]
+        ):
+            raise ValueError(
+                "monthly envelope backends disagree on "
+                "ranking_objective_evidence"
+            )
         return {
             "schema_version": SCHEMA_VERSION,
             "kind": "multi_envelope_monthly_sumo_backend",
@@ -899,6 +917,7 @@ class MonthlyDemandResolverRunner:
                 self.baseline_trip_duration_p99_s
             ),
             "envelope_policy": dataclasses.asdict(self.envelope_policy),
+            "ranking_objective_evidence": ranking_objective_evidence,
             **{
                 field: child[0][field]
                 for field in common_fields
@@ -953,6 +972,7 @@ class MonthlyDemandResolverRunner:
             "envelope_policy": dataclasses.asdict(child.envelope_policy),
             "expected_demand_spec": expected.to_dict(),
             "warm_execution": child.warm_execution,
+            "include_disruption": child.include_disruption,
         }
 
     def cleanup(self) -> None:

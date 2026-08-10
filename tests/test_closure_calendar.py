@@ -78,6 +78,145 @@ def test_content_key_describes_intent_not_label_or_edge_order():
     assert first.content_key == second.content_key
 
 
+def test_rolling_period_can_cross_week_and_month_boundary():
+    common = {
+        "permitted_date_start": "2027-07-30",  # Friday
+        "permitted_date_end": "2027-08-02",    # Monday, next ISO week
+        "required_work_minutes": 2 * 60,
+        "max_consecutive_start_days": 2,
+        "permitted_daily_band": DailyTimeBand("08:00", "09:00"),
+        "allowed_weekdays": (0, 4),
+        "interday_policy": "independent_daily_reset_v1",
+        "work_allocation_policy": "exact_equal_daily_v1",
+    }
+    rolling = _spec(**common, period_comparison_policy="rolling_period_v1")
+
+    schedules = generate_closure_schedules(rolling)
+    assert len(schedules) == 1
+    assert [item.work_date for item in schedules[0].intervals] == [
+        "2027-07-30", "2027-08-02"
+    ]
+    assert rolling.to_dict()["period_comparison_policy"] == "rolling_period_v1"
+
+
+def test_rolling_period_comparison_requires_independent_daily_evaluation():
+    with pytest.raises(ValueError, match="independent_daily_reset_v1"):
+        _spec(period_comparison_policy="rolling_period_v1")
+
+
+def test_rolling_period_requires_the_same_times_every_workday():
+    with pytest.raises(ValueError, match="same start and end time"):
+        _spec(
+            interday_policy="independent_daily_reset_v1",
+            work_allocation_policy="exact_balanced_daily_v1",
+            period_comparison_policy="rolling_period_v1",
+        )
+
+    spec = _spec(
+        permitted_date_start="2027-07-01",
+        permitted_date_end="2027-07-04",
+        required_work_minutes=3 * 60,
+        max_consecutive_start_days=2,
+        permitted_daily_band=DailyTimeBand("08:00", "12:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+        period_comparison_policy="rolling_period_v1",
+    )
+    schedules = generate_closure_schedules(spec)
+
+    assert {item.day_count for item in schedules} == {1, 2}
+    for schedule in schedules:
+        assert len({item.start_time[11:16] for item in schedule.intervals}) == 1
+        assert len({item.end_time[11:16] for item in schedule.intervals}) == 1
+        assert len({item.duration_minutes for item in schedule.intervals}) == 1
+
+
+def test_rolling_period_searches_exact_times_inside_permitted_daily_band():
+    spec = _spec(
+        permitted_date_start="2027-07-01",
+        permitted_date_end="2027-07-02",
+        required_work_minutes=2 * (7 * 60 + 45),
+        max_consecutive_start_days=2,
+        permitted_daily_band=DailyTimeBand("06:00", "18:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+        period_comparison_policy="rolling_period_v1",
+    )
+
+    matching = [
+        schedule for schedule in generate_closure_schedules(spec)
+        if schedule.day_count == 2
+        and schedule.daily_start == "07:30"
+        and schedule.daily_end == "15:15"
+    ]
+    assert len(matching) == 1
+    assert {item.start_time[11:16] for item in matching[0].intervals} == {
+        "07:30"
+    }
+    assert {item.end_time[11:16] for item in matching[0].intervals} == {
+        "15:15"
+    }
+
+
+def test_eight_workday_period_crosses_month_boundary():
+    spec = _spec(
+        permitted_date_start="2027-07-26",
+        permitted_date_end="2027-08-04",
+        required_work_minutes=8 * 60,
+        max_consecutive_start_days=8,
+        permitted_daily_band=DailyTimeBand("08:00", "09:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+        period_comparison_policy="rolling_period_v1",
+    )
+
+    schedules = generate_closure_schedules(spec)
+    assert len(schedules) == 1
+    assert schedules[0].day_count == 8
+    assert schedules[0].first_work_date == "2027-07-26"
+    assert schedules[0].intervals[-1].work_date == "2027-08-04"
+
+
+def test_thirty_workday_exact_equal_period_is_supported():
+    spec = _spec(
+        permitted_date_start="2027-07-01",
+        permitted_date_end="2027-08-11",
+        required_work_minutes=30 * 8 * 60,
+        max_consecutive_start_days=30,
+        permitted_daily_band=DailyTimeBand("08:00", "16:00"),
+        allowed_weekdays=(0, 1, 2, 3, 4, 5, 6),
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+        period_comparison_policy="rolling_period_v1",
+    )
+
+    schedules = generate_closure_schedules(spec)
+    thirty_day = [item for item in schedules if item.day_count == 30]
+    assert len(thirty_day) == 13
+    assert all(item.actual_closed_minutes == 30 * 8 * 60
+               for item in thirty_day)
+    assert all({interval.duration_minutes for interval in item.intervals}
+               == {8 * 60} for item in thirty_day)
+
+
+def test_long_period_contract_is_bounded_and_requires_exact_equal_days():
+    common = {
+        "max_consecutive_start_days": 30,
+        "interday_policy": "independent_daily_reset_v1",
+        "period_comparison_policy": "rolling_period_v1",
+    }
+    with pytest.raises(ValueError, match="exact_equal_daily_v1"):
+        _spec(**common, work_allocation_policy="exact_balanced_daily_v1")
+    with pytest.raises(ValueError, match="1 through 90"):
+        _spec(
+            **{**common, "max_consecutive_start_days": 91},
+            work_allocation_policy="exact_equal_daily_v1",
+        )
+
+
 def test_thirty_work_hours_generate_only_feasible_equal_daily_shifts():
     schedules = generate_closure_schedules(_spec())
 

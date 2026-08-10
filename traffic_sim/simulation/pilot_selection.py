@@ -11,7 +11,7 @@ authorizes a global-best claim.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import math
 from statistics import mean
 from typing import Sequence
@@ -21,10 +21,17 @@ from traffic_sim.simulation.finalist_decision import (
     DEMAND_VARIANTS,
     PairedObservation,
 )
+from traffic_sim.simulation.closure_ranking import (
+    ClosureCost,
+    rank_closures,
+    worst_variant_cost,
+)
 
 
 SCHEMA_VERSION = 1
 PILOT_METHOD = "matched_worst_variant_pilot_v1"
+CLOSURE_COST_PILOT_METHOD = "deterministic_closure_cost_pilot_v1"
+RANKING_OBJECTIVES = frozenset({"legacy_time_loss_v1", "closure_cost_v1"})
 _STATUSES = frozenset({"ready", "incomplete", "no_viable", "capacity_exceeded"})
 
 
@@ -87,6 +94,7 @@ class PilotCandidateStatistics:
     worst_variant: str | None
     worst_variant_delta_s: float | None
     complete: bool
+    closure_cost: ClosureCost | None = None
 
 
 @dataclass(frozen=True)
@@ -194,10 +202,30 @@ def _validate_shared_pairing(
 def select_pilot_finalists(
     evidence: Sequence[CandidateEvidence],
     policy: PilotPolicy,
+    *,
+    ranking_objective: str = "legacy_time_loss_v1",
+    practical_equivalence_vehicle_hours: float = 0.0,
 ) -> PilotSelection:
     """Retain robust pilot contenders without turning a pilot into a winner."""
     if not evidence:
         raise ValueError("pilot selection requires candidates")
+    if ranking_objective not in RANKING_OBJECTIVES:
+        raise ValueError(
+            f"ranking_objective must be one of {sorted(RANKING_OBJECTIVES)}"
+        )
+    if (
+        isinstance(practical_equivalence_vehicle_hours, bool)
+        or not math.isfinite(practical_equivalence_vehicle_hours)
+        or practical_equivalence_vehicle_hours < 0
+    ):
+        raise ValueError(
+            "practical_equivalence_vehicle_hours must be finite and non-negative"
+        )
+    selection_method = (
+        CLOSURE_COST_PILOT_METHOD
+        if ranking_objective == "closure_cost_v1"
+        else PILOT_METHOD
+    )
     candidate_ids = [candidate.candidate_id for candidate in evidence]
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ValueError("pilot candidate IDs must be unique")
@@ -275,6 +303,7 @@ def select_pilot_finalists(
             candidates=tuple(statistics),
             missing_pairs=(),
             policy=policy,
+            method=selection_method,
         )
     if missing:
         return PilotSelection(
@@ -284,23 +313,102 @@ def select_pilot_finalists(
             candidates=tuple(statistics),
             missing_pairs=tuple(sorted(missing)),
             policy=policy,
+            method=selection_method,
         )
 
-    ranked = sorted(
-        viable,
-        key=lambda candidate: (
-            float(candidate.worst_variant_delta_s),
-            candidate.candidate_id,
-        ),
-    )
+    if ranking_objective == "closure_cost_v1":
+        evidence_by_id = {
+            candidate.candidate_id: candidate
+            for candidate in evidence
+            if candidate.eligible
+        }
+        missing_disruption = sorted(
+            candidate_id
+            for candidate_id, candidate in evidence_by_id.items()
+            if not candidate.disruption
+        )
+        if missing_disruption:
+            raise ValueError(
+                "closure_cost_v1 requires disruption evidence for every "
+                f"viable pilot candidate: missing={missing_disruption}"
+            )
+        all_costs_by_id = {
+            candidate.candidate_id: worst_variant_cost(
+                candidate.candidate_id, candidate.disruption
+            )
+            for candidate in evidence
+            if candidate.disruption
+        }
+        costs = [
+            all_costs_by_id[candidate_id]
+            for candidate_id in evidence_by_id
+        ]
+        ordered, refused = rank_closures(costs)
+        refused_ids = {cost.candidate_id for cost in refused}
+        statistics = [
+            replace(
+                candidate,
+                eligible=False,
+                hard_failures=tuple(sorted({
+                    *candidate.hard_failures,
+                    "vehicles_no_detour",
+                })),
+                closure_cost=all_costs_by_id[candidate.candidate_id],
+            )
+            if candidate.candidate_id in refused_ids
+            else replace(
+                candidate,
+                closure_cost=all_costs_by_id.get(candidate.candidate_id),
+            )
+            for candidate in statistics
+        ]
+        viable_by_id = {candidate.candidate_id: candidate for candidate in viable}
+        ranked = [
+            viable_by_id[cost.candidate_id]
+            for cost in ordered
+        ]
+        if not ranked:
+            return PilotSelection(
+                status="no_viable",
+                selected_ids=(),
+                reason=(
+                    "every pilot candidate leaves at least one destination "
+                    "unreachable by car"
+                ),
+                candidates=tuple(statistics),
+                missing_pairs=(),
+                policy=policy,
+                method=selection_method,
+            )
+        costs_by_id = {cost.candidate_id: cost for cost in ordered}
+    else:
+        costs_by_id = {}
+        ranked = sorted(
+            viable,
+            key=lambda candidate: (
+                float(candidate.worst_variant_delta_s),
+                candidate.candidate_id,
+            ),
+        )
     minimum_count = min(policy.minimum_finalists, len(ranked))
-    cutoff = float(ranked[minimum_count - 1].worst_variant_delta_s)
-    retained = tuple(
-        candidate.candidate_id
-        for candidate in ranked
-        if float(candidate.worst_variant_delta_s)
-        <= cutoff + policy.retention_band_s
-    )
+    if ranking_objective == "closure_cost_v1":
+        cutoff = costs_by_id[
+            ranked[minimum_count - 1].candidate_id
+        ].added_vehicle_hours
+        retained = tuple(
+            candidate.candidate_id
+            for candidate in ranked
+            if costs_by_id[candidate.candidate_id].added_vehicle_hours
+            <= cutoff + practical_equivalence_vehicle_hours
+        )
+    else:
+        cutoff = float(ranked[minimum_count - 1].worst_variant_delta_s)
+        retained = tuple(
+            candidate.candidate_id
+            for candidate in ranked
+            if float(candidate.worst_variant_delta_s)
+            <= cutoff + policy.retention_band_s
+        )
     if len(retained) > policy.maximum_finalists:
         return PilotSelection(
             status="capacity_exceeded",
@@ -312,15 +420,21 @@ def select_pilot_finalists(
             candidates=tuple(statistics),
             missing_pairs=(),
             policy=policy,
+            method=selection_method,
         )
     return PilotSelection(
         status="ready",
         selected_ids=retained,
         reason=(
             "retained the frozen minimum plus every candidate inside the "
-            "worst-variant pilot retention band"
+            + (
+                "worst-variant closure-cost equivalence band"
+                if ranking_objective == "closure_cost_v1"
+                else "worst-variant pilot retention band"
+            )
         ),
         candidates=tuple(statistics),
         missing_pairs=(),
         policy=policy,
+        method=selection_method,
     )

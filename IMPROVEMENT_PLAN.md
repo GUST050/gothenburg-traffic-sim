@@ -1823,14 +1823,60 @@ benchmark before release. Multiple finalist comparisons use a Holm-adjusted
 or simultaneous procedure, rather than repeated uncorrected pairwise tests.
 At the repetition cap, an unresolved comparison is reported as inconclusive.
 
-The primary objective is the smallest **worst-variant upper 95% confidence
-bound of paired total time-loss increase**. Secondary evidence is median/
-mean paired time loss, per-day worst impact, throughput/access integrity,
-validated extra distance and affected vehicles. Queue/halting remains
-diagnostic. A unique winner is shown only when it is practically and
-statistically better under the robust objective. Otherwise return an honest
-tie set or `no clear winner`; return `no viable closure` if every schedule
-fails a hard gate.
+The frozen v1 primary objective is the smallest **worst-variant upper 95%
+confidence bound of paired total time-loss increase**. It remains available
+only for compatibility with evidence and policy identities produced under
+that contract.
+
+The provisional v2 primary objective is deterministic `closure_cost_v1`:
+field-wise worst added vehicle-hours across q10/q50/q90, followed
+lexicographically by added metres and affected vehicles. A vehicle with no
+legal detour disqualifies the schedule. Pilot and finalist stages must use the
+same explicit objective, and missing disruption evidence fails closed. Paired
+time loss, throughput/access integrity and queue/halting remain health or
+diagnostic evidence; they do not silently replace the v2 ranking key. An exact
+vehicle-hour tie may use the secondary keys, while a declared nonzero
+vehicle-hour equivalence band produces an honest practical tie.
+
+**Rolling multi-month period comparison, 2026-08-10.** The work-period API/UI
+now accepts a date interval spanning multiple months and compares rolling
+periods of up to 90 permitted workdays. A period may cross ISO-week and month
+boundaries; `rolling_period_v1` groups the compact response by candidate start
+date but preserves the exact winning schedule, end date and workday count.
+Rolling comparison always uses `exact_equal_daily_v1`: every selected workday
+has the same start and end time, and period lengths that cannot divide the
+requested work into equal 15-minute-aligned shifts are excluded. The balanced
+policy remains available only to explicit non-rolling internal workflows. This
+keeps allocation count bounded through 90 days; the older continuous model
+retains its 21-day ceiling.
+
+Every candidate is still evaluated by exact date-specific independent daily
+SUMO units and the v2 closure-cost objective. This is provisional analysis,
+not a new release claim: the golden-policy and untouched-heldout gates remain
+closed.
+
+**Scaling and validation implementation plan, 2026-08-10.** The next
+implementation sequence is specified in
+`docs/plans/CLOSURE_SEARCH_SCALING_AND_VALIDATION_PLAN_2026-08-10.md`. It
+freezes the measured 10,000-daily-unit limitation, adds an exact read-only
+preflight, replaces full parent/unit materialization with versioned streaming
+ledgers, moves deterministic disruption cost before SUMO, and proves a
+cost-ordered exact pilot scan against the current exhaustive result before
+activation. Persistent workers/libsumo are a later measured optimization;
+demand/work-zone calibration and independent-reset validation are separate
+evidence tracks. No existing policy, held-out record, or release claim is
+changed by the plan.
+
+**Objective-alignment benchmark checkpoint, 2026-08-10.** The pinned isolated
+v1 diagnostic for policy v2 completed on the original immutable golden archive
+in 318.18 s and resumed in 0.0 s with the identical result hash. Both pilot and
+final records name the closure-cost methods, and q10/q50/q90 disruption
+evidence is present. It is deliberately not a freeze benchmark: 06:00 and
+06:15 were cheaper on vehicle-hours but failed the teleport hard gate, leaving
+06:30 as the only viable schedule. The next benchmark must select cases by
+pre-outcome structural criteria that yield multiple health-viable candidates;
+only then can a nonzero equivalence tolerance be justified before the new
+untouched held-out campaign is frozen.
 
 ### Confidence, policy, and wording
 
@@ -2456,7 +2502,8 @@ candidate's exact intervals) so readers can map robust statistics to real
 dates without re-deriving the calendar.
 
 The web app gained the "Bästa arbetsperiod" workspace: edge picking reused
-from the closure flow, a date-range/daily-band/weekday/work-hours form,
+from the closure flow, a multi-month date-range/daily-band/weekday/work-hours
+form with rolling periods up to 90 workdays,
 start + poll with the workspace's own persisted phase shown live, cancel
 (kind=monthly, workspace stays resumable — the deterministic
 form-content-derived `search_id` means re-running the same search resumes

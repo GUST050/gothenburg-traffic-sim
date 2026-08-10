@@ -135,6 +135,47 @@ def test_daily_aggregation_sums_matched_pairs_before_decision():
         "independent-daily-baseline-")
 
 
+def test_daily_aggregation_sums_closure_cost_by_demand_variant():
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-02",
+    )
+    parent = next(
+        item for item in generate_closure_schedules(spec)
+        if item.day_count == 2 and item.daily_start == "15:00"
+    )
+    units, _ = decompose_schedules(spec, (parent,))
+    evidence = {}
+    for index, unit in enumerate(units, start=1):
+        records = tuple({
+            "demand_variant": variant,
+            "vehicles_affected": index,
+            "vehicles_no_detour": 0,
+            "added_vehicle_hours": index / 10,
+            "added_metres_total": index * 100,
+        } for variant in ("q10", "q50", "q90"))
+        evidence[unit.unit_id] = CandidateEvidence(
+            candidate_id=unit.schedule.schedule_id,
+            observations=(PairedObservation(
+                candidate_id=unit.schedule.schedule_id,
+                demand_variant="q10",
+                seed=1000,
+                baseline_time_loss_s=10,
+                candidate_time_loss_s=11,
+                matched_baseline_id=f"baseline-{index}",
+                provenance_key=f"provenance-{index}",
+            ),),
+            disruption=records,
+        )
+
+    combined = aggregate_daily_evidence(parent, units, evidence)
+
+    assert len(combined.disruption) == 3
+    assert combined.disruption[0]["demand_variant"] == "q10"
+    assert combined.disruption[0]["added_vehicle_hours"] == 0.3
+    assert combined.disruption[0]["added_metres_total"] == 300.0
+
+
 def test_runner_persists_daily_units_and_reuses_them_across_schedules(tmp_path):
     spec = _spec()
     schedules = [
@@ -607,6 +648,20 @@ def test_independent_exhaustive_search_is_ui_visible_without_proxy_claim(
         },
     )
     assert legacy_gate["global_best_claim_allowed"] is False
+
+    provisional = _claim_boundary(
+        {"proxy_version": "independent_daily_exhaustive_sumo_v1"},
+        "unique_winner",
+        heldout_gate={
+            "interday_policy": "independent_daily_reset_v1",
+            "heldout_set": "future-week-gate",
+        },
+        policy_status="provisional",
+        objective_method="closure_cost_v1",
+    )
+    assert provisional["ui_exposure_allowed"] is True
+    assert provisional["global_best_claim_allowed"] is False
+    assert "golden-frozen" in provisional["reason"]
 
 
 def test_server_routes_independent_search_to_exact_exhaustive_mode():

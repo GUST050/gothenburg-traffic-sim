@@ -264,6 +264,57 @@ def aggregate_daily_evidence(
             raise ValueError(
                 f"daily evidence variant/seed coverage differs for {unit_id}")
 
+    disruption_by_unit: list[dict[str, Mapping[str, Any]]] = []
+    disruption_presence: set[bool] = set()
+    for unit in units:
+        records = evidence_by_unit[unit.unit_id].disruption
+        disruption_presence.add(bool(records))
+        indexed_records: dict[str, Mapping[str, Any]] = {}
+        for record in records:
+            variant = str(record.get("demand_variant", ""))
+            if variant not in DEMAND_VARIANTS or variant in indexed_records:
+                raise ValueError(
+                    "daily disruption evidence must contain one unique record "
+                    "for each q10/q50/q90 variant"
+                )
+            indexed_records[variant] = record
+        if records and set(indexed_records) != set(DEMAND_VARIANTS):
+            raise ValueError(
+                "daily disruption evidence lacks q10/q50/q90 coverage"
+            )
+        disruption_by_unit.append(indexed_records)
+    if len(disruption_presence) > 1:
+        raise ValueError(
+            "daily disruption evidence is present for only part of a schedule"
+        )
+
+    combined_disruption: list[Mapping[str, Any]] = []
+    if disruption_presence == {True}:
+        for variant in DEMAND_VARIANTS:
+            records = [item[variant] for item in disruption_by_unit]
+            combined_disruption.append({
+                "demand_variant": variant,
+                "vehicles_affected": sum(
+                    int(item["vehicles_affected"]) for item in records
+                ),
+                "vehicles_considered": sum(
+                    int(item.get("vehicles_considered", 0)) for item in records
+                ),
+                "vehicles_no_detour": sum(
+                    int(item["vehicles_no_detour"]) for item in records
+                ),
+                "added_vehicle_hours": round(sum(
+                    float(item["added_vehicle_hours"]) for item in records
+                ), 4),
+                "added_metres_total": round(sum(
+                    float(item["added_metres_total"]) for item in records
+                ), 1),
+                "basis": (
+                    "sum of independent daily calibrated-route closure costs"
+                ),
+                "reduction": "sum across independent daily reset units",
+            })
+
     combined: list[PairedObservation] = []
     for variant, seed in sorted(
         expected,
@@ -293,6 +344,7 @@ def aggregate_daily_evidence(
         candidate_id=parent.schedule_id,
         observations=tuple(combined),
         hard_failures=tuple(sorted(failures)),
+        disruption=tuple(combined_disruption),
     )
 
 
@@ -303,6 +355,7 @@ def _evidence_to_dict(evidence: CandidateEvidence) -> dict[str, Any]:
         "candidate_id": evidence.candidate_id,
         "observations": [dataclasses.asdict(item) for item in evidence.observations],
         "hard_failures": list(evidence.hard_failures),
+        "disruption": [dict(item) for item in evidence.disruption],
     }
 
 
@@ -314,6 +367,7 @@ def _evidence_from_dict(raw: Mapping[str, Any]) -> CandidateEvidence:
             for item in raw.get("observations", ())
         ),
         hard_failures=tuple(str(item) for item in raw.get("hard_failures", ())),
+        disruption=tuple(dict(item) for item in raw.get("disruption", ())),
     )
 
 
@@ -668,6 +722,7 @@ class IndependentDailyRunner:
                     provenance_key=item.provenance_key,
                 ) for item in stored.observations),
                 hard_failures=stored.hard_failures,
+                disruption=stored.disruption,
             )
             self._memory_evidence[unit.unit_id] = rebound
             return rebound
@@ -699,6 +754,7 @@ class IndependentDailyRunner:
                 provenance_key=item.provenance_key,
             ) for item in evidence.observations),
             hard_failures=evidence.hard_failures,
+            disruption=evidence.disruption,
         )
         payload = {
             "schema": CACHE_SCHEMA,
@@ -751,6 +807,7 @@ class IndependentDailyRunner:
             candidate_id=evidence.candidate_id,
             observations=tuple(selected),
             hard_failures=evidence.hard_failures,
+            disruption=evidence.disruption,
         )
 
     def run_candidate(

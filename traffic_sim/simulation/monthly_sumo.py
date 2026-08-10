@@ -464,6 +464,7 @@ class ArchivedDemandSumoRunner:
         seed_workers: int = 1,
         envelope_policy: EnvelopePolicy = EnvelopePolicy(),
         expected_demand_spec: DemandBuildSpec | None = None,
+        include_disruption: bool = False,
         warm_execution: bool = False,
         sumo_invoker=None,
         boundary_controller=None,
@@ -572,6 +573,9 @@ class ArchivedDemandSumoRunner:
             raise ValueError("study_provenance_key must be non-empty")
         if warm_execution is not False and warm_execution is not True:
             raise ValueError("warm_execution must be a bool")
+        if include_disruption is not False and include_disruption is not True:
+            raise ValueError("include_disruption must be a bool")
+        self.include_disruption = bool(include_disruption)
         # DEFAULT-OFF. Revision 1 exposes this only to the paired validation
         # harness; product, API and monthly-search paths never set it, so the
         # warm branch is unreachable in ordinary operation even if a cache
@@ -619,6 +623,13 @@ class ArchivedDemandSumoRunner:
         self.close_edges = list(self.spec.directed_edges)
         self.adjacency = rs.build_edge_graph(set(self.close_edges))
         self.freeflow = rs.edge_freeflow_times()
+        self._disruption_cache: dict[str, tuple[Mapping[str, Any], ...]] = {}
+        if self.include_disruption:
+            self._disruption_adjacency = rs.build_edge_graph(set())
+            (
+                self._disruption_edge_time,
+                self._disruption_edge_len,
+            ) = rs.free_flow_edge_cost()
         self.rerouter_edges = rs.edges_near(
             self.close_edges,
             rs.REROUTER_RADIUS_M,
@@ -689,6 +700,14 @@ class ArchivedDemandSumoRunner:
             (
                 "traffic_sim/simulation/pilot_selection.py",
                 Path("traffic_sim/simulation/pilot_selection.py"),
+            ),
+            (
+                "traffic_sim/simulation/closure_ranking.py",
+                Path("traffic_sim/simulation/closure_ranking.py"),
+            ),
+            (
+                "traffic_sim/simulation/period_comparison.py",
+                Path("traffic_sim/simulation/period_comparison.py"),
             ),
             (
                 "traffic_sim/simulation/finalist_decision.py",
@@ -766,6 +785,11 @@ class ArchivedDemandSumoRunner:
             "simulation_source_digest": self.simulation_source_digest,
             "baseline_trip_duration_p99_s": (
                 self.baseline_trip_duration_p99_s
+            ),
+            "ranking_objective_evidence": (
+                "closure_cost_v1"
+                if self.include_disruption
+                else "legacy_time_loss_v1"
             ),
             "envelope_policy": dataclasses.asdict(self.envelope_policy),
             **self.runtime_identity,
@@ -929,6 +953,36 @@ class ArchivedDemandSumoRunner:
                     "end_s": end,
                 })
         return closures
+
+    def _closure_disruption(
+        self,
+        schedule: ClosureSchedule,
+    ) -> tuple[Mapping[str, Any], ...]:
+        """Return deterministic per-variant detour evidence for a schedule."""
+        if not self.include_disruption:
+            return ()
+        cached = self._disruption_cache.get(schedule.schedule_id)
+        if cached is not None:
+            return cached
+        closures = self._closure_seconds(schedule)
+        reports: list[Mapping[str, Any]] = []
+        for variant in DEMAND_VARIANTS:
+            report = rs.closure_disruption(
+                self.variants[variant],
+                set(self.close_edges),
+                closures,
+                self._disruption_edge_time,
+                self._disruption_edge_len,
+                adj=self._disruption_adjacency,
+            )
+            if report is None:
+                raise ValueError(
+                    f"closure disruption is unavailable for {variant}"
+                )
+            reports.append({"demand_variant": variant, **report})
+        result = tuple(reports)
+        self._disruption_cache[schedule.schedule_id] = result
+        return result
 
     def warm_interpreting_sources(self) -> dict:
         """Sources whose bytes change how a warm state or prefix is READ."""
@@ -1936,11 +1990,17 @@ class ArchivedDemandSumoRunner:
             raise ValueError("schedule does not belong to SUMO runner search")
         observations = list(existing.observations if existing is not None else ())
         failures = set(existing.hard_failures if existing is not None else ())
+        disruption = (
+            existing.disruption
+            if existing is not None and existing.disruption
+            else self._closure_disruption(schedule)
+        )
         if failures:
             return CandidateEvidence(
                 candidate_id=schedule.schedule_id,
                 observations=tuple(observations),
                 hard_failures=tuple(sorted(failures)),
+                disruption=disruption,
             )
         seen = {
             (item.demand_variant, item.seed) for item in observations
@@ -1979,4 +2039,5 @@ class ArchivedDemandSumoRunner:
             candidate_id=schedule.schedule_id,
             observations=tuple(observations),
             hard_failures=tuple(sorted(failures)),
+            disruption=disruption,
         )

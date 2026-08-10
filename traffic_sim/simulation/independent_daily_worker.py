@@ -71,6 +71,7 @@ def execute_request(raw: Mapping[str, Any]) -> dict[str, Any]:
         expected_demand_spec=DemandBuildSpec.from_dict(
             execution["expected_demand_spec"]
         ),
+        include_disruption=execution.get("include_disruption") is True,
         warm_execution=warm_execution,
         boundary_controller=(WarmPrefixController() if warm_execution else None),
     )

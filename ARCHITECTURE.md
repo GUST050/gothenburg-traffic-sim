@@ -1017,7 +1017,12 @@ The existing single-day closure-time entrypoint now exercises the safe
 decision seam end to end. `suggest_closure_time.py` uses one matched
 q50/q10/q90 pilot replication per candidate, applies all closure-integrity
 gates before finalist selection, and gives retained finalists four matched
-replications per variant (12 runs) for the simultaneous-bound decision.
+replications per variant (12 runs) for health/integrity evidence. Pilot and
+final ranking use the same deterministic closure-cost objective: field-wise
+worst added vehicle-hours across q10/q50/q90, then added metres and affected
+vehicles as exact lexicographic tie-breakers; any no-detour vehicle
+disqualifies the schedule. Missing objective evidence fails closed rather
+than falling back to sampled time loss.
 `serve.py` rejects old three-seed or non-canonical structured requests, and
 the web UI distinguishes a robust finalist winner, a practical tie,
 inconclusive evidence and no viable closure.  A real Gothenburg/SUMO 1.27.1
@@ -1056,6 +1061,25 @@ monthly-proxy section above), so global-best and UI exposure remain FALSE.
 They can open only once a future campaign's record is adopted together with a
 post-review adoption certificate, and then only for SUMO-verified schedules
 within the enumerated search space.
+
+The objective-alignment migration is explicit and does not rewrite that v1
+golden identity. `validation/monthly_search_policy_v2.json` is provisional and
+binds `closure_cost_v1`. The monthly SUMO backend emits one deterministic
+disruption record per demand variant; independent-day execution preserves the
+records through worker/cache serialization and sums them per variant before
+ranking a multi-day parent. Both pilot selection and finalist decision receive
+the policy's same `objective_method`. The v1 policy remains the legacy
+time-loss path until v2 receives a named benchmark and new validation evidence;
+the production/UI gate is therefore unchanged.
+
+`validation/monthly_search_v2_benchmark_v1.json` records the first isolated
+v2 execution checkpoint. Its tracked plan pins the original golden spec,
+policy, archive routes, network and runner by SHA-256; the runner bypasses the
+mutable demand resolver and writes only to a dedicated cold/serial search and
+cache root. The run completed in 318.18 s, produced a unique 06:30–10:30 result
+and reloaded byte-identically. This is diagnostic, not a policy freeze: the two
+lower-cost windows failed the teleport hard gate, so only one candidate was
+viable and no practical-equivalence tolerance could be calibrated.
 
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
@@ -1221,8 +1245,25 @@ seven 5 h 30 min days; all legal placements are enumerated and overshoot is
 zero. Its sequence uses consecutive eligible work dates, so deselected
 weekends and explicit blackout dates are skipped rather than making an
 eight-to-ten-workday schedule impossible. The exact selected dates are bound
-into the schedule ID. The web work-period tool selects this policy and caps
-work days at ten.
+into the schedule ID. That balanced policy remains available to explicit
+non-rolling internal workflows. The web rolling-period tool instead always
+uses `exact_equal_daily_v1`: requested work must divide into identical
+15-minute-aligned daily shifts, so every selected workday has the same start
+and end time. `permitted_daily_band` is a containing search window, not the
+chosen closure itself: a 07:30–15:15 candidate is legal inside 06:00–18:00.
+This also bounds allocation growth. Independent-day rolling
+searches are capped at 90 workdays; continuous searches retain the validated
+21-day ceiling.
+
+`rolling_period_v1` is the opt-in long-range comparison contract. It does not
+mean calendar week: every legal schedule is a rolling period and may cross
+week, month, or year boundaries. The result keeps one compact best viable
+schedule per start date, with its exact end date and workday count, while the
+workspace retains the full schedule/evidence ledger. The browser can therefore
+search across several months and compare periods from a few days through 90
+workdays without forcing them into an ISO week. Ranking uses provisional v2's
+same `closure_cost_v1` pilot/final objective; analysis is UI-visible but cannot
+open the global-best release claim while that policy remains provisional.
 
 Daily evidence is content-addressed by simulation-affecting unit and child
 backend identity, not by parent search ID, month range or total-work label.

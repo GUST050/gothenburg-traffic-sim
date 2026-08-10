@@ -1155,6 +1155,7 @@
         const monthlyFullday    = document.getElementById('monthly-fullday');
         const monthlyWorkHours  = document.getElementById('monthly-work-hours');
         const monthlyMaxDays    = document.getElementById('monthly-max-days');
+        const monthlyPeriodMode = document.getElementById('monthly-period-mode');
         const monthlyWeekdays   = document.getElementById('monthly-weekdays');
         const monthlyProgress   = document.getElementById('monthly-progress-hint');
         const btnMonthlyRun     = document.getElementById('monthly-run-btn');
@@ -1163,6 +1164,9 @@
         const monthlyResultsTitle = document.getElementById('monthly-results-title');
         const monthlyResultsMeta  = document.getElementById('monthly-results-meta');
         const monthlyResultsBody  = document.getElementById('monthly-results-tbody');
+        const monthlyColPeriod    = document.getElementById('monthly-col-period');
+        const monthlyColPrimary   = document.getElementById('monthly-col-primary');
+        const monthlyColSecondary = document.getElementById('monthly-col-secondary');
         const btnMonthlyResultsClose = document.getElementById('monthly-results-close');
         let monthlyJobRunning = false;
 
@@ -2003,7 +2007,7 @@
             required_work_minutes:
               Math.round((Number(monthlyWorkHours.value) || 4) * 60),
             max_consecutive_start_days:
-              Math.min(10, Math.max(1, Number(monthlyMaxDays.value) || 1)),
+              Math.min(90, Math.max(1, Number(monthlyMaxDays.value) || 1)),
             // "Heldag" gives the true full-day band 00:00–24:00 (the
             // contract accepts 24:00 only as latest_end, which a
             // type="time" input cannot express).
@@ -2019,14 +2023,20 @@
             closure_type: 'full',
             duration_basis: 'required_work_time',
             work_to_closure_assumption: 'one_to_one',
-            objective_profile: 'robust_time_loss',
+            objective_profile: monthlyPeriodMode.checked
+              ? 'closure_cost_v1' : 'robust_time_loss',
             policy_status: 'user_supplied_unverified',
             // Long searches are evaluated as exact date-specific daily SUMO
             // units. Traffic is reset between work days (the explicit fast
             // approximation), while every day's downloaded demand, road,
             // closure, variant and seed identity remains distinct.
             interday_policy: 'independent_daily_reset_v1',
-            work_allocation_policy: 'exact_balanced_daily_v1',
+            // Recurring road work uses the exact same start and end time on
+            // every selected workday. Period lengths that cannot divide the
+            // requested work into equal 15-minute shifts are not candidates.
+            work_allocation_policy: 'exact_equal_daily_v1',
+            period_comparison_policy: monthlyPeriodMode.checked
+              ? 'rolling_period_v1' : 'none_v1',
           };
           const key = monthlyStableKey(JSON.stringify(body));
           return {
@@ -2072,14 +2082,27 @@
           lastMonthlyResult = result;
           lastMonthlySpec = result.closure_search_spec || lastMonthlySpec;
           const screening = result.screening || {};
+          const periodComparison = result.period_comparison;
           monthlyResultsTitle.textContent =
-            `Bästa arbetsperiod · ${screening.candidate_count ?? '?'} lagliga ` +
-            `scheman · ${screening.shortlist_count ?? '?'} SUMO-verifierade`;
+            periodComparison
+              ? `Bästa period · ${periodComparison.start_date_count} startdatum · ` +
+                `${periodComparison.evaluated_count} SUMO-verifierade scheman`
+              : `Bästa arbetsperiod · ${screening.candidate_count ?? '?'} lagliga ` +
+                `scheman · ${screening.shortlist_count ?? '?'} SUMO-verifierade`;
 
           const metaLines = [];
           const boundary = result.claim_boundary || {};
           const winner = (result.selected_schedules || [])
             .find(s => s.schedule_id === result.winner_id);
+          if (periodComparison) {
+            monthlyColPeriod.textContent = 'Period';
+            monthlyColPrimary.textContent = 'Ford.timmar (värsta variant)';
+            monthlyColSecondary.textContent = 'Extra km';
+          } else {
+            monthlyColPeriod.textContent = 'Schema';
+            monthlyColPrimary.textContent = 'ΔTid p50 (värsta variant)';
+            monthlyColSecondary.textContent = 'Övre 95 %';
+          }
           if (!boundary.ui_exposure_allowed) {
             metaLines.push('<span class="monthly-warn">Resultatet får inte visas ' +
               'som rekommendation: ' + (boundary.reason || 'okänd orsak') + '</span>');
@@ -2098,13 +2121,33 @@
               'resultatet är statistiskt oavgjort eller pilotgrinden kunde ' +
               'inte gå vidare.</span>');
           }
-          metaLines.push('Varje kandidat körs parat mot sin egen baslinje i ' +
-            'SUMO över q10/q50/q90-varianterna; poängen är den värsta ' +
-            'variantens övre 95 %-gräns för total förlorad restid.');
+          metaLines.push(periodComparison
+            ? 'Alla rullande perioder jämförs med samma closure-cost-mått: värsta ' +
+              'tillagda fordonstimmar över q10/q50/q90, sedan extra sträcka ' +
+              'och antal berörda fordon. Optimeringen väljer samma dagliga ' +
+              'start/slut i 15-minuterssteg inom det tillåtna tidsfönstret. ' +
+              'Perioder får korsa vecko- och månadsgränser.'
+            : 'Varje kandidat körs parat mot sin egen baslinje i SUMO över ' +
+              'q10/q50/q90-varianterna.');
+          if (periodComparison) {
+            metaLines.push('Samma tider varje dag: en period tas med när den ' +
+              'totala arbetstiden kan delas exakt i lika långa 15-minuterspass ' +
+              'per arbetsdag. Maxgränsen är 90 arbetsdagar.');
+          }
+          if (result.policy_status === 'provisional') {
+            metaLines.push('<span class="monthly-warn">Periodanalysen använder ' +
+              'den preliminära v2-policyn. Resultatet är beslutsstöd, inte en ' +
+              'releasegodkänd global rekommendation.</span>');
+          }
+          if (periodComparison && !periodComparison.comparison_complete) {
+            metaLines.push('<span class="monthly-warn">Periodjämförelsen är ' +
+              'inte komplett; minst ett schema saknar tillgängligt eller ' +
+              'färdigt underlag.</span>');
+          }
           if (!boundary.global_best_claim_allowed) {
             metaLines.push('<span class="monthly-warn">Gäller de uppräknade ' +
-              'kandidaterna — grinden för påståendet “globalt bäst för en hel ' +
-              'månad” är ännu inte godkänd.</span>');
+              'kandidaterna — grinden för påståendet “globalt bäst över hela ' +
+              'sökintervallet” är ännu inte godkänd.</span>');
           }
           monthlyResultsMeta.innerHTML = metaLines.join('<br>');
 
@@ -2112,8 +2155,7 @@
             ((result.robust_decision || {}).candidates || [])
               .map(c => [c.candidate_id, c]));
           const tieIds = new Set(result.tie_ids || []);
-          monthlyResultsBody.replaceChildren(
-            ...(result.shortlisted_schedules || []).map(schedule => {
+          const scheduleRows = () => (result.shortlisted_schedules || []).map(schedule => {
               const stats = statsById[schedule.schedule_id];
               const tr = document.createElement('tr');
               const failed = stats?.hard_failures?.length;
@@ -2161,7 +2203,43 @@
 
               tr.append(schedTd, deltaTd, upperTd, statusTd, loadTd);
               return tr;
-            }));
+            });
+          const periodRows = () => (periodComparison?.periods || []).map(period => {
+            const tr = document.createElement('tr');
+            if (period.status === 'no_viable') tr.classList.add('disqualified');
+            const periodTd = document.createElement('td');
+            periodTd.textContent = period.best_schedule
+              ? scheduleLabel(period.best_schedule)
+              : `Start ${period.start_date}`;
+            const hoursTd = document.createElement('td');
+            hoursTd.textContent = period.best_cost
+              ? Number(period.best_cost.added_vehicle_hours).toFixed(4) : '–';
+            const distanceTd = document.createElement('td');
+            distanceTd.textContent = period.best_cost
+              ? (Number(period.best_cost.added_metres_total) / 1000).toFixed(1) : '–';
+            const statusTd = document.createElement('td');
+            statusTd.textContent = period.status === 'best_period' ? 'Bästa perioden'
+              : period.status === 'tied_best_period' ? 'Likvärdig bäst'
+              : period.status === 'viable' ? `${period.viable_count} giltiga`
+              : period.status === 'no_viable' ? 'Ingen giltig'
+              : 'Ofullständig';
+            const loadTd = document.createElement('td');
+            const loadBtn = document.createElement('button');
+            loadBtn.className = 'sr-load-btn';
+            loadBtn.textContent = 'Ladda';
+            loadBtn.disabled = !period.best_schedule ||
+              !boundary.ui_exposure_allowed;
+            if (period.best_schedule) {
+              loadBtn.title = `Ladda periodens bästa: ${scheduleLabel(period.best_schedule)}`;
+              loadBtn.addEventListener('click', () =>
+                loadMonthlySchedule(period.best_schedule, loadBtn));
+            }
+            loadTd.appendChild(loadBtn);
+            tr.append(periodTd, hoursTd, distanceTd, statusTd, loadTd);
+            return tr;
+          });
+          monthlyResultsBody.replaceChildren(
+            ...(periodComparison ? periodRows() : scheduleRows()));
           monthlyResults.classList.add('show');
         }
 

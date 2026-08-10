@@ -569,6 +569,36 @@ class TestMonthlySearch:
             json.loads(serve.MONTHLY_POLICY_PATH.read_text()))
         assert policy.status == "golden_frozen"
 
+    def test_rolling_period_mode_uses_provisional_closure_cost_policy(
+            self, base_url, monkeypatch):
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen["cmd"] = cmd
+            return FakeCompletedProcess(returncode=1, stderr="stopped")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        spec = _closure_search_spec("rolling-period-api")
+        spec.update({
+            "interday_policy": "independent_daily_reset_v1",
+            "work_allocation_policy": "exact_equal_daily_v1",
+            "period_comparison_policy": "rolling_period_v1",
+            "objective_profile": "closure_cost_v1",
+            "max_consecutive_start_days": 30,
+        })
+        status, _ = post_json(
+            f"{base_url}/api/monthly_search",
+            payload={"closure_search_spec": spec})
+        assert status == 202
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/monthly_search/status")[1]["status"] == "error")
+        cmd = seen["cmd"]
+        assert str(serve.MONTHLY_PERIOD_ANALYSIS_POLICY_PATH.resolve()) in cmd
+        assert cmd[cmd.index("--screening-mode") + 1] == (
+            "independent-exhaustive"
+        )
+        assert not serve._sim_lock.locked()
+
     def test_lifecycle_progress_then_curated_result(self, base_url, monkeypatch):
         sid = "monthly-api-test"
         expected_spec = serve.ClosureSearchSpec.from_dict(

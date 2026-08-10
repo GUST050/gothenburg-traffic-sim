@@ -420,6 +420,9 @@ def main() -> None:
             ),
             "study_provenance_key": study_key,
             "seed_workers": args.seed_workers,
+            "include_disruption": (
+                policy.objective_method == "closure_cost_v1"
+            ),
         }
         if args.warm_execution:
             # Construction is process-free. TraCI is resolved and SUMO starts

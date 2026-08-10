@@ -260,16 +260,28 @@ def _finalist_disruption(variants, close_edges, closures):
     """Per-variant closure cost for finalist ranking, or () if unavailable.
 
     Deterministic and demand-side, so it adds no simulation. Returns an empty
-    tuple rather than raising: a candidate with no disruption evidence keeps
-    the legacy time-loss key instead of ranking as costless.
+    tuple when unavailable; the explicit closure-cost selector then fails
+    closed rather than ranking the candidate as costless.
     """
     try:
-        report = rs.closure_disruption_across_variants(
-            list(variants), set(close_edges), list(closures or []),
-            *rs.free_flow_edge_cost(), adj=rs.build_edge_graph(set()))
+        edge_time, edge_len = rs.free_flow_edge_cost()
+        adjacency = rs.build_edge_graph(set())
+        reports = []
+        for label, path in zip(ROBUST_VARIANT_LABELS, variants):
+            report = rs.closure_disruption(
+                path,
+                set(close_edges),
+                list(closures or []),
+                edge_time,
+                edge_len,
+                adj=adjacency,
+            )
+            if report is None:
+                return ()
+            reports.append({"demand_variant": label, **report})
     except Exception:
         return ()
-    return (report,) if report is not None else ()
+    return tuple(reports)
 
 
 def rank_candidates(scored: list[dict]) -> list[dict]:
@@ -907,6 +919,9 @@ def main() -> None:
                 "pilot_replications": pilot_records,
                 "pilot_comparison": dataclasses.asdict(comparison),
                 "pilot_feasibility": feasibility,
+                "disruption": _finalist_disruption(
+                    variants, args.edge, closures
+                ),
                 "evidence_level": "meso_pilot",
             })
 
@@ -924,6 +939,7 @@ def main() -> None:
                 matched_baseline_id=pilot_baseline_id,
                 provenance_key=provenance_key,
                 hard_failures=item["feasibility"]["hard_failures"],
+                disruption=item["disruption"],
             )
             for item in simulated
         ]
@@ -936,6 +952,7 @@ def main() -> None:
         pilot_selection = select_pilot_finalists(
             pilot_evidence,
             pilot_policy,
+            ranking_objective="closure_cost_v1",
         )
         print(
             f"  pilot status={pilot_selection.status}; "
@@ -1060,8 +1077,7 @@ def main() -> None:
                         # delta_time_loss key, which on this network is noise
                         # (a real closure gave +0.050 s and -0.100 s per arm;
                         # congestion feedback converged at 0.0% change).
-                        disruption=_finalist_disruption(
-                            variants, args.edge, closures),
+                        disruption=item["disruption"],
                     )
                 )
             robust_decision = decide_finalists(
@@ -1074,6 +1090,7 @@ def main() -> None:
                     initial_repetitions=4,
                     max_repetitions=args.seeds // 3,
                 ),
+                ranking_objective="closure_cost_v1",
             )
             print(f"  robust decision={robust_decision.status}")
 

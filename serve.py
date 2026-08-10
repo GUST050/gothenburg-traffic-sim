@@ -199,6 +199,9 @@ OPTIMIZE_SIGNAL_CONDITIONS = SIGNAL_CONDITION_COUNT
 # golden artifact — the API never accepts tolerances from the client, so a
 # browser cannot vary what was frozen against the golden benchmark.
 MONTHLY_POLICY_PATH = ROOT / "validation" / "monthly_search_policy_v1.json"
+MONTHLY_PERIOD_ANALYSIS_POLICY_PATH = (
+    ROOT / "validation" / "monthly_search_policy_v2.json"
+)
 MONTHLY_SEARCH_ROOT = ROOT / "runs" / "closure-search"
 CLOSURE_SEARCH_SPEC_DIR = ROOT / "runs" / "closure_search_specs"
 # Frozen with the golden monthly benchmark (its workspace's backend
@@ -1054,8 +1057,14 @@ def summarize_monthly_search(result: dict) -> dict:
         "shortlisted_schedules": result.get("shortlisted_schedules", []),
         "screening": result.get("screening", {}),
         "robust_decision": result.get("robust_decision"),
+        "pilot_selection": result.get("pilot_selection"),
+        "period_comparison": result.get("period_comparison"),
         "policy_id": policy.get("policy_id"),
         "policy_benchmark_id": policy.get("benchmark_id"),
+        "policy_status": policy.get("status"),
+        "objective_method": policy.get(
+            "objective_method", "legacy_time_loss_v1"
+        ),
         "simulation_backend": {
             key: backend.get(key)
             for key in ("kind", "simulation_mode", "sumo_version",
@@ -2017,14 +2026,28 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._require_supported_closure_edges(
                 list(spec.directed_edges)):
             return
+        period_analysis = (
+            spec.period_comparison_policy == "rolling_period_v1"
+        )
+        policy_path = (
+            MONTHLY_PERIOD_ANALYSIS_POLICY_PATH
+            if period_analysis
+            else MONTHLY_POLICY_PATH
+        )
         try:
             policy = MonthlySearchPolicy.from_dict(
-                json.loads(MONTHLY_POLICY_PATH.read_text(encoding="utf-8")))
+                json.loads(policy_path.read_text(encoding="utf-8")))
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             return self._json(500, {"error":
-                "den frusna månadspolicyn kunde inte läsas — se serverloggen",
+                "månadspolicyn kunde inte läsas — se serverloggen",
                 "detail": str(exc)[:200]})
-        if policy.status != "golden_frozen":
+        if period_analysis and (
+            policy.objective_method != "closure_cost_v1"
+            or policy.status not in {"provisional", "golden_frozen"}
+        ):
+            return self._json(500, {"error":
+                "periodjämförelsen saknar en giltig closure_cost_v1-policy"})
+        if not period_analysis and policy.status != "golden_frozen":
             return self._json(500, {"error":
                 "månadspolicyn är inte golden_frozen — sökning vägras"})
 
@@ -2039,6 +2062,8 @@ class Handler(SimpleHTTPRequestHandler):
                                   search_id=spec.search_id,
                                   search_content_key=spec.content_key,
                                   policy_id=policy.policy_id,
+                                  policy_status=policy.status,
+                                  objective_method=policy.objective_method,
                                   edges=list(spec.directed_edges),
                                   closure_search_spec=spec.to_dict(),
                                   started_at=time.time())
@@ -2047,7 +2072,8 @@ class Handler(SimpleHTTPRequestHandler):
             "search_content_key": spec.content_key,
             "closure_search_spec": spec.to_dict(),
         })
-        threading.Thread(target=self._run_monthly_search, args=(spec,),
+        threading.Thread(target=self._run_monthly_search,
+                         args=(spec, policy_path),
                          daemon=True).start()
         return self._json(202, {"status": "started",
                                 "search_id": spec.search_id})
@@ -2057,7 +2083,11 @@ class Handler(SimpleHTTPRequestHandler):
         with _monthly_lock:
             _monthly_state.update(**kw)
 
-    def _run_monthly_search(self, spec: ClosureSearchSpec) -> None:
+    def _run_monthly_search(
+        self,
+        spec: ClosureSearchSpec,
+        policy_path: Path,
+    ) -> None:
         try:
             CLOSURE_SEARCH_SPEC_DIR.mkdir(parents=True, exist_ok=True)
             spec_path = CLOSURE_SEARCH_SPEC_DIR / (
@@ -2066,7 +2096,7 @@ class Handler(SimpleHTTPRequestHandler):
             write_closure_search_spec(spec_path, spec)
             cmd = [sys.executable, "run_monthly_closure_search.py",
                    "--spec", str(spec_path.resolve()),
-                   "--policy", str(MONTHLY_POLICY_PATH.resolve()),
+                   "--policy", str(policy_path.resolve()),
                    "--baseline-trip-duration-p99-s",
                    str(MONTHLY_BASELINE_TRIP_P99_S)]
             # Screening mode follows the ADOPTED held-out gate (record +

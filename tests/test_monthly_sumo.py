@@ -129,6 +129,42 @@ def test_archive_identity_and_envelope_are_validated(
     )
 
 
+def test_objective_aligned_runner_emits_per_variant_disruption(
+        tmp_path, patched_runtime, monkeypatch):
+    monkeypatch.setattr(
+        monthly_sumo.rs, "free_flow_edge_cost", lambda: ({}, {})
+    )
+    monkeypatch.setattr(
+        monthly_sumo.rs,
+        "closure_disruption",
+        lambda path, *args, **kwargs: {
+            "vehicles_affected": 2,
+            "vehicles_no_detour": 0,
+            "added_vehicle_hours": 0.5,
+            "added_metres_total": 100.0,
+        },
+    )
+    runner = ArchivedDemandSumoRunner(
+        _spec(),
+        archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+        include_disruption=True,
+    )
+
+    records = runner._closure_disruption(
+        generate_closure_schedules(_spec())[0]
+    )
+
+    assert tuple(item["demand_variant"] for item in records) == (
+        "q10", "q50", "q90"
+    )
+    assert runner.provenance()["ranking_objective_evidence"] == (
+        "closure_cost_v1"
+    )
+
+
 def test_archive_calibrated_on_another_network_is_rejected(
         tmp_path, patched_runtime):
     archive = _archive(tmp_path)

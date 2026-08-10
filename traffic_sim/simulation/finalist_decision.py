@@ -19,7 +19,7 @@ exactly which candidate/variant pairs still need matched repetitions.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import math
 from statistics import mean, median, stdev
 from typing import Any, Mapping, Sequence
@@ -29,6 +29,12 @@ from scipy.stats import t as student_t
 
 SCHEMA_VERSION = 1
 DECISION_METHOD = "paired_worst_variant_ucb_v1"
+CLOSURE_COST_DECISION_METHOD = "deterministic_worst_variant_closure_cost_v1"
+RANKING_OBJECTIVES = frozenset({
+    "auto",
+    "legacy_time_loss_v1",
+    "closure_cost_v1",
+})
 DEMAND_VARIANTS = ("q10", "q50", "q90")
 _DECISION_STATUSES = frozenset(
     {"unique_winner", "tie", "inconclusive", "no_viable"}
@@ -81,6 +87,13 @@ class FinalistPolicy:
             raise ValueError("absolute_precision_floor_s must be above zero")
         if _finite(self.practical_equivalence_s, "practical_equivalence_s") < 0:
             raise ValueError("practical_equivalence_s cannot be negative")
+        if _finite(
+            self.practical_equivalence_vehicle_hours,
+            "practical_equivalence_vehicle_hours",
+        ) < 0:
+            raise ValueError(
+                "practical_equivalence_vehicle_hours cannot be negative"
+            )
         if (
             isinstance(self.initial_repetitions, bool)
             or self.initial_repetitions < 2
@@ -632,14 +645,36 @@ def _next_runs(
 def decide_finalists(
     evidence: Sequence[CandidateEvidence],
     policy: FinalistPolicy,
+    *,
+    ranking_objective: str = "auto",
 ) -> DecisionResult:
     """Return the robust mesoscopic decision without guessing through gaps."""
     if not evidence:
         raise ValueError("at least one candidate is required")
+    if ranking_objective not in RANKING_OBJECTIVES:
+        raise ValueError(
+            f"ranking_objective must be one of {sorted(RANKING_OBJECTIVES)}"
+        )
     ids = [candidate.candidate_id for candidate in evidence]
     if len(ids) != len(set(ids)):
         raise ValueError("candidate IDs must be unique")
     eligible = [candidate for candidate in evidence if candidate.eligible]
+    declared_method = (
+        CLOSURE_COST_DECISION_METHOD
+        if ranking_objective == "closure_cost_v1"
+        else DECISION_METHOD
+    )
+    if ranking_objective == "closure_cost_v1":
+        missing = sorted(
+            candidate.candidate_id
+            for candidate in eligible
+            if not candidate.disruption
+        )
+        if missing:
+            raise ValueError(
+                "closure_cost_v1 requires disruption evidence for every "
+                f"viable candidate: missing={missing}"
+            )
     comparisons = max(1, len(eligible) * len(policy.variants))
     _cross_candidate_provenance(evidence, policy)
     statistics = tuple(
@@ -662,6 +697,7 @@ def decide_finalists(
             policy=policy,
             confidence_level=policy.confidence_level,
             simultaneous_comparisons=comparisons,
+            method=declared_method,
         )
 
     requests = _next_runs(viable, policy)
@@ -679,6 +715,7 @@ def decide_finalists(
             policy=policy,
             confidence_level=policy.confidence_level,
             simultaneous_comparisons=comparisons,
+            method=declared_method,
         )
 
     # RANKING OBJECTIVE. When every viable candidate carries disruption
@@ -689,10 +726,40 @@ def decide_finalists(
     # a score hides it. Mixed or absent evidence falls back to the legacy
     # time-loss bound so pre-objective campaigns still decide.
     costed = [c for c in viable if c.closure_cost is not None]
-    if costed and len(costed) == len(viable):
+    use_closure_cost = (
+        ranking_objective == "closure_cost_v1"
+        or (ranking_objective == "auto" and costed and len(costed) == len(viable))
+    )
+    if ranking_objective == "closure_cost_v1" and len(costed) != len(viable):
+        missing = sorted(
+            candidate.candidate_id
+            for candidate in viable
+            if candidate.closure_cost is None
+        )
+        raise ValueError(
+            "closure_cost_v1 requires disruption evidence for every viable "
+            f"candidate: missing={missing}"
+        )
+    decision_method = (
+        CLOSURE_COST_DECISION_METHOD if use_closure_cost else DECISION_METHOD
+    )
+    if use_closure_cost:
         ordered, refused = rank_closures(c.closure_cost for c in costed)
         by_id = {c.candidate_id: c for c in costed}
         refused_ids = {c.candidate_id for c in refused}
+        statistics = tuple(
+            replace(
+                candidate,
+                eligible=False,
+                hard_failures=tuple(sorted({
+                    *candidate.hard_failures,
+                    "vehicles_no_detour",
+                })),
+            )
+            if candidate.candidate_id in refused_ids
+            else candidate
+            for candidate in statistics
+        )
         ranked = [by_id[cost.candidate_id] for cost in ordered]
         viable = [c for c in viable if c.candidate_id not in refused_ids]
         if not ranked:
@@ -709,6 +776,7 @@ def decide_finalists(
                 policy=policy,
                 confidence_level=policy.confidence_level,
                 simultaneous_comparisons=comparisons,
+                method=decision_method,
             )
     else:
         ranked = sorted(
@@ -731,6 +799,7 @@ def decide_finalists(
                 policy=policy,
                 confidence_level=policy.confidence_level,
                 simultaneous_comparisons=comparisons,
+                method=decision_method,
             )
         return DecisionResult(
             status="inconclusive",
@@ -742,10 +811,10 @@ def decide_finalists(
             policy=policy,
             confidence_level=policy.confidence_level,
             simultaneous_comparisons=comparisons,
+            method=decision_method,
         )
 
-    if best.closure_cost is not None and all(
-            c.closure_cost is not None for c in ranked):
+    if use_closure_cost:
         # Deterministic objective: no sampling error, so the confidence
         # apparatus has nothing to resolve. A candidate wins outright when
         # every rival costs more than it by more than the equivalence band.
@@ -767,9 +836,53 @@ def decide_finalists(
                 policy=policy,
                 confidence_level=policy.confidence_level,
                 simultaneous_comparisons=comparisons,
+                method=decision_method,
             )
-        tied = tuple(c.candidate_id for c in ranked
-                     if c.closure_cost.added_vehicle_hours - best_hours <= band)
+        contenders = tuple(
+            candidate
+            for candidate in ranked
+            if candidate.closure_cost.added_vehicle_hours - best_hours <= band
+        )
+        # A non-zero primary difference inside the declared equivalence band
+        # is a practical tie.  When the primary values are EXACTLY equal,
+        # however, the documented lexicographic rule is allowed to use added
+        # metres and then affected vehicles as genuine tie-breakers.
+        if all(
+            candidate.closure_cost.added_vehicle_hours == best_hours
+            for candidate in contenders
+        ):
+            best_secondary = (
+                best.closure_cost.added_metres_total,
+                best.closure_cost.vehicles_affected,
+            )
+            secondary_ties = tuple(
+                candidate.candidate_id
+                for candidate in contenders
+                if (
+                    candidate.closure_cost.added_metres_total,
+                    candidate.closure_cost.vehicles_affected,
+                ) == best_secondary
+            )
+            if len(secondary_ties) == 1:
+                return DecisionResult(
+                    status="unique_winner",
+                    winner_id=best.candidate_id,
+                    tie_ids=(),
+                    reason=(
+                        "vehicle-hours are exactly tied and one schedule is "
+                        "lexicographically better on added distance and "
+                        "affected vehicles"
+                    ),
+                    candidates=statistics,
+                    next_runs=(),
+                    policy=policy,
+                    confidence_level=policy.confidence_level,
+                    simultaneous_comparisons=comparisons,
+                    method=decision_method,
+                )
+            tied = secondary_ties
+        else:
+            tied = tuple(candidate.candidate_id for candidate in contenders)
         return DecisionResult(
             status="tie",
             winner_id=None,
@@ -784,6 +897,7 @@ def decide_finalists(
             policy=policy,
             confidence_level=policy.confidence_level,
             simultaneous_comparisons=comparisons,
+            method=decision_method,
         )
 
     statistically_better = all(
@@ -805,6 +919,7 @@ def decide_finalists(
             policy=policy,
             confidence_level=policy.confidence_level,
             simultaneous_comparisons=comparisons,
+            method=decision_method,
         )
 
     unresolved_contenders = tuple(
@@ -853,6 +968,7 @@ def decide_finalists(
             policy=policy,
             confidence_level=policy.confidence_level,
             simultaneous_comparisons=comparisons,
+            method=decision_method,
         )
 
     return DecisionResult(
@@ -872,4 +988,5 @@ def decide_finalists(
         policy=policy,
         confidence_level=policy.confidence_level,
         simultaneous_comparisons=comparisons,
+        method=decision_method,
     )

@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import hashlib
 from pathlib import Path
@@ -200,6 +201,22 @@ class PreparingRunner(FakeRunner):
             **super().provenance(),
             "prepared_schedule_ids": list(self.prepared),
         }
+
+
+class CostedFakeRunner(FakeRunner):
+    def run_candidate(self, schedule, **kwargs):
+        evidence = super().run_candidate(schedule, **kwargs)
+        hours = 1.0 if schedule.daily_start == "08:15" else 10.0
+        return CandidateEvidence(
+            candidate_id=evidence.candidate_id,
+            observations=evidence.observations,
+            disruption=({
+                "vehicles_affected": 10,
+                "vehicles_no_detour": 0,
+                "added_vehicle_hours": hours,
+                "added_metres_total": hours * 100,
+            },),
+        )
 
 
 def test_policy_round_trips_with_stable_content_key():
@@ -500,6 +517,92 @@ def test_runs_full_resumable_pipeline_and_remains_fail_closed(tmp_path):
         )
 
 
+def test_objective_aligned_pipeline_uses_cost_in_pilot_and_final(tmp_path):
+    policy = dataclasses.replace(
+        _policy(), objective_method="closure_cost_v1"
+    )
+    result = run_monthly_search(
+        _spec("monthly-objective-aligned"),
+        policy,
+        runner=CostedFakeRunner(),
+        screen_builder=_screen_builder,
+        root=tmp_path,
+    )
+
+    assert result["status"] == "unique_winner"
+    assert result["selected_schedules"][0]["daily_start"] == "08:15"
+    assert result["pilot_selection"]["method"] == (
+        "deterministic_closure_cost_pilot_v1"
+    )
+    assert result["robust_decision"]["method"] == (
+        "deterministic_worst_variant_closure_cost_v1"
+    )
+
+
+def test_multi_month_rolling_period_result_keeps_compact_start_date_summary(
+    tmp_path,
+):
+    spec = dataclasses.replace(
+        _spec("multi-month-rolling-period"),
+        permitted_date_end="2027-08-05",
+        interday_policy="independent_daily_reset_v1",
+        work_allocation_policy="exact_equal_daily_v1",
+        period_comparison_policy="rolling_period_v1",
+    )
+    policy = dataclasses.replace(
+        _policy(), objective_method="closure_cost_v1"
+    )
+
+    def every_start_date(spec_path):
+        loaded = load_closure_search_spec(spec_path)
+        schedules = generate_closure_schedules(loaded)
+        entries = [
+            {"schedule_id": item.schedule_id, "selection_reasons": ["test"]}
+            for item in schedules
+            if item.daily_start == "08:00"
+        ]
+        return {
+            "schema_version": 1,
+            "kind": "monthly_closure_proxy_screening",
+            "proxy_version": "test-proxy",
+            "search": loaded.to_dict(),
+            "candidate_count": len(entries),
+            "scoreable_candidate_count": len(entries),
+            "ranked_candidates": [],
+            "shortlist": {"entries": entries},
+        }
+
+    class DateCostRunner(FakeRunner):
+        def run_candidate(self, schedule, **kwargs):
+            evidence = super().run_candidate(schedule, **kwargs)
+            hours = abs(20 - int(schedule.first_work_date[-2:])) + 1
+            return CandidateEvidence(
+                candidate_id=evidence.candidate_id,
+                observations=evidence.observations,
+                disruption=({
+                    "vehicles_affected": 10,
+                    "vehicles_no_detour": 0,
+                    "added_vehicle_hours": hours,
+                    "added_metres_total": hours * 100,
+                },),
+            )
+
+    result = run_monthly_search(
+        spec,
+        policy,
+        runner=DateCostRunner(),
+        screen_builder=every_start_date,
+        root=tmp_path,
+    )
+
+    comparison = result["period_comparison"]
+    assert comparison["comparison_complete"] is True
+    assert comparison["start_date_count"] == 32
+    assert comparison["best_start_date"] == "2027-07-20"
+    assert comparison["best_schedule_id"] == result["winner_id"]
+    assert result["claim_boundary"]["global_best_claim_allowed"] is False
+
+
 def test_restart_skips_immutable_completed_candidate(tmp_path):
     schedules = generate_closure_schedules(_spec())
     first_two = schedules[:2]
@@ -660,6 +763,20 @@ def test_tracked_golden_monthly_search_passes_but_keeps_release_gate_closed():
         Path("validation/monthly_search_policy_v1.json").read_text()
     ))
     assert policy.content_key == record["policy"]["content_key"]
+
+
+def test_provisional_v2_policy_binds_the_closure_cost_objective():
+    v1 = MonthlySearchPolicy.from_dict(json.loads(
+        Path("validation/monthly_search_policy_v1.json").read_text()
+    ))
+    v2 = MonthlySearchPolicy.from_dict(json.loads(
+        Path("validation/monthly_search_policy_v2.json").read_text()
+    ))
+
+    assert v1.objective_method == "legacy_time_loss_v1"
+    assert v2.objective_method == "closure_cost_v1"
+    assert v2.status == "provisional"
+    assert v2.content_key != v1.content_key
 
 
 def test_only_the_frozen_campaign_record_opens_the_release_gate(tmp_path):

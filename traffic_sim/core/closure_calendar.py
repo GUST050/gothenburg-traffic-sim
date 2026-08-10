@@ -138,7 +138,9 @@ def generate_closure_schedules(
     first_work_date = permitted_start
     while first_work_date <= permitted_end:
         for day_count in range(1, spec.max_consecutive_start_days + 1):
-            if spec.work_allocation_policy == "exact_balanced_daily_v1":
+            if spec.work_allocation_policy in {
+                "exact_balanced_daily_v1", "exact_equal_daily_v1"
+            }:
                 first_index = eligible_date_index.get(first_work_date)
                 if first_index is None:
                     continue
@@ -158,7 +160,16 @@ def generate_closure_schedules(
                     for offset in range(day_count)
                 )
 
-            if spec.work_allocation_policy == "exact_balanced_daily_v1":
+            if spec.work_allocation_policy == "exact_equal_daily_v1":
+                total_blocks = (
+                    spec.required_work_minutes // spec.resolution_minutes
+                )
+                daily_blocks, remainder = divmod(total_blocks, day_count)
+                if daily_blocks <= 0 or remainder:
+                    continue
+                daily_duration = daily_blocks * spec.resolution_minutes
+                durations_by_pattern = ((daily_duration,) * day_count,)
+            elif spec.work_allocation_policy == "exact_balanced_daily_v1":
                 total_blocks = (
                     spec.required_work_minutes // spec.resolution_minutes
                 )

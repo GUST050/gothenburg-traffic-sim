@@ -38,7 +38,11 @@ _INTERDAY_POLICIES = frozenset({
 _WORK_ALLOCATION_POLICIES = frozenset({
     "equal_daily_rounded_v1",
     "exact_balanced_daily_v1",
+    "exact_equal_daily_v1",
 })
+_PERIOD_COMPARISON_POLICIES = frozenset({"none_v1", "rolling_period_v1"})
+_CONTINUOUS_MAX_WORKDAYS = 21
+_INDEPENDENT_MAX_WORKDAYS = 90
 # "standard" (interactive Simulera datum) stays at the validated 7-day
 # ceiling. "closure_envelope" covers a closure-search schedule plus its
 # warm-up and recovery: a 21-consecutive-day closure (3 weeks) needs at
@@ -330,6 +334,7 @@ class ClosureSearchSpec:
     policy_status: str = "user_supplied_unverified"
     interday_policy: str = "continuous_v1"
     work_allocation_policy: str = "equal_daily_rounded_v1"
+    period_comparison_policy: str = "none_v1"
 
     def __post_init__(self) -> None:
         if (not isinstance(self.search_id, str) or not self.search_id
@@ -375,9 +380,10 @@ class ClosureSearchSpec:
             self.max_consecutive_start_days,
             "closure_search.max_consecutive_start_days",
         )
-        if not 1 <= maximum_days <= 21:
+        if not 1 <= maximum_days <= _INDEPENDENT_MAX_WORKDAYS:
             raise ValueError(
-                "closure_search.max_consecutive_start_days must be from 1 through 21")
+                "closure_search.max_consecutive_start_days must be from 1 "
+                f"through {_INDEPENDENT_MAX_WORKDAYS}")
         resolution = _strict_int(
             self.resolution_minutes, "closure_search.resolution_minutes")
         if resolution != 15:
@@ -439,20 +445,61 @@ class ClosureSearchSpec:
         if self.work_allocation_policy not in _WORK_ALLOCATION_POLICIES:
             raise ValueError(
                 "closure_search.work_allocation_policy must be "
-                "equal_daily_rounded_v1 or exact_balanced_daily_v1")
+                "equal_daily_rounded_v1, exact_balanced_daily_v1, or "
+                "exact_equal_daily_v1")
+        if self.period_comparison_policy not in _PERIOD_COMPARISON_POLICIES:
+            raise ValueError(
+                "closure_search.period_comparison_policy must be none_v1 "
+                "or rolling_period_v1"
+            )
         if (
-            self.work_allocation_policy == "exact_balanced_daily_v1"
+            self.period_comparison_policy == "rolling_period_v1"
             and self.interday_policy != "independent_daily_reset_v1"
         ):
             raise ValueError(
-                "exact balanced work allocation requires the independent "
+                "rolling-period comparison requires independent_daily_reset_v1"
+            )
+        if (
+            self.period_comparison_policy == "rolling_period_v1"
+            and self.work_allocation_policy != "exact_equal_daily_v1"
+        ):
+            raise ValueError(
+                "rolling-period comparison requires exact_equal_daily_v1 "
+                "so every workday has the same start and end time"
+            )
+        if (
+            self.work_allocation_policy in {
+                "exact_balanced_daily_v1", "exact_equal_daily_v1"
+            }
+            and self.interday_policy != "independent_daily_reset_v1"
+        ):
+            raise ValueError(
+                "exact work allocation requires the independent "
                 "daily reset policy")
         if (
-            self.work_allocation_policy == "exact_balanced_daily_v1"
+            self.work_allocation_policy in {
+                "exact_balanced_daily_v1", "exact_equal_daily_v1"
+            }
             and self.required_work_minutes % self.resolution_minutes
         ):
             raise ValueError(
-                "exact balanced work must align to the 15-minute resolution")
+                "exact work must align to the 15-minute resolution")
+        if (
+            maximum_days > _CONTINUOUS_MAX_WORKDAYS
+            and self.interday_policy != "independent_daily_reset_v1"
+        ):
+            raise ValueError(
+                "continuous closure_search.max_consecutive_start_days must "
+                "be from 1 through 21; more than 21 workdays requires "
+                "independent_daily_reset_v1"
+            )
+        if (
+            maximum_days > _CONTINUOUS_MAX_WORKDAYS
+            and self.work_allocation_policy != "exact_equal_daily_v1"
+        ):
+            raise ValueError(
+                "more than 21 workdays requires exact_equal_daily_v1"
+            )
         if self.interday_policy == "independent_daily_reset_v1":
             band_start = _clock_minutes(
                 self.permitted_daily_band.earliest_start
@@ -491,6 +538,8 @@ class ClosureSearchSpec:
             payload["interday_policy"] = self.interday_policy
         if self.work_allocation_policy != "equal_daily_rounded_v1":
             payload["work_allocation_policy"] = self.work_allocation_policy
+        if self.period_comparison_policy != "none_v1":
+            payload["period_comparison_policy"] = self.period_comparison_policy
         return payload
 
     @property
@@ -532,6 +581,8 @@ class ClosureSearchSpec:
                 "interday_policy", "continuous_v1")),
             work_allocation_policy=str(raw.get(
                 "work_allocation_policy", "equal_daily_rounded_v1")),
+            period_comparison_policy=str(raw.get(
+                "period_comparison_policy", "none_v1")),
         )
         supplied_key = raw.get("content_key")
         if supplied_key is not None and str(supplied_key) != spec.content_key:
@@ -696,7 +747,7 @@ class ClosureSchedule:
                 or (previous_date is not None and interval_date <= previous_date)
             ):
                 raise ValueError(
-                    "exact balanced work dates must be strictly increasing "
+                    "exact work dates must be strictly increasing "
                     "from first_work_date"
                 )
             previous_date = interval_date
@@ -735,20 +786,32 @@ class ClosureSchedule:
         ):
             raise ValueError(
                 "closure_schedule intervals must have equal durations matching closure")
-        if self.allocation_policy == "exact_balanced_daily_v1":
+        if self.allocation_policy in {
+            "exact_balanced_daily_v1", "exact_equal_daily_v1"
+        }:
             if scheduled != required or overshoot != 0:
                 raise ValueError(
-                    "exact balanced schedules cannot overshoot required work")
-            if max(durations) - min(durations) > 15:
+                    "exact schedules cannot overshoot required work")
+            if (
+                self.allocation_policy == "exact_balanced_daily_v1"
+                and max(durations) - min(durations) > 15
+            ):
                 raise ValueError(
                     "exact balanced daily durations may differ by at most 15 minutes")
+            if (
+                self.allocation_policy == "exact_equal_daily_v1"
+                and len(durations) != 1
+            ):
+                raise ValueError(
+                    "exact equal daily schedules require identical durations"
+                )
             # Compare clock labels, not absolute datetimes, because intervals
             # span consecutive work dates. Independent-day schedules are
             # contractually same-day, so ordinary HH:MM ordering is sound.
             latest_label = max(end_labels)
             if latest_label != self.daily_end:
                 raise ValueError(
-                    "exact balanced schedule daily_end must be its latest daily end")
+                    "exact schedule daily_end must be its latest daily end")
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "ClosureSchedule":

@@ -580,6 +580,12 @@ class TestClosureObjectiveRanking:
         assert result.winner_id == "ok", (
             "an unreachable destination is not 'a bit more delay' and must "
             "not win on near-zero vehicle-hours")
+        refused = next(
+            item for item in result.candidates
+            if item.candidate_id == "severing"
+        )
+        assert refused.eligible is False
+        assert refused.hard_failures == ("vehicles_no_detour",)
 
     def test_all_severing_yields_no_viable(self):
         a = _costed("a", _all_variants([1.0] * 4),
@@ -616,3 +622,31 @@ class TestClosureObjectiveRanking:
         result = decide_finalists([a, b], _policy())
         assert result.winner_id == "b", (
             "a must be judged on its worst variant (9.0), not its best")
+
+    def test_exact_vehicle_hour_tie_uses_added_distance(self):
+        short = _costed("short", _all_variants([1.0] * 4), [
+            _disruption(hours=1.0, metres=100, affected=20)
+        ])
+        long = _costed("long", _all_variants([1.0] * 4), [
+            _disruption(hours=1.0, metres=10_000, affected=2)
+        ])
+
+        result = decide_finalists(
+            [long, short], _policy(), ranking_objective="closure_cost_v1"
+        )
+
+        assert result.status == "unique_winner"
+        assert result.winner_id == "short"
+
+    def test_explicit_closure_objective_rejects_mixed_evidence(self):
+        costed = _costed("costed", _all_variants([90.0] * 4), [
+            _disruption(hours=0.1, affected=10)
+        ])
+        plain = _candidate("plain", _all_variants([10.0] * 4))
+
+        with pytest.raises(ValueError, match="requires disruption evidence"):
+            decide_finalists(
+                [costed, plain],
+                _policy(),
+                ranking_objective="closure_cost_v1",
+            )
