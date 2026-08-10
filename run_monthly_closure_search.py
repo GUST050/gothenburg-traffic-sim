@@ -369,6 +369,52 @@ def _independent_exhaustive_preflight(
     return report
 
 
+def _publish_cost_ordered_shadow(spec, policy, *, root) -> dict:
+    """Replay PR E's cost-ordered scan over a finished run, in shadow mode.
+
+    Writes `cost-ordered-shadow.json` beside the search workspace — outside
+    `artifacts/`, because it is a DIAGNOSTIC replay of a completed run, not one
+    of the run's immutable artifacts, and a succeeded workspace is closed to
+    publication anyway.
+
+    Nothing about the run's result, ranking, finalists or claim boundary
+    depends on this file.
+    """
+    from traffic_sim.simulation.cost_ordered_search import (
+        shadow_from_pilot_selection,
+    )
+    from traffic_sim.simulation.search_workspace import load_search_workspace
+
+    directory = Path(root) / spec.search_id
+    workspace = load_search_workspace(directory, verify=False)
+    records = [
+        record for record in workspace.manifest.get("artifacts", ())
+        if record.get("kind") == "monthly_pilot_selection"
+    ]
+    if len(records) != 1:
+        raise ValueError(
+            "cost-ordered shadow needs exactly one published pilot selection")
+    payload = json.loads(
+        (directory / str(records[0]["path"])).read_text(encoding="utf-8"))
+    comparison = shadow_from_pilot_selection(
+        payload,
+        policy.pilot,
+        search_content_key=spec.content_key,
+        provider_identity={
+            "schema": "deterministic_closure_disruption_v1",
+            "network_sha256": sha256_file(Path("sumo/net.net.xml")),
+        },
+        practical_equivalence_vehicle_hours=(
+            policy.finalist.practical_equivalence_vehicle_hours
+        ),
+    )
+    destination = directory / "cost-ordered-shadow.json"
+    destination.write_text(
+        json.dumps(comparison, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
+    return comparison
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--spec", type=Path, required=True)
@@ -407,8 +453,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--screening-mode",
-        choices=("proxy", "bounded-exhaustive", "independent-exhaustive"),
+        choices=("proxy", "bounded-exhaustive", "independent-exhaustive",
+                 "independent-cost-ordered-exact"),
         default="proxy",
+        help=(
+            "independent-cost-ordered-exact runs the SAME exhaustive "
+            "screening and additionally replays the PR E cost-ordered scan "
+            "against the run's own evidence, publishing a shadow comparison. "
+            "It is SHADOW MODE: it changes no ranking, no finalist set and no "
+            "claim, and it is not activated until the equivalence gate has "
+            "passed on a named benchmark."
+        ),
     )
     parser.add_argument(
         "--bounded-exhaustive-cap",
@@ -543,7 +598,8 @@ def main() -> None:
                     args.baseline_trip_duration_p99_s
                 ),
             )
-            if args.screening_mode == "independent-exhaustive"
+            if args.screening_mode in {"independent-exhaustive",
+                                       "independent-cost-ordered-exact"}
             else None
         )
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
@@ -664,7 +720,7 @@ def main() -> None:
         else:
             if spec.interday_policy != "independent_daily_reset_v1":
                 raise ValueError(
-                    "--screening-mode=independent-exhaustive requires an "
+                    f"--screening-mode={args.screening_mode} requires an "
                     "independent daily search spec"
                 )
             screen_builder = lambda path: _independent_exhaustive_builder(
@@ -685,6 +741,20 @@ def main() -> None:
             screen_builder=screen_builder,
             root=args.root,
         )
+        if args.screening_mode == "independent-cost-ordered-exact":
+            # SHADOW ONLY. The exhaustive answer above is the result; this
+            # replays the cost-ordered scan against the same evidence and
+            # publishes the comparison. It changes nothing about the run.
+            shadow = _publish_cost_ordered_shadow(
+                spec, policy, root=args.root)
+            print(
+                "cost-ordered shadow: "
+                f"equivalent={shadow.get('equivalent')}; "
+                f"verified={shadow.get('verified_candidates')}/"
+                f"{shadow.get('ordered_candidates')}; "
+                f"saved={shadow.get('sumo_verifications_saved')}",
+                file=sys.stderr,
+            )
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
         raise SystemExit(str(exc)) from exc
     finally:
