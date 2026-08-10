@@ -40,6 +40,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -48,6 +50,7 @@ from typing import Any, Mapping, Protocol, Sequence
 from traffic_sim.core.contracts import ClosureSchedule, ClosureSearchSpec
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.closure_ranking import ClosureCost, worst_variant_cost
+from traffic_sim.simulation.metadata import load_metadata
 
 #: Version of the deterministic disruption contract. Any change to how a
 #: record is computed or shaped must bump it; it is part of every cache key.
@@ -100,6 +103,16 @@ def _digest(payload: Any, *, length: int = 64) -> str:
 
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def _file_state(path: Path) -> tuple[int, int, int, int] | None:
+    """Cheap replacement/change detector for an already-hashed input."""
+    try:
+        stat = Path(path).stat()
+    except OSError:
+        return None
+    return (int(stat.st_dev), int(stat.st_ino), int(stat.st_size),
+            int(stat.st_mtime_ns))
 
 
 def costing_source_identity() -> dict[str, str]:
@@ -175,22 +188,87 @@ class NetworkCostModel:
     """
 
     def __init__(self, network_path: Path | None = None) -> None:
-        import run_scenario as rs  # noqa: PLC0415 - heavy; imported on use
+        if network_path is None:
+            import run_scenario as rs  # noqa: PLC0415 - heavy; imported on use
+            network_path = rs.NET_PATH
 
-        self.network_path = Path(
-            network_path if network_path is not None else rs.NET_PATH)
+        self.network_path = Path(network_path).resolve()
         if not self.network_path.is_file():
             raise DisruptionUnavailable(
                 f"deterministic cost needs the SUMO network: "
                 f"{self.network_path}")
         self.network_sha256 = sha256_file(self.network_path)
-        self.adjacency = rs.build_edge_graph(set())
-        self.edge_time, self.edge_len = rs.free_flow_edge_cost()
+        if self.network_sha256 is None:
+            raise DisruptionUnavailable(
+                f"deterministic cost cannot fingerprint the SUMO network: "
+                f"{self.network_path}")
+
+        # `run_scenario.build_edge_graph()` and `free_flow_edge_cost()` read
+        # the module-global NET_PATH. Calling them here would hash the path the
+        # caller supplied while silently costing another network whenever the
+        # two differ. Build from the bound path directly instead. The optional
+        # metadata index is the same validated acceleration layer production
+        # uses; its bytes are also bound below because they can select the
+        # adjacency used by this computation.
+        self.network_metadata_path = self.network_path.with_name(
+            "network_metadata.json")
+        self.network_metadata_sha256 = sha256_file(
+            self.network_metadata_path)
+        self._network_state = _file_state(self.network_path)
+        self._metadata_state = _file_state(self.network_metadata_path)
+        root = ET.parse(self.network_path).getroot()
+        metadata = load_metadata(
+            self.network_path, self.network_metadata_path)
+        if metadata is not None:
+            self.adjacency = {
+                str(source): [str(target) for target in targets]
+                for source, targets in metadata["successors"].items()
+            }
+        else:
+            adjacency: dict[str, list[str]] = {}
+            for connection in root.findall("connection"):
+                source = connection.get("from")
+                target = connection.get("to")
+                if source and target:
+                    adjacency.setdefault(source, []).append(target)
+            self.adjacency = adjacency
+
+        edge_time: dict[str, float] = {}
+        edge_len: dict[str, float] = {}
+        for edge in root.iter("edge"):
+            edge_id = edge.get("id")
+            if (not edge_id or edge.get("function") == "internal"
+                    or edge_id.startswith(":")):
+                continue
+            lane = next(
+                (item for item in edge if item.tag == "lane"), None)
+            if lane is None:
+                continue
+            length = float(lane.get("length", 0) or 0)
+            speed = max(float(lane.get("speed", 1) or 1), 0.1)
+            edge_time[edge_id] = length / speed
+            edge_len[edge_id] = length
+        self.edge_time = edge_time
+        self.edge_len = edge_len
+
+    def verify_current(self) -> None:
+        """Fail if the model's parsed bytes moved after construction."""
+        if _file_state(self.network_path) != self._network_state:
+            raise DisruptionUnavailable(
+                "SUMO network changed after deterministic cost construction")
+        if _file_state(self.network_metadata_path) != self._metadata_state:
+            raise DisruptionUnavailable(
+                "network metadata changed after deterministic cost construction")
 
     def identity(self) -> dict[str, Any]:
+        self.verify_current()
         return {
             "path": str(self.network_path),
             "sha256": self.network_sha256,
+            "metadata": {
+                "path": str(self.network_metadata_path),
+                "sha256": self.network_metadata_sha256,
+            },
         }
 
 
@@ -258,12 +336,23 @@ class DailyCostCache:
             "identity": dict(identity),
             "disruption": [dict(item) for item in records],
         }
-        temporary = path.with_name(path.name + ".partial")
-        with temporary.open("w", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        # A key can be computed by concurrent isolated daily workers. A fixed
+        # `<key>.partial` name lets them overwrite or remove each other's
+        # in-progress file. Use a unique same-directory temporary and publish
+        # atomically; every writer publishes identical canonical content.
+        fd, temporary_name = tempfile.mkstemp(
+            dir=path.parent, prefix=f".{path.name}.", suffix=".partial")
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(payload, indent=2, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
         return path
 
 
@@ -272,28 +361,41 @@ class ArchiveInputs:
     """One immutable demand archive, resolved to exactly three route files."""
 
     archive: Path
+    demand_meta_path: Path
     variant_paths: Mapping[str, Path]
     epoch: datetime
     duration_s: int
-    demand_meta_sha256: str | None
+    demand_meta_sha256: str
+    variant_sha256: Mapping[str, str]
+    demand_meta_state: tuple[int, int, int, int]
+    variant_states: Mapping[str, tuple[int, int, int, int]]
 
     @classmethod
     def from_archive(cls, archive: Path) -> "ArchiveInputs":
-        archive = Path(archive)
-        meta_path = archive / "demand_meta.json"
+        archive = Path(archive).resolve()
+        meta_path = (archive / "demand_meta.json").resolve()
         try:
             metadata = json.loads(meta_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
             raise DisruptionUnavailable(
                 f"demand archive has no readable demand_meta.json: {archive}"
             ) from error
-        variant_paths = {}
+        variant_paths: dict[str, Path] = {}
+        variant_sha256: dict[str, str] = {}
+        variant_states: dict[str, tuple[int, int, int, int]] = {}
         for variant, filename in VARIANT_FILENAMES.items():
             path = (archive / filename).resolve()
             if not path.is_file():
                 raise DisruptionUnavailable(
                     f"demand archive lacks the {variant} route file: {path}")
             variant_paths[variant] = path
+            digest = sha256_file(path)
+            state = _file_state(path)
+            if digest is None or state is None:
+                raise DisruptionUnavailable(
+                    f"demand archive cannot fingerprint {variant}: {path}")
+            variant_sha256[variant] = digest
+            variant_states[variant] = state
         try:
             epoch = datetime.fromisoformat(str(metadata["epoch_sim"]))
             intervals = int(metadata["n_intervals"])
@@ -301,15 +403,39 @@ class ArchiveInputs:
             raise DisruptionUnavailable(
                 f"demand archive metadata lacks an epoch or interval count: "
                 f"{archive}") from error
+        meta_digest = sha256_file(meta_path)
+        meta_state = _file_state(meta_path)
+        if meta_digest is None or meta_state is None:
+            raise DisruptionUnavailable(
+                f"demand archive cannot fingerprint demand_meta: {meta_path}")
         return cls(
             archive=archive,
+            demand_meta_path=meta_path,
             variant_paths=variant_paths,
             epoch=epoch,
             duration_s=intervals * 900,
-            demand_meta_sha256=sha256_file(meta_path),
+            demand_meta_sha256=meta_digest,
+            variant_sha256=variant_sha256,
+            demand_meta_state=meta_state,
+            variant_states=variant_states,
         )
 
+    def verify_current(self) -> None:
+        """Keep parsed metadata and route content under one fixed identity."""
+        if _file_state(self.demand_meta_path) != self.demand_meta_state:
+            raise DisruptionUnavailable(
+                "demand metadata changed after archive construction")
+        for variant, path in self.variant_paths.items():
+            if _file_state(path) != self.variant_states[variant]:
+                raise DisruptionUnavailable(
+                    f"{variant} route changed after archive construction")
+
     def identity(self) -> dict[str, Any]:
+        # Hash once when the immutable archive is opened. Re-hashing three
+        # large route files for every daily candidate defeats the purpose of
+        # cost-first screening; cheap stat checks above still fail closed if
+        # the archive is replaced or edited during a running search.
+        self.verify_current()
         return {
             "archive": str(self.archive),
             "demand_meta_sha256": self.demand_meta_sha256,
@@ -318,7 +444,7 @@ class ArchiveInputs:
             "variant_routes": {
                 variant: {
                     "filename": VARIANT_FILENAMES[variant],
-                    "sha256": sha256_file(path),
+                    "sha256": self.variant_sha256[variant],
                 }
                 for variant, path in sorted(self.variant_paths.items())
             },
@@ -351,8 +477,15 @@ class ArchiveDisruptionProvider:
 
     # -- identity ---------------------------------------------------------
 
+    def _verify_current_inputs(self) -> None:
+        self.inputs.verify_current()
+        verify_network = getattr(self.network, "verify_current", None)
+        if verify_network is not None:
+            verify_network()
+
     def identity(self) -> dict[str, Any]:
         """Everything a cached number is bound to except the schedule itself."""
+        self._verify_current_inputs()
         return {
             "schema": DISRUPTION_SCHEMA,
             "interday_policy": self.spec.interday_policy,
@@ -416,6 +549,10 @@ class ArchiveDisruptionProvider:
         if schedule.search_content_key != self.spec.content_key:
             raise DisruptionUnavailable(
                 "schedule does not belong to this search spec")
+        # This must precede the in-memory shortcut. Otherwise a route edited
+        # after the first lookup would keep returning remembered evidence
+        # under an identity that no longer describes its bytes.
+        self._verify_current_inputs()
         remembered = self._memory.get(schedule.schedule_id)
         if remembered is not None:
             return remembered

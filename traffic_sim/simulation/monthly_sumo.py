@@ -946,12 +946,20 @@ class ArchivedDemandSumoRunner:
         from traffic_sim.simulation.deterministic_disruption import (
             ArchiveDisruptionProvider,
             NetworkCostModel,
+            _file_state,
         )
 
         if self._deterministic_provider is None or cache is not None:
             network = object.__new__(NetworkCostModel)
-            network.network_path = Path(rs.NET_PATH)
+            network.network_path = Path(rs.NET_PATH).resolve()
             network.network_sha256 = sha256_file(rs.NET_PATH)
+            network.network_metadata_path = Path(
+                rs.SUMO_DIR / "network_metadata.json").resolve()
+            network.network_metadata_sha256 = sha256_file(
+                network.network_metadata_path)
+            network._network_state = _file_state(network.network_path)
+            network._metadata_state = _file_state(
+                network.network_metadata_path)
             network.adjacency = self._disruption_adjacency
             network.edge_time = self._disruption_edge_time
             network.edge_len = self._disruption_edge_len

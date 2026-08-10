@@ -137,10 +137,16 @@ class TestWorkspaceLock:
 
         monkeypatch.setattr(search, "WorkspaceLock",
                             lambda owner: ws.WorkspaceLock(owner, path=LOCK))
-        monkeypatch.setattr(search, "recover_live_demand_release",
-                            lambda: None)
+        # Preflight now intentionally runs before the demand lock, so give it
+        # a real valid spec. The heavy backend loader must remain unreachable
+        # when another process owns the workspace.
+        monkeypatch.setattr(
+            search, "_simulation_backends",
+            lambda: (_ for _ in ()).throw(AssertionError(
+                "a lock-refused search must not import the SUMO backend")))
         monkeypatch.setattr(sys, "argv", [
-            "run_monthly_closure_search.py", "--spec", "does-not-exist.json",
+            "run_monthly_closure_search.py", "--spec",
+            "validation/golden_monthly_search_spec_v6.json",
             "--policy", "validation/monthly_search_policy_v1.json",
             "--baseline-trip-duration-p99-s", "3600",
             "--workspace-wait-s", "0"])

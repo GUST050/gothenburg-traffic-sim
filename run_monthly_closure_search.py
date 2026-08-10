@@ -606,16 +606,6 @@ def main() -> None:
         raise SystemExit(str(exc)) from exc
 
     runner = None
-    (ArchivedDemandSumoRunner, MonthlyDemandResolverRunner,
-     recover_live_demand_release) = _simulation_backends()
-    recovered = recover_live_demand_release()
-    if recovered is not None:
-        print(
-            "restored the live demand release left behind by a killed run "
-            f"({len(recovered.get('entries', []))} products, "
-            f"{len(recovered.get('trees', []))} directories)",
-            file=sys.stderr,
-        )
     # A search owns the shared demand workspace for hours: it rebuilds
     # envelopes into sumo/ and snapshots the live release around them. The
     # web app and a horizon pre-warm run take the same lock, so this waits
@@ -627,6 +617,19 @@ def main() -> None:
             f"demand workspace busy: {workspace.holder_description()}; "
             "wait for it, stop it, or raise --workspace-wait-s")
     try:
+        # Only a run that owns the workspace may load or mutate the demand
+        # backend. A refused lock therefore stays on the same light import
+        # path as a refused preflight, and recovery cannot race a live owner.
+        (ArchivedDemandSumoRunner, MonthlyDemandResolverRunner,
+         recover_live_demand_release) = _simulation_backends()
+        recovered = recover_live_demand_release()
+        if recovered is not None:
+            print(
+                "restored the live demand release left behind by a killed "
+                f"run ({len(recovered.get('entries', []))} products, "
+                f"{len(recovered.get('trees', []))} directories)",
+                file=sys.stderr,
+            )
         study_key = _digest({
             "kind": "monthly_closure_search_study",
             "search_content_key": spec.content_key,

@@ -738,8 +738,9 @@ mot 708,88 MiB för v1-vägen (101× mindre).
 Det är fortfarande — avsiktligt — VÄGRAT av 10 000-enhetstaket, som PR C inte
 rör.
 
-720 h under 64 MiB: **den fasta importkostnaden är nu åtgärdad; grinden
-väntar på en mätning på Darwin/arm64.** Se avsnitt 10.
+720 h under 64 MiB: **uppfyllt efter slutmätningen 2026-08-11.** Fem
+repetitioner på Darwin/arm64 gav 25,30 MiB processtotal, utan importerad SciPy,
+mot 64 MiB-gränsen. Se avsnitt 10.
 
 ### Reviewkorrigeringar efter implementationen
 
@@ -765,11 +766,11 @@ held-out-kampanj kördes och ingen årlig uppvärmningsindata rördes.
 
 ---
 
-## 10. Steg 0 efter PR C: den fasta importkostnaden (2026-08-10)
+## 10. Steg 0 efter PR C: den fasta importkostnaden (2026-08-10/11)
 
 Avsnitt 1–9 är oförändrade. Detta avsnitt beskriver arbetet som gjordes för att
-PR C:s processtotalgrind ska KUNNA stängas av en mätning i stället för att vara
-strukturellt omöjlig.
+PR C:s processtotalgrind först gjordes mätbar och därefter stängdes på den
+frysta referensplattformen.
 
 ### Vad mätningen visade
 
@@ -822,6 +823,7 @@ oförändrade. `tests/test_finalist_decision.py` och
 | hela sökimportkedjan | 99,96 MiB | **21,62 MiB** |
 | produktens CLI vid import | 130,60 MiB | **21,68 MiB** |
 | 720 h strömmande, processtotal | ~102 MiB (Linux) | **23,25 MiB** (Linux) |
+| 720 h strömmande, slutgrind | jämförbar Darwin/arm64 krävs | **25,30 MiB** (Darwin/arm64) |
 
 `tests/test_search_import_cost.py` kör riktiga barntolkar och kräver att
 uppräkning, preflight och ledgerskrivning aldrig laddar SciPy, samt att
@@ -829,17 +831,12 @@ t-kvantilen fortfarande gör det där den används.
 
 ### Grindens status
 
-På mätvärden (Linux/x86_64) är 720 h-processtotalen nu 23,25 MiB mot taket
-64 MiB, och `imported_scipy` är `false` i strömningsbarnet. Posten rapporterar
-`open_pending_baseline_host`: **grinden är fortfarande ÖPPEN**, eftersom den
-frysta referensen togs på Darwin/arm64 och en RSS-siffra från ett
-operativsystem inte är evidens om ett annat.
+Den sista fem-repetitionskörningen 2026-08-11 gjordes på Darwin/arm64, samma
+plattformsklass som den frysta referensen. 720 h-processtotalen blev 25,30 MiB
+mot 64 MiB och `imported_scipy` är `false`. Posten rapporterar
+`memory_gate.status = passed`: **PR C:s minnesgrind är STÄNGD.**
 
-Skillnaden mot före: grinden kan nu stängas av en mätning. Tidigare var
-fixkostnaden 76,69 MiB av 78,02 MiB på den jämförbara värden, vilket ingen
-mätning kunde klara.
-
-Exakt kommando för att stänga den på utvecklingsmaskinen:
+Reproduktionskommando:
 
     python3 tools/benchmark_closure_streaming.py --repeats 5 --overwrite
 
@@ -849,7 +846,8 @@ och läs `validation/closure_search_streaming_v1.json` → `memory_gate.status`.
 
 ## 11. Uppmätt resultat: PR D, PR E, PR F, steg 4 och PR H (2026-08-10)
 
-Avsnitt 1–10 är oförändrade.
+Detta avsnitt dokumenterar implementationerna efter PR C och deras öppna
+evidensgrindar.
 
 ### PR D — processfri deterministisk disruption (steg 3)
 
@@ -863,9 +861,13 @@ TraCI eller SUMO-process: `DeterministicDisruptionProvider` (protokoll),
 - `vehicles_no_detour > 0` diskvalificerar före SUMO;
   `disqualification_evidence` behåller hela evidensen.
 - Cacheidentiteten binder full dagsenhetsidentitet, SHA-256 för alla tre
-  routefiler, nätets SHA-256, demand-metadata, disruptionschemats version och
-  bytes för varje källa som beräknar talet (`run_scenario.py`,
+  routefiler, nätets SHA-256, validerad adjacency-metadatas SHA-256,
+  demand-metadata, disruptionschemats version och bytes för varje källa som
+  beräknar talet (`run_scenario.py`,
   `deterministic_disruption.py`, `closure_ranking.py`).
+- Routehashar tas en gång när det immutable arkivet öppnas; billiga filstate-
+  kontroller vägrar drift under en öppen provider. Concurrent writers använder
+  unika partialfiler och atomisk replace.
 - Fail-closed: saknad variant, oläsbar post, post vars lagrade identitet inte
   matchar nyckeln, ofullständig variantmängd, schema från annan sökning.
 - Den gamla post-SUMO-vägen är inte en andra implementation:
@@ -875,20 +877,26 @@ TraCI eller SUMO-process: `DeterministicDisruptionProvider` (protokoll),
   `.deterministic_disruption_provider()` löser rätt immutable arkiv och
   delegerar utan att starta SUMO.
 
-**Tester:** `tests/test_deterministic_disruption.py` 27 passerade.
-**Exit-grinden är INTE stängd.** Planens grind kräver 100 % fältidentiska
-kostnader och identisk sorteringsordning på golden, benchmark och små
-brute-force-fixturer med VERKLIGA q10/q50/q90-arkiv. Det finns ingen
-kalibrerad demand i denna miljö. Vad som är bevisat: strukturell identitet
-(en implementation, delad konvertering) och beteendemässig identitet på
-syntetiska routefixturer.
+**Tester efter Codex-review:** `tests/test_deterministic_disruption.py` 32
+passerade. Reviewen rättade ett identitetsfel där en explicit `network_path`
+hashades medan kostnaden byggdes från `run_scenario.NET_PATH`, och band den
+metadata som faktiskt kan välja adjacency.
+**Real-golden-grinden är stängd.** Reviewen hittade den redan pinnade
+q10/q50/q90-golden-arkivet på utvecklingsmaskinen och körde
+`tools/verify_closure_cost_ordering_golden.py`. Alla tre kandidater är
+fältidentiska mellan processfri provider och aktuell runner-väg; de publicerade
+historiska kostnadsfälten och sorteringsordningen är också identiska. De enda
+nya fälten är de två avsiktliga survivability-räknarna. Posten
+`validation/closure_cost_ordering_golden_v1.json` reproducerar byte-för-byte.
 
 ### PR E — kostnadsordnad state machine i shadow mode (steg 4)
 
 `traffic_sim/simulation/cost_ordered_search.py`. Ren state machine med
 serialiserbart cursor/cutoff/verified-tillstånd, maskinläsbart stoppbevis och
 `identity_key` som ogiltigförklarar resume vid ändrad policy, kostnadsledger
-eller provideridentitet.
+eller provideridentitet. Cursor måste vara exakt samma prefix som `verified`,
+viability måste ligga i samma ordning och stämma med den persistenta evidensen;
+det valideras även för ett direkt dataclass-objekt som inte gått genom JSON.
 
 Stoppregeln är planens: no-detour diskvalificeras före SUMO, resten sorteras
 med oförändrad `sort_key`, hårda fel stoppar inte skanningen, cutoff sätts vid
@@ -899,7 +907,8 @@ Kandidat exakt på gränsen är INNANFÖR (`<=`). Modulen beslutar ingenting sj�
 `capacity_exceeded` och `no_viable` är oförändrade och ingen finalistmängd kan
 kapas tyst.
 
-**Tester:** `tests/test_cost_ordered_search.py` 70 passerade, nästan alla
+**Tester efter Codex-review:** `tests/test_cost_ordered_search.py` 77
+passerade, nästan alla
 differentiella mot uttömmande läge: små kalendrar, primär/sekundär/ID-ties,
 kandidat exakt på cutoff och precis över, hårdfelsmasker, alla underkända,
 alla no-detour, `capacity_exceeded`, för få finalister, 24 slumpade
@@ -912,9 +921,14 @@ kostnadsordnade skanningen över körningens egna registrerade beslutsindata,
 och skriver `cost-ordered-shadow.json` bredvid workspace. Ingen rangordning,
 ingen finalistmängd och inget anspråk ändras.
 
-**Exit-grinden är INTE stängd.** Den kräver samma pilotstatus och samma
-`selected_ids` i ett NAMNGIVET verkligt benchmark. Fixturer och replay räcker
-inte.
+Detta är uttryckligen en post-hoc replay efter den uttömmande körningen. Den
+persistenta state-machine-cursorn driver ännu inte produktens SUMO-exekvering.
+
+**Den namngivna real-benchmark-grinden är stängd.** Golden-replayen ger samma
+pilotstatus (`ready`) och samma `selected_ids`
+(`closure-d9af6f11562e20e708e5`) som exhaustive. Den sparar däremot 0 av 3
+verifieringar eftersom benchmarken bara har en health-viable kandidat. Därför
+är positiv-besparingsgrinden och all aktivering fortfarande stängda.
 
 ### PR F — policy v3 (steg 4/5)
 
@@ -959,18 +973,20 @@ Två KONTRAKTSFYND, viktigare än vad en kampanj hade gett:
 
 **Ingen mätning är gjord.** Posten öppnar ingen grind.
 
-### Vad som är BLOCKERAT och varför
+### Grindstatus och kvarvarande blockerare
 
 | steg | status | blockerare | exakt kommando |
 |---|---|---|---|
-| PR D exit-grind | blockerad | ingen kalibrerad q10/q50/q90-demand | `make demand` |
-| PR E exit-grind | blockerad | samma | `make demand` sedan uttömmande + cost-ordered på samma spec |
-| PR F aktivering | blockerad | inget namngivet benchmark, ingen held-out | se `monthly_search_policy_v3_preregistration.json` |
-| PR G (steg 6) | blockerad | ingen kalibrerad demand; `libsumo` är inte installerat i miljön | `pip install eclipse-sumo` med libsumo-bindning, sedan `python3 benchmark_seed_workers.py` |
-| PR H mätning | blockerad | ingen kalibrerad demand | `make demand` |
+| PR D real-golden-grind | passerad | — | `python3 tools/verify_closure_cost_ordering_golden.py --verify` |
+| PR E namngiven real-benchmark | passerad ekvivalens, 0 besparing | endast en health-viable kandidat | samma verifieringskommando |
+| PR F aktivering | blockerad | inget pre-outcome diskriminerande benchmark med positiv besparing, ingen held-out | se `monthly_search_policy_v3_preregistration.json` |
+| PR G (steg 6) | blockerad | `libsumo` är inte installerat i miljön | `pip install eclipse-sumo` med libsumo-bindning, sedan `python3 benchmark_seed_workers.py` |
+| PR H mätning | blockerad | mät-harness/case↔arkiv-bindning saknas; kalibrerade arkiv finns | implementera harness mot förregistreringen |
 | PR I (steg 8) | delvis PERMANENT stängd | projektbeslut 2026-07-20: ingen ny extern data (se CLAUDE.md "Open questions"). Mikrosimulering och work-zone-kalibrering kräver dessutom kalibrerad demand | ingen — beslutet är en fast gräns, inte en TODO |
-| Steg 8 (benchmark, held-out, releasegrind) | blockerad | kräver PR D/E-grindarna först, sedan en orörd held-out-kampanj | `make demand` sedan kampanjkedjan |
+| Steg 8 (benchmark, held-out, releasegrind) | blockerad | diskriminerande benchmark och därefter en orörd held-out-kampanj saknas | koppla riktig cost-ordered execution, frys cases, kör kampanjkedjan |
 
-`make demand` misslyckas i denna miljö: `build_candidates.py` behöver
-OSM/Overpass, som miljöns nätverkspolicy nekar. Det är den enda verkliga
-blockeraren för fem av sju rader ovan.
+Förregistreringens `blocked_by`-text om att inget kalibrerat arkiv finns bevaras
+oförändrad som pre-outcome historik, men är superseded för denna dev-maskin:
+den har det pinnade golden-arkivet och hundratals kalibrerade dagsarkiv. De
+återstående blockerarna är produktintegration, diskriminerande cases,
+`libsumo`, held-out och externa-data-gränsen — inte frånvaro av demand.

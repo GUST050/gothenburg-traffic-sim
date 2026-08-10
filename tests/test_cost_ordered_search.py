@@ -518,6 +518,60 @@ class TestStateContract:
                 "verified": ["a"], "viable": ["b"],
             })
 
+    @pytest.mark.parametrize("override, message", [
+        ({"cursor": 2, "verified": ["a"]}, "verified prefix"),
+        ({"cursor": 1, "verified": ["b"]}, "verified prefix"),
+        ({"cursor": 2, "verified": ["a", "a"]}, "repeats"),
+        ({"cursor": 2, "verified": ["a", "b"], "viable": ["a", "a"]},
+         "repeats"),
+        ({"cursor": 2, "verified": ["a", "b"], "viable": ["b", "a"]},
+         "verified order"),
+    ])
+    def test_a_resume_must_be_the_exact_verified_prefix(
+            self, override, message):
+        raw = {
+            "schema": "cost_ordered_closure_search_v1", "version": 1,
+            "identity_key": "k", "order": ["a", "b"], "cursor": 0,
+            "verified": [], "viable": [],
+        }
+        raw.update(override)
+        with pytest.raises(ValueError, match=message):
+            CostOrderedState.from_dict(raw)
+
+    def test_a_direct_state_cannot_bypass_resume_validation(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 4)]
+        policy = _policy(minimum=1)
+        fresh, _verified = _run(candidates, policy)
+        forged = CostOrderedState(
+            identity_key=fresh.state.identity_key,
+            order=fresh.state.order,
+            cursor=2,
+            verified=(fresh.state.order[0],),
+            viable=(fresh.state.order[0],),
+        )
+        with pytest.raises(ValueError, match="verified prefix"):
+            _run(candidates, policy, state=forged, verified_evidence={
+                fresh.state.order[0]: fresh.evidence[0],
+            })
+
+    def test_resume_viability_must_match_the_persisted_evidence(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 4)]
+        policy = _policy(minimum=1)
+        fresh, _verified = _run(candidates, policy)
+        candidate_id = fresh.state.verified[0]
+        ineligible = CandidateEvidence(
+            candidate_id=candidate_id,
+            observations=(),
+            hard_failures=("simulator_failed",),
+            disruption=fresh.evidence[0].disruption,
+        )
+
+        with pytest.raises(ValueError, match="viable set"):
+            _run(candidates, policy, state=fresh.state,
+                 verified_evidence={candidate_id: ineligible})
+
     def test_it_round_trips_through_json(self):
         state = CostOrderedState(
             identity_key="k", order=("a", "b"), cursor=1,

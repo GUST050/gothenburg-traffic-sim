@@ -19,6 +19,8 @@ equivalence benchmark, which needs the real q10/q50/q90 archives.
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -204,6 +206,68 @@ class TestProcessFree:
         loaded = json.loads(completed.stdout.strip().splitlines()[-1])
         assert loaded == {"scipy": False, "pandas": False,
                           "run_scenario": False}
+
+
+class TestNetworkCostModelIdentity:
+    @staticmethod
+    def _write_network(path: Path, edge_id: str, *, length: float,
+                       speed: float, target: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "<net>"
+            f"<edge id='{edge_id}'><lane id='{edge_id}_0' "
+            f"length='{length}' speed='{speed}'/></edge>"
+            f"<edge id='{target}'><lane id='{target}_0' "
+            "length='10' speed='10'/></edge>"
+            f"<connection from='{edge_id}' to='{target}'/>"
+            "</net>",
+            encoding="utf-8",
+        )
+
+    def test_the_supplied_network_is_both_hashed_and_costed(
+            self, tmp_path, monkeypatch):
+        """A caller-supplied path must not use run_scenario.NET_PATH."""
+        import run_scenario as rs
+
+        global_net = tmp_path / "global" / "net.net.xml"
+        bound_net = tmp_path / "bound" / "net.net.xml"
+        self._write_network(global_net, "global-edge", length=999,
+                            speed=1, target="global-target")
+        self._write_network(bound_net, "bound-edge", length=120,
+                            speed=12, target="xml-target")
+        monkeypatch.setattr(rs, "NET_PATH", global_net)
+
+        model = dd.NetworkCostModel(bound_net)
+
+        assert model.network_path == bound_net.resolve()
+        assert model.edge_len == {"bound-edge": 120.0,
+                                  "xml-target": 10.0}
+        assert model.edge_time == {"bound-edge": 10.0,
+                                   "xml-target": 1.0}
+        assert model.adjacency == {"bound-edge": ["xml-target"]}
+        assert "global-edge" not in model.edge_len
+        assert model.identity()["sha256"] == dd.sha256_file(bound_net)
+
+    def test_adjacency_metadata_bytes_are_bound_to_the_identity(
+            self, tmp_path):
+        net_path = tmp_path / "bound" / "net.net.xml"
+        self._write_network(net_path, "bound-edge", length=120,
+                            speed=12, target="xml-target")
+        metadata_path = net_path.with_name("network_metadata.json")
+        metadata_path.write_text(json.dumps({
+            "schema_version": 1,
+            "net_sha256": dd.sha256_file(net_path),
+            "edges": {},
+            "successors": {"bound-edge": ["metadata-target"]},
+        }), encoding="utf-8")
+
+        model = dd.NetworkCostModel(net_path)
+
+        assert model.adjacency == {"bound-edge": ["metadata-target"]}
+        assert model.identity()["metadata"] == {
+            "path": str(metadata_path.resolve()),
+            "sha256": dd.sha256_file(metadata_path),
+        }
 
 
 # --------------------------------------------------------------------------
@@ -528,6 +592,29 @@ class TestDailyCostCache:
 
         assert cache.key(before) != cache.key(after)
 
+    def test_an_open_provider_refuses_route_drift_before_memory_hit(
+            self, tmp_path, monkeypatch):
+        spec, provider, _cache = self._provider(tmp_path, monkeypatch)
+        schedule = _schedule(spec)
+        provider.disruption(schedule)
+        (tmp_path / "a" / dd.VARIANT_FILENAMES["q10"]).write_text(
+            "<routes id='changed-after-first-cost'/>", encoding="utf-8")
+
+        with pytest.raises(dd.DisruptionUnavailable,
+                           match="q10 route changed"):
+            provider.disruption(schedule)
+
+    def test_route_hashes_are_not_recomputed_for_every_daily_unit(
+            self, tmp_path, monkeypatch):
+        _specification, provider, _cache = self._provider(
+            tmp_path, monkeypatch)
+
+        def unexpected_hash(_path):
+            raise AssertionError("archive identity should use pinned digests")
+
+        monkeypatch.setattr(dd, "sha256_file", unexpected_hash)
+        assert provider.identity() == provider.identity()
+
     def test_a_changed_network_misses(self, tmp_path, monkeypatch):
         spec, provider, cache = self._provider(tmp_path, monkeypatch)
         schedule = _schedule(spec)
@@ -602,6 +689,31 @@ class TestDailyCostCache:
     def test_storing_leaves_no_partial_file(self, tmp_path, monkeypatch):
         spec, provider, cache = self._provider(tmp_path, monkeypatch)
         provider.disruption(_schedule(spec))
+        assert not list((tmp_path / "cache").rglob("*.partial"))
+
+    def test_concurrent_writers_do_not_share_a_partial_file(
+            self, tmp_path, monkeypatch):
+        cache = dd.DailyCostCache(tmp_path / "cache")
+        identity = {"unit": "same-content-key"}
+        records = tuple(
+            {"demand_variant": variant, **_record()}
+            for variant in dd.DEMAND_VARIANTS
+        )
+        original_replace = dd.os.replace
+        writers_ready = threading.Barrier(2)
+
+        def synchronized_replace(source, destination):
+            writers_ready.wait(timeout=5)
+            return original_replace(source, destination)
+
+        monkeypatch.setattr(dd.os, "replace", synchronized_replace)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(cache.store, identity, records)
+                       for _ in range(2)]
+            paths = [future.result(timeout=10) for future in futures]
+
+        assert paths[0] == paths[1]
+        assert cache.load(identity) == records
         assert not list((tmp_path / "cache").rglob("*.partial"))
 
 

@@ -131,6 +131,33 @@ class CostOrderedState:
             "stop_reason": self.stop_reason,
         }
 
+    def validate(self) -> None:
+        """Refuse state that could skip or reorder unverified candidates."""
+        if self.schema != SCHEMA or self.version != SCHEMA_VERSION:
+            raise ValueError("cost-ordered state schema is unsupported")
+        if self.cursor < 0 or self.cursor > len(self.order):
+            raise ValueError("cost-ordered cursor is outside its order")
+        if len(set(self.order)) != len(self.order):
+            raise ValueError("cost-ordered order repeats a candidate")
+        if len(set(self.verified)) != len(self.verified):
+            raise ValueError("cost-ordered verified set repeats a candidate")
+        if len(set(self.viable)) != len(self.viable):
+            raise ValueError("cost-ordered viable set repeats a candidate")
+        if tuple(self.order[:self.cursor]) != tuple(self.verified):
+            raise ValueError(
+                "cost-ordered cursor does not match the verified prefix")
+        if not set(self.viable) <= set(self.verified):
+            raise ValueError(
+                "cost-ordered state marked an unverified candidate viable")
+        viable_set = set(self.viable)
+        if tuple(item for item in self.verified if item in viable_set) != tuple(
+                self.viable):
+            raise ValueError(
+                "cost-ordered viable candidates are outside verified order")
+        if (self.stop_reason is not None
+                and self.stop_reason not in _STOP_REASONS):
+            raise ValueError("cost-ordered stop reason is unrecognised")
+
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "CostOrderedState":
         if not isinstance(raw, Mapping):
@@ -152,16 +179,7 @@ class CostOrderedState:
         except (KeyError, TypeError, ValueError) as error:
             raise ValueError(
                 f"cost-ordered state is malformed: {error}") from error
-        if state.cursor < 0 or state.cursor > len(state.order):
-            raise ValueError("cost-ordered cursor is outside its order")
-        if len(set(state.order)) != len(state.order):
-            raise ValueError("cost-ordered order repeats a candidate")
-        if not set(state.verified) <= set(state.order):
-            raise ValueError("cost-ordered state verified an unknown candidate")
-        if not set(state.viable) <= set(state.verified):
-            raise ValueError("cost-ordered state marked an unverified candidate viable")
-        if state.stop_reason is not None and state.stop_reason not in _STOP_REASONS:
-            raise ValueError("cost-ordered stop reason is unrecognised")
+        state.validate()
         return state
 
 
@@ -301,6 +319,10 @@ def run_cost_ordered_search(
     cost_by_id = {cost.candidate_id: cost for cost in ordered}
 
     if state is not None:
+        # Callers may supply a dataclass directly instead of loading JSON.
+        # Validate both paths so a forged cursor cannot skip an unverified
+        # prefix while retaining an otherwise matching content identity.
+        state.validate()
         if state.identity_key != key:
             raise ValueError(
                 "cost-ordered resume is invalid: the policy, cost ledger or "
@@ -322,6 +344,20 @@ def run_cost_ordered_search(
         raise ValueError(
             f"cost-ordered resume is missing evidence for {len(missing)} "
             f"already-verified candidate(s), first {missing[0]}")
+    mismatched = [
+        item for item in verified
+        if evidence_by_id[item].candidate_id != item
+    ]
+    if mismatched:
+        raise ValueError(
+            "cost-ordered resume evidence belongs to another candidate: "
+            f"{mismatched[0]}")
+    evidence_viable = [
+        item for item in verified if evidence_by_id[item].eligible
+    ]
+    if viable != evidence_viable:
+        raise ValueError(
+            "cost-ordered resume viable set does not match its evidence")
 
     cache_hits = 0
     stop_reason = "search_space_exhausted"

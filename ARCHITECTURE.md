@@ -1251,10 +1251,12 @@ the budget, the spec, the policy and the exact preflight before importing the
 SUMO stack at all, so an over-budget search is refused in about 22 MiB instead
 of after ~110 MiB of numpy/pandas/SciPy and a wait for the shared demand lock.
 Measured: the search import chain 99.96 → 21.62 MiB, the CLI 130.60 → 21.68
-MiB, the 720-hour streaming process total ~102 → 23.25 MiB on Linux/x86_64.
+MiB, and the 720-hour streaming process total ~102 → 23.25 MiB on Linux/x86_64.
 `tests/test_search_import_cost.py` pins this in real child interpreters. The
-gate itself stays OPEN — the frozen reference is Darwin/arm64 — but it is now
-closable by a measurement rather than structurally out of reach.
+final five-repeat run on the frozen baseline platform (Darwin/arm64, 2026-08-11)
+measured 25.30 MiB total with SciPy absent and reports
+`memory_gate.status=passed` against the 64 MiB ceiling. PR C's memory gate is
+closed.
 
 **Unchanged.** The 100,000-parent and 10,000-unit caps, ranking,
 `closure_cost_v1`, pilot selection, finalist decision, teleport policy and
@@ -1290,17 +1292,25 @@ pre-SUMO refusal can be read and argued with.
 **The daily-cost cache is versioned and content-addressed.**
 `deterministic_daily_cost_cache_v1` binds the full daily-unit identity, all
 three route files' SHA-256, the network digest, the demand metadata, the
-disruption schema version and the bytes of every source that computes the
-number. A widened date range around the same unit hits; a changed route,
-network, variant or line of costing code misses. A record whose stored identity
-does not match the key it was found under, an unreadable record or a partial
-variant set raises rather than degrading.
+network's validated adjacency-metadata digest, the disruption schema version
+and the bytes of every source that computes the number. Route digests are
+captured once when the immutable archive is opened; cheap file-state checks
+refuse an archive or network that changes beneath an open provider instead of
+re-hashing large routes for every daily unit. A widened date range around the
+same unit hits; a changed route, network, variant or line of costing code
+misses. Concurrent writers publish through unique same-directory partials and
+atomic replacement. A record whose stored identity does not match the key it
+was found under, an unreadable record or a partial variant set raises rather
+than degrading.
 
 **There is one implementation, not two.** `monthly_sumo._closure_disruption`
 delegates to the same provider and shares its interval-to-seconds conversion,
-so the pre-SUMO and post-SUMO paths cannot drift apart. The plan's equivalence
-gate on real golden and benchmark archives is still OPEN — it needs calibrated
-demand this environment cannot build.
+so the pre-SUMO and post-SUMO paths cannot drift apart.
+`validation/closure_cost_ordering_golden_v1.json` exercises both current paths
+against the pinned real q10/q50/q90 golden archive: all fields, historical cost
+fields and sorting order agree, and the record reproduces byte-for-byte. PR D's
+real-golden equivalence gate is passed; this remains development evidence, not
+held-out or release evidence.
 
 #### Cost-ordered verification (`cost_ordered_search.py`) — PR E, SHADOW ONLY
 
@@ -1320,15 +1330,23 @@ The module decides nothing: the finalist set goes to the unchanged
 `incomplete` are untouched and a finalist set can never be silently truncated.
 `CostOrderedState` is serializable and its `identity_key` binds policy, cost
 ledger and provider identity, so a resume after any of those moved is refused.
-Every scan publishes a machine-readable stop proof naming the band, the first
-unexamined candidate and its cost.
+The cursor must equal the exact verified prefix, viability must stay in that
+order and must agree with the persisted evidence; these checks also run for a
+direct dataclass supplied without JSON parsing. Every scan publishes a
+machine-readable stop proof naming the band, the first unexamined candidate and
+its cost.
 
 The screening mode `independent-cost-ordered-exact` is registered as SHADOW
 ONLY and changes no ranking, finalist set or claim. `validation/
 monthly_search_policy_v3.json` is provisional and changes execution order only;
 its pre-registration freezes every decision parameter and records that
 activation, UI exposure and global-best claims remain closed. The equivalence
-gate needs a named real benchmark and is OPEN.
+gate now passes on the pinned named golden replay: status and selected IDs match
+exhaustive. It saves 0 of 3 verifications because that benchmark has only one
+health-viable finalist, so the pre-registered positive-savings and activation
+gates remain closed. The current CLI integration is a post-hoc replay over the
+completed exhaustive pilot-selection record; the state machine's persistent
+cursor is not yet the product execution path.
 
 #### Progress vocabulary — step 4, BUILT
 

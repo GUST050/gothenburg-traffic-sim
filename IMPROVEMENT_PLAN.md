@@ -1878,6 +1878,21 @@ pre-outcome structural criteria that yield multiple health-viable candidates;
 only then can a nonzero equivalence tolerance be justified before the new
 untouched held-out campaign is frozen.
 
+**Closure-scaling review checkpoint, 2026-08-11.** PR C's five-repeat
+Darwin/arm64 run now passes the 64 MiB process-total gate at 25.30 MiB for the
+720-hour case. PR D's current process-free provider and runner path are
+field-identical on the pinned real q10/q50/q90 golden archive, and current cost
+fields/order match the preserved benchmark. PR E's named golden replay returns
+the same `ready` status and selected ID as exhaustive, but saves 0 of 3
+verifications because the benchmark has only one health-viable candidate. The
+records are `validation/closure_search_streaming_v1.json` and
+`validation/closure_cost_ordering_golden_v1.json`; both are diagnostic and
+open no release claim. The next priority is no longer to build demand—the dev
+machine already has a calibrated archive library—but to connect the persistent
+cost-ordered cursor/provider to actual product execution and then freeze a
+pre-outcome discriminating benchmark with several health-viable candidates.
+Policy v3, UI/global-best wording and held-out adoption remain closed.
+
 ### Confidence, policy, and wording
 
 Do not compress confidence into a fake probability. The result exposes:
