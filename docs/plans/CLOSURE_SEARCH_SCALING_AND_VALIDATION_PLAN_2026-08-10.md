@@ -844,3 +844,133 @@ Exakt kommando för att stänga den på utvecklingsmaskinen:
     python3 tools/benchmark_closure_streaming.py --repeats 5 --overwrite
 
 och läs `validation/closure_search_streaming_v1.json` → `memory_gate.status`.
+
+---
+
+## 11. Uppmätt resultat: PR D, PR E, PR F, steg 4 och PR H (2026-08-10)
+
+Avsnitt 1–10 är oförändrade.
+
+### PR D — processfri deterministisk disruption (steg 3)
+
+`traffic_sim/simulation/deterministic_disruption.py`. Publik provider utan
+TraCI eller SUMO-process: `DeterministicDisruptionProvider` (protokoll),
+`ArchiveDisruptionProvider` (ett arkiv + nät → per-variant-poster),
+`NetworkCostModel` (byggs en gång per nät), `DailyCostCache`.
+
+- Aggregering: `sum_daily_disruption` summerar PER VARIANT före field-wise
+  worst; `parent_closure_cost` använder oförändrad `ClosureCost.sort_key`.
+- `vehicles_no_detour > 0` diskvalificerar före SUMO;
+  `disqualification_evidence` behåller hela evidensen.
+- Cacheidentiteten binder full dagsenhetsidentitet, SHA-256 för alla tre
+  routefiler, nätets SHA-256, demand-metadata, disruptionschemats version och
+  bytes för varje källa som beräknar talet (`run_scenario.py`,
+  `deterministic_disruption.py`, `closure_ranking.py`).
+- Fail-closed: saknad variant, oläsbar post, post vars lagrade identitet inte
+  matchar nyckeln, ofullständig variantmängd, schema från annan sökning.
+- Den gamla post-SUMO-vägen är inte en andra implementation:
+  `monthly_sumo._closure_disruption` delegerar till samma provider och delar
+  intervall→sekunder-konverteringen.
+- `MonthlyDemandResolverRunner.archive_for()` och
+  `.deterministic_disruption_provider()` löser rätt immutable arkiv och
+  delegerar utan att starta SUMO.
+
+**Tester:** `tests/test_deterministic_disruption.py` 27 passerade.
+**Exit-grinden är INTE stängd.** Planens grind kräver 100 % fältidentiska
+kostnader och identisk sorteringsordning på golden, benchmark och små
+brute-force-fixturer med VERKLIGA q10/q50/q90-arkiv. Det finns ingen
+kalibrerad demand i denna miljö. Vad som är bevisat: strukturell identitet
+(en implementation, delad konvertering) och beteendemässig identitet på
+syntetiska routefixturer.
+
+### PR E — kostnadsordnad state machine i shadow mode (steg 4)
+
+`traffic_sim/simulation/cost_ordered_search.py`. Ren state machine med
+serialiserbart cursor/cutoff/verified-tillstånd, maskinläsbart stoppbevis och
+`identity_key` som ogiltigförklarar resume vid ändrad policy, kostnadsledger
+eller provideridentitet.
+
+Stoppregeln är planens: no-detour diskvalificeras före SUMO, resten sorteras
+med oförändrad `sort_key`, hårda fel stoppar inte skanningen, cutoff sätts vid
+k:te viabla kandidatens `added_vehicle_hours`, och verifiering fortsätter
+medan nästa kandidat är `<= cutoff + practical_equivalence_vehicle_hours`.
+Kandidat exakt på gränsen är INNANFÖR (`<=`). Modulen beslutar ingenting själv
+— finalistmängden går till oförändrad `select_pilot_finalists`, så
+`capacity_exceeded` och `no_viable` är oförändrade och ingen finalistmängd kan
+kapas tyst.
+
+**Tester:** `tests/test_cost_ordered_search.py` 70 passerade, nästan alla
+differentiella mot uttömmande läge: små kalendrar, primär/sekundär/ID-ties,
+kandidat exakt på cutoff och precis över, hårdfelsmasker, alla underkända,
+alla no-detour, `capacity_exceeded`, för få finalister, 24 slumpade
+kontrakt/mask-kombinationer, restart före och efter cutoff samt fyra
+resume-ogiltigförklaringar. På 50 kandidater verifieras 4.
+
+Screeningläget `independent-cost-ordered-exact` är registrerat men SHADOW
+ONLY: det kör samma uttömmande screening och replayer dessutom den
+kostnadsordnade skanningen över körningens egna registrerade beslutsindata,
+och skriver `cost-ordered-shadow.json` bredvid workspace. Ingen rangordning,
+ingen finalistmängd och inget anspråk ändras.
+
+**Exit-grinden är INTE stängd.** Den kräver samma pilotstatus och samma
+`selected_ids` i ett NAMNGIVET verkligt benchmark. Fixturer och replay räcker
+inte.
+
+### PR F — policy v3 (steg 4/5)
+
+`validation/monthly_search_policy_v3.json` är provisional och ändrar ENDAST
+exekveringsordning: varje beslutsparameter är kopierad oförändrad från v2.
+`validation/monthly_search_policy_v3_preregistration.json` fryser praktisk
+ekvivalens, precision, finalistkapacitet och maxrepetitioner före
+benchmarkutfallet, och säger uttryckligen att aktivering och alla UI- och
+global-best-anspråk förblir stängda. v1 och v2 är oförändrade.
+**Policy v3 kan INTE aktiveras.**
+
+### Steg 4 — progress, budget och UI
+
+`PROGRESS_PHASES` deklarerar hela vokabulären på ett ställe:
+`policy, preflight, enumerate, screen, cost_units, cost_parents, health_scan,
+prepare_backend, pilot, finalists, decide, adaptive_finalists, publish`.
+`SearchWorkspace.update_progress` tar en valfri `detail`-mapping som valideras
+och serialiseras vid skrivning. `serve.py` skickar redan hela progress-objektet
+vidare. `web/app.js` etiketterar varje fas och visar detaljraden: X/Y
+kostnadsberäknade, cacheträffar, A/B SUMO-verifierade och aktuell gräns i
+fordonstimmar. Bundlepinnen är v20.
+`tests/test_monthly_progress_contract.py` (10) låser faserna, etiketterna och
+detaljen mot varandra.
+
+### PR H — förregistrering av independent vs continuous (steg 7)
+
+`validation/independent_vs_continuous_preregistration_v1.json`: 84 fall, 35
+parbara, med frysta toleranser, jämförda mått och båda riskklasserna.
+
+Två KONTRAKTSFYND, viktigare än vad en kampanj hade gett:
+
+1. `ClosureSearchSpec` VÄGRAR en continuous-stängning längre än 21 arbetsdagar.
+   Ovanför 21 finns ingen motfaktisk att jämföra mot — inte av brist på
+   demand, utan enligt kontraktet. Planens förbud mot att extrapolera
+   21-dagarsevidens till 90 har därmed en konkret grund: det finns inget att
+   extrapolera från.
+2. De två policyerna går på olika datumaxlar. Med helger uteslutna existerar
+   ingen continuous-körning på 7 arbetsdagar alls. En parbar jämförelse bortom
+   en arbetsvecka är därför bara uttryckbar när alla veckodagar tillåts — nu en
+   explicit axel. En overnight-bandbredd är oparbar åt andra hållet:
+   independent-policyn kan inte uttrycka den.
+
+**Ingen mätning är gjord.** Posten öppnar ingen grind.
+
+### Vad som är BLOCKERAT och varför
+
+| steg | status | blockerare | exakt kommando |
+|---|---|---|---|
+| PR D exit-grind | blockerad | ingen kalibrerad q10/q50/q90-demand | `make demand` |
+| PR E exit-grind | blockerad | samma | `make demand` sedan uttömmande + cost-ordered på samma spec |
+| PR F aktivering | blockerad | inget namngivet benchmark, ingen held-out | se `monthly_search_policy_v3_preregistration.json` |
+| PR G (steg 6) | blockerad | ingen kalibrerad demand; `libsumo` är inte installerat i miljön | `pip install eclipse-sumo` med libsumo-bindning, sedan `python3 benchmark_seed_workers.py` |
+| PR H mätning | blockerad | ingen kalibrerad demand | `make demand` |
+| PR I (steg 8) | delvis PERMANENT stängd | projektbeslut 2026-07-20: ingen ny extern data (se CLAUDE.md "Open questions"). Mikrosimulering och work-zone-kalibrering kräver dessutom kalibrerad demand | ingen — beslutet är en fast gräns, inte en TODO |
+| Steg 8 (benchmark, held-out, releasegrind) | blockerad | kräver PR D/E-grindarna först, sedan en orörd held-out-kampanj | `make demand` sedan kampanjkedjan |
+
+`make demand` misslyckas i denna miljö: `build_candidates.py` behöver
+OSM/Overpass, som miljöns nätverkspolicy nekar. Det är den enda verkliga
+blockeraren för fem av sju rader ovan.

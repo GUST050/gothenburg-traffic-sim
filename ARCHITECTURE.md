@@ -1261,6 +1261,87 @@ closable by a measurement rather than structurally out of reach.
 survivability logic are untouched. The 360-hour six-month case is still refused
 by the unit cap; it simply no longer fails for want of memory first.
 
+#### Deterministic closure cost before SUMO (`deterministic_disruption.py`) — PR D, BUILT
+
+`closure_cost_v1` is demand-side and congestion-independent: it replays each
+calibrated vehicle's baseline route against the closure windows and compares
+the cheapest legal path with and without the closure. Nothing in that needs a
+simulator, but until PR D it was reachable only through
+`ArchivedDemandSumoRunner` — so a search had to simulate a candidate to learn
+whether the candidate was worth simulating.
+
+`DeterministicDisruptionProvider` is the protocol and exposes no simulation
+handle; `ArchiveDisruptionProvider` implements it from one immutable archive
+plus `NetworkCostModel`, which parses the network once and carries the digest
+it was built from. `MonthlyDemandResolverRunner.archive_for()` and
+`.deterministic_disruption_provider()` resolve the right archive and delegate
+without starting SUMO.
+
+**Reduction order is a contract.** `sum_daily_disruption` sums a parent's daily
+records PER VARIANT and only then takes the field-wise worst. Reducing first
+and summing after would let a schedule take its worst day from q10 and its
+worst day from q90 and add them — a world in which the direction split changed
+overnight. `parent_closure_cost` then uses the unchanged `ClosureCost.sort_key`.
+
+**`vehicles_no_detour` disqualifies; it never becomes a cost.**
+`disqualification_evidence` keeps the numbers and the per-variant records so a
+pre-SUMO refusal can be read and argued with.
+
+**The daily-cost cache is versioned and content-addressed.**
+`deterministic_daily_cost_cache_v1` binds the full daily-unit identity, all
+three route files' SHA-256, the network digest, the demand metadata, the
+disruption schema version and the bytes of every source that computes the
+number. A widened date range around the same unit hits; a changed route,
+network, variant or line of costing code misses. A record whose stored identity
+does not match the key it was found under, an unreadable record or a partial
+variant set raises rather than degrading.
+
+**There is one implementation, not two.** `monthly_sumo._closure_disruption`
+delegates to the same provider and shares its interval-to-seconds conversion,
+so the pre-SUMO and post-SUMO paths cannot drift apart. The plan's equivalence
+gate on real golden and benchmark archives is still OPEN — it needs calibrated
+demand this environment cannot build.
+
+#### Cost-ordered verification (`cost_ordered_search.py`) — PR E, SHADOW ONLY
+
+Because the cost is deterministic and the order is total, SUMO can only qualify
+or disqualify a candidate — it cannot reorder them. So a run can stop as soon
+as no unexamined candidate could still enter the finalist set: deterministically
+disqualified candidates never reach SUMO, the rest are verified in
+`sort_key` order, a hard failure continues rather than stops the scan, and once
+`minimum_finalists` verified candidates are viable the cutoff is the k-th
+viable candidate's `added_vehicle_hours`. Verification continues while the next
+candidate is `<= cutoff + practical_equivalence_vehicle_hours` — inclusive, the
+same comparison `pilot_selection` makes — and stops only when the next
+candidate is strictly above it.
+
+The module decides nothing: the finalist set goes to the unchanged
+`select_pilot_finalists`, so `ready`, `capacity_exceeded`, `no_viable` and
+`incomplete` are untouched and a finalist set can never be silently truncated.
+`CostOrderedState` is serializable and its `identity_key` binds policy, cost
+ledger and provider identity, so a resume after any of those moved is refused.
+Every scan publishes a machine-readable stop proof naming the band, the first
+unexamined candidate and its cost.
+
+The screening mode `independent-cost-ordered-exact` is registered as SHADOW
+ONLY and changes no ranking, finalist set or claim. `validation/
+monthly_search_policy_v3.json` is provisional and changes execution order only;
+its pre-registration freezes every decision parameter and records that
+activation, UI exposure and global-best claims remain closed. The equivalence
+gate needs a named real benchmark and is OPEN.
+
+#### Progress vocabulary — step 4, BUILT
+
+`monthly_search.PROGRESS_PHASES` declares the phases in one place —
+`policy, preflight, enumerate, screen, cost_units, cost_parents, health_scan,
+prepare_backend, pilot, finalists, decide, adaptive_finalists, publish` — and
+`SearchWorkspace.update_progress` accepts an optional `detail` mapping,
+validated and serialised at write time. `web/app.js` labels every phase and
+renders the detail beside it: costed candidates, cache hits, SUMO verifications
+and the current cutoff. `tests/test_monthly_progress_contract.py` pins the
+search, the API and the UI against each other, so a phase with no label cannot
+ship.
+
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %
 of a hidden station's traffic (range 0.06–0.83). CONFOUND WARNING (missing

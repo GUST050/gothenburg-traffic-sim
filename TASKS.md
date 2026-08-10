@@ -9,94 +9,97 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Closure-search scaling: PR C (streaming closure schedules and
-  versioned workspace ledgers), independently reviewed and corrected`
-- Status: `IMPLEMENTATION GREEN; ONE DOCUMENTED EXIT GATE REMAINS OPEN. Claude's
-  streaming calendar, atomic versioned ledgers, v1 compatibility and minimal
-  parent index are intact. Review added the missing exact preflight before an
-  independent-exhaustive product run can write ledgers, enforces the total
-  parent cap even when some parents are unavailable, and checks preflight counts
-  against the streamed enumeration. All six frozen cases retain identical
-  counts (2,186/5,676 and 11,813/23,349). On comparable Darwin/arm64, streaming
-  adds 1.33 MiB for 720 h and 7.00 MiB for 360 h, but the 720 h process total is
-  78.02 MiB, so the explicit under-64-MiB process gate is still OPEN.`
-- Suggested next action: `Choose and implement a real reduction of fixed import
-  RSS if the 64-MiB process-total gate must pass; otherwise review and explicitly
-  revise that gate before beginning PR D. Another measurement alone cannot close
-  it.`
+- Current focus: `Closure-search scaling: everything in the 2026-08-10 plan
+  that can be built without calibrated demand — step 0, PR D, PR E, PR F,
+  step 4 and PR H's pre-registration`
+- Status: `IMPLEMENTED AND GREEN; FIVE GATES REMAIN OPEN, ALL ON THE SAME
+  MISSING INPUT. Step 0 removed the fixed SciPy import from the search path:
+  the import chain is 99.96 -> 21.62 MiB, the product CLI 130.60 -> 21.68 MiB
+  and the 720 h streaming process total 23.25 MiB on Linux, so PR C's
+  under-64-MiB gate is now closable by a measurement instead of structurally
+  out of reach — it still needs a Darwin/arm64 run. PR D moved the
+  deterministic cost into a process-free provider with a versioned
+  content-addressed daily cache; PR E is a cost-ordered state machine proved
+  equivalent to exhaustive on 70 differential tests and registered SHADOW
+  ONLY; PR F froze policy v3 and its pre-registration without activating
+  anything; step 4 declared the progress vocabulary and wired the UI detail;
+  PR H froze the independent-vs-continuous question and found that the
+  contract itself refuses a continuous closure above 21 workdays.`
+- Suggested next action: `Build one calibrated q10/q50/q90 demand archive
+  (make demand) on a host with OSM access. That single input unblocks the PR D
+  and PR E equivalence gates, PR F's benchmark, PR G and PR H's measurement.
+  Then re-measure the PR C memory gate on the Darwin/arm64 dev machine.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Do not use held observations in pool, picker or certificate.
-  Do not weaken TAG/fit/provenance gates or promote pilot or diagnostic
-  artifacts as release evidence. Do not edit annual plan-bound inputs while
-  warming is active. Do not raise the 10,000-unit cap before cost-ordering
-  equivalence and resource gates pass. Do not rewrite
-  validation/closure_search_scaling_baseline_v1.json — its source drift on the
-  four files PR C changed is intended evidence.`
-- Updated: `Codex review branch codex/review-closure-streaming-pr-c over Claude
-  commit 1080ac7. Focused closure/monthly/preflight checks pass 301/301; API 126/126;
-  survivability artifact reproduces byte-for-byte. One unrelated brittle
-  warm-horizon source-text test also fails on base 01a0b16. Darwin comparison
-  artifact regenerated with current source hashes / 2026-08-10.`
+  Do not weaken TAG/fit/provenance gates or promote pilot, shadow or diagnostic
+  artifacts as release evidence. Do not activate policy v3, the cost-ordered
+  screening mode, UI exposure or a global-best claim before the equivalence and
+  held-out gates actually pass. Do not raise the 10,000-unit cap. Do not
+  rewrite validation/closure_search_scaling_baseline_v1.json or any frozen
+  v1/v6/v9/v10 artifact. Do not edit annual plan-bound inputs while warming is
+  active. Do not fabricate demand, held-out or microsimulation evidence.`
+- Updated: `Claude, branch claude/closure-scaling-remaining-plan over Codex
+  review 8644f81. Focused suites: deterministic disruption 27, cost-ordered 70,
+  import cost 4, progress contract 10, policy v3 9, PR H pre-registration 17;
+  closure/monthly/held-out/proxy sweep 2,057 passed with the same 122
+  environment failures the review commit reproduces; API 126. The API suite
+  has pre-existing timing flakes that also appear at 8644f81 / 2026-08-10`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### CLOSURE-SCALING-C — Streaming closure schedules and versioned ledgers
+### CLOSURE-SCALING-REST — Cost-first execution, shadow mode and pre-registrations
 
-- Status: `IMPLEMENTED, REVIEWED AND TESTED; semantic/restart gates pass, while
-  the comparable process-total memory gate remains open at 78.02 MiB.`
-- Objective and scope: `PR C only from
-  docs/plans/CLOSURE_SEARCH_SCALING_AND_VALIDATION_PLAN_2026-08-10.md. Stream
-  the calendar, write versioned NDJSON ledgers, and remove the full
-  parent/reverse-parent object graph from the new execution path while
-  preserving exact behaviour and backward compatibility. No cost ordering, no
-  ranking change, no PR D/E, no cap change.`
-- Completion outcome: `iter_closure_schedules yields the identical enumeration
-  lazily and generate_closure_schedules is its materialising wrapper.
-  closure_ledgers.py writes parents.ndjson, units.ndjson and
-  parent_units.ndjson in one streaming pass, publishes them atomically and
-  publishes the manifest LAST as the completion signal. The reverse
-  unit->parents graph is gone from the new path; StreamingDailyUnit carries no
-  parent list. monthly_search opens a v1 ledger, a published streaming manifest
-  or an unpublished build area, in that order, and only ever builds a
-  byte-offset ParentLedgerIndex. run_monthly_closure_search preflights supported
-  independent-exhaustive specs before ledger creation, then screens in one
-  streaming pass.`
-- Context or checkpoints: `Unit identity comes from ONE implementation
-  (daily_unit_records) shared by both paths, so a streamed unit hits the same v1
-  cache entry — regression-tested end to end. Its schedule object is built
-  lazily; building it eagerly made decompose_schedules five times more
-  expensive, which was found and fixed before measuring. Review also fixed the
-  previously late cap refusal, a flaky small-fixture RSS assertion and a
-  misleading comparable-host gate explanation.`
-- Primary files: `NEW traffic_sim/simulation/closure_ledgers.py,
-  tools/benchmark_closure_streaming.py,
-  validation/closure_search_streaming_v1.json, tests/test_closure_ledgers.py,
-  tests/test_benchmark_closure_streaming.py. MODIFIED
-  traffic_sim/core/closure_calendar.py,
-  traffic_sim/simulation/independent_daily.py,
-  traffic_sim/simulation/monthly_search.py, run_monthly_closure_search.py,
-  tests/test_closure_calendar.py,
-  tests/test_benchmark_closure_search_scaling.py, tests/test_independent_daily.py,
-  ARCHITECTURE.md, the scaling plan (section 9), TASKS.md, AGENT_NOTES.md`
-- Constraints and safety: `The 100,000-parent and 10,000-unit caps are
-  unchanged and still refuse the 360 h case. Ranking, closure_cost_v1, pilot
-  selection, finalist decision, teleport policy and survivability logic are
-  untouched. No frozen v1/v6/v9/v10 artifact was rewritten, no v11 created, no
-  held-out campaign run and no annual warming input touched. PR A's baseline is
-  history and now reports intended source drift on four files.`
-- Acceptance criteria: `Identical schedule IDs and order; byte-equivalent
-  to_dict(); parent->unit order and unique unit IDs unchanged; interrupted,
-  missing, malformed, miscounted and mis-digested ledgers never resumed as
-  valid; restart idempotent; old v1 workspaces and caches still load; a
-  100,000-parent synthetic search builds no object graph; 720 h streaming under
-  64 MiB on comparable hardware.`
-- Useful checks: `Focused PR C set 161 passed before final review additions;
-  expanded monthly/closure/calendar/preflight set 301 passed, one unrelated
-  base-existing brittle warm-horizon test deselected; benchmark contract included;
-  full API 126 passed with loopback permission; survivability byte verification
-  true; git diff --check clean.`
+- Status: `IMPLEMENTED AND TESTED. Every gate that can be closed without
+  calibrated demand is closed; the rest are named with reproducible commands.`
+- Objective and scope: `The remaining closure-search plan: step 0's memory
+  gate, PR D's process-free deterministic cost, PR E's cost-ordered state
+  machine in shadow mode, PR F's policy v3 pre-registration, step 4's progress
+  and UI work, and PR H's pre-registration. PR G, PR I and step 8 are reported
+  as blocked, not simulated.`
+- Completion outcome: `finalist_decision imports SciPy lazily and the seed
+  budget moved to a dependency-free module, so the CLI refuses an over-budget
+  search in ~22 MiB instead of ~131 MiB. deterministic_disruption.py computes
+  closure cost with no SUMO process, sums per variant before the field-wise
+  worst, disqualifies no-detour candidates with full evidence, and caches
+  daily costs under an identity that binds routes, network, schema and costing
+  code. cost_ordered_search.py verifies in cost order and stops only when the
+  next candidate is strictly above cutoff + practical equivalence, handing the
+  finalist set to the unchanged selector. policy v3 and the
+  independent-vs-continuous question are frozen but inert.`
+- Context or checkpoints: `PR H's construction found that ClosureSearchSpec
+  refuses a continuous closure above 21 workdays, so the plan's 1-90 day
+  paired comparison is not expressible above 21 at all — which is why 21-day
+  evidence may not be extrapolated to 90. It also found that with weekends
+  excluded a continuous 7-workday run does not exist, because the two policies
+  walk different date axes.`
+- Primary files: `NEW traffic_sim/simulation/deterministic_disruption.py,
+  cost_ordered_search.py, seed_worker_budget.py,
+  tools/preregister_independent_vs_continuous.py,
+  validation/monthly_search_policy_v3.json,
+  validation/monthly_search_policy_v3_preregistration.json,
+  validation/independent_vs_continuous_preregistration_v1.json, and five new
+  test modules. MODIFIED finalist_decision.py, monthly_sumo.py,
+  monthly_demand.py, monthly_search.py, search_workspace.py,
+  run_monthly_closure_search.py, web/app.js, web/index.html, ARCHITECTURE.md,
+  the scaling plan (sections 10 and 11), TASKS.md, AGENT_NOTES.md.`
+- Constraints and safety: `Nothing was activated. Ranking, closure_cost_v1,
+  pilot selection, finalist decision, teleport policy, survivability and both
+  resource caps are unchanged; v1 and v2 policies and every frozen artifact are
+  untouched; no held-out campaign was run and no demand, OSM or microsimulation
+  evidence was fabricated.`
+- Acceptance criteria: `Differential equivalence with the exhaustive path on
+  every fixture; pre-SUMO and post-SUMO costs field-identical; caches that hit
+  on a widened range and miss on any identity change; restart idempotent and
+  stale resumes refused; the progress vocabulary shared by search, API and UI;
+  every pre-registration frozen before its outcome and claiming nothing.`
+- Useful checks: `pytest -q tests/test_deterministic_disruption.py
+  tests/test_cost_ordered_search.py tests/test_search_import_cost.py
+  tests/test_monthly_progress_contract.py tests/test_policy_v3_preregistration.py
+  tests/test_independent_vs_continuous_preregistration.py (127 passed); the
+  combined closure/monthly sweep; tests/test_serve.py; git diff --check;
+  python3 tools/benchmark_closure_streaming.py --repeats 5 --overwrite.`
 <!-- ACTIVE_TASK_END -->
 
 ## History

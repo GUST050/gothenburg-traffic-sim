@@ -7,46 +7,68 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `PR C was independently reviewed on
-  codex/review-closure-streaming-pr-c over Claude commit 1080ac7. Functional,
-  semantic, restart and integrity work is green; the explicit process-total
-  64-MiB exit gate remains open on comparable Darwin/arm64.`
-- Summary: `The streaming calendar and three manifest-last NDJSON ledgers are
-  sound and preserve v1 IDs/order/cache compatibility without the reverse
-  unit->parents graph. Review found that the product CLI still wrote the full
-  candidate ledger before independent-exhaustive screening discovered the
-  known cap. It now runs exact preflight before network identity, runner setup
-  or search-workspace publication; total parent and unit caps are enforced,
-  and supported preflight counts must match the streamed pass.`
-- Files changed: `Claude's PR C files plus review edits in
-  run_monthly_closure_search.py, tools/benchmark_closure_streaming.py,
-  tests/test_independent_daily.py, tests/test_benchmark_closure_streaming.py,
-  validation/closure_search_streaming_v1.json, ARCHITECTURE.md, the scaling
-  plan, TASKS.md and AGENT_NOTES.md.`
-- Checks: `Focused PR C set 161 passed; expanded closure/monthly/calendar/
-  preflight set 301 passed with one unrelated test_warm_horizon source-text
-  assertion deselected because it also fails at base 01a0b16;
-  API 126 passed with loopback permission; screen_closure_survivability
-  --verify reproduces byte-for-byte; git diff --check clean.`
-- Decisions and evidence: `The regenerated Darwin/arm64 diagnostic comparison
-  is source-hash and content-key consistent. All six cases agree semantically.
-  720 h: 2,186 parents / 5,676 units, streaming p95 7.425 s, 1.33 MiB over
-  imports, 78.02 MiB process total, versus 250.80 MiB materialising. 360 h:
-  11,813 / 23,349, streaming p95 30.474 s, 7.00 MiB over imports, versus
-  785.77 MiB materialising. PR A's frozen baseline was not rewritten.`
-- Blockers or risks: `open_fixed_import_cost_dominates is confirmed on the
-  comparable host, not pending remeasurement: fixed imports are 76.69 MiB, so
-  the 78.02-MiB process total cannot pass a 64-MiB gate even though enumeration
-  adds only 1.33 MiB. Closing it requires a real fixed-import reduction or an
-  explicitly reviewed gate-contract change. The review branch is local and has
-  not been merged or pushed.`
-- Suggested next action: `Decide whether to reduce real process import RSS for
-  the existing gate or explicitly revise the gate; after that, integrate PR C
-  and proceed to PR D.`
-- Actor notes: `No held-out campaign, SUMO comparison, annual warming input,
-  cap increase, policy/ranking change or frozen PR A baseline rewrite occurred.
-  Legacy exact_balanced_daily_v1 remains stream-compatible and falls back to
-  streaming cap checks because exact PR-B preflight intentionally refuses it.`
+- Focus and status: `The remaining closure-search plan, built on top of Codex
+  review 8644f81, on branch claude/closure-scaling-remaining-plan. Step 0,
+  PR D, PR E, PR F, step 4 and PR H's pre-registration are implemented and
+  green. PR G, PR I and step 8 are blocked on one missing input and are
+  reported, not simulated.`
+- Summary: `Step 0 found that PR C's whole process total was one line — a
+  module-scope scipy import in finalist_decision, which independent_daily
+  imports, so enumeration, preflight, ledgers and cost ordering all paid
+  81.7 MiB for a distribution they never evaluate. It is lazy now, the seed
+  budget moved to a dependency-free module, and the CLI runs spec, policy and
+  the exact preflight before importing the SUMO stack or taking the demand
+  lock. PR D turned the deterministic cost into a public process-free provider
+  with a versioned content-addressed daily cache, summing per variant before
+  the field-wise worst and disqualifying no-detour candidates with their
+  evidence intact; the SUMO runner now delegates to that same provider, so
+  there is one implementation rather than two to keep equal. PR E verifies in
+  cost order and stops only when the next candidate is strictly above
+  cutoff + practical equivalence, handing the finalist set to the unchanged
+  selector so capacity_exceeded and no_viable are untouched.`
+- Files changed: `NEW deterministic_disruption.py, cost_ordered_search.py,
+  seed_worker_budget.py, tools/preregister_independent_vs_continuous.py, three
+  validation records (policy v3, its pre-registration, the
+  independent-vs-continuous pre-registration) and six test modules. MODIFIED
+  finalist_decision.py, monthly_sumo.py, monthly_demand.py, monthly_search.py,
+  search_workspace.py, run_monthly_closure_search.py, web/app.js,
+  web/index.html, tests/test_independent_daily.py, tests/test_serve.py,
+  ARCHITECTURE.md, the scaling plan (sections 10 and 11), TASKS.md,
+  AGENT_NOTES.md.`
+- Checks: `Focused: deterministic disruption 27, cost-ordered 70, import cost
+  4, progress contract 10, policy v3 9, PR H 17. Combined closure / monthly /
+  held-out / proxy sweep: 2,057 passed with the same 122 failures the review
+  commit 8644f81 reproduces in a clean worktree (this container's gitignored
+  sumo/net.net.xml is not the dev machine's). API 126 passed. The API suite has
+  pre-existing timing flakes — three runs at 8644f81 reproduced one — and each
+  passes in isolation. git diff --check clean; no .partial files; no orphan
+  SUMO processes.`
+- Decisions and evidence: `Measured after step 0: search import chain
+  99.96 -> 21.62 MiB, product CLI 130.60 -> 21.68 MiB, 720 h streaming process
+  total 23.25 MiB on Linux/x86_64 with imported_scipy false. PR C's gate now
+  reads open_pending_baseline_host instead of open_fixed_import_cost_dominates:
+  it is closable by a Darwin/arm64 measurement, which it was not before. PR E
+  verifies 4 of 50 candidates on a broad fixture and agrees with exhaustive on
+  every differential test including 24 randomised masks. PR H's construction
+  found that ClosureSearchSpec refuses a continuous closure above 21 workdays,
+  so the plan's 1-90 day paired comparison is not expressible above 21 at all.`
+- Blockers or risks: `ONE missing input blocks five gates: there is no
+  calibrated q10/q50/q90 demand archive, and `make demand` fails here because
+  build_candidates.py needs OSM/Overpass, which the environment's network
+  policy denies. That blocks the PR D and PR E equivalence gates, PR F's
+  benchmark and activation, PR G and PR H's measurement. PR G is additionally
+  blocked because libsumo is not installed. PR I is partly closed by the
+  project's own 2026-07-20 decision to take no further external data. Step 8
+  needs the PR D/E gates first. Policy v3 must NOT be activated and no
+  global-best or UI claim may open.`
+- Suggested next action: `Build one calibrated demand archive on a host with
+  OSM access, then run the exhaustive and cost-ordered arms on the same spec
+  and compare; separately, re-measure the PR C memory gate on Darwin/arm64.`
+- Actor notes: `Nothing was activated and nothing frozen was rewritten: v1/v2
+  policies, the PR A baseline and every v6/v9/v10 artifact are untouched, no
+  v11 was created, no held-out campaign was run, no annual warming input was
+  touched, and both resource caps are unchanged. Shadow and replay artifacts
+  are labelled diagnostic with release_evidence false.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
