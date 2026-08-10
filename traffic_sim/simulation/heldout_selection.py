@@ -289,6 +289,73 @@ def stream_edge_departures(route_path, candidates):
     return {edge: sorted(times) for edge, times in found.items()}
 
 
+def stream_closure_exposure(route_path, candidates):
+    """Per candidate edge, everything a survivability check needs — in one pass.
+
+    Returned per edge:
+      ``vehicles``          routes containing the edge at all;
+      ``denied_departures`` routes STARTING on it, which a full closure denies
+                            outright — access the closure removes, not a
+                            statement about the network's topology;
+      ``resume_pairs``      ``{(edge before the closure, destination): count}``.
+
+    The pair is deliberately the edge IMMEDIATELY BEFORE the closed one, not
+    the route's origin. That is where SUMO's live rerouter re-plans from, and
+    `run_scenario.truncate_stranded_vehicles` was fixed in 2026-07-09 review
+    for using the origin as a proxy: two vehicles sharing an origin can be on
+    different candidate routes, one already committed to a dead branch the
+    other avoided. Counting pairs rather than vehicles keeps the reachability
+    work proportional to distinct approaches, which is a few dozen even when
+    thousands of vehicles cross the edge.
+
+    Parses with the same strict single-pass reader as `stream_edge_departures`,
+    including its refusal of unsupported constructs: a vehicle that silently
+    failed to parse would look like an edge with nothing to sever.
+    """
+    wanted = set(candidates)
+    found: dict[str, dict] = {}
+    seen_vehicles = 0
+    with open(route_path, "r", encoding="utf-8") as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith(("<?xml", "<routes", "</routes", "<!--")):
+                continue
+            if not line.startswith("<vehicle"):
+                tag = line[1:].split(">")[0].split()[0].lstrip("/")
+                if tag not in ALLOWED_TAGS:
+                    raise CanonicalBindingError(
+                        f"unsupported route construct {tag!r} in {Path(route_path).name}")
+                continue
+            edges_match = EDGES_RE.search(line)
+            if VEHICLE_RE.search(line) is None or edges_match is None:
+                raise CanonicalBindingError(
+                    f"unparsable vehicle element in {Path(route_path).name}")
+            seen_vehicles += 1
+            edges = edges_match.group(1).split()
+            if not edges:
+                continue
+            # FIRST occurrence only. A route may touch the same edge twice;
+            # the closure stops it at the earliest one, and counting the later
+            # occurrence would price a leg the vehicle never reaches.
+            for index, edge in enumerate(edges):
+                if edge not in wanted:
+                    continue
+                record = found.setdefault(
+                    edge, {"vehicles": 0, "denied_departures": 0,
+                           "resume_pairs": {}})
+                record["vehicles"] += 1
+                if index == 0:
+                    record["denied_departures"] += 1
+                else:
+                    key = (edges[index - 1], edges[-1])
+                    record["resume_pairs"][key] = \
+                        record["resume_pairs"].get(key, 0) + 1
+                break
+    if not seen_vehicles:
+        raise CanonicalBindingError(f"no vehicles parsed from {Path(route_path).name}")
+    return found
+
+
 def window_exposure(departs, windows):
     """Vehicles departing inside each [start, end) window, in window order.
 

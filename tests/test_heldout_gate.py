@@ -401,6 +401,11 @@ class TestLiveSourceFingerprintEnforcement:
         proxy_validation gained the tolerance-field migration, and the campaign
         runner gained v9 in EXACT_DEMAND_BINDING_CAMPAIGNS. More drift still
         means v6 stays refused, which is the property under test.
+
+        Grew again 2026-08-10 for Stage 4 of the closure-integrity plan:
+        heldout_selection gained `stream_closure_exposure`, which the
+        survivability precondition streams routes with, and the runner gained
+        v10.
         """
         import hashlib as _h
         drifted = {
@@ -410,6 +415,7 @@ class TestLiveSourceFingerprintEnforcement:
         assert drifted == {
             "run_monthly_proxy_validation.py",
             "traffic_sim/core/closure_calendar.py",
+            "traffic_sim/simulation/heldout_selection.py",
             "traffic_sim/simulation/monthly_search.py",
             "traffic_sim/simulation/proxy_validation.py",
         }

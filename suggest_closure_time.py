@@ -55,6 +55,7 @@ import numpy as np
 from scipy import stats as scipy_stats
 
 from traffic_sim.simulation import metrics as cm
+from traffic_sim.simulation import closure_teleport as ct
 import run_scenario as rs
 from traffic_sim.core.contracts import load_scenario_spec
 from traffic_sim.simulation.finalist_decision import (
@@ -344,6 +345,7 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      seed_start: int = 1000,
                      variant_labels: Sequence[str] | None = None,
                      replication_records: list[dict[str, Any]] | None = None,
+                     time_to_teleport_s: int | None = ct.CLOSURE_TIME_TO_TELEPORT_S,
                      ) -> tuple[cm.DisruptionMetrics, int, int, list[float]]:
     """Run `seeds` Monte Carlo replications of one candidate (or the
     baseline, when close_edges is empty) and aggregate their disruption
@@ -447,10 +449,18 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
                      "seed_truncated": seed_truncated,
                      "seed_dropped": seed_dropped})
 
+    # The BASELINE arm (close_edges empty) keeps SUMO's own teleport default:
+    # it has no closed edge to leak onto, and its teleports are the genuine
+    # congestion signal `closure_feasibility` disqualifies a whole observation
+    # on. Only the arm that actually closes something takes the policy, so the
+    # paired comparison keeps a live integrity check on at least one side.
+    seed_teleport_policy = time_to_teleport_s if close_edges else None
+
     def run_one(job: dict) -> tuple[int, int, str, cm.DisruptionMetrics, list[Path]]:
         metric_paths = rs.run_sumo(
             job["seed"], job["route_path"], [job["add_path"]] + closure_add,
             duration_s, home, micro=micro, metrics=True,
+            time_to_teleport_s=seed_teleport_policy,
             **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
         active_throughput = None
         if closures and job["ed_file"].exists():
@@ -540,7 +550,9 @@ def recommendation_status(correlation: dict | None) -> str:
 
 def closure_feasibility(candidate: cm.DisruptionMetrics,
                         baseline: cm.DisruptionMetrics,
-                        *, detour: dict | None = None) -> dict:
+                        *, detour: dict | None = None,
+                        time_to_teleport_s: int | None =
+                        ct.CLOSURE_TIME_TO_TELEPORT_S) -> dict:
     """Build the hard/diagnostic gates used by closure-time ranking.
 
     A low delay is not a valid recommendation if it came from losing access,
@@ -593,6 +605,13 @@ def closure_feasibility(candidate: cm.DisruptionMetrics,
         "vehicles_ended_short": candidate.truncated_unreachable,
         "detour": detour_status,
         "queue": queue,
+        # Carried so `hard_failures` can be read correctly. With the Stage 3
+        # policy in force the candidate's teleport count is zero by
+        # construction, so the ABSENCE of a "teleports" failure is not
+        # evidence about the run — the stuck vehicles are in
+        # vehicles_ended_short/unfinished instead. Recording the policy is
+        # what stops a vacuous check from reading as a passed one.
+        "teleport_policy": ct.policy_record(time_to_teleport_s),
         "paired_delta_time_loss": None,
     }
 

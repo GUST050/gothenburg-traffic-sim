@@ -50,6 +50,7 @@ import numpy as np
 import pandas as pd
 
 from traffic_sim.simulation import metrics as cm
+from traffic_sim.simulation import closure_teleport as ct
 from traffic_sim.simulation.sensor_fit import (assess_output_fit,
                                                summarize_pairs,
                                                summarize_rows)
@@ -370,6 +371,18 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
                if c.get("begin_s") is not None and c.get("end_s") is not None]
     cache: dict = {}
     affected = severed = considered = 0
+    # `severed` above stays the published total for backward compatibility.
+    # The two counters below SPLIT it, because the halves are different facts
+    # and Stage 4 of the closure-integrity plan needs only one of them:
+    #   denied  — the vehicle's own first edge is shut, so it never starts.
+    #             Every street with departures on it has some. It is access the
+    #             closure removes (metrics.access_impact_reasons, C1), not a
+    #             statement about the network's topology.
+    #   severed_destination — the destination is unreachable BY CAR once the
+    #             edge is gone. That is a topology fact about the edge itself,
+    #             and it is what "the edge must survive its own closure" means.
+    # Conflating them is what made every busy edge look structurally fatal.
+    denied = severed_destination = 0
     added_s: list[float] = []
     added_m: list[float] = []
     for veh in ET.parse(route_path).getroot().iter("vehicle"):
@@ -406,6 +419,7 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
         # the ranking, not in a check on simulator artifacts.
         if edges[0] in closed:
             severed += 1
+            denied += 1
             continue
         key = (edges[0], edges[-1])
         if key not in cache:
@@ -419,6 +433,7 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
             continue                      # unreachable even without the closure
         if det_s is None:
             severed += 1                  # destination now unreachable by car
+            severed_destination += 1
             continue
         added_s.append(max(det_s - base_s, 0.0))
         added_m.append(max((det_m or 0.0) - (base_m or 0.0), 0.0))
@@ -427,6 +442,12 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
         "vehicles_affected": affected,
         "vehicles_considered": considered,
         "vehicles_no_detour": severed,
+        # Additive split of vehicles_no_detour. The total keeps its exact
+        # meaning and every existing consumer (closure_ranking's disqualifier,
+        # published scenario JSON, frozen campaign artifacts) is untouched;
+        # these two only make the halves separately readable.
+        "vehicles_denied_departure": denied,
+        "vehicles_severed_destination": severed_destination,
         # 4dp, not 2: this is the primary ranking key, and 2dp quantised
         # anything under 18 vehicle-seconds to zero, making distinct
         # candidates compare equal for no reason.
@@ -472,6 +493,10 @@ def closure_disruption_across_variants(
         "vehicles_affected": max(r["vehicles_affected"] for r in records),
         "vehicles_considered": max(r["vehicles_considered"] for r in records),
         "vehicles_no_detour": max(r["vehicles_no_detour"] for r in records),
+        "vehicles_denied_departure": max(r["vehicles_denied_departure"]
+                                         for r in records),
+        "vehicles_severed_destination": max(r["vehicles_severed_destination"]
+                                            for r in records),
         "added_vehicle_hours": max(r["added_vehicle_hours"] for r in records),
         "added_metres_total": max(r["added_metres_total"] for r in records),
         "added_seconds_median": max(r["added_seconds_median"] for r in records),
@@ -492,7 +517,8 @@ def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
                            sig: str, seed_health: list, health_flags: list,
                            multi_day_validation, sensor_audit, flows_out: dict,
                            conf_out: dict,
-                           disruption: dict | None = None) -> dict:
+                           disruption: dict | None = None,
+                           teleport_policy: dict | None = None) -> dict:
     """The published scenario JSON payload, factored out so the benchmark harness
     can build the byte-identical artifact from the same inputs.
 
@@ -523,6 +549,12 @@ def build_scenario_payload(*, meta: dict, n_intervals: int, generated_at: str,
             "active_closure_edge_entries": active_closure_entries,
             "active_closure_edge_entries_by_seed": active_entries_by_seed,
             "closure_integrity": closure_integrity,
+            # Present only on a closure run, and always beside the integrity
+            # verdict: a "verified_clean" that was obtained with teleporting
+            # disabled must never be readable without that fact, or the zero
+            # becomes self-congratulation instead of evidence.
+            **({"teleport_policy": teleport_policy}
+               if teleport_policy is not None else {}),
             **({"date": meta["date"], "begin": meta["begin"], "end": meta["end"]}
                if "date" in meta else
                {"start_date": meta["start_date"],
@@ -846,6 +878,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--keep-scratch", action="store_true",
                    help="Keep this run's isolated SUMO workspace for diagnosis "
                         "instead of deleting it after successful publication.")
+    p.add_argument("--time-to-teleport", type=int,
+                   default=ct.CLOSURE_TIME_TO_TELEPORT_S, metavar="SECONDS",
+                   help="Teleport policy for CLOSURE runs only (a run without "
+                        "--close/--closure never passes the option to SUMO). "
+                        f"Default {ct.CLOSURE_TIME_TO_TELEPORT_S} disables "
+                        "stuck-vehicle relocation, which is the only observed "
+                        "route to traffic on a closed edge. A positive value "
+                        "restores a finite threshold for comparison runs.")
     args = p.parse_args()
     if args.seeds < 1:
         p.error("--seeds must be >= 1")
@@ -853,6 +893,10 @@ def parse_args() -> argparse.Namespace:
         p.error("--seed-workers must be >= 1")
     if args.trajectories and args.no_trajectories:
         p.error("--trajectories and --no-trajectories are mutually exclusive")
+    try:
+        ct.normalize_time_to_teleport(args.time_to_teleport)
+    except ct.ClosureTeleportPolicyError as error:
+        p.error(f"--time-to-teleport: {error}")
     return args
 
 
@@ -1549,9 +1593,11 @@ def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
     For a time window, only a vehicle estimated to arrive at its closed edge
     during that window is considered. Its arrival is depart plus free-flow
     travel time over the preceding route. A no-detour vehicle is retained if
-    the remaining closure wait is safely below SUMO's 300 s teleport limit;
-    otherwise it is truncated exactly as in the whole-run case.  This does
-    not use periodic mode-8 routing: C1 showed that it changes route choice.
+    the remaining closure wait is below ct.MAX_CLOSURE_WAIT_S — the point at
+    which a driver is modelled as giving up rather than queueing the closure
+    out; otherwise it is truncated exactly as in the whole-run case.  This
+    does not use periodic mode-8 routing: C1 showed that it changes route
+    choice.
 
     `adj` is built ONCE by the caller (build_edge_graph(closed)) and
     reused across every demand variant file for this closure — it only
@@ -1594,9 +1640,15 @@ def truncate_stranded_vehicles(route_path: Path, close_edges: list[str],
             if not active:
                 continue
             i, closure, arrival = min(active, key=lambda x: x[0])
-            # C1 observed the default teleport at 301 s. Keep only waits
-            # strictly below 300 s, leaving one second of headroom.
-            if closure["end_s"] - arrival >= 300:
+            # Keep only waits strictly below the give-up threshold. C1 first
+            # observed the default teleport at 301 s, which is why the value
+            # is 300; but the rule survives the Stage 3 teleport policy
+            # unchanged, because it models the DRIVER, not the simulator. A
+            # driver facing an eight-hour closure parks short of it and walks
+            # — they do not queue for eight hours because SUMO would now let
+            # them. Keeping the threshold tied to ct.MAX_CLOSURE_WAIT_S rather
+            # than to the teleport option is what keeps those two apart.
+            if closure["end_s"] - arrival >= ct.MAX_CLOSURE_WAIT_S:
                 pass
             else:
                 continue
@@ -1659,6 +1711,7 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
              tripinfo_write_unfinished: bool = True,
              output_precision: int | None = None,
              keep_after_arrival_s: int | None = None,
+             time_to_teleport_s: int | None = None,
              work_dir: Path | None = None) -> tuple[list[str], dict, Path]:
     """Build the exact SUMO argv, metric paths and cwd — and run nothing.
 
@@ -1750,6 +1803,11 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
         # Vehicles whose destination IS the closed edge have no valid route —
         # drop them instead of aborting (standard for closure studies).
         "--ignore-route-errors", "true",
+        # Closure runs opt in to an explicit teleport policy (Stage 3 of
+        # docs/plans/CLOSURE_INTEGRITY_PLAN_2026-08-05.md). None emits
+        # nothing at all, so every non-closure caller's argv — and therefore
+        # the warm/cold equivalence contract — is byte-identical to before.
+        *ct.sumo_arguments(time_to_teleport_s),
     ]
     metric_paths: dict[str, Path] = {}
     if (save_state_path is None) != (save_state_time_s is None):
@@ -1880,6 +1938,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              tripinfo_write_unfinished: bool = True,
              output_precision: int | None = None,
              keep_after_arrival_s: int | None = None,
+             time_to_teleport_s: int | None = None,
              work_dir: Path | None = None) -> dict[str, Path] | None:
     # Delegates construction to the shared pure builder; this function
     # remains the only place that EXECUTES.
@@ -1895,6 +1954,7 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         tripinfo_write_unfinished=tripinfo_write_unfinished,
         output_precision=output_precision,
         keep_after_arrival_s=keep_after_arrival_s,
+        time_to_teleport_s=time_to_teleport_s,
         work_dir=work_dir)
     run_cwd.mkdir(parents=True, exist_ok=True)
     try:
@@ -2519,6 +2579,10 @@ def run_seed_job(job: dict) -> dict:
         vehroute_output=job.get("vehroute_output"),
         vehroute_write_unfinished=job.get("vehroute_write_unfinished", False),
         summary_output=job.get("summary_file"),
+        # None on a baseline run: the policy belongs to the closure, and a
+        # baseline that silently stopped teleporting would lose the congestion
+        # signal its own health gate is built on.
+        time_to_teleport_s=job.get("time_to_teleport_s"),
         work_dir=job["work_dir"])
     sumo_seconds = (time.perf_counter() - sumo_started) if timing else None
     flows = parse_edgedata(
@@ -2713,9 +2777,14 @@ def main() -> None:
 
     closure_add: list[Path] = []
     n_truncated = n_dropped = 0   # stay 0 for a baseline (no-closure) run
+    # None on a baseline: SUMO keeps its own default and the argv is exactly
+    # what it has always been. Only a run that actually closes something takes
+    # the Stage 3 policy.
+    teleport_policy_s = args.time_to_teleport if close_edges else None
     closure_preparation = timer.phase("closure_preparation")
     closure_preparation.__enter__()
     if close_edges:
+        print(f"  teleport policy: {ct.policy_label(teleport_policy_s)}")
         rerouter_edges = edges_near(close_edges, REROUTER_RADIUS_M)
         print(f"  rerouter on {len(rerouter_edges)} edges within "
               f"{REROUTER_RADIUS_M} m of the closure")
@@ -2815,6 +2884,7 @@ def main() -> None:
             "vehroute_write_unfinished": (seed == trajectory_seed and trajectory_enabled),
             "work_dir": seed_dir,
             "timing": timer.enabled,
+            "time_to_teleport_s": teleport_policy_s,
         })
 
     job_preparation.__exit__(None, None, None)
@@ -2974,7 +3044,9 @@ def main() -> None:
         sensor_audit=sensor_audit, flows_out=flows_out, conf_out=conf_out,
         disruption=closure_disruption_across_variants(
             demand_variants(meta), set(close_edges), closures,
-            *free_flow_edge_cost()))
+            *free_flow_edge_cost()),
+        teleport_policy=(ct.policy_record(teleport_policy_s)
+                         if close_edges else None))
     out_path = OUT_DIR / f"{name}.json"
     atomic_write_json(out_path, payload, separators=(",", ":"))
     _LAST_SCENARIO_OUTPUT = out_path
@@ -2991,6 +3063,13 @@ def main() -> None:
         "closed_edges": close_edges,
         "closures": closures,
         "closure_integrity": closure_integrity,
+        # serve.py gates publication on `closure_integrity == "verified_clean"`
+        # reading THIS entry, not the payload — so the policy that produced the
+        # verdict has to be here too. Under the Stage 3 policy a clean verdict
+        # is far easier to obtain, which is exactly why the reader must be able
+        # to see how it was obtained without opening the scenario file.
+        **({"teleport_policy": ct.policy_record(teleport_policy_s)}
+           if close_edges else {}),
         "scenario_spec": spec.to_dict(),
         "demand_signature": sig,
         "build_id": meta.get("build_id"),

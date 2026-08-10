@@ -117,3 +117,52 @@ class TestDeniedDeparture:
         report = _run(path, ["C"])
         assert report["vehicles_no_detour"] == 0
         assert report["added_vehicle_hours"] > 0
+
+
+class TestSeveranceSplit:
+    """`vehicles_no_detour` conflated two different facts.
+
+    Stage 4 of the closure-integrity plan needs only one of them: a destination
+    that becomes unreachable is a TOPOLOGY fact about the edge, while a denied
+    departure is access the closure removes (C1, 2026-08-06) and exists on
+    every street with traffic on it. Gating a survivability rule on the total
+    would refuse to close any real street.
+    """
+
+    def test_a_denied_departure_is_reported_separately(self, tmp_path):
+        path = _routes(tmp_path, [("v", 0.0, ["C", "D"])])   # starts ON C
+        report = _run(path, ["C"])
+        assert report["vehicles_denied_departure"] == 1
+        assert report["vehicles_severed_destination"] == 0
+
+    def test_a_severed_destination_is_reported_separately(self, tmp_path):
+        """B is the only way into C, so closing B strands anyone bound for C."""
+        path = _routes(tmp_path, [("v", 0.0, ["A", "B", "C"])])
+        report = _run(path, ["B"])
+        assert report["vehicles_denied_departure"] == 0
+        assert report["vehicles_severed_destination"] == 1
+
+    def test_the_halves_sum_to_the_published_total(self, tmp_path):
+        """`vehicles_no_detour` keeps its exact meaning: every existing
+        consumer — closure_ranking's disqualifier, published scenario JSON,
+        frozen campaign artifacts — must be unaffected by the split."""
+        path = _routes(tmp_path, [
+            ("denied", 0.0, ["B", "C"]),
+            ("severed", 0.0, ["A", "B", "C"]),
+            ("detoured", 0.0, ["A", "B", "C", "D"]),
+        ])
+        report = _run(path, ["B"])
+        assert (report["vehicles_denied_departure"]
+                + report["vehicles_severed_destination"]
+                == report["vehicles_no_detour"] == 2)
+
+    def test_across_variants_the_split_takes_the_worst_case(self, tmp_path):
+        q50 = _routes(tmp_path, [("v", 0.0, ["A", "B", "C", "D"])])
+        severe = tmp_path / "calibrated_v1.rou.xml"
+        severe.write_text(
+            '<routes><vehicle id="v" depart="0">'
+            '<route edges="A B C"/></vehicle></routes>')
+        report = run_scenario.closure_disruption_across_variants(
+            [q50, severe], {"B"}, [], TIME, LEN, adj=ADJ)
+        assert report["vehicles_severed_destination"] == 1
+        assert report["vehicles_denied_departure"] == 0

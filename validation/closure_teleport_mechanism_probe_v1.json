@@ -1,0 +1,49 @@
+{
+  "arms": [
+    {
+      "arm": "sumo_default",
+      "closed_edge_throughput": 1,
+      "teleport_total": 1,
+      "time_to_teleport_s": null,
+      "unfinished_trips": 0
+    },
+    {
+      "arm": "policy",
+      "closed_edge_throughput": 0,
+      "teleport_total": 0,
+      "time_to_teleport_s": -1,
+      "unfinished_trips": 1
+    }
+  ],
+  "environment": {
+    "machine": "x86_64",
+    "python": "3.11.15",
+    "sumo_version": "Eclipse SUMO sumo 1.27.1",
+    "system": "Linux"
+  },
+  "fixture": {
+    "closure": "closingReroute disallow=all on no_closed for the whole run, rerouter attached to no_in",
+    "detour": "NONE. The lower chain is a straight line; there is no path from no_in to no_out avoiding no_closed.",
+    "network": "8 directed edges built by netconvert from the tracked net.nod.xml/net.edg.xml",
+    "path": "tools/c1_temporary_closure_probe",
+    "route": "long.rou.xml \u2014 one vehicle on no_in -> no_closed -> no_out",
+    "simulation": "mesosim, limited junction control, --ignore-route-errors, seed 1000, 0-1800 s, edgeData period 900 s"
+  },
+  "gate": {
+    "detour_less_vehicles": 1,
+    "passed": true,
+    "rule": "throughput measured and zero, no teleports, and the unfinished/dropped population growing by no more than the genuinely detour-less vehicle count",
+    "stuck_growth": 1
+  },
+  "kind": "closure_teleport_mechanism_probe",
+  "limitation": "EIGHT EDGES AND ONE VEHICLE. This demonstrates the mechanism against the real simulator; it is not the stage 3 gate. The gate is a paired measurement on the deployed Gothenburg demand (tools/measure_closure_teleport_policy.py), which this container cannot run: sumo/ and runs/ are gitignored, so there is no calibrated demand here. Nothing about how many vehicles a real closure strands follows from this probe.",
+  "measured_at": "2026-08-10",
+  "question": "does --time-to-teleport -1 remove closed-edge throughput, and does the vehicle then show up as not arriving?",
+  "reproduce": "python3 -m pytest tests/test_closure_teleport_probe.py",
+  "schema_version": 1,
+  "stage": "closure_integrity_plan_stage_3",
+  "verdict": {
+    "answers": "the plan's stage 3 requirement: a vehicle that cannot get through shows up as not arriving, never as driving through",
+    "holds": "the default arm reproduces the documented leak \u2014 the vehicle is relocated along its own route through the closure, records an entry on the closed edge, and reports as a COMPLETED trip. With teleporting disabled the same closure records zero entries and the vehicle reports as not arriving."
+  }
+}

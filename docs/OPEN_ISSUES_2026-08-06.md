@@ -133,6 +133,18 @@ Limitation: one teleport on one edge is a thin sample.
 throughput. They failed on unreachability alone. C1 should have addressed this;
 it has not been re-measured against a fresh campaign.
 
+> **UPDATE 2026-08-10.** A re-score tool now exists
+> (`tools/remeasure_closure_disqualification.py`): it partitions a stored
+> campaign's recorded `hard_failures` by what today's rules do with each
+> reason, which answers this item from evidence already on disk. It has not
+> been RUN — this container has no campaign root. It also deliberately refuses
+> to predict a fresh campaign, because disabling teleporting changes the
+> simulation itself. See `docs/plans/CLOSURE_INTEGRITY_STAGES_3_4_2026-08-10.md`.
+>
+> **C2/C3 are also closed out there:** stage 3 disables SUMO teleporting on the
+> closure arm (the necessary condition C2 measured), and C3's "leave the radius
+> at 400 m" stands untouched.
+
 ## 6. Direction split — the unmeasured carriageway
 
 **Current state:** ceiling only, never a floor. Five edges. Binds in 24.0% of

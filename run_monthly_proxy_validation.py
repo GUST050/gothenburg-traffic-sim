@@ -42,8 +42,13 @@ REPO_ROOT = Path(__file__).resolve().parent
 # claimed by several successful archives with DIFFERENT input bytes — so key
 # resolution silently depends on which copy sorts last. These campaigns are
 # bound to the exact archive their frozen selection artifact recorded.
-EXACT_DEMAND_BINDING_CAMPAIGNS = frozenset({"v6", "v7", "v8", "v9"})   # v7 binds its
-# canonical archive the same way v6 does: by exact path and full identity.
+EXACT_DEMAND_BINDING_CAMPAIGNS = frozenset({"v6", "v7", "v8", "v9", "v10"})
+# v7 binds its canonical archive the same way v6 does: by exact path and full
+# identity. v10 is registered HERE, before it is frozen — the freeze tool
+# fingerprints this file, so registering afterwards would change the source
+# digest the frozen manifest recorded and void the campaign. That trap has
+# already voided two campaigns; see the Stage 4 note in
+# docs/plans/CLOSURE_INTEGRITY_PLAN_2026-08-05.md.
 
 # The exact command shape a future, separately approved v6 run must use.
 APPROVED_V6_COMMAND = (

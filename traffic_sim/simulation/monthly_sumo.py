@@ -26,6 +26,7 @@ from traffic_sim.core.contracts import (
     DemandBuildSpec,
 )
 from traffic_sim.core.fingerprint import sha256_file, sumo_version
+from traffic_sim.simulation import closure_teleport
 from traffic_sim.simulation import metrics as closure_metrics
 from traffic_sim.simulation.envelope import (
     EnvelopePolicy,
@@ -1276,6 +1277,13 @@ class ArchivedDemandSumoRunner:
             begin_s=plan.warm_point_s, work_dir=run_dir,
             load_state_path=plan.state_path,
             output_precision=WARM_OUTPUT_PRECISION,
+            # The warm arm must be equivalent to the cold arm it replaces, and
+            # the cold arm (legacy.simulate_closure) now runs the Stage 3
+            # teleport policy. Only the post-warm segment carries it, because
+            # only that segment has the closure — the candidate-free prefix
+            # keeps SUMO's default exactly as before.
+            time_to_teleport_s=(closure_teleport.CLOSURE_TIME_TO_TELEPORT_S
+                                if closures else None),
             tripinfo_write_unfinished=True)
         measurement = self._boundary_controller.run_resumed(
             cmd=cmd, cwd=run_cwd, home=self.home,

@@ -63,6 +63,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 
 from traffic_sim.simulation import metrics as cm
+from traffic_sim.simulation import closure_teleport as ct
 import run_scenario as rs
 from signal_lab import (TLS_PROVENANCE, merge_route_files, net_fingerprint,
                         sumo_version, tls_plan_diff, tls_timing_schedule,
@@ -474,12 +475,22 @@ def run_condition(*, net_path: Path, add_paths: list[Path], variants: list[Path]
         if ed_file is not None:
             scratch.append(ed_file)
 
+    # A condition whose add_paths carry an ACTIVE closure (D4's
+    # signal_closure_combine) is a closure run and takes the same Stage 3
+    # teleport policy as every other closure path, or its
+    # disqualification_reasons() would judge a different simulation from the
+    # one the closure search produced. A condition with no closed edges is an
+    # ordinary signal experiment and keeps SUMO's default.
+    condition_teleport_policy = (ct.CLOSURE_TIME_TO_TELEPORT_S
+                                 if closed_edges else None)
+
     def run_one(job: dict) -> tuple[int, cm.DisruptionMetrics, SignalRun, list[Path]]:
         metric_paths = rs.run_sumo(
             job["seed"], job["route_path"], job["run_add_paths"], job["end_s"],
             job["home"], micro=job["micro"], metrics=True,
             begin_s=job["begin_s"], net_path=job["net_path"], flush_s=0,
             vehroute_output=job["vehroute_output"], run_label=run_label,
+            time_to_teleport_s=condition_teleport_policy,
             **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
         closed_edge_throughput = None
         if job["ed_file"] is not None:

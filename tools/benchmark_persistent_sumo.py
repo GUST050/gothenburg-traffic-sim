@@ -587,12 +587,18 @@ def build_bootstrap_args(*, sumo_bin, net_path, port) -> list[str]:
 
 def build_sumo_args(*, seed: int, route_path: Path, add_paths: list[Path],
                     edgedata_out: Path, statistics_out: Path,
-                    vehroute_out: Path | None, traci_server: bool) -> list[str]:
+                    vehroute_out: Path | None, traci_server: bool,
+                    closed_edges: list[str] | None = None) -> list[str]:
     """The one command template both arms use; only the trailing TraCI-server
     pair distinguishes the persistent arm. Result-affecting flags are identical
     to run_scenario.run_sumo's, so a difference can only come from execution
     mode. Vehroute output is requested only for the trajectory seed (its path is
-    None otherwise), matching run_scenario."""
+    None otherwise), matching run_scenario.
+
+    ``closed_edges`` selects the Stage 3 teleport policy exactly as production
+    does — the closure query must run the closure semantics, or "the persistent
+    arm reproduced the real production artifact" would be a claim about a
+    simulation production no longer performs."""
     args = [
         "--mesosim", "true",
         "--meso-junction-control", "true",
@@ -608,6 +614,10 @@ def build_sumo_args(*, seed: int, route_path: Path, add_paths: list[Path],
         "--ignore-route-errors", "true",
         "--statistic-output", str(Path(statistics_out).resolve()),
     ]
+    if closed_edges:
+        from traffic_sim.simulation import closure_teleport  # noqa: PLC0415
+        args += closure_teleport.sumo_arguments(
+            closure_teleport.CLOSURE_TIME_TO_TELEPORT_S)
     if vehroute_out is not None:
         args += ["--vehroute-output", str(Path(vehroute_out).resolve()),
                  "--vehroute-output.exit-times", "true",
@@ -615,6 +625,13 @@ def build_sumo_args(*, seed: int, route_path: Path, add_paths: list[Path],
     if traci_server:
         args += ["--remote-port", "0", "--num-clients", "1"]
     return args
+
+
+def _closure_teleport_policy() -> dict:
+    """The provenance record production writes into a closure payload."""
+    from traffic_sim.simulation import closure_teleport      # noqa: PLC0415
+    return closure_teleport.policy_record(
+        closure_teleport.CLOSURE_TIME_TO_TELEPORT_S)
 
 
 # ── Query matrix ─────────────────────────────────────────────────────────────
@@ -689,7 +706,12 @@ class ScenarioAssembler:
             seed_values=[s["seed"] for s in per_seed], sig=ctx["sig"],
             seed_health=seed_health, health_flags=rs.seed_health_flags(seed_health),
             multi_day_validation=None, sensor_audit=sensor_audit,
-            flows_out=flows_out, conf_out=conf_out)
+            flows_out=flows_out, conf_out=conf_out,
+            # Production attaches the teleport policy to a closure payload and
+            # nothing else. Omitting it here would make the two artifacts differ
+            # for a reason that has nothing to do with execution mode.
+            teleport_policy=(
+                _closure_teleport_policy() if closed_edges else None))
         # Production refuses to publish a baseline whose raw SUMO edgeData does
         # not fit the frozen demand targets (`baseline_output_fit_errors` raises
         # in main()). Apply the SAME gate here so neither arm can "match" on an
@@ -808,7 +830,7 @@ def _run_member_seed(member: PoolMember, query: dict, prep) -> dict:
             statistics_out=member.work_dir / "statistics.xml",
             vehroute_out=(member.work_dir / "vehroutes.xml"
                           if member.seed == TRAJECTORY_SEED else None),
-            traci_server=False)
+            traci_server=False, closed_edges=query["closed_edges"])
         member.connector.load(args)
         member.connector.advance(SIM_END_S)
         member.connector.collect_live_health()      # diagnostic only
@@ -1630,7 +1652,7 @@ def real_reference_runner(root, *, launch=None, dir_prefix="ref"):
             edgedata_out=wd / "edgedata.xml", statistics_out=wd / "statistics.xml",
             vehroute_out=(wd / "vehroutes.xml"
                           if slot["seed"] == TRAJECTORY_SEED else None),
-            traci_server=False)
+            traci_server=False, closed_edges=query["closed_edges"])
         proc = launch(args, wd)
         registry.register(proc)
         rc = proc.wait(timeout=PER_QUERY_TIMEOUT_S)

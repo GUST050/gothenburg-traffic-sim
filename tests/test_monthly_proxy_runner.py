@@ -358,11 +358,14 @@ class TestLegacyBehaviourIsUnchanged:
 
     def test_only_demand_binding_campaigns_bind_exactly(self):
         """v7 joined v6 when the ranking objective changed: it binds its own
-        canonical archive by exact path and full identity the same way. The
-        set stays pinned so a campaign cannot acquire exact binding by
-        accident — legacy v1-v5 must remain excluded (covered above)."""
+        canonical archive by exact path and full identity the same way. v10
+        joined for Stage 4 of the closure-integrity plan, and DELIBERATELY
+        before its freeze — the freeze fingerprints the runner, so registering
+        afterwards would void the campaign. The set stays pinned so a campaign
+        cannot acquire exact binding by accident — legacy v1-v5 must remain
+        excluded (covered above)."""
         assert _runner().EXACT_DEMAND_BINDING_CAMPAIGNS == frozenset(
-            {"v6", "v7", "v8", "v9"})
+            {"v6", "v7", "v8", "v9", "v10"})
 
     def test_key_resolution_still_exists_for_legacy_campaigns(self):
         """Legacy is not broadened, relabeled or removed."""
