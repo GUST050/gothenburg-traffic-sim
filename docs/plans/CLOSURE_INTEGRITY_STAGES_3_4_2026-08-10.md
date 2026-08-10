@@ -14,7 +14,7 @@ this closes out.
 | 1 — measure the leak mechanism | done, premise REVISED (`d07e586`) | unchanged |
 | 2 — rerouter reach sweep | done, no change adopted (`a32006d`) | unchanged |
 | 3 — teleport policy for closure runs | open | **implemented; mechanism measured on a synthetic probe, gate on real demand unrun** |
-| 4 — v10 selection precondition | open | **implemented; freeze unrun** |
+| 4 — v10 selection precondition | open | **implemented; topology half measured (gate achievable), freeze unrun** |
 | 5 — warming | superseded by `WARMING_PLAN_2026-08-05.md` | unchanged |
 | unplanned finding (21/61) | open, "not re-measured" | **re-score tool built; unrun** |
 
@@ -162,8 +162,45 @@ not.
 fingerprints `run_monthly_proxy_validation.py`, so registering afterwards would
 change the digest the frozen manifest recorded.
 
-**The freeze, unrun.** It needs the canonical archive under `runs/` and
-`sumo/net.net.xml`, neither of which is tracked. On a machine that has both:
+**The topology half is MEASURED** ·
+`validation/closure_survivability_screen_v1.json`. `sumo/net.net.xml` is
+gitignored but derived deterministically from the tracked graph, so
+`make sumo-net` reconstructs it and the topology half of the rule can be
+answered without any demand at all:
+
+```
+network : 1285 / 7101 edges (18.1%) sever a successor when closed
+pool    :   35 /   46 near-sensor candidates survive the topology screen
+            secondary  8 survive / 2 fatal
+            tertiary  27 survive / 9 fatal
+stage 4 gate achievable (>= 4 survivors): TRUE
+```
+
+So the Stage 4 gate is achievable before a single SUMO run — which is exactly
+what the plan wanted it to establish. 18.1% network-wide is also a useful
+number in its own right: closing a random inner-city edge severs somebody
+roughly one time in five, and that is the population v9's selection had no way
+to see.
+
+*The first version of this screen reported ZERO severing edges, everywhere.*
+It ran the one-hop question against `build_edge_graph`'s raw output, where SUMO
+stores a real connection A→B as A→`:j_0`→B — 20 522 of 27 623 sources on this
+network are internal junction lanes. Remove A and the internal edge still
+points at B, so B looks reachable when nothing can get to it. The check was
+inert, and it was caught by asking it about `60786979_3575001205_0`, the edge
+`CLAUDE.md` documents as severing its downstream because node 3575001205 has
+one incoming connection in the whole network. `collapse_internal` now resolves
+those hops, the screen refuses to emit a report unless that known case
+reproduces, and five regression tests pin the defect — including one that
+asserts the raw graph gives the wrong answer.
+
+`reachable()` is deliberately NOT given the collapsed graph: path-finding must
+traverse internals, and already does so correctly. Only the one-hop predecessor
+question needed them removed.
+
+**The freeze, unrun.** It needs the canonical archive under `runs/`, which is
+not tracked and cannot be reconstructed — it is bound by exact path and
+SHA-256. On a machine that has it:
 
 ```
 python3 tools/freeze_heldout_v10.py --dry-run    # compose and report, writes nothing

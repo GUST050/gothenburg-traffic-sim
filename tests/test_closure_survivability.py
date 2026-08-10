@@ -64,6 +64,13 @@ def reachable(adj, start, goal, banned):
     return False
 
 
+def _topology(adjacency=None):
+    """(collapsed, predecessors) for the one-hop cut-off question."""
+    adjacency = build_adjacency(set()) if adjacency is None else adjacency
+    collapsed = csv.collapse_internal(adjacency)
+    return collapsed, csv.real_predecessors(collapsed)
+
+
 def _routes(directory, name, vehicles):
     body = "".join(
         f'<vehicle id="{vid}" depart="{depart}">'
@@ -127,13 +134,10 @@ class TestStructuralSeverance:
             "topology alone, which is the point")
 
     def test_a_successor_with_another_way_in_is_not_cut_off(self):
-        cut = csv.successors_cut_off("B", build_adjacency(set()),
-                                     build_adjacency({"B"}))
-        assert cut == ()
+        assert csv.successors_cut_off("B", *_topology()) == ()
 
     def test_an_edge_with_no_successors_cuts_nothing_off(self):
-        assert csv.successors_cut_off("D", build_adjacency(set()),
-                                      build_adjacency({"D"})) == ()
+        assert csv.successors_cut_off("D", *_topology()) == ()
 
 
 class TestVariantReduction:
@@ -274,3 +278,59 @@ class TestDerivedClosedGraph:
 
     def test_a_banned_source_is_dropped_entirely(self):
         assert csv.without_edges({"a": ["b"], "b": ["c"]}, {"a"}) == {"b": ["c"]}
+
+
+class TestInternalJunctionEdges:
+    """SUMO stores a real connection A->B as A->:j_0->B.
+
+    The FIRST version of this check ran the one-hop question against that raw
+    graph and always answered "fine": remove A and the internal edge still
+    points at B, so B looked reachable when nothing could get to it. It
+    reported zero cut-off successors for 60786979_3575001205_0 — the exact edge
+    CLAUDE.md documents as severing 63 edges because node 3575001205 has one
+    incoming connection in the whole network. A check that cannot see its own
+    motivating case is inert, and on the deployed network 20,522 of 27,623
+    sources are internal, so it was inert everywhere.
+    """
+
+    # only_way_in -> :j_0 -> downstream, plus an unrelated pair
+    RAW = {
+        "only_way_in": [":j_0"],
+        ":j_0": ["downstream"],
+        "downstream": [],
+        "other": [":j_1"],
+        ":j_1": ["shared"],
+        "second_way_in": [":j_2"],
+        ":j_2": ["shared"],
+        "shared": [],
+    }
+
+    def test_collapsing_resolves_internal_hops(self):
+        collapsed = csv.collapse_internal(self.RAW)
+        assert collapsed["only_way_in"] == ["downstream"]
+        assert collapsed["other"] == ["shared"]
+        assert not any(edge.startswith(":") for edge in collapsed)
+
+    def test_the_sole_predecessor_cuts_its_successor_off(self):
+        collapsed = csv.collapse_internal(self.RAW)
+        predecessors = csv.real_predecessors(collapsed)
+        assert csv.successors_cut_off("only_way_in", collapsed,
+                                      predecessors) == ("downstream",)
+
+    def test_a_successor_with_two_real_predecessors_survives(self):
+        collapsed = csv.collapse_internal(self.RAW)
+        predecessors = csv.real_predecessors(collapsed)
+        assert csv.successors_cut_off("other", collapsed, predecessors) == ()
+
+    def test_the_raw_graph_would_have_answered_wrongly(self):
+        """The defect itself, pinned: asked on the uncollapsed graph, the
+        internal edge keeps the successor alive and the check says nothing is
+        cut off."""
+        without = csv.without_edges(self.RAW, {"only_way_in"})
+        still_reachable = {t for s, ts in without.items() for t in ts}
+        assert "downstream" in still_reachable, (
+            "this is the wrong answer the collapse exists to prevent")
+
+    def test_a_chain_of_internal_edges_resolves(self):
+        raw = {"a": [":j_0"], ":j_0": [":j_1"], ":j_1": ["b"], "b": []}
+        assert csv.collapse_internal(raw)["a"] == ["b"]

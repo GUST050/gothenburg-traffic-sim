@@ -1,0 +1,8556 @@
+{
+  "candidate_pool": {
+    "by_road_class": {
+      "secondary": {
+        "fatal": 2,
+        "survive": 8
+      },
+      "tertiary": {
+        "fatal": 9,
+        "survive": 27
+      }
+    },
+    "edges": [
+      {
+        "dist_sensor_m": 251.2,
+        "edge_id": "1300365504_318486259_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 124.0,
+        "edge_id": "1300365504_91615275_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 371.0,
+        "edge_id": "1304282393_60789851_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "60789851_7532496128_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 245.3,
+        "edge_id": "1338661486_559960490_0",
+        "road_class": "secondary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 251.1,
+        "edge_id": "1455778261_1463940578_0",
+        "road_class": "secondary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 131.9,
+        "edge_id": "1455801454_366911_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 118.7,
+        "edge_id": "1463940578_1455801454_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "1455801454_366911_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 352.4,
+        "edge_id": "2395027712_135705883_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 299.7,
+        "edge_id": "2395027712_25734040_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 355.9,
+        "edge_id": "2395027723_2395027712_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "2395027712_25734040_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 365.7,
+        "edge_id": "2395027738_30420895_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 388.2,
+        "edge_id": "25734037_25734041_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 299.7,
+        "edge_id": "25734040_2395027712_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "2395027712_135705883_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 388.2,
+        "edge_id": "25734041_25734037_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 388.3,
+        "edge_id": "25734041_3473721571_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 11.0,
+        "edge_id": "26355153_26842525_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 25.8,
+        "edge_id": "26355153_96523321_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 11.0,
+        "edge_id": "26842525_26355153_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 52.5,
+        "edge_id": "30420757_30421744_0",
+        "road_class": "secondary",
+        "successors_cut_off": [
+          "30421744_7532496188_0",
+          "30421744_8722747991_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 365.7,
+        "edge_id": "30420895_2395027738_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "2395027738_2395027728_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 326.3,
+        "edge_id": "30420898_8722747939_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "8722747939_8722747919_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 247.6,
+        "edge_id": "30420904_60789862_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 388.3,
+        "edge_id": "3473721571_25734041_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 254.4,
+        "edge_id": "3575001214_1455778248_0",
+        "road_class": "secondary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 131.9,
+        "edge_id": "366911_1455801454_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "1455801454_1455801464_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 22.7,
+        "edge_id": "559960490_1305379743_0",
+        "road_class": "secondary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 8.8,
+        "edge_id": "60786979_3575001205_0",
+        "road_class": "secondary",
+        "successors_cut_off": [
+          "3575001205_3575001214_0",
+          "3575001205_9037093042_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 371.0,
+        "edge_id": "60789851_1304282393_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 304.8,
+        "edge_id": "60789851_7532496128_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 247.6,
+        "edge_id": "60789862_30420904_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 355.9,
+        "edge_id": "60789862_8722747921_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 279.1,
+        "edge_id": "7532496152_1338661557_0",
+        "road_class": "secondary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 159.0,
+        "edge_id": "7532496152_559960490_0",
+        "road_class": "secondary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 294.7,
+        "edge_id": "8709855498_91615275_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 76.4,
+        "edge_id": "8710974792_1759741980_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 373.5,
+        "edge_id": "8722747921_8722747939_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "8722747939_30420898_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 326.3,
+        "edge_id": "8722747939_30420898_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 380.4,
+        "edge_id": "8722747939_8722747919_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 86.8,
+        "edge_id": "9037093028_1305379743_0",
+        "road_class": "secondary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 111.3,
+        "edge_id": "9037093028_30420757_0",
+        "road_class": "secondary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 124.6,
+        "edge_id": "91615275_8710974792_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [
+          "8710974792_1759741980_0",
+          "8710974792_91615277_0"
+        ],
+        "survives_topology": false
+      },
+      {
+        "dist_sensor_m": 228.6,
+        "edge_id": "96523105_96523603_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 25.8,
+        "edge_id": "96523321_26355153_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 111.6,
+        "edge_id": "96523321_96523748_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 228.6,
+        "edge_id": "96523603_96523105_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      },
+      {
+        "dist_sensor_m": 111.6,
+        "edge_id": "96523748_96523321_0",
+        "road_class": "tertiary",
+        "successors_cut_off": [],
+        "survives_topology": true
+      }
+    ],
+    "fatal": 11,
+    "gate_achievable": true,
+    "min_surviving_cases_required": 4,
+    "prior_heldout_edges_excluded": 54,
+    "rule": "dist_sensor_m <= 400 m, length >= 30 m, road class in ['secondary', 'tertiary'], excluding every prior campaign edge and its junction neighbours",
+    "size": 46,
+    "survive_topology": 35
+  },
+  "kind": "closure_survivability_topology_screen",
+  "limitation": "TOPOLOGY ONLY, and therefore a NECESSARY condition, not a sufficient one. An edge that passes can still strand real demand further along a route; that is the per-vehicle half of the rule and it needs the canonical archived demand, which lives under the gitignored runs/ tree.",
+  "measured_at": "2026-08-10",
+  "network": {
+    "directed_edges": 7101,
+    "edges_that_sever_a_successor": 1285,
+    "internal_sources_collapsed": 20522,
+    "raw_connection_sources": 27623,
+    "share": 0.181
+  },
+  "question": "which edges leave a successor with no remaining real predecessor once they close?",
+  "rule_version": "survives_own_closure_v1",
+  "schema_version": 1,
+  "self_check": {
+    "basis": "CLAUDE.md: node 3575001205 has exactly ONE incoming connection in the whole network",
+    "edge": "60786979_3575001205_0",
+    "successors_cut_off": [
+      "3575001205_3575001214_0",
+      "3575001205_9037093042_0"
+    ]
+  },
+  "severing_edges": [
+    {
+      "edge_id": "101345091_26024466_0",
+      "successors_cut_off": [
+        "26024466_171240192_0",
+        "26024466_26024500_0"
+      ]
+    },
+    {
+      "edge_id": "101345187_240351695_0",
+      "successors_cut_off": [
+        "240351695_101345187_0"
+      ]
+    },
+    {
+      "edge_id": "101345187_286348786_0",
+      "successors_cut_off": [
+        "286348786_287657501_0"
+      ]
+    },
+    {
+      "edge_id": "101458086_206162170_0",
+      "successors_cut_off": [
+        "206162170_3634488210_0"
+      ]
+    },
+    {
+      "edge_id": "101530006_320986808_0",
+      "successors_cut_off": [
+        "320986808_26495821_0"
+      ]
+    },
+    {
+      "edge_id": "101582094_303384751_0",
+      "successors_cut_off": [
+        "303384751_26495820_0",
+        "303384751_9739379210_0"
+      ]
+    },
+    {
+      "edge_id": "101583717_8709403279_0",
+      "successors_cut_off": [
+        "8709403279_101583717_0"
+      ]
+    },
+    {
+      "edge_id": "101588171_265744989_0",
+      "successors_cut_off": [
+        "265744989_101588171_0"
+      ]
+    },
+    {
+      "edge_id": "10161422038_8710044097_0",
+      "successors_cut_off": [
+        "8710044097_96156261_0"
+      ]
+    },
+    {
+      "edge_id": "101631284_101631731_0",
+      "successors_cut_off": [
+        "101631731_101631284_0"
+      ]
+    },
+    {
+      "edge_id": "101631290_101631846_0",
+      "successors_cut_off": [
+        "101631846_101631290_0"
+      ]
+    },
+    {
+      "edge_id": "101631296_495593596_0",
+      "successors_cut_off": [
+        "495593596_101631296_0"
+      ]
+    },
+    {
+      "edge_id": "101631298_101631609_0",
+      "successors_cut_off": [
+        "101631609_101631298_0"
+      ]
+    },
+    {
+      "edge_id": "101632489_101632586_0",
+      "successors_cut_off": [
+        "101632586_101632489_0"
+      ]
+    },
+    {
+      "edge_id": "101698234_1073143468_0",
+      "successors_cut_off": [
+        "1073143468_25688838_0",
+        "1073143468_292565223_0"
+      ]
+    },
+    {
+      "edge_id": "10229404609_309767599_0",
+      "successors_cut_off": [
+        "309767599_309767590_0"
+      ]
+    },
+    {
+      "edge_id": "10229404609_309767653_0",
+      "successors_cut_off": [
+        "309767653_10229404609_0"
+      ]
+    },
+    {
+      "edge_id": "10248537886_8722747968_0",
+      "successors_cut_off": [
+        "8722747968_8722747971_0",
+        "8722747968_8722747976_0"
+      ]
+    },
+    {
+      "edge_id": "1026731431_30485844_0",
+      "successors_cut_off": [
+        "30485844_293989930_0",
+        "30485844_293989931_0"
+      ]
+    },
+    {
+      "edge_id": "102730672_9022802659_0",
+      "successors_cut_off": [
+        "9022802659_102730672_0"
+      ]
+    },
+    {
+      "edge_id": "102730697_5387957674_0",
+      "successors_cut_off": [
+        "5387957674_102730634_0",
+        "5387957674_2839680287_0"
+      ]
+    },
+    {
+      "edge_id": "1030036117_1030034804_0",
+      "successors_cut_off": [
+        "1030034804_1030036117_0"
+      ]
+    },
+    {
+      "edge_id": "1030036117_83615008_0",
+      "successors_cut_off": [
+        "83615008_33071904_0",
+        "83615008_83541150_0"
+      ]
+    },
+    {
+      "edge_id": "1058644590_1058644609_0",
+      "successors_cut_off": [
+        "1058644609_1058644590_0"
+      ]
+    },
+    {
+      "edge_id": "1058644590_10770757077_0",
+      "successors_cut_off": [
+        "10770757077_1058644590_0"
+      ]
+    },
+    {
+      "edge_id": "1058732207_294637726_0",
+      "successors_cut_off": [
+        "294637726_1058732207_0"
+      ]
+    },
+    {
+      "edge_id": "1058832918_2452890117_0",
+      "successors_cut_off": [
+        "2452890117_26022219_0",
+        "2452890117_8863402510_0"
+      ]
+    },
+    {
+      "edge_id": "1058832934_26354430_0",
+      "successors_cut_off": [
+        "26354430_1055481913_0",
+        "26354430_1058832918_0"
+      ]
+    },
+    {
+      "edge_id": "105980631_105980058_0",
+      "successors_cut_off": [
+        "105980058_105980631_0"
+      ]
+    },
+    {
+      "edge_id": "1072466953_9385498542_0",
+      "successors_cut_off": [
+        "9385498542_1072466953_0"
+      ]
+    },
+    {
+      "edge_id": "1072998679_1332459640_0",
+      "successors_cut_off": [
+        "1332459640_1072998679_0"
+      ]
+    },
+    {
+      "edge_id": "10741450507_25733263_0",
+      "successors_cut_off": [
+        "25733263_10741450507_0"
+      ]
+    },
+    {
+      "edge_id": "1076862892_6565796308_0",
+      "successors_cut_off": [
+        "6565796308_3153307073_0"
+      ]
+    },
+    {
+      "edge_id": "108116848_1311860414_0",
+      "successors_cut_off": [
+        "1311860414_108116848_0"
+      ]
+    },
+    {
+      "edge_id": "108116848_2583089892_0",
+      "successors_cut_off": [
+        "2583089892_108116848_0"
+      ]
+    },
+    {
+      "edge_id": "1084232050_147433_0",
+      "successors_cut_off": [
+        "147433_1679061604_0"
+      ]
+    },
+    {
+      "edge_id": "1084232126_26495931_0",
+      "successors_cut_off": [
+        "26495931_158644034_0",
+        "26495931_3587379328_0"
+      ]
+    },
+    {
+      "edge_id": "1084232409_60911771_0",
+      "successors_cut_off": [
+        "60911771_520155_0",
+        "60911771_60911750_0"
+      ]
+    },
+    {
+      "edge_id": "10920089084_1569498604_0",
+      "successors_cut_off": [
+        "1569498604_10920089084_0"
+      ]
+    },
+    {
+      "edge_id": "10920089088_11210828079_0",
+      "successors_cut_off": [
+        "11210828079_10309322173_0",
+        "11210828079_10920089097_0"
+      ]
+    },
+    {
+      "edge_id": "10920089097_16967481_0",
+      "successors_cut_off": [
+        "16967481_10920113507_0",
+        "16967481_16967459_0"
+      ]
+    },
+    {
+      "edge_id": "10920113507_1773590600_0",
+      "successors_cut_off": [
+        "1773590600_11837831250_0",
+        "1773590600_1880279370_0"
+      ]
+    },
+    {
+      "edge_id": "1093920475_151469752_0",
+      "successors_cut_off": [
+        "151469752_1093920475_0"
+      ]
+    },
+    {
+      "edge_id": "1093920475_2597676509_0",
+      "successors_cut_off": [
+        "2597676509_1093920475_0"
+      ]
+    },
+    {
+      "edge_id": "1093923690_172430950_0",
+      "successors_cut_off": [
+        "172430950_1093923690_0"
+      ]
+    },
+    {
+      "edge_id": "1097961228_286386004_0",
+      "successors_cut_off": [
+        "286386004_286385442_0",
+        "286386004_286386018_0"
+      ]
+    },
+    {
+      "edge_id": "1097961228_287674141_0",
+      "successors_cut_off": [
+        "287674141_1097961228_0"
+      ]
+    },
+    {
+      "edge_id": "11187517788_292560076_0",
+      "successors_cut_off": [
+        "292560076_11187517788_0"
+      ]
+    },
+    {
+      "edge_id": "11193020025_29373451_0",
+      "successors_cut_off": [
+        "29373451_11193020028_0",
+        "29373451_2935980571_0"
+      ]
+    },
+    {
+      "edge_id": "11207348368_11207348382_0",
+      "successors_cut_off": [
+        "11207348382_1477723570_0"
+      ]
+    },
+    {
+      "edge_id": "11210828110_5694557182_0",
+      "successors_cut_off": [
+        "5694557182_11210828126_0",
+        "5694557182_5694557200_0"
+      ]
+    },
+    {
+      "edge_id": "11261370930_11261373837_0",
+      "successors_cut_off": [
+        "11261373837_5993064849_0"
+      ]
+    },
+    {
+      "edge_id": "11261370930_3046795009_0",
+      "successors_cut_off": [
+        "3046795009_11261370930_0"
+      ]
+    },
+    {
+      "edge_id": "11469101263_377898_0",
+      "successors_cut_off": [
+        "377898_377900_0"
+      ]
+    },
+    {
+      "edge_id": "11470796032_11192641065_0",
+      "successors_cut_off": [
+        "11192641065_11192641063_0",
+        "11192641065_145181102_0"
+      ]
+    },
+    {
+      "edge_id": "11472719431_1577473234_0",
+      "successors_cut_off": [
+        "1577473234_11472719431_0"
+      ]
+    },
+    {
+      "edge_id": "11631647410_512453472_0",
+      "successors_cut_off": [
+        "512453472_102730685_0",
+        "512453472_140581881_0"
+      ]
+    },
+    {
+      "edge_id": "11697974819_60476803_0",
+      "successors_cut_off": [
+        "60476803_292560095_0",
+        "60476803_60476804_0"
+      ]
+    },
+    {
+      "edge_id": "11837831250_10920089101_0",
+      "successors_cut_off": [
+        "10920089101_10920089088_0",
+        "10920089101_10920089092_0"
+      ]
+    },
+    {
+      "edge_id": "11847445468_11847445467_0",
+      "successors_cut_off": [
+        "11847445467_11847496069_0",
+        "11847445467_30440874_0"
+      ]
+    },
+    {
+      "edge_id": "11847496069_30440906_0",
+      "successors_cut_off": [
+        "30440906_31098713_0"
+      ]
+    },
+    {
+      "edge_id": "11847496072_30440899_0",
+      "successors_cut_off": [
+        "30440899_317749845_0",
+        "30440899_317750141_0"
+      ]
+    },
+    {
+      "edge_id": "11871970255_1639994536_0",
+      "successors_cut_off": [
+        "1639994536_11871970255_0"
+      ]
+    },
+    {
+      "edge_id": "11872101205_11872101202_0",
+      "successors_cut_off": [
+        "11872101202_11872101205_0"
+      ]
+    },
+    {
+      "edge_id": "11883182375_9223031236_0",
+      "successors_cut_off": [
+        "9223031236_145188152_0"
+      ]
+    },
+    {
+      "edge_id": "12054891151_12398555103_0",
+      "successors_cut_off": [
+        "12398555103_12269418491_0"
+      ]
+    },
+    {
+      "edge_id": "12054891152_12054891151_0",
+      "successors_cut_off": [
+        "12054891151_12250307391_0",
+        "12054891151_12398555103_0"
+      ]
+    },
+    {
+      "edge_id": "12250307391_12054891147_0",
+      "successors_cut_off": [
+        "12054891147_1646500167_0",
+        "12054891147_30492081_0"
+      ]
+    },
+    {
+      "edge_id": "12250307400_12250313312_0",
+      "successors_cut_off": [
+        "12250313312_12250313305_0",
+        "12250313312_1679062108_0"
+      ]
+    },
+    {
+      "edge_id": "12250313305_12250313315_0",
+      "successors_cut_off": [
+        "12250313315_30154078_0"
+      ]
+    },
+    {
+      "edge_id": "12250313315_12411955127_0",
+      "successors_cut_off": [
+        "12411955127_12250307400_0",
+        "12411955127_12398555110_0"
+      ]
+    },
+    {
+      "edge_id": "12269418491_12398555103_0",
+      "successors_cut_off": [
+        "12398555103_12250307391_0"
+      ]
+    },
+    {
+      "edge_id": "12269418491_1679061948_0",
+      "successors_cut_off": [
+        "1679061948_12269418491_0"
+      ]
+    },
+    {
+      "edge_id": "1231723846_9720183766_0",
+      "successors_cut_off": [
+        "9720183766_1231723846_0"
+      ]
+    },
+    {
+      "edge_id": "12384353041_9133538505_0",
+      "successors_cut_off": [
+        "9133538505_310183305_0",
+        "9133538505_9133538499_0"
+      ]
+    },
+    {
+      "edge_id": "12406483625_764578558_0",
+      "successors_cut_off": [
+        "764578558_764578606_0",
+        "764578558_764578606_1"
+      ]
+    },
+    {
+      "edge_id": "12456140251_12456140258_0",
+      "successors_cut_off": [
+        "12456140258_310989699_0"
+      ]
+    },
+    {
+      "edge_id": "12456140258_12456140251_0",
+      "successors_cut_off": [
+        "12456140251_12456140258_0"
+      ]
+    },
+    {
+      "edge_id": "124601249_3142662958_0",
+      "successors_cut_off": [
+        "3142662958_124601249_0"
+      ]
+    },
+    {
+      "edge_id": "124601264_253617852_0",
+      "successors_cut_off": [
+        "253617852_124601264_0"
+      ]
+    },
+    {
+      "edge_id": "124601298_10017905051_0",
+      "successors_cut_off": [
+        "10017905051_124601298_0"
+      ]
+    },
+    {
+      "edge_id": "124601298_124601393_0",
+      "successors_cut_off": [
+        "124601393_124601298_0"
+      ]
+    },
+    {
+      "edge_id": "124601330_1568539388_0",
+      "successors_cut_off": [
+        "1568539388_124601330_0"
+      ]
+    },
+    {
+      "edge_id": "124617420_2935980571_0",
+      "successors_cut_off": [
+        "2935980571_11193020025_0"
+      ]
+    },
+    {
+      "edge_id": "12596393547_137735023_0",
+      "successors_cut_off": [
+        "137735023_11962084955_0",
+        "137735023_12596393547_0",
+        "137735023_1277523489_0"
+      ]
+    },
+    {
+      "edge_id": "12603781404_190497842_0",
+      "successors_cut_off": [
+        "190497842_317749846_0",
+        "190497842_317749847_0"
+      ]
+    },
+    {
+      "edge_id": "1277413986_117856275_0",
+      "successors_cut_off": [
+        "117856275_1277413986_0"
+      ]
+    },
+    {
+      "edge_id": "1277413995_4605891996_0",
+      "successors_cut_off": [
+        "4605891996_2997554293_0",
+        "4605891996_9955312448_0"
+      ]
+    },
+    {
+      "edge_id": "1277475353_1277475302_0",
+      "successors_cut_off": [
+        "1277475302_60894490_0"
+      ]
+    },
+    {
+      "edge_id": "1277475370_1277414080_0",
+      "successors_cut_off": [
+        "1277414080_1277413986_0",
+        "1277414080_60893006_0"
+      ]
+    },
+    {
+      "edge_id": "1277604318_25581709_0",
+      "successors_cut_off": [
+        "25581709_1021142979_0",
+        "25581709_377704_0"
+      ]
+    },
+    {
+      "edge_id": "12812336100_10605909485_0",
+      "successors_cut_off": [
+        "10605909485_12812336100_0"
+      ]
+    },
+    {
+      "edge_id": "1282124078_135460337_0",
+      "successors_cut_off": [
+        "135460337_28393084_0"
+      ]
+    },
+    {
+      "edge_id": "1291501898_12146789040_0",
+      "successors_cut_off": [
+        "12146789040_1291501898_0"
+      ]
+    },
+    {
+      "edge_id": "1291501898_2036848075_0",
+      "successors_cut_off": [
+        "2036848075_1291501898_0"
+      ]
+    },
+    {
+      "edge_id": "12926050588_13245593252_0",
+      "successors_cut_off": [
+        "13245593252_12926128105_0",
+        "13245593252_12926128137_0"
+      ]
+    },
+    {
+      "edge_id": "12926128105_12926050588_0",
+      "successors_cut_off": [
+        "12926050588_13245593252_0",
+        "12926050588_287188555_0"
+      ]
+    },
+    {
+      "edge_id": "12926128137_2330517042_0",
+      "successors_cut_off": [
+        "2330517042_265793837_0",
+        "2330517042_8314649744_0"
+      ]
+    },
+    {
+      "edge_id": "1293814963_1293814935_0",
+      "successors_cut_off": [
+        "1293814935_1293814963_0"
+      ]
+    },
+    {
+      "edge_id": "1297830267_96144243_0",
+      "successors_cut_off": [
+        "96144243_96144274_0"
+      ]
+    },
+    {
+      "edge_id": "1297906834_96819099_0",
+      "successors_cut_off": [
+        "96819099_1297906834_0"
+      ]
+    },
+    {
+      "edge_id": "1300588845_1297830155_0",
+      "successors_cut_off": [
+        "1297830155_5615901351_0"
+      ]
+    },
+    {
+      "edge_id": "1300588845_96819695_0",
+      "successors_cut_off": [
+        "96819695_1300588845_0"
+      ]
+    },
+    {
+      "edge_id": "1303900591_60894505_0",
+      "successors_cut_off": [
+        "60894505_1303900591_0"
+      ]
+    },
+    {
+      "edge_id": "1304282393_60789851_0",
+      "successors_cut_off": [
+        "60789851_7532496128_0"
+      ]
+    },
+    {
+      "edge_id": "1304766596_496248259_0",
+      "successors_cut_off": [
+        "496248259_496248256_0",
+        "496248259_496248260_0"
+      ]
+    },
+    {
+      "edge_id": "1304800610_5615901348_0",
+      "successors_cut_off": [
+        "5615901348_1297830155_0",
+        "5615901348_5615901351_0"
+      ]
+    },
+    {
+      "edge_id": "1305379743_1305379746_0",
+      "successors_cut_off": [
+        "1305379746_60790253_0",
+        "1305379746_9037089316_0"
+      ]
+    },
+    {
+      "edge_id": "1305379746_9037089316_0",
+      "successors_cut_off": [
+        "9037089316_1453741774_0",
+        "9037089316_60786979_0"
+      ]
+    },
+    {
+      "edge_id": "1305996402_32959003_0",
+      "successors_cut_off": [
+        "32959003_1305996402_0"
+      ]
+    },
+    {
+      "edge_id": "1305996560_32694298_0",
+      "successors_cut_off": [
+        "32694298_32958907_0"
+      ]
+    },
+    {
+      "edge_id": "130634639_2247034998_0",
+      "successors_cut_off": [
+        "2247034998_130634639_0",
+        "2247034998_2247034953_0"
+      ]
+    },
+    {
+      "edge_id": "130929296_302374613_0",
+      "successors_cut_off": [
+        "302374613_130929296_0"
+      ]
+    },
+    {
+      "edge_id": "130929304_308676314_0",
+      "successors_cut_off": [
+        "308676314_130929304_0"
+      ]
+    },
+    {
+      "edge_id": "1311282457_1716479428_0",
+      "successors_cut_off": [
+        "1716479428_1311282457_0"
+      ]
+    },
+    {
+      "edge_id": "1311282779_355158675_0",
+      "successors_cut_off": [
+        "355158675_96144174_0"
+      ]
+    },
+    {
+      "edge_id": "1311283013_1311282361_0",
+      "successors_cut_off": [
+        "1311282361_1311283013_0"
+      ]
+    },
+    {
+      "edge_id": "1311283013_1778390731_0",
+      "successors_cut_off": [
+        "1778390731_1311283013_0"
+      ]
+    },
+    {
+      "edge_id": "1311399302_1311399448_0",
+      "successors_cut_off": [
+        "1311399448_1311399302_0"
+      ]
+    },
+    {
+      "edge_id": "1311857158_1311857222_0",
+      "successors_cut_off": [
+        "1311857222_1311857203_0",
+        "1311857222_3733619797_0"
+      ]
+    },
+    {
+      "edge_id": "1311857165_30491840_0",
+      "successors_cut_off": [
+        "30491840_30491859_0",
+        "30491840_30493632_0"
+      ]
+    },
+    {
+      "edge_id": "1311857203_480080091_0",
+      "successors_cut_off": [
+        "480080091_4731104418_0",
+        "480080091_480080065_0"
+      ]
+    },
+    {
+      "edge_id": "1311860273_1311860312_0",
+      "successors_cut_off": [
+        "1311860312_1311860273_0"
+      ]
+    },
+    {
+      "edge_id": "1311860273_1311860357_0",
+      "successors_cut_off": [
+        "1311860357_1311860273_0"
+      ]
+    },
+    {
+      "edge_id": "1314228867_1314228880_0",
+      "successors_cut_off": [
+        "1314228880_27591199_0",
+        "1314228880_6137855455_0"
+      ]
+    },
+    {
+      "edge_id": "1325284346_5840502855_0",
+      "successors_cut_off": [
+        "5840502855_1325284346_0"
+      ]
+    },
+    {
+      "edge_id": "13312076389_297788129_0",
+      "successors_cut_off": [
+        "297788129_1646500067_0",
+        "297788129_286779307_0"
+      ]
+    },
+    {
+      "edge_id": "133200431_4936154873_0",
+      "successors_cut_off": [
+        "4936154873_133200431_0"
+      ]
+    },
+    {
+      "edge_id": "133201657_1710256337_0",
+      "successors_cut_off": [
+        "1710256337_133201657_0"
+      ]
+    },
+    {
+      "edge_id": "133201660_138236482_0",
+      "successors_cut_off": [
+        "138236482_133201660_0"
+      ]
+    },
+    {
+      "edge_id": "133201660_1710256336_0",
+      "successors_cut_off": [
+        "1710256336_133201660_0"
+      ]
+    },
+    {
+      "edge_id": "133202711_133202708_0",
+      "successors_cut_off": [
+        "133202708_133202711_0"
+      ]
+    },
+    {
+      "edge_id": "133204582_2584443783_0",
+      "successors_cut_off": [
+        "2584443783_133204582_0"
+      ]
+    },
+    {
+      "edge_id": "133209654_13015469430_0",
+      "successors_cut_off": [
+        "13015469430_133209654_0"
+      ]
+    },
+    {
+      "edge_id": "133209654_1311282086_0",
+      "successors_cut_off": [
+        "1311282086_133209654_0"
+      ]
+    },
+    {
+      "edge_id": "133211372_133211377_0",
+      "successors_cut_off": [
+        "133211377_133211372_0"
+      ]
+    },
+    {
+      "edge_id": "133217135_3951420384_0",
+      "successors_cut_off": [
+        "3951420384_133217135_0"
+      ]
+    },
+    {
+      "edge_id": "133222276_172425806_0",
+      "successors_cut_off": [
+        "172425806_133222276_0"
+      ]
+    },
+    {
+      "edge_id": "133222283_1716688363_0",
+      "successors_cut_off": [
+        "1716688363_133222283_0"
+      ]
+    },
+    {
+      "edge_id": "133224002_133224007_0",
+      "successors_cut_off": [
+        "133224007_133224002_0"
+      ]
+    },
+    {
+      "edge_id": "133224599_133224820_0",
+      "successors_cut_off": [
+        "133224820_133224599_0"
+      ]
+    },
+    {
+      "edge_id": "133224599_2916972942_0",
+      "successors_cut_off": [
+        "2916972942_133224599_0"
+      ]
+    },
+    {
+      "edge_id": "133225694_309523161_0",
+      "successors_cut_off": [
+        "309523161_133225694_0"
+      ]
+    },
+    {
+      "edge_id": "133225694_309523220_0",
+      "successors_cut_off": [
+        "309523220_133225694_0"
+      ]
+    },
+    {
+      "edge_id": "1332592398_504395091_0",
+      "successors_cut_off": [
+        "504395091_300715999_0"
+      ]
+    },
+    {
+      "edge_id": "1332606712_265788830_0",
+      "successors_cut_off": [
+        "265788830_1332606712_0"
+      ]
+    },
+    {
+      "edge_id": "1333858999_9152927057_0",
+      "successors_cut_off": [
+        "9152927057_1177309363_0",
+        "9152927057_428592610_0"
+      ]
+    },
+    {
+      "edge_id": "1333859017_465608602_0",
+      "successors_cut_off": [
+        "465608602_465608588_0",
+        "465608602_465609243_0"
+      ]
+    },
+    {
+      "edge_id": "1336926543_60911661_0",
+      "successors_cut_off": [
+        "60911661_1338661508_0",
+        "60911661_147409_0"
+      ]
+    },
+    {
+      "edge_id": "1338661557_709036335_0",
+      "successors_cut_off": [
+        "709036335_1338661560_0",
+        "709036335_302399077_0",
+        "709036335_709036364_0"
+      ]
+    },
+    {
+      "edge_id": "1340070141_5700020597_0",
+      "successors_cut_off": [
+        "5700020597_1340070141_0"
+      ]
+    },
+    {
+      "edge_id": "135460337_1282124078_0",
+      "successors_cut_off": [
+        "1282124078_135460337_0"
+      ]
+    },
+    {
+      "edge_id": "135464410_135464409_0",
+      "successors_cut_off": [
+        "135464409_135464410_0"
+      ]
+    },
+    {
+      "edge_id": "135464412_1452525556_0",
+      "successors_cut_off": [
+        "1452525556_135464412_0"
+      ]
+    },
+    {
+      "edge_id": "135465287_135465666_0",
+      "successors_cut_off": [
+        "135465666_135465287_0"
+      ]
+    },
+    {
+      "edge_id": "135468307_33955249_0",
+      "successors_cut_off": [
+        "33955249_308970122_0",
+        "33955249_489120_0"
+      ]
+    },
+    {
+      "edge_id": "135474024_173954859_0",
+      "successors_cut_off": [
+        "173954859_135474024_0"
+      ]
+    },
+    {
+      "edge_id": "135479054_135480481_0",
+      "successors_cut_off": [
+        "135480481_135479054_0"
+      ]
+    },
+    {
+      "edge_id": "135479054_2917596941_0",
+      "successors_cut_off": [
+        "2917596941_135479054_0"
+      ]
+    },
+    {
+      "edge_id": "135482235_135482239_0",
+      "successors_cut_off": [
+        "135482239_135482235_0"
+      ]
+    },
+    {
+      "edge_id": "135705007_135704991_0",
+      "successors_cut_off": [
+        "135704991_135704976_0",
+        "135704991_25734033_0"
+      ]
+    },
+    {
+      "edge_id": "135705883_25581714_0",
+      "successors_cut_off": [
+        "25581714_2395027728_0",
+        "25581714_2395027738_0"
+      ]
+    },
+    {
+      "edge_id": "135708894_7373678_0",
+      "successors_cut_off": [
+        "7373678_25581718_0",
+        "7373678_7373677_0"
+      ]
+    },
+    {
+      "edge_id": "135709750_8712779927_0",
+      "successors_cut_off": [
+        "8712779927_25587536_0",
+        "8712779927_8712779926_0"
+      ]
+    },
+    {
+      "edge_id": "135734771_135734346_0",
+      "successors_cut_off": [
+        "135734346_135734771_0",
+        "135734346_96523439_0"
+      ]
+    },
+    {
+      "edge_id": "135736793_1301362100_0",
+      "successors_cut_off": [
+        "1301362100_135736793_0"
+      ]
+    },
+    {
+      "edge_id": "13584636788_457324262_0",
+      "successors_cut_off": [
+        "457324262_13584636788_0"
+      ]
+    },
+    {
+      "edge_id": "1371040530_1371040511_0",
+      "successors_cut_off": [
+        "1371040511_1371040530_0"
+      ]
+    },
+    {
+      "edge_id": "1374678118_1277475353_0",
+      "successors_cut_off": [
+        "1277475353_1277475302_0",
+        "1277475353_1277475356_0"
+      ]
+    },
+    {
+      "edge_id": "1374678216_60911666_0",
+      "successors_cut_off": [
+        "60911666_60911663_0",
+        "60911666_60911674_0"
+      ]
+    },
+    {
+      "edge_id": "1375955281_2487024325_0",
+      "successors_cut_off": [
+        "2487024325_1374678269_0",
+        "2487024325_314452327_0"
+      ]
+    },
+    {
+      "edge_id": "1375971934_1375971933_0",
+      "successors_cut_off": [
+        "1375971933_7373673_0"
+      ]
+    },
+    {
+      "edge_id": "137735023_12596393547_0",
+      "successors_cut_off": [
+        "12596393547_287188555_0"
+      ]
+    },
+    {
+      "edge_id": "138235150_138235432_0",
+      "successors_cut_off": [
+        "138235432_138235150_0"
+      ]
+    },
+    {
+      "edge_id": "1386002084_1386002103_0",
+      "successors_cut_off": [
+        "1386002103_3797401431_0",
+        "1386002103_9765247944_0"
+      ]
+    },
+    {
+      "edge_id": "1386028831_3797401436_0",
+      "successors_cut_off": [
+        "3797401436_1386028831_0",
+        "3797401436_3343504711_0"
+      ]
+    },
+    {
+      "edge_id": "13865617721_13865617722_0",
+      "successors_cut_off": [
+        "13865617722_13865617717_0",
+        "13865617722_1587095305_0"
+      ]
+    },
+    {
+      "edge_id": "1389776862_3428401525_0",
+      "successors_cut_off": [
+        "3428401525_13865617728_0",
+        "3428401525_175671314_0"
+      ]
+    },
+    {
+      "edge_id": "140581881_30453237_0",
+      "successors_cut_off": [
+        "30453237_30453194_0",
+        "30453237_30453238_0"
+      ]
+    },
+    {
+      "edge_id": "1448660666_145194735_0",
+      "successors_cut_off": [
+        "145194735_1275929583_0",
+        "145194735_1448660666_0",
+        "145194735_558172089_0"
+      ]
+    },
+    {
+      "edge_id": "145124937_158649258_0",
+      "successors_cut_off": [
+        "158649258_145124937_0"
+      ]
+    },
+    {
+      "edge_id": "145146508_148762779_0",
+      "successors_cut_off": [
+        "148762779_145146508_0"
+      ]
+    },
+    {
+      "edge_id": "145147826_148762541_0",
+      "successors_cut_off": [
+        "148762541_145147826_0"
+      ]
+    },
+    {
+      "edge_id": "145149589_1920422286_0",
+      "successors_cut_off": [
+        "1920422286_145149589_0"
+      ]
+    },
+    {
+      "edge_id": "145150493_2165604048_0",
+      "successors_cut_off": [
+        "2165604048_145150493_0"
+      ]
+    },
+    {
+      "edge_id": "145155087_1825936045_0",
+      "successors_cut_off": [
+        "1825936045_145155087_0"
+      ]
+    },
+    {
+      "edge_id": "145155093_1827273786_0",
+      "successors_cut_off": [
+        "1827273786_145155093_0"
+      ]
+    },
+    {
+      "edge_id": "145157381_1934259530_0",
+      "successors_cut_off": [
+        "1934259530_145157381_0"
+      ]
+    },
+    {
+      "edge_id": "145158596_301143465_0",
+      "successors_cut_off": [
+        "301143465_145158596_0"
+      ]
+    },
+    {
+      "edge_id": "145158604_4426246409_0",
+      "successors_cut_off": [
+        "4426246409_145158604_0"
+      ]
+    },
+    {
+      "edge_id": "145159761_145147835_0",
+      "successors_cut_off": [
+        "145147835_299836027_0"
+      ]
+    },
+    {
+      "edge_id": "145162891_145162893_0",
+      "successors_cut_off": [
+        "145162893_271283547_0"
+      ]
+    },
+    {
+      "edge_id": "145162893_145162891_0",
+      "successors_cut_off": [
+        "145162891_1934199242_0"
+      ]
+    },
+    {
+      "edge_id": "145181102_1466901174_0",
+      "successors_cut_off": [
+        "1466901174_145173356_0",
+        "1466901174_1466901235_0"
+      ]
+    },
+    {
+      "edge_id": "145181108_649088405_0",
+      "successors_cut_off": [
+        "649088405_1275935019_0",
+        "649088405_31304394_0"
+      ]
+    },
+    {
+      "edge_id": "145184550_1584172884_0",
+      "successors_cut_off": [
+        "1584172884_13571598791_0",
+        "1584172884_299734410_0"
+      ]
+    },
+    {
+      "edge_id": "145188152_9223031236_0",
+      "successors_cut_off": [
+        "9223031236_1275929575_0"
+      ]
+    },
+    {
+      "edge_id": "145188499_145194737_0",
+      "successors_cut_off": [
+        "145194737_558172089_0"
+      ]
+    },
+    {
+      "edge_id": "145194735_1275929583_0",
+      "successors_cut_off": [
+        "1275929583_11883182375_0",
+        "1275929583_3553101024_0"
+      ]
+    },
+    {
+      "edge_id": "145194735_1448660666_0",
+      "successors_cut_off": [
+        "1448660666_145194735_0"
+      ]
+    },
+    {
+      "edge_id": "1452525553_7545353491_0",
+      "successors_cut_off": [
+        "7545353491_7545352981_0",
+        "7545353491_7545353583_0"
+      ]
+    },
+    {
+      "edge_id": "1455778248_1455778254_0",
+      "successors_cut_off": [
+        "1455778254_14774909_0"
+      ]
+    },
+    {
+      "edge_id": "1463940578_1455801454_0",
+      "successors_cut_off": [
+        "1455801454_366911_0"
+      ]
+    },
+    {
+      "edge_id": "1471232867_140582455_0",
+      "successors_cut_off": [
+        "140582455_199206152_0",
+        "140582455_30440876_0"
+      ]
+    },
+    {
+      "edge_id": "147385_1314228867_0",
+      "successors_cut_off": [
+        "1314228867_1314228880_0",
+        "1314228867_1333858999_0"
+      ]
+    },
+    {
+      "edge_id": "147393_147407_0",
+      "successors_cut_off": [
+        "147407_147409_0",
+        "147407_60911657_0"
+      ]
+    },
+    {
+      "edge_id": "147406_147398_0",
+      "successors_cut_off": [
+        "147398_1333859017_0",
+        "147398_2901051914_0",
+        "147398_7785554736_0"
+      ]
+    },
+    {
+      "edge_id": "147409_147411_0",
+      "successors_cut_off": [
+        "147411_60911698_0",
+        "147411_60911717_0"
+      ]
+    },
+    {
+      "edge_id": "147413_60911744_0",
+      "successors_cut_off": [
+        "60911744_27091406_0",
+        "60911744_60911745_0"
+      ]
+    },
+    {
+      "edge_id": "147416_147419_0",
+      "successors_cut_off": [
+        "147419_1084232050_0",
+        "147419_97734057_0"
+      ]
+    },
+    {
+      "edge_id": "147419_97734057_0",
+      "successors_cut_off": [
+        "97734057_331884738_0",
+        "97734057_331884750_0"
+      ]
+    },
+    {
+      "edge_id": "14774909_1455778254_0",
+      "successors_cut_off": [
+        "1455778254_60786990_0"
+      ]
+    },
+    {
+      "edge_id": "1477723527_11207348382_0",
+      "successors_cut_off": [
+        "11207348382_11207348368_0"
+      ]
+    },
+    {
+      "edge_id": "1477723570_26022209_0",
+      "successors_cut_off": [
+        "26022209_3577042741_0"
+      ]
+    },
+    {
+      "edge_id": "1479941726_31098747_0",
+      "successors_cut_off": [
+        "31098747_1479941726_0"
+      ]
+    },
+    {
+      "edge_id": "148615804_1906604446_0",
+      "successors_cut_off": [
+        "1906604446_148615804_0"
+      ]
+    },
+    {
+      "edge_id": "148617477_148619358_0",
+      "successors_cut_off": [
+        "148619358_148617477_0"
+      ]
+    },
+    {
+      "edge_id": "148617479_299827361_0",
+      "successors_cut_off": [
+        "299827361_148617479_0"
+      ]
+    },
+    {
+      "edge_id": "148617479_456040014_0",
+      "successors_cut_off": [
+        "456040014_148617479_0"
+      ]
+    },
+    {
+      "edge_id": "148617480_247479553_0",
+      "successors_cut_off": [
+        "247479553_148617480_0"
+      ]
+    },
+    {
+      "edge_id": "148617480_299827171_0",
+      "successors_cut_off": [
+        "299827171_148617480_0"
+      ]
+    },
+    {
+      "edge_id": "148617480_928058311_0",
+      "successors_cut_off": [
+        "928058311_148617480_0"
+      ]
+    },
+    {
+      "edge_id": "148617485_148617482_0",
+      "successors_cut_off": [
+        "148617482_148617485_0"
+      ]
+    },
+    {
+      "edge_id": "148618365_1836583947_0",
+      "successors_cut_off": [
+        "1836583947_148618365_0"
+      ]
+    },
+    {
+      "edge_id": "148621142_271283546_0",
+      "successors_cut_off": [
+        "271283546_148621142_0"
+      ]
+    },
+    {
+      "edge_id": "1504541784_30137139_0",
+      "successors_cut_off": [
+        "30137139_639543424_0",
+        "30137139_649018403_0"
+      ]
+    },
+    {
+      "edge_id": "151412175_151412174_0",
+      "successors_cut_off": [
+        "151412174_151412175_0"
+      ]
+    },
+    {
+      "edge_id": "151412178_151414778_0",
+      "successors_cut_off": [
+        "151414778_151412178_0"
+      ]
+    },
+    {
+      "edge_id": "151412179_151414291_0",
+      "successors_cut_off": [
+        "151414291_151412179_0"
+      ]
+    },
+    {
+      "edge_id": "151412179_1577472997_0",
+      "successors_cut_off": [
+        "1577472997_1577473001_0"
+      ]
+    },
+    {
+      "edge_id": "151418234_151418240_0",
+      "successors_cut_off": [
+        "151418240_151418234_0"
+      ]
+    },
+    {
+      "edge_id": "151460855_151460863_0",
+      "successors_cut_off": [
+        "151460863_151460855_0"
+      ]
+    },
+    {
+      "edge_id": "151465355_151465356_0",
+      "successors_cut_off": [
+        "151465356_151465355_0"
+      ]
+    },
+    {
+      "edge_id": "151465355_151466226_0",
+      "successors_cut_off": [
+        "151466226_151465355_0"
+      ]
+    },
+    {
+      "edge_id": "151468129_172434461_0",
+      "successors_cut_off": [
+        "172434461_151468129_0"
+      ]
+    },
+    {
+      "edge_id": "151468129_9383613175_0",
+      "successors_cut_off": [
+        "9383613175_151468129_0",
+        "9383613175_172433648_0"
+      ]
+    },
+    {
+      "edge_id": "151469746_151470710_0",
+      "successors_cut_off": [
+        "151470710_151469746_0"
+      ]
+    },
+    {
+      "edge_id": "1519339916_1519339914_0",
+      "successors_cut_off": [
+        "1519339914_1519339916_0"
+      ]
+    },
+    {
+      "edge_id": "1519339916_272523581_0",
+      "successors_cut_off": [
+        "272523581_1519339916_0"
+      ]
+    },
+    {
+      "edge_id": "1519794894_2087898228_0",
+      "successors_cut_off": [
+        "2087898228_60474410_0"
+      ]
+    },
+    {
+      "edge_id": "152901829_293983463_0",
+      "successors_cut_off": [
+        "293983463_289311088_0"
+      ]
+    },
+    {
+      "edge_id": "152901917_8815809544_0",
+      "successors_cut_off": [
+        "8815809544_152901917_0"
+      ]
+    },
+    {
+      "edge_id": "152902085_16967767_0",
+      "successors_cut_off": [
+        "16967767_152902085_0"
+      ]
+    },
+    {
+      "edge_id": "152902490_369249733_0",
+      "successors_cut_off": [
+        "369249733_152902490_0"
+      ]
+    },
+    {
+      "edge_id": "153344793_7546189292_0",
+      "successors_cut_off": [
+        "7546189292_7546189290_0"
+      ]
+    },
+    {
+      "edge_id": "153345629_2998549532_0",
+      "successors_cut_off": [
+        "2998549532_520168_0"
+      ]
+    },
+    {
+      "edge_id": "153556282_292884805_0",
+      "successors_cut_off": [
+        "292884805_153556282_0"
+      ]
+    },
+    {
+      "edge_id": "1546141900_29373375_0",
+      "successors_cut_off": [
+        "29373375_1546141900_0"
+      ]
+    },
+    {
+      "edge_id": "1546141900_9766621220_0",
+      "successors_cut_off": [
+        "9766621220_159065674_0"
+      ]
+    },
+    {
+      "edge_id": "154934738_154934739_0",
+      "successors_cut_off": [
+        "154934739_1679061604_0"
+      ]
+    },
+    {
+      "edge_id": "1568538060_366092175_0",
+      "successors_cut_off": [
+        "366092175_1568538060_0"
+      ]
+    },
+    {
+      "edge_id": "1577473001_151414023_0",
+      "successors_cut_off": [
+        "151414023_1577473001_0"
+      ]
+    },
+    {
+      "edge_id": "1577473001_1577472997_0",
+      "successors_cut_off": [
+        "1577472997_151412179_0"
+      ]
+    },
+    {
+      "edge_id": "1577473148_1577473123_0",
+      "successors_cut_off": [
+        "1577473123_1577473148_0"
+      ]
+    },
+    {
+      "edge_id": "1577473272_331849834_0",
+      "successors_cut_off": [
+        "331849834_1577473272_0"
+      ]
+    },
+    {
+      "edge_id": "1577473506_1577473501_0",
+      "successors_cut_off": [
+        "1577473501_1577473506_0"
+      ]
+    },
+    {
+      "edge_id": "1577473530_1577473531_0",
+      "successors_cut_off": [
+        "1577473531_1577473530_0"
+      ]
+    },
+    {
+      "edge_id": "1577473559_1577473580_0",
+      "successors_cut_off": [
+        "1577473580_26193257_0"
+      ]
+    },
+    {
+      "edge_id": "1577473580_1577473559_0",
+      "successors_cut_off": [
+        "1577473559_26193265_0"
+      ]
+    },
+    {
+      "edge_id": "1579330746_1577473287_0",
+      "successors_cut_off": [
+        "1577473287_1579330746_0"
+      ]
+    },
+    {
+      "edge_id": "1579330774_299415902_0",
+      "successors_cut_off": [
+        "299415902_1579330774_0"
+      ]
+    },
+    {
+      "edge_id": "158298733_26025206_0",
+      "successors_cut_off": [
+        "26025206_381453172_0"
+      ]
+    },
+    {
+      "edge_id": "1584172884_299734410_0",
+      "successors_cut_off": [
+        "299734410_299734358_0",
+        "299734410_299734377_0"
+      ]
+    },
+    {
+      "edge_id": "158643311_13815804282_0",
+      "successors_cut_off": [
+        "13815804282_11093709613_0",
+        "13815804282_158643778_0"
+      ]
+    },
+    {
+      "edge_id": "158643778_11469925208_0",
+      "successors_cut_off": [
+        "11469925208_26193258_0",
+        "11469925208_9738920299_0"
+      ]
+    },
+    {
+      "edge_id": "158644034_1084231608_0",
+      "successors_cut_off": [
+        "1084231608_26194218_0",
+        "1084231608_559958623_0"
+      ]
+    },
+    {
+      "edge_id": "158662880_7858662980_0",
+      "successors_cut_off": [
+        "7858662980_158662880_0"
+      ]
+    },
+    {
+      "edge_id": "158663779_158663782_0",
+      "successors_cut_off": [
+        "158663782_158663779_0"
+      ]
+    },
+    {
+      "edge_id": "158663779_158664851_0",
+      "successors_cut_off": [
+        "158664851_158663779_0"
+      ]
+    },
+    {
+      "edge_id": "158674212_158674216_0",
+      "successors_cut_off": [
+        "158674216_158674217_0"
+      ]
+    },
+    {
+      "edge_id": "158674216_158674212_0",
+      "successors_cut_off": [
+        "158674212_91795180_0"
+      ]
+    },
+    {
+      "edge_id": "158674217_158674216_0",
+      "successors_cut_off": [
+        "158674216_158674212_0"
+      ]
+    },
+    {
+      "edge_id": "158675358_158675359_0",
+      "successors_cut_off": [
+        "158675359_158675358_0"
+      ]
+    },
+    {
+      "edge_id": "1587095305_12926128128_0",
+      "successors_cut_off": [
+        "12926128128_12926128105_0",
+        "12926128128_265793086_0"
+      ]
+    },
+    {
+      "edge_id": "159065550_159065505_0",
+      "successors_cut_off": [
+        "159065505_159065550_0"
+      ]
+    },
+    {
+      "edge_id": "159065550_159065537_0",
+      "successors_cut_off": [
+        "159065537_159065550_0"
+      ]
+    },
+    {
+      "edge_id": "159065674_623030089_0",
+      "successors_cut_off": [
+        "623030089_159065674_0"
+      ]
+    },
+    {
+      "edge_id": "159065674_9766621220_0",
+      "successors_cut_off": [
+        "9766621220_1546141900_0"
+      ]
+    },
+    {
+      "edge_id": "159083000_2034433007_0",
+      "successors_cut_off": [
+        "2034433007_287657472_0",
+        "2034433007_287659701_0"
+      ]
+    },
+    {
+      "edge_id": "159083009_5225519093_0",
+      "successors_cut_off": [
+        "5225519093_130636565_0",
+        "5225519093_4081183108_0"
+      ]
+    },
+    {
+      "edge_id": "162407_26193576_0",
+      "successors_cut_off": [
+        "26193576_1084232409_0",
+        "26193576_1338661560_0"
+      ]
+    },
+    {
+      "edge_id": "162601884_1332606712_0",
+      "successors_cut_off": [
+        "1332606712_265788830_0"
+      ]
+    },
+    {
+      "edge_id": "1629179235_1629179228_0",
+      "successors_cut_off": [
+        "1629179228_1629179235_0"
+      ]
+    },
+    {
+      "edge_id": "1639994362_31304330_0",
+      "successors_cut_off": [
+        "31304330_148614561_0"
+      ]
+    },
+    {
+      "edge_id": "1639994392_1639994376_0",
+      "successors_cut_off": [
+        "1639994376_1639994392_0"
+      ]
+    },
+    {
+      "edge_id": "1639994409_1639994441_0",
+      "successors_cut_off": [
+        "1639994441_1639994409_0"
+      ]
+    },
+    {
+      "edge_id": "1639994422_1639994375_0",
+      "successors_cut_off": [
+        "1639994375_1639994422_0"
+      ]
+    },
+    {
+      "edge_id": "1639994462_299834334_0",
+      "successors_cut_off": [
+        "299834334_1639994462_0"
+      ]
+    },
+    {
+      "edge_id": "1639994476_271327464_0",
+      "successors_cut_off": [
+        "271327464_1639994476_0"
+      ]
+    },
+    {
+      "edge_id": "1639994511_1639994534_0",
+      "successors_cut_off": [
+        "1639994534_299716161_0"
+      ]
+    },
+    {
+      "edge_id": "1639994534_1639994511_0",
+      "successors_cut_off": [
+        "1639994511_1639994534_0"
+      ]
+    },
+    {
+      "edge_id": "1639994673_299721191_0",
+      "successors_cut_off": [
+        "299721191_1639994673_0"
+      ]
+    },
+    {
+      "edge_id": "1639994689_1639994660_0",
+      "successors_cut_off": [
+        "1639994660_1639994689_0"
+      ]
+    },
+    {
+      "edge_id": "1639994699_1639994687_0",
+      "successors_cut_off": [
+        "1639994687_1639994699_0"
+      ]
+    },
+    {
+      "edge_id": "1639994750_1639994784_0",
+      "successors_cut_off": [
+        "1639994784_1639994750_0"
+      ]
+    },
+    {
+      "edge_id": "1639994784_1639994750_0",
+      "successors_cut_off": [
+        "1639994750_1640044671_0"
+      ]
+    },
+    {
+      "edge_id": "1640044671_1639994750_0",
+      "successors_cut_off": [
+        "1639994750_1639994784_0"
+      ]
+    },
+    {
+      "edge_id": "1640671192_1640671198_0",
+      "successors_cut_off": [
+        "1640671198_1640671248_0",
+        "1640671198_30440868_0"
+      ]
+    },
+    {
+      "edge_id": "1640671204_1640671192_0",
+      "successors_cut_off": [
+        "1640671192_30440968_0"
+      ]
+    },
+    {
+      "edge_id": "1640671248_1640671257_0",
+      "successors_cut_off": [
+        "1640671257_265798848_0"
+      ]
+    },
+    {
+      "edge_id": "1640671249_30440892_0",
+      "successors_cut_off": [
+        "30440892_1640671318_0",
+        "30440892_30440886_0"
+      ]
+    },
+    {
+      "edge_id": "1640671257_1640671249_0",
+      "successors_cut_off": [
+        "1640671249_1640671204_0",
+        "1640671249_30440892_0"
+      ]
+    },
+    {
+      "edge_id": "1646500093_9188284766_0",
+      "successors_cut_off": [
+        "9188284766_1646526447_0",
+        "9188284766_2453136363_0"
+      ]
+    },
+    {
+      "edge_id": "1646500167_12054891153_0",
+      "successors_cut_off": [
+        "12054891153_12054891152_0",
+        "12054891153_30491861_0"
+      ]
+    },
+    {
+      "edge_id": "1653391896_292565211_0",
+      "successors_cut_off": [
+        "292565211_1653391896_0"
+      ]
+    },
+    {
+      "edge_id": "1679061592_154934738_0",
+      "successors_cut_off": [
+        "154934738_154934739_0"
+      ]
+    },
+    {
+      "edge_id": "1679061619_1679061592_0",
+      "successors_cut_off": [
+        "1679061592_154934738_0"
+      ]
+    },
+    {
+      "edge_id": "1679061932_1679061887_0",
+      "successors_cut_off": [
+        "1679061887_1679061932_0"
+      ]
+    },
+    {
+      "edge_id": "16967324_293982866_0",
+      "successors_cut_off": [
+        "293982866_12405413600_0",
+        "293982866_9272693493_0"
+      ]
+    },
+    {
+      "edge_id": "16967336_293983116_0",
+      "successors_cut_off": [
+        "293983116_1880279322_0",
+        "293983116_293983187_0"
+      ]
+    },
+    {
+      "edge_id": "16967372_9239129793_0",
+      "successors_cut_off": [
+        "9239129793_16967372_0"
+      ]
+    },
+    {
+      "edge_id": "16967376_3141901056_0",
+      "successors_cut_off": [
+        "3141901056_16967376_0"
+      ]
+    },
+    {
+      "edge_id": "16968199_30151681_0",
+      "successors_cut_off": [
+        "30151681_16968199_0"
+      ]
+    },
+    {
+      "edge_id": "16968580_3554378215_0",
+      "successors_cut_off": [
+        "3554378215_16968580_1"
+      ]
+    },
+    {
+      "edge_id": "16968580_3554378215_1",
+      "successors_cut_off": [
+        "3554378215_16968580_0"
+      ]
+    },
+    {
+      "edge_id": "1704389466_1704389477_0",
+      "successors_cut_off": [
+        "1704389477_60128120_0"
+      ]
+    },
+    {
+      "edge_id": "1704389477_1704389476_0",
+      "successors_cut_off": [
+        "1704389476_1455778261_0",
+        "1704389476_1704389482_0"
+      ]
+    },
+    {
+      "edge_id": "1704389482_1704389466_0",
+      "successors_cut_off": [
+        "1704389466_2416756790_0"
+      ]
+    },
+    {
+      "edge_id": "1707906475_1707906434_0",
+      "successors_cut_off": [
+        "1707906434_1707906475_0"
+      ]
+    },
+    {
+      "edge_id": "171240192_1793744624_0",
+      "successors_cut_off": [
+        "1793744624_1793760567_0",
+        "1793744624_1793760595_0"
+      ]
+    },
+    {
+      "edge_id": "171241445_171249204_0",
+      "successors_cut_off": [
+        "171249204_171248251_0"
+      ]
+    },
+    {
+      "edge_id": "171244580_171246806_0",
+      "successors_cut_off": [
+        "171246806_171244580_0"
+      ]
+    },
+    {
+      "edge_id": "171244580_171252846_0",
+      "successors_cut_off": [
+        "171252846_286424410_0"
+      ]
+    },
+    {
+      "edge_id": "171248251_171249202_0",
+      "successors_cut_off": [
+        "171249202_171248251_0"
+      ]
+    },
+    {
+      "edge_id": "171248251_171249204_0",
+      "successors_cut_off": [
+        "171249204_171241445_0"
+      ]
+    },
+    {
+      "edge_id": "171249202_171248251_0",
+      "successors_cut_off": [
+        "171248251_171249204_0"
+      ]
+    },
+    {
+      "edge_id": "171249204_171248251_0",
+      "successors_cut_off": [
+        "171248251_171249202_0"
+      ]
+    },
+    {
+      "edge_id": "1716688924_1716688935_0",
+      "successors_cut_off": [
+        "1716688935_1716688924_0"
+      ]
+    },
+    {
+      "edge_id": "172405214_172405216_0",
+      "successors_cut_off": [
+        "172405216_172405214_0"
+      ]
+    },
+    {
+      "edge_id": "172405214_172405577_0",
+      "successors_cut_off": [
+        "172405577_172405214_0"
+      ]
+    },
+    {
+      "edge_id": "172407198_172407193_0",
+      "successors_cut_off": [
+        "172407193_172407198_0"
+      ]
+    },
+    {
+      "edge_id": "172408359_172408360_0",
+      "successors_cut_off": [
+        "172408360_172408359_0"
+      ]
+    },
+    {
+      "edge_id": "172408359_172408656_0",
+      "successors_cut_off": [
+        "172408656_172408359_0"
+      ]
+    },
+    {
+      "edge_id": "172408993_172412437_0",
+      "successors_cut_off": [
+        "172412437_172408993_0"
+      ]
+    },
+    {
+      "edge_id": "172410198_1311282509_0",
+      "successors_cut_off": [
+        "1311282509_172410198_0"
+      ]
+    },
+    {
+      "edge_id": "172410198_172410210_0",
+      "successors_cut_off": [
+        "172410210_172410198_0"
+      ]
+    },
+    {
+      "edge_id": "172414267_172415921_0",
+      "successors_cut_off": [
+        "172415921_172414267_0"
+      ]
+    },
+    {
+      "edge_id": "172417001_7814638351_0",
+      "successors_cut_off": [
+        "7814638351_172417001_0"
+      ]
+    },
+    {
+      "edge_id": "172417053_172418673_0",
+      "successors_cut_off": [
+        "172418673_172417053_0"
+      ]
+    },
+    {
+      "edge_id": "172421577_1415343889_0",
+      "successors_cut_off": [
+        "1415343889_172421577_0"
+      ]
+    },
+    {
+      "edge_id": "172421959_172424206_0",
+      "successors_cut_off": [
+        "172424206_172421959_0"
+      ]
+    },
+    {
+      "edge_id": "172428556_172428563_0",
+      "successors_cut_off": [
+        "172428563_172428556_0"
+      ]
+    },
+    {
+      "edge_id": "172428556_2583081695_0",
+      "successors_cut_off": [
+        "2583081695_172428556_0"
+      ]
+    },
+    {
+      "edge_id": "172430083_172430143_0",
+      "successors_cut_off": [
+        "172430143_172430083_0"
+      ]
+    },
+    {
+      "edge_id": "172435653_172435657_0",
+      "successors_cut_off": [
+        "172435657_172435653_0"
+      ]
+    },
+    {
+      "edge_id": "172439409_172439863_0",
+      "successors_cut_off": [
+        "172439863_172439409_0"
+      ]
+    },
+    {
+      "edge_id": "1739118993_1739118992_0",
+      "successors_cut_off": [
+        "1739118992_1739118993_0"
+      ]
+    },
+    {
+      "edge_id": "1739118993_3387695723_0",
+      "successors_cut_off": [
+        "3387695723_1374702846_0",
+        "3387695723_6883685424_0"
+      ]
+    },
+    {
+      "edge_id": "1739118998_9228282034_0",
+      "successors_cut_off": [
+        "9228282034_60906513_0",
+        "9228282034_60911679_0"
+      ]
+    },
+    {
+      "edge_id": "1753135307_309917376_0",
+      "successors_cut_off": [
+        "309917376_1799251064_0"
+      ]
+    },
+    {
+      "edge_id": "175670902_1641623056_0",
+      "successors_cut_off": [
+        "1641623056_175670902_0"
+      ]
+    },
+    {
+      "edge_id": "175671313_6935981828_0",
+      "successors_cut_off": [
+        "6935981828_175671313_0"
+      ]
+    },
+    {
+      "edge_id": "175671573_1707877379_0",
+      "successors_cut_off": [
+        "1707877379_175671573_0"
+      ]
+    },
+    {
+      "edge_id": "175671630_175671581_0",
+      "successors_cut_off": [
+        "175671581_175670677_0",
+        "175671581_175670997_0"
+      ]
+    },
+    {
+      "edge_id": "175671725_175671627_0",
+      "successors_cut_off": [
+        "175671627_175671725_0"
+      ]
+    },
+    {
+      "edge_id": "175671725_175671724_0",
+      "successors_cut_off": [
+        "175671724_175671725_0"
+      ]
+    },
+    {
+      "edge_id": "175671779_1940468123_0",
+      "successors_cut_off": [
+        "1940468123_175671779_0"
+      ]
+    },
+    {
+      "edge_id": "175671833_2405576986_0",
+      "successors_cut_off": [
+        "2405576986_175671833_0"
+      ]
+    },
+    {
+      "edge_id": "1763613709_293702082_0",
+      "successors_cut_off": [
+        "293702082_1763613709_0"
+      ]
+    },
+    {
+      "edge_id": "1763613710_287673625_0",
+      "successors_cut_off": [
+        "287673625_1763613710_0"
+      ]
+    },
+    {
+      "edge_id": "1770658054_1389776862_0",
+      "successors_cut_off": [
+        "1389776862_175672315_0",
+        "1389776862_3428401525_0"
+      ]
+    },
+    {
+      "edge_id": "1773590600_1880279370_0",
+      "successors_cut_off": [
+        "1880279370_2698615152_0",
+        "1880279370_2698615165_0"
+      ]
+    },
+    {
+      "edge_id": "1780485100_60896063_0",
+      "successors_cut_off": [
+        "60896063_60896047_0",
+        "60896063_60896066_0"
+      ]
+    },
+    {
+      "edge_id": "1799251059_1799251063_0",
+      "successors_cut_off": [
+        "1799251063_67433370_0"
+      ]
+    },
+    {
+      "edge_id": "1799251060_1799251059_0",
+      "successors_cut_off": [
+        "1799251059_172433648_0"
+      ]
+    },
+    {
+      "edge_id": "1799251063_1799251064_0",
+      "successors_cut_off": [
+        "1799251064_309917376_0"
+      ]
+    },
+    {
+      "edge_id": "1799251064_1799251060_0",
+      "successors_cut_off": [
+        "1799251060_101631284_0"
+      ]
+    },
+    {
+      "edge_id": "1799251064_309917376_0",
+      "successors_cut_off": [
+        "309917376_1753135318_0"
+      ]
+    },
+    {
+      "edge_id": "181796883_8703275653_0",
+      "successors_cut_off": [
+        "8703275653_181800324_0",
+        "8703275653_8725335586_0"
+      ]
+    },
+    {
+      "edge_id": "181796899_181803257_0",
+      "successors_cut_off": [
+        "181803257_181796844_0",
+        "181803257_79482242_0"
+      ]
+    },
+    {
+      "edge_id": "181796907_472670326_0",
+      "successors_cut_off": [
+        "472670326_30482790_0"
+      ]
+    },
+    {
+      "edge_id": "181800324_5789588029_0",
+      "successors_cut_off": [
+        "5789588029_2388781379_0",
+        "5789588029_33072008_0"
+      ]
+    },
+    {
+      "edge_id": "181803257_181796844_0",
+      "successors_cut_off": [
+        "181796844_181796905_0",
+        "181796844_9577811405_0"
+      ]
+    },
+    {
+      "edge_id": "18241874_9037089313_0",
+      "successors_cut_off": [
+        "9037089313_1305697326_0",
+        "9037089313_14774902_0"
+      ]
+    },
+    {
+      "edge_id": "1829205050_1829205064_0",
+      "successors_cut_off": [
+        "1829205064_1829205050_0"
+      ]
+    },
+    {
+      "edge_id": "1880279056_1568539631_0",
+      "successors_cut_off": [
+        "1568539631_124601346_0"
+      ]
+    },
+    {
+      "edge_id": "1880279217_1880279173_0",
+      "successors_cut_off": [
+        "1880279173_1880279217_0"
+      ]
+    },
+    {
+      "edge_id": "1880279249_5726713989_0",
+      "successors_cut_off": [
+        "5726713989_1880279249_0"
+      ]
+    },
+    {
+      "edge_id": "1880279252_293982903_0",
+      "successors_cut_off": [
+        "293982903_16967324_0",
+        "293982903_293983086_0"
+      ]
+    },
+    {
+      "edge_id": "189299726_189299734_0",
+      "successors_cut_off": [
+        "189299734_189299726_0"
+      ]
+    },
+    {
+      "edge_id": "189299745_344123560_0",
+      "successors_cut_off": [
+        "344123560_189299745_0"
+      ]
+    },
+    {
+      "edge_id": "189332922_2037282379_0",
+      "successors_cut_off": [
+        "2037282379_189332922_0"
+      ]
+    },
+    {
+      "edge_id": "190473445_190473489_0",
+      "successors_cut_off": [
+        "190473489_190473502_0",
+        "190473489_190473519_0"
+      ]
+    },
+    {
+      "edge_id": "190473519_12603781404_0",
+      "successors_cut_off": [
+        "12603781404_190497842_0",
+        "12603781404_302665554_0"
+      ]
+    },
+    {
+      "edge_id": "190497792_2018803697_0",
+      "successors_cut_off": [
+        "2018803697_2585822226_0",
+        "2018803697_7644360563_0"
+      ]
+    },
+    {
+      "edge_id": "190497843_1393186592_0",
+      "successors_cut_off": [
+        "1393186592_1377517274_0",
+        "1393186592_199206099_0"
+      ]
+    },
+    {
+      "edge_id": "1912709360_6883791425_0",
+      "successors_cut_off": [
+        "6883791425_10161422038_0",
+        "6883791425_8709482853_0"
+      ]
+    },
+    {
+      "edge_id": "1913168771_1913168778_0",
+      "successors_cut_off": [
+        "1913168778_1913168776_0",
+        "1913168778_8722747922_0"
+      ]
+    },
+    {
+      "edge_id": "1921715459_1639994628_0",
+      "successors_cut_off": [
+        "1639994628_1921715459_0"
+      ]
+    },
+    {
+      "edge_id": "1927897779_1927897507_0",
+      "successors_cut_off": [
+        "1927897507_1927897779_0"
+      ]
+    },
+    {
+      "edge_id": "1934199242_145162891_0",
+      "successors_cut_off": [
+        "145162891_145162893_0"
+      ]
+    },
+    {
+      "edge_id": "1934226104_1934226112_0",
+      "successors_cut_off": [
+        "1934226112_1934226104_0"
+      ]
+    },
+    {
+      "edge_id": "1934226106_1934226109_0",
+      "successors_cut_off": [
+        "1934226109_1934226106_0"
+      ]
+    },
+    {
+      "edge_id": "1935784803_299722865_0",
+      "successors_cut_off": [
+        "299722865_1935784803_0"
+      ]
+    },
+    {
+      "edge_id": "1943102983_541203302_0",
+      "successors_cut_off": [
+        "541203302_1943102983_0"
+      ]
+    },
+    {
+      "edge_id": "1943757160_25688932_0",
+      "successors_cut_off": [
+        "25688932_25688931_0",
+        "25688932_30453193_0"
+      ]
+    },
+    {
+      "edge_id": "199206135_313483083_0",
+      "successors_cut_off": [
+        "313483083_1332592404_0",
+        "313483083_1332592414_0"
+      ]
+    },
+    {
+      "edge_id": "199206152_2481971675_0",
+      "successors_cut_off": [
+        "2481971675_11631647410_0",
+        "2481971675_2481971672_0"
+      ]
+    },
+    {
+      "edge_id": "199206177_1332592400_0",
+      "successors_cut_off": [
+        "1332592400_1332592414_0",
+        "1332592400_199206135_0"
+      ]
+    },
+    {
+      "edge_id": "199206180_301424345_0",
+      "successors_cut_off": [
+        "301424345_265793086_0",
+        "301424345_5220571130_0"
+      ]
+    },
+    {
+      "edge_id": "1992445757_1478870932_0",
+      "successors_cut_off": [
+        "1478870932_1992445757_0"
+      ]
+    },
+    {
+      "edge_id": "2021363183_1127949375_0",
+      "successors_cut_off": [
+        "1127949375_2021363183_0"
+      ]
+    },
+    {
+      "edge_id": "2034413982_12384353041_0",
+      "successors_cut_off": [
+        "12384353041_310183305_0",
+        "12384353041_9133538505_0"
+      ]
+    },
+    {
+      "edge_id": "206162170_1477723527_0",
+      "successors_cut_off": [
+        "1477723527_11207348382_0",
+        "1477723527_1477723570_0"
+      ]
+    },
+    {
+      "edge_id": "206162170_3634488210_0",
+      "successors_cut_off": [
+        "3634488210_206162170_0",
+        "3634488210_210966399_0"
+      ]
+    },
+    {
+      "edge_id": "2087898222_2087898223_0",
+      "successors_cut_off": [
+        "2087898223_60474408_0"
+      ]
+    },
+    {
+      "edge_id": "2087898223_54712417_0",
+      "successors_cut_off": [
+        "54712417_1519794894_0",
+        "54712417_54712423_0"
+      ]
+    },
+    {
+      "edge_id": "2087898228_2087898222_0",
+      "successors_cut_off": [
+        "2087898222_60474411_0"
+      ]
+    },
+    {
+      "edge_id": "210966399_210966386_0",
+      "successors_cut_off": [
+        "210966386_101458086_0"
+      ]
+    },
+    {
+      "edge_id": "21389289_21618264_0",
+      "successors_cut_off": [
+        "21618264_301426214_0",
+        "21618264_6137855461_0"
+      ]
+    },
+    {
+      "edge_id": "2141832891_320986808_0",
+      "successors_cut_off": [
+        "320986808_101530006_0"
+      ]
+    },
+    {
+      "edge_id": "21618264_301426214_0",
+      "successors_cut_off": [
+        "301426214_1314215501_0",
+        "301426214_301426458_0"
+      ]
+    },
+    {
+      "edge_id": "21618264_6137855461_0",
+      "successors_cut_off": [
+        "6137855461_306109470_0",
+        "6137855461_6137855455_0"
+      ]
+    },
+    {
+      "edge_id": "2184631703_2184631704_0",
+      "successors_cut_off": [
+        "2184631704_2184631703_0"
+      ]
+    },
+    {
+      "edge_id": "2212064015_2694347742_0",
+      "successors_cut_off": [
+        "2694347742_2212064015_0"
+      ]
+    },
+    {
+      "edge_id": "2223500293_2271461106_0",
+      "successors_cut_off": [
+        "2271461106_2223500293_0"
+      ]
+    },
+    {
+      "edge_id": "2223500294_2184624853_0",
+      "successors_cut_off": [
+        "2184624853_2223500294_0"
+      ]
+    },
+    {
+      "edge_id": "2266863484_2284629646_0",
+      "successors_cut_off": [
+        "2284629646_2266863484_0"
+      ]
+    },
+    {
+      "edge_id": "226856217_240618113_0",
+      "successors_cut_off": [
+        "240618113_226856217_0"
+      ]
+    },
+    {
+      "edge_id": "2388781345_181796883_0",
+      "successors_cut_off": [
+        "181796883_2266863484_0"
+      ]
+    },
+    {
+      "edge_id": "2388781379_4939007133_0",
+      "successors_cut_off": [
+        "4939007133_2388781387_0",
+        "4939007133_4939007139_0"
+      ]
+    },
+    {
+      "edge_id": "2388781387_3374722589_0",
+      "successors_cut_off": [
+        "3374722589_181796899_0",
+        "3374722589_2388781396_0"
+      ]
+    },
+    {
+      "edge_id": "2388781396_33071906_0",
+      "successors_cut_off": [
+        "33071906_3374722587_0",
+        "33071906_83615021_0"
+      ]
+    },
+    {
+      "edge_id": "2395027723_2395027712_0",
+      "successors_cut_off": [
+        "2395027712_25734040_0"
+      ]
+    },
+    {
+      "edge_id": "2395027728_366902_0",
+      "successors_cut_off": [
+        "366902_135706037_0",
+        "366902_1913168771_0"
+      ]
+    },
+    {
+      "edge_id": "243685984_6903277709_0",
+      "successors_cut_off": [
+        "6903277709_243685984_0"
+      ]
+    },
+    {
+      "edge_id": "2441612874_96156690_0",
+      "successors_cut_off": [
+        "96156690_5894434644_0"
+      ]
+    },
+    {
+      "edge_id": "2452884961_101698234_0",
+      "successors_cut_off": [
+        "101698234_1073143468_0",
+        "101698234_292565224_0"
+      ]
+    },
+    {
+      "edge_id": "2452890117_8863402510_0",
+      "successors_cut_off": [
+        "8863402510_292560110_0",
+        "8863402510_292565228_0"
+      ]
+    },
+    {
+      "edge_id": "2453134334_54712427_0",
+      "successors_cut_off": [
+        "54712427_54712409_0",
+        "54712427_54712430_0"
+      ]
+    },
+    {
+      "edge_id": "2453136363_297788252_0",
+      "successors_cut_off": [
+        "297788252_30492086_0",
+        "297788252_60683222_0"
+      ]
+    },
+    {
+      "edge_id": "2453207679_1762057410_0",
+      "successors_cut_off": [
+        "1762057410_287676016_0"
+      ]
+    },
+    {
+      "edge_id": "247479550_247479548_0",
+      "successors_cut_off": [
+        "247479548_247479550_0"
+      ]
+    },
+    {
+      "edge_id": "247479554_2277115854_0",
+      "successors_cut_off": [
+        "2277115854_247479554_0"
+      ]
+    },
+    {
+      "edge_id": "248453311_248453310_0",
+      "successors_cut_off": [
+        "248453310_248453311_0"
+      ]
+    },
+    {
+      "edge_id": "2487024336_2487024333_0",
+      "successors_cut_off": [
+        "2487024333_1374678118_0",
+        "2487024333_60786992_0"
+      ]
+    },
+    {
+      "edge_id": "2519084223_2518662509_0",
+      "successors_cut_off": [
+        "2518662509_2519084223_0"
+      ]
+    },
+    {
+      "edge_id": "2519084223_2519084220_0",
+      "successors_cut_off": [
+        "2519084220_2519084223_0"
+      ]
+    },
+    {
+      "edge_id": "2524041236_60911669_0",
+      "successors_cut_off": [
+        "60911669_1336926543_0",
+        "60911669_60911664_0"
+      ]
+    },
+    {
+      "edge_id": "2529029420_299412026_0",
+      "successors_cut_off": [
+        "299412026_2529029420_0"
+      ]
+    },
+    {
+      "edge_id": "253840308_294707896_0",
+      "successors_cut_off": [
+        "294707896_253840308_0"
+      ]
+    },
+    {
+      "edge_id": "25581714_2395027738_0",
+      "successors_cut_off": [
+        "2395027738_30420895_0"
+      ]
+    },
+    {
+      "edge_id": "25587532_1375971945_0",
+      "successors_cut_off": [
+        "1375971945_1375955297_0",
+        "1375971945_314452681_0"
+      ]
+    },
+    {
+      "edge_id": "25587538_135708894_0",
+      "successors_cut_off": [
+        "135708894_135705006_0",
+        "135708894_7373678_0"
+      ]
+    },
+    {
+      "edge_id": "25599387_1570146813_0",
+      "successors_cut_off": [
+        "1570146813_25599366_0",
+        "1570146813_5798339139_0"
+      ]
+    },
+    {
+      "edge_id": "25599394_3804212601_0",
+      "successors_cut_off": [
+        "3804212601_25599394_0"
+      ]
+    },
+    {
+      "edge_id": "25658728_321376250_0",
+      "successors_cut_off": [
+        "321376250_26022230_0",
+        "321376250_316821206_0"
+      ]
+    },
+    {
+      "edge_id": "25658734_25688165_0",
+      "successors_cut_off": [
+        "25688165_25688169_0",
+        "25688165_25688175_0"
+      ]
+    },
+    {
+      "edge_id": "25688155_96108704_0",
+      "successors_cut_off": [
+        "96108704_25688155_0"
+      ]
+    },
+    {
+      "edge_id": "25688159_26022315_0",
+      "successors_cut_off": [
+        "26022315_25688160_0",
+        "26022315_272525242_0"
+      ]
+    },
+    {
+      "edge_id": "25688169_3944262836_0",
+      "successors_cut_off": [
+        "3944262836_1539195344_0",
+        "3944262836_25688158_0"
+      ]
+    },
+    {
+      "edge_id": "25688833_1073100190_0",
+      "successors_cut_off": [
+        "1073100190_2452884961_0",
+        "1073100190_292565224_0"
+      ]
+    },
+    {
+      "edge_id": "25688833_312530980_0",
+      "successors_cut_off": [
+        "312530980_25688833_0"
+      ]
+    },
+    {
+      "edge_id": "25688838_8863421801_0",
+      "successors_cut_off": [
+        "8863421801_25688839_0",
+        "8863421801_25688840_0"
+      ]
+    },
+    {
+      "edge_id": "25688840_663949200_0",
+      "successors_cut_off": [
+        "663949200_28405765_0"
+      ]
+    },
+    {
+      "edge_id": "25688931_30483976_0",
+      "successors_cut_off": [
+        "30483976_181796907_0",
+        "30483976_30453386_0"
+      ]
+    },
+    {
+      "edge_id": "25705777_25705778_0",
+      "successors_cut_off": [
+        "25705778_25705777_0"
+      ]
+    },
+    {
+      "edge_id": "25708792_30480011_0",
+      "successors_cut_off": [
+        "30480011_30479503_0",
+        "30480011_312999711_0"
+      ]
+    },
+    {
+      "edge_id": "25732554_25732553_0",
+      "successors_cut_off": [
+        "25732553_25733267_0"
+      ]
+    },
+    {
+      "edge_id": "25732554_9577068856_0",
+      "successors_cut_off": [
+        "9577068856_25732554_0"
+      ]
+    },
+    {
+      "edge_id": "25733257_25733258_0",
+      "successors_cut_off": [
+        "25733258_25733257_0"
+      ]
+    },
+    {
+      "edge_id": "25733642_25733710_0",
+      "successors_cut_off": [
+        "25733710_25733642_0"
+      ]
+    },
+    {
+      "edge_id": "25733717_2315968142_0",
+      "successors_cut_off": [
+        "2315968142_25733717_0"
+      ]
+    },
+    {
+      "edge_id": "25733717_25733722_0",
+      "successors_cut_off": [
+        "25733722_25733717_0"
+      ]
+    },
+    {
+      "edge_id": "25734031_135705007_0",
+      "successors_cut_off": [
+        "135705007_135704991_0",
+        "135705007_135709750_0"
+      ]
+    },
+    {
+      "edge_id": "25734032_25734044_0",
+      "successors_cut_off": [
+        "25734044_25734032_0",
+        "25734044_25734039_0"
+      ]
+    },
+    {
+      "edge_id": "25734036_137720053_0",
+      "successors_cut_off": [
+        "137720053_135706389_0",
+        "137720053_25734036_0"
+      ]
+    },
+    {
+      "edge_id": "25734040_2395027712_0",
+      "successors_cut_off": [
+        "2395027712_135705883_0"
+      ]
+    },
+    {
+      "edge_id": "25734043_1705153232_0",
+      "successors_cut_off": [
+        "1705153232_25734043_0"
+      ]
+    },
+    {
+      "edge_id": "25734046_320395677_0",
+      "successors_cut_off": [
+        "320395677_25734046_0"
+      ]
+    },
+    {
+      "edge_id": "25735058_4571834271_0",
+      "successors_cut_off": [
+        "4571834271_312999712_0",
+        "4571834271_320395676_0"
+      ]
+    },
+    {
+      "edge_id": "25735059_320395678_0",
+      "successors_cut_off": [
+        "320395678_25735059_0"
+      ]
+    },
+    {
+      "edge_id": "26022209_2459067871_0",
+      "successors_cut_off": [
+        "2459067871_54721286_0",
+        "2459067871_54721287_0"
+      ]
+    },
+    {
+      "edge_id": "26022219_26354431_0",
+      "successors_cut_off": [
+        "26354431_26495551_0",
+        "26354431_374403085_0"
+      ]
+    },
+    {
+      "edge_id": "26022224_26022225_0",
+      "successors_cut_off": [
+        "26022225_26022226_0"
+      ]
+    },
+    {
+      "edge_id": "26022224_26495550_0",
+      "successors_cut_off": [
+        "26495550_374403085_0"
+      ]
+    },
+    {
+      "edge_id": "26022225_26022224_0",
+      "successors_cut_off": [
+        "26022224_26495550_0"
+      ]
+    },
+    {
+      "edge_id": "26022227_310896538_0",
+      "successors_cut_off": [
+        "310896538_26022231_0",
+        "310896538_272522980_0"
+      ]
+    },
+    {
+      "edge_id": "26022230_9370857363_0",
+      "successors_cut_off": [
+        "9370857363_26022226_0",
+        "9370857363_9370857359_0"
+      ]
+    },
+    {
+      "edge_id": "26024466_171240192_0",
+      "successors_cut_off": [
+        "171240192_171241445_0",
+        "171240192_1793744624_0"
+      ]
+    },
+    {
+      "edge_id": "26025206_158298733_0",
+      "successors_cut_off": [
+        "158298733_2946358037_0"
+      ]
+    },
+    {
+      "edge_id": "26038593_9945755726_0",
+      "successors_cut_off": [
+        "9945755726_71611746_0",
+        "9945755726_9945755724_0"
+      ]
+    },
+    {
+      "edge_id": "26038980_310902748_0",
+      "successors_cut_off": [
+        "310902748_310902749_0",
+        "310902748_8730000944_0"
+      ]
+    },
+    {
+      "edge_id": "26193170_309917366_0",
+      "successors_cut_off": [
+        "309917366_321381374_0",
+        "309917366_8730000972_0"
+      ]
+    },
+    {
+      "edge_id": "26193194_1300365504_0",
+      "successors_cut_off": [
+        "1300365504_318486259_0",
+        "1300365504_91615275_0"
+      ]
+    },
+    {
+      "edge_id": "26193257_1577473580_0",
+      "successors_cut_off": [
+        "1577473580_1577473559_0"
+      ]
+    },
+    {
+      "edge_id": "26193263_26193260_0",
+      "successors_cut_off": [
+        "26193260_1084232126_0",
+        "26193260_1577473550_0"
+      ]
+    },
+    {
+      "edge_id": "26193265_1577473559_0",
+      "successors_cut_off": [
+        "1577473559_1577473580_0"
+      ]
+    },
+    {
+      "edge_id": "2623863185_4794769161_0",
+      "successors_cut_off": [
+        "4794769161_2623863185_0"
+      ]
+    },
+    {
+      "edge_id": "26354420_60476786_0",
+      "successors_cut_off": [
+        "60476786_26022211_0",
+        "60476786_7878187743_0"
+      ]
+    },
+    {
+      "edge_id": "26355153_165154328_0",
+      "successors_cut_off": [
+        "165154328_26355153_0"
+      ]
+    },
+    {
+      "edge_id": "264570085_287674067_0",
+      "successors_cut_off": [
+        "287674067_264570085_0"
+      ]
+    },
+    {
+      "edge_id": "264570086_287674100_0",
+      "successors_cut_off": [
+        "287674100_264570086_0"
+      ]
+    },
+    {
+      "edge_id": "26495550_26022224_0",
+      "successors_cut_off": [
+        "26022224_26022225_0"
+      ]
+    },
+    {
+      "edge_id": "26495551_1058833008_0",
+      "successors_cut_off": [
+        "1058833008_1058832903_0",
+        "1058833008_1058832934_0"
+      ]
+    },
+    {
+      "edge_id": "26495820_2141832891_0",
+      "successors_cut_off": [
+        "2141832891_26495820_0",
+        "2141832891_26495821_0",
+        "2141832891_320986808_0"
+      ]
+    },
+    {
+      "edge_id": "26495821_8709518476_0",
+      "successors_cut_off": [
+        "8709518476_10657802561_0",
+        "8709518476_10909679270_0"
+      ]
+    },
+    {
+      "edge_id": "26495915_331886522_0",
+      "successors_cut_off": [
+        "331886522_330897633_0",
+        "331886522_331886520_0"
+      ]
+    },
+    {
+      "edge_id": "26495917_331886524_0",
+      "successors_cut_off": [
+        "331886524_299247377_0",
+        "331886524_330912694_0"
+      ]
+    },
+    {
+      "edge_id": "265788830_1332606712_0",
+      "successors_cut_off": [
+        "1332606712_1332606844_0"
+      ]
+    },
+    {
+      "edge_id": "265790619_301424967_0",
+      "successors_cut_off": [
+        "301424967_265790619_0"
+      ]
+    },
+    {
+      "edge_id": "265790919_265791277_0",
+      "successors_cut_off": [
+        "265791277_13865617717_0",
+        "265791277_5627310015_0"
+      ]
+    },
+    {
+      "edge_id": "265793837_265790919_0",
+      "successors_cut_off": [
+        "265790919_265791277_0",
+        "265790919_301423850_0"
+      ]
+    },
+    {
+      "edge_id": "265798855_1471232959_0",
+      "successors_cut_off": [
+        "1471232959_1471232867_0",
+        "1471232959_435267243_0"
+      ]
+    },
+    {
+      "edge_id": "265800197_265800199_0",
+      "successors_cut_off": [
+        "265800199_265800197_0"
+      ]
+    },
+    {
+      "edge_id": "26586623_190497792_0",
+      "successors_cut_off": [
+        "190497792_190473495_0",
+        "190497792_2018803697_0"
+      ]
+    },
+    {
+      "edge_id": "2667256073_311939382_0",
+      "successors_cut_off": [
+        "311939382_26023037_0",
+        "311939382_287372807_0"
+      ]
+    },
+    {
+      "edge_id": "2667256075_311939383_0",
+      "successors_cut_off": [
+        "311939383_1538717195_0",
+        "311939383_2667256073_0"
+      ]
+    },
+    {
+      "edge_id": "2698615270_2698615191_0",
+      "successors_cut_off": [
+        "2698615191_11837831250_0",
+        "2698615191_2698615165_0"
+      ]
+    },
+    {
+      "edge_id": "2698615290_2698615270_0",
+      "successors_cut_off": [
+        "2698615270_2698615191_0",
+        "2698615270_2698615257_0"
+      ]
+    },
+    {
+      "edge_id": "2698615342_30491835_0",
+      "successors_cut_off": [
+        "30491835_1025096232_0",
+        "30491835_30491833_0"
+      ]
+    },
+    {
+      "edge_id": "2698615348_30491830_0",
+      "successors_cut_off": [
+        "30491830_30154068_0"
+      ]
+    },
+    {
+      "edge_id": "2698615366_2698615348_0",
+      "successors_cut_off": [
+        "2698615348_2698615290_0",
+        "2698615348_30491830_0"
+      ]
+    },
+    {
+      "edge_id": "2698615509_1311857158_0",
+      "successors_cut_off": [
+        "1311857158_1311857222_0"
+      ]
+    },
+    {
+      "edge_id": "27032940_35132984_0",
+      "successors_cut_off": [
+        "35132984_27032940_0"
+      ]
+    },
+    {
+      "edge_id": "271281549_1830498745_0",
+      "successors_cut_off": [
+        "1830498745_271281549_0"
+      ]
+    },
+    {
+      "edge_id": "271281647_271281646_0",
+      "successors_cut_off": [
+        "271281646_271281647_0"
+      ]
+    },
+    {
+      "edge_id": "271283547_145162893_0",
+      "successors_cut_off": [
+        "145162893_145162891_0"
+      ]
+    },
+    {
+      "edge_id": "271327648_440773493_0",
+      "successors_cut_off": [
+        "440773493_271327648_0"
+      ]
+    },
+    {
+      "edge_id": "272523583_5391440994_0",
+      "successors_cut_off": [
+        "5391440994_272523583_0"
+      ]
+    },
+    {
+      "edge_id": "272523597_310896543_0",
+      "successors_cut_off": [
+        "310896543_272523597_0",
+        "310896543_310896555_0"
+      ]
+    },
+    {
+      "edge_id": "272524655_276668990_0",
+      "successors_cut_off": [
+        "276668990_272524655_0"
+      ]
+    },
+    {
+      "edge_id": "272524798_135445338_0",
+      "successors_cut_off": [
+        "135445338_272524798_0"
+      ]
+    },
+    {
+      "edge_id": "272525242_25653337_0",
+      "successors_cut_off": [
+        "25653337_26022231_0",
+        "25653337_310896555_0"
+      ]
+    },
+    {
+      "edge_id": "274401794_274401802_0",
+      "successors_cut_off": [
+        "274401802_274402031_0",
+        "274401802_378362_0"
+      ]
+    },
+    {
+      "edge_id": "274402031_274402040_0",
+      "successors_cut_off": [
+        "274402040_1333859017_0",
+        "274402040_649018765_0"
+      ]
+    },
+    {
+      "edge_id": "274402040_649018765_0",
+      "successors_cut_off": [
+        "649018765_4756176727_0",
+        "649018765_649018787_0"
+      ]
+    },
+    {
+      "edge_id": "27591199_274401794_0",
+      "successors_cut_off": [
+        "274401794_1333858999_0",
+        "274401794_274401802_0"
+      ]
+    },
+    {
+      "edge_id": "279642805_21389296_0",
+      "successors_cut_off": [
+        "21389296_1177309363_0",
+        "21389296_378362_0"
+      ]
+    },
+    {
+      "edge_id": "279920016_947857984_0",
+      "successors_cut_off": [
+        "947857984_279920016_0"
+      ]
+    },
+    {
+      "edge_id": "282724092_30154078_0",
+      "successors_cut_off": [
+        "30154078_12250313315_0"
+      ]
+    },
+    {
+      "edge_id": "28393053_135455848_0",
+      "successors_cut_off": [
+        "135455848_28393056_0"
+      ]
+    },
+    {
+      "edge_id": "28393056_135455848_0",
+      "successors_cut_off": [
+        "135455848_1452525553_0"
+      ]
+    },
+    {
+      "edge_id": "28393084_135460337_0",
+      "successors_cut_off": [
+        "135460337_1282124078_0"
+      ]
+    },
+    {
+      "edge_id": "28393090_1340070093_0",
+      "successors_cut_off": [
+        "1340070093_28393090_0"
+      ]
+    },
+    {
+      "edge_id": "28393090_1340070257_0",
+      "successors_cut_off": [
+        "1340070257_28393090_0"
+      ]
+    },
+    {
+      "edge_id": "28397704_28397705_0",
+      "successors_cut_off": [
+        "28397705_719650265_0"
+      ]
+    },
+    {
+      "edge_id": "28397704_719650252_0",
+      "successors_cut_off": [
+        "719650252_28397704_0"
+      ]
+    },
+    {
+      "edge_id": "28397705_719650265_0",
+      "successors_cut_off": [
+        "719650265_28397705_0"
+      ]
+    },
+    {
+      "edge_id": "28405765_312909828_0",
+      "successors_cut_off": [
+        "312909828_26354871_0"
+      ]
+    },
+    {
+      "edge_id": "28405765_663949200_0",
+      "successors_cut_off": [
+        "663949200_368250645_0"
+      ]
+    },
+    {
+      "edge_id": "286386018_2453207679_0",
+      "successors_cut_off": [
+        "2453207679_1762057410_0",
+        "2453207679_287676016_0"
+      ]
+    },
+    {
+      "edge_id": "286424410_171252846_0",
+      "successors_cut_off": [
+        "171252846_171244580_0"
+      ]
+    },
+    {
+      "edge_id": "286424410_294705546_0",
+      "successors_cut_off": [
+        "294705546_286424410_0"
+      ]
+    },
+    {
+      "edge_id": "286778247_694150717_0",
+      "successors_cut_off": [
+        "694150717_296149185_0"
+      ]
+    },
+    {
+      "edge_id": "287188555_12596393547_0",
+      "successors_cut_off": [
+        "12596393547_137735023_0"
+      ]
+    },
+    {
+      "edge_id": "287372538_2667256078_0",
+      "successors_cut_off": [
+        "2667256078_2667256075_0",
+        "2667256078_287372537_0"
+      ]
+    },
+    {
+      "edge_id": "287372807_2667256070_0",
+      "successors_cut_off": [
+        "2667256070_287372538_0",
+        "2667256070_287372925_0"
+      ]
+    },
+    {
+      "edge_id": "287372824_272525427_0",
+      "successors_cut_off": [
+        "272525427_25688159_0",
+        "272525427_287372824_0"
+      ]
+    },
+    {
+      "edge_id": "287372925_287372814_0",
+      "successors_cut_off": [
+        "287372814_25688159_0",
+        "287372814_287372824_0"
+      ]
+    },
+    {
+      "edge_id": "287657472_287657471_0",
+      "successors_cut_off": [
+        "287657471_287657470_0",
+        "287657471_310148255_0"
+      ]
+    },
+    {
+      "edge_id": "287657501_286348786_0",
+      "successors_cut_off": [
+        "286348786_101345187_0"
+      ]
+    },
+    {
+      "edge_id": "287657501_287059933_0",
+      "successors_cut_off": [
+        "287059933_287657502_0"
+      ]
+    },
+    {
+      "edge_id": "287657502_287059906_0",
+      "successors_cut_off": [
+        "287059906_310148255_0"
+      ]
+    },
+    {
+      "edge_id": "287657502_287059933_0",
+      "successors_cut_off": [
+        "287059933_287657501_0"
+      ]
+    },
+    {
+      "edge_id": "287676016_694150712_0",
+      "successors_cut_off": [
+        "694150712_286778246_0",
+        "694150712_286778247_0"
+      ]
+    },
+    {
+      "edge_id": "288049563_288049608_0",
+      "successors_cut_off": [
+        "288049608_151412175_0"
+      ]
+    },
+    {
+      "edge_id": "288049575_288049621_0",
+      "successors_cut_off": [
+        "288049621_151418233_0"
+      ]
+    },
+    {
+      "edge_id": "288049608_288049575_0",
+      "successors_cut_off": [
+        "288049575_288049621_0"
+      ]
+    },
+    {
+      "edge_id": "288049621_288049563_0",
+      "successors_cut_off": [
+        "288049563_288049833_0"
+      ]
+    },
+    {
+      "edge_id": "288049795_288049796_0",
+      "successors_cut_off": [
+        "288049796_151464963_0"
+      ]
+    },
+    {
+      "edge_id": "288049796_288049833_0",
+      "successors_cut_off": [
+        "288049833_288049563_0"
+      ]
+    },
+    {
+      "edge_id": "288049833_288049795_0",
+      "successors_cut_off": [
+        "288049795_96144242_0"
+      ]
+    },
+    {
+      "edge_id": "289311088_293983463_0",
+      "successors_cut_off": [
+        "293983463_11960814777_0"
+      ]
+    },
+    {
+      "edge_id": "289311263_289311315_0",
+      "successors_cut_off": [
+        "289311315_289311390_0",
+        "289311315_289312024_0"
+      ]
+    },
+    {
+      "edge_id": "289311390_289311243_0",
+      "successors_cut_off": [
+        "289311243_289311177_0",
+        "289311243_289311263_0"
+      ]
+    },
+    {
+      "edge_id": "2901514320_495593565_0",
+      "successors_cut_off": [
+        "495593565_2901514320_0"
+      ]
+    },
+    {
+      "edge_id": "2908715023_2908715058_0",
+      "successors_cut_off": [
+        "2908715058_2908715023_0"
+      ]
+    },
+    {
+      "edge_id": "292560110_3395861633_0",
+      "successors_cut_off": [
+        "3395861633_292560110_0"
+      ]
+    },
+    {
+      "edge_id": "292889283_292889018_0",
+      "successors_cut_off": [
+        "292889018_292889283_0"
+      ]
+    },
+    {
+      "edge_id": "293224583_293224701_0",
+      "successors_cut_off": [
+        "293224701_293224583_0"
+      ]
+    },
+    {
+      "edge_id": "293224583_30151685_0",
+      "successors_cut_off": [
+        "30151685_293224583_0"
+      ]
+    },
+    {
+      "edge_id": "29373451_2935980571_0",
+      "successors_cut_off": [
+        "2935980571_124617420_0"
+      ]
+    },
+    {
+      "edge_id": "293982903_16967324_0",
+      "successors_cut_off": [
+        "16967324_16967361_0",
+        "16967324_293982866_0"
+      ]
+    },
+    {
+      "edge_id": "293983086_16967335_0",
+      "successors_cut_off": [
+        "16967335_1569498425_0",
+        "16967335_16967336_0"
+      ]
+    },
+    {
+      "edge_id": "293983116_1880279322_0",
+      "successors_cut_off": [
+        "1880279322_2472432809_0",
+        "1880279322_2472432812_0"
+      ]
+    },
+    {
+      "edge_id": "293989930_1943767451_0",
+      "successors_cut_off": [
+        "1943767451_293989930_0"
+      ]
+    },
+    {
+      "edge_id": "293989930_293990282_0",
+      "successors_cut_off": [
+        "293990282_293989930_0"
+      ]
+    },
+    {
+      "edge_id": "293989931_293989464_0",
+      "successors_cut_off": [
+        "293989464_30485834_0",
+        "293989464_30485877_0"
+      ]
+    },
+    {
+      "edge_id": "2946358037_158298733_0",
+      "successors_cut_off": [
+        "158298733_26025206_0"
+      ]
+    },
+    {
+      "edge_id": "2946358037_2946358034_0",
+      "successors_cut_off": [
+        "2946358034_2946358037_0"
+      ]
+    },
+    {
+      "edge_id": "294637186_292560144_0",
+      "successors_cut_off": [
+        "292560144_60476807_0"
+      ]
+    },
+    {
+      "edge_id": "294637196_294637218_0",
+      "successors_cut_off": [
+        "294637218_294637196_0"
+      ]
+    },
+    {
+      "edge_id": "294637196_697225056_0",
+      "successors_cut_off": [
+        "697225056_294637196_0"
+      ]
+    },
+    {
+      "edge_id": "294637199_294637228_0",
+      "successors_cut_off": [
+        "294637228_294637199_0"
+      ]
+    },
+    {
+      "edge_id": "294637201_294637230_0",
+      "successors_cut_off": [
+        "294637230_294637201_0"
+      ]
+    },
+    {
+      "edge_id": "294637201_294637237_0",
+      "successors_cut_off": [
+        "294637237_294637201_0"
+      ]
+    },
+    {
+      "edge_id": "294637251_294637253_0",
+      "successors_cut_off": [
+        "294637253_294637251_0"
+      ]
+    },
+    {
+      "edge_id": "294637268_683311971_0",
+      "successors_cut_off": [
+        "683311971_294637268_0"
+      ]
+    },
+    {
+      "edge_id": "296149185_287674561_0",
+      "successors_cut_off": [
+        "287674561_296149185_0"
+      ]
+    },
+    {
+      "edge_id": "296149185_296149234_0",
+      "successors_cut_off": [
+        "296149234_296149185_0"
+      ]
+    },
+    {
+      "edge_id": "297788028_13312076389_0",
+      "successors_cut_off": [
+        "13312076389_13312124403_0",
+        "13312076389_297788129_0"
+      ]
+    },
+    {
+      "edge_id": "297788252_30492086_0",
+      "successors_cut_off": [
+        "30492086_30492081_0"
+      ]
+    },
+    {
+      "edge_id": "2987952886_60889990_0",
+      "successors_cut_off": [
+        "60889990_60894502_0"
+      ]
+    },
+    {
+      "edge_id": "298860315_248453372_0",
+      "successors_cut_off": [
+        "248453372_298860315_0"
+      ]
+    },
+    {
+      "edge_id": "299230369_158650543_0",
+      "successors_cut_off": [
+        "158650543_299230369_0"
+      ]
+    },
+    {
+      "edge_id": "299230369_299230367_0",
+      "successors_cut_off": [
+        "299230367_299230369_0"
+      ]
+    },
+    {
+      "edge_id": "299230417_2497833488_0",
+      "successors_cut_off": [
+        "2497833488_299230417_0"
+      ]
+    },
+    {
+      "edge_id": "299230417_299230416_0",
+      "successors_cut_off": [
+        "299230416_299230417_0"
+      ]
+    },
+    {
+      "edge_id": "299242976_10311151903_0",
+      "successors_cut_off": [
+        "10311151903_299242976_0"
+      ]
+    },
+    {
+      "edge_id": "299242976_1657934559_0",
+      "successors_cut_off": [
+        "1657934559_299242976_0"
+      ]
+    },
+    {
+      "edge_id": "299243143_299245859_0",
+      "successors_cut_off": [
+        "299245859_299243143_0",
+        "299245859_299245223_0",
+        "299245859_299245863_0"
+      ]
+    },
+    {
+      "edge_id": "299243148_299242660_0",
+      "successors_cut_off": [
+        "299242660_158675630_0",
+        "299242660_299244543_0"
+      ]
+    },
+    {
+      "edge_id": "299243591_299243793_0",
+      "successors_cut_off": [
+        "299243793_299243591_0"
+      ]
+    },
+    {
+      "edge_id": "299243596_299243597_0",
+      "successors_cut_off": [
+        "299243597_299243596_0"
+      ]
+    },
+    {
+      "edge_id": "299243917_1657934585_0",
+      "successors_cut_off": [
+        "1657934585_299243917_0"
+      ]
+    },
+    {
+      "edge_id": "299243917_1657934883_0",
+      "successors_cut_off": [
+        "1657934883_299243917_0"
+      ]
+    },
+    {
+      "edge_id": "299243920_299242870_0",
+      "successors_cut_off": [
+        "299242870_299243920_0"
+      ]
+    },
+    {
+      "edge_id": "299244543_299245836_0",
+      "successors_cut_off": [
+        "299245836_299244543_0"
+      ]
+    },
+    {
+      "edge_id": "299244625_331886532_0",
+      "successors_cut_off": [
+        "331886532_26495915_0"
+      ]
+    },
+    {
+      "edge_id": "299244883_299244544_0",
+      "successors_cut_off": [
+        "299244544_299244360_0",
+        "299244544_299244883_0"
+      ]
+    },
+    {
+      "edge_id": "299244937_299245010_0",
+      "successors_cut_off": [
+        "299245010_299244937_0"
+      ]
+    },
+    {
+      "edge_id": "299245113_299245119_0",
+      "successors_cut_off": [
+        "299245119_299245113_0"
+      ]
+    },
+    {
+      "edge_id": "299246106_299246103_0",
+      "successors_cut_off": [
+        "299246103_299246041_0",
+        "299246103_299246106_0"
+      ]
+    },
+    {
+      "edge_id": "299246313_158637985_0",
+      "successors_cut_off": [
+        "158637985_26193263_0"
+      ]
+    },
+    {
+      "edge_id": "299246532_299246533_0",
+      "successors_cut_off": [
+        "299246533_299246532_0"
+      ]
+    },
+    {
+      "edge_id": "299246878_2165543139_0",
+      "successors_cut_off": [
+        "2165543139_299246878_0"
+      ]
+    },
+    {
+      "edge_id": "299247445_11952212066_0",
+      "successors_cut_off": [
+        "11952212066_299247445_0"
+      ]
+    },
+    {
+      "edge_id": "299247448_299247462_0",
+      "successors_cut_off": [
+        "299247462_299247448_0"
+      ]
+    },
+    {
+      "edge_id": "299247477_299247478_0",
+      "successors_cut_off": [
+        "299247478_299247477_0"
+      ]
+    },
+    {
+      "edge_id": "299247494_299247495_0",
+      "successors_cut_off": [
+        "299247495_299247494_0"
+      ]
+    },
+    {
+      "edge_id": "299247620_299247451_0",
+      "successors_cut_off": [
+        "299247451_299247620_0"
+      ]
+    },
+    {
+      "edge_id": "299251843_299251834_0",
+      "successors_cut_off": [
+        "299251834_299251843_0"
+      ]
+    },
+    {
+      "edge_id": "299411977_299411979_0",
+      "successors_cut_off": [
+        "299411979_299411977_0"
+      ]
+    },
+    {
+      "edge_id": "299412010_299412011_0",
+      "successors_cut_off": [
+        "299412011_299412010_0"
+      ]
+    },
+    {
+      "edge_id": "299412101_299412092_0",
+      "successors_cut_off": [
+        "299412092_299412101_0"
+      ]
+    },
+    {
+      "edge_id": "299412344_299412353_0",
+      "successors_cut_off": [
+        "299412353_299412344_0"
+      ]
+    },
+    {
+      "edge_id": "299414628_299414554_0",
+      "successors_cut_off": [
+        "299414554_299414628_0"
+      ]
+    },
+    {
+      "edge_id": "299414953_299414992_0",
+      "successors_cut_off": [
+        "299414992_299414953_0"
+      ]
+    },
+    {
+      "edge_id": "299414958_1879977259_0",
+      "successors_cut_off": [
+        "1879977259_299414958_0"
+      ]
+    },
+    {
+      "edge_id": "299415107_301144025_0",
+      "successors_cut_off": [
+        "301144025_299415107_0"
+      ]
+    },
+    {
+      "edge_id": "299415239_299415311_0",
+      "successors_cut_off": [
+        "299415311_299415239_0"
+      ]
+    },
+    {
+      "edge_id": "299415797_299415805_0",
+      "successors_cut_off": [
+        "299415805_299415797_0"
+      ]
+    },
+    {
+      "edge_id": "299415862_1898448190_0",
+      "successors_cut_off": [
+        "1898448190_299415862_0"
+      ]
+    },
+    {
+      "edge_id": "299415883_3204325139_0",
+      "successors_cut_off": [
+        "3204325139_299415883_0"
+      ]
+    },
+    {
+      "edge_id": "299417214_2215104098_0",
+      "successors_cut_off": [
+        "2215104098_299417214_0"
+      ]
+    },
+    {
+      "edge_id": "299417391_1466901120_0",
+      "successors_cut_off": [
+        "1466901120_299417391_0"
+      ]
+    },
+    {
+      "edge_id": "299417734_1448660674_0",
+      "successors_cut_off": [
+        "1448660674_299417734_0"
+      ]
+    },
+    {
+      "edge_id": "299417734_1466934665_0",
+      "successors_cut_off": [
+        "1466934665_299417734_0"
+      ]
+    },
+    {
+      "edge_id": "299417736_299417738_0",
+      "successors_cut_off": [
+        "299417738_299417736_0"
+      ]
+    },
+    {
+      "edge_id": "299715659_299717006_0",
+      "successors_cut_off": [
+        "299717006_299715659_0"
+      ]
+    },
+    {
+      "edge_id": "299715864_1639994486_0",
+      "successors_cut_off": [
+        "1639994486_299715864_0"
+      ]
+    },
+    {
+      "edge_id": "299716125_299716183_0",
+      "successors_cut_off": [
+        "299716183_299716165_0"
+      ]
+    },
+    {
+      "edge_id": "299716125_299716195_0",
+      "successors_cut_off": [
+        "299716195_299716125_0"
+      ]
+    },
+    {
+      "edge_id": "299716161_1639994534_0",
+      "successors_cut_off": [
+        "1639994534_1639994511_0"
+      ]
+    },
+    {
+      "edge_id": "299716165_299716183_0",
+      "successors_cut_off": [
+        "299716183_299716125_0"
+      ]
+    },
+    {
+      "edge_id": "299721218_299721215_0",
+      "successors_cut_off": [
+        "299721215_299721218_0"
+      ]
+    },
+    {
+      "edge_id": "299721391_299721311_0",
+      "successors_cut_off": [
+        "299721311_299721391_0"
+      ]
+    },
+    {
+      "edge_id": "299721398_299721382_0",
+      "successors_cut_off": [
+        "299721382_299721398_0"
+      ]
+    },
+    {
+      "edge_id": "299721398_299722324_0",
+      "successors_cut_off": [
+        "299722324_4409399838_0"
+      ]
+    },
+    {
+      "edge_id": "299721453_1639994804_0",
+      "successors_cut_off": [
+        "1639994804_299721453_0"
+      ]
+    },
+    {
+      "edge_id": "299722324_4409399838_0",
+      "successors_cut_off": [
+        "4409399838_299722324_0"
+      ]
+    },
+    {
+      "edge_id": "299722519_299722759_0",
+      "successors_cut_off": [
+        "299722759_175784003_0",
+        "299722759_299722758_0"
+      ]
+    },
+    {
+      "edge_id": "299722519_299722868_0",
+      "successors_cut_off": [
+        "299722868_301135669_0"
+      ]
+    },
+    {
+      "edge_id": "299722753_1275929592_0",
+      "successors_cut_off": [
+        "1275929592_299722753_0"
+      ]
+    },
+    {
+      "edge_id": "299733771_11883182370_0",
+      "successors_cut_off": [
+        "11883182370_3553101024_0",
+        "11883182370_6883685406_0"
+      ]
+    },
+    {
+      "edge_id": "299734040_299733540_0",
+      "successors_cut_off": [
+        "299733540_299734040_0"
+      ]
+    },
+    {
+      "edge_id": "299734358_5061966869_0",
+      "successors_cut_off": [
+        "5061966869_301823631_0",
+        "5061966869_6883685395_0"
+      ]
+    },
+    {
+      "edge_id": "299823745_1836585284_0",
+      "successors_cut_off": [
+        "1836585284_299823745_0"
+      ]
+    },
+    {
+      "edge_id": "299831582_299831635_0",
+      "successors_cut_off": [
+        "299831635_299831582_0"
+      ]
+    },
+    {
+      "edge_id": "299831615_299831566_0",
+      "successors_cut_off": [
+        "299831566_299831615_0"
+      ]
+    },
+    {
+      "edge_id": "299831615_299831608_0",
+      "successors_cut_off": [
+        "299831608_299831615_0"
+      ]
+    },
+    {
+      "edge_id": "299831835_299831836_0",
+      "successors_cut_off": [
+        "299831836_299831835_0"
+      ]
+    },
+    {
+      "edge_id": "299831897_299831899_0",
+      "successors_cut_off": [
+        "299831899_299831897_0"
+      ]
+    },
+    {
+      "edge_id": "299833004_1824399961_0",
+      "successors_cut_off": [
+        "1824399961_299833004_0"
+      ]
+    },
+    {
+      "edge_id": "299833004_299833012_0",
+      "successors_cut_off": [
+        "299833012_299833004_0"
+      ]
+    },
+    {
+      "edge_id": "299835944_299836012_0",
+      "successors_cut_off": [
+        "299836012_299835944_0"
+      ]
+    },
+    {
+      "edge_id": "299836027_145147835_0",
+      "successors_cut_off": [
+        "145147835_145159761_0"
+      ]
+    },
+    {
+      "edge_id": "2998549532_520168_0",
+      "successors_cut_off": [
+        "520168_1452525546_0",
+        "520168_6763913381_0"
+      ]
+    },
+    {
+      "edge_id": "300715999_504395091_0",
+      "successors_cut_off": [
+        "504395091_313483079_0"
+      ]
+    },
+    {
+      "edge_id": "301135669_299722868_0",
+      "successors_cut_off": [
+        "299722868_299722519_0"
+      ]
+    },
+    {
+      "edge_id": "301135670_1275935019_0",
+      "successors_cut_off": [
+        "1275935019_31304394_0"
+      ]
+    },
+    {
+      "edge_id": "301135677_301135490_0",
+      "successors_cut_off": [
+        "301135490_301135488_0",
+        "301135490_301135671_0"
+      ]
+    },
+    {
+      "edge_id": "301136251_2782816722_0",
+      "successors_cut_off": [
+        "2782816722_6051619382_0"
+      ]
+    },
+    {
+      "edge_id": "301143387_301143385_0",
+      "successors_cut_off": [
+        "301143385_301143387_0"
+      ]
+    },
+    {
+      "edge_id": "301143424_301143421_0",
+      "successors_cut_off": [
+        "301143421_301143424_0"
+      ]
+    },
+    {
+      "edge_id": "30133633_30133635_0",
+      "successors_cut_off": [
+        "30133635_30133633_0"
+      ]
+    },
+    {
+      "edge_id": "30133636_30133637_0",
+      "successors_cut_off": [
+        "30133637_30133636_0"
+      ]
+    },
+    {
+      "edge_id": "30133642_30133643_0",
+      "successors_cut_off": [
+        "30133643_30133642_0"
+      ]
+    },
+    {
+      "edge_id": "30133642_30133645_0",
+      "successors_cut_off": [
+        "30133645_30133642_0"
+      ]
+    },
+    {
+      "edge_id": "30133649_30133657_0",
+      "successors_cut_off": [
+        "30133657_30133649_0"
+      ]
+    },
+    {
+      "edge_id": "30133650_30133651_0",
+      "successors_cut_off": [
+        "30133651_30133650_0"
+      ]
+    },
+    {
+      "edge_id": "30133650_3708147553_0",
+      "successors_cut_off": [
+        "3708147553_30133650_0"
+      ]
+    },
+    {
+      "edge_id": "30133656_30133658_0",
+      "successors_cut_off": [
+        "30133658_30133656_0"
+      ]
+    },
+    {
+      "edge_id": "30133714_30133716_0",
+      "successors_cut_off": [
+        "30133716_30133714_0"
+      ]
+    },
+    {
+      "edge_id": "30133723_1030035659_0",
+      "successors_cut_off": [
+        "1030035659_30133723_0"
+      ]
+    },
+    {
+      "edge_id": "30133730_30133732_0",
+      "successors_cut_off": [
+        "30133732_30133730_0"
+      ]
+    },
+    {
+      "edge_id": "30133736_30133739_0",
+      "successors_cut_off": [
+        "30133739_30133736_0"
+      ]
+    },
+    {
+      "edge_id": "30133736_3708102867_0",
+      "successors_cut_off": [
+        "3708102867_30133736_0"
+      ]
+    },
+    {
+      "edge_id": "30133742_30133751_0",
+      "successors_cut_off": [
+        "30133751_30133742_0"
+      ]
+    },
+    {
+      "edge_id": "30133758_30133761_0",
+      "successors_cut_off": [
+        "30133761_30133758_0"
+      ]
+    },
+    {
+      "edge_id": "30133768_30133782_0",
+      "successors_cut_off": [
+        "30133782_30133768_0"
+      ]
+    },
+    {
+      "edge_id": "30133790_3384329354_0",
+      "successors_cut_off": [
+        "3384329354_3384329335_0",
+        "3384329354_3384329350_0"
+      ]
+    },
+    {
+      "edge_id": "301423850_199206177_0",
+      "successors_cut_off": [
+        "199206177_1332592400_0",
+        "199206177_26586623_0"
+      ]
+    },
+    {
+      "edge_id": "301424345_5220571130_0",
+      "successors_cut_off": [
+        "5220571130_6137877030_0",
+        "5220571130_6137877055_0"
+      ]
+    },
+    {
+      "edge_id": "301426214_301426458_0",
+      "successors_cut_off": [
+        "301426458_301426672_0",
+        "301426458_371273_0"
+      ]
+    },
+    {
+      "edge_id": "301427208_21031642_0",
+      "successors_cut_off": [
+        "21031642_27591185_0",
+        "21031642_6137876640_0"
+      ]
+    },
+    {
+      "edge_id": "30151646_30151647_0",
+      "successors_cut_off": [
+        "30151647_16967866_0",
+        "30151647_30151648_0"
+      ]
+    },
+    {
+      "edge_id": "30151656_30151657_0",
+      "successors_cut_off": [
+        "30151657_30151656_0"
+      ]
+    },
+    {
+      "edge_id": "30151666_293220317_0",
+      "successors_cut_off": [
+        "293220317_30151666_0"
+      ]
+    },
+    {
+      "edge_id": "30151666_30151690_0",
+      "successors_cut_off": [
+        "30151690_30151666_0"
+      ]
+    },
+    {
+      "edge_id": "30151674_30151675_0",
+      "successors_cut_off": [
+        "30151675_30151674_0",
+        "30151675_30151676_0"
+      ]
+    },
+    {
+      "edge_id": "30151677_1904268035_0",
+      "successors_cut_off": [
+        "1904268035_30151677_0"
+      ]
+    },
+    {
+      "edge_id": "30151677_30151678_0",
+      "successors_cut_off": [
+        "30151678_30151677_0"
+      ]
+    },
+    {
+      "edge_id": "30151683_3051049618_0",
+      "successors_cut_off": [
+        "3051049618_30486863_0",
+        "3051049618_3051049627_0"
+      ]
+    },
+    {
+      "edge_id": "30153745_290228076_0",
+      "successors_cut_off": [
+        "290228076_30153745_0"
+      ]
+    },
+    {
+      "edge_id": "30153750_30153751_0",
+      "successors_cut_off": [
+        "30153751_30153750_0"
+      ]
+    },
+    {
+      "edge_id": "30153753_30153752_0",
+      "successors_cut_off": [
+        "30153752_30153753_0"
+      ]
+    },
+    {
+      "edge_id": "30153754_30153796_0",
+      "successors_cut_off": [
+        "30153796_30153778_0"
+      ]
+    },
+    {
+      "edge_id": "30153778_30153796_0",
+      "successors_cut_off": [
+        "30153796_30153754_0"
+      ]
+    },
+    {
+      "edge_id": "30153778_8815947667_0",
+      "successors_cut_off": [
+        "8815947667_30153778_0"
+      ]
+    },
+    {
+      "edge_id": "30153839_30153840_0",
+      "successors_cut_off": [
+        "30153840_30153839_0"
+      ]
+    },
+    {
+      "edge_id": "30153839_30153841_0",
+      "successors_cut_off": [
+        "30153841_30153839_0"
+      ]
+    },
+    {
+      "edge_id": "30154055_12398555104_0",
+      "successors_cut_off": [
+        "12398555104_30154055_0"
+      ]
+    },
+    {
+      "edge_id": "30154068_30491830_0",
+      "successors_cut_off": [
+        "30491830_2698615290_0"
+      ]
+    },
+    {
+      "edge_id": "30154070_282724092_0",
+      "successors_cut_off": [
+        "282724092_310989699_0"
+      ]
+    },
+    {
+      "edge_id": "30154078_30154070_0",
+      "successors_cut_off": [
+        "30154070_343835455_0"
+      ]
+    },
+    {
+      "edge_id": "30155564_30155565_0",
+      "successors_cut_off": [
+        "30155565_30155564_0"
+      ]
+    },
+    {
+      "edge_id": "30155564_30155566_0",
+      "successors_cut_off": [
+        "30155566_30155564_0"
+      ]
+    },
+    {
+      "edge_id": "30155587_30155589_0",
+      "successors_cut_off": [
+        "30155589_30155587_0"
+      ]
+    },
+    {
+      "edge_id": "30155591_101345158_0",
+      "successors_cut_off": [
+        "101345158_101345040_0",
+        "101345158_96144931_0"
+      ]
+    },
+    {
+      "edge_id": "301653130_301653104_0",
+      "successors_cut_off": [
+        "301653104_1304282393_0",
+        "301653104_301653130_0"
+      ]
+    },
+    {
+      "edge_id": "301653258_301653262_0",
+      "successors_cut_off": [
+        "301653262_301653258_0"
+      ]
+    },
+    {
+      "edge_id": "301653510_982996377_0",
+      "successors_cut_off": [
+        "982996377_301653510_0"
+      ]
+    },
+    {
+      "edge_id": "30179872_1039327880_0",
+      "successors_cut_off": [
+        "1039327880_1039327853_0",
+        "1039327880_30179675_0"
+      ]
+    },
+    {
+      "edge_id": "30180063_9176641555_0",
+      "successors_cut_off": [
+        "9176641555_290220734_0",
+        "9176641555_30179872_0"
+      ]
+    },
+    {
+      "edge_id": "30180587_310183015_0",
+      "successors_cut_off": [
+        "310183015_1311857165_0",
+        "310183015_30486704_0"
+      ]
+    },
+    {
+      "edge_id": "30220359_30220360_0",
+      "successors_cut_off": [
+        "30220360_30220359_0"
+      ]
+    },
+    {
+      "edge_id": "30220360_30220359_0",
+      "successors_cut_off": [
+        "30220359_30220363_0"
+      ]
+    },
+    {
+      "edge_id": "30220363_30220359_0",
+      "successors_cut_off": [
+        "30220359_30220360_0"
+      ]
+    },
+    {
+      "edge_id": "30220402_1535794491_0",
+      "successors_cut_off": [
+        "1535794491_30220402_0"
+      ]
+    },
+    {
+      "edge_id": "302364482_302364490_0",
+      "successors_cut_off": [
+        "302364490_302364482_0"
+      ]
+    },
+    {
+      "edge_id": "302364602_5196260489_0",
+      "successors_cut_off": [
+        "5196260489_302364602_0"
+      ]
+    },
+    {
+      "edge_id": "302399077_26193580_0",
+      "successors_cut_off": [
+        "26193580_26194218_0",
+        "26193580_26194219_0"
+      ]
+    },
+    {
+      "edge_id": "302399565_496248275_0",
+      "successors_cut_off": [
+        "496248275_1304766596_0",
+        "496248275_7532496160_0"
+      ]
+    },
+    {
+      "edge_id": "302710948_140584429_0",
+      "successors_cut_off": [
+        "140584429_302710948_0"
+      ]
+    },
+    {
+      "edge_id": "302710948_313878260_0",
+      "successors_cut_off": [
+        "313878260_302710948_0"
+      ]
+    },
+    {
+      "edge_id": "30420757_30421744_0",
+      "successors_cut_off": [
+        "30421744_7532496188_0",
+        "30421744_8722747991_0"
+      ]
+    },
+    {
+      "edge_id": "30420893_5162863585_0",
+      "successors_cut_off": [
+        "5162863585_30420893_0"
+      ]
+    },
+    {
+      "edge_id": "30420895_2395027738_0",
+      "successors_cut_off": [
+        "2395027738_2395027728_0"
+      ]
+    },
+    {
+      "edge_id": "30420898_8722747939_0",
+      "successors_cut_off": [
+        "8722747939_8722747919_0"
+      ]
+    },
+    {
+      "edge_id": "30420904_1934023361_0",
+      "successors_cut_off": [
+        "1934023361_30420898_0",
+        "1934023361_30420904_0"
+      ]
+    },
+    {
+      "edge_id": "30421744_7532496188_0",
+      "successors_cut_off": [
+        "7532496188_7532496182_0",
+        "7532496188_8722747991_0"
+      ]
+    },
+    {
+      "edge_id": "30440868_2865625520_0",
+      "successors_cut_off": [
+        "2865625520_2865625500_0",
+        "2865625520_30440872_0"
+      ]
+    },
+    {
+      "edge_id": "30440872_11847445468_0",
+      "successors_cut_off": [
+        "11847445468_30440928_0"
+      ]
+    },
+    {
+      "edge_id": "30440892_30440886_0",
+      "successors_cut_off": [
+        "30440886_181659004_0",
+        "30440886_34944454_0"
+      ]
+    },
+    {
+      "edge_id": "30440906_11847496072_0",
+      "successors_cut_off": [
+        "11847496072_30440872_0",
+        "11847496072_30440899_0"
+      ]
+    },
+    {
+      "edge_id": "30440928_30440970_0",
+      "successors_cut_off": [
+        "30440970_2865625500_0",
+        "30440970_30440988_0"
+      ]
+    },
+    {
+      "edge_id": "30453565_30453568_0",
+      "successors_cut_off": [
+        "30453568_30453565_0"
+      ]
+    },
+    {
+      "edge_id": "30453571_30453573_0",
+      "successors_cut_off": [
+        "30453573_30453571_0"
+      ]
+    },
+    {
+      "edge_id": "30470414_12688035190_0",
+      "successors_cut_off": [
+        "12688035190_30470414_0"
+      ]
+    },
+    {
+      "edge_id": "30470414_30470415_0",
+      "successors_cut_off": [
+        "30470415_30470414_0"
+      ]
+    },
+    {
+      "edge_id": "30480010_25734031_0",
+      "successors_cut_off": [
+        "25734031_135705007_0",
+        "25734031_25734033_0"
+      ]
+    },
+    {
+      "edge_id": "30480013_30480022_0",
+      "successors_cut_off": [
+        "30480022_105979798_0",
+        "30480022_30480019_0",
+        "30480022_312999717_0"
+      ]
+    },
+    {
+      "edge_id": "30480014_1705300744_0",
+      "successors_cut_off": [
+        "1705300744_30480014_0",
+        "1705300744_30480015_0"
+      ]
+    },
+    {
+      "edge_id": "30480019_30480020_0",
+      "successors_cut_off": [
+        "30480020_30480019_0"
+      ]
+    },
+    {
+      "edge_id": "30484181_5814614981_0",
+      "successors_cut_off": [
+        "5814614981_30484181_0"
+      ]
+    },
+    {
+      "edge_id": "30484183_30484261_0",
+      "successors_cut_off": [
+        "30484261_30484183_0"
+      ]
+    },
+    {
+      "edge_id": "30485834_30485835_0",
+      "successors_cut_off": [
+        "30485835_293989471_0",
+        "30485835_30485876_0"
+      ]
+    },
+    {
+      "edge_id": "30485835_293989471_0",
+      "successors_cut_off": [
+        "293989471_1311857283_0",
+        "293989471_275045818_0"
+      ]
+    },
+    {
+      "edge_id": "30485876_1026731285_0",
+      "successors_cut_off": [
+        "1026731285_1026731431_0",
+        "1026731285_30486642_0"
+      ]
+    },
+    {
+      "edge_id": "30486058_30486087_0",
+      "successors_cut_off": [
+        "30486087_3445583249_0",
+        "30486087_377889_0"
+      ]
+    },
+    {
+      "edge_id": "30486087_377889_0",
+      "successors_cut_off": [
+        "377889_275045511_0",
+        "377889_30494221_0"
+      ]
+    },
+    {
+      "edge_id": "30486130_30180066_0",
+      "successors_cut_off": [
+        "30180066_30180063_0",
+        "30180066_3548135046_0"
+      ]
+    },
+    {
+      "edge_id": "30486642_1943767511_0",
+      "successors_cut_off": [
+        "1943767511_30486642_0"
+      ]
+    },
+    {
+      "edge_id": "30486704_9163431220_0",
+      "successors_cut_off": [
+        "9163431220_30486706_0",
+        "9163431220_30486707_0"
+      ]
+    },
+    {
+      "edge_id": "30486733_1026731514_0",
+      "successors_cut_off": [
+        "1026731514_3733619797_0",
+        "1026731514_3733619798_0"
+      ]
+    },
+    {
+      "edge_id": "30486741_30486737_0",
+      "successors_cut_off": [
+        "30486737_3381864418_0",
+        "30486737_5065981547_0"
+      ]
+    },
+    {
+      "edge_id": "30491833_1025096187_0",
+      "successors_cut_off": [
+        "1025096187_1025096232_0",
+        "1025096187_30151665_0"
+      ]
+    },
+    {
+      "edge_id": "30491840_30491859_0",
+      "successors_cut_off": [
+        "30491859_12054891152_0",
+        "30491859_30491861_0"
+      ]
+    },
+    {
+      "edge_id": "30492081_30492086_0",
+      "successors_cut_off": [
+        "30492086_60683222_0"
+      ]
+    },
+    {
+      "edge_id": "30493632_2698615342_0",
+      "successors_cut_off": [
+        "2698615342_2698615366_0",
+        "2698615342_30491835_0"
+      ]
+    },
+    {
+      "edge_id": "3051049627_9163431230_0",
+      "successors_cut_off": [
+        "9163431230_30486734_0",
+        "9163431230_3548135046_0"
+      ]
+    },
+    {
+      "edge_id": "305677068_305677072_0",
+      "successors_cut_off": [
+        "305677072_305677068_0"
+      ]
+    },
+    {
+      "edge_id": "308459210_496248279_0",
+      "successors_cut_off": [
+        "496248279_308459210_0"
+      ]
+    },
+    {
+      "edge_id": "308678490_308678495_0",
+      "successors_cut_off": [
+        "308678495_308678490_0"
+      ]
+    },
+    {
+      "edge_id": "308968907_308969298_0",
+      "successors_cut_off": [
+        "308969298_308968907_0"
+      ]
+    },
+    {
+      "edge_id": "308968907_94155747_0",
+      "successors_cut_off": [
+        "94155747_308968907_0"
+      ]
+    },
+    {
+      "edge_id": "309502224_309502234_0",
+      "successors_cut_off": [
+        "309502234_309502224_0"
+      ]
+    },
+    {
+      "edge_id": "309523028_151472073_0",
+      "successors_cut_off": [
+        "151472073_309523028_0"
+      ]
+    },
+    {
+      "edge_id": "309523049_309523136_0",
+      "successors_cut_off": [
+        "309523136_309523049_0"
+      ]
+    },
+    {
+      "edge_id": "309523139_309523154_0",
+      "successors_cut_off": [
+        "309523154_309523139_0"
+      ]
+    },
+    {
+      "edge_id": "309767287_309767311_0",
+      "successors_cut_off": [
+        "309767311_309767287_0"
+      ]
+    },
+    {
+      "edge_id": "309767315_309767340_0",
+      "successors_cut_off": [
+        "309767340_309767315_0"
+      ]
+    },
+    {
+      "edge_id": "309767315_309767533_0",
+      "successors_cut_off": [
+        "309767533_309767315_0"
+      ]
+    },
+    {
+      "edge_id": "309767590_309767599_0",
+      "successors_cut_off": [
+        "309767599_10229404609_0"
+      ]
+    },
+    {
+      "edge_id": "309767599_10229404609_0",
+      "successors_cut_off": [
+        "10229404609_309767653_0"
+      ]
+    },
+    {
+      "edge_id": "309767653_10229404609_0",
+      "successors_cut_off": [
+        "10229404609_309767599_0"
+      ]
+    },
+    {
+      "edge_id": "309767749_32958909_0",
+      "successors_cut_off": [
+        "32958909_101530006_0",
+        "32958909_4036318056_0"
+      ]
+    },
+    {
+      "edge_id": "309917376_1753135318_0",
+      "successors_cut_off": [
+        "1753135318_26025184_0",
+        "1753135318_321376241_0"
+      ]
+    },
+    {
+      "edge_id": "309956715_309956724_0",
+      "successors_cut_off": [
+        "309956724_26025184_0",
+        "309956724_26193170_0"
+      ]
+    },
+    {
+      "edge_id": "310128561_3008331084_0",
+      "successors_cut_off": [
+        "3008331084_310128561_0"
+      ]
+    },
+    {
+      "edge_id": "310128561_310128499_0",
+      "successors_cut_off": [
+        "310128499_310128561_0"
+      ]
+    },
+    {
+      "edge_id": "310128561_7546189290_0",
+      "successors_cut_off": [
+        "7546189290_133217141_0"
+      ]
+    },
+    {
+      "edge_id": "310148255_287059906_0",
+      "successors_cut_off": [
+        "287059906_287657502_0"
+      ]
+    },
+    {
+      "edge_id": "310899939_310900027_0",
+      "successors_cut_off": [
+        "310900027_310899939_0"
+      ]
+    },
+    {
+      "edge_id": "310899944_310900023_0",
+      "successors_cut_off": [
+        "310900023_310899944_0"
+      ]
+    },
+    {
+      "edge_id": "310899947_1250004873_0",
+      "successors_cut_off": [
+        "1250004873_310899947_0"
+      ]
+    },
+    {
+      "edge_id": "310902748_8730000944_0",
+      "successors_cut_off": [
+        "8730000944_310899947_0",
+        "8730000944_321381374_0"
+      ]
+    },
+    {
+      "edge_id": "31098641_2181344794_0",
+      "successors_cut_off": [
+        "2181344794_31098641_0"
+      ]
+    },
+    {
+      "edge_id": "31098690_2990739818_0",
+      "successors_cut_off": [
+        "2990739818_31098690_0"
+      ]
+    },
+    {
+      "edge_id": "31098696_33541070_0",
+      "successors_cut_off": [
+        "33541070_31098728_0"
+      ]
+    },
+    {
+      "edge_id": "31098713_3461232710_0",
+      "successors_cut_off": [
+        "3461232710_31098713_0"
+      ]
+    },
+    {
+      "edge_id": "31098721_31098730_0",
+      "successors_cut_off": [
+        "31098730_31098721_0"
+      ]
+    },
+    {
+      "edge_id": "31098722_31098731_0",
+      "successors_cut_off": [
+        "31098731_31098722_0"
+      ]
+    },
+    {
+      "edge_id": "31098728_33541070_0",
+      "successors_cut_off": [
+        "33541070_33541062_0"
+      ]
+    },
+    {
+      "edge_id": "310989699_12456140258_0",
+      "successors_cut_off": [
+        "12456140258_12456140251_0"
+      ]
+    },
+    {
+      "edge_id": "310990276_6909943613_0",
+      "successors_cut_off": [
+        "6909943613_310990276_0"
+      ]
+    },
+    {
+      "edge_id": "311585453_311586225_0",
+      "successors_cut_off": [
+        "311586225_311585453_0"
+      ]
+    },
+    {
+      "edge_id": "311886629_26038980_0",
+      "successors_cut_off": [
+        "26038980_310902748_0",
+        "26038980_401625549_0"
+      ]
+    },
+    {
+      "edge_id": "312102333_696356953_0",
+      "successors_cut_off": [
+        "696356953_312102333_0"
+      ]
+    },
+    {
+      "edge_id": "312633322_6945911123_0",
+      "successors_cut_off": [
+        "6945911123_312633322_0"
+      ]
+    },
+    {
+      "edge_id": "312790917_12001072920_0",
+      "successors_cut_off": [
+        "12001072920_312790917_0"
+      ]
+    },
+    {
+      "edge_id": "312999711_1708738969_0",
+      "successors_cut_off": [
+        "1708738969_1708738944_0",
+        "1708738969_312999712_0"
+      ]
+    },
+    {
+      "edge_id": "312999712_312999713_0",
+      "successors_cut_off": [
+        "312999713_30479532_0",
+        "312999713_312999715_0"
+      ]
+    },
+    {
+      "edge_id": "312999718_105979278_0",
+      "successors_cut_off": [
+        "105979278_105978925_0",
+        "105979278_26193194_0"
+      ]
+    },
+    {
+      "edge_id": "312999718_307862070_0",
+      "successors_cut_off": [
+        "307862070_312999718_0"
+      ]
+    },
+    {
+      "edge_id": "312999719_1612527826_0",
+      "successors_cut_off": [
+        "1612527826_25735058_0",
+        "1612527826_25735060_0"
+      ]
+    },
+    {
+      "edge_id": "31304320_1639994362_0",
+      "successors_cut_off": [
+        "1639994362_1639994365_0"
+      ]
+    },
+    {
+      "edge_id": "31304328_31304320_0",
+      "successors_cut_off": [
+        "31304320_13585812157_0"
+      ]
+    },
+    {
+      "edge_id": "31304330_31304328_0",
+      "successors_cut_off": [
+        "31304328_299415114_0"
+      ]
+    },
+    {
+      "edge_id": "31304346_3419402597_0",
+      "successors_cut_off": [
+        "3419402597_13571598790_0",
+        "3419402597_145181108_0"
+      ]
+    },
+    {
+      "edge_id": "31304394_301822218_0",
+      "successors_cut_off": [
+        "301822218_1275935040_0",
+        "301822218_145184550_0"
+      ]
+    },
+    {
+      "edge_id": "313483079_210861493_0",
+      "successors_cut_off": [
+        "210861493_504312736_0"
+      ]
+    },
+    {
+      "edge_id": "313744677_140581189_0",
+      "successors_cut_off": [
+        "140581189_313744677_0"
+      ]
+    },
+    {
+      "edge_id": "313961809_868332717_0",
+      "successors_cut_off": [
+        "868332717_313961809_0"
+      ]
+    },
+    {
+      "edge_id": "313961809_8730001054_0",
+      "successors_cut_off": [
+        "8730001054_313961809_0"
+      ]
+    },
+    {
+      "edge_id": "314541673_314541670_0",
+      "successors_cut_off": [
+        "314541670_1389776864_0",
+        "314541670_320186566_0"
+      ]
+    },
+    {
+      "edge_id": "314640226_25688174_0",
+      "successors_cut_off": [
+        "25688174_25688169_0",
+        "25688174_25688175_0"
+      ]
+    },
+    {
+      "edge_id": "314758572_314757150_0",
+      "successors_cut_off": [
+        "314757150_25599395_0",
+        "314757150_314757077_0"
+      ]
+    },
+    {
+      "edge_id": "314758578_314755493_0",
+      "successors_cut_off": [
+        "314755493_25733266_0",
+        "314755493_314759192_0"
+      ]
+    },
+    {
+      "edge_id": "3153307073_6565796308_0",
+      "successors_cut_off": [
+        "6565796308_1076862892_0"
+      ]
+    },
+    {
+      "edge_id": "317749847_190497843_0",
+      "successors_cut_off": [
+        "190497843_1393186592_0",
+        "190497843_199206180_0"
+      ]
+    },
+    {
+      "edge_id": "318138386_117856193_0",
+      "successors_cut_off": [
+        "117856193_318138386_0"
+      ]
+    },
+    {
+      "edge_id": "318140378_613830836_0",
+      "successors_cut_off": [
+        "613830836_378363_0"
+      ]
+    },
+    {
+      "edge_id": "318486259_320747793_0",
+      "successors_cut_off": [
+        "320747793_10909679299_0",
+        "320747793_153557355_0"
+      ]
+    },
+    {
+      "edge_id": "3204396954_3204396959_0",
+      "successors_cut_off": [
+        "3204396959_90683892_0"
+      ]
+    },
+    {
+      "edge_id": "3204396959_90683891_0",
+      "successors_cut_off": [
+        "90683891_89348863_0"
+      ]
+    },
+    {
+      "edge_id": "3204396959_90683892_0",
+      "successors_cut_off": [
+        "90683892_3204396959_0"
+      ]
+    },
+    {
+      "edge_id": "32049935_32049631_0",
+      "successors_cut_off": [
+        "32049631_32049935_0"
+      ]
+    },
+    {
+      "edge_id": "32049936_299414865_0",
+      "successors_cut_off": [
+        "299414865_32049936_0"
+      ]
+    },
+    {
+      "edge_id": "320986808_101530006_0",
+      "successors_cut_off": [
+        "101530006_4036318056_0"
+      ]
+    },
+    {
+      "edge_id": "321376250_26022230_0",
+      "successors_cut_off": [
+        "26022230_25658734_0",
+        "26022230_9370857363_0"
+      ]
+    },
+    {
+      "edge_id": "321379663_265787694_0",
+      "successors_cut_off": [
+        "265787694_321379668_0",
+        "265787694_321379669_0"
+      ]
+    },
+    {
+      "edge_id": "321381374_309956715_0",
+      "successors_cut_off": [
+        "309956715_1753135307_0",
+        "309956715_309956724_0"
+      ]
+    },
+    {
+      "edge_id": "321846280_301427208_0",
+      "successors_cut_off": [
+        "301427208_21031642_0",
+        "301427208_288587568_0"
+      ]
+    },
+    {
+      "edge_id": "3269397340_1297830267_0",
+      "successors_cut_off": [
+        "1297830267_11545402174_0",
+        "1297830267_96144243_0"
+      ]
+    },
+    {
+      "edge_id": "3269397342_96144244_0",
+      "successors_cut_off": [
+        "96144244_96144246_0"
+      ]
+    },
+    {
+      "edge_id": "32694298_1305996560_0",
+      "successors_cut_off": [
+        "1305996560_1305996427_0",
+        "1305996560_1305996529_0",
+        "1305996560_32694298_0"
+      ]
+    },
+    {
+      "edge_id": "32958905_32958906_0",
+      "successors_cut_off": [
+        "32958906_32694298_0",
+        "32958906_32958907_0"
+      ]
+    },
+    {
+      "edge_id": "32958906_32694298_0",
+      "successors_cut_off": [
+        "32694298_1305996560_0"
+      ]
+    },
+    {
+      "edge_id": "32958907_4036318057_0",
+      "successors_cut_off": [
+        "4036318057_101586799_0",
+        "4036318057_309767749_0"
+      ]
+    },
+    {
+      "edge_id": "32958909_101530006_0",
+      "successors_cut_off": [
+        "101530006_320986808_0"
+      ]
+    },
+    {
+      "edge_id": "32959139_1622840995_0",
+      "successors_cut_off": [
+        "1622840995_32959139_0"
+      ]
+    },
+    {
+      "edge_id": "32959139_32958977_0",
+      "successors_cut_off": [
+        "32958977_32959139_0"
+      ]
+    },
+    {
+      "edge_id": "329965213_329965220_0",
+      "successors_cut_off": [
+        "329965220_329965213_0"
+      ]
+    },
+    {
+      "edge_id": "329965220_329965213_0",
+      "successors_cut_off": [
+        "329965213_9152927119_0"
+      ]
+    },
+    {
+      "edge_id": "33071906_3374722587_0",
+      "successors_cut_off": [
+        "3374722587_2388781379_0",
+        "3374722587_311887170_0"
+      ]
+    },
+    {
+      "edge_id": "33072008_9502852425_0",
+      "successors_cut_off": [
+        "9502852425_138365478_0",
+        "9502852425_181800324_0"
+      ]
+    },
+    {
+      "edge_id": "330890496_330890497_0",
+      "successors_cut_off": [
+        "330890497_330890496_0"
+      ]
+    },
+    {
+      "edge_id": "330897633_1809275155_0",
+      "successors_cut_off": [
+        "1809275155_330897633_0"
+      ]
+    },
+    {
+      "edge_id": "330912694_331889194_0",
+      "successors_cut_off": [
+        "331889194_26495915_0",
+        "331889194_331886532_0"
+      ]
+    },
+    {
+      "edge_id": "331414080_331413739_0",
+      "successors_cut_off": [
+        "331413739_331414080_0"
+      ]
+    },
+    {
+      "edge_id": "331414080_332073696_0",
+      "successors_cut_off": [
+        "332073696_331414080_0"
+      ]
+    },
+    {
+      "edge_id": "3316531048_10084995052_0",
+      "successors_cut_off": [
+        "10084995052_3316531048_0"
+      ]
+    },
+    {
+      "edge_id": "3316531048_33836759_0",
+      "successors_cut_off": [
+        "33836759_33836755_0",
+        "33836759_6137877018_0"
+      ]
+    },
+    {
+      "edge_id": "331886520_148585201_0",
+      "successors_cut_off": [
+        "148585201_26495917_0",
+        "148585201_7545352957_0"
+      ]
+    },
+    {
+      "edge_id": "331889194_331886532_0",
+      "successors_cut_off": [
+        "331886532_299244625_0"
+      ]
+    },
+    {
+      "edge_id": "33382087_4939007139_0",
+      "successors_cut_off": [
+        "4939007139_2388781387_0"
+      ]
+    },
+    {
+      "edge_id": "33382087_79490017_0",
+      "successors_cut_off": [
+        "79490017_33382087_0",
+        "79490017_79490016_0"
+      ]
+    },
+    {
+      "edge_id": "33411350_33411351_0",
+      "successors_cut_off": [
+        "33411351_2481971672_0",
+        "33411351_33411350_0"
+      ]
+    },
+    {
+      "edge_id": "33411691_3084867852_0",
+      "successors_cut_off": [
+        "3084867852_33411691_0"
+      ]
+    },
+    {
+      "edge_id": "33411779_34944401_0",
+      "successors_cut_off": [
+        "34944401_33411779_0"
+      ]
+    },
+    {
+      "edge_id": "33411784_40021168_0",
+      "successors_cut_off": [
+        "40021168_33411784_0"
+      ]
+    },
+    {
+      "edge_id": "33411790_3060913263_0",
+      "successors_cut_off": [
+        "3060913263_3060913268_0",
+        "3060913263_33411788_0"
+      ]
+    },
+    {
+      "edge_id": "33541062_33541065_0",
+      "successors_cut_off": [
+        "33541065_33541067_0",
+        "33541065_8706553025_0"
+      ]
+    },
+    {
+      "edge_id": "33541067_33541069_0",
+      "successors_cut_off": [
+        "33541069_1753135610_0",
+        "33541069_31098696_0"
+      ]
+    },
+    {
+      "edge_id": "33541069_1753135610_0",
+      "successors_cut_off": [
+        "1753135610_1753135594_0",
+        "1753135610_3377817871_0"
+      ]
+    },
+    {
+      "edge_id": "336679181_3389885107_0",
+      "successors_cut_off": [
+        "3389885107_336679181_0"
+      ]
+    },
+    {
+      "edge_id": "3374722587_311887170_0",
+      "successors_cut_off": [
+        "311887170_2266691721_0",
+        "311887170_33072008_0"
+      ]
+    },
+    {
+      "edge_id": "3382764347_30133790_0",
+      "successors_cut_off": [
+        "30133790_3384329354_0"
+      ]
+    },
+    {
+      "edge_id": "3382764347_30133797_0",
+      "successors_cut_off": [
+        "30133797_3382764347_0"
+      ]
+    },
+    {
+      "edge_id": "33836759_33836755_0",
+      "successors_cut_off": [
+        "33836755_3316531046_0",
+        "33836755_9373240031_0"
+      ]
+    },
+    {
+      "edge_id": "3384329360_30133790_0",
+      "successors_cut_off": [
+        "30133790_3382764347_0"
+      ]
+    },
+    {
+      "edge_id": "338545110_30151686_0",
+      "successors_cut_off": [
+        "30151686_338545110_0"
+      ]
+    },
+    {
+      "edge_id": "338545110_30151687_0",
+      "successors_cut_off": [
+        "30151687_338545110_0"
+      ]
+    },
+    {
+      "edge_id": "33979144_2018803694_0",
+      "successors_cut_off": [
+        "2018803694_16966790_0",
+        "2018803694_190497809_0"
+      ]
+    },
+    {
+      "edge_id": "3428401525_13865617728_0",
+      "successors_cut_off": [
+        "13865617728_1587095305_0",
+        "13865617728_5627310014_0"
+      ]
+    },
+    {
+      "edge_id": "343835705_343835709_0",
+      "successors_cut_off": [
+        "343835709_343835705_0"
+      ]
+    },
+    {
+      "edge_id": "343835705_343836174_0",
+      "successors_cut_off": [
+        "343836174_343835705_0"
+      ]
+    },
+    {
+      "edge_id": "343843996_343844356_0",
+      "successors_cut_off": [
+        "343844356_343843996_0"
+      ]
+    },
+    {
+      "edge_id": "344125653_1679061750_0",
+      "successors_cut_off": [
+        "1679061750_344125653_0"
+      ]
+    },
+    {
+      "edge_id": "344125653_287661728_0",
+      "successors_cut_off": [
+        "287661728_344125653_0"
+      ]
+    },
+    {
+      "edge_id": "34944270_1537175615_0",
+      "successors_cut_off": [
+        "1537175615_34944270_0"
+      ]
+    },
+    {
+      "edge_id": "34944280_34944298_0",
+      "successors_cut_off": [
+        "34944298_34944280_0"
+      ]
+    },
+    {
+      "edge_id": "34944309_34944306_0",
+      "successors_cut_off": [
+        "34944306_34944309_0"
+      ]
+    },
+    {
+      "edge_id": "34944358_2326754855_0",
+      "successors_cut_off": [
+        "2326754855_34944449_0"
+      ]
+    },
+    {
+      "edge_id": "34944358_34944400_0",
+      "successors_cut_off": [
+        "34944400_34944358_0"
+      ]
+    },
+    {
+      "edge_id": "34944395_34944399_0",
+      "successors_cut_off": [
+        "34944399_34944395_0"
+      ]
+    },
+    {
+      "edge_id": "34944407_34944468_0",
+      "successors_cut_off": [
+        "34944468_30156694_0",
+        "34944468_33411775_0"
+      ]
+    },
+    {
+      "edge_id": "34944421_1691294844_0",
+      "successors_cut_off": [
+        "1691294844_34944421_0"
+      ]
+    },
+    {
+      "edge_id": "34944421_34944407_0",
+      "successors_cut_off": [
+        "34944407_34944438_0"
+      ]
+    },
+    {
+      "edge_id": "34944438_34944407_0",
+      "successors_cut_off": [
+        "34944407_34944468_0"
+      ]
+    },
+    {
+      "edge_id": "34944438_34944433_0",
+      "successors_cut_off": [
+        "34944433_34944438_0"
+      ]
+    },
+    {
+      "edge_id": "34944449_2326754855_0",
+      "successors_cut_off": [
+        "2326754855_34944358_0"
+      ]
+    },
+    {
+      "edge_id": "34944454_34944456_0",
+      "successors_cut_off": [
+        "34944456_34944454_0"
+      ]
+    },
+    {
+      "edge_id": "3499249062_3499249064_0",
+      "successors_cut_off": [
+        "3499249064_6482686247_0"
+      ]
+    },
+    {
+      "edge_id": "3499249063_1404738420_0",
+      "successors_cut_off": [
+        "1404738420_300715999_0",
+        "1404738420_3069759663_0"
+      ]
+    },
+    {
+      "edge_id": "3499249064_3499249072_0",
+      "successors_cut_off": [
+        "3499249072_3499249079_0",
+        "3499249072_7644391634_0"
+      ]
+    },
+    {
+      "edge_id": "3499249072_7644391634_0",
+      "successors_cut_off": [
+        "7644391634_2409284486_0",
+        "7644391634_2409284495_0"
+      ]
+    },
+    {
+      "edge_id": "3499249073_3499249063_0",
+      "successors_cut_off": [
+        "3499249063_1404738420_0",
+        "3499249063_3499249062_0"
+      ]
+    },
+    {
+      "edge_id": "3499249079_3499249073_0",
+      "successors_cut_off": [
+        "3499249073_312633322_0"
+      ]
+    },
+    {
+      "edge_id": "3501601671_71612237_0",
+      "successors_cut_off": [
+        "71612237_3501601661_0",
+        "71612237_71611900_0"
+      ]
+    },
+    {
+      "edge_id": "35132987_35132997_0",
+      "successors_cut_off": [
+        "35132997_35132987_0"
+      ]
+    },
+    {
+      "edge_id": "35133000_35133002_0",
+      "successors_cut_off": [
+        "35133002_35133000_0"
+      ]
+    },
+    {
+      "edge_id": "35133001_9884447710_0",
+      "successors_cut_off": [
+        "9884447710_35133001_0"
+      ]
+    },
+    {
+      "edge_id": "35133006_40021309_0",
+      "successors_cut_off": [
+        "40021309_35133006_0"
+      ]
+    },
+    {
+      "edge_id": "365463546_312909828_0",
+      "successors_cut_off": [
+        "312909828_28405765_0"
+      ]
+    },
+    {
+      "edge_id": "365468179_27032646_0",
+      "successors_cut_off": [
+        "27032646_85997426_0",
+        "27032646_85997467_0"
+      ]
+    },
+    {
+      "edge_id": "3662347334_25599393_0",
+      "successors_cut_off": [
+        "25599393_3797401431_0",
+        "25599393_9765247944_0"
+      ]
+    },
+    {
+      "edge_id": "36654996_36654998_0",
+      "successors_cut_off": [
+        "36654998_36654996_0"
+      ]
+    },
+    {
+      "edge_id": "36654999_36654995_0",
+      "successors_cut_off": [
+        "36654995_36654999_0"
+      ]
+    },
+    {
+      "edge_id": "366911_1455801454_0",
+      "successors_cut_off": [
+        "1455801454_1455801464_0"
+      ]
+    },
+    {
+      "edge_id": "368250645_368250644_0",
+      "successors_cut_off": [
+        "368250644_1073105206_0",
+        "368250644_25688839_0"
+      ]
+    },
+    {
+      "edge_id": "371273_6137876647_0",
+      "successors_cut_off": [
+        "6137876647_6137876640_0",
+        "6137876647_6137876897_0"
+      ]
+    },
+    {
+      "edge_id": "371331_36655002_0",
+      "successors_cut_off": [
+        "36655002_371331_0"
+      ]
+    },
+    {
+      "edge_id": "374403085_26495550_0",
+      "successors_cut_off": [
+        "26495550_26022224_0"
+      ]
+    },
+    {
+      "edge_id": "3764228305_5840553183_0",
+      "successors_cut_off": [
+        "5840553183_2409284517_0"
+      ]
+    },
+    {
+      "edge_id": "377706_377705_0",
+      "successors_cut_off": [
+        "377705_30014468_0",
+        "377705_377706_0",
+        "377705_7373675_0"
+      ]
+    },
+    {
+      "edge_id": "377887_11469101263_0",
+      "successors_cut_off": [
+        "11469101263_377898_0"
+      ]
+    },
+    {
+      "edge_id": "377887_5192040649_0",
+      "successors_cut_off": [
+        "5192040649_377887_0"
+      ]
+    },
+    {
+      "edge_id": "377898_11469101263_0",
+      "successors_cut_off": [
+        "11469101263_377887_0"
+      ]
+    },
+    {
+      "edge_id": "377900_377898_0",
+      "successors_cut_off": [
+        "377898_11469101263_0"
+      ]
+    },
+    {
+      "edge_id": "377900_96091314_0",
+      "successors_cut_off": [
+        "96091314_377900_0"
+      ]
+    },
+    {
+      "edge_id": "377901_96091370_0",
+      "successors_cut_off": [
+        "96091370_96091377_0"
+      ]
+    },
+    {
+      "edge_id": "378363_613830836_0",
+      "successors_cut_off": [
+        "613830836_11831956259_0"
+      ]
+    },
+    {
+      "edge_id": "3797446524_3764228305_0",
+      "successors_cut_off": [
+        "3764228305_5840553183_0"
+      ]
+    },
+    {
+      "edge_id": "381453172_26025206_0",
+      "successors_cut_off": [
+        "26025206_158298733_0"
+      ]
+    },
+    {
+      "edge_id": "3829936917_153344793_0",
+      "successors_cut_off": [
+        "153344793_7546189262_0",
+        "153344793_7546189292_0"
+      ]
+    },
+    {
+      "edge_id": "40089699_1344274970_0",
+      "successors_cut_off": [
+        "1344274970_40089699_0"
+      ]
+    },
+    {
+      "edge_id": "40090785_40090918_0",
+      "successors_cut_off": [
+        "40090918_40090785_0"
+      ]
+    },
+    {
+      "edge_id": "40091110_40091062_0",
+      "successors_cut_off": [
+        "40091062_40091110_0"
+      ]
+    },
+    {
+      "edge_id": "40091110_40091155_0",
+      "successors_cut_off": [
+        "40091155_40091110_0"
+      ]
+    },
+    {
+      "edge_id": "401625549_310911260_0",
+      "successors_cut_off": [
+        "310911260_25658728_0",
+        "310911260_94232943_0"
+      ]
+    },
+    {
+      "edge_id": "401625571_401625586_0",
+      "successors_cut_off": [
+        "401625586_401625571_0"
+      ]
+    },
+    {
+      "edge_id": "401625647_401625656_0",
+      "successors_cut_off": [
+        "401625656_401625647_0"
+      ]
+    },
+    {
+      "edge_id": "401625675_401625684_0",
+      "successors_cut_off": [
+        "401625684_401625675_0"
+      ]
+    },
+    {
+      "edge_id": "4036318056_32958903_0",
+      "successors_cut_off": [
+        "32958903_1297254810_0",
+        "32958903_32958905_0"
+      ]
+    },
+    {
+      "edge_id": "405219284_405219293_0",
+      "successors_cut_off": [
+        "405219293_405219284_0"
+      ]
+    },
+    {
+      "edge_id": "41066799_4356036732_0",
+      "successors_cut_off": [
+        "4356036732_41066799_0"
+      ]
+    },
+    {
+      "edge_id": "412885454_7545352954_0",
+      "successors_cut_off": [
+        "7545352954_331889135_0",
+        "7545352954_489117_0"
+      ]
+    },
+    {
+      "edge_id": "430962239_430962238_0",
+      "successors_cut_off": [
+        "430962238_1776518634_0",
+        "430962238_25733706_0",
+        "430962238_430962239_0"
+      ]
+    },
+    {
+      "edge_id": "4359025139_12558494727_0",
+      "successors_cut_off": [
+        "12558494727_4359025139_0"
+      ]
+    },
+    {
+      "edge_id": "4359025139_7048859852_0",
+      "successors_cut_off": [
+        "7048859852_12529445892_0"
+      ]
+    },
+    {
+      "edge_id": "4408257372_4408257379_0",
+      "successors_cut_off": [
+        "4408257379_4408257372_0"
+      ]
+    },
+    {
+      "edge_id": "4409399838_299722324_0",
+      "successors_cut_off": [
+        "299722324_299721398_0"
+      ]
+    },
+    {
+      "edge_id": "456022853_456022856_0",
+      "successors_cut_off": [
+        "456022856_456022853_0"
+      ]
+    },
+    {
+      "edge_id": "456040017_11407495211_0",
+      "successors_cut_off": [
+        "11407495211_456040017_0"
+      ]
+    },
+    {
+      "edge_id": "456152517_456152514_0",
+      "successors_cut_off": [
+        "456152514_456152517_0"
+      ]
+    },
+    {
+      "edge_id": "456152517_456152520_0",
+      "successors_cut_off": [
+        "456152520_456152517_0"
+      ]
+    },
+    {
+      "edge_id": "4649967172_4649967176_0",
+      "successors_cut_off": [
+        "4649967176_4649967186_0",
+        "4649967176_4649968091_0"
+      ]
+    },
+    {
+      "edge_id": "4649967186_9249508310_0",
+      "successors_cut_off": [
+        "9249508310_16968580_0"
+      ]
+    },
+    {
+      "edge_id": "472670326_1943757160_0",
+      "successors_cut_off": [
+        "1943757160_25688932_0",
+        "1943757160_4707809980_0"
+      ]
+    },
+    {
+      "edge_id": "4731104418_4731104408_0",
+      "successors_cut_off": [
+        "4731104408_6647137688_0",
+        "4731104408_6855062287_0"
+      ]
+    },
+    {
+      "edge_id": "480080091_480080065_0",
+      "successors_cut_off": [
+        "480080065_1311857280_0",
+        "480080065_480080113_0"
+      ]
+    },
+    {
+      "edge_id": "4827620404_1873712635_0",
+      "successors_cut_off": [
+        "1873712635_4827620404_0"
+      ]
+    },
+    {
+      "edge_id": "4868525081_5861350203_0",
+      "successors_cut_off": [
+        "5861350203_30486058_0",
+        "5861350203_30486570_0"
+      ]
+    },
+    {
+      "edge_id": "489116_11469925218_0",
+      "successors_cut_off": [
+        "11469925218_489117_0",
+        "11469925218_7545352957_0"
+      ]
+    },
+    {
+      "edge_id": "489120_7545353585_0",
+      "successors_cut_off": [
+        "7545353585_7545352981_0",
+        "7545353585_7545353577_0"
+      ]
+    },
+    {
+      "edge_id": "4913535277_2213848947_0",
+      "successors_cut_off": [
+        "2213848947_4913535277_0"
+      ]
+    },
+    {
+      "edge_id": "4939007133_4939007139_0",
+      "successors_cut_off": [
+        "4939007139_33382087_0"
+      ]
+    },
+    {
+      "edge_id": "495593574_495593575_0",
+      "successors_cut_off": [
+        "495593575_495593574_0"
+      ]
+    },
+    {
+      "edge_id": "496248275_7532496160_0",
+      "successors_cut_off": [
+        "7532496160_7532496129_0",
+        "7532496160_7532496138_0"
+      ]
+    },
+    {
+      "edge_id": "504312736_210861493_0",
+      "successors_cut_off": [
+        "210861493_1332592408_0"
+      ]
+    },
+    {
+      "edge_id": "5061966869_301823631_0",
+      "successors_cut_off": [
+        "301823631_145181102_0",
+        "301823631_6883685395_0"
+      ]
+    },
+    {
+      "edge_id": "5076173004_30156696_0",
+      "successors_cut_off": [
+        "30156696_5076173004_0"
+      ]
+    },
+    {
+      "edge_id": "520155_60911746_0",
+      "successors_cut_off": [
+        "60911746_27091406_0",
+        "60911746_60911745_0"
+      ]
+    },
+    {
+      "edge_id": "520156_60911731_0",
+      "successors_cut_off": [
+        "60911731_520156_0"
+      ]
+    },
+    {
+      "edge_id": "520157_60911706_0",
+      "successors_cut_off": [
+        "60911706_60911698_0",
+        "60911706_60911712_0"
+      ]
+    },
+    {
+      "edge_id": "520168_1452525546_0",
+      "successors_cut_off": [
+        "1452525546_28393050_0",
+        "1452525546_28393053_0"
+      ]
+    },
+    {
+      "edge_id": "520168_6763913381_0",
+      "successors_cut_off": [
+        "6763913381_331884750_0",
+        "6763913381_520180_0"
+      ]
+    },
+    {
+      "edge_id": "520175_520172_0",
+      "successors_cut_off": [
+        "520172_147406_0",
+        "520172_7373665_0"
+      ]
+    },
+    {
+      "edge_id": "520177_26193566_0",
+      "successors_cut_off": [
+        "26193566_162407_0",
+        "26193566_26194219_0"
+      ]
+    },
+    {
+      "edge_id": "520180_520177_0",
+      "successors_cut_off": [
+        "520177_26193566_0",
+        "520177_520175_0"
+      ]
+    },
+    {
+      "edge_id": "5347922854_6966893071_0",
+      "successors_cut_off": [
+        "6966893071_8964515267_0"
+      ]
+    },
+    {
+      "edge_id": "5347922856_91910918_0",
+      "successors_cut_off": [
+        "91910918_8964515276_0"
+      ]
+    },
+    {
+      "edge_id": "5387957674_102730634_0",
+      "successors_cut_off": [
+        "102730634_102730808_0",
+        "102730634_1404738400_0"
+      ]
+    },
+    {
+      "edge_id": "54712404_2453134333_0",
+      "successors_cut_off": [
+        "2453134333_2453134334_0",
+        "2453134333_54712437_0"
+      ]
+    },
+    {
+      "edge_id": "54712423_54712406_0",
+      "successors_cut_off": [
+        "54712406_30486741_0",
+        "54712406_54712404_0"
+      ]
+    },
+    {
+      "edge_id": "54712430_2453134332_0",
+      "successors_cut_off": [
+        "2453134332_1519794894_0",
+        "2453134332_54712423_0"
+      ]
+    },
+    {
+      "edge_id": "54721286_101458034_0",
+      "successors_cut_off": [
+        "101458034_101458086_0",
+        "101458034_206357862_0"
+      ]
+    },
+    {
+      "edge_id": "54721287_207388526_0",
+      "successors_cut_off": [
+        "207388526_54721287_0"
+      ]
+    },
+    {
+      "edge_id": "54721302_54721305_0",
+      "successors_cut_off": [
+        "54721305_54721302_0"
+      ]
+    },
+    {
+      "edge_id": "54726326_54726443_0",
+      "successors_cut_off": [
+        "54726443_57653486_0"
+      ]
+    },
+    {
+      "edge_id": "54726350_54726353_0",
+      "successors_cut_off": [
+        "54726353_54726350_0"
+      ]
+    },
+    {
+      "edge_id": "54726355_54726423_0",
+      "successors_cut_off": [
+        "54726423_54726355_0"
+      ]
+    },
+    {
+      "edge_id": "54726355_54726432_0",
+      "successors_cut_off": [
+        "54726432_54726355_0"
+      ]
+    },
+    {
+      "edge_id": "54726443_57653486_0",
+      "successors_cut_off": [
+        "57653486_54726443_0"
+      ]
+    },
+    {
+      "edge_id": "54726450_54726459_0",
+      "successors_cut_off": [
+        "54726459_54726450_0"
+      ]
+    },
+    {
+      "edge_id": "5473743566_5694982445_0",
+      "successors_cut_off": [
+        "5694982445_1504541784_0",
+        "5694982445_5694982460_0"
+      ]
+    },
+    {
+      "edge_id": "5473743567_318138473_0",
+      "successors_cut_off": [
+        "318138473_1780484771_0",
+        "318138473_5473743566_0"
+      ]
+    },
+    {
+      "edge_id": "558172089_145194737_0",
+      "successors_cut_off": [
+        "145194737_145188499_0"
+      ]
+    },
+    {
+      "edge_id": "5615901346_336595630_0",
+      "successors_cut_off": [
+        "336595630_1300589046_0",
+        "336595630_1304800610_0"
+      ]
+    },
+    {
+      "edge_id": "5615901348_1297830155_0",
+      "successors_cut_off": [
+        "1297830155_1300588845_0"
+      ]
+    },
+    {
+      "edge_id": "5615901350_138231908_0",
+      "successors_cut_off": [
+        "138231908_9132394969_0"
+      ]
+    },
+    {
+      "edge_id": "5615901351_5615901350_0",
+      "successors_cut_off": [
+        "5615901350_138231908_0",
+        "5615901350_5615901346_0"
+      ]
+    },
+    {
+      "edge_id": "5627309991_3797446524_0",
+      "successors_cut_off": [
+        "3797446524_3343504707_0",
+        "3797446524_3764228305_0"
+      ]
+    },
+    {
+      "edge_id": "5627309992_1325284346_0",
+      "successors_cut_off": [
+        "1325284346_5840502855_0"
+      ]
+    },
+    {
+      "edge_id": "5627310010_305002711_0",
+      "successors_cut_off": [
+        "305002711_5627310010_0"
+      ]
+    },
+    {
+      "edge_id": "5694557200_5694557192_0",
+      "successors_cut_off": [
+        "5694557192_11210828110_0",
+        "5694557192_11210828111_0"
+      ]
+    },
+    {
+      "edge_id": "5694982445_1504541784_0",
+      "successors_cut_off": [
+        "1504541784_30137139_0",
+        "1504541784_4827620404_0"
+      ]
+    },
+    {
+      "edge_id": "5694982460_60890006_0",
+      "successors_cut_off": [
+        "60890006_3579707437_0",
+        "60890006_5473743567_0"
+      ]
+    },
+    {
+      "edge_id": "5696126122_9383375799_0",
+      "successors_cut_off": [
+        "9383375799_5696126122_0"
+      ]
+    },
+    {
+      "edge_id": "5696126126_5696126127_0",
+      "successors_cut_off": [
+        "5696126127_5696126126_0"
+      ]
+    },
+    {
+      "edge_id": "569956025_1716688499_0",
+      "successors_cut_off": [
+        "1716688499_569956025_0"
+      ]
+    },
+    {
+      "edge_id": "5700020591_5700020592_0",
+      "successors_cut_off": [
+        "5700020592_5700020591_0"
+      ]
+    },
+    {
+      "edge_id": "5700516664_12593716354_0",
+      "successors_cut_off": [
+        "12593716354_5700516664_0"
+      ]
+    },
+    {
+      "edge_id": "57653486_54726443_0",
+      "successors_cut_off": [
+        "54726443_54726326_0"
+      ]
+    },
+    {
+      "edge_id": "5840502855_1325284346_0",
+      "successors_cut_off": [
+        "1325284346_5627309991_0"
+      ]
+    },
+    {
+      "edge_id": "5840553183_2409284517_0",
+      "successors_cut_off": [
+        "2409284517_1706420688_0",
+        "2409284517_2409284504_0"
+      ]
+    },
+    {
+      "edge_id": "5840553183_3764228305_0",
+      "successors_cut_off": [
+        "3764228305_3343504707_0"
+      ]
+    },
+    {
+      "edge_id": "5876791542_9249508280_0",
+      "successors_cut_off": [
+        "9249508280_6121493170_0"
+      ]
+    },
+    {
+      "edge_id": "5890052100_5627309989_0",
+      "successors_cut_off": [
+        "5627309989_12529419837_0",
+        "5627309989_5627309992_0"
+      ]
+    },
+    {
+      "edge_id": "5992506035_1717049769_0",
+      "successors_cut_off": [
+        "1717049769_5992506035_0"
+      ]
+    },
+    {
+      "edge_id": "5992506035_6280920542_0",
+      "successors_cut_off": [
+        "6280920542_5992506035_0"
+      ]
+    },
+    {
+      "edge_id": "5993064849_11261373837_0",
+      "successors_cut_off": [
+        "11261373837_135469893_0"
+      ]
+    },
+    {
+      "edge_id": "5993064849_5993064850_0",
+      "successors_cut_off": [
+        "5993064850_5993064849_0"
+      ]
+    },
+    {
+      "edge_id": "60128114_1305379788_0",
+      "successors_cut_off": [
+        "1305379788_1375955281_0",
+        "1305379788_314452681_0"
+      ]
+    },
+    {
+      "edge_id": "60128120_60128126_0",
+      "successors_cut_off": [
+        "60128126_60128120_0"
+      ]
+    },
+    {
+      "edge_id": "6033826919_9249508250_0",
+      "successors_cut_off": [
+        "9249508250_6087701479_0"
+      ]
+    },
+    {
+      "edge_id": "60356343_309366848_0",
+      "successors_cut_off": [
+        "309366848_60356343_0"
+      ]
+    },
+    {
+      "edge_id": "60356957_305677078_0",
+      "successors_cut_off": [
+        "305677078_60356957_0"
+      ]
+    },
+    {
+      "edge_id": "60356958_971424014_0",
+      "successors_cut_off": [
+        "971424014_60356958_0"
+      ]
+    },
+    {
+      "edge_id": "6042795372_9249508239_0",
+      "successors_cut_off": [
+        "9249508239_12529445892_0",
+        "9249508239_9249508225_0"
+      ]
+    },
+    {
+      "edge_id": "60476807_292560144_0",
+      "successors_cut_off": [
+        "292560144_27032643_0"
+      ]
+    },
+    {
+      "edge_id": "6051619373_2782816722_0",
+      "successors_cut_off": [
+        "2782816722_301136251_0"
+      ]
+    },
+    {
+      "edge_id": "6051619383_60902802_0",
+      "successors_cut_off": [
+        "60902802_1780485087_0",
+        "60902802_1780485100_0"
+      ]
+    },
+    {
+      "edge_id": "6051619388_60902811_0",
+      "successors_cut_off": [
+        "60902811_6051619388_0"
+      ]
+    },
+    {
+      "edge_id": "6051792442_9214642605_0",
+      "successors_cut_off": [
+        "9214642605_9214642600_0",
+        "9214642605_9214642609_0"
+      ]
+    },
+    {
+      "edge_id": "60682974_293984930_0",
+      "successors_cut_off": [
+        "293984930_954994868_0"
+      ]
+    },
+    {
+      "edge_id": "60682975_60682981_0",
+      "successors_cut_off": [
+        "60682981_954994039_0",
+        "60682981_954994308_0"
+      ]
+    },
+    {
+      "edge_id": "60682976_60682984_0",
+      "successors_cut_off": [
+        "60682984_954993250_0"
+      ]
+    },
+    {
+      "edge_id": "60683218_1646500093_0",
+      "successors_cut_off": [
+        "1646500093_9188284783_0"
+      ]
+    },
+    {
+      "edge_id": "60683221_60683226_0",
+      "successors_cut_off": [
+        "60683226_694150688_0"
+      ]
+    },
+    {
+      "edge_id": "60683222_60683221_0",
+      "successors_cut_off": [
+        "60683221_60683226_0",
+        "60683221_694150688_0"
+      ]
+    },
+    {
+      "edge_id": "60683655_60683218_0",
+      "successors_cut_off": [
+        "60683218_1646500093_0",
+        "60683218_2453136363_0"
+      ]
+    },
+    {
+      "edge_id": "60786979_3575001205_0",
+      "successors_cut_off": [
+        "3575001205_3575001214_0",
+        "3575001205_9037093042_0"
+      ]
+    },
+    {
+      "edge_id": "60786990_1374678236_0",
+      "successors_cut_off": [
+        "1374678236_1374678216_0",
+        "1374678236_314452328_0"
+      ]
+    },
+    {
+      "edge_id": "60790252_1751665080_0",
+      "successors_cut_off": [
+        "1751665080_60790252_0"
+      ]
+    },
+    {
+      "edge_id": "60889990_1434213847_0",
+      "successors_cut_off": [
+        "1434213847_60891646_0",
+        "1434213847_9217771095_0"
+      ]
+    },
+    {
+      "edge_id": "60889995_60889996_0",
+      "successors_cut_off": [
+        "60889996_60894497_0"
+      ]
+    },
+    {
+      "edge_id": "60889996_3124398607_0",
+      "successors_cut_off": [
+        "3124398607_2987952886_0",
+        "3124398607_318140378_0"
+      ]
+    },
+    {
+      "edge_id": "60889996_60894497_0",
+      "successors_cut_off": [
+        "60894497_3067480424_0",
+        "60894497_60889996_0"
+      ]
+    },
+    {
+      "edge_id": "60891316_4494220224_0",
+      "successors_cut_off": [
+        "4494220224_60891316_0"
+      ]
+    },
+    {
+      "edge_id": "60891316_613831002_0",
+      "successors_cut_off": [
+        "613831002_60891316_0"
+      ]
+    },
+    {
+      "edge_id": "60893001_1596539385_0",
+      "successors_cut_off": [
+        "1596539385_60893001_0"
+      ]
+    },
+    {
+      "edge_id": "60893006_60893005_0",
+      "successors_cut_off": [
+        "60893005_60893006_0"
+      ]
+    },
+    {
+      "edge_id": "60894490_1277475302_0",
+      "successors_cut_off": [
+        "1277475302_1277414112_0"
+      ]
+    },
+    {
+      "edge_id": "60894496_60911685_0",
+      "successors_cut_off": [
+        "60911685_60894496_0"
+      ]
+    },
+    {
+      "edge_id": "60895972_60895984_0",
+      "successors_cut_off": [
+        "60895984_378363_0",
+        "60895984_60895972_0"
+      ]
+    },
+    {
+      "edge_id": "60896008_60896004_0",
+      "successors_cut_off": [
+        "60896004_60896008_0"
+      ]
+    },
+    {
+      "edge_id": "60896008_60896016_0",
+      "successors_cut_off": [
+        "60896016_60896008_0"
+      ]
+    },
+    {
+      "edge_id": "60896040_60896056_0",
+      "successors_cut_off": [
+        "60896056_60896040_0"
+      ]
+    },
+    {
+      "edge_id": "60896063_60896047_0",
+      "successors_cut_off": [
+        "60896047_60896040_0",
+        "60896047_60905265_0"
+      ]
+    },
+    {
+      "edge_id": "60902843_60902846_0",
+      "successors_cut_off": [
+        "60902846_60902843_0"
+      ]
+    },
+    {
+      "edge_id": "60902857_60902859_0",
+      "successors_cut_off": [
+        "60902859_6051792442_0",
+        "60902859_60902887_0"
+      ]
+    },
+    {
+      "edge_id": "60905261_7412705957_0",
+      "successors_cut_off": [
+        "7412705957_60905261_0"
+      ]
+    },
+    {
+      "edge_id": "60911657_60911656_0",
+      "successors_cut_off": [
+        "60911656_60911665_0",
+        "60911656_60911670_0"
+      ]
+    },
+    {
+      "edge_id": "60911670_60906515_0",
+      "successors_cut_off": [
+        "60906515_1739118993_0",
+        "60906515_60906513_0"
+      ]
+    },
+    {
+      "edge_id": "60911674_60911668_0",
+      "successors_cut_off": [
+        "60911668_2524041236_0",
+        "60911668_520159_0"
+      ]
+    },
+    {
+      "edge_id": "60911678_2487024336_0",
+      "successors_cut_off": [
+        "2487024336_1374678191_0",
+        "2487024336_2487024333_0"
+      ]
+    },
+    {
+      "edge_id": "60911690_1448683922_0",
+      "successors_cut_off": [
+        "1448683922_60911690_0"
+      ]
+    },
+    {
+      "edge_id": "60911698_9036356930_0",
+      "successors_cut_off": [
+        "9036356930_30420747_0"
+      ]
+    },
+    {
+      "edge_id": "60911706_60911712_0",
+      "successors_cut_off": [
+        "60911712_60911717_0",
+        "60911712_7373665_0"
+      ]
+    },
+    {
+      "edge_id": "60911717_147413_0",
+      "successors_cut_off": [
+        "147413_147416_0",
+        "147413_60911744_0"
+      ]
+    },
+    {
+      "edge_id": "60911720_60911728_0",
+      "successors_cut_off": [
+        "60911728_60911720_0"
+      ]
+    },
+    {
+      "edge_id": "60911724_60911725_0",
+      "successors_cut_off": [
+        "60911725_60911724_0"
+      ]
+    },
+    {
+      "edge_id": "60911724_60911730_0",
+      "successors_cut_off": [
+        "60911730_60911724_0"
+      ]
+    },
+    {
+      "edge_id": "60911732_60911733_0",
+      "successors_cut_off": [
+        "60911733_60911732_0",
+        "60911733_60911734_0",
+        "60911733_60911752_0"
+      ]
+    },
+    {
+      "edge_id": "60911734_60911735_0",
+      "successors_cut_off": [
+        "60911735_60911734_0",
+        "60911735_60911736_0"
+      ]
+    },
+    {
+      "edge_id": "60911752_2023585550_0",
+      "successors_cut_off": [
+        "2023585550_1338661486_0",
+        "2023585550_1338661576_0"
+      ]
+    },
+    {
+      "edge_id": "60911771_520155_0",
+      "successors_cut_off": [
+        "520155_60911746_0",
+        "520155_60911750_0"
+      ]
+    },
+    {
+      "edge_id": "6121493178_9152927074_0",
+      "successors_cut_off": [
+        "9152927074_6121493170_0",
+        "9152927074_6121493181_0"
+      ]
+    },
+    {
+      "edge_id": "6121493181_9152927082_0",
+      "successors_cut_off": [
+        "9152927082_6121493587_0",
+        "9152927082_9152927083_0"
+      ]
+    },
+    {
+      "edge_id": "6121493587_6121493588_0",
+      "successors_cut_off": [
+        "6121493588_1576319356_0",
+        "6121493588_9152927132_0"
+      ]
+    },
+    {
+      "edge_id": "6137855461_306109470_0",
+      "successors_cut_off": [
+        "306109470_9152927119_0",
+        "306109470_9152927123_0"
+      ]
+    },
+    {
+      "edge_id": "6137876603_598141911_0",
+      "successors_cut_off": [
+        "598141911_148573571_0",
+        "598141911_288587568_0"
+      ]
+    },
+    {
+      "edge_id": "6137876640_6137877024_0",
+      "successors_cut_off": [
+        "6137877024_6137876914_0",
+        "6137877024_6137877018_0"
+      ]
+    },
+    {
+      "edge_id": "6137876657_27591176_0",
+      "successors_cut_off": [
+        "27591176_6121493591_0",
+        "27591176_6137876603_0"
+      ]
+    },
+    {
+      "edge_id": "6137876930_6137876927_0",
+      "successors_cut_off": [
+        "6137876927_6137876603_0",
+        "6137876927_6137876897_0",
+        "6137876927_6137876913_0"
+      ]
+    },
+    {
+      "edge_id": "6137876958_11903331214_0",
+      "successors_cut_off": [
+        "11903331214_6137876958_0"
+      ]
+    },
+    {
+      "edge_id": "6137876976_30486057_0",
+      "successors_cut_off": [
+        "30486057_30486058_0",
+        "30486057_30486570_0"
+      ]
+    },
+    {
+      "edge_id": "6137877004_6137876980_0",
+      "successors_cut_off": [
+        "6137876980_6137876976_0",
+        "6137876980_6137877005_0"
+      ]
+    },
+    {
+      "edge_id": "6137877018_6137877016_0",
+      "successors_cut_off": [
+        "6137877016_5220571139_0",
+        "6137877016_6137877004_0"
+      ]
+    },
+    {
+      "edge_id": "6137877030_6137877051_0",
+      "successors_cut_off": [
+        "6137877051_11452297149_0",
+        "6137877051_6061755657_0"
+      ]
+    },
+    {
+      "edge_id": "6137877055_6137876657_0",
+      "successors_cut_off": [
+        "6137876657_27591176_0",
+        "6137876657_6137876954_0"
+      ]
+    },
+    {
+      "edge_id": "649088405_1275935019_0",
+      "successors_cut_off": [
+        "1275935019_301135670_0"
+      ]
+    },
+    {
+      "edge_id": "6565796308_3153307073_0",
+      "successors_cut_off": [
+        "3153307073_6565796308_0"
+      ]
+    },
+    {
+      "edge_id": "67065689_2694639556_0",
+      "successors_cut_off": [
+        "2694639556_67065689_0"
+      ]
+    },
+    {
+      "edge_id": "67065693_272312506_0",
+      "successors_cut_off": [
+        "272312506_67065693_0"
+      ]
+    },
+    {
+      "edge_id": "67433380_67437669_0",
+      "successors_cut_off": [
+        "67437669_67433380_0"
+      ]
+    },
+    {
+      "edge_id": "67433380_67437697_0",
+      "successors_cut_off": [
+        "67437697_67433380_0"
+      ]
+    },
+    {
+      "edge_id": "6909943586_343846507_0",
+      "successors_cut_off": [
+        "343846507_310990276_0",
+        "343846507_6909943586_0"
+      ]
+    },
+    {
+      "edge_id": "694150688_60683220_0",
+      "successors_cut_off": [
+        "60683220_297787381_0",
+        "60683220_60683655_0"
+      ]
+    },
+    {
+      "edge_id": "694150712_286778246_0",
+      "successors_cut_off": [
+        "286778246_286778247_0"
+      ]
+    },
+    {
+      "edge_id": "694150717_1097961228_0",
+      "successors_cut_off": [
+        "1097961228_287674141_0"
+      ]
+    },
+    {
+      "edge_id": "695060040_695060055_0",
+      "successors_cut_off": [
+        "695060055_695060040_0"
+      ]
+    },
+    {
+      "edge_id": "6966893080_6966893071_0",
+      "successors_cut_off": [
+        "6966893071_5347922854_0"
+      ]
+    },
+    {
+      "edge_id": "6966901387_91910918_0",
+      "successors_cut_off": [
+        "91910918_5347922856_0"
+      ]
+    },
+    {
+      "edge_id": "7041867542_4359025139_0",
+      "successors_cut_off": [
+        "4359025139_12558494727_0"
+      ]
+    },
+    {
+      "edge_id": "7048859852_7041867533_0",
+      "successors_cut_off": [
+        "7041867533_7041867542_0",
+        "7041867533_9460653479_0"
+      ]
+    },
+    {
+      "edge_id": "71611103_11132694164_0",
+      "successors_cut_off": [
+        "11132694164_71611103_0"
+      ]
+    },
+    {
+      "edge_id": "71611111_71611442_0",
+      "successors_cut_off": [
+        "71611442_71611111_0"
+      ]
+    },
+    {
+      "edge_id": "71611359_2925853686_0",
+      "successors_cut_off": [
+        "2925853686_71611359_0"
+      ]
+    },
+    {
+      "edge_id": "71611538_1716688133_0",
+      "successors_cut_off": [
+        "1716688133_71611538_0"
+      ]
+    },
+    {
+      "edge_id": "718403021_28397710_0",
+      "successors_cut_off": [
+        "28397710_718403021_0"
+      ]
+    },
+    {
+      "edge_id": "719650265_28397705_0",
+      "successors_cut_off": [
+        "28397705_28397704_0"
+      ]
+    },
+    {
+      "edge_id": "7373665_1338661498_0",
+      "successors_cut_off": [
+        "1338661498_1338661508_0",
+        "1338661498_9146766070_0"
+      ]
+    },
+    {
+      "edge_id": "7373670_983019640_0",
+      "successors_cut_off": [
+        "983019640_1305379809_0",
+        "983019640_60128119_0"
+      ]
+    },
+    {
+      "edge_id": "7373673_1375971933_0",
+      "successors_cut_off": [
+        "1375971933_25587532_0"
+      ]
+    },
+    {
+      "edge_id": "7532496129_7532496152_0",
+      "successors_cut_off": [
+        "7532496152_1338661557_0",
+        "7532496152_559960490_0"
+      ]
+    },
+    {
+      "edge_id": "7532496168_60789851_0",
+      "successors_cut_off": [
+        "60789851_1304282393_0"
+      ]
+    },
+    {
+      "edge_id": "7545352957_7545352958_0",
+      "successors_cut_off": [
+        "7545352958_489116_0",
+        "7545352958_7545352962_0"
+      ]
+    },
+    {
+      "edge_id": "7545352971_7545353567_0",
+      "successors_cut_off": [
+        "7545353567_7545352981_0",
+        "7545353567_7545353488_0"
+      ]
+    },
+    {
+      "edge_id": "7545353488_7545353599_0",
+      "successors_cut_off": [
+        "7545353599_489120_0",
+        "7545353599_7545353608_0"
+      ]
+    },
+    {
+      "edge_id": "7545353583_489115_0",
+      "successors_cut_off": [
+        "489115_331884737_0",
+        "489115_489116_0"
+      ]
+    },
+    {
+      "edge_id": "7545353599_7545353608_0",
+      "successors_cut_off": [
+        "7545353608_135468307_0",
+        "7545353608_7545353618_0"
+      ]
+    },
+    {
+      "edge_id": "7546189262_3829936917_0",
+      "successors_cut_off": [
+        "3829936917_153344793_0",
+        "3829936917_3829936916_0"
+      ]
+    },
+    {
+      "edge_id": "7546189290_133217141_0",
+      "successors_cut_off": [
+        "133217141_153345629_0",
+        "133217141_7546189262_0"
+      ]
+    },
+    {
+      "edge_id": "7546189292_7546189290_0",
+      "successors_cut_off": [
+        "7546189290_310128561_0"
+      ]
+    },
+    {
+      "edge_id": "7644389501_5840553183_0",
+      "successors_cut_off": [
+        "5840553183_3764228305_0"
+      ]
+    },
+    {
+      "edge_id": "79488366_313744678_0",
+      "successors_cut_off": [
+        "313744678_79488366_0"
+      ]
+    },
+    {
+      "edge_id": "79488366_386175112_0",
+      "successors_cut_off": [
+        "386175112_79488366_0"
+      ]
+    },
+    {
+      "edge_id": "79495284_26038988_0",
+      "successors_cut_off": [
+        "26038988_26025184_0",
+        "26038988_26193170_0"
+      ]
+    },
+    {
+      "edge_id": "79495289_401724906_0",
+      "successors_cut_off": [
+        "401724906_79495289_0"
+      ]
+    },
+    {
+      "edge_id": "79495292_79496749_0",
+      "successors_cut_off": [
+        "79496749_79495292_0"
+      ]
+    },
+    {
+      "edge_id": "79496924_8392019025_0",
+      "successors_cut_off": [
+        "8392019025_79496924_0"
+      ]
+    },
+    {
+      "edge_id": "828586859_60682974_0",
+      "successors_cut_off": [
+        "60682974_293984930_0",
+        "60682974_9027008516_0"
+      ]
+    },
+    {
+      "edge_id": "8314649744_6137877039_0",
+      "successors_cut_off": [
+        "6137877039_6137877036_0",
+        "6137877039_6137877040_0"
+      ]
+    },
+    {
+      "edge_id": "845275749_845275747_0",
+      "successors_cut_off": [
+        "845275747_845275749_0"
+      ]
+    },
+    {
+      "edge_id": "845275757_845275755_0",
+      "successors_cut_off": [
+        "845275755_845275757_0"
+      ]
+    },
+    {
+      "edge_id": "845275762_845275761_0",
+      "successors_cut_off": [
+        "845275761_845275762_0"
+      ]
+    },
+    {
+      "edge_id": "85997462_502014332_0",
+      "successors_cut_off": [
+        "502014332_85997462_0"
+      ]
+    },
+    {
+      "edge_id": "85997467_85997455_0",
+      "successors_cut_off": [
+        "85997455_85997449_0",
+        "85997455_85997452_0"
+      ]
+    },
+    {
+      "edge_id": "85999506_85999516_0",
+      "successors_cut_off": [
+        "85999516_85999506_0"
+      ]
+    },
+    {
+      "edge_id": "85999508_1068790464_0",
+      "successors_cut_off": [
+        "1068790464_85999508_0"
+      ]
+    },
+    {
+      "edge_id": "85999511_85999513_0",
+      "successors_cut_off": [
+        "85999513_85999511_0"
+      ]
+    },
+    {
+      "edge_id": "8622257782_1482501435_0",
+      "successors_cut_off": [
+        "1482501435_8622257782_0"
+      ]
+    },
+    {
+      "edge_id": "8690832932_9712080629_0",
+      "successors_cut_off": [
+        "9712080629_8690832932_0"
+      ]
+    },
+    {
+      "edge_id": "8690832933_16967316_0",
+      "successors_cut_off": [
+        "16967316_8690832933_0"
+      ]
+    },
+    {
+      "edge_id": "8703192008_2465991693_0",
+      "successors_cut_off": [
+        "2465991693_8703192008_0"
+      ]
+    },
+    {
+      "edge_id": "8706553025_8706000431_0",
+      "successors_cut_off": [
+        "8706000431_2388781345_0",
+        "8706000431_25658728_0"
+      ]
+    },
+    {
+      "edge_id": "8709518476_10909679270_0",
+      "successors_cut_off": [
+        "10909679270_10657802561_0",
+        "10909679270_318684151_0"
+      ]
+    },
+    {
+      "edge_id": "8712779926_8712821190_0",
+      "successors_cut_off": [
+        "8712821190_135709758_0",
+        "8712821190_8712821188_0"
+      ]
+    },
+    {
+      "edge_id": "8712779927_8712779926_0",
+      "successors_cut_off": [
+        "8712779926_135709753_0",
+        "8712779926_8712821190_0"
+      ]
+    },
+    {
+      "edge_id": "8712821190_135709758_0",
+      "successors_cut_off": [
+        "135709758_135704976_0",
+        "135709758_135709753_0"
+      ]
+    },
+    {
+      "edge_id": "8722747919_1913168786_0",
+      "successors_cut_off": [
+        "1913168786_1913168799_0",
+        "1913168786_99139609_0"
+      ]
+    },
+    {
+      "edge_id": "8722747921_8722747939_0",
+      "successors_cut_off": [
+        "8722747939_30420898_0"
+      ]
+    },
+    {
+      "edge_id": "8725335586_2388781357_0",
+      "successors_cut_off": [
+        "2388781357_33541067_0",
+        "2388781357_8706553025_0"
+      ]
+    },
+    {
+      "edge_id": "8863402510_292565228_0",
+      "successors_cut_off": [
+        "292565228_1073105206_0",
+        "292565228_25688838_0"
+      ]
+    },
+    {
+      "edge_id": "8863421801_25688840_0",
+      "successors_cut_off": [
+        "25688840_27032642_0",
+        "25688840_663949200_0"
+      ]
+    },
+    {
+      "edge_id": "89348867_1311283000_0",
+      "successors_cut_off": [
+        "1311283000_89348867_0"
+      ]
+    },
+    {
+      "edge_id": "89348914_10294687824_0",
+      "successors_cut_off": [
+        "10294687824_89348914_0"
+      ]
+    },
+    {
+      "edge_id": "8964515188_6966893080_0",
+      "successors_cut_off": [
+        "6966893080_6966893071_0",
+        "6966893080_8964515267_0"
+      ]
+    },
+    {
+      "edge_id": "8964515259_6966901387_0",
+      "successors_cut_off": [
+        "6966901387_8964515276_0",
+        "6966901387_91910918_0"
+      ]
+    },
+    {
+      "edge_id": "8964515267_6966893077_0",
+      "successors_cut_off": [
+        "6966893077_1076862892_0",
+        "6966893077_8964515259_0"
+      ]
+    },
+    {
+      "edge_id": "8964515276_8964515275_0",
+      "successors_cut_off": [
+        "8964515275_11209825484_0",
+        "8964515275_8964515188_0"
+      ]
+    },
+    {
+      "edge_id": "9027008516_60682976_0",
+      "successors_cut_off": [
+        "60682976_60682975_0",
+        "60682976_60682984_0"
+      ]
+    },
+    {
+      "edge_id": "9036346207_520157_0",
+      "successors_cut_off": [
+        "520157_60911720_0"
+      ]
+    },
+    {
+      "edge_id": "9036356930_9036346207_0",
+      "successors_cut_off": [
+        "9036346207_60911700_0"
+      ]
+    },
+    {
+      "edge_id": "9041848344_9041848505_0",
+      "successors_cut_off": [
+        "9041848505_9041848344_0"
+      ]
+    },
+    {
+      "edge_id": "90683891_3204396954_0",
+      "successors_cut_off": [
+        "3204396954_1577473424_0"
+      ]
+    },
+    {
+      "edge_id": "9128834647_9128834646_0",
+      "successors_cut_off": [
+        "9128834646_9128834647_0"
+      ]
+    },
+    {
+      "edge_id": "9128834655_9128834640_0",
+      "successors_cut_off": [
+        "9128834640_9128834655_0"
+      ]
+    },
+    {
+      "edge_id": "9128834655_9128834664_0",
+      "successors_cut_off": [
+        "9128834664_9128834647_0",
+        "9128834664_9128834661_0"
+      ]
+    },
+    {
+      "edge_id": "9128834656_9128834655_0",
+      "successors_cut_off": [
+        "9128834655_9128834640_0"
+      ]
+    },
+    {
+      "edge_id": "9128834661_9128834659_0",
+      "successors_cut_off": [
+        "9128834659_5840502379_0",
+        "9128834659_9128834656_0"
+      ]
+    },
+    {
+      "edge_id": "9132394969_138231908_0",
+      "successors_cut_off": [
+        "138231908_96144578_0"
+      ]
+    },
+    {
+      "edge_id": "9132394969_138232074_0",
+      "successors_cut_off": [
+        "138232074_9132394969_0"
+      ]
+    },
+    {
+      "edge_id": "9144075275_130929198_0",
+      "successors_cut_off": [
+        "130929198_9144075275_0"
+      ]
+    },
+    {
+      "edge_id": "9144075275_292891453_0",
+      "successors_cut_off": [
+        "292891453_9144075275_0"
+      ]
+    },
+    {
+      "edge_id": "9152927057_428592610_0",
+      "successors_cut_off": [
+        "428592610_147393_0",
+        "428592610_60896066_0"
+      ]
+    },
+    {
+      "edge_id": "9152927082_9152927083_0",
+      "successors_cut_off": [
+        "9152927083_9152927123_0"
+      ]
+    },
+    {
+      "edge_id": "9152927119_329965213_0",
+      "successors_cut_off": [
+        "329965213_329965220_0"
+      ]
+    },
+    {
+      "edge_id": "9152927123_9152927083_0",
+      "successors_cut_off": [
+        "9152927083_6121493587_0"
+      ]
+    },
+    {
+      "edge_id": "9152927132_6121493175_0",
+      "successors_cut_off": [
+        "6121493175_6121493178_0",
+        "6121493175_6768060796_0"
+      ]
+    },
+    {
+      "edge_id": "91611269_10909679300_0",
+      "successors_cut_off": [
+        "10909679300_10909679299_0",
+        "10909679300_91611268_0"
+      ]
+    },
+    {
+      "edge_id": "91615275_8710974792_0",
+      "successors_cut_off": [
+        "8710974792_1759741980_0",
+        "8710974792_91615277_0"
+      ]
+    },
+    {
+      "edge_id": "91615277_105980153_0",
+      "successors_cut_off": [
+        "105980153_312999719_0",
+        "105980153_3396224374_0"
+      ]
+    },
+    {
+      "edge_id": "9163431220_30486707_0",
+      "successors_cut_off": [
+        "30486707_30486733_0",
+        "30486707_3548135046_0"
+      ]
+    },
+    {
+      "edge_id": "91640157_1304848092_0",
+      "successors_cut_off": [
+        "1304848092_94609257_0"
+      ]
+    },
+    {
+      "edge_id": "9176641555_290220734_0",
+      "successors_cut_off": [
+        "290220734_30179872_0"
+      ]
+    },
+    {
+      "edge_id": "91795073_10125540286_0",
+      "successors_cut_off": [
+        "10125540286_91795073_0"
+      ]
+    },
+    {
+      "edge_id": "91795074_2165575575_0",
+      "successors_cut_off": [
+        "2165575575_91795074_0"
+      ]
+    },
+    {
+      "edge_id": "91795074_91795120_0",
+      "successors_cut_off": [
+        "91795120_91795074_0"
+      ]
+    },
+    {
+      "edge_id": "91795151_91908741_0",
+      "successors_cut_off": [
+        "91908741_91795151_0"
+      ]
+    },
+    {
+      "edge_id": "91795180_158674212_0",
+      "successors_cut_off": [
+        "158674212_158674216_0"
+      ]
+    },
+    {
+      "edge_id": "9188284783_1646500093_0",
+      "successors_cut_off": [
+        "1646500093_9188284766_0"
+      ]
+    },
+    {
+      "edge_id": "91910918_5347922856_0",
+      "successors_cut_off": [
+        "5347922856_91910918_0"
+      ]
+    },
+    {
+      "edge_id": "9203753665_1027776730_0",
+      "successors_cut_off": [
+        "1027776730_1027776916_0",
+        "1027776730_26024500_0"
+      ]
+    },
+    {
+      "edge_id": "9214642600_1699472396_0",
+      "successors_cut_off": [
+        "1699472396_9214642600_0"
+      ]
+    },
+    {
+      "edge_id": "9214642609_6051792441_0",
+      "successors_cut_off": [
+        "6051792441_9214642613_0",
+        "6051792441_9214642647_0"
+      ]
+    },
+    {
+      "edge_id": "9214642613_6768060852_0",
+      "successors_cut_off": [
+        "6768060852_299823840_0",
+        "6768060852_60902857_0"
+      ]
+    },
+    {
+      "edge_id": "9217771095_60889993_0",
+      "successors_cut_off": [
+        "60889993_1277475370_0",
+        "60889993_60889995_0"
+      ]
+    },
+    {
+      "edge_id": "9223031236_145188152_0",
+      "successors_cut_off": [
+        "145188152_9223031236_0"
+      ]
+    },
+    {
+      "edge_id": "9225814580_9225814579_0",
+      "successors_cut_off": [
+        "9225814579_60905255_0",
+        "9225814579_9225814578_0"
+      ]
+    },
+    {
+      "edge_id": "9228282034_60911679_0",
+      "successors_cut_off": [
+        "60911679_60911677_0",
+        "60911679_7373668_0"
+      ]
+    },
+    {
+      "edge_id": "9249508225_9249508227_0",
+      "successors_cut_off": [
+        "9249508227_12529445895_0",
+        "9249508227_9249508230_0"
+      ]
+    },
+    {
+      "edge_id": "9249508230_6042795369_0",
+      "successors_cut_off": [
+        "6042795369_12529445896_0",
+        "6042795369_6042795372_0"
+      ]
+    },
+    {
+      "edge_id": "9249508250_5876791542_0",
+      "successors_cut_off": [
+        "5876791542_11959266100_0"
+      ]
+    },
+    {
+      "edge_id": "9249508280_6033826919_0",
+      "successors_cut_off": [
+        "6033826919_5840502379_0"
+      ]
+    },
+    {
+      "edge_id": "9249508310_4649967172_0",
+      "successors_cut_off": [
+        "4649967172_259428433_0"
+      ]
+    },
+    {
+      "edge_id": "9250883576_9203753665_0",
+      "successors_cut_off": [
+        "9203753665_1027776730_0",
+        "9203753665_9250883576_0"
+      ]
+    },
+    {
+      "edge_id": "9250883576_9444827079_0",
+      "successors_cut_off": [
+        "9444827079_9250883576_0"
+      ]
+    },
+    {
+      "edge_id": "9370857359_26022225_0",
+      "successors_cut_off": [
+        "26022225_26022224_0"
+      ]
+    },
+    {
+      "edge_id": "9439210780_9037093028_0",
+      "successors_cut_off": [
+        "9037093028_1305379743_0",
+        "9037093028_30420757_0"
+      ]
+    },
+    {
+      "edge_id": "94609257_1304848092_0",
+      "successors_cut_off": [
+        "1304848092_91640157_0"
+      ]
+    },
+    {
+      "edge_id": "94609738_135738045_0",
+      "successors_cut_off": [
+        "135738045_94609738_0"
+      ]
+    },
+    {
+      "edge_id": "947045459_947045463_0",
+      "successors_cut_off": [
+        "947045463_947045459_0"
+      ]
+    },
+    {
+      "edge_id": "947045462_1338924686_0",
+      "successors_cut_off": [
+        "1338924686_947045462_0"
+      ]
+    },
+    {
+      "edge_id": "947045480_947045474_0",
+      "successors_cut_off": [
+        "947045474_947045480_0"
+      ]
+    },
+    {
+      "edge_id": "9502852425_138365478_0",
+      "successors_cut_off": [
+        "138365478_1753135594_0",
+        "138365478_3377817871_0"
+      ]
+    },
+    {
+      "edge_id": "954993161_954994238_0",
+      "successors_cut_off": [
+        "954994238_264570078_0",
+        "954994238_954994606_0"
+      ]
+    },
+    {
+      "edge_id": "954993250_60682984_0",
+      "successors_cut_off": [
+        "60682984_60682975_0"
+      ]
+    },
+    {
+      "edge_id": "954993913_954994850_0",
+      "successors_cut_off": [
+        "954994850_954993020_0",
+        "954994850_954994987_0"
+      ]
+    },
+    {
+      "edge_id": "954994308_60682977_0",
+      "successors_cut_off": [
+        "60682977_828586859_0",
+        "60682977_956138668_0"
+      ]
+    },
+    {
+      "edge_id": "954994545_3149058390_0",
+      "successors_cut_off": [
+        "3149058390_954994545_0"
+      ]
+    },
+    {
+      "edge_id": "954994606_954993101_0",
+      "successors_cut_off": [
+        "954993101_60682990_0",
+        "954993101_954993913_0"
+      ]
+    },
+    {
+      "edge_id": "954994868_293984930_0",
+      "successors_cut_off": [
+        "293984930_9027008516_0"
+      ]
+    },
+    {
+      "edge_id": "954994987_60682988_0",
+      "successors_cut_off": [
+        "60682988_954993161_0",
+        "60682988_954993250_0"
+      ]
+    },
+    {
+      "edge_id": "96091336_96091357_0",
+      "successors_cut_off": [
+        "96091357_96091336_0"
+      ]
+    },
+    {
+      "edge_id": "96091377_96091370_0",
+      "successors_cut_off": [
+        "96091370_377901_0"
+      ]
+    },
+    {
+      "edge_id": "96091403_96091477_0",
+      "successors_cut_off": [
+        "96091477_96091494_0"
+      ]
+    },
+    {
+      "edge_id": "96091403_96091547_0",
+      "successors_cut_off": [
+        "96091547_96091403_0"
+      ]
+    },
+    {
+      "edge_id": "96091477_96091494_0",
+      "successors_cut_off": [
+        "96091494_96091499_0"
+      ]
+    },
+    {
+      "edge_id": "96091494_96091477_0",
+      "successors_cut_off": [
+        "96091477_96091403_0"
+      ]
+    },
+    {
+      "edge_id": "96091494_96091499_0",
+      "successors_cut_off": [
+        "96091499_96091515_0"
+      ]
+    },
+    {
+      "edge_id": "96091499_96091494_0",
+      "successors_cut_off": [
+        "96091494_96091477_0"
+      ]
+    },
+    {
+      "edge_id": "96091499_96091515_0",
+      "successors_cut_off": [
+        "96091515_96091499_0"
+      ]
+    },
+    {
+      "edge_id": "96091515_96091499_0",
+      "successors_cut_off": [
+        "96091499_96091494_0"
+      ]
+    },
+    {
+      "edge_id": "96144174_355158675_0",
+      "successors_cut_off": [
+        "355158675_1709378055_0"
+      ]
+    },
+    {
+      "edge_id": "96144191_96144210_0",
+      "successors_cut_off": [
+        "96144210_96144235_0"
+      ]
+    },
+    {
+      "edge_id": "96144208_96144191_0",
+      "successors_cut_off": [
+        "96144191_133200435_0"
+      ]
+    },
+    {
+      "edge_id": "96144210_96144213_0",
+      "successors_cut_off": [
+        "96144213_133211370_0"
+      ]
+    },
+    {
+      "edge_id": "96144213_96144208_0",
+      "successors_cut_off": [
+        "96144208_8869249175_0"
+      ]
+    },
+    {
+      "edge_id": "96144235_1416153127_0",
+      "successors_cut_off": [
+        "1416153127_96144235_0"
+      ]
+    },
+    {
+      "edge_id": "96144246_96144244_0",
+      "successors_cut_off": [
+        "96144244_3269397340_0"
+      ]
+    },
+    {
+      "edge_id": "96144246_974496991_0",
+      "successors_cut_off": [
+        "974496991_96144246_0"
+      ]
+    },
+    {
+      "edge_id": "96144258_331324003_0",
+      "successors_cut_off": [
+        "331324003_96144258_0"
+      ]
+    },
+    {
+      "edge_id": "96144274_96144243_0",
+      "successors_cut_off": [
+        "96144243_3269397341_0"
+      ]
+    },
+    {
+      "edge_id": "96144577_130930572_0",
+      "successors_cut_off": [
+        "130930572_96144577_0"
+      ]
+    },
+    {
+      "edge_id": "96154397_307866702_0",
+      "successors_cut_off": [
+        "307866702_96154397_0"
+      ]
+    },
+    {
+      "edge_id": "96155589_307866687_0",
+      "successors_cut_off": [
+        "307866687_96155589_0"
+      ]
+    },
+    {
+      "edge_id": "96155589_96154630_0",
+      "successors_cut_off": [
+        "96154630_96155589_0"
+      ]
+    },
+    {
+      "edge_id": "96155589_96155587_0",
+      "successors_cut_off": [
+        "96155587_96155589_0"
+      ]
+    },
+    {
+      "edge_id": "96156261_8710044097_0",
+      "successors_cut_off": [
+        "8710044097_10161422038_0"
+      ]
+    },
+    {
+      "edge_id": "96156265_96156274_0",
+      "successors_cut_off": [
+        "96156274_2441612874_0",
+        "96156274_2441612874_1"
+      ]
+    },
+    {
+      "edge_id": "96156690_5894434644_0",
+      "successors_cut_off": [
+        "5894434644_96156690_0"
+      ]
+    },
+    {
+      "edge_id": "96156690_96156265_0",
+      "successors_cut_off": [
+        "96156265_96156261_0"
+      ]
+    },
+    {
+      "edge_id": "96523394_96523573_0",
+      "successors_cut_off": [
+        "96523573_96523394_0"
+      ]
+    },
+    {
+      "edge_id": "96523439_973134726_0",
+      "successors_cut_off": [
+        "973134726_96523394_0",
+        "973134726_96523570_0"
+      ]
+    },
+    {
+      "edge_id": "96528278_1809420231_0",
+      "successors_cut_off": [
+        "1809420231_96528278_0"
+      ]
+    },
+    {
+      "edge_id": "96528297_96524026_0",
+      "successors_cut_off": [
+        "96524026_96528297_0"
+      ]
+    },
+    {
+      "edge_id": "96807006_1306883460_0",
+      "successors_cut_off": [
+        "1306883460_96807006_0"
+      ]
+    },
+    {
+      "edge_id": "96807008_1306883506_0",
+      "successors_cut_off": [
+        "1306883506_96807008_0"
+      ]
+    },
+    {
+      "edge_id": "96809425_331322931_0",
+      "successors_cut_off": [
+        "331322931_96809425_0"
+      ]
+    },
+    {
+      "edge_id": "96811673_336681288_0",
+      "successors_cut_off": [
+        "336681288_96811673_0"
+      ]
+    },
+    {
+      "edge_id": "96812096_13019100229_0",
+      "successors_cut_off": [
+        "13019100229_96812096_0"
+      ]
+    },
+    {
+      "edge_id": "96815031_96815039_0",
+      "successors_cut_off": [
+        "96815039_96815031_0"
+      ]
+    },
+    {
+      "edge_id": "96818575_96818831_0",
+      "successors_cut_off": [
+        "96818831_96818575_0"
+      ]
+    },
+    {
+      "edge_id": "96819184_1300589076_0",
+      "successors_cut_off": [
+        "1300589076_96819184_0"
+      ]
+    },
+    {
+      "edge_id": "96819538_305061134_0",
+      "successors_cut_off": [
+        "305061134_96819538_0"
+      ]
+    },
+    {
+      "edge_id": "96820932_457141886_0",
+      "successors_cut_off": [
+        "457141886_96820932_0"
+      ]
+    },
+    {
+      "edge_id": "96820936_1574976467_0",
+      "successors_cut_off": [
+        "1574976467_96820936_0"
+      ]
+    },
+    {
+      "edge_id": "96820940_305676932_0",
+      "successors_cut_off": [
+        "305676932_96820940_0"
+      ]
+    },
+    {
+      "edge_id": "973134704_1301362393_0",
+      "successors_cut_off": [
+        "1301362393_973134704_0"
+      ]
+    },
+    {
+      "edge_id": "973134704_973134707_0",
+      "successors_cut_off": [
+        "973134707_973134704_0"
+      ]
+    },
+    {
+      "edge_id": "973134717_973134702_0",
+      "successors_cut_off": [
+        "973134702_973134717_0"
+      ]
+    },
+    {
+      "edge_id": "973134779_471390475_0",
+      "successors_cut_off": [
+        "471390475_135734770_0",
+        "471390475_973134710_0"
+      ]
+    },
+    {
+      "edge_id": "9738920299_158637985_0",
+      "successors_cut_off": [
+        "158637985_299246313_0"
+      ]
+    },
+    {
+      "edge_id": "9765247946_314757081_0",
+      "successors_cut_off": [
+        "314757081_1629179235_0",
+        "314757081_315043857_0"
+      ]
+    },
+    {
+      "edge_id": "97734057_331884738_0",
+      "successors_cut_off": [
+        "331884738_7545352962_0",
+        "331884738_7545352971_0"
+      ]
+    },
+    {
+      "edge_id": "9945755723_26038599_0",
+      "successors_cut_off": [
+        "26038599_26038593_0",
+        "26038599_9041848344_0"
+      ]
+    },
+    {
+      "edge_id": "9945755724_9945755723_0",
+      "successors_cut_off": [
+        "9945755723_71611103_0"
+      ]
+    },
+    {
+      "edge_id": "9955312448_1277414114_0",
+      "successors_cut_off": [
+        "1277414114_1780484771_0",
+        "1277414114_5473743567_0"
+      ]
+    }
+  ],
+  "sources": {
+    "sumo/net.net.xml": "64d7a909d93633b227f4706612092cad618a7d574ef42d65d03e9aca6b43dd94",
+    "web/data/graph.graphml": "651b0a841e0d4ea4107411e8ba34d04a0b85c853a2296e3ffcf404ba9099d69a",
+    "web/data/network.geojson": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+  },
+  "stage": "closure_integrity_plan_stage_4",
+  "wall_seconds": 0.34
+}

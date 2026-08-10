@@ -109,11 +109,71 @@ def without_edges(adjacency: Mapping[str, Sequence[str]],
     return out
 
 
+def _is_internal(edge_id: str) -> bool:
+    """SUMO's synthetic junction lanes, which carry a leading colon."""
+    return edge_id.startswith(":")
+
+
+def collapse_internal(adjacency: Mapping[str, Sequence[str]]
+                      ) -> dict[str, list[str]]:
+    """Real-edge → real-edge successors, resolving internal junction hops.
+
+    NECESSARY, not tidiness. `run_scenario.build_edge_graph` returns SUMO's
+    raw connection graph, in which a real connection A→B is stored as
+    A→:j_0→B: on the deployed network 20 522 of 27 623 sources are internal.
+    A one-hop question asked on that graph is wrong in a way that always
+    answers "fine" — remove A and the internal edge still points at B, so B
+    looks reachable when nothing can get to it any more.
+
+    That is not hypothetical. The FIRST version of this check ran against the
+    raw graph and reported zero cut-off successors for
+    `60786979_3575001205_0`, the exact edge `CLAUDE.md` documents as severing
+    63 edges because node 3575001205 has one incoming connection in the whole
+    network. A check that cannot see its own motivating case is inert.
+
+    `reachable()` is deliberately NOT given this graph: path-finding must
+    traverse internals, and does so correctly. Only the one-hop predecessor
+    question needs them collapsed.
+    """
+    collapsed: dict[str, list[str]] = {}
+    for source, targets in adjacency.items():
+        if _is_internal(source):
+            continue
+        real: set[str] = set()
+        seen: set[str] = set()
+        stack = list(targets)
+        while stack:
+            target = stack.pop()
+            if target in seen:
+                continue
+            seen.add(target)
+            if _is_internal(target):
+                stack.extend(adjacency.get(target, ()))
+            else:
+                real.add(target)
+        if real:
+            collapsed[source] = sorted(real)
+    return collapsed
+
+
+def real_predecessors(collapsed: Mapping[str, Sequence[str]]
+                      ) -> dict[str, set[str]]:
+    """Inverse of `collapse_internal` — every real edge's real predecessors.
+
+    Computed once for a whole candidate pool so each candidate's check is a
+    set lookup rather than another pass over 37 000 connections.
+    """
+    predecessors: dict[str, set[str]] = {}
+    for source, targets in collapsed.items():
+        for target in targets:
+            predecessors.setdefault(target, set()).add(source)
+    return predecessors
+
+
 def successors_cut_off(edge_id: str,
-                       adjacency_with: Mapping[str, Sequence[str]],
-                       adjacency_without: Mapping[str, Sequence[str]]
-                       ) -> tuple[str, ...]:
-    """Edges reachable ONLY through `edge_id` in one hop — pure topology.
+                       collapsed: Mapping[str, Sequence[str]],
+                       predecessors: Mapping[str, set]) -> tuple[str, ...]:
+    """Edges reachable ONLY through `edge_id` — pure topology, no demand.
 
     This is the Skånegatan/Engelbrektsgatan shape recorded in `CLAUDE.md`:
     node 3575001205 had exactly ONE incoming connection in the whole network,
@@ -122,23 +182,20 @@ def successors_cut_off(edge_id: str,
     a demand-only check would miss it on any quarter where nothing drove there.
 
     Deliberately one hop and not a component analysis: a successor that keeps
-    another incoming connection is reachable by definition, and one that keeps
-    none is unreachable by definition. Anything beyond that is already covered
-    by the per-vehicle destination check.
+    another real predecessor is reachable by definition, and one that keeps
+    none is unreachable by definition. Anything further is already covered by
+    the per-vehicle destination check, which is a full graph search.
     """
-    downstream = set(adjacency_with.get(edge_id, ()))
-    if not downstream:
-        return ()
-    still_reachable = {target
-                       for source, targets in adjacency_without.items()
-                       if source != edge_id
-                       for target in targets}
-    return tuple(sorted(downstream - still_reachable))
+    return tuple(sorted(
+        target for target in collapsed.get(edge_id, ())
+        if not (predecessors.get(target, set()) - {edge_id})))
 
 
 def evaluate_edge(edge_id: str, *,
                   exposure_by_variant: Mapping[str, Mapping],
                   adjacency_with: Mapping[str, Sequence[str]],
+                  collapsed: Mapping[str, Sequence[str]] | None = None,
+                  predecessors: Mapping[str, set] | None = None,
                   reachable: Callable[..., bool]) -> SurvivabilityReport:
     """Decide one edge from already-streamed exposure and the unclosed graph.
 
@@ -159,7 +216,14 @@ def evaluate_edge(edge_id: str, *,
         raise ValueError(f"no demand variant was supplied for {edge_id}")
     closed = {edge_id}
     adjacency_without = without_edges(adjacency_with, closed)
-    cut_off = successors_cut_off(edge_id, adjacency_with, adjacency_without)
+    # Derived here for a single-edge caller; `evaluate_pool` computes both once
+    # for the whole pool, because collapsing 37 000 connections per candidate
+    # would be the dominant cost of a freeze.
+    if collapsed is None:
+        collapsed = collapse_internal(adjacency_with)
+    if predecessors is None:
+        predecessors = real_predecessors(collapsed)
+    cut_off = successors_cut_off(edge_id, collapsed, predecessors)
 
     # One reachability answer per DISTINCT approach/destination pair, shared
     # across variants: the same pair cannot have two answers on one network,
@@ -223,8 +287,12 @@ def evaluate_pool(edge_ids: Sequence[str], *, archive_path: Path,
             streamed[edge][variant] = found.get(edge, _EMPTY_EXPOSURE)
 
     adjacency_with = build_adjacency(set())
+    collapsed = collapse_internal(adjacency_with)
+    predecessors = real_predecessors(collapsed)
     return {edge: evaluate_edge(edge,
                                 exposure_by_variant=streamed[edge],
                                 adjacency_with=adjacency_with,
+                                collapsed=collapsed,
+                                predecessors=predecessors,
                                 reachable=reachable)
             for edge in wanted}
