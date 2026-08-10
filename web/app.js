@@ -2049,8 +2049,12 @@
 
         const MONTHLY_PHASE_LABELS = {
           policy: 'Startar',
+          preflight: 'Mäter sökningens storlek',
           enumerate: 'Räknar upp lagliga scheman',
           screen: 'Väljer kandidater',
+          cost_units: 'Beräknar dagskostnader',
+          cost_parents: 'Summerar kostnad per schema',
+          health_scan: 'Kontrollerar körbarhet',
           prepare_backend: 'Bygger kalibrerat underlag per datum (~6 min/datum första gången)',
           pilot: 'Pilotkörningar i SUMO',
           finalists: 'Finalistkörningar i SUMO',
@@ -2059,15 +2063,40 @@
           publish: 'Publicerar resultat',
         };
 
+        // What the long phases are actually doing, when the search says so.
+        // A bare X/Y tells the user how far it has come but not what it is
+        // spending the time on; a cache hit and a current cutoff do.
+        function monthlyProgressDetail(detail) {
+          if (!detail || typeof detail !== 'object') return '';
+          const parts = [];
+          if (Number.isFinite(detail.costed) && Number.isFinite(detail.cost_total)) {
+            parts.push(`${detail.costed}/${detail.cost_total} kostnadsberäknade`);
+          }
+          if (Number.isFinite(detail.cache_hits)) {
+            parts.push(`${detail.cache_hits} cacheträffar`);
+          }
+          if (Number.isFinite(detail.verified) && Number.isFinite(detail.total)) {
+            parts.push(`${detail.verified}/${detail.total} SUMO-verifierade`);
+          }
+          if (Number.isFinite(detail.cutoff)) {
+            parts.push(`gräns ${detail.cutoff.toFixed(2)} fordonstimmar`);
+          }
+          if (Number.isFinite(detail.parent_schedules) && !parts.length) {
+            parts.push(`${detail.parent_schedules} scheman`);
+          }
+          return parts.length ? ` · ${parts.join(' · ')}` : '';
+        }
+
         function updateMonthlyProgress(status) {
           const progress = status.progress || {};
           const label = MONTHLY_PHASE_LABELS[progress.phase] || 'Söker';
           const counts = progress.total
             ? ` ${progress.completed}/${progress.total}` : '';
+          const detail = monthlyProgressDetail(progress.detail);
           btnMonthlyRun.textContent = `Söker… (${status.elapsed_s || 0}s)`;
           monthlyProgress.hidden = false;
           monthlyProgress.textContent = status.status === 'cancelling'
-            ? 'Avbryter…' : `${label}${counts}`;
+            ? 'Avbryter…' : `${label}${counts}${detail}`;
         }
 
         function scheduleLabel(schedule) {

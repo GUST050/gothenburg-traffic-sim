@@ -78,9 +78,10 @@ def test_web_shell_is_desktop_only_and_uses_the_professional_palette():
     for decorative_icon in ("🛡", "📅", "🕐", "📆", "⚡"):
         assert decorative_icon not in html
     assert 'controls.js?v=12' in html
-    # Bumped with the PR B preflight display so a cached bundle cannot hide
-    # the new estimate; the pin exists to force exactly this deliberate edit.
-    assert 'app.js?v=19' in html
+    # Bumped with the step-4 progress phases and their detail line so a cached
+    # bundle cannot hide them; the pin exists to force exactly this deliberate
+    # edit.
+    assert 'app.js?v=20' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",

@@ -108,8 +108,16 @@ class SearchWorkspace:
         completed: int = 0,
         total: int | None = None,
         error: str | None = None,
+        detail: Mapping[str, Any] | None = None,
     ) -> None:
-        """Persist a resumable progress pointer while the workspace runs."""
+        """Persist a resumable progress pointer while the workspace runs.
+
+        `detail` carries phase-specific counters the UI shows beside the
+        headline — costed candidates, cache hits, SUMO verifications, the
+        current cutoff. It is optional and additive: a reader that does not
+        know a key ignores it, and an old manifest without `detail` still
+        parses.
+        """
         self._require_running()
         if not isinstance(phase, str) or not phase.strip():
             raise ValueError("workspace progress phase must be non-empty")
@@ -136,6 +144,14 @@ class SearchWorkspace:
             "total": total,
             "updated_at": _now(),
         }
+        if detail is not None:
+            if not isinstance(detail, Mapping):
+                raise ValueError("workspace progress detail must be an object")
+            # Serialised here rather than at read time: a progress pointer that
+            # cannot be written is a bug to surface now, not a manifest that
+            # fails to load later.
+            progress["detail"] = json.loads(json.dumps(dict(detail),
+                                                       allow_nan=False))
         if error is not None:
             progress["last_error"] = str(error)
         self.manifest["progress"] = progress

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "kind": "monthly_closure_policy_preregistration",
+  "policy_id": "monthly-closure-policy-v3-cost-ordered",
+  "policy_path": "validation/monthly_search_policy_v3.json",
+  "registered_at": "2026-08-10",
+  "status": "frozen_before_outcome",
+  "evidence_class": "preregistration",
+  "release_evidence": false,
+  "activated": false,
+  "why": "PR F of docs/plans/CLOSURE_SEARCH_SCALING_AND_VALIDATION_PLAN_2026-08-10.md requires the decision parameters to be fixed BEFORE the benchmark that judges cost-ordered execution runs, so a disappointing comparison cannot be repaired by moving a threshold afterwards.",
+  "frozen_parameters": {
+    "practical_equivalence_vehicle_hours": 0.0,
+    "practical_equivalence_s": 300.0,
+    "absolute_precision_floor_s": 600.0,
+    "relative_precision": 0.05,
+    "confidence_level": 0.95,
+    "minimum_finalists": 2,
+    "maximum_finalists": 12,
+    "max_repetitions": 12,
+    "initial_repetitions": 4,
+    "repetitions_per_variant": 1,
+    "retention_band_s": 300.0,
+    "micro_finalist_limit": 3
+  },
+  "inherited_from": {
+    "policy_id": "monthly-closure-policy-v2-objective-aligned",
+    "policy_path": "validation/monthly_search_policy_v2.json",
+    "note": "v3 changes EXECUTION ORDER only. Every decision parameter is copied from v2 unchanged, so a difference in outcome between the two can only come from the execution order — which is exactly the hypothesis the equivalence gate tests. v1 and v2 are untouched."
+  },
+  "hypothesis": "For the same candidates, costs, policy and hard-failure outcomes, independent-cost-ordered-exact produces the same pilot status and the same selected_ids as independent-exhaustive, while running SUMO on strictly fewer candidates.",
+  "acceptance_criteria": {
+    "candidate_costs_field_identical": true,
+    "hard_failures_identical": true,
+    "finalist_set_identical": true,
+    "final_decision_identical": true,
+    "sumo_verifications_saved_gt_zero": true,
+    "no_silently_truncated_finalist_set": true
+  },
+  "reported_regardless_of_outcome": [
+    "actual SUMO saving",
+    "daily-cost cache hits",
+    "verified candidate count",
+    "stop reason and stop proof"
+  ],
+  "activation_conditions": {
+    "policy_v3_may_be_activated": false,
+    "requires": [
+      "a named pre-outcome benchmark with several health-viable candidates",
+      "identical candidate costs, hard failures, finalist set and final decision between policy v2 exhaustive and policy v3 cost-ordered",
+      "an untouched held-out set passing practical-winner recall, regret and failure recall",
+      "the existing provenance, integrity, health and release gates"
+    ],
+    "ui_and_global_best_claims_remain_closed": true
+  },
+  "blocked_by": {
+    "reason": "no calibrated q10/q50/q90 demand archive exists in this environment, so no real benchmark or held-out campaign can be run",
+    "reproducible_command": "make demand && python3 run_monthly_closure_search.py --spec <spec.json> --policy validation/monthly_search_policy_v2.json --screening-mode independent-exhaustive && python3 run_monthly_closure_search.py --spec <spec.json> --policy validation/monthly_search_policy_v3.json --screening-mode independent-cost-ordered-exact",
+    "note": "The first command needs network access to the OSM/Overpass source that build_candidates.py uses; it is denied by this environment's network policy."
+  }
+}

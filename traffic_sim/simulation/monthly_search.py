@@ -67,6 +67,27 @@ LEDGER_ARTIFACT_KIND = "closure_schedule_ledger_v2"
 # shortlist; above this many schedules it is refused rather than silently
 # materialised, so the memory gate cannot be lost to a fallback.
 MATERIALISED_SHORTLIST_LIMIT = 512
+# The full progress vocabulary a long run can report. Declared in one place so
+# the API contract test, the web UI and the search cannot drift apart — a phase
+# the UI has no label for reads as a bare "Söker" and tells the user nothing.
+# `preflight`, `cost_units`, `cost_parents` and `health_scan` belong to the
+# cost-ordered execution of PR D/E; `preflight` already runs on every product
+# CLI invocation, the other three report the cost-ordered scan.
+PROGRESS_PHASES = (
+    "policy",
+    "preflight",
+    "enumerate",
+    "screen",
+    "cost_units",
+    "cost_parents",
+    "health_scan",
+    "prepare_backend",
+    "pilot",
+    "finalists",
+    "decide",
+    "adaptive_finalists",
+    "publish",
+)
 # The tracked held-out release gate (IMPROVEMENT_PLAN.md Phase 4).  When
 # this record exists, is well-formed and says "pass", the pre-registered
 # release contract is satisfied: the pilot/finalist policy is golden-frozen
@@ -1129,10 +1150,28 @@ def run_monthly_search(
             workspace.update_progress(phase)
         _existing_policy(workspace, policy)
 
+        phase = "preflight"
+        if workspace.status == "running":
+            # The exact size is already known — the product CLI computes it
+            # before this function is reached — so the user sees what the run
+            # is about to enumerate rather than a silent pause.
+            workspace.update_progress(phase)
+
         phase = "enumerate"
         if workspace.status == "running":
             workspace.update_progress(phase)
         schedules = _candidate_ledger(workspace, spec)
+        if workspace.status == "running":
+            workspace.update_progress(
+                phase,
+                completed=len(schedules),
+                total=len(schedules),
+                detail={
+                    "parent_schedules": len(schedules),
+                    "ledger_schema": schedules.schema,
+                    "ledger_version": schedules.version,
+                },
+            )
 
         phase = "screen"
         if workspace.status == "running":
