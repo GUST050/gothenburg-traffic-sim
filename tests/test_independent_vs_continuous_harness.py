@@ -19,7 +19,10 @@ import tools.measure_independent_vs_continuous as harness
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRATION = (
     ROOT / "validation" / "independent_vs_continuous_preregistration_v1.json")
-OUTCOME = ROOT / "validation" / "independent_vs_continuous_outcome_v1.json"
+# v1 is preserved on disk as the four-bucket historical record; the CURRENT
+# outcome is v2, which adds `different_candidate_spaces` as its own category.
+OUTCOME_V1 = ROOT / "validation" / "independent_vs_continuous_outcome_v1.json"
+OUTCOME = ROOT / "validation" / "independent_vs_continuous_outcome_v2.json"
 
 
 @pytest.fixture(scope="module")
@@ -126,6 +129,56 @@ class TestTheFourBucketsStaySeparate:
                 report = record["demand"]["arms"][arm]
                 assert report["required_build_count"] > 0
                 assert report["missing_build_count"] > 0
+
+
+class TestTheFifthCategory:
+    """v2 reports `different_candidate_spaces` separately.
+
+    In v1 it was a field on the record, so a case whose two arms search
+    different spaces could be counted among the measured and its agreement read
+    as agreement about the decision. It is a distinct kind of answer and now
+    has a distinct name.
+    """
+
+    def test_every_case_carries_a_pairing_verdict(self, outcome):
+        for record in outcome["cases"]:
+            assert record["pairing"] in harness.PAIRINGS, record["case_id"]
+
+    def test_the_pairing_counts_account_for_every_case(self, outcome):
+        assert sum(outcome["pairing_counts"].values()) == (
+            outcome["examined_case_count"])
+
+    def test_a_blocked_case_still_reports_whether_its_spaces_differ(self,
+                                                                    outcome):
+        """The contract finding does not wait for demand to arrive."""
+        blocked = [record for record in outcome["cases"]
+                   if record["bucket"] == "blocked_missing_demand"]
+        if not blocked:
+            pytest.skip("nothing is blocked in this environment")
+        assert all(record["pairing"] in {"identical_candidate_spaces",
+                                         "different_candidate_spaces"}
+                   for record in blocked)
+        assert outcome["pairing_counts"]["different_candidate_spaces"] > 0, (
+            "the differing-space finding must survive a fully blocked run")
+
+    def test_a_measured_case_whose_spaces_differ_is_not_counted_as_measured(
+            self, registration):
+        built = harness.build_outcome(
+            registration,
+            [{"case_id": "clean", "bucket": "measurable", "workday_count": 1,
+              "pairing": "identical_candidate_spaces"},
+             {"case_id": "split", "bucket": "measurable", "workday_count": 1,
+              "pairing": "different_candidate_spaces"}],
+            runs_root=ROOT / "runs",
+            measured={"clean": {"comparison": {}}, "split": {"comparison": {}}})
+        assert built["buckets"]["measured"] == ["clean"]
+        assert built["buckets"]["different_candidate_spaces"] == ["split"]
+
+    def test_unpairable_and_unsupported_keep_their_own_pairing_names(self,
+                                                                     outcome):
+        for record in outcome["cases"]:
+            if record["bucket"] in {"unpairable", "unsupported_by_contract"}:
+                assert record["pairing"] == record["bucket"]
 
 
 class TestCandidateCorrespondence:

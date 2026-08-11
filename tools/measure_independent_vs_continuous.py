@@ -63,12 +63,12 @@ if str(ROOT) not in sys.path:
 from traffic_sim.core.closure_calendar import iter_closure_schedules  # noqa: E402
 from traffic_sim.core.contracts import ClosureSearchSpec  # noqa: E402
 
-OUTCOME_SCHEMA = "independent_vs_continuous_outcome_v1"
+OUTCOME_SCHEMA = "independent_vs_continuous_outcome_v2"
 
 DEFAULT_REGISTRATION = (
     ROOT / "validation" / "independent_vs_continuous_preregistration_v1.json")
 DEFAULT_OUTCOME = (
-    ROOT / "validation" / "independent_vs_continuous_outcome_v1.json")
+    ROOT / "validation" / "independent_vs_continuous_outcome_v2.json")
 DEFAULT_RUNS_ROOT = ROOT / "runs"
 DEFAULT_RELEASE_ROOT = ROOT / "runs" / "monthly-demand-releases"
 
@@ -82,9 +82,26 @@ DEFAULT_POLICY = ROOT / "validation" / "monthly_search_policy_v2.json"
 #: statistics wrong in a direction that flatters the comparison.
 MAXIMUM_ENUMERATED_CANDIDATES = 50_000
 
+#: v2 reports FIVE categories, not four. `different_candidate_spaces` was a
+#: field on the record in v1 and is a bucket here, because it is a distinct
+#: kind of answer: the case runs, but the two arms do not search the same
+#: space, so agreement over their intersection says nothing about the decision.
+#: Burying it inside "measured" would let a green comparison stand for more
+#: than it does.
 BUCKETS = (
     "measured",
+    "different_candidate_spaces",
     "blocked_missing_demand",
+    "unpairable",
+    "unsupported_by_contract",
+)
+
+#: The pairing verdict, which is a CONTRACT fact and therefore knowable without
+#: any demand. Recorded on every case — including blocked ones — so the count of
+#: cases whose candidate spaces differ is visible even where nothing could run.
+PAIRINGS = (
+    "identical_candidate_spaces",
+    "different_candidate_spaces",
     "unpairable",
     "unsupported_by_contract",
 )
@@ -314,6 +331,7 @@ def classify(case: Mapping[str, Any], *, runs_root: Path,
     }
     if not case.get("continuous_expressible", False):
         record.update({
+            "pairing": "unsupported_by_contract",
             "bucket": "unsupported_by_contract",
             "reason": (
                 f"ClosureSearchSpec refuses a continuous closure of "
@@ -324,6 +342,7 @@ def classify(case: Mapping[str, Any], *, runs_root: Path,
         return record
     if not case.get("pairable", False):
         record.update({
+            "pairing": "unpairable",
             "bucket": "unpairable",
             "reason": (
                 "the two policies do not describe the same closure for this "
@@ -332,7 +351,13 @@ def classify(case: Mapping[str, Any], *, runs_root: Path,
         })
         return record
 
-    record["correspondence"] = candidate_correspondence(case)
+    correspondence = candidate_correspondence(case)
+    record["correspondence"] = correspondence
+    # The pairing verdict is decided by the two calendars alone, so it is
+    # recorded whether or not any demand exists.
+    record["pairing"] = ("identical_candidate_spaces"
+                         if correspondence["candidate_space_identical"]
+                         else "different_candidate_spaces")
     if not check_demand:
         record.update({"bucket": "not_evaluated",
                        "reason": "demand availability was not checked"})
@@ -665,8 +690,15 @@ def build_outcome(registration: Mapping[str, Any],
     for record in records:
         bucket = record["bucket"]
         if bucket == "measurable":
-            bucket = ("measured" if record["case_id"] in measured
-                      else "blocked_missing_demand")
+            if record["case_id"] not in measured:
+                bucket = "blocked_missing_demand"
+            elif record.get("pairing") == "different_candidate_spaces":
+                # It ran, and the answer is still not a clean paired
+                # comparison. Reported as its own category rather than counted
+                # among the measured.
+                bucket = "different_candidate_spaces"
+            else:
+                bucket = "measured"
         buckets.setdefault(bucket, []).append(record["case_id"])
     # Every case lands in exactly one bucket, and the counts must add up to the
     # cases examined. A silently dropped case is the one failure mode that
@@ -695,6 +727,13 @@ def build_outcome(registration: Mapping[str, Any],
         "extrapolation_rule": registration["extrapolation_rule"],
         "bucket_counts": {name: len(value)
                           for name, value in sorted(buckets.items())},
+        # Cross-cutting, because a blocked case still HAS a pairing verdict and
+        # the count of differing candidate spaces is a contract finding that
+        # does not wait for demand.
+        "pairing_counts": {
+            name: sum(1 for record in records
+                      if record.get("pairing") == name)
+            for name in PAIRINGS},
         "buckets": {name: sorted(value)
                     for name, value in sorted(buckets.items())},
         "examined_case_count": len(records),
