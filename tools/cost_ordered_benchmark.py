@@ -142,6 +142,164 @@ def _candidate_specs() -> tuple[ClosureSearchSpec, ...]:
     return tuple(specs)
 
 
+# --------------------------------------------------------------------------
+# v2: discover the cases from the archive library instead of guessing dates.
+# --------------------------------------------------------------------------
+
+#: Daily windows to try. Several start times on an available date is what makes
+#: a case discriminating without needing dates the library does not have.
+DISCOVERY_BANDS = (
+    (("06:00", "12:00"), 4),
+    (("07:00", "15:00"), 5),
+    (("09:00", "16:00"), 5),
+    (("10:00", "18:00"), 6),
+)
+
+#: How many surviving roads to build cases for. Structural, deterministic, and
+#: capped so discovery cannot enumerate for minutes on a large library.
+DISCOVERY_ROAD_LIMIT = 6
+
+SURVIVABILITY_SCREEN = (
+    ROOT / "validation" / "closure_survivability_screen_v2.json")
+
+
+def archive_calendar(runs_root: Path) -> dict[str, dict[str, Any]]:
+    """Single-day calibrated archives on disk, keyed by their work date.
+
+    Only whole-day, three-variant archives count. An independent daily unit
+    resolves to exactly such an archive, so anything else cannot serve a case
+    however promising its filename looks.
+    """
+    calendar: dict[str, dict[str, Any]] = {}
+    root = Path(runs_root)
+    if not root.is_dir():
+        return calendar
+    for archive in sorted(root.glob("demand-*")):
+        meta_path = archive / "demand_meta.json"
+        if not archive.is_dir() or not meta_path.is_file():
+            continue
+        try:
+            metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+            spec = dict(metadata.get("demand_spec") or {})
+        except (OSError, ValueError):
+            continue
+        routes = {variant: archive / filename
+                  for variant, filename in VARIANT_FILENAMES.items()}
+        if not all(path.is_file() for path in routes.values()):
+            continue
+        if int(spec.get("days", 0)) != 1:
+            continue
+        if spec.get("begin") != "00:00" or spec.get("end") != "24:00":
+            continue
+        date_text = str(spec.get("start_date", ""))
+        if not date_text:
+            continue
+        calendar.setdefault(date_text, {
+            "date": date_text,
+            "source": str(spec.get("source", "historical")),
+            "demand_build_key": str(metadata.get("demand_build_key", "")),
+            "archive": _relative(archive),
+            "routes": {
+                variant: {"path": _relative(path), "sha256": sha256_file(path)}
+                for variant, path in sorted(routes.items())},
+            "demand_meta_sha256": sha256_file(meta_path),
+        })
+    return calendar
+
+
+def _date_runs(dates: Sequence[str],
+               weekdays: Sequence[int]) -> list[list[str]]:
+    """Maximal runs of consecutive eligible dates present in the library.
+
+    A case's permitted window must contain dates that actually have archives,
+    which is exactly what v1 got wrong: its windows were written by hand and
+    most of them named dates the library never held.
+    """
+    available = sorted(set(dates))
+    runs: list[list[str]] = []
+    current: list[str] = []
+    previous: date | None = None
+    for text in available:
+        try:
+            value = date.fromisoformat(text)
+        except ValueError:
+            continue
+        if value.weekday() not in set(weekdays):
+            continue
+        if previous is not None and (value - previous).days > 3:
+            runs.append(current)
+            current = []
+        current.append(text)
+        previous = value
+    if current:
+        runs.append(current)
+    return [item for item in runs if item]
+
+
+def surviving_roads(path: Path = SURVIVABILITY_SCREEN) -> list[dict[str, Any]]:
+    """Edges that survive their own closure, from the frozen topology screen.
+
+    A structural criterion, available before any outcome: an edge that severs a
+    successor produces a search whose candidates are all degenerate for reasons
+    that have nothing to do with execution order. v1's road
+    (`60786979_3575001205_0`) is precisely such an edge — the documented
+    single-incoming-connection case — so v2 prefers roads that survive.
+    """
+    try:
+        screen = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    edges = (screen.get("candidate_pool") or {}).get("edges") or []
+    surviving = [item for item in edges if item.get("survives_topology")]
+    # Deterministic and outcome-blind: nearest to a sensor first (the best
+    # measured part of the network), then by edge id.
+    surviving.sort(key=lambda item: (float(item.get("dist_sensor_m", 1e9)),
+                                     str(item.get("edge_id"))))
+    return surviving[:DISCOVERY_ROAD_LIMIT]
+
+
+def discovered_specs(runs_root: Path) -> tuple[ClosureSearchSpec, ...]:
+    """Cases built around dates the archive library actually contains."""
+    calendar = archive_calendar(runs_root)
+    if not calendar:
+        return ()
+    roads = surviving_roads()
+    if not roads:
+        return ()
+    weekdays = (0, 1, 2, 3, 4)
+    specs: list[ClosureSearchSpec] = []
+    by_source: dict[str, list[str]] = {}
+    for record in calendar.values():
+        by_source.setdefault(record["source"], []).append(record["date"])
+    for source in sorted(by_source):
+        for run in _date_runs(by_source[source], weekdays):
+            if len(run) < 2:
+                continue
+            for road in roads:
+                for band, hours in DISCOVERY_BANDS:
+                    edge = str(road["edge_id"])
+                    specs.append(ClosureSearchSpec(
+                        search_id=(
+                            f"cob2-{source[:4]}-{run[0].replace('-', '')}"
+                            f"-{edge.split('_')[0][:8]}"
+                            f"-{band[0].replace(':', '')}"),
+                        directed_edges=(edge,),
+                        demand_build_id=f"{source}-{run[0][:4]}",
+                        source=source,
+                        permitted_date_start=run[0],
+                        permitted_date_end=run[-1],
+                        required_work_minutes=hours * 60,
+                        max_consecutive_start_days=1,
+                        permitted_daily_band=DailyTimeBand(*band),
+                        allowed_weekdays=weekdays,
+                        interday_policy="independent_daily_reset_v1",
+                        work_allocation_policy="exact_equal_daily_v1",
+                        objective_profile="displaced_vehicles_and_detour_v1",
+                        period_comparison_policy="rolling_period_v1",
+                    ))
+    return tuple(specs)
+
+
 def _relative(path: Path) -> str:
     """Repository-relative when possible; absolute when the root differs.
 
@@ -216,7 +374,8 @@ def _structural_profile(spec: ClosureSearchSpec) -> dict[str, Any]:
     }
 
 
-def select_case(runs_root: Path = DEFAULT_RUNS_ROOT) -> dict[str, Any]:
+def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
+                *, from_archives: bool = False) -> dict[str, Any]:
     """Pick the case with the most structurally eligible candidates.
 
     Deliberately blind to outcomes: it never runs a search, never prices a
@@ -230,7 +389,9 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT) -> dict[str, Any]:
         for record in archives.values()
     }
     evaluated = []
-    for spec in _candidate_specs():
+    specs = (discovered_specs(runs_root) if from_archives
+             else _candidate_specs())
+    for spec in specs:
         profile = _structural_profile(spec)
         available = [value for value in profile["work_dates"]
                      if value in covered_dates]
@@ -258,11 +419,15 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT) -> dict[str, Any]:
         "selection_rule": (
             "most candidates, then fewest unique daily units, then search_id; "
             "no outcome, cost or winner is consulted"),
+        "case_source": ("discovered_from_archive_metadata" if from_archives
+                        else "fixed_v1_candidate_specs"),
+        "evaluated_case_count": len(evaluated),
     }
 
 
-def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT) -> dict[str, Any]:
-    selection = select_case(runs_root)
+def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
+                       *, from_archives: bool = False) -> dict[str, Any]:
+    selection = select_case(runs_root, from_archives=from_archives)
     selected = selection["selected"]
     archives = _archive_index(runs_root)
 
@@ -279,6 +444,8 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT) -> dict[str, Any]:
             "execution, while running SUMO on strictly fewer candidates."),
         "selection": {
             "rule": selection["selection_rule"],
+            "case_source": selection["case_source"],
+            "evaluated_case_count": selection["evaluated_case_count"],
             "minimum_structural_candidates": MINIMUM_STRUCTURAL_CANDIDATES,
             "archives_available": selection["archives_available"],
             "evaluated": [
@@ -975,6 +1142,9 @@ def main(argv=None) -> int:
     parser.add_argument("--no-fault-injection", action="store_true",
                         help="skip the interrupt/resume probe (the restart "
                              "gate then fails, which is the honest outcome)")
+    parser.add_argument("--from-archives", action="store_true",
+                        help="discover cases from the archive library's own "
+                             "metadata instead of the fixed v1 specs")
     parser.add_argument("--allow-drift", action="store_true",
                         help="run even though bound inputs moved; the drift "
                              "is recorded in the outcome")
@@ -984,7 +1154,19 @@ def main(argv=None) -> int:
         raise SystemExit("choose exactly one of --preregister or --run")
 
     if args.preregister:
-        record = build_registration(args.runs_root)
+        record = build_registration(args.runs_root,
+                                    from_archives=args.from_archives)
+        if args.from_archives and record["selected_case"] is None:
+            # Refusing here is the whole lesson of v1, which was frozen against
+            # an empty runs directory and then could not be corrected without
+            # editing history. A registration that selected nothing is not
+            # evidence of anything except which machine it ran on.
+            raise SystemExit(
+                "discovery found no structurally eligible case under "
+                f"{args.runs_root} "
+                f"({record['blocked_by']['archives_available']} complete "
+                "archives). Refusing to freeze an empty registration: run this "
+                "on the host that holds the calibrated archive library.")
         if args.stdout:
             print(json.dumps(record, indent=1, sort_keys=True))
         else:
