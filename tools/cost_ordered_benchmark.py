@@ -141,6 +141,7 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/seed_worker_budget.py",
     "traffic_sim/simulation/sensor_fit.py",
     "traffic_sim/simulation/trajectory_contract.py",
+    "traffic_sim/simulation/unit_budget.py",
     "traffic_sim/simulation/warm_route_windows.py",
     "traffic_sim/simulation/warm_state_boundary.py",
     "traffic_sim/simulation/warm_state_cache.py",
@@ -551,7 +552,7 @@ def sumo_runtime_identity(data_root: Path = ROOT) -> dict[str, Any]:
     return report
 
 
-def external_gate_state(root: Path = ROOT) -> dict[str, Any]:
+def external_gate_state(root: Path | None = None) -> dict[str, Any]:
     """Bind the held-out gate artifacts, present or absent.
 
     Absence is a binding, not a gap. "There was no adopted gate when this
@@ -559,7 +560,12 @@ def external_gate_state(root: Path = ROOT) -> dict[str, Any]:
     certificate silently widening what a replay may claim is precisely the
     drift this exists to catch.
     """
-    state: dict[str, Any] = {}
+    # The gate artifacts the RUN will consult live under the data root the
+    # registration binds. Reading them from the tool's own checkout would seal
+    # one set of bytes and let the search read another — the same confusion the
+    # data_root parameter exists to prevent for the network.
+    root = ROOT if root is None else Path(root)
+    state: dict[str, Any] = {"data_root": str(Path(root).resolve())}
     for name in EXTERNAL_GATE_ARTIFACTS:
         path = Path(root) / name
         if path.is_file():
@@ -767,7 +773,7 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
         "sources": {name: sha256_file(ROOT / name)
                     for name in SEMANTIC_SOURCES},
         "sumo_runtime": sumo_runtime_identity(data_root),
-        "external_gate_state": external_gate_state(),
+        "external_gate_state": external_gate_state(data_root),
         # These paths are deliberately absolute. Source files belong to this
         # checkout, but ignored SUMO data commonly lives in the primary
         # worktree. Binding ROOT here while run_scenario reads relative to the
@@ -998,7 +1004,12 @@ def verify_bindings(registration: Mapping[str, Any],
 
     bound_gate = registration.get("external_gate_state")
     if bound_gate is not None:
-        live_gate = external_gate_state()
+        live_gate = external_gate_state(bound_gate.get("data_root") or ROOT)
+        if bound_gate.get("data_root") != live_gate.get("data_root"):
+            drift.append(
+                f"external gate data root changed: registered "
+                f"{bound_gate.get('data_root')!r}, live "
+                f"{live_gate.get('data_root')!r}")
         for name in EXTERNAL_GATE_ARTIFACTS:
             was = bound_gate.get(name) or {}
             now = live_gate.get(name) or {}

@@ -40,6 +40,8 @@ from traffic_sim.simulation.closure_preflight import (
 # simulation exists. Importing it from `monthly_sumo` pulled in run_scenario
 # (pandas) and suggest_closure_time (SciPy) — about 110 MiB — on every run,
 # including one the exact preflight then refuses.
+from traffic_sim.simulation import unit_budget
+from traffic_sim.simulation.unit_budget import DailyUnitBudget
 from traffic_sim.simulation.seed_worker_budget import (
     SEED_WORKER_BENCHMARK_RECORD,
     approved_seed_workers,
@@ -185,7 +187,18 @@ def _independent_exhaustive_builder(
     maximum_daily_units: int,
     baseline_trip_duration_p99_s: int,
     preflight_report: ClosureSearchPreflight | None = None,
+    budget: "DailyUnitBudget | None" = None,
 ) -> dict[str, Any]:
+    """Stream the exhaustive independent enumeration under a declared budget.
+
+    With no budget this behaves exactly as before: past `maximum_daily_units`
+    it raises, which is the fail-closed behaviour every existing search relies
+    on. With a budget it PAUSES instead — the enumeration stops at the last
+    complete parent, records where to resume, and the artifact it produces is
+    labelled `independent_daily_budget_stopped_v1` rather than
+    `..._exhaustive_sumo_v1`. That rename is the point: nothing downstream can
+    read a partial enumeration as an exhaustive one, because the word is gone.
+    """
     spec = load_closure_search_spec(spec_path)
     if spec.interday_policy != "independent_daily_reset_v1":
         raise ValueError(
@@ -193,6 +206,7 @@ def _independent_exhaustive_builder(
         )
     report = preflight_report or _independent_exhaustive_preflight(
         spec,
+        budget=budget,
         maximum_candidates=maximum_candidates,
         maximum_daily_units=maximum_daily_units,
         baseline_trip_duration_p99_s=baseline_trip_duration_p99_s,
@@ -221,7 +235,14 @@ def _independent_exhaustive_builder(
     unavailable_candidates = []
     eligible_ids: list[str] = []
     candidate_count = 0
+    # The resume cursor is the last parent that was decomposed COMPLETELY, so a
+    # paused enumeration restarts at a parent boundary rather than in the
+    # middle of one parent's units.
+    last_complete_parent: str | None = None
+    budget_stop: dict[str, Any] | None = None
     for schedule in iter_closure_schedules(spec):
+        if budget_stop is not None:
+            break
         candidate_count += 1
         if candidate_count > maximum_candidates:
             raise ValueError(
@@ -238,7 +259,20 @@ def _independent_exhaustive_builder(
             # A schedule object is built only for a NEW unique unit, which is
             # also the only place an envelope needs checking.
             daily = build()
-            if len(evaluated_units) > maximum_daily_units:
+            if budget is not None:
+                crossed = unit_budget.exceeded(
+                    budget, daily_units=len(evaluated_units))
+                if crossed is not None:
+                    # PAUSE, do not raise and do not truncate silently. The
+                    # cursor is the last COMPLETE parent, so a resume restarts
+                    # at a parent boundary rather than mid-decomposition.
+                    budget_stop = {
+                        "crossed": crossed,
+                        "resume_after_parent_id": last_complete_parent,
+                        "daily_units": len(evaluated_units),
+                    }
+                    break
+            elif len(evaluated_units) > maximum_daily_units:
                 raise ValueError(
                     f"independent exhaustive screening generated more than "
                     f"{maximum_daily_units} unique daily SUMO units, above "
@@ -284,7 +318,30 @@ def _independent_exhaustive_builder(
             })
         else:
             eligible_ids.append(schedule.schedule_id)
-    if report is not None and (
+        last_complete_parent = schedule.schedule_id
+    if budget_stop is not None:
+        # A budget-stopped enumeration is NOT the exhaustive one, so it must
+        # not be compared against a preflight that counted the whole space.
+        payload = _exhaustive_payload(
+            spec_path,
+            spec=spec,
+            schedule_ids=eligible_ids,
+            maximum_candidates=maximum_candidates,
+            proxy_version="independent_daily_budget_stopped_v1",
+        )
+        state = unit_budget.BudgetState(
+            daily_units=int(budget_stop["daily_units"]),
+            parent_schedules=candidate_count,
+            status=unit_budget.INCOMPLETE_STATUS,
+            stopped_by=str(budget_stop["crossed"]),
+            resume_after_parent_id=budget_stop["resume_after_parent_id"],
+        )
+        payload["budget_state"] = state.to_dict()
+        payload["budget"] = budget.to_dict()
+        payload["exhaustive"] = False
+        payload["budget_message"] = unit_budget.describe(state, budget)
+        return payload
+    if budget is None and report is not None and (
         report.parent_schedule_count != candidate_count
         or report.unique_daily_unit_count != len(evaluated_units)
     ):
@@ -304,6 +361,15 @@ def _independent_exhaustive_builder(
         maximum_candidates=maximum_candidates,
         proxy_version="independent_daily_exhaustive_sumo_v1",
     )
+    if budget is not None:
+        state = unit_budget.BudgetState(
+            daily_units=len(evaluated_units),
+            parent_schedules=candidate_count,
+            status=unit_budget.COMPLETE_STATUS)
+        payload["budget_state"] = state.to_dict()
+        payload["budget"] = budget.to_dict()
+        payload["exhaustive"] = True
+        payload["budget_message"] = unit_budget.describe(state, budget)
     payload["candidate_count"] = candidate_count
     payload["scoreable_candidate_count"] = len(eligible_ids)
     payload["unavailable_candidates"] = unavailable_candidates
@@ -323,6 +389,7 @@ def _independent_exhaustive_builder(
 def _independent_exhaustive_preflight(
     spec,
     *,
+    budget: "DailyUnitBudget | None" = None,
     maximum_candidates: int,
     maximum_daily_units: int,
     baseline_trip_duration_p99_s: int,
@@ -358,7 +425,12 @@ def _independent_exhaustive_preflight(
             f"{report.parent_schedule_count} parent schedules, above the "
             f"explicit cap {maximum_candidates}"
         )
-    if report.unique_daily_unit_count > maximum_daily_units:
+    if report.unique_daily_unit_count > maximum_daily_units and budget is None:
+        # Without a declared budget this stays fail-closed, exactly as before.
+        # WITH one, refusing here would defeat the point: the budget's contract
+        # is to PAUSE mid-enumeration with a resumable cursor, and a search
+        # refused before it starts can never pause. The streaming loop enforces
+        # it instead.
         raise ValueError(
             f"independent exhaustive preflight counted "
             f"{report.unique_daily_unit_count} unique daily SUMO units, "
@@ -589,6 +661,13 @@ def parse_args() -> argparse.Namespace:
         help="Disable warm-state execution and run every observation cold.",
     )
     parser.set_defaults(warm_execution=True)
+    parser.add_argument("--daily-unit-budget", type=int, default=None,
+                        help="Declare a daily-unit BUDGET instead of the "
+                             "legacy hard cap. Above the budget the search "
+                             "pauses with a resumable, explicitly incomplete "
+                             "result; it is never reported as exhaustive. "
+                             "Without this flag the legacy cap applies "
+                             "unchanged.")
     parser.add_argument("--workspace-wait-s", type=float, default=3600.0,
                         help="Seconds to wait for the shared demand "
                              "workspace (a horizon pre-warm or the web "
@@ -660,7 +739,14 @@ def main() -> None:
                 maximum_candidates=(
                     args.independent_exhaustive_candidate_cap
                 ),
-                maximum_daily_units=args.independent_exhaustive_daily_cap,
+                # The preflight REPORTS against the effective limit. With a
+                # declared budget that limit is the budget, so a search the
+                # budget admits is not refused before it starts by the very cap
+                # the budget replaces.
+                maximum_daily_units=(
+                    args.daily_unit_budget
+                    if args.daily_unit_budget is not None
+                    else args.independent_exhaustive_daily_cap),
                 baseline_trip_duration_p99_s=(
                     args.baseline_trip_duration_p99_s
                 ),
@@ -793,6 +879,12 @@ def main() -> None:
                     f"--screening-mode={args.screening_mode} requires an "
                     "independent daily search spec"
                 )
+            declared_budget = (
+                DailyUnitBudget(
+                    maximum_daily_units=args.daily_unit_budget,
+                    maximum_parent_schedules=(
+                        args.independent_exhaustive_candidate_cap))
+                if args.daily_unit_budget is not None else None)
             screen_builder = lambda path: _independent_exhaustive_builder(
                 path,
                 maximum_candidates=(
@@ -803,6 +895,7 @@ def main() -> None:
                     args.baseline_trip_duration_p99_s
                 ),
                 preflight_report=independent_preflight,
+                budget=declared_budget,
             )
         cost_source = None
         if args.screening_mode == "independent-cost-ordered-exact":

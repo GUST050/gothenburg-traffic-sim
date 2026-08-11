@@ -22,7 +22,6 @@ import pytest
 
 from traffic_sim.simulation.unit_budget import (
     COMPLETE_STATUS,
-    DEFAULT_PEAK_RSS_BUDGET_BYTES,
     INCOMPLETE_STATUS,
     LEGACY_DAILY_UNIT_LIMIT,
     SIX_MONTH_DAILY_UNIT_BUDGET,
@@ -161,16 +160,10 @@ class TestTheSixMonthCaseIsNoLongerRejectedByAConstant:
         assert (parents, len(units)) == (2_186, 5_676)
         assert exceeded(DailyUnitBudget(), daily_units=len(units)) is None
 
-    def test_streaming_the_larger_case_stays_inside_the_process_gate(self):
-        """It was never memory that stopped this case."""
-        import resource
-        import sys
-
-        self._enumerate(self._spec("six-month-360h"))
-        scale = 1 if sys.platform == "darwin" else 1024
-        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * scale
-        assert peak < DEFAULT_PEAK_RSS_BUDGET_BYTES * 4, (
-            f"streaming enumeration peaked at {peak / 1048576:.1f} MiB")
+    # The 64 MiB process gate is measured in a FRESH interpreter by
+    # tests/test_unit_budget_integration.py. Asserting it here would measure
+    # pytest's own imports, which is why this file once allowed 4x headroom —
+    # a ceiling of 256 MiB does not test a 64 MiB gate.
 
     def test_semantic_unit_ids_are_stable_across_two_enumerations(self):
         """A budget must not change WHICH units a search would produce."""
