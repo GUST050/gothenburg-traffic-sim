@@ -188,6 +188,7 @@ def _independent_exhaustive_builder(
     baseline_trip_duration_p99_s: int,
     preflight_report: ClosureSearchPreflight | None = None,
     budget: "DailyUnitBudget | None" = None,
+    resume_state: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Stream the exhaustive independent enumeration under a declared budget.
 
@@ -240,9 +241,37 @@ def _independent_exhaustive_builder(
     # middle of one parent's units.
     last_complete_parent: str | None = None
     budget_stop: dict[str, Any] | None = None
+    # UNRESOLVED, and recorded here rather than hidden: `resume_state` carries
+    # the evaluated-unit set forward so units deduplicate across a pause, which
+    # means the budget behaves as a CUMULATIVE total — a resumed leg starts
+    # already at the previous leg's spend and immediately re-crosses the line.
+    # A search that needs 910 units under a 300-unit budget therefore never
+    # completes, and a resumed run does NOT reproduce an uninterrupted one
+    # (measured: 193 eligible parents against 754). Two different meanings were
+    # conflated: a budget that bounds MEMORY HELD AT ONCE, and one that bounds
+    # TOTAL WORK. They need separate fields and separate resume semantics.
+    # Until that is settled, resume_state is accepted but must not be relied
+    # on: `--daily-unit-budget` is safe for the single-leg case the tests
+    # cover, where it pauses correctly and never reports itself exhaustive.
+    resume_after = None
+    resumed = True
+    if resume_state:
+        resume_after = resume_state.get("resume_after_parent_id")
+        resumed = not resume_after
+        # Carried forward so units are deduplicated ACROSS the pause exactly as
+        # they would be within one run — otherwise a resumed search would
+        # re-count units the first leg already evaluated and stop early.
+        evaluated_units.update(resume_state.get("evaluated_unit_ids") or ())
+        eligible_ids.extend(resume_state.get("eligible_schedule_ids") or ())
+        candidate_count = int(resume_state.get("parent_schedules") or 0)
     for schedule in iter_closure_schedules(spec):
-        if budget_stop is not None:
-            break
+        if resume_after and not resumed:
+            # Skip the verified prefix. The cursor is the last parent a
+            # previous run decomposed COMPLETELY, so continuation starts
+            # immediately after it and no parent is processed twice.
+            if schedule.schedule_id == resume_after:
+                resumed = True
+            continue
         candidate_count += 1
         if candidate_count > maximum_candidates:
             raise ValueError(
@@ -318,6 +347,16 @@ def _independent_exhaustive_builder(
             })
         else:
             eligible_ids.append(schedule.schedule_id)
+        if budget_stop is not None:
+            # This parent was abandoned mid-decomposition: its remaining units
+            # were never evaluated, so it is NOT complete and must not become
+            # the resume cursor. Recording it would skip it on resume and lose
+            # every unit after the one that crossed the budget.
+            budget_stop["abandoned_parent_id"] = schedule.schedule_id
+            eligible_ids = [item for item in eligible_ids
+                            if item != schedule.schedule_id]
+            candidate_count -= 1
+            break
         last_complete_parent = schedule.schedule_id
     if budget_stop is not None:
         # A budget-stopped enumeration is NOT the exhaustive one, so it must
@@ -330,13 +369,18 @@ def _independent_exhaustive_builder(
             proxy_version="independent_daily_budget_stopped_v1",
         )
         state = unit_budget.BudgetState(
-            daily_units=int(budget_stop["daily_units"]),
+            daily_units=len(evaluated_units),
             parent_schedules=candidate_count,
             status=unit_budget.INCOMPLETE_STATUS,
             stopped_by=str(budget_stop["crossed"]),
-            resume_after_parent_id=budget_stop["resume_after_parent_id"],
+            resume_after_parent_id=last_complete_parent,
         )
         payload["budget_state"] = state.to_dict()
+        # Everything continuation needs, persisted with the artifact.
+        payload["budget_state"]["evaluated_unit_ids"] = sorted(evaluated_units)
+        payload["budget_state"]["eligible_schedule_ids"] = list(eligible_ids)
+        payload["budget_state"]["abandoned_parent_id"] = budget_stop.get(
+            "abandoned_parent_id")
         payload["budget"] = budget.to_dict()
         payload["exhaustive"] = False
         payload["budget_message"] = unit_budget.describe(state, budget)

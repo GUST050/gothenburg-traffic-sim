@@ -139,6 +139,17 @@ class BudgetState:
         }
 
 
+#: ENFORCEMENT REALITY, stated so the fields cannot over-promise. The product
+#: screening path enforces `maximum_daily_units` and the unchanged
+#: `maximum_parent_schedules`. `maximum_ledger_bytes` and
+#: `maximum_peak_rss_bytes` are declared and checked by `exceeded()`, but the
+#: streaming enumeration does not yet sample either, so nothing in the product
+#: currently crosses them. They are contract, not yet gate.
+ENFORCED_IN_PRODUCT_PATH = ("maximum_daily_units", "maximum_parent_schedules")
+DECLARED_BUT_NOT_YET_SAMPLED = ("maximum_ledger_bytes",
+                                "maximum_peak_rss_bytes")
+
+
 def exceeded(budget: DailyUnitBudget, *, daily_units: int,
              ledger_bytes: int = 0, peak_rss_bytes: int = 0) -> str | None:
     """Which budget line was crossed, or None.
