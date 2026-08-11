@@ -1132,6 +1132,228 @@ def _claim_boundary(
     }
 
 
+def _pilot_evidence_for(
+    workspace: SearchWorkspace,
+    runner: "CandidateRunner",
+    schedule: ClosureSchedule,
+    *,
+    targets: Mapping[str, int],
+    existing_records: Sequence[tuple[int, CandidateEvidence]],
+    compact_pilot: bool,
+    policy: "MonthlySearchPolicy",
+) -> CandidateEvidence:
+    """One candidate's pilot evidence: reused, run compactly, or published.
+
+    Shared by the exhaustive and cost-ordered pilots so the two paths cannot
+    differ in HOW a candidate is simulated — only in WHICH candidates are.
+    """
+    if existing_records:
+        evidence = existing_records[-1][1]
+        _validate_evidence_target(
+            evidence,
+            schedule_id=schedule.schedule_id,
+            targets=targets,
+        )
+        return evidence
+    if compact_pilot:
+        evidence = runner.run_candidate(
+            schedule,
+            target_repetitions=targets,
+            existing=None,
+            stage="pilot",
+        )
+        _validate_evidence_target(
+            evidence,
+            schedule_id=schedule.schedule_id,
+            targets=targets,
+        )
+        return evidence
+    return _run_and_publish_candidate(
+        workspace,
+        runner,
+        schedule,
+        targets=targets,
+        existing=None,
+        stage="pilot",
+        kind="monthly_pilot_candidate",
+        round_index=0,
+        policy=policy,
+    )
+
+
+def _exhaustive_pilot(
+    workspace: SearchWorkspace,
+    policy: "MonthlySearchPolicy",
+    *,
+    runner: "CandidateRunner",
+    schedules,
+    shortlist_ids: Sequence[str],
+    pilot_targets: Mapping[str, int],
+    pilot_records: Mapping[str, Any],
+    compact_pilot: bool,
+    phase: str = "pilot",
+) -> list[CandidateEvidence]:
+    """Simulate every shortlisted candidate. The reference path, unchanged."""
+    pilot_evidence: list[CandidateEvidence] = []
+    for index, candidate_id in enumerate(shortlist_ids):
+        # A broad independent search can contain tens of thousands of
+        # parents. Updating the workspace manifest for every additive
+        # in-memory reconstruction turns cache hits into a filesystem
+        # benchmark, so retain bounded progress writes instead.
+        progress_stride = max(1, len(shortlist_ids) // 100)
+        if not compact_pilot or index % progress_stride == 0:
+            workspace.update_progress(
+                phase,
+                completed=index,
+                total=len(shortlist_ids),
+            )
+        pilot_evidence.append(_pilot_evidence_for(
+            workspace, runner, schedules[candidate_id],
+            targets=pilot_targets,
+            existing_records=pilot_records.get(candidate_id, []),
+            compact_pilot=compact_pilot,
+            policy=policy,
+        ))
+    return pilot_evidence
+
+
+def _cost_ordered_pilot(
+    workspace: SearchWorkspace,
+    spec: ClosureSearchSpec,
+    policy: "MonthlySearchPolicy",
+    *,
+    runner: "CandidateRunner",
+    schedules,
+    shortlist_ids: Sequence[str],
+    cost_source: Any,
+    pilot_targets: Mapping[str, int],
+    pilot_records: Mapping[str, Any],
+    compact_pilot: bool,
+) -> tuple[list[CandidateEvidence], Any]:
+    """Price every candidate, then simulate only the boundary set.
+
+    This is the real cost-first execution: no exhaustive SUMO pass happens
+    first, and the candidates above the boundary are never simulated at all.
+    The evidence it returns goes to the same unchanged selector the exhaustive
+    path uses.
+    """
+    from traffic_sim.simulation import cost_ordered_execution as coe
+
+    def report(phase: str, completed: int, total: int,
+               detail: Mapping[str, Any]) -> None:
+        if workspace.status == "running":
+            workspace.update_progress(
+                phase, completed=completed, total=total, detail=dict(detail))
+
+    # --- cost_units / cost_parents -------------------------------------
+    ledger_records = _artifact_records(workspace, kind=coe.COST_LEDGER_KIND)
+    if ledger_records:
+        if len(ledger_records) != 1:
+            raise ValueError("workspace has duplicate cost ledgers")
+        ledger = coe.CostLedger.from_dict(
+            _read_artifact(workspace, ledger_records[0]))
+        if ledger.search_content_key != spec.content_key:
+            raise ValueError("cost ledger belongs to another search")
+        if [item.candidate_id for item in ledger.costs] != list(shortlist_ids):
+            raise ValueError(
+                "resumed cost ledger does not cover this shortlist")
+    else:
+        ledger = coe.build_cost_ledger(
+            spec,
+            [schedules[candidate_id] for candidate_id in shortlist_ids],
+            cost_source,
+            progress=report,
+        )
+        _publish_json(
+            workspace,
+            ledger.to_dict(),
+            "cost-ledger.json",
+            kind=coe.COST_LEDGER_KIND,
+            provenance={
+                "search_content_key": spec.content_key,
+                "candidate_count": len(ledger.costs),
+                "daily_cost_cache_hits": ledger.cache_hits,
+                "release_evidence": False,
+            },
+        )
+
+    # --- health_scan ---------------------------------------------------
+    refused = [item for item in ledger.costs if item.cost.disqualified]
+    report("health_scan", len(ledger.costs), len(ledger.costs), {
+        "costed": len(ledger.costs),
+        "cost_total": len(ledger.costs),
+        "cache_hits": ledger.cache_hits,
+        "deterministically_disqualified": len(refused),
+    })
+
+    # --- pilot ---------------------------------------------------------
+    cursor_records = _artifact_records(workspace, kind=coe.CURSOR_KIND)
+    cursor = None
+    priced_by_id = {item.candidate_id: item for item in ledger.costs}
+    verified_evidence: dict[str, CandidateEvidence] = {}
+    if cursor_records:
+        # The LAST published cursor is the position; earlier ones are the
+        # history of getting there and are kept for forensics.
+        cursor = coe.ExecutionCursor.from_dict(
+            _read_artifact(workspace, cursor_records[-1]))
+        for candidate_id in cursor.state.verified:
+            records = pilot_records.get(candidate_id, [])
+            if not records:
+                raise ValueError(
+                    "cost-ordered resume claims a candidate was verified but "
+                    f"its evidence is missing: {candidate_id}")
+            # Reconciled on the way back in as well: evidence published by an
+            # earlier process must still agree with the ledger this run is
+            # ordering by, or the resume is continuing a different search.
+            verified_evidence[candidate_id] = coe.reconcile_disruption(
+                records[-1][1], priced_by_id[candidate_id])
+
+    checkpoint_index = len(cursor_records)
+
+    def checkpoint(new_cursor, candidate_id: str,
+                   evidence: CandidateEvidence) -> None:
+        nonlocal checkpoint_index
+        if workspace.status != "running":
+            return
+        _publish_json(
+            workspace,
+            new_cursor.to_dict(),
+            f"cost-ordered-cursor-{checkpoint_index:05d}.json",
+            kind=coe.CURSOR_KIND,
+            provenance={
+                "search_content_key": spec.content_key,
+                "cursor": int(new_cursor.state.cursor),
+                "candidate_id": candidate_id,
+                "release_evidence": False,
+            },
+        )
+        checkpoint_index += 1
+
+    def verify(candidate_id: str) -> CandidateEvidence:
+        evidence = _pilot_evidence_for(
+            workspace, runner, schedules[candidate_id],
+            targets=pilot_targets,
+            existing_records=pilot_records.get(candidate_id, []),
+            compact_pilot=compact_pilot,
+            policy=policy,
+        )
+        # The price the ordering used and the price the runner reports must be
+        # the same number. Checked on every candidate, not only in a benchmark.
+        return coe.reconcile_disruption(evidence, priced_by_id[candidate_id])
+
+    result = coe.run_cost_ordered_execution(
+        spec, ledger, policy.pilot,
+        verify=verify,
+        practical_equivalence_vehicle_hours=(
+            policy.finalist.practical_equivalence_vehicle_hours),
+        cursor=cursor,
+        verified_evidence=verified_evidence,
+        checkpoint=checkpoint,
+        progress=report,
+    )
+    return list(result.evidence), result
+
+
 def run_monthly_search(
     spec: ClosureSearchSpec,
     policy: MonthlySearchPolicy,
@@ -1139,8 +1361,16 @@ def run_monthly_search(
     runner: CandidateRunner,
     screen_builder: ScreenBuilder,
     root: Path = DEFAULT_ROOT,
+    cost_source: Any = None,
 ) -> dict[str, Any]:
-    """Run or resume one monthly search through a robust mesoscopic decision."""
+    """Run or resume one monthly search through a robust mesoscopic decision.
+
+    `cost_source` switches the pilot phase from exhaustive to COST-ORDERED
+    execution: every candidate is priced from calibrated routes first, and SUMO
+    then runs only for the candidates the ordering boundary requires. It is the
+    real execution, not a replay — the exhaustive path stays available and
+    unchanged as the reference by simply not passing one.
+    """
     spec = ClosureSearchSpec.from_dict(spec.to_dict())
     policy = MonthlySearchPolicy.from_dict(policy.to_dict())
     workspace, _ = open_search_workspace(spec, root=root)
@@ -1224,51 +1454,37 @@ def run_monthly_search(
             variant: policy.pilot.repetitions_per_variant
             for variant in DEMAND_VARIANTS
         }
-        for index, candidate_id in enumerate(shortlist_ids):
-            # A broad independent search can contain tens of thousands of
-            # parents. Updating the workspace manifest for every additive
-            # in-memory reconstruction turns cache hits into a filesystem
-            # benchmark, so retain bounded progress writes instead.
-            progress_stride = max(1, len(shortlist_ids) // 100)
-            if not compact_pilot or index % progress_stride == 0:
-                workspace.update_progress(
-                    phase,
-                    completed=index,
-                    total=len(shortlist_ids),
-                )
-            existing = pilot_records.get(candidate_id, [])
-            if existing:
-                evidence = existing[-1][1]
-                _validate_evidence_target(
-                    evidence,
-                    schedule_id=candidate_id,
-                    targets=pilot_targets,
-                )
-            elif compact_pilot:
-                evidence = runner.run_candidate(
-                    schedules[candidate_id],
-                    target_repetitions=pilot_targets,
-                    existing=None,
-                    stage="pilot",
-                )
-                _validate_evidence_target(
-                    evidence,
-                    schedule_id=candidate_id,
-                    targets=pilot_targets,
-                )
-            else:
-                evidence = _run_and_publish_candidate(
-                    workspace,
-                    runner,
-                    schedules[candidate_id],
-                    targets=pilot_targets,
-                    existing=None,
-                    stage="pilot",
-                    kind="monthly_pilot_candidate",
-                    round_index=0,
-                    policy=policy,
-                )
-            pilot_evidence.append(evidence)
+        cost_ordered_result = None
+        if cost_source is not None:
+            if policy.objective_method != "closure_cost_v1":
+                raise ValueError(
+                    "cost-ordered execution requires the closure_cost_v1 "
+                    "objective; the legacy time-loss key is not deterministic "
+                    "and cannot order candidates before simulation")
+            pilot_evidence, cost_ordered_result = _cost_ordered_pilot(
+                workspace,
+                spec,
+                policy,
+                runner=runner,
+                schedules=schedules,
+                shortlist_ids=shortlist_ids,
+                cost_source=cost_source,
+                pilot_targets=pilot_targets,
+                pilot_records=pilot_records,
+                compact_pilot=compact_pilot,
+            )
+        else:
+            pilot_evidence = _exhaustive_pilot(
+                workspace,
+                policy,
+                runner=runner,
+                schedules=schedules,
+                shortlist_ids=shortlist_ids,
+                pilot_targets=pilot_targets,
+                pilot_records=pilot_records,
+                compact_pilot=compact_pilot,
+                phase=phase,
+            )
 
         pilot_selection = select_pilot_finalists(
             pilot_evidence,

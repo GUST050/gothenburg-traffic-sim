@@ -801,6 +801,24 @@ class IndependentDailyRunner:
         self._parents = parents
         self._prepared_parent_ids = parent_ids
 
+    def daily_units_for(
+        self, parent: ClosureSchedule
+    ) -> tuple[tuple[str, ClosureSchedule], ...]:
+        """This parent's ordered ``(unit_id, daily schedule)`` pairs.
+
+        The seam cost-first execution needs: a parent's deterministic price is
+        the sum of its daily units' prices, and the units are the reusable
+        thing — the same day appears in many overlapping parents, so pricing is
+        cached per unit and a later parent covering those days is usually free.
+        """
+        if self._prepared_parent_ids is None:
+            raise RuntimeError("independent daily runner is not prepared")
+        unit_ids = self._parents.get(parent.schedule_id)
+        if unit_ids is None:
+            raise ValueError("candidate was not part of the prepared shortlist")
+        return tuple(
+            (unit_id, self._units[unit_id].schedule) for unit_id in unit_ids)
+
     def provenance(self) -> Mapping[str, Any]:
         if self._backend_digest is None:
             raise RuntimeError("independent daily runner must be prepared")

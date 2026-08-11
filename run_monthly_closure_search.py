@@ -369,6 +369,52 @@ def _independent_exhaustive_preflight(
     return report
 
 
+def _cost_source_for(spec, runner, args):
+    """Build the deterministic cost source for real cost-first execution.
+
+    Prices a parent by pricing its daily units through the SAME calibrated
+    archives the simulation would use, resolved by the demand resolver. No SUMO
+    process is started to do it.
+    """
+    from traffic_sim.simulation.cost_ordered_execution import (
+        IndependentDailyCostSource,
+    )
+    from traffic_sim.simulation.deterministic_disruption import (
+        DailyCostCache,
+        NetworkCostModel,
+    )
+
+    daily_runner = getattr(runner, "daily_runner", None)
+    units_for = getattr(runner, "daily_units_for", None)
+    if daily_runner is None or units_for is None:
+        raise ValueError(
+            "cost-ordered execution requires the independent daily runner; "
+            "it prices a parent from its daily units")
+    resolver = getattr(daily_runner, "deterministic_disruption_provider", None)
+    if resolver is None:
+        # IsolatedDailySumoRunner wraps the resolver for parallel execution;
+        # the prices come from the resolver underneath it, never from a worker.
+        inner = getattr(daily_runner, "runner", None)
+        resolver = getattr(inner, "deterministic_disruption_provider", None)
+    if resolver is None:
+        raise ValueError(
+            "cost-ordered execution needs a demand resolver that can produce a "
+            "process-free disruption provider")
+
+    # One network model for the whole search: the adjacency and free-flow
+    # tables are per-network, and rebuilding them per candidate would cost more
+    # than the simulations being avoided.
+    network = NetworkCostModel()
+    cache = DailyCostCache(Path(args.daily_cost_cache))
+    return IndependentDailyCostSource(
+        spec,
+        daily_units_for=units_for,
+        provider_for=lambda unit_schedule: resolver(
+            unit_schedule, cache=cache, network=network),
+        cache=cache,
+    )
+
+
 def _publish_cost_ordered_shadow(spec, policy, *, root) -> dict:
     """Replay PR E's cost-ordered scan over a finished run, in shadow mode.
 
@@ -492,6 +538,18 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Content-addressed independent-day evidence cache used when the "
             "search spec selects independent_daily_reset_v1."
+        ),
+    )
+    parser.add_argument(
+        "--daily-cost-cache",
+        type=Path,
+        default=Path("runs") / "closure-search-daily-costs",
+        help=(
+            "Content-addressed DETERMINISTIC daily cost cache used by "
+            "--screening-mode=independent-cost-ordered-exact. Separate from "
+            "--daily-result-cache because a price and a simulation outcome "
+            "have different identities: a price binds routes, network and "
+            "costing sources, an outcome also binds the SUMO runtime."
         ),
     )
     parser.add_argument("--seed-workers", type=int, default=1)
@@ -737,25 +795,26 @@ def main() -> None:
                 ),
                 preflight_report=independent_preflight,
             )
+        cost_source = None
+        if args.screening_mode == "independent-cost-ordered-exact":
+            # REAL cost-first execution: candidates are priced from the
+            # calibrated routes before anything is simulated, and SUMO runs
+            # only for the ones the ordering boundary requires. The exhaustive
+            # mode remains the untouched reference.
+            cost_source = _cost_source_for(spec, runner, args)
         result = run_monthly_search(
             spec,
             policy,
             runner=runner,
             screen_builder=screen_builder,
             root=args.root,
+            cost_source=cost_source,
         )
-        if args.screening_mode == "independent-cost-ordered-exact":
-            # SHADOW ONLY. The exhaustive answer above is the result; this
-            # replays the cost-ordered scan against the same evidence and
-            # publishes the comparison. It changes nothing about the run.
-            shadow = _publish_cost_ordered_shadow(
-                spec, policy, root=args.root)
+        if cost_source is not None:
             print(
-                "cost-ordered shadow: "
-                f"equivalent={shadow.get('equivalent')}; "
-                f"verified={shadow.get('verified_candidates')}/"
-                f"{shadow.get('ordered_candidates')}; "
-                f"saved={shadow.get('sumo_verifications_saved')}",
+                "cost-ordered execution: "
+                f"priced {getattr(cost_source, 'computed_units', 0)} daily "
+                f"units, {getattr(cost_source, 'cache_hits', 0)} cache hits",
                 file=sys.stderr,
             )
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
