@@ -57,15 +57,20 @@ def wired(monkeypatch, tmp_path):
     return {"spec": spec, "ids": ids, "prices": prices, "runners": runners}
 
 
-def _registration(tmp_path, spec, *, runs_root=None):
-    """A registration bound only to inputs that really exist in this tree."""
+def _registration(tmp_path, spec, *, runs_root=None, outcome=None):
+    """A registration bound only to inputs that really exist in this tree.
+
+    `outcome` is threaded through because a registration now names the outcome
+    the caller asked for, and a run must write exactly that file.
+    """
     network_dir = tmp_path / "sumo"
     network_dir.mkdir(exist_ok=True)
     (network_dir / "net.net.xml").write_text("<net/>", encoding="utf-8")
     (network_dir / "network_metadata.json").write_text(
         "{}", encoding="utf-8")
     record = bench.build_registration(
-        runs_root or tmp_path, data_root=tmp_path)
+        runs_root or tmp_path, data_root=tmp_path,
+        outcome_path=outcome or (tmp_path / "outcome.json"))
     record["selected_case"] = {
         "search_id": spec.search_id,
         "search_content_key": spec.content_key,

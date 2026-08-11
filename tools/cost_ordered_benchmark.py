@@ -50,13 +50,102 @@ from traffic_sim.simulation.deterministic_disruption import (  # noqa: E402
     VARIANT_FILENAMES,
 )
 
-REGISTRATION_SCHEMA = "cost_ordered_benchmark_registration_v2"
-OUTCOME_SCHEMA = "cost_ordered_benchmark_outcome_v2"
+#: The CURRENT contract. v3 differs from v2 in two ways that change what a
+#: registration MEANS, which is why it is a new schema rather than new
+#: filenames under the old one:
+#:
+#:   * `outcome_record` names the outcome the caller actually asked for. v2
+#:     hard-coded its own default, so a v3 registration written to a custom
+#:     path still claimed the v2 outcome — the record pointed at a file it had
+#:     nothing to do with.
+#:   * `sources` seals every project module on the arms' real import path, not
+#:     the ten that were listed by hand. The gap was not academic: the runtime
+#:     correction in adf765b changed `monthly_sumo.py` and `suggest_closure_
+#:     time.py`, and a v2 registration would have reported no drift at all.
+#:
+#: v2 stays readable so the frozen v2 history keeps validating; it is never
+#: written again.
+REGISTRATION_SCHEMA = "cost_ordered_benchmark_registration_v3"
+OUTCOME_SCHEMA = "cost_ordered_benchmark_outcome_v3"
+REGISTRATION_SCHEMA_V2 = "cost_ordered_benchmark_registration_v2"
+OUTCOME_SCHEMA_V2 = "cost_ordered_benchmark_outcome_v2"
+SUPPORTED_REGISTRATION_SCHEMAS = (REGISTRATION_SCHEMA, REGISTRATION_SCHEMA_V2)
+#: An outcome must speak its registration's dialect: replaying a frozen v2
+#: registration must still produce a v2-schema outcome, or the v2 history
+#: acquires a successor it never licensed.
+OUTCOME_SCHEMA_FOR_REGISTRATION = {
+    REGISTRATION_SCHEMA: OUTCOME_SCHEMA,
+    REGISTRATION_SCHEMA_V2: OUTCOME_SCHEMA_V2,
+}
 
 DEFAULT_REGISTRATION = (
-    ROOT / "validation" / "cost_ordered_benchmark_registration_v2.json")
+    ROOT / "validation" / "cost_ordered_benchmark_registration_v3.json")
 DEFAULT_OUTCOME = (
-    ROOT / "validation" / "cost_ordered_benchmark_outcome_v2.json")
+    ROOT / "validation" / "cost_ordered_benchmark_outcome_v3.json")
+
+#: Every project module on the two arms' real construction and execution path.
+#: Derived by importing exactly what `product_arm.build_arm` and
+#: `run_monthly_search` touch and taking the project-local closure; pinned by
+#: `test_the_seal_covers_the_real_import_closure`, which re-derives it, so a
+#: module added to the path later cannot slip past the seal unnoticed.
+#:
+#: The list is explicit rather than computed at registration time: a seal that
+#: discovers its own contents would also quietly shrink when an import moved,
+#: and a registration must fail loudly instead.
+SEMANTIC_SOURCES = (
+    "run_monthly_closure_search.py",
+    "run_scenario.py",
+    "suggest_closure_time.py",
+    "tools/__init__.py",
+    "tools/cost_ordered_benchmark.py",
+    "tools/product_arm.py",
+    "traffic_sim/__init__.py",
+    "traffic_sim/core/__init__.py",
+    "traffic_sim/core/closure_calendar.py",
+    "traffic_sim/core/contracts.py",
+    "traffic_sim/core/fingerprint.py",
+    "traffic_sim/demand/__init__.py",
+    "traffic_sim/demand/build_lock.py",
+    "traffic_sim/demand/route_support.py",
+    "traffic_sim/demand/source_identity.py",
+    "traffic_sim/simulation/__init__.py",
+    "traffic_sim/simulation/closure_ledgers.py",
+    "traffic_sim/simulation/closure_preflight.py",
+    "traffic_sim/simulation/closure_ranking.py",
+    "traffic_sim/simulation/closure_teleport.py",
+    "traffic_sim/simulation/cost_ordered_execution.py",
+    "traffic_sim/simulation/cost_ordered_search.py",
+    "traffic_sim/simulation/deterministic_disruption.py",
+    "traffic_sim/simulation/envelope.py",
+    "traffic_sim/simulation/finalist_decision.py",
+    # Lazily imported by `load_passing_heldout_gate`, which decides the CLAIM
+    # BOUNDARY on every result. A static import probe misses them; the full
+    # suite caught them. Anything that can change what a result is allowed to
+    # claim belongs in the seal.
+    "traffic_sim/simulation/heldout_gate.py",
+    "traffic_sim/simulation/independent_daily.py",
+    "traffic_sim/simulation/metadata.py",
+    "traffic_sim/simulation/metrics.py",
+    "traffic_sim/simulation/monthly_demand.py",
+    "traffic_sim/simulation/monthly_proxy.py",
+    "traffic_sim/simulation/monthly_search.py",
+    "traffic_sim/simulation/monthly_sumo.py",
+    "traffic_sim/simulation/monthly_warm_state.py",
+    "traffic_sim/simulation/multiday.py",
+    "traffic_sim/simulation/period_comparison.py",
+    "traffic_sim/simulation/pilot_selection.py",
+    "traffic_sim/simulation/proxy_validation.py",
+    "traffic_sim/simulation/runtime.py",
+    "traffic_sim/simulation/search_workspace.py",
+    "traffic_sim/simulation/seed_worker_budget.py",
+    "traffic_sim/simulation/sensor_fit.py",
+    "traffic_sim/simulation/trajectory_contract.py",
+    "traffic_sim/simulation/warm_route_windows.py",
+    "traffic_sim/simulation/warm_state_boundary.py",
+    "traffic_sim/simulation/warm_state_cache.py",
+    "traffic_sim/simulation/warm_state_forensics.py",
+    "traffic_sim/simulation/workspace.py",
+)
 
 #: Where calibrated archives live. An archive is usable only if it carries all
 #: three variants AND its own metadata.
@@ -535,7 +624,8 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
 
 def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
                        *, from_archives: bool = False,
-                       data_root: Path = ROOT) -> dict[str, Any]:
+                       data_root: Path = ROOT,
+                       outcome_path: Path = DEFAULT_OUTCOME) -> dict[str, Any]:
     data_root = Path(data_root).resolve()
     selection = select_case(runs_root, from_archives=from_archives)
     selected = selection["selected"]
@@ -575,21 +665,8 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
                 "sha256": sha256_file(ROOT / COST_ORDERED_POLICY),
             },
         },
-        "sources": {
-            name: sha256_file(ROOT / name)
-            for name in (
-                "traffic_sim/simulation/cost_ordered_execution.py",
-                "traffic_sim/simulation/cost_ordered_search.py",
-                "traffic_sim/simulation/deterministic_disruption.py",
-                "traffic_sim/simulation/closure_ranking.py",
-                "traffic_sim/simulation/pilot_selection.py",
-                "traffic_sim/simulation/finalist_decision.py",
-                "traffic_sim/simulation/monthly_search.py",
-                "run_scenario.py",
-                "run_monthly_closure_search.py",
-                "tools/cost_ordered_benchmark.py",
-            )
-        },
+        "sources": {name: sha256_file(ROOT / name)
+                    for name in SEMANTIC_SOURCES},
         # These paths are deliberately absolute. Source files belong to this
         # checkout, but ignored SUMO data commonly lives in the primary
         # worktree. Binding ROOT here while run_scenario reads relative to the
@@ -623,8 +700,12 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
         },
         "comparison_metrics": list(COMPARISON_METRICS),
         "gate_thresholds": dict(GATE_THRESHOLDS),
-        "outcome_record": str(
-            DEFAULT_OUTCOME.relative_to(ROOT)),
+        # The outcome the CALLER asked for, not this tool's default. v2 bound
+        # its own default regardless of --out, so a registration written to a
+        # v3 path still named the v2 outcome — a provenance claim about a file
+        # it had nothing to do with, and one nobody would notice until two
+        # records disagreed about which run produced which.
+        "outcome_record": _relative(Path(outcome_path).resolve()),
         "claim_boundary": {
             "activates_policy_v3": False,
             "opens_global_best": False,
@@ -718,8 +799,10 @@ def build_outcome(
 ) -> dict[str, Any]:
     """The separate record a run writes. Never edits the registration."""
     gates = _gate_results(comparison)
+    schema = OUTCOME_SCHEMA_FOR_REGISTRATION.get(
+        str(registration.get("schema")), OUTCOME_SCHEMA)
     record = {
-        "schema": OUTCOME_SCHEMA,
+        "schema": schema,
         "kind": "cost_ordered_benchmark_outcome",
         "evidence_class": "preregistered_benchmark",
         "release_evidence": False,
@@ -727,6 +810,7 @@ def build_outcome(
         "status": status,
         "registration": {
             "path": _relative(Path(registration_path).resolve()),
+            "schema": registration.get("schema"),
             "content_key": registration.get("content_key"),
             "search_id": (registration.get("selected_case") or {}).get(
                 "search_id"),
@@ -1305,6 +1389,7 @@ def main(argv=None) -> int:
             args.runs_root,
             from_archives=args.from_archives,
             data_root=args.data_root,
+            outcome_path=args.out,
         )
         if args.from_archives and record["selected_case"] is None:
             # Refusing here is the whole lesson of v1, which was frozen against
@@ -1326,6 +1411,11 @@ def main(argv=None) -> int:
 
     registration = json.loads(
         Path(args.registration).read_text(encoding="utf-8"))
+    schema = str(registration.get("schema"))
+    if schema not in SUPPORTED_REGISTRATION_SCHEMAS:
+        raise SystemExit(
+            f"unsupported registration schema {schema!r}; this tool reads "
+            f"{', '.join(SUPPORTED_REGISTRATION_SCHEMAS)}")
     if registration.get("selected_case") is None:
         raise SystemExit(
             "the registration selected no case; there is nothing to run. "
@@ -1339,6 +1429,19 @@ def main(argv=None) -> int:
             + "\n  - ".join(drift)
             + "\nRe-register (a NEW version; never edit a frozen one) or "
               "restore the bound inputs.")
+
+    # The registration named an outcome; a run must write exactly that file,
+    # or the two records stop describing the same experiment. Checked AFTER
+    # binding verification so a reviewer who also got --out wrong still learns
+    # that the inputs moved, which is the more important finding.
+    declared_outcome = registration.get("outcome_record")
+    if declared_outcome and _relative(Path(args.out).resolve()) != (
+            declared_outcome):
+        raise SystemExit(
+            f"the registration names {declared_outcome} as its outcome but "
+            f"--out is {_relative(Path(args.out).resolve())}. A run must write "
+            f"the record its registration froze, or the two stop describing "
+            f"the same experiment.")
 
     try:
         executed = run_benchmark(

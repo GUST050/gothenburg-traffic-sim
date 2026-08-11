@@ -217,12 +217,15 @@ class TestItRefusesToFreezeAnEmptyRegistration:
         library.mkdir()
         _weekday_library(library, "2025-09-01", 6)
         destination = tmp_path / "v2.json"
+        outcome = tmp_path / "outcome.json"
         bench.main(["--preregister", "--from-archives",
                     "--runs-root", str(library),
                     "--data-root", str(tmp_path),
-                    "--registration", str(destination)])
+                    "--registration", str(destination),
+                    "--out", str(outcome)])
         record = json.loads(destination.read_text(encoding="utf-8"))
-        assert record["schema"] == "cost_ordered_benchmark_registration_v2"
+        assert record["schema"] == bench.REGISTRATION_SCHEMA
+        assert record["outcome_record"] == bench._relative(outcome.resolve())
         assert record["data_root"] == str(tmp_path.resolve())
         assert Path(record["network"]["path"]).is_absolute()
         assert record["status"] == "frozen_before_outcome"
@@ -253,10 +256,12 @@ class TestItRefusesToFreezeAnEmptyRegistration:
         library.mkdir()
         _weekday_library(library, "2025-09-01", 6)
         registration_path = tmp_path / "v2.json"
+        outcome_path = tmp_path / "outcome-v2.json"
         bench.main(["--preregister", "--from-archives",
                     "--runs-root", str(library),
                     "--data-root", str(tmp_path),
-                    "--registration", str(registration_path)])
+                    "--registration", str(registration_path),
+                    "--out", str(outcome_path)])
         record = json.loads(registration_path.read_text(encoding="utf-8"))
 
         from traffic_sim.core.contracts import ClosureSearchSpec
@@ -273,7 +278,6 @@ class TestItRefusesToFreezeAnEmptyRegistration:
         monkeypatch.setattr(pa, "build_arm", fake_build_arm)
         monkeypatch.setattr(bench.pa, "build_arm", fake_build_arm)
 
-        outcome_path = tmp_path / "outcome-v2.json"
         code = bench.main(["--run", "--registration", str(registration_path),
                            "--runs-root", str(library),
                            "--data-root", str(tmp_path),
@@ -281,7 +285,7 @@ class TestItRefusesToFreezeAnEmptyRegistration:
                            "--workspace-root", str(tmp_path / "ws"),
                            "--out", str(outcome_path)])
         outcome = json.loads(outcome_path.read_text(encoding="utf-8"))
-        assert outcome["schema"] == "cost_ordered_benchmark_outcome_v2"
+        assert outcome["schema"] == bench.OUTCOME_SCHEMA
         assert outcome["registration"]["path"] == str(outcome_path.parent / "v2.json")
         assert code == 0, outcome["gates"]["checks"]
         assert outcome["gates"]["passed"] is True
