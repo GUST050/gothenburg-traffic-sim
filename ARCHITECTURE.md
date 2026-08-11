@@ -1407,14 +1407,15 @@ eleven gate thresholds including a strictly positive
 windows were written by hand and mostly named dates no archive held, and its
 road was `60786979_3575001205_0` — the documented single-incoming-connection
 edge, whose closure severs a successor, so its candidates are degenerate for
-reasons unrelated to execution order. Discovery reads the library's own
-`demand_meta.json` files, keeps only whole-day three-variant archives (what an
-independent daily unit resolves to), groups them into runs of consecutive
-eligible dates per source, offers several daily windows per run, and takes its
-roads from the frozen topology screen's SURVIVING set. A discovery that finds
-nothing refuses to write anything: v1 was frozen against an empty runs
-directory, and an empty registration looks like evidence while saying only
-which machine it ran on.
+reasons unrelated to execution order. Discovery reads `demand_meta.json` only
+to propose dates, then asks the product's `MonthlyDemandResolverRunner` and
+`find_demand_archives` to validate the exact warm-up envelope, manifest,
+generator/runtime fingerprints, provenance and output digests. This matters
+because an independent one-day closure normally resolves to a three-day demand
+envelope: archive start date and work date are not interchangeable. Individual
+dates are offered as well as maximal runs; one day still yields 9–13 legal
+start times. Roads come from the frozen topology screen's SURVIVING set. A
+discovery that finds nothing refuses to write anything.
 
 **`--run` executes both arms.** Bindings are re-hashed first and all drift is
 reported at once; both arms then run under ONE workspace lock held for the whole
@@ -1437,6 +1438,15 @@ restart gate rather than passing by absence.
 `--run` writes a SEPARATE outcome record naming the registration by content
 key; the registration is never edited, and a run that turns out
 non-discriminating is recorded as it happened before a new case is registered.
+Execution errors also publish `failed_execution` with every gate false.
+Network and metadata are bound to an explicit data root, both arms execute from
+that root, and the shared demand lock is taken there rather than in the source
+worktree.
+
+The real v2 run on 2026-08-11 bound 13 schedules on 2027-03-22 to exact demand
+build `5ac74750843384b3`. Its first exhaustive SUMO observation timed out after
+the unchanged 300-second limit at seed 1000. The outcome therefore opens no
+equivalence, saving, held-out or activation gate.
 
 #### Progress vocabulary — step 4, BUILT
 
@@ -1498,12 +1508,14 @@ would actually cost, and it is not made here.
 
 PR G's in-process SUMO path is blocked, and not for the reason previously
 recorded. eclipse-sumo 1.27.1 IS installed; it ships the libsumo C++ library
-(`lib64/libsumocpp.so`) and every libsumo header, and no Python binding at all.
+(`lib64/libsumocpp.so` on Linux and `lib/libsumocpp.dylib` on Darwin), every
+libsumo header, and no Python binding at all.
 Reinstalling the same wheel cannot help. The preflight separates the three
 faults that all surface as `ModuleNotFoundError` — a module absent only because
 SUMO's `tools` directory is off `sys.path` (true here for `sumolib` and
-`traci`), a distribution without the binding, and SUMO genuinely absent — and
-installs nothing. The subprocess backend stays the only execution path, so the
+`traci`), a distribution without the binding, and SUMO genuinely absent. It
+checks packaged `<SUMO_HOME>/bin` binaries as well as `PATH` and recognises
+Linux, Darwin and Windows library suffixes. It installs nothing. The subprocess backend stays the only execution path, so the
 approved seed-worker budget and every process and memory cap stand as
 benchmarked.
 

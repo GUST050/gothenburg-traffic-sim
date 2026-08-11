@@ -27,15 +27,19 @@ owners, states and approval formulas are not active workflow rules. See
   artifacts on load — and the speculative fix was reverted and pinned in both
   directions. tools/cost_ordered_benchmark.py --run is implemented and drives
   bindings, both arms, the comparison, the gates and the outcome; benchmark
-  cases are now discovered from archive metadata; the independent-vs-continuous
-  outcome reports five categories.`
-- Suggested next action: `On the host holding the calibrated archive library:
-  `python3 tools/cost_ordered_benchmark.py --preregister --from-archives
-  --runs-root <root> --registration
-  validation/cost_ordered_benchmark_registration_v2.json`, then `--run --out
-  validation/cost_ordered_benchmark_outcome_v2.json`. If and only if all eleven
-  gates pass, freeze and run an untouched held-out campaign. Re-run
-  measure_independent_vs_continuous.py there too with a v3 outcome.`
+  cases are now discovered from exact product-resolvable demand envelopes; the
+  independent-vs-continuous outcome reports five categories. Codex review
+  additionally fixed worktree/network identity, single-day discovery,
+  real-archive validation, failed-outcome publication and Darwin libsumo
+  detection. The frozen real v2 benchmark selected 13 schedules on 2027-03-22,
+  but its first exhaustive SUMO verification hit the unchanged 300 s timeout;
+  the separate outcome records `failed_execution` and all gates false.`
+- Suggested next action: `Profile the frozen v2 arm up to its 300 s timeout and
+  determine whether the cost is avoidable setup/I/O, an invalid simulation
+  horizon, or the genuine runtime of the bound three-day archive. Do not raise
+  the timeout. Preserve v2; preregister v3 only after a source-level correction
+  or a structurally different product-resolvable case can be justified before
+  its outcome. Held-out remains gated behind a passing benchmark.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Do not use held observations in pool, picker, ordering
   thresholds, finalist selection or certificate. Do not weaken equivalence,
@@ -51,14 +55,11 @@ owners, states and approval formulas are not active workflow rules. See
   external calibration data without explicit user authority; the 2026-07-20
   no-further-external-data decision stands. Do not fabricate demand, held-out,
   benchmark or microsimulation evidence.`
-- Updated: `Branch claude/closure-evidence-gates on top of fe8b3d4. Focused
-  suites: 297 passed (deterministic disruption 32, cost-ordered search 77,
-  cost-ordered execution 21, execution review 10, benchmark registration 18,
-  benchmark run 21, benchmark discovery 18, import cost 4, progress 10, policy
-  v3 9, PR H pre-registration 17, IVC harness 27, libsumo preflight 11, golden
-  4, independent daily 18). tests/test_serve.py: 126 passed. The affected sweep
-  fails 181, an identical set to the recorded 73f5116 baseline — no failure is
-  introduced. git diff --check clean.`
+- Updated: `Codex review over f078b64. Focused suites: 300 passed; API: 126
+  passed with loopback permission; survivability reproduces byte-for-byte.
+  The real v2 registration and failed outcome are immutable, diagnostic and
+  release_evidence=false. Darwin libsumo preflight v2 correctly finds SUMO
+  1.27.1 and libsumocpp.dylib but no Python binding. git diff --check clean.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -66,9 +67,9 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### CLOSURE-EVIDENCE-GATES — Review, benchmark runner, discovery, IVC v2
 
-- Status: `IMPLEMENTED, REVIEWED AND TESTED. The evidence PIPELINE is complete
-  and exercised end to end; the evidence itself is not produced, because this
-  container holds no calibrated archive library. Nothing was activated.`
+- Status: `IMPLEMENTED, REVIEWED AND TESTED. The real v2 benchmark was frozen
+  before outcome and attempted; it failed on the first arm's unchanged 300 s
+  SUMO timeout. No held-out run or activation followed.`
 - Objective and scope: `Review commits 16046fe..fe8b3d4 and repair what is
   wrong; implement a real --run that executes and compares both arms; discover
   benchmark cases from archive metadata rather than hand-written dates; run
@@ -86,17 +87,20 @@ owners, states and approval formulas are not active workflow rules. See
   and roads that survive their own closure, and refuses to freeze an empty
   registration. The IVC harness reports five categories with a cross-cutting
   pairing verdict.`
-- Context or checkpoints: `The named data root /Users/gt/Documents/gs-project/
-  runs does not exist in this container — there is no /Users at all, and a
-  whole-filesystem search finds calibrated route files only under pytest temp
-  directories. No v2 benchmark registration is committed: freezing one from
-  zero archives would repeat exactly the v1 mistake this work exists to fix.
-  Held-out validation is gated behind a passing benchmark and did not run.`
+- Context or checkpoints: `The primary dev root contains 51 archive directories
+  but only exact product validation may declare one runnable. Discovery now
+  accounts for multi-day warm-up envelopes and selected build
+  5ac74750843384b3 for 2027-03-22. The 13-candidate v2 registration is frozen;
+  its first exhaustive SUMO run timed out after 300 s at seed 1000. Held-out
+  validation remains gated and did not run.`
 - Primary files: `NEW tools/product_arm.py,
   tests/test_cost_ordered_execution_review.py,
   tests/test_cost_ordered_benchmark_run.py,
   tests/test_cost_ordered_benchmark_discovery.py,
-  validation/independent_vs_continuous_outcome_v2.json. MODIFIED
+  validation/independent_vs_continuous_outcome_v2.json,
+  validation/cost_ordered_benchmark_registration_v2.json,
+  validation/cost_ordered_benchmark_outcome_v2.json and
+  validation/libsumo_preflight_v2.json. MODIFIED
   monthly_search.py, cost_ordered_execution.py, run_monthly_closure_search.py,
   tools/cost_ordered_benchmark.py, tools/measure_independent_vs_continuous.py,
   ARCHITECTURE.md, IMPROVEMENT_PLAN.md, the scaling plan, TASKS.md,
@@ -115,8 +119,8 @@ owners, states and approval formulas are not active workflow rules. See
   when a price is poisoned; discovery selects without consulting an outcome and
   refuses to freeze nothing; every measurement writes a separate versioned
   record.`
-- Useful checks: `pytest -q on the fifteen focused modules (297 passed);
-  tests/test_serve.py; python3 tools/verify_closure_cost_ordering_golden.py
+- Useful checks: `pytest -q on the fifteen focused modules (300 passed);
+  tests/test_serve.py (126 passed); python3 tools/verify_closure_cost_ordering_golden.py
   --verify; python3 tools/screen_closure_survivability.py --verify;
   git diff --check.`
 <!-- ACTIVE_TASK_END -->

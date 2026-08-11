@@ -24,6 +24,26 @@ import tools.cost_ordered_benchmark as bench
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture(autouse=True)
+def _synthetic_archives_are_product_resolvable(monkeypatch):
+    """Keep small metadata-only fixtures while production uses full validation."""
+    def resolve(spec, runs_root, cache=None):
+        index = bench._archive_index(runs_root)
+        covered = {
+            str(record.get("epoch_sim", ""))[:10]
+            for record in index.values()
+        }
+        needed = set(bench._structural_profile(spec)["work_dates"])
+        if not needed <= covered:
+            return None
+        return {
+            key: value for key, value in index.items()
+            if str(value.get("epoch_sim", ""))[:10] in needed
+        }
+
+    monkeypatch.setattr(bench, "_resolved_archives_for_spec", resolve)
+
+
 def _archive(root: Path, work_date: str, *, source: str = "historical",
              days: int = 1, begin: str = "00:00", end: str = "24:00",
              variants=("q10", "q50", "q90")) -> Path:
@@ -57,6 +77,13 @@ def _weekday_library(root: Path, first: str, count: int, **kwargs) -> list[str]:
             made.append(day.isoformat())
         day += timedelta(days=1)
     return made
+
+
+def _network(root: Path) -> None:
+    directory = root / "sumo"
+    directory.mkdir(exist_ok=True)
+    (directory / "net.net.xml").write_text("<net/>", encoding="utf-8")
+    (directory / "network_metadata.json").write_text("{}", encoding="utf-8")
 
 
 class TestTheCalendarComesFromTheArchives:
@@ -116,6 +143,15 @@ class TestTheRoadsAreStructurallyChosen:
 
 
 class TestDiscoveryBuildsRunnableCases:
+    def test_one_archived_weekday_is_enough_for_a_discriminating_case(
+            self, tmp_path):
+        _archive(tmp_path, "2025-09-16")
+        specs = bench.discovered_specs(tmp_path)
+        assert specs, "one day can contain several legal start times"
+        selection = bench.select_case(tmp_path, from_archives=True)
+        assert selection["selected"] is not None
+        assert selection["selected"]["candidate_count"] >= 6
+
     def test_every_discovered_window_lies_inside_the_library(self, tmp_path):
         dates = _weekday_library(tmp_path, "2025-09-01", 6)
         specs = bench.discovered_specs(tmp_path)
@@ -134,10 +170,6 @@ class TestDiscoveryBuildsRunnableCases:
     def test_an_empty_library_discovers_nothing(self, tmp_path):
         assert bench.discovered_specs(tmp_path) == ()
 
-    def test_a_single_date_is_not_a_run(self, tmp_path):
-        _archive(tmp_path, "2025-09-01")
-        assert bench.discovered_specs(tmp_path) == ()
-
     def test_discovered_cases_are_structurally_eligible(self, tmp_path):
         _weekday_library(tmp_path, "2025-09-01", 6)
         selection = bench.select_case(tmp_path, from_archives=True)
@@ -148,6 +180,15 @@ class TestDiscoveryBuildsRunnableCases:
             bench.MINIMUM_STRUCTURAL_CANDIDATES)
         assert chosen["work_dates_with_calibrated_archive"] == (
             chosen["work_dates"])
+
+    def test_product_archive_resolution_can_veto_metadata_only_candidates(
+            self, tmp_path, monkeypatch):
+        _weekday_library(tmp_path, "2025-09-01", 2)
+        monkeypatch.setattr(
+            bench, "_resolved_archives_for_spec",
+            lambda spec, runs_root, cache=None: None)
+        assert bench.select_case(
+            tmp_path, from_archives=True)["selected"] is None
 
     def test_selection_still_consults_no_outcome(self, tmp_path, monkeypatch):
         from traffic_sim.simulation import deterministic_disruption as dd
@@ -171,14 +212,19 @@ class TestItRefusesToFreezeAnEmptyRegistration:
             "an empty registration must not reach disk at all")
 
     def test_discovery_with_archives_writes_a_registration(self, tmp_path):
+        _network(tmp_path)
         library = tmp_path / "runs"
         library.mkdir()
         _weekday_library(library, "2025-09-01", 6)
         destination = tmp_path / "v2.json"
         bench.main(["--preregister", "--from-archives",
                     "--runs-root", str(library),
+                    "--data-root", str(tmp_path),
                     "--registration", str(destination)])
         record = json.loads(destination.read_text(encoding="utf-8"))
+        assert record["schema"] == "cost_ordered_benchmark_registration_v2"
+        assert record["data_root"] == str(tmp_path.resolve())
+        assert Path(record["network"]["path"]).is_absolute()
         assert record["status"] == "frozen_before_outcome"
         assert record["selected_case"] is not None
         assert record["selection"]["case_source"] == (
@@ -202,12 +248,14 @@ class TestItRefusesToFreezeAnEmptyRegistration:
             FakeCostSource, FakeRunner, _ordered_prices, _screen_builder)
         from traffic_sim.core.closure_calendar import generate_closure_schedules
 
+        _network(tmp_path)
         library = tmp_path / "runs"
         library.mkdir()
         _weekday_library(library, "2025-09-01", 6)
         registration_path = tmp_path / "v2.json"
         bench.main(["--preregister", "--from-archives",
                     "--runs-root", str(library),
+                    "--data-root", str(tmp_path),
                     "--registration", str(registration_path)])
         record = json.loads(registration_path.read_text(encoding="utf-8"))
 
@@ -228,10 +276,13 @@ class TestItRefusesToFreezeAnEmptyRegistration:
         outcome_path = tmp_path / "outcome-v2.json"
         code = bench.main(["--run", "--registration", str(registration_path),
                            "--runs-root", str(library),
+                           "--data-root", str(tmp_path),
                            "--release-root", str(tmp_path / "releases"),
                            "--workspace-root", str(tmp_path / "ws"),
                            "--out", str(outcome_path)])
         outcome = json.loads(outcome_path.read_text(encoding="utf-8"))
+        assert outcome["schema"] == "cost_ordered_benchmark_outcome_v2"
+        assert outcome["registration"]["path"] == str(outcome_path.parent / "v2.json")
         assert code == 0, outcome["gates"]["checks"]
         assert outcome["gates"]["passed"] is True
         assert outcome["comparison"]["sumo_verifications_saved"] > 0

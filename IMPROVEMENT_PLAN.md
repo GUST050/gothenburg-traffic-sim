@@ -1948,6 +1948,26 @@ proof, restart equivalent. The real benchmark, and therefore held-out
 validation, remain unrun: this container has no calibrated archive library.
 Policy v3, global-best and UI claims are unchanged and closed.
 
+**Real evidence review, 2026-08-11.** The environment-local conclusion above
+is superseded for the primary dev root. Review found that the first archive
+discovery still selected non-runnable data: it equated work dates with archive
+start dates and ignored the product's multi-day warm-up envelope. Discovery now
+uses the product resolver and full archive validation, permits a single work
+date when it supplies a discriminating 9–13 start-time set, and binds the exact
+active network/data root. Frozen v2 selected 13 schedules on 2027-03-22 with
+demand build `5ac74750843384b3`. Its first exhaustive SUMO observation reached
+the unchanged 300 s timeout, so
+`validation/cost_ordered_benchmark_outcome_v2.json` records
+`failed_execution`; all gates remain false and held-out did not run. The next
+work is profiling that bound timeout without raising it, not claiming demand is
+absent.
+
+The same review made runtime errors durable benchmark outcomes, corrected the
+shared lock to the registered data root, and fixed PR G's read-only preflight
+for packaged binaries and `.dylib`/`.dll` libraries. Linux v1 remains frozen;
+Darwin v2 finds SUMO 1.27.1 and `lib/libsumocpp.dylib`, but still no Python
+binding. This changes no worker cap or activation decision.
+
 ### Confidence, policy, and wording
 
 Do not compress confidence into a fake probability. The result exposes:

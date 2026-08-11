@@ -50,13 +50,13 @@ from traffic_sim.simulation.deterministic_disruption import (  # noqa: E402
     VARIANT_FILENAMES,
 )
 
-REGISTRATION_SCHEMA = "cost_ordered_benchmark_registration_v1"
-OUTCOME_SCHEMA = "cost_ordered_benchmark_outcome_v1"
+REGISTRATION_SCHEMA = "cost_ordered_benchmark_registration_v2"
+OUTCOME_SCHEMA = "cost_ordered_benchmark_outcome_v2"
 
 DEFAULT_REGISTRATION = (
-    ROOT / "validation" / "cost_ordered_benchmark_registration_v1.json")
+    ROOT / "validation" / "cost_ordered_benchmark_registration_v2.json")
 DEFAULT_OUTCOME = (
-    ROOT / "validation" / "cost_ordered_benchmark_outcome_v1.json")
+    ROOT / "validation" / "cost_ordered_benchmark_outcome_v2.json")
 
 #: Where calibrated archives live. An archive is usable only if it carries all
 #: three variants AND its own metadata.
@@ -207,6 +207,39 @@ def archive_calendar(runs_root: Path) -> dict[str, dict[str, Any]]:
     return calendar
 
 
+def candidate_work_calendar(runs_root: Path) -> dict[str, set[str]]:
+    """Possible work dates, derived from complete archive envelopes.
+
+    Independent daily demand is normally a multi-day warm-up envelope: for a
+    closure on 2027-07-15 the exact archive can start on 2027-07-14 and span
+    three days. Treating only one-day archive start dates as work dates made
+    discovery select archives the product resolver would later refuse. This
+    function only proposes dates; `_resolved_archives_for_spec` below proves
+    the exact product demand contract before a case becomes eligible.
+    """
+    by_source: dict[str, set[str]] = {}
+    root = Path(runs_root)
+    if not root.is_dir():
+        return by_source
+    for archive in sorted(root.glob("demand-*")):
+        meta_path = archive / "demand_meta.json"
+        try:
+            metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+            spec = dict(metadata.get("demand_spec") or {})
+            first = date.fromisoformat(str(spec["start_date"]))
+            days = int(spec["days"])
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        routes = [archive / filename for filename in VARIANT_FILENAMES.values()]
+        if days < 1 or not all(path.is_file() for path in routes):
+            continue
+        source = str(spec.get("source", "historical"))
+        dates = by_source.setdefault(source, set())
+        for offset in range(days):
+            dates.add((first + timedelta(days=offset)).isoformat())
+    return by_source
+
+
 def _date_runs(dates: Sequence[str],
                weekdays: Sequence[int]) -> list[list[str]]:
     """Maximal runs of consecutive eligible dates present in the library.
@@ -260,44 +293,113 @@ def surviving_roads(path: Path = SURVIVABILITY_SCREEN) -> list[dict[str, Any]]:
 
 def discovered_specs(runs_root: Path) -> tuple[ClosureSearchSpec, ...]:
     """Cases built around dates the archive library actually contains."""
-    calendar = archive_calendar(runs_root)
-    if not calendar:
+    by_source = candidate_work_calendar(runs_root)
+    if not by_source:
         return ()
     roads = surviving_roads()
     if not roads:
         return ()
     weekdays = (0, 1, 2, 3, 4)
     specs: list[ClosureSearchSpec] = []
-    by_source: dict[str, list[str]] = {}
-    for record in calendar.values():
-        by_source.setdefault(record["source"], []).append(record["date"])
     for source in sorted(by_source):
-        for run in _date_runs(by_source[source], weekdays):
-            if len(run) < 2:
-                continue
-            for road in roads:
-                for band, hours in DISCOVERY_BANDS:
-                    edge = str(road["edge_id"])
-                    specs.append(ClosureSearchSpec(
-                        search_id=(
-                            f"cob2-{source[:4]}-{run[0].replace('-', '')}"
-                            f"-{edge.split('_')[0][:8]}"
-                            f"-{band[0].replace(':', '')}"),
-                        directed_edges=(edge,),
-                        demand_build_id=f"{source}-{run[0][:4]}",
-                        source=source,
-                        permitted_date_start=run[0],
-                        permitted_date_end=run[-1],
-                        required_work_minutes=hours * 60,
-                        max_consecutive_start_days=1,
-                        permitted_daily_band=DailyTimeBand(*band),
-                        allowed_weekdays=weekdays,
-                        interday_policy="independent_daily_reset_v1",
-                        work_allocation_policy="exact_equal_daily_v1",
-                        objective_profile="displaced_vehicles_and_detour_v1",
-                        period_comparison_policy="rolling_period_v1",
-                    ))
+        for run in _date_runs(sorted(by_source[source]), weekdays):
+            # Include every individual work date as well as the maximal run.
+            # A maximal calendar run can straddle two distinct warm-up demand
+            # envelopes even when one of its days is fully calibrated. Making
+            # only the maximal case expressible caused one missing neighbour
+            # to hide a perfectly discriminating 9-13-candidate day.
+            windows = [[value] for value in run]
+            if len(run) > 1:
+                windows.append(run)
+            for window in windows:
+                for road in roads:
+                    for band, hours in DISCOVERY_BANDS:
+                        edge = str(road["edge_id"])
+                        specs.append(ClosureSearchSpec(
+                            search_id=(
+                                f"cob2-{source[:4]}"
+                                f"-{window[0].replace('-', '')}"
+                                f"-{window[-1].replace('-', '')}"
+                                f"-{edge.split('_')[0][:8]}"
+                                f"-{band[0].replace(':', '')}"),
+                            directed_edges=(edge,),
+                            demand_build_id=f"{source}-{window[0][:4]}",
+                            source=source,
+                            permitted_date_start=window[0],
+                            permitted_date_end=window[-1],
+                            required_work_minutes=hours * 60,
+                            max_consecutive_start_days=1,
+                            permitted_daily_band=DailyTimeBand(*band),
+                            allowed_weekdays=weekdays,
+                            interday_policy="independent_daily_reset_v1",
+                            work_allocation_policy="exact_equal_daily_v1",
+                            objective_profile=(
+                                "displaced_vehicles_and_detour_v1"),
+                            period_comparison_policy="rolling_period_v1",
+                        ))
     return tuple(specs)
+
+
+def _resolved_archives_for_spec(
+    spec: ClosureSearchSpec,
+    runs_root: Path,
+    cache: dict[str, tuple[dict[str, Any], ...]] | None = None,
+) -> dict[str, dict[str, Any]] | None:
+    """Resolve the exact archives the product runner would use.
+
+    Metadata shape and route filenames are not sufficient evidence. The
+    product validates manifests, generator/runtime fingerprints, provenance,
+    output digests and the exact warm-up envelope. Selection remains
+    outcome-blind, but it may only call a case runnable when this resolver does.
+    """
+    from traffic_sim.simulation.independent_daily import daily_unit_records
+    from traffic_sim.simulation.monthly_demand import (
+        MonthlyDemandResolverRunner,
+        find_demand_archives,
+    )
+
+    resolved_cache = cache if cache is not None else {}
+    resolver = MonthlyDemandResolverRunner(
+        spec,
+        runs_root=Path(runs_root),
+        build_missing=False,
+        baseline_trip_duration_p99_s=3600,
+        study_provenance_key="cost-ordered-benchmark-discovery",
+    )
+    builds: dict[str, Any] = {}
+    for parent in iter_closure_schedules(spec):
+        for _unit_id, _identity, build_schedule in daily_unit_records(
+                spec, parent):
+            daily = build_schedule()
+            required = resolver._required(daily)
+            builds[required.build_key] = required
+
+    bound: dict[str, dict[str, Any]] = {}
+    for build_key, required in sorted(builds.items()):
+        matches = resolved_cache.get(build_key)
+        if matches is None:
+            matches = tuple(find_demand_archives(Path(runs_root), required))
+            resolved_cache[build_key] = matches
+        if not matches:
+            return None
+        archive = Path(matches[0]["archive"]).resolve()
+        meta_path = archive / "demand_meta.json"
+        routes = {
+            variant: archive / filename
+            for variant, filename in VARIANT_FILENAMES.items()
+        }
+        bound[build_key] = {
+            "archive": str(archive),
+            "epoch_sim": f"{required.start_date}T00:00:00",
+            "n_intervals": required.days * 96,
+            "demand_build_spec": required.to_dict(),
+            "routes": {
+                variant: {"path": str(path), "sha256": sha256_file(path)}
+                for variant, path in sorted(routes.items())
+            },
+            "demand_meta_sha256": sha256_file(meta_path),
+        }
+    return bound
 
 
 def _relative(path: Path) -> str:
@@ -384,17 +486,22 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
     property of the calendar and the archives on disk.
     """
     archives = _archive_index(runs_root)
-    covered_dates = {
-        str(record.get("epoch_sim", ""))[:10]
-        for record in archives.values()
-    }
     evaluated = []
+    resolution_cache: dict[str, tuple[dict[str, Any], ...]] = {}
     specs = (discovered_specs(runs_root) if from_archives
              else _candidate_specs())
     for spec in specs:
         profile = _structural_profile(spec)
-        available = [value for value in profile["work_dates"]
-                     if value in covered_dates]
+        resolved = (_resolved_archives_for_spec(
+            spec, runs_root, resolution_cache) if from_archives else None)
+        covered_dates = {
+            str(record.get("epoch_sim", ""))[:10]
+            for record in archives.values()
+        }
+        available = ([value for value in profile["work_dates"]
+                      if value in covered_dates]
+                     if not from_archives else
+                     list(profile["work_dates"]) if resolved is not None else [])
         profile.update({
             "search_id": spec.search_id,
             "search_content_key": spec.content_key,
@@ -404,6 +511,7 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
                 len(available) == len(profile["work_dates"])
                 and profile["candidate_count"] >= MINIMUM_STRUCTURAL_CANDIDATES
             ),
+            "resolved_archives": resolved,
         })
         evaluated.append(profile)
     eligible = [item for item in evaluated if item["structurally_eligible"]]
@@ -426,7 +534,9 @@ def select_case(runs_root: Path = DEFAULT_RUNS_ROOT,
 
 
 def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
-                       *, from_archives: bool = False) -> dict[str, Any]:
+                       *, from_archives: bool = False,
+                       data_root: Path = ROOT) -> dict[str, Any]:
+    data_root = Path(data_root).resolve()
     selection = select_case(runs_root, from_archives=from_archives)
     selected = selection["selected"]
     archives = _archive_index(runs_root)
@@ -480,13 +590,19 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
                 "tools/cost_ordered_benchmark.py",
             )
         },
+        # These paths are deliberately absolute. Source files belong to this
+        # checkout, but ignored SUMO data commonly lives in the primary
+        # worktree. Binding ROOT here while run_scenario reads relative to the
+        # process cwd would register one network and simulate another.
+        "data_root": str(data_root),
         "network": {
-            "path": "sumo/net.net.xml",
-            "sha256": sha256_file(ROOT / "sumo" / "net.net.xml"),
+            "path": str(data_root / "sumo" / "net.net.xml"),
+            "sha256": sha256_file(data_root / "sumo" / "net.net.xml"),
         },
         "network_metadata": {
-            "path": "sumo/network_metadata.json",
-            "sha256": sha256_file(ROOT / "sumo" / "network_metadata.json"),
+            "path": str(data_root / "sumo" / "network_metadata.json"),
+            "sha256": sha256_file(
+                data_root / "sumo" / "network_metadata.json"),
         },
         "disruption_schema": DISRUPTION_SCHEMA,
         "demand_variants": list(VARIANT_FILENAMES),
@@ -522,6 +638,13 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
         },
     }
 
+    if selected is not None and (
+            record["network"]["sha256"] is None
+            or record["network_metadata"]["sha256"] is None):
+        raise ValueError(
+            "cannot freeze a runnable benchmark without the active SUMO "
+            f"network and metadata under {data_root / 'sumo'}")
+
     if selected is None:
         record["status"] = "blocked_no_structurally_eligible_case"
         record["selected_case"] = None
@@ -544,11 +667,13 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
                 "unique_daily_unit_count", "work_dates",
                 "work_dates_with_calibrated_archive")
         }
-        record["archives"] = {
-            key: value for key, value in archives.items()
-            if str(value.get("epoch_sim", ""))[:10]
-            in set(selected["work_dates"])
-        }
+        record["archives"] = (
+            selected.get("resolved_archives")
+            if from_archives else {
+                key: value for key, value in archives.items()
+                if str(value.get("epoch_sim", ""))[:10]
+                in set(selected["work_dates"])
+            })
     record["content_key"] = _content_key(
         {key: value for key, value in record.items()
          if key not in {"content_key", "registered_at"}})
@@ -589,6 +714,7 @@ def build_outcome(
     comparison: Mapping[str, Any],
     *,
     status: str,
+    registration_path: Path = DEFAULT_REGISTRATION,
 ) -> dict[str, Any]:
     """The separate record a run writes. Never edits the registration."""
     gates = _gate_results(comparison)
@@ -600,7 +726,7 @@ def build_outcome(
         "measured_at": time.strftime("%Y-%m-%d"),
         "status": status,
         "registration": {
-            "path": str(DEFAULT_REGISTRATION.relative_to(ROOT)),
+            "path": _relative(Path(registration_path).resolve()),
             "content_key": registration.get("content_key"),
             "search_id": (registration.get("selected_case") or {}).get(
                 "search_id"),
@@ -608,9 +734,7 @@ def build_outcome(
         "comparison": dict(comparison),
         "gates": gates,
         "claim_boundary": {
-            "activates_policy_v3": bool(
-                gates["passed"] and status == "measured"
-                and comparison.get("heldout_validated") is True),
+            "activates_policy_v3": False,
             "opens_global_best": False,
             "permits_ui_claim": False,
             "reason": (
@@ -662,7 +786,10 @@ def verify_bindings(registration: Mapping[str, Any],
 
     for key in ("network", "network_metadata"):
         bound = registration.get(key) or {}
-        path = ROOT / str(bound.get("path", ""))
+        path = Path(str(bound.get("path", "")))
+        if not path.is_absolute():
+            # Backward compatibility for the frozen v1 registration.
+            path = ROOT / path
         if not path.is_file():
             drift.append(f"bound {key} is missing: {bound.get('path')}")
         elif sha256_file(path) != bound.get("sha256"):
@@ -977,6 +1104,7 @@ def compare_arms(exhaustive: Mapping[str, Any],
 
 def run_benchmark(registration: Mapping[str, Any], *, runs_root: Path,
                   release_root: Path, workspace_root: Path,
+                  data_root: Path = ROOT,
                   fault_injection: bool = True) -> dict[str, Any]:
     """Execute both arms on the bound inputs and compare them.
 
@@ -1005,11 +1133,26 @@ def run_benchmark(registration: Mapping[str, Any], *, runs_root: Path,
     roots = registration["output_roots"]
     daily_cost_cache = ROOT / roots["daily_cost_cache"]
 
-    lock = WorkspaceLock(f"cost_ordered_benchmark {os.getpid()}")
+    data_root = Path(data_root).resolve()
+    registered_root = Path(registration.get("data_root", data_root)).resolve()
+    if registered_root != data_root:
+        raise SystemExit(
+            "the benchmark data root differs from the registered data root: "
+            f"{data_root} != {registered_root}")
+
+    lock = WorkspaceLock(
+        f"cost_ordered_benchmark {os.getpid()}",
+        path=data_root / "runs" / ".demand-workspace.lock",
+    )
     if not lock.acquire(timeout=3600.0, poll_s=10.0):
         raise SystemExit(
             f"demand workspace busy: {lock.holder_description()}")
+    previous_cwd = Path.cwd()
     try:
+        # run_scenario's deployed network paths are intentionally relative.
+        # Execute both arms from the root whose network was registered so the
+        # bytes verified above are exactly the bytes SUMO consumes.
+        os.chdir(data_root)
         arms = {}
         for arm, cost_ordered in (("exhaustive", False),
                                   ("cost_ordered", True)):
@@ -1034,6 +1177,7 @@ def run_benchmark(registration: Mapping[str, Any], *, runs_root: Path,
                 daily_cost_cache=daily_cost_cache,
                 reference=arms["cost_ordered"])
     finally:
+        os.chdir(previous_cwd)
         lock.release()
     return {"arms": arms,
             "comparison": compare_arms(arms["exhaustive"],
@@ -1130,6 +1274,9 @@ def main(argv=None) -> int:
     parser.add_argument("--preregister", action="store_true")
     parser.add_argument("--run", action="store_true")
     parser.add_argument("--runs-root", type=Path, default=DEFAULT_RUNS_ROOT)
+    parser.add_argument(
+        "--data-root", type=Path, default=ROOT,
+        help="root containing the active sumo/ network used by both arms")
     parser.add_argument("--registration", type=Path,
                         default=DEFAULT_REGISTRATION)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUTCOME)
@@ -1154,8 +1301,11 @@ def main(argv=None) -> int:
         raise SystemExit("choose exactly one of --preregister or --run")
 
     if args.preregister:
-        record = build_registration(args.runs_root,
-                                    from_archives=args.from_archives)
+        record = build_registration(
+            args.runs_root,
+            from_archives=args.from_archives,
+            data_root=args.data_root,
+        )
         if args.from_archives and record["selected_case"] is None:
             # Refusing here is the whole lesson of v1, which was frozen against
             # an empty runs directory and then could not be corrected without
@@ -1190,17 +1340,49 @@ def main(argv=None) -> int:
             + "\nRe-register (a NEW version; never edit a frozen one) or "
               "restore the bound inputs.")
 
-    executed = run_benchmark(
-        registration,
-        runs_root=args.runs_root,
-        release_root=args.release_root,
-        workspace_root=args.workspace_root,
-        fault_injection=not args.no_fault_injection,
-    )
+    try:
+        executed = run_benchmark(
+            registration,
+            runs_root=args.runs_root,
+            release_root=args.release_root,
+            workspace_root=args.workspace_root,
+            data_root=args.data_root,
+            fault_injection=not args.no_fault_injection,
+        )
+    except (OSError, ValueError, RuntimeError, KeyError) as error:
+        comparison = {
+            "execution_error": {
+                "type": type(error).__name__,
+                "message": str(error),
+            },
+            "binding_drift_accepted": drift,
+            "workspace_root": str(Path(args.workspace_root).resolve()),
+        }
+        outcome = build_outcome(
+            registration,
+            comparison,
+            status="failed_execution",
+            registration_path=args.registration,
+        )
+        if args.stdout:
+            print(json.dumps(outcome, indent=1, sort_keys=True))
+        else:
+            _write(args.out, outcome, overwrite=args.overwrite)
+            print(
+                f"wrote {args.out} (status=failed_execution, "
+                f"error={type(error).__name__}: {error})",
+                file=sys.stderr,
+            )
+        return 5
     comparison = dict(executed["comparison"])
     if drift:
         comparison["binding_drift_accepted"] = drift
-    outcome = build_outcome(registration, comparison, status="measured")
+    outcome = build_outcome(
+        registration,
+        comparison,
+        status="measured",
+        registration_path=args.registration,
+    )
     if args.stdout:
         print(json.dumps(outcome, indent=1, sort_keys=True))
         return 0 if outcome["gates"]["passed"] else 4

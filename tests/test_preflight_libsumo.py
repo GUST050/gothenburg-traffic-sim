@@ -16,7 +16,7 @@ import pytest
 import tools.preflight_libsumo as preflight
 
 ROOT = Path(__file__).resolve().parents[1]
-RECORD = ROOT / "validation" / "libsumo_preflight_v1.json"
+RECORD = ROOT / "validation" / "libsumo_preflight_v2.json"
 
 
 @pytest.fixture(scope="module")
@@ -115,3 +115,11 @@ class TestItLicensesNothing:
         rebuilt = preflight.build_record()
         assert rebuilt["content_key"] == record["content_key"]
         assert rebuilt["environment"]["SUMO_HOME"] == resolved
+
+
+def test_the_linux_v1_record_remains_frozen():
+    historical = json.loads(
+        (ROOT / "validation" / "libsumo_preflight_v1.json")
+        .read_text(encoding="utf-8"))
+    assert historical["schema"] == "libsumo_preflight_v1"
+    assert historical["environment"]["platform"].startswith("Linux-")

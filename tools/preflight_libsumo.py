@@ -39,8 +39,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-SCHEMA = "libsumo_preflight_v1"
-DEFAULT_OUT = ROOT / "validation" / "libsumo_preflight_v1.json"
+SCHEMA = "libsumo_preflight_v2"
+DEFAULT_OUT = ROOT / "validation" / "libsumo_preflight_v2.json"
 
 #: The modules the speed path would need, and why each matters.
 MODULES = {
@@ -126,14 +126,18 @@ def _distribution() -> dict[str, Any]:
         return report
     root = Path(home)
     report["root"] = str(root)
-    report["libsumo_cpp_library"] = sorted(
+    report["libsumo_cpp_library"] = sorted({
         str(path.relative_to(root))
-        for path in root.rglob("libsumocpp*.so"))
+        for pattern in ("libsumocpp*.so", "libsumocpp*.dylib",
+                        "libsumocpp*.dll")
+        for path in root.rglob(pattern)
+    })
     report["libsumo_headers"] = (root / "include" / "libsumo").is_dir()
     report["libsumo_python_binding"] = sorted(
         str(path.relative_to(root))
-        for path in list(root.rglob("_libsumo*.so"))
-        + list(root.rglob("libsumo/__init__.py")))
+        for pattern in ("_libsumo*.so", "_libsumo*.dylib",
+                        "_libsumo*.pyd", "libsumo/__init__.py")
+        for path in root.rglob(pattern))
     return report
 
 
@@ -150,8 +154,14 @@ def build_record() -> dict[str, Any]:
         for name, reason in MODULES.items()
     }
     binaries = {}
+    resolved_home = Path(home["resolved_by_project"]) if (
+        home.get("resolved_by_project")) else None
     for name in BINARIES:
         path = shutil.which(name)
+        if path is None and resolved_home is not None:
+            packaged = resolved_home / "bin" / name
+            if packaged.is_file() and os.access(packaged, os.X_OK):
+                path = str(packaged)
         version = None
         if path:
             try:
@@ -177,13 +187,15 @@ def build_record() -> dict[str, Any]:
         blocker = (
             "the installed distribution ships the libsumo C++ library "
             f"({', '.join(distribution['libsumo_cpp_library'])}) and its "
-            "headers, but no Python binding — there is no `libsumo/__init__.py` "
-            "and no `_libsumo*.so` anywhere under the SUMO root. `pip install "
+            "headers, but no Python binding module anywhere under the SUMO "
+            "root. `pip install "
             "eclipse-sumo` therefore does NOT make libsumo importable; a build "
             "or wheel that includes the SWIG Python bindings would be required.")
     elif not any(item["path"] for item in binaries.values()):
         verdict = "blocked_no_sumo"
-        blocker = "no SUMO binaries are on PATH at all"
+        blocker = (
+            "no SUMO binaries are on PATH or under the project-resolved "
+            "SUMO home")
     else:
         verdict = "blocked_missing_libsumo"
         blocker = "libsumo is not importable and no C++ library was found"

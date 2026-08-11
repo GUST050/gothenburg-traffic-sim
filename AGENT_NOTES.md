@@ -8,10 +8,10 @@ which model may continue. See `AGENTS.md`.
 ## CURRENT_HANDOFF
 
 - Focus and status: `Closure-search evidence gates on branch
-  claude/closure-evidence-gates over fe8b3d4. The evidence PIPELINE is
-  reviewed, repaired, implemented and green end to end. The evidence itself is
-  not produced: this container has no calibrated archive library. Nothing was
-  activated.`
+  codex/review-closure-evidence-gates over Claude f078b64. The pipeline is
+  reviewed and repaired; the real v2 registration was frozen and attempted.
+  Its first exhaustive SUMO verification timed out at the unchanged 300 s
+  limit, so every release gate remains closed and nothing was activated.`
 - Summary: `The review found one defect that voided the durability claim.
   IndependentDailyRunner declares compact_pilot_artifacts, so no per-parent
   pilot evidence was published; the cursor still recorded every verification,
@@ -33,12 +33,15 @@ which model may continue. See `AGENTS.md`.
   takes the same lock the product CLI takes.`
 - Files changed: `NEW tools/product_arm.py and three test modules
   (execution review 10, benchmark run 21, benchmark discovery 18), plus
-  validation/independent_vs_continuous_outcome_v2.json. MODIFIED
+  validation/independent_vs_continuous_outcome_v2.json, the immutable real
+  benchmark v2 registration/failed outcome, and Darwin libsumo preflight v2.
+  MODIFIED
   monthly_search.py, cost_ordered_execution.py, run_monthly_closure_search.py
   (_cost_source_for takes an explicit cache path), tools/cost_ordered_
   benchmark.py, tools/measure_independent_vs_continuous.py, ARCHITECTURE.md,
   IMPROVEMENT_PLAN.md, the scaling plan, TASKS.md, AGENT_NOTES.md.`
-- Checks: `Focused suites 297 passed. tests/test_serve.py 126 passed. The
+- Checks: `Focused suites 300 passed. tests/test_serve.py 126 passed with
+  loopback permission. Survivability reproduces byte-for-byte. The
   affected sweep fails 181, an IDENTICAL set to the recorded 73f5116 baseline
   (diff empty), while the branch adds 72+ passing tests. The golden record's
   bound source digests are unchanged and its own suite passes; note that
@@ -57,23 +60,23 @@ which model may continue. See `AGENTS.md`.
   cost ledger, so 45 candidates are compared and a poisoned price fails.
   IVC v2: 84 cases, 24 unsupported, 25 unpairable, 35 blocked, 0 measured;
   pairings 24 identical / 11 different candidate spaces / 25 unpairable / 24
-  unsupported.`
-- Blockers or risks: `The named archive root /Users/gt/Documents/gs-project/
-  runs does not exist here — there is no /Users at all, no mounted volume holds
-  it, and a whole-filesystem search finds calibrated route files only under
-  pytest temp directories. So the real benchmark did not run, no v2
-  registration is committed (freezing one from zero archives would repeat the
-  v1 mistake), and held-out validation — gated behind a passing benchmark — did
-  not run and produced nothing. PR G still needs a SUMO build carrying the SWIG
-  Python bindings. PR I stays closed by the 2026-07-20 decision. Policy v3 must
-  NOT be activated and no global-best or UI claim may open.`
-- Suggested next action: `On the host with the archive library: preregister v2
-  with --from-archives, run it, and only if all eleven gates pass, freeze and
-  run an untouched held-out campaign. Re-run the IVC harness there with a v3
-  outcome.`
+  unsupported. The primary dev root was then used for real evidence. Product
+  validation selected the exact three-day build 5ac74750843384b3 and froze 13
+  schedules for 2027-03-22. The first exhaustive observation timed out after
+  300 s (seed 1000); outcome v2 records failed_execution and all gates false.`
+- Blockers or risks: `The next blocker is runtime, not archive absence: the
+  bound three-day SUMO observation exceeds the existing 300 s limit before one
+  candidate completes. Do not raise the limit to pass. Held-out remains gated.
+  PR G's Darwin v2 preflight finds packaged SUMO 1.27.1 and
+  lib/libsumocpp.dylib but no SWIG Python binding. PR I stays closed by the
+  2026-07-20 decision. Policy v3 and every UI/global-best claim remain closed.`
+- Suggested next action: `Instrument the frozen v2 execution up to its timeout,
+  identify the responsible phase without changing bound outcomes, and repair
+  avoidable runtime/setup defects. Preserve the failed v2 outcome; create v3
+  only after a pre-outcome structural justification.`
 - Actor notes: `Nothing was activated and nothing frozen was rewritten. The
-  v1 benchmark registration and the v1 IVC outcome are byte-identical; v2 is a
-  new file. No demand was built, no held-out campaign was run, no libsumo was
+  v1 benchmark registration and the v1 IVC outcome are byte-identical; v2 files
+  are new. No demand was built, no held-out campaign was run, no libsumo was
   installed, no external data was requested, _CONTINUOUS_MAX_WORKDAYS is
   unchanged and both resource caps are unchanged. Every new record carries
   release_evidence false.`

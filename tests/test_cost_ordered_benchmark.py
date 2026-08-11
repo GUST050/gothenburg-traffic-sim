@@ -142,17 +142,30 @@ class TestTheRegistration:
             blocked["reproducible_command"])
 
     def test_the_tool_refuses_to_silently_overwrite(self, tmp_path):
+        network_dir = tmp_path / "sumo"
+        network_dir.mkdir()
+        (network_dir / "net.net.xml").write_text("<net/>", encoding="utf-8")
+        (network_dir / "network_metadata.json").write_text(
+            "{}", encoding="utf-8")
         destination = tmp_path / "registration.json"
         bench.main(["--preregister", "--registration", str(destination),
-                    "--runs-root", str(tmp_path)])
+                    "--runs-root", str(tmp_path),
+                    "--data-root", str(tmp_path)])
         with pytest.raises(SystemExit, match="frozen"):
             bench.main(["--preregister", "--registration", str(destination),
-                        "--runs-root", str(tmp_path)])
+                        "--runs-root", str(tmp_path),
+                        "--data-root", str(tmp_path)])
 
     def test_a_run_without_a_selected_case_refuses(self, tmp_path):
+        network_dir = tmp_path / "sumo"
+        network_dir.mkdir()
+        (network_dir / "net.net.xml").write_text("<net/>", encoding="utf-8")
+        (network_dir / "network_metadata.json").write_text(
+            "{}", encoding="utf-8")
         destination = tmp_path / "registration.json"
         bench.main(["--preregister", "--registration", str(destination),
-                    "--runs-root", str(tmp_path)])
+                    "--runs-root", str(tmp_path),
+                    "--data-root", str(tmp_path)])
         with pytest.raises(SystemExit, match="nothing to run"):
             bench.main(["--run", "--registration", str(destination)])
 
@@ -174,6 +187,23 @@ class TestTheOutcomeIsSeparate:
         }
         comparison.update(overrides)
         return comparison
+
+    def test_the_real_v2_failure_is_bound_and_opens_nothing(self):
+        registration = json.loads((
+            ROOT / "validation" /
+            "cost_ordered_benchmark_registration_v2.json"
+        ).read_text(encoding="utf-8"))
+        outcome = json.loads((
+            ROOT / "validation" / "cost_ordered_benchmark_outcome_v2.json"
+        ).read_text(encoding="utf-8"))
+        body = {key: value for key, value in registration.items()
+                if key not in {"content_key", "registered_at"}}
+        assert registration["content_key"] == bench._content_key(body)
+        assert outcome["registration"]["content_key"] == (
+            registration["content_key"])
+        assert outcome["status"] == "failed_execution"
+        assert outcome["gates"]["passed"] is False
+        assert outcome["claim_boundary"]["activates_policy_v3"] is False
 
     def test_a_passing_outcome_still_does_not_activate_policy_v3(
             self, registration):

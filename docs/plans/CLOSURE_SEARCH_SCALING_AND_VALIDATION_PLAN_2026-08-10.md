@@ -980,10 +980,10 @@ Två KONTRAKTSFYND, viktigare än vad en kampanj hade gett:
 | PR D real-golden-grind | passerad | — | `python3 tools/verify_closure_cost_ordering_golden.py --verify` |
 | PR E namngiven real-benchmark | passerad ekvivalens, 0 besparing | endast en health-viable kandidat | samma verifieringskommando |
 | PR F aktivering | blockerad | inget pre-outcome diskriminerande benchmark med positiv besparing, ingen held-out | se `monthly_search_policy_v3_preregistration.json` |
-| PR G (steg 6) | blockerad | KORRIGERAT 2026-08-11: eclipse-sumo 1.27.1 ÄR installerat och levererar libsumo:s C++-bibliotek och headers men INGEN Python-bindning — ominstallation av samma wheel hjälper inte | `python3 tools/preflight_libsumo.py --overwrite` (read-only diagnos); därefter krävs ett bygge/wheel med SWIG-bindningen innan `python3 benchmark_seed_workers.py` |
+| PR G (steg 6) | blockerad | Linux v1 och Darwin v2 hittar eclipse-sumo 1.27.1 och plattformens libsumocpp-bibliotek men INGEN Python-bindning | `python3 tools/preflight_libsumo.py --out validation/libsumo_preflight_v3.json` på en ny miljö; installation kräver separat auktoritet |
 | PR H mätning | harness BYGGD och körd; v2 har FEM kategorier; 0 mätta fall | 35 av 84 fall blockerade på kalibrerade arkiv i denna miljö; 11 av dem har dessutom olika kandidatrum | `python3 tools/measure_independent_vs_continuous.py --runs-root <arkivrot> --out validation/independent_vs_continuous_outcome_v3.json` |
 | PR I (steg 8) | delvis PERMANENT stängd | projektbeslut 2026-07-20: ingen ny extern data (se CLAUDE.md "Open questions"). Mikrosimulering och work-zone-kalibrering kräver dessutom kalibrerad demand | ingen — beslutet är en fast gräns, inte en TODO |
-| Steg 8 (benchmark, held-out, releasegrind) | delvis | cost-ordered execution är KOPPLAD och granskad; `--run` är IMPLEMENTERAD och verifierad mot fixture-armar; fallupptäckt sker nu ur arkivmetadata. Kvar: en riktig körning mot arkivbiblioteket och därefter en orörd held-out-kampanj | `python3 tools/cost_ordered_benchmark.py --preregister --from-archives --runs-root <arkivrot> --registration validation/cost_ordered_benchmark_registration_v2.json` följt av `--run --out validation/cost_ordered_benchmark_outcome_v2.json` |
+| Steg 8 (benchmark, held-out, releasegrind) | blockerad av runtime | verklig v2 är förregistrerad och körd; första uttömmande SUMO-observationen nådde oförändrade 300 s och utfallet är `failed_execution` | profilera exakt samma v2-input utan att höja timeout; bevara v2 och skapa v3 först efter en pre-outcome motivering |
 
 Förregistreringens `blocked_by`-text om att inget kalibrerat arkiv finns bevaras
 oförändrad som pre-outcome historik, men är superseded för denna dev-maskin:
@@ -1071,3 +1071,27 @@ alltså inte hjälpt. 10 tester.
 PR I är oförändrad: projektbeslutet 2026-07-20 att inte hämta mer extern data
 står kvar som en fast gräns, inte en TODO. Ingen dataförfrågan skickades och
 ingen föreslås.
+
+## 13. Codex-review och verkligt v2-utfall 2026-08-11
+
+Reviewen korrigerade fyra evidensfel. Discovery får inte likställa arkivets
+startdatum med vägens arbetsdatum: produktens independent-daily-kontrakt använder
+normalt ett tredagars warm-up-envelope. Därför verifieras nu varje föreslaget
+fall genom `MonthlyDemandResolverRunner` och `find_demand_archives`, inklusive
+manifest, generator/runtime, proveniens och outputdigester. En enskild
+kalenderdag tillåts eftersom dess olika 15-minutersstarter ändå ger 9–13
+kandidater. Nätverk, metadata och workspace-lock binds till samma explicita
+data root som SUMO använder. Runtimefel publiceras som separata
+`failed_execution`-utfall i stället för att lämna registreringen utan svar.
+
+`validation/cost_ordered_benchmark_registration_v2.json` frystes före utfall.
+Den valde 13 scheman den 2027-03-22 och exakt demand build
+`5ac74750843384b3`. Första observationen i den uttömmande armen nådde den
+oförändrade 300-sekundersgränsen (`seed 1000`).
+`validation/cost_ordered_benchmark_outcome_v2.json` sätter därför alla elva
+grindar till falskt. Timeouten höjs inte, held-out körs inte och policy v3
+förblir inaktiv.
+
+PR G-preflighten är också plattformsrättad. Linux-v1 bevaras; Darwin-v2 hittar
+de paketerade SUMO 1.27.1-binärerna och `lib/libsumocpp.dylib`, men ingen
+Python/SWIG-bindning. Det öppnar ingen grind och ändrar ingen workerbudget.

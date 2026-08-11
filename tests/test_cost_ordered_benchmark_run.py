@@ -59,7 +59,13 @@ def wired(monkeypatch, tmp_path):
 
 def _registration(tmp_path, spec, *, runs_root=None):
     """A registration bound only to inputs that really exist in this tree."""
-    record = bench.build_registration(runs_root or tmp_path)
+    network_dir = tmp_path / "sumo"
+    network_dir.mkdir(exist_ok=True)
+    (network_dir / "net.net.xml").write_text("<net/>", encoding="utf-8")
+    (network_dir / "network_metadata.json").write_text(
+        "{}", encoding="utf-8")
+    record = bench.build_registration(
+        runs_root or tmp_path, data_root=tmp_path)
     record["selected_case"] = {
         "search_id": spec.search_id,
         "search_content_key": spec.content_key,
@@ -135,7 +141,7 @@ class TestBothArmsActuallyRun:
         return bench.run_benchmark(
             record, runs_root=tmp_path,
             release_root=tmp_path / "releases",
-            workspace_root=tmp_path / "ws", **kwargs)
+            workspace_root=tmp_path / "ws", data_root=tmp_path, **kwargs)
 
     def test_the_cost_ordered_arm_simulates_strictly_fewer(self, tmp_path,
                                                             wired):
@@ -144,6 +150,24 @@ class TestBothArmsActuallyRun:
         assert comparison["cost_ordered_sumo_candidates"] < (
             comparison["exhaustive_sumo_candidates"])
         assert comparison["sumo_verifications_saved"] > 0
+
+    def test_the_registered_data_root_controls_cwd_and_the_shared_lock(
+            self, tmp_path, wired, monkeypatch):
+        from traffic_sim.simulation import workspace as workspace_module
+
+        paths = []
+        original = workspace_module.WorkspaceLock
+
+        class RecordingLock(original):
+            def __init__(self, owner, **kwargs):
+                super().__init__(owner, **kwargs)
+                paths.append(self.path)
+
+        monkeypatch.setattr(workspace_module, "WorkspaceLock", RecordingLock)
+        before = Path.cwd()
+        self._run(tmp_path, wired, fault_injection=False)
+        assert Path.cwd() == before
+        assert paths == [tmp_path / "runs" / ".demand-workspace.lock"]
 
     def test_the_two_arms_agree_on_everything_that_matters(self, tmp_path,
                                                             wired):
@@ -254,7 +278,8 @@ class TestFaultInjection:
         record = _registration(tmp_path, wired["spec"])
         executed = bench.run_benchmark(
             record, runs_root=tmp_path, release_root=tmp_path / "releases",
-            workspace_root=tmp_path / "ws", fault_injection=True)
+            workspace_root=tmp_path / "ws", data_root=tmp_path,
+            fault_injection=True)
         restart = executed["comparison"]["restart"]
         assert restart["performed"] is True
         assert restart["interrupted_after_pilots"] >= 1
@@ -264,7 +289,8 @@ class TestFaultInjection:
         record = _registration(tmp_path, wired["spec"])
         executed = bench.run_benchmark(
             record, runs_root=tmp_path, release_root=tmp_path / "releases",
-            workspace_root=tmp_path / "ws", fault_injection=False)
+            workspace_root=tmp_path / "ws", data_root=tmp_path,
+            fault_injection=False)
         comparison = executed["comparison"]
         assert comparison["restart_equivalent"] is False
         assert bench._gate_results(comparison)["checks"][
@@ -273,6 +299,32 @@ class TestFaultInjection:
 
 
 class TestTheOutcome:
+    def test_an_execution_failure_is_published_as_a_failed_outcome(
+            self, tmp_path, wired, monkeypatch):
+        record = _registration(tmp_path, wired["spec"])
+        path = tmp_path / "registration.json"
+        path.write_text(json.dumps(record), encoding="utf-8")
+        out = tmp_path / "outcome.json"
+
+        def fail(*args, **kwargs):
+            raise RuntimeError("sumo timed out after 300s (seed 1000)")
+
+        monkeypatch.setattr(bench, "run_benchmark", fail)
+        code = bench.main([
+            "--run", "--registration", str(path),
+            "--runs-root", str(tmp_path), "--data-root", str(tmp_path),
+            "--workspace-root", str(tmp_path / "ws"), "--out", str(out),
+        ])
+        outcome = json.loads(out.read_text(encoding="utf-8"))
+        assert code == 5
+        assert outcome["status"] == "failed_execution"
+        assert outcome["gates"]["passed"] is False
+        assert outcome["comparison"]["execution_error"]["type"] == (
+            "RuntimeError")
+        assert "timed out after 300s" in outcome["comparison"][
+            "execution_error"]["message"]
+        assert outcome["release_evidence"] is False
+
     def test_a_full_pass_writes_an_outcome_and_still_activates_nothing(
             self, tmp_path, wired):
         record = _registration(tmp_path, wired["spec"])
@@ -281,6 +333,7 @@ class TestTheOutcome:
         out = tmp_path / "outcome.json"
         code = bench.main(["--run", "--registration", str(path),
                            "--runs-root", str(tmp_path),
+                           "--data-root", str(tmp_path),
                            "--release-root", str(tmp_path / "releases"),
                            "--workspace-root", str(tmp_path / "ws"),
                            "--out", str(out)])
@@ -300,6 +353,7 @@ class TestTheOutcome:
         before = path.read_bytes()
         bench.main(["--run", "--registration", str(path),
                     "--runs-root", str(tmp_path),
+                    "--data-root", str(tmp_path),
                     "--release-root", str(tmp_path / "releases"),
                     "--workspace-root", str(tmp_path / "ws"),
                     "--out", str(tmp_path / "outcome.json")])
@@ -312,6 +366,7 @@ class TestTheOutcome:
         out = tmp_path / "outcome.json"
         argv = ["--run", "--registration", str(path),
                 "--runs-root", str(tmp_path),
+                "--data-root", str(tmp_path),
                 "--release-root", str(tmp_path / "releases"),
                 "--workspace-root", str(tmp_path / "ws"), "--out", str(out)]
         bench.main(argv)
