@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import platform
 import sys
 import time
@@ -37,6 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import tools.product_arm as pa  # noqa: E402
 from traffic_sim.core.closure_calendar import iter_closure_schedules  # noqa: E402
 from traffic_sim.core.contracts import (  # noqa: E402
     ClosureSearchSpec,
@@ -456,6 +458,495 @@ def build_outcome(
     return record
 
 
+# --------------------------------------------------------------------------
+# The run: both arms, on the bound inputs, compared field by field.
+# --------------------------------------------------------------------------
+
+
+def verify_bindings(registration: Mapping[str, Any],
+                    runs_root: Path) -> list[str]:
+    """Every digest the registration froze must still describe the tree.
+
+    A benchmark whose inputs moved under it measures something nobody
+    registered. Reported as a list rather than raised one at a time, so a
+    reviewer sees ALL the drift at once instead of fixing it one run per
+    finding.
+    """
+    drift: list[str] = []
+
+    body = {key: value for key, value in registration.items()
+            if key not in {"content_key", "registered_at"}}
+    if registration.get("content_key") != _content_key(body):
+        drift.append("the registration's own content key does not describe it")
+
+    for name, digest in (registration.get("sources") or {}).items():
+        path = ROOT / name
+        if not path.is_file():
+            drift.append(f"bound source is missing: {name}")
+        elif sha256_file(path) != digest:
+            drift.append(f"bound source changed since registration: {name}")
+
+    for arm, bound in (registration.get("policies") or {}).items():
+        path = ROOT / str(bound["path"])
+        if not path.is_file():
+            drift.append(f"bound {arm} policy is missing: {bound['path']}")
+        elif sha256_file(path) != bound["sha256"]:
+            drift.append(f"bound {arm} policy changed: {bound['path']}")
+
+    for key in ("network", "network_metadata"):
+        bound = registration.get(key) or {}
+        path = ROOT / str(bound.get("path", ""))
+        if not path.is_file():
+            drift.append(f"bound {key} is missing: {bound.get('path')}")
+        elif sha256_file(path) != bound.get("sha256"):
+            drift.append(f"bound {key} changed: {bound.get('path')}")
+
+    for build_key, archive in (registration.get("archives") or {}).items():
+        base = Path(archive["archive"])
+        if not base.is_absolute():
+            base = ROOT / base
+        for variant, route in (archive.get("routes") or {}).items():
+            path = Path(route["path"])
+            if not path.is_absolute():
+                path = ROOT / path
+            if not path.is_file():
+                drift.append(
+                    f"bound route is missing: {build_key}/{variant} "
+                    f"({route['path']})")
+            elif sha256_file(path) != route["sha256"]:
+                drift.append(
+                    f"bound route changed: {build_key}/{variant} "
+                    f"({route['path']})")
+        meta = base / "demand_meta.json"
+        if not meta.is_file():
+            drift.append(f"bound demand metadata is missing: {meta}")
+        elif sha256_file(meta) != archive.get("demand_meta_sha256"):
+            drift.append(f"bound demand metadata changed: {meta}")
+    return drift
+
+
+def _workspace_artifact(arm: Mapping[str, Any], kind: str) -> dict[str, Any]:
+    """One published artifact from an arm's workspace, by kind."""
+    workspace = Path(arm.get("workspace", ""))
+    manifest_path = workspace / "manifest.json"
+    if not manifest_path.is_file():
+        return {}
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for record in manifest.get("artifacts", ()):
+        if record.get("kind") == kind:
+            return json.loads((workspace / record["path"])
+                              .read_text(encoding="utf-8"))
+    return {}
+
+
+def _pilot_statistics(arm: Mapping[str, Any]) -> dict[str, Any]:
+    """The COMPLETE pilot selection, from the workspace rather than the API.
+
+    `_final_result` truncates `pilot_selection.candidates` to the finalists for
+    a broad independent search — tens of thousands of interval-heavy records
+    would otherwise be copied into every response. The full statistics live in
+    the workspace's `pilot-selection.json`, and comparing the truncated view
+    instead would quietly reduce a field-by-field gate over every candidate to
+    a check on the two both arms simulated anyway. Falls back to the response
+    when no workspace is available (the API-only case).
+    """
+    published = _workspace_artifact(arm, "monthly_pilot_selection")
+    return published or (arm.get("result", {}).get("pilot_selection") or {})
+
+
+def _candidate_costs(arm_or_result: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """Per-candidate deterministic cost and health, keyed by schedule id."""
+    selection = (_pilot_statistics(arm_or_result)
+                 if "workspace" in arm_or_result or "result" in arm_or_result
+                 else (arm_or_result.get("pilot_selection") or {}))
+    out: dict[str, dict[str, Any]] = {}
+    for item in selection.get("candidates", ()):
+        cost = item.get("closure_cost") or {}
+        out[str(item.get("candidate_id"))] = {
+            "added_vehicle_hours": cost.get("added_vehicle_hours"),
+            "added_metres_total": cost.get("added_metres_total"),
+            "vehicles_affected": cost.get("vehicles_affected"),
+            "vehicles_no_detour": cost.get("vehicles_no_detour"),
+            "eligible": item.get("eligible"),
+            "complete": item.get("complete"),
+            "hard_failures": sorted(item.get("hard_failures") or ()),
+        }
+    return out
+
+
+def _ledger_costs(arm: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """EVERY candidate's deterministic price, from the published cost ledger.
+
+    The cost-ordered arm's pilot statistics only cover the candidates it
+    simulated — two of forty-five on a typical case — so comparing those alone
+    would check the gate on the handful where the arms trivially agree. The
+    ledger holds the price of every candidate, computed before any SUMO ran,
+    which is exactly what the exhaustive arm's disruption evidence should
+    reproduce. Comparing THOSE is the field-by-field check worth having.
+    """
+    workspace = Path(arm.get("workspace", ""))
+    ledger = workspace / "artifacts" / "cost-ledger.json"
+    if not ledger.is_file():
+        return {}
+    payload = json.loads(ledger.read_text(encoding="utf-8"))
+    return {
+        str(item["candidate_id"]): {
+            key: item["cost"][key] for key in (
+                "added_vehicle_hours", "added_metres_total",
+                "vehicles_affected", "vehicles_no_detour")}
+        for item in payload.get("costs", ())
+    }
+
+
+def _final_decision(result: Mapping[str, Any]) -> dict[str, Any]:
+    decision = result.get("robust_decision") or {}
+    return {
+        "status": result.get("status"),
+        "winner_id": result.get("winner_id"),
+        "tie_ids": sorted(result.get("tie_ids") or ()),
+        "decision_status": decision.get("status"),
+        "decision_winner": decision.get("winner_id"),
+    }
+
+
+def _stop_proof_valid(execution: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Re-derive the stop rule from the published proof, rather than trust it.
+
+    A stop proof produced only by the code it justifies proves nothing, so the
+    arithmetic is redone here against the proof's OWN declared numbers:
+
+      * `band_exhausted` — the first unexamined candidate must be STRICTLY
+        above cutoff + practical equivalence. That is the entire argument for
+        not having simulated it, and `>=` would be the classic off-by-one that
+        skips a candidate still inside the band.
+      * `search_space_exhausted` — nothing was skipped, so `unexamined` must be
+        zero and `examined` must equal the ordered total.
+      * anything else — nothing survived the deterministic no-detour gate, so
+        there must have been nothing to order.
+    """
+    if not execution:
+        return {"valid": False, "reason": "no execution record was published"}
+    proof = execution.get("stop_proof") or {}
+    if not proof:
+        return {"valid": False, "reason": "the execution record has no proof"}
+    reason = str(proof.get("stop_reason", ""))
+    if reason == "band_exhausted":
+        band = proof.get("selection_band_added_vehicle_hours")
+        first = proof.get("first_unexamined_added_vehicle_hours")
+        if band is None or first is None:
+            return {"valid": False, "stop_reason": reason,
+                    "reason": "a band stop must name its band and the first "
+                              "unexamined candidate"}
+        valid = float(first) > float(band)
+        return {
+            "valid": valid, "stop_reason": reason,
+            "selection_band_added_vehicle_hours": float(band),
+            "first_unexamined_added_vehicle_hours": float(first),
+            "reason": ("the first unexamined candidate is strictly above the "
+                       "band, so no unexamined candidate could be retained"
+                       if valid else
+                       "the first unexamined candidate is INSIDE the band; it "
+                       "should have been verified"),
+        }
+    if reason == "search_space_exhausted":
+        valid = (int(proof.get("unexamined", -1)) == 0
+                 and int(proof.get("examined", -1))
+                 == int(proof.get("total_ordered", -2)))
+        return {"valid": valid, "stop_reason": reason,
+                "reason": ("every ordered candidate was verified"
+                           if valid else
+                           "the proof claims exhaustion but left candidates "
+                           "unexamined")}
+    valid = int(proof.get("total_ordered", -1)) == 0
+    return {"valid": valid, "stop_reason": reason,
+            "reason": ("nothing survived the deterministic no-detour gate"
+                       if valid else
+                       f"unrecognised stop reason {reason!r} with candidates "
+                       f"still ordered")}
+
+
+def compare_arms(exhaustive: Mapping[str, Any],
+                 cost_ordered: Mapping[str, Any],
+                 *, restart: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Field-by-field comparison of the two arms. Reports; judges nothing."""
+    left = _candidate_costs(exhaustive)
+    right = _candidate_costs(cost_ordered)
+    shared = sorted(set(left) & set(right))
+
+    cost_fields = ("added_vehicle_hours", "added_metres_total",
+                   "vehicles_affected", "vehicles_no_detour")
+    cost_mismatches = []
+    failure_mismatches = []
+    health_mismatches = []
+    for candidate_id in shared:
+        a, b = left[candidate_id], right[candidate_id]
+        for field in cost_fields:
+            if a.get(field) != b.get(field):
+                cost_mismatches.append({
+                    "candidate_id": candidate_id, "field": field,
+                    "exhaustive": a.get(field), "cost_ordered": b.get(field)})
+        if a["hard_failures"] != b["hard_failures"]:
+            failure_mismatches.append({
+                "candidate_id": candidate_id,
+                "exhaustive": a["hard_failures"],
+                "cost_ordered": b["hard_failures"]})
+        if (a.get("eligible"), a.get("complete")) != (
+                b.get("eligible"), b.get("complete")):
+            health_mismatches.append({
+                "candidate_id": candidate_id,
+                "exhaustive": [a.get("eligible"), a.get("complete")],
+                "cost_ordered": [b.get("eligible"), b.get("complete")]})
+
+    execution = cost_ordered["result"].get("cost_ordered_execution")
+    exhaustive_pilots = int(
+        (exhaustive["result"].get("screening") or {}).get("shortlist_count")
+        or len(left))
+    cost_ordered_pilots = (
+        int(execution["cost_ordered_sumo_candidates"]) if execution
+        else exhaustive_pilots)
+
+    left_selected = sorted(
+        (exhaustive["result"].get("pilot_selection") or {}).get(
+            "selected_ids", ()))
+    right_selected = sorted(
+        (cost_ordered["result"].get("pilot_selection") or {}).get(
+            "selected_ids", ()))
+
+    caps = {
+        "maximum_parent_schedules": pa.MAXIMUM_CANDIDATES,
+        "maximum_daily_units": pa.MAXIMUM_DAILY_UNITS,
+    }
+    stop_proof_check = _stop_proof_valid(execution)
+
+    # The stronger check: every candidate the LEDGER priced, against the
+    # exhaustive arm's own evidence for the same candidate.
+    ledger = _ledger_costs(cost_ordered)
+    ledger_mismatches = []
+    for candidate_id, priced in sorted(ledger.items()):
+        observed = left.get(candidate_id)
+        if observed is None:
+            continue
+        for field in cost_fields:
+            if observed.get(field) != priced.get(field):
+                ledger_mismatches.append({
+                    "candidate_id": candidate_id, "field": field,
+                    "exhaustive": observed.get(field),
+                    "cost_ordered_ledger": priced.get(field)})
+    ledger_compared = sorted(set(ledger) & set(left))
+
+    comparison: dict[str, Any] = {
+        # The cost-ordered arm SIMULATES fewer candidates, so its pilot
+        # statistics cover only those. Candidates only the exhaustive arm
+        # simulated are reported, never silently dropped — and the ledger
+        # comparison below covers ALL of them anyway.
+        "compared_candidate_count": len(shared),
+        "ledger_compared_candidate_count": len(ledger_compared),
+        "ledger_costs_field_identical": not ledger_mismatches,
+        "ledger_cost_mismatches": ledger_mismatches[:50],
+        "exhaustive_only_candidates": sorted(set(left) - set(right)),
+        "cost_ordered_only_candidates": sorted(set(right) - set(left)),
+        "candidate_costs_field_identical": (
+            not cost_mismatches and not ledger_mismatches),
+        "candidate_cost_mismatches": cost_mismatches[:50],
+        "hard_failures_identical": not failure_mismatches,
+        "hard_failure_mismatches": failure_mismatches[:50],
+        "health_classifications_identical": not health_mismatches,
+        "health_mismatches": health_mismatches[:50],
+        "status_identical": (
+            (exhaustive["result"].get("pilot_selection") or {}).get("status")
+            == (cost_ordered["result"].get("pilot_selection") or {}).get(
+                "status")),
+        "selected_ids_identical": left_selected == right_selected,
+        "selected_ids": {"exhaustive": left_selected,
+                         "cost_ordered": right_selected},
+        "final_decision_identical": (
+            _final_decision(exhaustive["result"])
+            == _final_decision(cost_ordered["result"])),
+        "final_decision": {
+            "exhaustive": _final_decision(exhaustive["result"]),
+            "cost_ordered": _final_decision(cost_ordered["result"])},
+        "exhaustive_sumo_candidates": exhaustive_pilots,
+        "cost_ordered_sumo_candidates": cost_ordered_pilots,
+        "sumo_verifications_saved": exhaustive_pilots - cost_ordered_pilots,
+        "stop_proof": (execution or {}).get("stop_proof"),
+        "stop_proof_check": stop_proof_check,
+        "stop_proof_valid": bool(stop_proof_check["valid"]),
+        "cursor": (execution or {}).get("cursor"),
+        "verified_prefix": list(
+            ((execution or {}).get("cursor") or {}).get("verified", ())),
+        "daily_cost_cache_hits": {
+            "exhaustive": exhaustive["daily_cost_cache_hits"],
+            "cost_ordered": cost_ordered["daily_cost_cache_hits"],
+            "published_by_execution_record": (
+                (execution or {}).get("daily_cost_cache_hits"))},
+        # The cost source counts cache hits as it prices; the published record
+        # snapshots the ledger's count. All pricing happens during ledger
+        # construction, so the two must agree — if they diverge, something
+        # priced a candidate outside the ledger and the ordering was built on
+        # numbers the record does not describe.
+        "cache_hits_consistent": bool(
+            execution is not None
+            and int(execution.get("daily_cost_cache_hits", -1))
+            == int(cost_ordered["daily_cost_cache_hits"])),
+        "wall_time_s": {"exhaustive": exhaustive["wall_time_s"],
+                        "cost_ordered": cost_ordered["wall_time_s"]},
+        "peak_rss_bytes": {"exhaustive": exhaustive["peak_rss_bytes"],
+                           "cost_ordered": cost_ordered["peak_rss_bytes"]},
+        "resource_caps": caps,
+        "no_resource_cap_regression": (
+            caps["maximum_daily_units"] == 10_000
+            and caps["maximum_parent_schedules"] == 100_000),
+    }
+    if restart is None:
+        comparison["restart_equivalent"] = False
+        comparison["restart"] = {
+            "performed": False,
+            "reason": "no interrupted run was executed"}
+    else:
+        comparison["restart_equivalent"] = bool(restart.get("equivalent"))
+        comparison["restart"] = dict(restart)
+    return comparison
+
+
+def run_benchmark(registration: Mapping[str, Any], *, runs_root: Path,
+                  release_root: Path, workspace_root: Path,
+                  fault_injection: bool = True) -> dict[str, Any]:
+    """Execute both arms on the bound inputs and compare them.
+
+    Holds the shared demand-workspace lock for the WHOLE benchmark: acquiring
+    it per arm would let another writer rearrange `sumo/` between the two, and
+    then the arms would not have run against the same demand.
+    """
+    from traffic_sim.simulation.monthly_search import MonthlySearchPolicy
+    from traffic_sim.simulation.workspace import WorkspaceLock
+
+    selected = registration["selected_case"]
+    spec = ClosureSearchSpec.from_dict(
+        {key: value for key, value in selected["spec"].items()
+         if key != "content_key"})
+    if spec.content_key != selected["search_content_key"]:
+        raise SystemExit(
+            "the registered spec no longer rebuilds to its content key; the "
+            "contract changed since the registration was frozen")
+
+    policies = {
+        arm: MonthlySearchPolicy.from_dict(json.loads(
+            (ROOT / registration["policies"][arm]["path"])
+            .read_text(encoding="utf-8")))
+        for arm in ("exhaustive", "cost_ordered")
+    }
+    roots = registration["output_roots"]
+    daily_cost_cache = ROOT / roots["daily_cost_cache"]
+
+    lock = WorkspaceLock(f"cost_ordered_benchmark {os.getpid()}")
+    if not lock.acquire(timeout=3600.0, poll_s=10.0):
+        raise SystemExit(
+            f"demand workspace busy: {lock.holder_description()}")
+    try:
+        arms = {}
+        for arm, cost_ordered in (("exhaustive", False),
+                                  ("cost_ordered", True)):
+            arms[arm] = pa.run_arm(
+                spec, policies[arm],
+                cost_ordered=cost_ordered,
+                # Separate roots per arm: one workspace is keyed by search_id,
+                # so both arms in one root would resume each other's evidence
+                # and the comparison would be with itself.
+                workspace_root=Path(workspace_root) / roots[arm].split("/")[-1],
+                runs_root=runs_root,
+                release_root=release_root,
+                daily_cost_cache=daily_cost_cache,
+                study_provenance_key=f"cost-ordered-benchmark-{arm}",
+            )
+        restart = None
+        if fault_injection:
+            restart = _restart_probe(
+                spec, policies["cost_ordered"],
+                workspace_root=Path(workspace_root) / "restart",
+                runs_root=runs_root, release_root=release_root,
+                daily_cost_cache=daily_cost_cache,
+                reference=arms["cost_ordered"])
+    finally:
+        lock.release()
+    return {"arms": arms,
+            "comparison": compare_arms(arms["exhaustive"],
+                                       arms["cost_ordered"], restart=restart)}
+
+
+def _restart_probe(spec, policy, *, workspace_root: Path, runs_root: Path,
+                   release_root: Path, daily_cost_cache: Path,
+                   reference: Mapping[str, Any]) -> dict[str, Any]:
+    """Interrupt a cost-ordered run, resume it, and compare the outcome.
+
+    A durable cursor nobody ever crashes into is a claim, not a property. The
+    probe kills the arm after its first verification and resumes it in a fresh
+    process-equivalent call; the resumed answer must equal the uninterrupted
+    one, and the resume must not re-simulate published work.
+    """
+    from traffic_sim.simulation.monthly_search import run_monthly_search
+
+    class _Interrupt(RuntimeError):
+        pass
+
+    runner, screen_builder, cost_source = pa.build_arm(
+        spec, cost_ordered=True, runs_root=runs_root,
+        release_root=release_root, daily_cost_cache=daily_cost_cache,
+        study_provenance_key="cost-ordered-benchmark-restart",
+        objective_method=policy.objective_method)
+
+    original = runner.run_candidate
+    simulated: list[str] = []
+
+    def interrupting(schedule, **kwargs):
+        if kwargs.get("stage") == "pilot" and simulated:
+            raise _Interrupt("benchmark fault injection")
+        if kwargs.get("stage") == "pilot":
+            simulated.append(schedule.schedule_id)
+        return original(schedule, **kwargs)
+
+    runner.run_candidate = interrupting            # type: ignore[assignment]
+    interrupted = False
+    try:
+        run_monthly_search(spec, policy, runner=runner,
+                           screen_builder=screen_builder,
+                           root=Path(workspace_root), cost_source=cost_source)
+    except _Interrupt:
+        interrupted = True
+    except (OSError, ValueError, RuntimeError) as error:
+        return {"performed": True, "equivalent": False,
+                "reason": f"the interrupted arm failed for another reason: {error}"}
+    finally:
+        cleanup = getattr(runner, "cleanup", None)
+        if callable(cleanup):
+            cleanup()
+    if not interrupted:
+        return {"performed": True, "equivalent": False,
+                "reason": "the arm finished before it could be interrupted; "
+                          "no restart was exercised"}
+
+    resumed = pa.run_arm(
+        spec, policy, cost_ordered=True,
+        workspace_root=Path(workspace_root),
+        runs_root=runs_root, release_root=release_root,
+        daily_cost_cache=daily_cost_cache,
+        study_provenance_key="cost-ordered-benchmark-restart")
+    equivalent = (
+        _final_decision(resumed["result"])
+        == _final_decision(reference["result"])
+        and _candidate_costs(resumed) == _candidate_costs(reference))
+    return {
+        "performed": True,
+        "equivalent": bool(equivalent),
+        "interrupted_after_pilots": len(simulated),
+        "resumed_final_decision": _final_decision(resumed["result"]),
+        "reference_final_decision": _final_decision(reference["result"]),
+        "reason": ("the resumed run reproduced the uninterrupted outcome"
+                   if equivalent else
+                   "the resumed run did NOT reproduce the uninterrupted "
+                   "outcome"),
+    }
+
+
 def _write(path: Path, payload: Mapping[str, Any], *, overwrite: bool) -> None:
     destination = Path(path)
     if destination.exists() and not overwrite:
@@ -477,6 +968,16 @@ def main(argv=None) -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUTCOME)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--stdout", action="store_true")
+    parser.add_argument("--release-root", type=Path,
+                        default=DEFAULT_RELEASE_ROOT)
+    parser.add_argument("--workspace-root", type=Path,
+                        default=ROOT / "runs")
+    parser.add_argument("--no-fault-injection", action="store_true",
+                        help="skip the interrupt/resume probe (the restart "
+                             "gate then fails, which is the honest outcome)")
+    parser.add_argument("--allow-drift", action="store_true",
+                        help="run even though bound inputs moved; the drift "
+                             "is recorded in the outcome")
     args = parser.parse_args(argv)
 
     if args.preregister == args.run:
@@ -497,12 +998,36 @@ def main(argv=None) -> int:
         raise SystemExit(
             "the registration selected no case; there is nothing to run. "
             f"Its blocker: {registration.get('blocked_by', {}).get('reason')}")
-    raise SystemExit(
-        "running the benchmark requires the calibrated archive library named "
-        "in the registration. Execute both arms with "
-        "run_monthly_closure_search.py --screening-mode independent-exhaustive "
-        "and --screening-mode independent-cost-ordered-exact on the bound "
-        "spec, then pass their results to build_outcome().")
+
+    drift = verify_bindings(registration, args.runs_root)
+    if drift and not args.allow_drift:
+        raise SystemExit(
+            "the registration's bound inputs no longer describe this tree, so "
+            "a run would measure something nobody registered:\n  - "
+            + "\n  - ".join(drift)
+            + "\nRe-register (a NEW version; never edit a frozen one) or "
+              "restore the bound inputs.")
+
+    executed = run_benchmark(
+        registration,
+        runs_root=args.runs_root,
+        release_root=args.release_root,
+        workspace_root=args.workspace_root,
+        fault_injection=not args.no_fault_injection,
+    )
+    comparison = dict(executed["comparison"])
+    if drift:
+        comparison["binding_drift_accepted"] = drift
+    outcome = build_outcome(registration, comparison, status="measured")
+    if args.stdout:
+        print(json.dumps(outcome, indent=1, sort_keys=True))
+        return 0 if outcome["gates"]["passed"] else 4
+    _write(args.out, outcome, overwrite=args.overwrite)
+    print(f"wrote {args.out} (status={outcome['status']}, "
+          f"gates_passed={outcome['gates']['passed']}, "
+          f"saved={comparison['sumo_verifications_saved']} of "
+          f"{comparison['exhaustive_sumo_candidates']})")
+    return 0 if outcome["gates"]["passed"] else 4
 
 
 if __name__ == "__main__":

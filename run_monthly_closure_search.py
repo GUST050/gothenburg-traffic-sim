@@ -369,8 +369,12 @@ def _independent_exhaustive_preflight(
     return report
 
 
-def _cost_source_for(spec, runner, args):
+def _cost_source_for(spec, runner, args=None, *, daily_cost_cache=None):
     """Build the deterministic cost source for real cost-first execution.
+
+    Takes either the parsed CLI ``args`` or an explicit ``daily_cost_cache``,
+    so a benchmark can build the SAME cost source the product uses without
+    fabricating an argparse namespace. One implementation, two callers.
 
     Prices a parent by pricing its daily units through the SAME calibrated
     archives the simulation would use, resolved by the demand resolver. No SUMO
@@ -405,7 +409,12 @@ def _cost_source_for(spec, runner, args):
     # tables are per-network, and rebuilding them per candidate would cost more
     # than the simulations being avoided.
     network = NetworkCostModel()
-    cache = DailyCostCache(Path(args.daily_cost_cache))
+    if daily_cost_cache is None:
+        if args is None:
+            raise ValueError(
+                "a cost source needs a daily cost cache location")
+        daily_cost_cache = args.daily_cost_cache
+    cache = DailyCostCache(Path(daily_cost_cache))
     return IndependentDailyCostSource(
         spec,
         daily_units_for=units_for,
