@@ -1,0 +1,58 @@
+{
+ "budgets": {
+  "declared_for_six_month": {
+   "maximum_daily_units": 30000,
+   "maximum_ledger_bytes": 268435456,
+   "maximum_parent_schedules": 100000,
+   "maximum_peak_rss_bytes": 67108864,
+   "schema": "daily_unit_budget_v2"
+  },
+  "legacy": {
+   "maximum_daily_units": 10000,
+   "maximum_ledger_bytes": 268435456,
+   "maximum_parent_schedules": 100000,
+   "maximum_peak_rss_bytes": 67108864,
+   "schema": "daily_unit_budget_v2"
+  }
+ },
+ "cases": [
+  {
+   "admitted_by_declared_budget": true,
+   "case_id": "six-month-720h",
+   "parent_schedules": 2186,
+   "process_peak_rss_bytes": 23736320,
+   "refused_by_legacy_cap": false,
+   "streaming_seconds": 3.432,
+   "unique_daily_units": 5676
+  },
+  {
+   "admitted_by_declared_budget": true,
+   "case_id": "six-month-360h",
+   "parent_schedules": 11813,
+   "process_peak_rss_bytes": 27783168,
+   "refused_by_legacy_cap": true,
+   "streaming_seconds": 14.594,
+   "unique_daily_units": 23349
+  }
+ ],
+ "claim_boundary": {
+  "activates_policy_v3": false,
+  "opens_global_best": false,
+  "permits_ui_claim": false,
+  "reason": "an enumeration and resource measurement. It runs no SUMO, ranks no closure and licenses nothing."
+ },
+ "content_key": "3e617bd370600d4d3e3b3a4d2d579d8e0c58ac4926338f5a9d38955efee9ab87",
+ "environment": {
+  "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+  "python": "3.11.15"
+ },
+ "evidence_class": "measurement",
+ "finding": "No. It enumerates fully by streaming, and the peak RSS is a small fraction of the 64 MiB process gate \u2014 the enumeration was never memory-bound. The legacy cap refuses it; a declared budget admits it.",
+ "kind": "closure_search_scaling_measurement",
+ "measured_at": "2026-08-11",
+ "question": "Is the six-month 360-hour case rejected by anything other than the old 10,000-unit constant?",
+ "release_evidence": false,
+ "schema": "closure_search_scaling_measurement_v2",
+ "stage": "closure_search_scaling_plan_phase_4",
+ "supersedes_nothing": "validation/closure_search_scaling_baseline_v1.json is UNCHANGED. This is a separate measurement of the same cases under the streaming enumeration and the declared budget."
+}
