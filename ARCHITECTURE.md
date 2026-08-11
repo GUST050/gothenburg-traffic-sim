@@ -1438,6 +1438,25 @@ restart gate rather than passing by absence.
 `--run` writes a SEPARATE outcome record naming the registration by content
 key; the registration is never edited, and a run that turns out
 non-discriminating is recorded as it happened before a new case is registered.
+
+**Registration schema v3 — what a registration binds.** Two things v2 got wrong
+changed what a registration MEANS, so v3 is a new schema rather than new
+filenames under the old contract. v2 stays readable, and an outcome speaks its
+registration's dialect: replaying a frozen v2 registration still produces a
+v2-schema outcome.
+
+* `outcome_record` binds the outcome the CALLER asked for. v2 hard-coded the
+  tool's default, so a registration written to a v3 path still named the v2
+  outcome. A run now refuses to write an outcome its registration disowns.
+* `sources` seals every project module on the arms' real construction and
+  execution path — forty-eight files, derived by importing exactly what
+  `product_arm.build_arm` and `run_monthly_search` touch — instead of ten
+  chosen by hand. The gap was not academic: the runtime correction that bounded
+  independent-day cold runs changed `monthly_sumo.py` and
+  `suggest_closure_time.py`, and a v2 registration would have reported no drift
+  at all. Two of the sealed modules (`heldout_gate.py`, `proxy_validation.py`)
+  are imported lazily and decide the claim boundary; a static probe misses them,
+  so a test re-derives the closure and fails when a new module appears on it.
 Execution errors also publish `failed_execution` with every gate false.
 Network and metadata are bound to an explicit data root, both arms execute from
 that root, and the shared demand lock is taken there rather than in the source

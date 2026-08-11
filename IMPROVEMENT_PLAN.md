@@ -1893,6 +1893,28 @@ cost-ordered cursor/provider to actual product execution and then freeze a
 pre-outcome discriminating benchmark with several health-viable candidates.
 Policy v3, UI/global-best wording and held-out adoption remain closed.
 
+**Benchmark provenance and the v2 timeout, 2026-08-11.** The v2 benchmark
+failed with `sumo timed out after 300s (seed 1000)` and zero completed pilots.
+The cause is visible in the frozen registration without running anything: the
+selected case is a SINGLE work date (2027-03-22, 07:00-15:00, 300 required
+minutes) whose independent daily unit declares a one-day envelope
+`2027-03-22T00:00:00 -> 2027-03-23T00:00:00`, while the demand archive it
+resolves to (`5ac74750843384b3`) is the canonical three-day
+previous/current/next build starting 2027-03-21, `n_intervals: 288`. SUMO ran to
+the archive's far end, so a five-hour closure was observed by simulating
+seventy-two hours — roughly 3x the necessary work per observation. `adf765b`
+corrects exactly this by bounding an independent-daily cold run to its declared
+envelope.
+
+That correction also exposed a provenance hole: it changed `monthly_sumo.py` and
+`suggest_closure_time.py`, and neither was in the benchmark registration's
+source seal, so a v2 registration could not have reported the runtime change as
+drift. Registration schema v3 seals every module on the arms' real import path
+and binds the caller's outcome path instead of the tool's default. It also
+leaves `validation/closure_cost_ordering_golden_v1.json` with a stale bound
+digest for `monthly_sumo.py` — a real consequence to resolve deliberately, not
+by editing the frozen record.
+
 **Cost-first execution and the remaining measurements, 2026-08-11.** Cost
 ordering is now the product execution path, not a post-hoc replay:
 `cost_ordered_execution.py` prices every candidate before any SUMO process

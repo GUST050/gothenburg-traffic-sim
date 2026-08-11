@@ -69,63 +69,48 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### CLOSURE-EVIDENCE-GATES — Review, benchmark runner, discovery, IVC v2
+### CLOSURE-EVIDENCE-V3 — Benchmark provenance, then a v3 registration
 
-- Status: `IMPLEMENTED, REVIEWED AND TESTED. The real v2 benchmark was frozen
-  before outcome and attempted; it failed on the first arm's unchanged 300 s
-  SUMO timeout. No held-out run or activation followed.`
-- Objective and scope: `Review commits 16046fe..fe8b3d4 and repair what is
-  wrong; implement a real --run that executes and compares both arms; discover
-  benchmark cases from archive metadata rather than hand-written dates; run
-  held-out validation only if the benchmark passes; re-report
-  independent-vs-continuous with a fifth category.`
-- Completion outcome: `Three review findings, one of them serious and
-  reproduced before fixing. cost_ordered_benchmark.py --run now verifies every
-  bound digest, runs both arms under one workspace lock into separate roots,
-  compares the published cost ledger for EVERY candidate rather than the two
-  both arms simulated, re-derives the stop proof against its own vocabulary,
-  injects a fault and requires the resumed run to reproduce the uninterrupted
-  outcome, and writes a separate immutable record. tools/product_arm.py is the
-  single place an arm is constructed, out of the CLI's own helpers.
-  --from-archives discovers cases from demand_meta.json around dates that exist
-  and roads that survive their own closure, and refuses to freeze an empty
-  registration. The IVC harness reports five categories with a cross-cutting
-  pairing verdict.`
-- Context or checkpoints: `The primary dev root contains 51 archive directories
-  but only exact product validation may declare one runnable. Discovery now
-  accounts for multi-day warm-up envelopes and selected build
-  5ac74750843384b3 for 2027-03-22. The 13-candidate v2 registration is frozen;
-  its first exhaustive SUMO run timed out after 300 s at seed 1000. Held-out
-  validation remains gated and did not run.`
-- Primary files: `NEW tools/product_arm.py,
-  tests/test_cost_ordered_execution_review.py,
-  tests/test_cost_ordered_benchmark_run.py,
-  tests/test_cost_ordered_benchmark_discovery.py,
-  validation/independent_vs_continuous_outcome_v2.json,
-  validation/cost_ordered_benchmark_registration_v2.json,
-  validation/cost_ordered_benchmark_outcome_v2.json and
-  validation/libsumo_preflight_v2.json. MODIFIED
-  monthly_search.py, cost_ordered_execution.py, run_monthly_closure_search.py,
-  tools/cost_ordered_benchmark.py, tools/measure_independent_vs_continuous.py,
-  ARCHITECTURE.md, IMPROVEMENT_PLAN.md, the scaling plan, TASKS.md,
-  AGENT_NOTES.md. UNCHANGED: cost_ordered_search.py, every frozen registration
-  and the v1 outcomes.`
-- Constraints and safety: `Nothing was activated. Policy v3, global-best and UI
-  claims are closed. No frozen artifact was edited — the v1 benchmark
-  registration and the v1 IVC outcome are byte-identical, and v2 is a new file.
-  No demand was built, no held-out campaign was run, no libsumo was installed,
-  no external data was requested, _CONTINUOUS_MAX_WORKDAYS is unchanged and
-  both resource caps are unchanged.`
-- Acceptance criteria: `A crashed cost-ordered search with the deployed runner
-  resumes and reproduces the uninterrupted answer; the saving and stop proof
-  are durable and a re-entered pilot cannot report a different one; --run
-  refuses drifted bindings, compares every ledger-priced candidate, and fails
-  when a price is poisoned; discovery selects without consulting an outcome and
-  refuses to freeze nothing; every measurement writes a separate versioned
-  record.`
-- Useful checks: `pytest -q on the fifteen focused modules (300 passed);
-  tests/test_serve.py (126 passed); python3 tools/verify_closure_cost_ordering_golden.py
-  --verify; python3 tools/screen_closure_survivability.py --verify;
+- Status: `SOURCE WORK COMPLETE AND GREEN. The v3 registration and run are NOT
+  produced: this container is not the machine that holds the archive library.
+  Nothing was activated.`
+- Objective and scope: `Fix the registration's provenance defects (outcome path,
+  source seal, schema), then freeze and run a v3 cost-ordered benchmark against
+  the corrected runtime.`
+- Completion outcome: `Registration schema v3. outcome_record binds the
+  caller's --out instead of the tool's default, and a run refuses to write an
+  outcome its registration disowns. sources seals every project module on the
+  arms' real import path (48 files) instead of ten chosen by hand; two of them
+  (heldout_gate.py, proxy_validation.py) are imported lazily and decide the
+  claim boundary, and were found by the closure test rather than the audit. v2
+  stays readable and a v2 registration still produces a v2-schema outcome.`
+- Context or checkpoints: `The v2 timeout is diagnosed and its cause is visible
+  in the frozen registration with nothing running: a single-work-date case whose
+  daily unit declares a one-day envelope resolves to the canonical THREE-day
+  archive 5ac74750843384b3 (n_intervals 288), so SUMO ran 72 hours to observe a
+  5-hour closure. adf765b bounds that. That same correction changed
+  monthly_sumo.py, which the FROZEN golden record binds — so
+  tests/test_closure_cost_ordering_golden.py's source-digest test now fails at
+  adf765b, before any change of this branch. It needs a deliberate re-freeze on
+  a host with the archives; do not edit the frozen record.`
+- Primary files: `NEW tests/test_cost_ordered_benchmark_provenance.py (25
+  tests). MODIFIED tools/cost_ordered_benchmark.py, two benchmark test modules,
+  ARCHITECTURE.md, IMPROVEMENT_PLAN.md, TASKS.md, AGENT_NOTES.md. UNCHANGED:
+  every frozen v1/v2 registration and outcome, byte for byte.`
+- Constraints and safety: `Nothing was activated. No timeout was raised, no cap
+  altered, no gate weakened, no libsumo installed, no external data obtained, no
+  held-out run. --allow-drift, --overwrite and --no-fault-injection were not
+  used. No v3 registration or outcome file was written, because discovery found
+  zero archives and refuses to freeze an empty registration.`
+- Acceptance criteria: `A custom v3 registration names its custom v3 outcome; a
+  run refuses a disowned outcome; changing monthly_sumo.py or product_arm.py is
+  reported as drift; the seal covers the re-derived import closure; the
+  registration is self-consistent and detects tampering; frozen v1/v2 records
+  still validate against themselves.`
+- Useful checks: `pytest -q tests/test_cost_ordered_benchmark_run.py
+  tests/test_cost_ordered_benchmark_discovery.py
+  tests/test_cost_ordered_execution_review.py tests/test_monthly_sumo.py
+  (135 passed); tests/test_cost_ordered_benchmark_provenance.py (25 passed);
   git diff --check.`
 <!-- ACTIVE_TASK_END -->
 

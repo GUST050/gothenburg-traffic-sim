@@ -7,81 +7,59 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Closure-search evidence gates on branch
-  codex/review-closure-evidence-gates over Claude f078b64. The pipeline is
-  reviewed and repaired; the real v2 registration was frozen and attempted.
-  Its first exhaustive SUMO verification timed out at the unchanged 300 s
-  limit, so every release gate remains closed and nothing was activated. A
-  runtime correction now bounds independent-day cold runs to the envelope and
-  records candidate-local SUMO timeouts instead of aborting the search.`
-- Summary: `The review found one defect that voided the durability claim.
-  IndependentDailyRunner declares compact_pilot_artifacts, so no per-parent
-  pilot evidence was published; the cursor still recorded every verification,
-  and the resume then demanded evidence that had deliberately never been
-  written — so every restart of a real cost-ordered search raised "evidence is
-  missing". Reproduced directly, then fixed by disabling compaction whenever a
-  cost source is present: compaction exists because an EXHAUSTIVE independent
-  pilot writes one file per parent, and cost-first execution simulates only the
-  boundary set, so the objection does not apply. The exhaustive path still
-  compacts, pinned by a test. Second, execution_record was dead code and
-  cost_ordered_result was assigned and never read, so neither the workspace nor
-  result.json distinguished a cost-ordered run or carried its stop proof; both
-  are published now, without timing so a re-entered pilot must reproduce them
-  exactly. Third, a suspected orphan-cursor defect turned out NOT to be one —
-  verify_search_workspace refuses unledgered artifacts on load, which is
-  stricter than stepping over them — so the speculative fix was reverted and
-  the real behaviour pinned in both directions. Separately, the IVC harness
-  called run_monthly_search in-process while holding no WorkspaceLock; it now
-  takes the same lock the product CLI takes.`
-- Files changed: `NEW tools/product_arm.py and three test modules
-  (execution review 10, benchmark run 21, benchmark discovery 18), plus
-  validation/independent_vs_continuous_outcome_v2.json, the immutable real
-  benchmark v2 registration/failed outcome, and Darwin libsumo preflight v2.
-  MODIFIED
-  monthly_search.py, cost_ordered_execution.py, run_monthly_closure_search.py
-  (_cost_source_for takes an explicit cache path), tools/cost_ordered_
-  benchmark.py, tools/measure_independent_vs_continuous.py, ARCHITECTURE.md,
-  IMPROVEMENT_PLAN.md, the scaling plan, TASKS.md, AGENT_NOTES.md.`
-- Checks: `Focused suites 300 passed. tests/test_serve.py 126 passed with
-  loopback permission. Survivability reproduces byte-for-byte. The
-  affected sweep fails 181, an IDENTICAL set to the recorded 73f5116 baseline
-  (diff empty), while the branch adds 72+ passing tests. The golden record's
-  bound source digests are unchanged and its own suite passes; note that
-  monthly_search.py is NOT among the digests the golden record binds, which is
-  why the review fixes were possible without touching frozen evidence.
-  git diff --check clean.`
-- Decisions and evidence: `Benchmark --run measured on in-memory fixture arms:
-  45 exhaustive pilots against 2 cost-ordered, 43 saved, identical selected IDs
-  and final decision, valid band_exhausted stop proof (first unexamined 3.0 >
-  band 2.0), cache hits consistent, restart equivalent, all eleven gates
-  passed. Two first-cut errors were caught by reading the numbers rather than
-  the green tests: the stop proof was re-derived against invented field names,
-  and the cost gate compared 2 candidates of 45 because the cost-ordered arm
-  only has pilot statistics for what it simulated AND _final_result truncates
-  them further — it now reads the workspace pilot-selection and the published
-  cost ledger, so 45 candidates are compared and a poisoned price fails.
-  IVC v2: 84 cases, 24 unsupported, 25 unpairable, 35 blocked, 0 measured;
-  pairings 24 identical / 11 different candidate spaces / 25 unpairable / 24
-  unsupported. The primary dev root was then used for real evidence. Product
-  validation selected the exact three-day build 5ac74750843384b3 and froze 13
-  schedules for 2027-03-22. The first exhaustive observation timed out after
-  300 s (seed 1000); outcome v2 records failed_execution and all gates false.`
-- Blockers or risks: `The next blocker is runtime, not archive absence: the
-  corrected reset-window run completes the first candidate but a later
-  07:15/q10 closure still exceeds the existing 300 s limit. Do not raise the
-  limit to pass. Held-out remains gated.
-  PR G's Darwin v2 preflight finds packaged SUMO 1.27.1 and
-  lib/libsumocpp.dylib but no SWIG Python binding. PR I stays closed by the
-  2026-07-20 decision. Policy v3 and every UI/global-best claim remain closed.`
-- Suggested next action: `Create a NEW v3 preregistration with current source
-  digests and rerun the corrected product path without --allow-drift. Preserve
-  the failed v2 outcome; do not activate any gate on the diagnostic rerun.`
-- Actor notes: `Nothing was activated and nothing frozen was rewritten. The
-  v1 benchmark registration and the v1 IVC outcome are byte-identical; v2 files
-  are new. No demand was built, no held-out campaign was run, no libsumo was
-  installed, no external data was requested, _CONTINUOUS_MAX_WORKDAYS is
-  unchanged and both resource caps are unchanged. Every new record carries
-  release_evidence false.`
+- Focus and status: `Benchmark provenance on branch claude/closure-evidence-v3
+  over adf765b. Source work is complete and green; the v3 registration and run
+  are NOT produced, because this container has no archive library.`
+- Summary: `Registration schema v3 fixes two claims the record made that were
+  false. outcome_record was hard-coded to the tool's default, so a registration
+  written to a v3 path still named the v2 outcome; it now binds the caller's
+  --out, and a run refuses to write an outcome its registration disowns —
+  checked after binding verification, so drift in the INPUTS is still reported
+  first. sources sealed ten hand-picked files while the arms import 48; the seal
+  now covers the real construction and execution closure. Two modules
+  (heldout_gate.py, proxy_validation.py) were found by the closure test rather
+  than the audit: they are imported lazily by load_passing_heldout_gate, which
+  decides the claim boundary. Both changes alter what a registration MEANS, so
+  it is a new schema; v2 remains readable and a v2 registration still yields a
+  v2-schema outcome.`
+- Files changed: `NEW tests/test_cost_ordered_benchmark_provenance.py.
+  MODIFIED tools/cost_ordered_benchmark.py,
+  tests/test_cost_ordered_benchmark_run.py,
+  tests/test_cost_ordered_benchmark_discovery.py, ARCHITECTURE.md,
+  IMPROVEMENT_PLAN.md, TASKS.md, AGENT_NOTES.md. UNCHANGED: every frozen v1/v2
+  registration and outcome.`
+- Checks: `Required focused set 135 passed. Provenance regressions 25 passed.
+  git diff --check clean. verify_closure_cost_ordering_golden.py --verify fails
+  on the absent golden archive; screen_closure_survivability.py --verify differs
+  only in the gitignored sumo/net.net.xml digest — both pre-existing here.
+  tests/test_closure_cost_ordering_golden.py's source-digest test fails at
+  adf765b BEFORE this branch, because that commit changed monthly_sumo.py, which
+  the frozen golden record binds.`
+- Decisions and evidence: `The v2 timeout root cause, computed from the frozen
+  registration with nothing running: the selected case is one work date
+  (2027-03-22, 07:00-15:00, 300 required minutes, 13 candidates); its daily unit
+  declares envelope 2027-03-22T00:00:00 -> 2027-03-23T00:00:00 (86,400 s) but
+  resolves to demand build 5ac74750843384b3, which is start_date 2027-03-21,
+  days 3, n_intervals 288 (259,200 s). SUMO ran to the archive's far end, so a
+  5-hour closure cost 72 simulated hours per observation — about 3x the
+  necessary work, and the 300 s timeout was reached with zero completed pilots.
+  adf765b bounds an independent-daily cold run to its declared envelope, which
+  is exactly this.`
+- Blockers or risks: `/Users/gt/Documents/gs-project does not exist in this
+  container (there is no /Users at all), so --preregister --from-archives found
+  0 complete archives and correctly REFUSED to freeze an empty registration. No
+  v3 registration or outcome file exists. The golden record's stale
+  monthly_sumo.py digest needs a deliberate re-freeze on a host with the
+  archives — do not edit the frozen record. Policy v3, held-out, UI and
+  global-best remain closed.`
+- Suggested next action: `On the machine with the archive library, re-run the
+  preregister and run commands from this task verbatim. If all eleven gates
+  pass, the next gate is a separately preregistered untouched held-out campaign
+  — not part of that task. Also re-freeze the cost-ordering golden record as a
+  new version so its source seal matches the corrected runtime.`
+- Actor notes: `Nothing was activated and nothing frozen was rewritten. No
+  timeout was raised, no cap altered, no gate weakened. --allow-drift,
+  --overwrite and --no-fault-injection were not used.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
