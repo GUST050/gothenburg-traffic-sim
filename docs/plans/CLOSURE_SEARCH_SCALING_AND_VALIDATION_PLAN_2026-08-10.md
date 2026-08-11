@@ -980,13 +980,94 @@ Två KONTRAKTSFYND, viktigare än vad en kampanj hade gett:
 | PR D real-golden-grind | passerad | — | `python3 tools/verify_closure_cost_ordering_golden.py --verify` |
 | PR E namngiven real-benchmark | passerad ekvivalens, 0 besparing | endast en health-viable kandidat | samma verifieringskommando |
 | PR F aktivering | blockerad | inget pre-outcome diskriminerande benchmark med positiv besparing, ingen held-out | se `monthly_search_policy_v3_preregistration.json` |
-| PR G (steg 6) | blockerad | `libsumo` är inte installerat i miljön | `pip install eclipse-sumo` med libsumo-bindning, sedan `python3 benchmark_seed_workers.py` |
-| PR H mätning | blockerad | mät-harness/case↔arkiv-bindning saknas; kalibrerade arkiv finns | implementera harness mot förregistreringen |
+| PR G (steg 6) | blockerad | KORRIGERAT 2026-08-11: eclipse-sumo 1.27.1 ÄR installerat och levererar libsumo:s C++-bibliotek och headers men INGEN Python-bindning — ominstallation av samma wheel hjälper inte | `python3 tools/preflight_libsumo.py --overwrite` (read-only diagnos); därefter krävs ett bygge/wheel med SWIG-bindningen innan `python3 benchmark_seed_workers.py` |
+| PR H mätning | harness BYGGD och körd; 0 mätta fall | 35 av 84 fall blockerade på kalibrerade arkiv i denna miljö | `python3 tools/measure_independent_vs_continuous.py --overwrite` |
 | PR I (steg 8) | delvis PERMANENT stängd | projektbeslut 2026-07-20: ingen ny extern data (se CLAUDE.md "Open questions"). Mikrosimulering och work-zone-kalibrering kräver dessutom kalibrerad demand | ingen — beslutet är en fast gräns, inte en TODO |
-| Steg 8 (benchmark, held-out, releasegrind) | blockerad | diskriminerande benchmark och därefter en orörd held-out-kampanj saknas | koppla riktig cost-ordered execution, frys cases, kör kampanjkedjan |
+| Steg 8 (benchmark, held-out, releasegrind) | delvis | cost-ordered execution är KOPPLAD (steg 1) och benchmarken är förregistrerad strukturellt (steg 2); körningen och därefter en orörd held-out-kampanj saknas | `python3 tools/cost_ordered_benchmark.py --run` på en värd med arkivbiblioteket |
 
 Förregistreringens `blocked_by`-text om att inget kalibrerat arkiv finns bevaras
 oförändrad som pre-outcome historik, men är superseded för denna dev-maskin:
 den har det pinnade golden-arkivet och hundratals kalibrerade dagsarkiv. De
 återstående blockerarna är produktintegration, diskriminerande cases,
 `libsumo`, held-out och externa-data-gränsen — inte frånvaro av demand.
+
+## 12. Uppmätt resultat 2026-08-11: stegen 1-5
+
+Utfört på branchen `claude/closure-cost-ordered-product-integration` ovanpå
+`73f5116`. **Ingenting aktiverades.** Policy v3, global-best och UI-anspråk är
+oförändrat stängda.
+
+### Steg 1 — cost-ordered execution är nu produktvägen
+
+`traffic_sim/simulation/cost_ordered_execution.py` (NY) kopplar ordningen till
+verklig exekvering: `run_monthly_search(..., cost_source=...)` byter ut den
+uttömmande piloten mot `_cost_ordered_pilot`, och prissättningen sker INNAN
+någon SUMO-process finns — inte som efterhandsreplay. Båda piloterna bygger sin
+evidens genom samma `_pilot_evidence_for`, så vägarna kan skilja sig i VILKA
+kandidater som simuleras men aldrig i HUR.
+
+Den durabla markören SPEGLAR scanningens egen bokföring i stället för att haka
+in i den: `cost_ordered_search.py` är bunden byte-för-byte av
+`validation/closure_cost_ordering_golden_v1.json`, så en callback där hade
+brutit golden-postens källdigester. Spegeln rekonstrueras ur samma indata under
+samma regel, och varje körning hävdar till sist att den aldrig divergerat — ett
+felinjektionstest saboterar scanningens returnerade tillstånd och bevisar att
+kontrollen slår till. 21 tester.
+
+### Steg 2 — benchmarken är förregistrerad strukturellt, inte körd
+
+`tools/cost_ordered_benchmark.py` väljer sitt fall enbart ur egenskaper som är
+kända före körning och kan inte konsultera ett utfall (testerna monkeypatchar
+`parent_closure_cost` och `ArchiveDisruptionProvider.disruption` till att
+kasta). Elva grindtrösklar är frysta i förväg, inklusive ett strikt positivt
+`sumo_verifications_saved_minimum`. 18 tester.
+
+`validation/cost_ordered_benchmark_registration_v1.json` i detta träd:
+`status = blocked_no_structurally_eligible_case`, `archives_available = 0` —
+uppmätt, inte antaget. De åtta utvärderade fallen bär 81-90 kandidater vardera
+och skulle alltså diskriminera; de saknar bara arkivbiblioteket.
+
+### Steg 3 — held-out: BLOCKERAD, inget kört
+
+Held-out-validering får per plan köras först efter att benchmarken passerat.
+Benchmarken kunde inte köras här, alltså finns ingen held-out-evidens och
+ingen produceras. Inga observationer rördes.
+
+### Steg 4 — independent vs continuous: harness byggd och körd
+
+`tools/measure_independent_vs_continuous.py` binder till förregistreringen via
+content key och skriver en SEPARAT utfallspost;
+`validation/independent_vs_continuous_preregistration_v1.json` är oförändrad.
+84 fall undersökta: 24 `unsupported_by_contract`, 25 `unpairable`, 35
+`blocked_missing_demand`, 0 `measured`. 4,4 s, 137 MiB topp-RSS, content key
+stabil mellan körningar. 22 tester.
+
+**Ett tredje kontraktsfynd, uppmätt här.** Förregistreringens parbarhetstest
+jämför det FÖRSTA schemat varje policy räknar upp. Det räcker inte: 11 av dess
+35 "parbara" fall söker olika rum, åt båda hållen.
+
+* `equal_daily_rounded_v1` avrundar varje dagspass UPPÅT, så continuous kan
+  klara samma arbetskrav på FÄRRE dagar. 21-dagarsfallet (midday) räknar upp
+  17-, 18-, 19-, 20- och 21-dagarsscheman — 470 kandidater mot independent-
+  armens 150 — och de korta schemalägger upp till 5130 minuter för ett krav på
+  5040. `exact_equal_daily_v1` kan inte uttrycka något av dem.
+* Independent går på i tur och ordning TILLÅTNA datum och kan därför spänna
+  över en helg där kalenderföljande continuous inte kan: 8 mot 6 kandidater i
+  3-dagarsfallen med enbart vardagar.
+
+Harnessen behandlar detta som avgörande: ett avvikande kandidatrum, eller en
+vinnare den andra armen inte kan uttrycka, kan aldrig rapporteras som låg risk.
+Taket på 21 arbetsdagar höjs INTE här —
+`docs/plans/CONTINUOUS_CLOSURE_CEILING_2026-08-11.md` beskriver vad den
+ändringen faktiskt skulle kosta.
+
+### Steg 5 — PR G korrigerad, PR I oförändrat stängd
+
+`tools/preflight_libsumo.py` (read-only, installerar ingenting) visar att
+eclipse-sumo 1.27.1 ÄR installerat med libsumo:s C++-bibliotek och headers men
+utan Python-bindning. Planens tidigare åtgärd (`pip install eclipse-sumo`) hade
+alltså inte hjälpt. 10 tester.
+
+PR I är oförändrad: projektbeslutet 2026-07-20 att inte hämta mer extern data
+står kvar som en fast gräns, inte en TODO. Ingen dataförfrågan skickades och
+ingen föreslås.

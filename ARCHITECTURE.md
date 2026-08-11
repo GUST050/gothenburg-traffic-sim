@@ -1312,7 +1312,7 @@ fields and sorting order agree, and the record reproduces byte-for-byte. PR D's
 real-golden equivalence gate is passed; this remains development evidence, not
 held-out or release evidence.
 
-#### Cost-ordered verification (`cost_ordered_search.py`) — PR E, SHADOW ONLY
+#### Cost-ordered verification (`cost_ordered_search.py`) — PR E, the scan
 
 Because the cost is deterministic and the order is total, SUMO can only qualify
 or disqualify a candidate — it cannot reorder them. So a run can stop as soon
@@ -1336,17 +1336,59 @@ direct dataclass supplied without JSON parsing. Every scan publishes a
 machine-readable stop proof naming the band, the first unexamined candidate and
 its cost.
 
-The screening mode `independent-cost-ordered-exact` is registered as SHADOW
-ONLY and changes no ranking, finalist set or claim. `validation/
-monthly_search_policy_v3.json` is provisional and changes execution order only;
-its pre-registration freezes every decision parameter and records that
-activation, UI exposure and global-best claims remain closed. The equivalence
-gate now passes on the pinned named golden replay: status and selected IDs match
-exhaustive. It saves 0 of 3 verifications because that benchmark has only one
-health-viable finalist, so the pre-registered positive-savings and activation
-gates remain closed. The current CLI integration is a post-hoc replay over the
-completed exhaustive pilot-selection record; the state machine's persistent
-cursor is not yet the product execution path.
+#### Cost-first product execution (`cost_ordered_execution.py`) — stage 1, BUILT
+
+The scan above decides WHICH candidates to simulate; this module makes the
+product actually obey it. `run_monthly_search(..., cost_source=...)` swaps the
+exhaustive pilot for `_cost_ordered_pilot`, and the ordering now runs BEFORE
+any SUMO process exists rather than replaying a completed exhaustive record.
+Both pilots build their evidence through the same `_pilot_evidence_for`, so the
+two paths can differ in WHICH candidates are simulated and never in HOW.
+
+Everything a resume needs is durable. The cost ledger is published once with a
+content key that binds the daily-unit identity, the three route digests, the
+network digest, the demand metadata, the disruption schema and the costing
+source bytes; a cursor is written after every verification. A resume whose
+ledger key, bound identity or verified prefix does not match is refused rather
+than repaired.
+
+The durable cursor MIRRORS the scan's own bookkeeping instead of reaching into
+it: `cost_ordered_search.py` is bound byte-for-byte by
+`validation/closure_cost_ordering_golden_v1.json`, so adding a callback to it
+would have broken the golden record's source digests. The mirror is
+reconstructed from the same inputs under the same rule, and every run asserts
+at the end that it never diverged — a fault-injection test sabotages the scan's
+returned state to prove the assertion fires.
+
+`reconcile_disruption` is the per-candidate equivalence gate between the
+pre-SUMO cost and the post-SUMO evidence: when the runner returns no disruption
+records the ledger's are attached, and when it returns its own they must be
+field-identical on `vehicles_affected`, `vehicles_no_detour`,
+`added_vehicle_hours` and `added_metres_total`.
+
+`validation/monthly_search_policy_v3.json` remains provisional and changes
+execution order only; its pre-registration freezes every decision parameter and
+records that activation, UI exposure and global-best claims remain closed. The
+equivalence gate passes on the pinned named golden replay — status and selected
+IDs match exhaustive — but saves 0 of 3 verifications because that benchmark
+has only one health-viable finalist. **Policy v3 is therefore still inactive**,
+and stays inactive until a discriminating benchmark measures a strictly
+positive saving and an untouched held-out campaign passes.
+
+#### The discriminating benchmark (`tools/cost_ordered_benchmark.py`) — stage 2
+
+`--preregister` selects its case from properties knowable before any search
+runs — candidate count, unique daily-unit count, work dates, archive
+completeness — and cannot consult an outcome: the tests monkeypatch
+`parent_closure_cost` and `ArchiveDisruptionProvider.disruption` to raise, so a
+single outcome lookup fails the suite. The registration binds both policies,
+the costing sources, the network and its metadata, the three demand variants
+per archive, the resource caps, the seeds and the output roots, and freezes
+eleven gate thresholds including a strictly positive
+`sumo_verifications_saved_minimum`. `--run` writes a SEPARATE outcome record
+naming the registration by content key; the registration is never edited, and a
+run that turns out non-discriminating is recorded as it happened before a new
+case is registered.
 
 #### Progress vocabulary — step 4, BUILT
 
@@ -1359,6 +1401,58 @@ renders the detail beside it: costed candidates, cache hits, SUMO verifications
 and the current cutoff. `tests/test_monthly_progress_contract.py` pins the
 search, the API and the UI against each other, so a phase with no label cannot
 ship.
+
+#### Independent vs continuous (`tools/measure_independent_vs_continuous.py`)
+
+The harness for PR H's frozen question. It binds to
+`validation/independent_vs_continuous_preregistration_v1.json` by content key —
+re-deriving each frozen spec's key, so a contract drift is caught rather than
+silently measured around — and writes a separate outcome record. It never edits
+the registration.
+
+Four buckets stay separate because they are four different facts:
+`unsupported_by_contract` (no continuous counterfactual exists above 21
+workdays, so there is nothing to measure), `unpairable` (both policies run but
+do not describe the same closure), `blocked_missing_demand` (decided by the
+product's own `find_demand_archives` against the product's own
+`DemandBuildSpec`, per daily unit for the independent arm) and `measured`.
+Bucket counts must account for every examined case.
+
+**A third contract finding, measured 2026-08-11.** The registration's
+pairability test compares the FIRST schedule each policy enumerates, which is
+necessary but not sufficient: 11 of its 35 "pairable" cases search different
+spaces, in both directions.
+
+* `equal_daily_rounded_v1` rounds each daily shift UP to the resolution, so the
+  continuous arm can serve the same work requirement in FEWER days. The
+  21-workday midday case enumerates 17-, 18-, 19-, 20- and 21-day schedules —
+  470 candidates against the independent arm's 150 — and the short ones
+  schedule up to 5130 minutes for a 5040-minute requirement.
+  `exact_equal_daily_v1` cannot express any of them (5040/17 is not a multiple
+  of the resolution).
+* The independent policy walks consecutive ELIGIBLE dates, so with weekends
+  excluded it can straddle a weekend where calendar-consecutive continuous
+  cannot: 8 candidates against 6 on the 3-workday weekdays-only cases.
+
+The harness treats this as decisive: a differing candidate space, or a winner
+the other arm cannot express, can never be reported as low risk, however well
+the shared subset agrees. Raising `_CONTINUOUS_MAX_WORKDAYS` would widen the
+comparison's range without making the arms search the same space —
+`docs/plans/CONTINUOUS_CLOSURE_CEILING_2026-08-11.md` records what that change
+would actually cost, and it is not made here.
+
+#### libsumo preflight (`tools/preflight_libsumo.py`) — PR G, BLOCKED
+
+PR G's in-process SUMO path is blocked, and not for the reason previously
+recorded. eclipse-sumo 1.27.1 IS installed; it ships the libsumo C++ library
+(`lib64/libsumocpp.so`) and every libsumo header, and no Python binding at all.
+Reinstalling the same wheel cannot help. The preflight separates the three
+faults that all surface as `ModuleNotFoundError` — a module absent only because
+SUMO's `tools` directory is off `sys.path` (true here for `sumolib` and
+`traci`), a distribution without the binding, and SUMO genuinely absent — and
+installs nothing. The subprocess backend stays the only execution path, so the
+approved seed-worker budget and every process and memory cap stand as
+benchmarked.
 
 ### F — Confidence (`validate_sim.py`) — CORE BUILT
 LOSO results (2026-07-05, whole day): the program recovers a median 32 %

@@ -1893,6 +1893,34 @@ cost-ordered cursor/provider to actual product execution and then freeze a
 pre-outcome discriminating benchmark with several health-viable candidates.
 Policy v3, UI/global-best wording and held-out adoption remain closed.
 
+**Cost-first execution and the remaining measurements, 2026-08-11.** Cost
+ordering is now the product execution path, not a post-hoc replay:
+`cost_ordered_execution.py` prices every candidate before any SUMO process
+exists, persists a content-keyed cost ledger and a cursor after every
+verification, refuses a resume whose ledger key or verified prefix does not
+match, and reconciles the pre-SUMO cost against the post-SUMO evidence
+field-by-field. The durable cursor mirrors the scan rather than hooking into
+it, because `cost_ordered_search.py` is bound byte-for-byte by the golden
+record; a fault-injection test proves the divergence check fires.
+
+The discriminating benchmark is registered but not run:
+`tools/cost_ordered_benchmark.py --preregister` selects structurally, freezes
+eleven thresholds including a strictly positive saving minimum, and reports
+`archives_available: 0` in this checkout — measured, not assumed. Held-out
+validation therefore did not run and no held-out evidence exists.
+
+Two measurements did complete. PR H's harness
+(`tools/measure_independent_vs_continuous.py`) examined all 84 pre-registered
+cases — 24 unsupported by contract, 25 unpairable, 35 blocked on demand, 0
+measured — and found a THIRD contract divergence: 11 of the 35 "pairable" cases
+search different candidate spaces in both directions, because
+`equal_daily_rounded_v1` can serve the work requirement in fewer days than
+`exact_equal_daily_v1` can express, and because the two policies walk different
+date axes. `tools/preflight_libsumo.py` corrected PR G's blocker: eclipse-sumo
+1.27.1 is installed and ships libsumo's C++ library and headers with no Python
+binding, so the previously recorded fix would not have worked. Policy v3,
+global-best and UI claims remain closed; nothing was activated.
+
 ### Confidence, policy, and wording
 
 Do not compress confidence into a fake probability. The result exposes:
