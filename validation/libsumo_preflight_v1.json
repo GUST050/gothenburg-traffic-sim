@@ -24,7 +24,7 @@
   "pr_g_persistent_sumo": "blocked",
   "seed_worker_budget_unchanged": true
  },
- "content_key": "f785371604937951258484e16f23129d5c1066414c55e17b67005aad917b54f1",
+ "content_key": "926517cff826d2387dac442338978e8193a31792eecbc24e5eb3c40ce7f5b26b",
  "distribution": {
   "libsumo_cpp_library": [
    "lib64/libsumocpp.so"
@@ -34,6 +34,7 @@
   "root": "/usr/local/lib/python3.11/dist-packages/sumo"
  },
  "environment": {
+  "SUMO_HOME": null,
   "executable": "/usr/local/bin/python3",
   "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
   "python": "3.11.15"
@@ -81,7 +82,6 @@
  "schema": "libsumo_preflight_v1",
  "stage": "closure_search_scaling_plan_pr_g",
  "sumo_home": {
-  "environment_variable": null,
   "error": null,
   "resolved_by_project": "/usr/local/lib/python3.11/dist-packages/sumo",
   "tools_dir": "/usr/local/lib/python3.11/dist-packages/sumo/tools",

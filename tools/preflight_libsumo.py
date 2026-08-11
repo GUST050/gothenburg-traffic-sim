@@ -86,8 +86,12 @@ def _importable(name: str, *, extra_path: str | None = None) -> dict[str, Any]:
 
 
 def _sumo_home() -> dict[str, Any]:
+    # NOTE: the ambient `SUMO_HOME` variable is reported under `environment`,
+    # which the content key excludes. It is context for a reader, not part of
+    # what the record claims — and binding it would make the key depend on
+    # whatever any surrounding process happened to export, so the same machine
+    # in the same state would fail to reproduce its own preflight.
     report: dict[str, Any] = {
-        "environment_variable": os.environ.get("SUMO_HOME"),
         "resolved_by_project": None,
         "tools_dir": None,
         "tools_dir_exists": False,
@@ -202,6 +206,7 @@ def build_record() -> dict[str, Any]:
             "python": platform.python_version(),
             "platform": platform.platform(),
             "executable": sys.executable,
+            "SUMO_HOME": os.environ.get("SUMO_HOME"),
         },
         "consequences": {
             "pr_g_persistent_sumo": (

@@ -96,3 +96,22 @@ class TestItLicensesNothing:
         rebuilt = preflight.build_record()
         assert rebuilt["content_key"] == record["content_key"], (
             "the preflight must be reproducible on the machine it describes")
+
+    def test_exporting_the_sumo_home_it_already_resolves_changes_nothing(
+            self, monkeypatch, record):
+        """Found by a full-suite run: a neighbouring test exported SUMO_HOME.
+
+        Pointing the variable at the root the project resolves anyway describes
+        the SAME installation, so the record must not change. Echoing the
+        variable inside the keyed payload made it change, which meant the same
+        machine in the same state failed to reproduce its own preflight
+        depending on which test ran first. It is reported under `environment`,
+        which the key excludes.
+        """
+        resolved = record["sumo_home"]["resolved_by_project"]
+        if not resolved:
+            pytest.skip("no SUMO installation to point at")
+        monkeypatch.setenv("SUMO_HOME", resolved)
+        rebuilt = preflight.build_record()
+        assert rebuilt["content_key"] == record["content_key"]
+        assert rebuilt["environment"]["SUMO_HOME"] == resolved
