@@ -1,0 +1,159 @@
+{
+ "blocked_by": {
+  "archives_available": 0,
+  "reason": "no calibrated demand archive exists under the runs root",
+  "reproducible_command": "python3 tools/cost_ordered_benchmark.py --preregister --runs-root runs   # on a host whose runs/ holds the calibrated archive library",
+  "runs_root": "/home/user/gothenburg-traffic-sim/runs"
+ },
+ "claim_boundary": {
+  "activates_policy_v3": false,
+  "opens_global_best": false,
+  "permits_ui_claim": false,
+  "reason": "a registration freezes a question; it measures nothing"
+ },
+ "comparison_metrics": [
+  "candidate_deterministic_costs",
+  "hard_failures",
+  "health_classification",
+  "pilot_status",
+  "selected_ids",
+  "final_decision",
+  "sumo_verifications",
+  "daily_cost_cache_hits",
+  "wall_time_s",
+  "peak_rss_bytes"
+ ],
+ "content_key": "69c1820288ee3029579c6436141561551027671ddd508a1f54fe0e5d5f0fdb43",
+ "demand_variants": [
+  "q50",
+  "q10",
+  "q90"
+ ],
+ "disruption_schema": "deterministic_closure_disruption_v1",
+ "evidence_class": "preregistration",
+ "gate_thresholds": {
+  "cache_hits_consistent": true,
+  "candidate_costs_field_identical": true,
+  "final_decision_identical": true,
+  "hard_failures_identical": true,
+  "health_classifications_identical": true,
+  "resource_cap_regression_allowed": false,
+  "restart_equivalent": true,
+  "selected_ids_identical": true,
+  "status_identical": true,
+  "stop_proof_valid": true,
+  "sumo_verifications_saved_minimum": 1
+ },
+ "hypothesis": "Cost-first execution reaches the same pilot status, the same selected_ids and the same final decision as exhaustive execution, while running SUMO on strictly fewer candidates.",
+ "kind": "cost_ordered_benchmark_registration",
+ "network": {
+  "path": "sumo/net.net.xml",
+  "sha256": "64d7a909d93633b227f4706612092cad618a7d574ef42d65d03e9aca6b43dd94"
+ },
+ "network_metadata": {
+  "path": "sumo/network_metadata.json",
+  "sha256": "d588d632aa3f2735a6848ee88a95a73aa223c5ceb1bebf32004d32495a3aa9f2"
+ },
+ "outcome_record": "validation/cost_ordered_benchmark_outcome_v1.json",
+ "output_roots": {
+  "cost_ordered": "runs/closure-search-benchmark-cost-ordered",
+  "daily_cost_cache": "runs/closure-search-benchmark-daily-costs",
+  "exhaustive": "runs/closure-search-benchmark-exhaustive"
+ },
+ "policies": {
+  "cost_ordered": {
+   "path": "validation/monthly_search_policy_v3.json",
+   "sha256": "1d3f3e1ea35f90ecec7e06941391a8a8728f0e7d8603df917dbbdb361ee242b0"
+  },
+  "exhaustive": {
+   "path": "validation/monthly_search_policy_v2.json",
+   "sha256": "249a98a95d10be3fbeeaceb2fc071ef1aa5f43b9d15b2cfa9023994f742be83d"
+  }
+ },
+ "python": {
+  "implementation": "CPython",
+  "version": "3.11.15"
+ },
+ "registered_at": "2026-08-11",
+ "release_evidence": false,
+ "resource_caps": {
+  "daily_workers": 1,
+  "maximum_daily_units": 10000,
+  "maximum_parent_schedules": 100000,
+  "seed_workers": 1
+ },
+ "schema": "cost_ordered_benchmark_registration_v1",
+ "seeds": {
+  "basis": "canonical_seed(variant, repetition) \u2014 unchanged",
+  "repetitions_per_variant": 1
+ },
+ "selected_case": null,
+ "selection": {
+  "archives_available": 0,
+  "evaluated": [
+   {
+    "candidate_count": 81,
+    "search_id": "cost-ordered-benchmark-03-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 81
+   },
+   {
+    "candidate_count": 81,
+    "search_id": "cost-ordered-benchmark-03-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 81
+   },
+   {
+    "candidate_count": 81,
+    "search_id": "cost-ordered-benchmark-05-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 81
+   },
+   {
+    "candidate_count": 81,
+    "search_id": "cost-ordered-benchmark-05-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 81
+   },
+   {
+    "candidate_count": 90,
+    "search_id": "cost-ordered-benchmark-09-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 90
+   },
+   {
+    "candidate_count": 90,
+    "search_id": "cost-ordered-benchmark-09-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 90
+   },
+   {
+    "candidate_count": 90,
+    "search_id": "cost-ordered-benchmark-11-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 90
+   },
+   {
+    "candidate_count": 90,
+    "search_id": "cost-ordered-benchmark-11-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 90
+   }
+  ],
+  "minimum_structural_candidates": 6,
+  "rule": "most candidates, then fewest unique daily units, then search_id; no outcome, cost or winner is consulted"
+ },
+ "sources": {
+  "run_monthly_closure_search.py": "5c5825fe9bbcc78fb234c35447c23062237efbd370bdcc44cdc80372325ed3a4",
+  "run_scenario.py": "d552557c878e68dc37b897d119648293ae08027d3adbce4c6e12a26baee0e3c9",
+  "tools/cost_ordered_benchmark.py": "83bc049c5f9ec3f74b73ce55f9a762a734c98d764247e567f15835a6d28fe584",
+  "traffic_sim/simulation/closure_ranking.py": "f47b4193bd62a6bfc8c2d15a0532af0314e25d481186dc2af17feed933ee389d",
+  "traffic_sim/simulation/cost_ordered_execution.py": "1b49e8eeae0a2b4ae00e07ec30e5739a7268084a633d3024f7c4a4987befcb28",
+  "traffic_sim/simulation/cost_ordered_search.py": "5110756ee952a5bd019987b2ecc49ffd49bdb4478522799edac29567cc2edb92",
+  "traffic_sim/simulation/deterministic_disruption.py": "8f68b28678486d77f6f68d347644f1ede503844d4eeb0ec53a1c2e868166cda1",
+  "traffic_sim/simulation/finalist_decision.py": "8129909b2dc34e12fde8e34525d37c75b60f979868ec765827cdc574f85489a1",
+  "traffic_sim/simulation/monthly_search.py": "b59ce0293df27d72555934f42d6171396530ccf2361bba27aac7574ef202eab1",
+  "traffic_sim/simulation/pilot_selection.py": "9f7f0d282b4513e40140bc5d4f6a7dc0c6b034bf1bbf89d9b4013cadf712f2a1"
+ },
+ "status": "blocked_no_structurally_eligible_case"
+}
