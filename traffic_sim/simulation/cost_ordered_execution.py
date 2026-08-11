@@ -69,6 +69,9 @@ SCHEMA_VERSION = 1
 #: to the exact candidate rather than to the start of the phase.
 COST_LEDGER_KIND = "cost_ordered_cost_ledger"
 CURSOR_KIND = "cost_ordered_cursor"
+#: The end-of-pilot account: how many candidates SUMO would have run against
+#: how many it did, plus the stop proof for the ones it did not.
+EXECUTION_KIND = "cost_ordered_execution_result"
 
 
 def _canonical(payload: Any) -> str:

@@ -117,9 +117,19 @@ class TestTheRegistration:
         assert thresholds["final_decision_identical"] is True
         assert thresholds["resource_cap_regression_allowed"] is False
 
-    def test_it_recomputes_from_the_tool(self, registration):
-        rebuilt = bench.build_registration(ROOT / "runs")
-        assert rebuilt["content_key"] == registration["content_key"]
+    def test_its_content_key_still_describes_its_own_body(self, registration):
+        """v1 is FROZEN historical evidence, so it is checked against itself.
+
+        It binds source digests, and those sources have since moved — the
+        stage-1 review changed `monthly_search.py`. Requiring a frozen record to
+        recompute from a moving tree would force a choice between editing
+        history and a permanently red test. Self-consistency is the property
+        that actually matters for a preserved artifact; "recomputes from the
+        tool" belongs to the CURRENT registration, where it is meaningful.
+        """
+        body = {key: value for key, value in registration.items()
+                if key not in {"content_key", "registered_at"}}
+        assert registration["content_key"] == bench._content_key(body)
 
     def test_it_reports_its_blocker_honestly(self, registration):
         """This environment has no calibrated archives; say so, do not guess."""

@@ -878,6 +878,7 @@ def _final_result(
     pilot_selection: Mapping[str, Any],
     decision: Mapping[str, Any] | None,
     backend_provenance: Mapping[str, Any],
+    cost_ordered_execution: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     decision_status = (
         str(decision["status"])
@@ -972,6 +973,12 @@ def _final_result(
             "proxy_version": screening.get("proxy_version"),
         },
         "pilot_selection": response_pilot_selection,
+        # Present only when cost-first execution ran. A reader of result.json
+        # could otherwise not tell which execution path produced it, nor how
+        # many SUMO runs the ordering saved.
+        "cost_ordered_execution": (
+            dict(cost_ordered_execution)
+            if cost_ordered_execution is not None else None),
         "robust_decision": dict(decision) if decision is not None else None,
         "period_comparison": period_comparison,
         "claim_boundary": _claim_boundary(
@@ -1308,6 +1315,15 @@ def _cost_ordered_pilot(
             verified_evidence[candidate_id] = coe.reconcile_disruption(
                 records[-1][1], priced_by_id[candidate_id])
 
+    # Counting manifest records is sufficient, and deliberately so. A process
+    # killed between `publish_artifact`'s file copy and its manifest append
+    # leaves an orphan the manifest does not mention — but such a workspace
+    # never reaches this line: `verify_search_workspace` refuses any file under
+    # `artifacts/` that is not in the ledger, so the workspace fails integrity
+    # on load with a message naming the orphan. Scanning the directory here to
+    # step over it would be strictly worse: it would resume a workspace whose
+    # contents nobody can account for. Pinned by
+    # `TestAnOrphanCursorIsRefusedNotSteppedOver`.
     checkpoint_index = len(cursor_records)
 
     def checkpoint(new_cursor, candidate_id: str,
@@ -1351,7 +1367,41 @@ def _cost_ordered_pilot(
         checkpoint=checkpoint,
         progress=report,
     )
-    return list(result.evidence), result
+
+    # The durable account of what cost ordering actually did. Without it
+    # nothing in the workspace or the result distinguishes a cost-ordered run
+    # from an exhaustive one, and the stop proof — the argument that the
+    # unexamined candidates could not have won — exists only in memory.
+    # Deliberately free of wall time and peak RSS: those differ between a run
+    # and its resume, and this artifact must reproduce exactly so a re-entered
+    # pilot can prove it did not change its mind.
+    record = coe.execution_record(
+        spec, ledger, result,
+        exhaustive_candidate_count=len(shortlist_ids),
+    )
+    existing_execution = _artifact_records(workspace, kind=coe.EXECUTION_KIND)
+    if existing_execution:
+        if len(existing_execution) != 1 or _canonical_digest(
+                _read_artifact(workspace, existing_execution[0])
+        ) != _canonical_digest(record):
+            raise ValueError(
+                "resumed cost-ordered execution is not deterministic: the "
+                "re-entered pilot reports a different saving or stop proof")
+    else:
+        _publish_json(
+            workspace,
+            record,
+            "cost-ordered-execution.json",
+            kind=coe.EXECUTION_KIND,
+            provenance={
+                "search_content_key": spec.content_key,
+                "cost_ordered_sumo_candidates": record[
+                    "cost_ordered_sumo_candidates"],
+                "sumo_verifications_saved": record["sumo_verifications_saved"],
+                "release_evidence": False,
+            },
+        )
+    return list(result.evidence), record
 
 
 def run_monthly_search(
@@ -1442,8 +1492,18 @@ def run_monthly_search(
             workspace,
             kind="monthly_pilot_candidate",
         )
+        # Compaction exists because an EXHAUSTIVE independent pilot writes one
+        # JSON file per parent — tens of thousands of them — and the parent
+        # evidence is a deterministic sum of immutable daily cache entries
+        # anyway. Cost-first execution simulates only the boundary set, so the
+        # file count is bounded by the finalists and the objection does not
+        # apply. It must not apply: without those files a resume cannot prove
+        # the cursor's verified prefix, and every restart of a real
+        # cost-ordered search fails closed on "evidence is missing" — which is
+        # exactly the durability the cursor exists to provide.
         compact_pilot = (
             getattr(runner, "compact_pilot_artifacts", False) is True
+            and cost_source is None
         )
         if compact_pilot and pilot_records:
             raise ValueError(
@@ -1454,7 +1514,7 @@ def run_monthly_search(
             variant: policy.pilot.repetitions_per_variant
             for variant in DEMAND_VARIANTS
         }
-        cost_ordered_result = None
+        cost_ordered_result: Any = None
         if cost_source is not None:
             if policy.objective_method != "closure_cost_v1":
                 raise ValueError(
@@ -1653,6 +1713,7 @@ def run_monthly_search(
             pilot_selection=pilot_payload,
             decision=decision_payload,
             backend_provenance=backend_provenance,
+            cost_ordered_execution=cost_ordered_result,
         )
         # Return the exact JSON representation that is persisted so an
         # idempotent reload cannot differ only because dataclass tuples became

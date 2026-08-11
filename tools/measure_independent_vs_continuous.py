@@ -48,6 +48,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import platform
 import resource
 import sys
@@ -739,6 +740,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="structural buckets only; run no SUMO")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--stdout", action="store_true")
+    parser.add_argument("--workspace-wait-s", type=float, default=3600.0,
+                        help="Seconds to wait for the shared demand "
+                             "workspace before giving up.")
     args = parser.parse_args(argv)
 
     started = time.monotonic()
@@ -754,22 +758,39 @@ def main(argv: Sequence[str] | None = None) -> int:
                                 check_demand=not args.classify_only))
 
     measured: dict[str, Any] = {}
-    if not args.classify_only:
-        by_id = {case["case_id"]: case for case in registration["cases"]}
-        for record in records:
-            if record["bucket"] != "measurable":
-                continue
-            case = by_id[record["case_id"]]
-            run = measure_case(
-                case, record, policy_path=Path(args.policy),
-                runs_root=runs_root, release_root=Path(args.release_root),
-                workspace_root=Path(args.workspace_root))
-            run["comparison"] = compare_arms(
-                case, record["correspondence"],
-                run["arms_raw"]["independent"], run["arms_raw"]["continuous"],
-                registration["tolerances"])
-            run.pop("arms_raw")
-            measured[record["case_id"]] = run
+    measurable = [record for record in records
+                  if record["bucket"] == "measurable"]
+    if not args.classify_only and measurable:
+        # `sumo/` and `web/data/` are ONE mutable workspace. Running
+        # `run_monthly_search` in-process without this lock lets a measurement
+        # interleave its envelope builds with serve.py or a horizon pre-warm
+        # run — the product CLI has always taken it, and a harness that calls
+        # the same function must too, or it measures a workspace someone else
+        # is rewriting underneath it.
+        from traffic_sim.simulation.workspace import WorkspaceLock
+
+        lock = WorkspaceLock(f"measure_independent_vs_continuous {os.getpid()}")
+        if not lock.acquire(timeout=args.workspace_wait_s, poll_s=10.0):
+            raise SystemExit(
+                f"demand workspace busy: {lock.holder_description()}; "
+                "wait for it, stop it, or raise --workspace-wait-s")
+        try:
+            by_id = {case["case_id"]: case for case in registration["cases"]}
+            for record in measurable:
+                case = by_id[record["case_id"]]
+                run = measure_case(
+                    case, record, policy_path=Path(args.policy),
+                    runs_root=runs_root, release_root=Path(args.release_root),
+                    workspace_root=Path(args.workspace_root))
+                run["comparison"] = compare_arms(
+                    case, record["correspondence"],
+                    run["arms_raw"]["independent"],
+                    run["arms_raw"]["continuous"],
+                    registration["tolerances"])
+                run.pop("arms_raw")
+                measured[record["case_id"]] = run
+        finally:
+            lock.release()
 
     outcome = build_outcome(
         registration, records, runs_root=runs_root, measured=measured,
