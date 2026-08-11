@@ -1921,6 +1921,33 @@ date axes. `tools/preflight_libsumo.py` corrected PR G's blocker: eclipse-sumo
 binding, so the previously recorded fix would not have worked. Policy v3,
 global-best and UI claims remain closed; nothing was activated.
 
+**Evidence-pipeline review and completion, 2026-08-11.** Re-reviewing the
+product integration found one defect that voided its main claim: every resume
+of a real cost-ordered search failed closed, because `IndependentDailyRunner`
+suppresses per-parent pilot artifacts and the resume then demanded evidence
+that had deliberately never been written. Compaction is now disabled whenever a
+cost source is present — cost-first execution simulates only the boundary set,
+so the file count it was invented to bound does not arise. `execution_record`
+was also dead code; the saving, the stop proof and the final cursor are now
+published and surfaced in the result. A third suspected defect turned out not
+to be one and is pinned as such.
+
+`--run` is implemented: bindings re-hashed, both arms under one workspace lock
+into separate roots, built from the CLI's own helpers via
+`tools/product_arm.py`. The field-by-field cost gate compares the published
+cost LEDGER — every candidate, priced before any SUMO — rather than the two
+candidates both arms simulated; the stop proof is re-derived against its own
+vocabulary and can fail; fault injection is part of the run, and skipping it
+fails the restart gate. Benchmark cases are now DISCOVERED from the archive
+library's metadata around dates that exist and roads that survive their own
+closure, and a discovery that finds nothing refuses to freeze.
+
+Measured here on in-memory arms: 45 exhaustive pilots against 2 cost-ordered,
+43 saved, identical selected IDs and final decision, valid band-exhausted stop
+proof, restart equivalent. The real benchmark, and therefore held-out
+validation, remain unrun: this container has no calibrated archive library.
+Policy v3, global-best and UI claims are unchanged and closed.
+
 ### Confidence, policy, and wording
 
 Do not compress confidence into a fake probability. The result exposes:

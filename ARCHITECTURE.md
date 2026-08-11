@@ -1360,11 +1360,28 @@ reconstructed from the same inputs under the same rule, and every run asserts
 at the end that it never diverged — a fault-injection test sabotages the scan's
 returned state to prove the assertion fires.
 
+**Compaction is disabled in this mode, and that is a correctness requirement
+rather than a preference.** `IndependentDailyRunner` declares
+`compact_pilot_artifacts` because an EXHAUSTIVE independent pilot would write
+one JSON file per parent, tens of thousands of them. Cost-first execution
+simulates only the boundary set, so the file count is bounded by the finalists —
+and without those files a resume cannot prove the cursor's verified prefix, so
+every restart of a real cost-ordered search failed closed on "evidence is
+missing" until this was fixed. The exhaustive path still compacts.
+
 `reconcile_disruption` is the per-candidate equivalence gate between the
 pre-SUMO cost and the post-SUMO evidence: when the runner returns no disruption
 records the ledger's are attached, and when it returns its own they must be
 field-identical on `vehicles_affected`, `vehicles_no_detour`,
 `added_vehicle_hours` and `added_metres_total`.
+
+Every cost-ordered pilot publishes a `cost_ordered_execution_result` artifact —
+the exhaustive candidate count against the simulated one, the saving, the stop
+proof and the final cursor — and the search result carries a
+`cost_ordered_execution` summary, so a reader can tell which execution path
+produced a result and what it saved. It carries no wall time or peak RSS
+deliberately: a re-entered pilot must reproduce it exactly, and a resume that
+reports a different saving raises.
 
 `validation/monthly_search_policy_v3.json` remains provisional and changes
 execution order only; its pre-registration freezes every decision parameter and
@@ -1375,20 +1392,51 @@ has only one health-viable finalist. **Policy v3 is therefore still inactive**,
 and stays inactive until a discriminating benchmark measures a strictly
 positive saving and an untouched held-out campaign passes.
 
-#### The discriminating benchmark (`tools/cost_ordered_benchmark.py`) — stage 2
+#### The discriminating benchmark (`tools/cost_ordered_benchmark.py`)
 
 `--preregister` selects its case from properties knowable before any search
-runs — candidate count, unique daily-unit count, work dates, archive
-completeness — and cannot consult an outcome: the tests monkeypatch
+runs and cannot consult an outcome: the tests monkeypatch
 `parent_closure_cost` and `ArchiveDisruptionProvider.disruption` to raise, so a
 single outcome lookup fails the suite. The registration binds both policies,
 the costing sources, the network and its metadata, the three demand variants
 per archive, the resource caps, the seeds and the output roots, and freezes
 eleven gate thresholds including a strictly positive
-`sumo_verifications_saved_minimum`. `--run` writes a SEPARATE outcome record
-naming the registration by content key; the registration is never edited, and a
-run that turns out non-discriminating is recorded as it happened before a new
-case is registered.
+`sumo_verifications_saved_minimum`.
+
+**`--from-archives` (v2) discovers the cases instead of guessing them.** v1's
+windows were written by hand and mostly named dates no archive held, and its
+road was `60786979_3575001205_0` — the documented single-incoming-connection
+edge, whose closure severs a successor, so its candidates are degenerate for
+reasons unrelated to execution order. Discovery reads the library's own
+`demand_meta.json` files, keeps only whole-day three-variant archives (what an
+independent daily unit resolves to), groups them into runs of consecutive
+eligible dates per source, offers several daily windows per run, and takes its
+roads from the frozen topology screen's SURVIVING set. A discovery that finds
+nothing refuses to write anything: v1 was frozen against an empty runs
+directory, and an empty registration looks like evidence while saying only
+which machine it ran on.
+
+**`--run` executes both arms.** Bindings are re-hashed first and all drift is
+reported at once; both arms then run under ONE workspace lock held for the whole
+benchmark, into separate workspace roots — one root keyed by `search_id` would
+let the second arm resume the first's evidence and compare the run with itself.
+Both arms are built by `tools/product_arm.py` out of the CLI's own helpers, so a
+benchmark cannot measure a lookalike of the product.
+
+Two comparisons matter and only one of them is obvious. The cost-ordered arm
+has pilot statistics only for what it simulated — two candidates of forty-five —
+so the field-by-field cost gate reads the arm's published cost LEDGER, which
+priced every candidate before any SUMO ran, against the exhaustive arm's own
+evidence. The stop proof is re-derived rather than trusted, against its own
+vocabulary: `band_exhausted` requires the first unexamined candidate to be
+STRICTLY above cutoff plus practical equivalence. Fault injection is part of the
+run — the probe interrupts a cost-ordered arm, resumes it, and requires the
+resumed decision and every candidate cost to match; skipping it fails the
+restart gate rather than passing by absence.
+
+`--run` writes a SEPARATE outcome record naming the registration by content
+key; the registration is never edited, and a run that turns out
+non-discriminating is recorded as it happened before a new case is registered.
 
 #### Progress vocabulary — step 4, BUILT
 
@@ -1436,8 +1484,13 @@ spaces, in both directions.
 
 The harness treats this as decisive: a differing candidate space, or a winner
 the other arm cannot express, can never be reported as low risk, however well
-the shared subset agrees. Raising `_CONTINUOUS_MAX_WORKDAYS` would widen the
-comparison's range without making the arms search the same space —
+the shared subset agrees. **v2 makes it a category rather than a field** — five
+buckets, not four — because a case counted among the "measured" carries an
+implication its comparison cannot support. The pairing verdict is a contract
+fact, so it is recorded on every case and summarised cross-cuttingly: the
+differing-space finding survives an environment where every case is blocked on
+demand. Raising `_CONTINUOUS_MAX_WORKDAYS` would widen the comparison's range
+without making the arms search the same space —
 `docs/plans/CONTINUOUS_CLOSURE_CEILING_2026-08-11.md` records what that change
 would actually cost, and it is not made here.
 
