@@ -245,3 +245,119 @@ class TestTheFrozenHistoryIsUntouched:
         assert outcome["gates"]["passed"] is False
         assert outcome["comparison"]["execution_error"]["message"].startswith(
             "sumo timed out after 300s")
+
+
+class TestTheSimulatorIsBoundToo:
+    """Sealing every line of Python and none of the simulator seals half.
+
+    SUMO decides every observation, so a different executable or version is
+    exactly as much of a semantic change as an edited source file — and neither
+    is visible in a source digest.
+    """
+
+    def _registration(self, tmp_path):
+        tree = _fixture_tree(tmp_path)
+        path = tmp_path / "registration.json"
+        bench.main(["--preregister", "--runs-root", str(tree),
+                    "--data-root", str(tree), "--registration", str(path)])
+        return json.loads(path.read_text(encoding="utf-8")), tree
+
+    def test_the_runtime_identity_is_recorded(self, tmp_path):
+        record, _tree = self._registration(tmp_path)
+        runtime = record["sumo_runtime"]
+        for field in ("executable", "version", "sha256", "resolved_by",
+                      "platform", "machine"):
+            assert field in runtime, field
+        if runtime["executable"]:
+            assert runtime["sha256"] and runtime["version"]
+
+    def test_a_different_sumo_binary_is_drift(self, tmp_path):
+        record, tree = self._registration(tmp_path)
+        if not record["sumo_runtime"]["sha256"]:
+            pytest.skip("no SUMO executable resolved in this environment")
+        record["sumo_runtime"]["sha256"] = "0" * 64
+        assert any("executable bytes changed" in item
+                   for item in bench.verify_bindings(record, tree))
+
+    def test_a_different_sumo_version_is_drift(self, tmp_path):
+        record, tree = self._registration(tmp_path)
+        record["sumo_runtime"]["version"] = "Eclipse SUMO sumo 0.0.0"
+        assert any("version changed" in item
+                   for item in bench.verify_bindings(record, tree))
+
+    def test_a_different_platform_is_drift(self, tmp_path):
+        record, tree = self._registration(tmp_path)
+        record["sumo_runtime"]["machine"] = "s390x"
+        assert any("machine changed" in item
+                   for item in bench.verify_bindings(record, tree))
+
+    def test_an_intact_runtime_binding_is_not_drift(self, tmp_path):
+        record, tree = self._registration(tmp_path)
+        assert bench.verify_bindings(record, tree) == []
+
+
+class TestAbsenceIsBoundAsFirmlyAsPresence:
+    """"There was no adopted gate when this was frozen" is a claim.
+
+    A later-appearing certificate silently widening what a replay may claim is
+    exactly the drift this exists to catch, so absence is recorded explicitly
+    rather than omitted.
+    """
+
+    def _registration(self, tmp_path):
+        tree = _fixture_tree(tmp_path)
+        path = tmp_path / "registration.json"
+        bench.main(["--preregister", "--runs-root", str(tree),
+                    "--data-root", str(tree), "--registration", str(path)])
+        return json.loads(path.read_text(encoding="utf-8")), tree
+
+    def test_every_gate_artifact_has_an_explicit_presence_verdict(self,
+                                                                   tmp_path):
+        record, _tree = self._registration(tmp_path)
+        state = record["external_gate_state"]
+        for name in bench.EXTERNAL_GATE_ARTIFACTS:
+            assert name in state, name
+            assert "present" in state[name]
+        assert "certificate_manifest" in state
+
+    def test_an_absent_gate_that_appears_is_drift(self, tmp_path):
+        record, tree = self._registration(tmp_path)
+        name = "validation/monthly_gate_record.json"
+        if record["external_gate_state"][name]["present"]:
+            pytest.skip("this tree already has an adopted gate record")
+        # Register the OPPOSITE of what is live: the record claims the file was
+        # present, the tree says it is absent. Same asymmetry either way round.
+        record["external_gate_state"][name] = {
+            "present": True, "sha256": "0" * 64, "bytes": 1}
+        drift = bench.verify_bindings(record, tree)
+        assert any(name in item and "present at registration" in item
+                   for item in drift), drift
+
+    def test_a_changed_gate_record_is_drift(self, tmp_path):
+        record, tree = self._registration(tmp_path)
+        name = "validation/monthly_gate_record.json"
+        if not record["external_gate_state"][name]["present"]:
+            pytest.skip("no gate record present to change")
+        record["external_gate_state"][name]["sha256"] = "0" * 64
+        assert any("external gate artifact changed" in item
+                   for item in bench.verify_bindings(record, tree))
+
+    def test_a_changed_certificate_manifest_is_drift(self, tmp_path):
+        record, tree = self._registration(tmp_path)
+        record["external_gate_state"]["certificate_manifest"] = {
+            "named_by_certificate": "validation/monthly_proxy_manifest_v6.json",
+            "present": True, "sha256": "0" * 64}
+        assert any("named by the adoption certificate changed" in item
+                   for item in bench.verify_bindings(record, tree))
+
+    def test_absence_is_not_silently_treated_as_nothing_to_bind(self,
+                                                                tmp_path):
+        record, _tree = self._registration(tmp_path)
+        state = record["external_gate_state"]
+        absent = [name for name in bench.EXTERNAL_GATE_ARTIFACTS
+                  if not state[name]["present"]]
+        if not absent:
+            pytest.skip("every gate artifact exists in this tree")
+        for name in absent:
+            assert state[name]["present"] is False, (
+                "an absent artifact must be recorded as absent, not omitted")

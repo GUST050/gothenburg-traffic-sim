@@ -28,6 +28,7 @@ import hashlib
 import json
 import os
 import platform
+import subprocess
 import sys
 import time
 from datetime import date, timedelta
@@ -491,6 +492,104 @@ def _resolved_archives_for_spec(
     return bound
 
 
+#: External artifacts that decide the CLAIM BOUNDARY rather than the numbers.
+#: `load_passing_heldout_gate` reads both, and the certificate names a manifest
+#: that is bound too. Their ABSENCE is bound as explicitly as their contents:
+#: a registration frozen while no gate existed, replayed after one appears,
+#: describes a different claim boundary, and must say so.
+EXTERNAL_GATE_ARTIFACTS = (
+    "validation/monthly_gate_record.json",
+    "validation/monthly_gate_adoption_certificate.json",
+)
+
+
+def sumo_runtime_identity(data_root: Path = ROOT) -> dict[str, Any]:
+    """The SUMO that will actually run, bound by path, version and bytes.
+
+    A benchmark that seals every line of Python and none of the simulator is
+    sealing the easy half. SUMO decides every observation, so a different
+    executable or a different version is exactly as much of a semantic change
+    as an edited source file — and neither is visible in a source digest.
+
+    Resolution mirrors the product: `runtime.sumo_home()` first, then PATH, so
+    the identity recorded is the binary the run will invoke rather than
+    whichever one happens to be first on an interactive shell's PATH.
+    """
+    import shutil
+
+    report: dict[str, Any] = {
+        "executable": None, "version": None, "sha256": None,
+        "resolved_by": None,
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+    }
+    candidates: list[tuple[str, Path]] = []
+    try:
+        from traffic_sim.simulation.runtime import sumo_home
+
+        candidates.append(("sumo_home", Path(sumo_home()) / "bin" / "sumo"))
+    except Exception:                                          # noqa: BLE001
+        pass
+    found = shutil.which("sumo")
+    if found:
+        candidates.append(("PATH", Path(found)))
+    for how, candidate in candidates:
+        if not candidate.is_file():
+            continue
+        report["executable"] = str(candidate)
+        report["resolved_by"] = how
+        report["sha256"] = sha256_file(candidate)
+        try:
+            completed = subprocess.run(
+                [str(candidate), "--version"], capture_output=True,
+                text=True, timeout=60)
+            report["version"] = (
+                completed.stdout.splitlines() or [""])[0].strip()
+        except (OSError, subprocess.SubprocessError):
+            report["version"] = None
+        break
+    return report
+
+
+def external_gate_state(root: Path = ROOT) -> dict[str, Any]:
+    """Bind the held-out gate artifacts, present or absent.
+
+    Absence is a binding, not a gap. "There was no adopted gate when this
+    question was frozen" is a claim about the experiment, and a later-appearing
+    certificate silently widening what a replay may claim is precisely the
+    drift this exists to catch.
+    """
+    state: dict[str, Any] = {}
+    for name in EXTERNAL_GATE_ARTIFACTS:
+        path = Path(root) / name
+        if path.is_file():
+            state[name] = {"present": True, "sha256": sha256_file(path),
+                           "bytes": path.stat().st_size}
+        else:
+            state[name] = {"present": False, "sha256": None, "bytes": None}
+
+    # The certificate names a manifest; that manifest is part of the same
+    # claim and is bound with it.
+    certificate = (Path(root)
+                   / "validation/monthly_gate_adoption_certificate.json")
+    manifest_state: dict[str, Any] = {"named_by_certificate": None,
+                                      "present": False, "sha256": None}
+    if certificate.is_file():
+        try:
+            payload = json.loads(certificate.read_text(encoding="utf-8"))
+            named = str(payload.get("manifest_path", "") or "")
+        except (OSError, ValueError):
+            named = ""
+        if named:
+            manifest_state["named_by_certificate"] = named
+            manifest_path = Path(root) / named
+            if manifest_path.is_file():
+                manifest_state["present"] = True
+                manifest_state["sha256"] = sha256_file(manifest_path)
+    state["certificate_manifest"] = manifest_state
+    return state
+
+
 def _relative(path: Path) -> str:
     """Repository-relative when possible; absolute when the root differs.
 
@@ -667,6 +766,8 @@ def build_registration(runs_root: Path = DEFAULT_RUNS_ROOT,
         },
         "sources": {name: sha256_file(ROOT / name)
                     for name in SEMANTIC_SOURCES},
+        "sumo_runtime": sumo_runtime_identity(data_root),
+        "external_gate_state": external_gate_state(),
         # These paths are deliberately absolute. Source files belong to this
         # checkout, but ignored SUMO data commonly lives in the primary
         # worktree. Binding ROOT here while run_scenario reads relative to the
@@ -878,6 +979,49 @@ def verify_bindings(registration: Mapping[str, Any],
             drift.append(f"bound {key} is missing: {bound.get('path')}")
         elif sha256_file(path) != bound.get("sha256"):
             drift.append(f"bound {key} changed: {bound.get('path')}")
+
+    bound_runtime = registration.get("sumo_runtime")
+    if bound_runtime is not None:
+        live = sumo_runtime_identity()
+        for field, label in (("sha256", "executable bytes"),
+                             ("version", "version"),
+                             ("executable", "resolved path")):
+            if bound_runtime.get(field) != live.get(field):
+                drift.append(
+                    f"SUMO runtime {label} changed: registered "
+                    f"{bound_runtime.get(field)!r}, live {live.get(field)!r}")
+        for field in ("platform", "machine"):
+            if bound_runtime.get(field) != live.get(field):
+                drift.append(
+                    f"SUMO runtime {field} changed: registered "
+                    f"{bound_runtime.get(field)!r}, live {live.get(field)!r}")
+
+    bound_gate = registration.get("external_gate_state")
+    if bound_gate is not None:
+        live_gate = external_gate_state()
+        for name in EXTERNAL_GATE_ARTIFACTS:
+            was = bound_gate.get(name) or {}
+            now = live_gate.get(name) or {}
+            if bool(was.get("present")) != bool(now.get("present")):
+                # The direction matters and both directions are drift: a gate
+                # that appeared widens what a replay may claim, and one that
+                # vanished narrows it.
+                drift.append(
+                    f"external gate artifact {name} was "
+                    f"{'present' if was.get('present') else 'absent'} at "
+                    f"registration and is now "
+                    f"{'present' if now.get('present') else 'absent'}")
+            elif was.get("sha256") != now.get("sha256"):
+                drift.append(f"external gate artifact changed: {name}")
+        was_manifest = bound_gate.get("certificate_manifest") or {}
+        now_manifest = live_gate.get("certificate_manifest") or {}
+        if was_manifest != now_manifest:
+            drift.append(
+                "the manifest named by the adoption certificate changed: "
+                f"registered {was_manifest.get('named_by_certificate')!r} "
+                f"(sha {was_manifest.get('sha256')}), live "
+                f"{now_manifest.get('named_by_certificate')!r} "
+                f"(sha {now_manifest.get('sha256')})")
 
     for build_key, archive in (registration.get("archives") or {}).items():
         base = Path(archive["archive"])
