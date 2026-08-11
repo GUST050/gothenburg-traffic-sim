@@ -1,0 +1,91 @@
+{
+ "binaries": {
+  "duarouter": {
+   "path": "/usr/local/bin/duarouter",
+   "version": "Eclipse SUMO duarouter 1.27.1"
+  },
+  "netconvert": {
+   "path": "/usr/local/bin/netconvert",
+   "version": "Eclipse SUMO netconvert 1.27.1"
+  },
+  "sumo": {
+   "path": "/usr/local/bin/sumo",
+   "version": "Eclipse SUMO sumo 1.27.1"
+  }
+ },
+ "blocker": "the installed distribution ships the libsumo C++ library (lib64/libsumocpp.so) and its headers, but no Python binding \u2014 there is no `libsumo/__init__.py` and no `_libsumo*.so` anywhere under the SUMO root. `pip install eclipse-sumo` therefore does NOT make libsumo importable; a build or wheel that includes the SWIG Python bindings would be required.",
+ "claim_boundary": {
+  "activates_policy_v3": false,
+  "opens_no_gate": true,
+  "reason": "an environment fact about one optional speed path. It measures no closure, ranks nothing and licenses nothing."
+ },
+ "consequences": {
+  "note": "The subprocess path remains the only execution backend, so the approved seed-worker budget and every process/memory cap stand exactly as benchmarked. Nothing here licenses raising them: a speed path that does not exist cannot justify more workers.",
+  "pr_g_persistent_sumo": "blocked",
+  "seed_worker_budget_unchanged": true
+ },
+ "content_key": "f785371604937951258484e16f23129d5c1066414c55e17b67005aad917b54f1",
+ "distribution": {
+  "libsumo_cpp_library": [
+   "lib64/libsumocpp.so"
+  ],
+  "libsumo_headers": true,
+  "libsumo_python_binding": [],
+  "root": "/usr/local/lib/python3.11/dist-packages/sumo"
+ },
+ "environment": {
+  "executable": "/usr/local/bin/python3",
+  "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+  "python": "3.11.15"
+ },
+ "evidence_class": "environment_preflight",
+ "installed_anything": false,
+ "kind": "libsumo_preflight",
+ "modules": {
+  "libsumo": {
+   "on_default_path": {
+    "importable": false,
+    "origin": null
+   },
+   "why": "in-process SUMO; the whole point of PR G",
+   "with_sumo_tools_on_path": {
+    "importable": false,
+    "origin": null
+   }
+  },
+  "sumolib": {
+   "on_default_path": {
+    "importable": false,
+    "origin": null
+   },
+   "why": "network/route helpers the product already uses",
+   "with_sumo_tools_on_path": {
+    "importable": true,
+    "origin": "/usr/local/lib/python3.11/dist-packages/sumo/tools/sumolib/__init__.py"
+   }
+  },
+  "traci": {
+   "on_default_path": {
+    "importable": false,
+    "origin": null
+   },
+   "why": "the socket fallback PR G would replace",
+   "with_sumo_tools_on_path": {
+    "importable": true,
+    "origin": "/usr/local/lib/python3.11/dist-packages/sumo/tools/traci/__init__.py"
+   }
+  }
+ },
+ "read_only": true,
+ "release_evidence": false,
+ "schema": "libsumo_preflight_v1",
+ "stage": "closure_search_scaling_plan_pr_g",
+ "sumo_home": {
+  "environment_variable": null,
+  "error": null,
+  "resolved_by_project": "/usr/local/lib/python3.11/dist-packages/sumo",
+  "tools_dir": "/usr/local/lib/python3.11/dist-packages/sumo/tools",
+  "tools_dir_exists": true
+ },
+ "verdict": "blocked_missing_python_binding"
+}
