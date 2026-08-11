@@ -1968,6 +1968,19 @@ for packaged binaries and `.dylib`/`.dll` libraries. Linux v1 remains frozen;
 Darwin v2 finds SUMO 1.27.1 and `lib/libsumocpp.dylib`, but still no Python
 binding. This changes no worker cap or activation decision.
 
+**Runtime correction, 2026-08-11.** The first timeout was not caused solely by
+the three-day archive size. For `independent_daily_reset_v1`, the cold runner
+was simulating the reusable archive's prior/current/next-day tail even when
+the declared unit envelope ended earlier. It now starts at the envelope
+midnight, stops at the recovery boundary with `flush=0`, and includes that
+window in the matched-baseline cache identity. Continuous runs retain their
+archive-start horizon and carryover semantics. A SUMO timeout or failed
+process is recorded as a candidate-local hard failure rather than aborting the
+search. This is a source correction only: frozen v2 remains `failed_execution`,
+the diagnostic rerun still found a later 07:15/q10 candidate above 300 s, and
+no benchmark, held-out or release gate opened. A new v3 registration is
+required before measuring the corrected source.
+
 ### Confidence, policy, and wording
 
 Do not compress confidence into a fake probability. The result exposes:

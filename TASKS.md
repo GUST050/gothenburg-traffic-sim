@@ -33,13 +33,16 @@ owners, states and approval formulas are not active workflow rules. See
   real-archive validation, failed-outcome publication and Darwin libsumo
   detection. The frozen real v2 benchmark selected 13 schedules on 2027-03-22,
   but its first exhaustive SUMO verification hit the unchanged 300 s timeout;
-  the separate outcome records `failed_execution` and all gates false.`
-- Suggested next action: `Profile the frozen v2 arm up to its 300 s timeout and
-  determine whether the cost is avoidable setup/I/O, an invalid simulation
-  horizon, or the genuine runtime of the bound three-day archive. Do not raise
-  the timeout. Preserve v2; preregister v3 only after a source-level correction
-  or a structurally different product-resolvable case can be justified before
-  its outcome. Held-out remains gated behind a passing benchmark.`
+  the separate outcome records `failed_execution` and all gates false. The
+  runtime review found that independent-day cold runs simulated the archive
+  tail and then aborted the whole search on a candidate-local SUMO timeout.
+  Cold independent runs now start at the envelope midnight, use `flush=0`,
+  bind the trimmed window into baseline caches, and record a SUMO timeout as a
+  candidate hard failure. The frozen v2 outcome is unchanged; a diagnostic
+  rerun still found a later 07:15 candidate that exceeds 300 s.`
+- Suggested next action: `Preregister a NEW v3 with the corrected source
+  digests, then run it without --allow-drift. Do not raise the timeout or edit
+  v2. Held-out remains gated behind a passing discriminating benchmark.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Do not use held observations in pool, picker, ordering
   thresholds, finalist selection or certificate. Do not weaken equivalence,
@@ -55,7 +58,8 @@ owners, states and approval formulas are not active workflow rules. See
   external calibration data without explicit user authority; the 2026-07-20
   no-further-external-data decision stands. Do not fabricate demand, held-out,
   benchmark or microsimulation evidence.`
-- Updated: `Codex review over f078b64. Focused suites: 300 passed; API: 126
+- Updated: `Codex runtime review over f078b64. Focused suites: 175 runtime/
+  demand tests passed; API: 126
   passed with loopback permission; survivability reproduces byte-for-byte.
   The real v2 registration and failed outcome are immutable, diagnostic and
   release_evidence=false. Darwin libsumo preflight v2 correctly finds SUMO

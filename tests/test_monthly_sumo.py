@@ -129,6 +129,31 @@ def test_archive_identity_and_envelope_are_validated(
     )
 
 
+def test_cold_run_stops_at_schedule_envelope_not_archive_tail(
+        tmp_path, patched_runtime):
+    """A reusable multi-day archive must not force a longer SUMO run."""
+    spec = ClosureSearchSpec.from_dict({
+        **{key: value for key, value in _spec().to_dict().items()
+           if key != "content_key"},
+        "permitted_date_start": "2025-09-17",
+        "permitted_date_end": "2025-09-17",
+        "interday_policy": "independent_daily_reset_v1",
+    })
+    runner = ArchivedDemandSumoRunner(
+        spec,
+        archive=_archive(tmp_path, days=3),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    schedule = generate_closure_schedules(spec)[0]
+
+    assert runner.n_intervals == 288
+    assert runner.duration_s == 3 * 24 * 3600
+    assert runner._cold_simulation_window(schedule) == (
+        96, 2 * 24 * 3600, 24 * 3600, 0)
+
+
 def test_objective_aligned_runner_emits_per_variant_disruption(
         tmp_path, patched_runtime, monkeypatch):
     monkeypatch.setattr(
@@ -317,6 +342,33 @@ def test_hard_failure_stops_additional_work(
         stage="finalist",
     )
     assert result.hard_failures == ("teleports",)
+
+
+def test_sumo_timeout_is_recorded_as_candidate_failure(
+        tmp_path, patched_runtime, monkeypatch):
+    runner = ArchivedDemandSumoRunner(
+        _spec(),
+        archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    schedule = generate_closure_schedules(_spec())[0]
+
+    def timeout(*args, **kwargs):
+        raise SystemExit("sumo timed out after 300s (seed 1000)")
+
+    monkeypatch.setattr(runner, "_run_observation", timeout)
+    result = runner.run_candidate(
+        schedule,
+        target_repetitions={"q10": 1, "q50": 1, "q90": 1},
+        existing=None,
+        stage="pilot",
+    )
+    assert result.observations == ()
+    assert result.hard_failures == (
+        "sumo_execution_failure:q10:1000:sumo timed out after 300s (seed 1000)",
+    )
 
 
 def _observation_stub(runner, calls, *, failing=(), raising=(), lock=None):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import replace
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -812,11 +813,26 @@ class ArchivedDemandSumoRunner:
             )
         return envelope
 
-    def _baseline_cache_key(self, variant: str, seed: int) -> str:
+    def _baseline_cache_key(
+        self,
+        variant: str,
+        seed: int,
+        *,
+        n_intervals: int | None = None,
+        duration_s: int | None = None,
+        begin_s: int = 0,
+        flush_s: int = 3600,
+    ) -> str:
+        n_intervals = self.n_intervals if n_intervals is None else n_intervals
+        duration_s = self.duration_s if duration_s is None else duration_s
         return _canonical_digest({
             "archive_digest": self.archive_digest,
             "variant": variant,
             "seed": seed,
+            "n_intervals": n_intervals,
+            "duration_s": duration_s,
+            "begin_s": begin_s,
+            "flush_s": flush_s,
             **self.runtime_identity,
         })[:32]
 
@@ -824,11 +840,22 @@ class ArchivedDemandSumoRunner:
         self,
         variant: str,
         seed: int,
+        *,
+        n_intervals: int | None = None,
+        duration_s: int | None = None,
+        begin_s: int = 0,
+        flush_s: int = 3600,
     ) -> tuple[
         closure_metrics.DisruptionMetrics,
         tuple[RecoveryBucket, ...],
     ]:
-        key = self._baseline_cache_key(variant, seed)
+        n_intervals = self.n_intervals if n_intervals is None else n_intervals
+        duration_s = self.duration_s if duration_s is None else duration_s
+        if begin_s < 0 or begin_s >= duration_s or begin_s % 900:
+            raise ValueError("baseline begin_s must be a 15-minute-aligned range start")
+        key = self._baseline_cache_key(
+            variant, seed, n_intervals=n_intervals, duration_s=duration_s,
+            begin_s=begin_s, flush_s=flush_s)
         path = self.cache_root / f"{key}.json"
         if path.is_file():
             cached = _read(path)
@@ -839,6 +866,10 @@ class ArchivedDemandSumoRunner:
             if (
                 cached.get("cache_key") != key
                 or cached.get("archive_digest") != self.archive_digest
+                or int(cached.get("n_intervals", -1)) != n_intervals
+                or int(cached.get("duration_s", -1)) != duration_s
+                or int(cached.get("begin_s", -1)) != begin_s
+                or int(cached.get("flush_s", -1)) != flush_s
                 or cached.get("evidence_sha256") != _canonical_digest(evidence)
             ):
                 raise ValueError(f"monthly baseline cache is corrupt: {path}")
@@ -861,8 +892,10 @@ class ArchivedDemandSumoRunner:
                 close_edges=[],
                 variants=[self.variants[variant]],
                 seeds=1,
-                n_intervals=self.n_intervals,
-                duration_s=self.duration_s,
+                n_intervals=n_intervals,
+                duration_s=duration_s,
+                begin_s=begin_s,
+                flush_s=flush_s,
                 home=self.home,
                 micro=False,
                 adj=None,
@@ -887,6 +920,10 @@ class ArchivedDemandSumoRunner:
                 "archive_digest": self.archive_digest,
                 "variant": variant,
                 "seed": seed,
+                "n_intervals": n_intervals,
+                "duration_s": duration_s,
+                "begin_s": begin_s,
+                "flush_s": flush_s,
                 **self.runtime_identity,
                 "metrics": dataclasses.asdict(metrics),
                 "recovery_buckets": _buckets_to_dict(buckets),
@@ -918,6 +955,85 @@ class ArchivedDemandSumoRunner:
             epoch=self.epoch,
             duration_s=self.duration_s,
         )
+
+    def _cold_simulation_window(
+        self, schedule: ClosureSchedule,
+    ) -> tuple[int, int, int, int]:
+        """Return the smallest safe cold-run horizon for one schedule.
+
+        Canonical independent-daily archives deliberately contain a reusable
+        previous/current/next-day envelope.  SUMO still used to run to the
+        archive's far end for every candidate, even when the declared
+        recovery envelope ended earlier.  Independent reset explicitly allows
+        a reset between work days, so start at the envelope midnight and run
+        only its declared recovery horizon.  Continuous searches retain
+        archive-start execution because overnight carryover is part of that
+        contract.  The warm path is intentionally not routed through this
+        helper until its own equivalence benchmark covers the reset boundary.
+        """
+        envelope = self._envelope(schedule)
+        end = datetime.fromisoformat(envelope.scenario_end)
+        start = datetime.fromisoformat(envelope.scenario_start)
+        begin_s = int((start - self.epoch).total_seconds())
+        duration_s = int((end - self.epoch).total_seconds())
+        if begin_s < 0 or duration_s <= begin_s or duration_s > self.duration_s:
+            raise ValueError(
+                f"simulation envelope end is outside demand archive for "
+                f"{schedule.schedule_id}: {envelope.scenario_end}")
+        if duration_s % 900:
+            raise ValueError(
+                f"simulation envelope end is not aligned to 15 minutes: "
+                f"{envelope.scenario_end}")
+        n_intervals = (duration_s - begin_s) // 900
+        flush_s = 0 if begin_s else 3600
+        if self.spec.interday_policy != "independent_daily_reset_v1":
+            begin_s, flush_s = 0, 3600
+            n_intervals = duration_s // 900
+        return n_intervals, duration_s, begin_s, flush_s
+
+    def _matched_baseline_id_for_window(
+        self,
+        *,
+        n_intervals: int,
+        duration_s: int,
+        begin_s: int,
+        flush_s: int,
+    ) -> str:
+        if (
+            n_intervals == self.n_intervals
+            and duration_s == self.duration_s
+            and begin_s == 0
+            and flush_s == 3600
+        ):
+            return self.matched_baseline_id
+        return "monthly-baseline-" + _canonical_digest({
+            "archive_digest": self.archive_digest,
+            "n_intervals": n_intervals,
+            "duration_s": duration_s,
+            "begin_s": begin_s,
+            "flush_s": flush_s,
+        })[:20]
+
+    def _run_baseline_for_window(
+        self,
+        variant: str,
+        seed: int,
+        *,
+        n_intervals: int,
+        duration_s: int,
+        begin_s: int = 0,
+        flush_s: int = 3600,
+    ):
+        """Call baseline with the trimmed window while preserving test seams."""
+        parameters = inspect.signature(self._run_baseline).parameters
+        if "duration_s" in parameters or "n_intervals" in parameters:
+            return self._run_baseline(
+                variant, seed, n_intervals=n_intervals, duration_s=duration_s,
+                begin_s=begin_s, flush_s=flush_s)
+        # Older injected probes override the two-argument seam.  They are
+        # diagnostic test doubles, not production runners, and must continue
+        # to be callable without weakening the production window contract.
+        return self._run_baseline(variant, seed)
 
     def _closure_disruption(
         self,
@@ -1758,7 +1874,28 @@ class ArchivedDemandSumoRunner:
         seed: int,
     ) -> tuple[PairedObservation, tuple[str, ...], dict[str, Any] | None]:
         envelope = self._envelope(schedule)
-        baseline, baseline_buckets = self._run_baseline(variant, seed)
+        if self.warm_execution:
+            # Warm state snapshots are still bound to the full archive until
+            # their separate equivalence gate covers a trimmed horizon.
+            run_n_intervals, run_duration_s, run_begin_s, run_flush_s = (
+                self.n_intervals, self.duration_s, 0, 3600)
+        else:
+            (
+                run_n_intervals,
+                run_duration_s,
+                run_begin_s,
+                run_flush_s,
+            ) = self._cold_simulation_window(schedule)
+        matched_baseline_id = self._matched_baseline_id_for_window(
+            n_intervals=run_n_intervals,
+            duration_s=run_duration_s,
+            begin_s=run_begin_s,
+            flush_s=run_flush_s,
+        )
+        baseline, baseline_buckets = self._run_baseline_for_window(
+            variant, seed, n_intervals=run_n_intervals,
+            duration_s=run_duration_s, begin_s=run_begin_s,
+            flush_s=run_flush_s)
         closures = self._closure_seconds(schedule)
         # The warm arm is attempted only when explicitly enabled AND the frozen
         # eligibility rule says this schedule qualifies. Any miss, mismatch or
@@ -1813,8 +1950,10 @@ class ArchivedDemandSumoRunner:
                 close_edges=self.close_edges,
                 variants=[self.variants[variant]],
                 seeds=1,
-                n_intervals=self.n_intervals,
-                duration_s=self.duration_s,
+                n_intervals=run_n_intervals,
+                duration_s=run_duration_s,
+                begin_s=run_begin_s,
+                flush_s=run_flush_s,
                 home=self.home,
                 micro=False,
                 adj=self.adjacency,
@@ -1890,7 +2029,7 @@ class ArchivedDemandSumoRunner:
                 feasibility=feasibility,
                 recovery=recovery,
                 failures=sorted(failures),
-                matched_baseline_id=self.matched_baseline_id,
+                matched_baseline_id=matched_baseline_id,
                 provenance_key=self.study_provenance_key,
                 provenance=self.provenance(),
                 # ALWAYS "cold" here: this is the cold simulation path, and it
@@ -1907,7 +2046,7 @@ class ArchivedDemandSumoRunner:
                     seed=seed,
                     baseline_time_loss_s=baseline.total_time_loss_s,
                     candidate_time_loss_s=metrics.total_time_loss_s,
-                    matched_baseline_id=self.matched_baseline_id,
+                    matched_baseline_id=matched_baseline_id,
                     provenance_key=self.study_provenance_key,
                 ),
                 tuple(sorted(failures)),
@@ -1940,8 +2079,17 @@ class ArchivedDemandSumoRunner:
         """
         if self.seed_workers == 1 or len(pending) <= 1:
             for variant, seed in pending:
-                observation, run_failures, canonical = self._run_observation(
-                    schedule, variant=variant, seed=seed)
+                try:
+                    observation, run_failures, canonical = self._run_observation(
+                        schedule, variant=variant, seed=seed)
+                except SystemExit as error:
+                    message = str(error)
+                    if "sumo timed out" not in message and "sumo failed" not in message:
+                        raise
+                    observation, canonical = None, None
+                    run_failures = (
+                        f"sumo_execution_failure:{variant}:{seed}:" + message,
+                    )
                 yield variant, seed, observation, run_failures, canonical
             return
 
@@ -1956,7 +2104,16 @@ class ArchivedDemandSumoRunner:
                 for variant, seed in pending
             ]
             for (variant, seed), future in zip(pending, futures):
-                observation, run_failures, canonical = future.result()
+                try:
+                    observation, run_failures, canonical = future.result()
+                except SystemExit as error:
+                    message = str(error)
+                    if "sumo timed out" not in message and "sumo failed" not in message:
+                        raise
+                    observation, canonical = None, None
+                    run_failures = (
+                        f"sumo_execution_failure:{variant}:{seed}:" + message,
+                    )
                 yield variant, seed, observation, run_failures, canonical
         finally:
             # Drop what has not started, then wait for the few still in
@@ -2013,8 +2170,10 @@ class ArchivedDemandSumoRunner:
 
         with closing(self._observations_for(schedule, pending)) as stream:
             for variant, seed, observation, run_failures, canonical in stream:
-                observations.append(observation)
-                self.canonical_observations.append(canonical)
+                if observation is not None:
+                    observations.append(observation)
+                if canonical is not None:
+                    self.canonical_observations.append(canonical)
                 seen.add((variant, seed))
                 failures.update(run_failures)
                 if failures:

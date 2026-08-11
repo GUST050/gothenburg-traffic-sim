@@ -347,6 +347,7 @@ def rank_candidates(scored: list[dict]) -> list[dict]:
 def simulate_closure(*, name: str, closures: list[dict] | None,
                      close_edges: list[str], variants: list[Path],
                      seeds: int, n_intervals: int, duration_s: int,
+                     begin_s: int = 0, flush_s: int = 3600,
                      home: Path, micro: bool,
                      adj: dict[str, list[str]] | None,
                      freeflow: dict[str, float] | None,
@@ -376,6 +377,12 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     Returns the RAW per-seed total_time_loss_s values alongside the
     aggregated metrics — C5's UI wants to show a median + seed interval
     (IMPROVEMENT_PLAN.md's own words), which the mean alone throws away."""
+    if not (isinstance(begin_s, int) and not isinstance(begin_s, bool)
+            and 0 <= begin_s < duration_s and begin_s % 900 == 0):
+        raise ValueError("simulate_closure begin_s must be a 15-minute-aligned range start")
+    if not (isinstance(flush_s, int) and not isinstance(flush_s, bool)
+            and flush_s >= 0):
+        raise ValueError("simulate_closure flush_s must be a non-negative integer")
     run_variants = variants
     # Per-VARIANT truncated/dropped counts — truncation is deterministic
     # given (variant, closure), independent of a seed's random number, so
@@ -452,7 +459,8 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
             seed_dir.mkdir(parents=True, exist_ok=False)
         ed_file = seed_dir / f"{SCT_PREFIX}ed_{name}_{seed}.xml"
         add_path = seed_dir / f"{SCT_PREFIX}add_{name}_{seed}.add.xml"
-        rs.write_edgedata_additional(add_path, ed_file, duration_s)
+        rs.write_edgedata_additional(
+            add_path, ed_file, duration_s, begin_s=begin_s)
         scratch += [ed_file, add_path]
         jobs.append({"seed": seed, "route_path": route_path,
                      "variant_idx": variant_idx, "seed_dir": seed_dir,
@@ -471,7 +479,8 @@ def simulate_closure(*, name: str, closures: list[dict] | None,
     def run_one(job: dict) -> tuple[int, int, str, cm.DisruptionMetrics, list[Path]]:
         metric_paths = rs.run_sumo(
             job["seed"], job["route_path"], [job["add_path"]] + closure_add,
-            duration_s, home, micro=micro, metrics=True,
+            duration_s, home, micro=micro, metrics=True, begin_s=begin_s,
+            flush_s=flush_s,
             time_to_teleport_s=seed_teleport_policy,
             **({"work_dir": job["seed_dir"]} if work_dir is not None else {}))
         active_throughput = None

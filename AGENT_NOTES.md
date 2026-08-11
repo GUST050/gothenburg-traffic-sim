@@ -11,7 +11,9 @@ which model may continue. See `AGENTS.md`.
   codex/review-closure-evidence-gates over Claude f078b64. The pipeline is
   reviewed and repaired; the real v2 registration was frozen and attempted.
   Its first exhaustive SUMO verification timed out at the unchanged 300 s
-  limit, so every release gate remains closed and nothing was activated.`
+  limit, so every release gate remains closed and nothing was activated. A
+  runtime correction now bounds independent-day cold runs to the envelope and
+  records candidate-local SUMO timeouts instead of aborting the search.`
 - Summary: `The review found one defect that voided the durability claim.
   IndependentDailyRunner declares compact_pilot_artifacts, so no per-parent
   pilot evidence was published; the cursor still recorded every verification,
@@ -65,15 +67,15 @@ which model may continue. See `AGENTS.md`.
   schedules for 2027-03-22. The first exhaustive observation timed out after
   300 s (seed 1000); outcome v2 records failed_execution and all gates false.`
 - Blockers or risks: `The next blocker is runtime, not archive absence: the
-  bound three-day SUMO observation exceeds the existing 300 s limit before one
-  candidate completes. Do not raise the limit to pass. Held-out remains gated.
+  corrected reset-window run completes the first candidate but a later
+  07:15/q10 closure still exceeds the existing 300 s limit. Do not raise the
+  limit to pass. Held-out remains gated.
   PR G's Darwin v2 preflight finds packaged SUMO 1.27.1 and
   lib/libsumocpp.dylib but no SWIG Python binding. PR I stays closed by the
   2026-07-20 decision. Policy v3 and every UI/global-best claim remain closed.`
-- Suggested next action: `Instrument the frozen v2 execution up to its timeout,
-  identify the responsible phase without changing bound outcomes, and repair
-  avoidable runtime/setup defects. Preserve the failed v2 outcome; create v3
-  only after a pre-outcome structural justification.`
+- Suggested next action: `Create a NEW v3 preregistration with current source
+  digests and rerun the corrected product path without --allow-drift. Preserve
+  the failed v2 outcome; do not activate any gate on the diagnostic rerun.`
 - Actor notes: `Nothing was activated and nothing frozen was rewritten. The
   v1 benchmark registration and the v1 IVC outcome are byte-identical; v2 files
   are new. No demand was built, no held-out campaign was run, no libsumo was

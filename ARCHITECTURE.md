@@ -1730,6 +1730,16 @@ demand; the remaining 57,703 parents / 6,500 units continue normally. A result
 with any unavailable schedule is labelled best only among the available
 schedules and cannot make a global-best claim.
 
+Independent-day cold execution also respects the reset boundary operationally:
+when a reusable archive extends beyond a unit's declared envelope, SUMO starts
+at that envelope's midnight and ends at its recovery boundary with no post-end
+flush. The exact `(begin, end, interval count, flush)` window is part of the
+matched-baseline cache key. Continuous runs retain archive-start execution so
+overnight vehicle carryover is not truncated. A SUMO timeout or failed process
+is recorded as a candidate-local hard failure (`sumo_execution_failure:*`)
+instead of aborting the whole search; the evidence and claim gates remain
+fail-closed.
+
 The obsolete v1 annual readiness record covers only 07:00–15:30 and is retained
 as historical pilot evidence. Earlier full-day v2 roots predate the pre-run
 hardening and are also superseded. The current v3 plan is the full-day contract
