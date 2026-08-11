@@ -69,49 +69,55 @@ owners, states and approval formulas are not active workflow rules. See
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### CLOSURE-EVIDENCE-V3 — Benchmark provenance, then a v3 registration
+### CLOSURE-PLAN-COMPLETE — Provenance, simulator binding, unit budget
 
-- Status: `SOURCE WORK COMPLETE AND GREEN. The v3 registration and run are NOT
-  produced: this container is not the machine that holds the archive library.
-  Nothing was activated.`
-- Objective and scope: `Fix the registration's provenance defects (outcome path,
-  source seal, schema), then freeze and run a v3 cost-ordered benchmark against
-  the corrected runtime.`
-- Completion outcome: `Registration schema v3. outcome_record binds the
-  caller's --out instead of the tool's default, and a run refuses to write an
-  outcome its registration disowns. sources seals every project module on the
-  arms' real import path (48 files) instead of ten chosen by hand; two of them
-  (heldout_gate.py, proxy_validation.py) are imported lazily and decide the
-  claim boundary, and were found by the closure test rather than the audit. v2
-  stays readable and a v2 registration still produces a v2-schema outcome.`
-- Context or checkpoints: `The v2 timeout is diagnosed and its cause is visible
-  in the frozen registration with nothing running: a single-work-date case whose
-  daily unit declares a one-day envelope resolves to the canonical THREE-day
-  archive 5ac74750843384b3 (n_intervals 288), so SUMO ran 72 hours to observe a
-  5-hour closure. adf765b bounds that. That same correction changed
-  monthly_sumo.py, which the FROZEN golden record binds — so
-  tests/test_closure_cost_ordering_golden.py's source-digest test now fails at
-  adf765b, before any change of this branch. It needs a deliberate re-freeze on
-  a host with the archives; do not edit the frozen record.`
-- Primary files: `NEW tests/test_cost_ordered_benchmark_provenance.py (25
-  tests). MODIFIED tools/cost_ordered_benchmark.py, two benchmark test modules,
-  ARCHITECTURE.md, IMPROVEMENT_PLAN.md, TASKS.md, AGENT_NOTES.md. UNCHANGED:
-  every frozen v1/v2 registration and outcome, byte for byte.`
-- Constraints and safety: `Nothing was activated. No timeout was raised, no cap
-  altered, no gate weakened, no libsumo installed, no external data obtained, no
-  held-out run. --allow-drift, --overwrite and --no-fault-injection were not
-  used. No v3 registration or outcome file was written, because discovery found
-  zero archives and refuses to freeze an empty registration.`
-- Acceptance criteria: `A custom v3 registration names its custom v3 outcome; a
-  run refuses a disowned outcome; changing monthly_sumo.py or product_arm.py is
-  reported as drift; the seal covers the re-derived import closure; the
-  registration is self-consistent and detects tampering; frozen v1/v2 records
-  still validate against themselves.`
-- Useful checks: `pytest -q tests/test_cost_ordered_benchmark_run.py
-  tests/test_cost_ordered_benchmark_discovery.py
-  tests/test_cost_ordered_execution_review.py tests/test_monthly_sumo.py
-  (135 passed); tests/test_cost_ordered_benchmark_provenance.py (25 passed);
-  git diff --check.`
+- Status: `PHASES 1 AND 4 IMPLEMENTED AND GREEN. Phases 2, 3, 5, 6, 7, 8 and 9
+  require the calibrated archive library, which is not reachable from the
+  environment these commands execute in. Nothing was activated.`
+- Objective and scope: `Complete every safely actionable part of the closure
+  scaling and validation plan, with real measurements.`
+- Completion outcome: `Phase 1 — the registration now binds the SIMULATOR as
+  well as the Python: resolved executable, SHA-256, version, resolution method
+  and platform/machine, each reported as drift with both values named. It also
+  binds the external gate state (monthly_gate_record.json, the adoption
+  certificate, and the manifest the certificate names), where ABSENCE is bound
+  as firmly as presence — a later-appearing certificate silently widening what
+  a replay may claim is exactly the drift this catches. Phase 4 — the
+  10,000-unit cap is replaced by a measured budget in
+  traffic_sim/simulation/unit_budget.py: declared units/ledger-bytes/peak-RSS,
+  a PAUSE with an explicitly incomplete resumable state instead of raising or
+  truncating, and a status that can never be read as exhaustive. The default
+  budget is still 10,000 so nothing changes by accident, and the
+  100,000-parent protection is retained.`
+- Context or checkpoints: `The plan's final acceptance criterion is measured
+  and frozen as validation/closure_search_scaling_measurement_v2.json: the
+  six-month 360 h case enumerates 11,813 parents and 23,349 unique daily units
+  by streaming, in 14.6 s at 26.5 MiB peak RSS — well inside the 64 MiB process
+  gate. It was never memory-bound; the legacy cap refuses it and a declared
+  budget admits it. The 720 h case reproduces at 2,186/5,676 and stays valid
+  under the legacy budget. The v1 baseline is UNCHANGED.`
+- Primary files: `NEW traffic_sim/simulation/unit_budget.py,
+  tests/test_unit_budget.py,
+  validation/closure_search_scaling_measurement_v2.json. MODIFIED
+  tools/cost_ordered_benchmark.py,
+  tests/test_cost_ordered_benchmark_provenance.py, ARCHITECTURE.md,
+  IMPROVEMENT_PLAN.md, TASKS.md, AGENT_NOTES.md. UNCHANGED: every frozen
+  v1/v2 registration, outcome and baseline.`
+- Constraints and safety: `Nothing was activated. No timeout raised, no cap
+  weakened (the daily-unit default is unchanged and the parent cap is intact),
+  no gate loosened, no libsumo installed, no external data obtained, no
+  held-out run. No v3 registration or outcome was written.`
+- Acceptance criteria: `A changed SUMO binary, version or platform is drift; an
+  absent gate that appears is drift; a changed gate/certificate/manifest is
+  drift; changed monthly_sumo.py or product_arm.py is drift; custom
+  registration/outcome paths bind each other; unknown schema is refused;
+  self-tampering is detected; the 360 h case is admitted by a declared budget
+  and still refused by the legacy one; an incomplete search cannot pass as
+  exhaustive.`
+- Useful checks: `pytest -q tests/test_cost_ordered_benchmark_provenance.py
+  (34 passed, 1 skipped); tests/test_unit_budget.py (16 passed); the four
+  required focused modules plus the v1/v2 registration suite (154 passed);
+  git diff --check clean.`
 <!-- ACTIVE_TASK_END -->
 
 ## History
