@@ -1,0 +1,76 @@
+{
+ "adaptive_repetition_rule": "add seeds only while the paired candidate-minus-baseline difference straddles the decision boundary; never add seeds after inspecting which candidate they would favour",
+ "bootstrap_seed": 20260813,
+ "campaign": "closure_uncertainty_shadow_v1",
+ "ci_method": "block bootstrap over station-days, 2000 resamples",
+ "content_key": "119399f42a7e6319a145ef9b1d28ede6798b96db6900bfe24cbc4a4dd79e4ebc",
+ "coverage_tolerance": 0.05,
+ "fold_kinds": [
+  "leave_city_out",
+  "leave_station_out",
+  "blocked_date"
+ ],
+ "max_compute_units": 10000,
+ "metric_hierarchy": [
+  "mae",
+  "pinball",
+  "interval_score",
+  "empirical_coverage",
+  "variogram_score",
+  "energy_score"
+ ],
+ "min_seeds": 4,
+ "model_candidates": [
+  "constant_5050",
+  "shrunk_dfactor",
+  "beta_binomial_dfactor",
+  "similarity_weighted_lgbm"
+ ],
+ "nominal_coverage": 0.8,
+ "outcome_blind_note": "test_dates and test_edges are EMPTY on purpose. They must be drawn by a versioned outcome-blind rule before execution, and the registration re-frozen as v2 at that point. Filling them in after any measurement would void the pre-registration.",
+ "primary_groups": [
+  "all",
+  "weekday_peak"
+ ],
+ "risk_measures": [
+  "weighted_expectation",
+  "weighted_tail_q90",
+  "max_regret"
+ ],
+ "safety_gates": [
+  "topological_severing",
+  "no_detour",
+  "closure_survivability",
+  "seed_health"
+ ],
+ "scenario_batches": [
+  4,
+  8,
+  16
+ ],
+ "schema_version": "closure_uncertainty_shadow_registration_v1",
+ "seed_start": 1000,
+ "selection_rule": "simplest_defensible_v1",
+ "source_fingerprints": {
+  "demand/cases.py": "cd6d9901f4b7ea08f0a351fd3bea80fa34956460f777114723473d4a55504dc5",
+  "dirsplit/calibrate.py": "f7b4b47d7d10ae5a302748ebaaedb363536744669c7153c1dc5d6bf88ef70bd1",
+  "dirsplit/dataset_schema.py": "92f40f9cab17238ae5e4dcf41c7b56c097ae097f973c76fa80adff9423ba9989",
+  "dirsplit/ensemble.py": "6dc4c016d140a83b26cc473c570e51a839433d7362d95edd67715c52de2835ec",
+  "dirsplit/evaluate.py": "0dad159ca8ddce94bef560d6dfbdaebd781368792b20f9c32b18f09d7606f83c",
+  "dirsplit/evidence.py": "a796037eb48d0397c46a63a2a07dd0bfd36d52c67c34f81a2a2fdbaa5499e663",
+  "dirsplit/models.py": "ddf303d8b584935872a3dc5cb5a584f6f231091b15b510ab0eac4e5b741e9ef8",
+  "dirsplit/scenario_evaluation.py": "ee53a8679acc9950a39f22cd07a72e7e449e2445a105bb09c65fd2264270cd4e",
+  "dirsplit/scenarios.py": "35788bba3ecb80d70100f614f17cb547669b266eba6133f08ef3fbfbd85fd45f",
+  "dirsplit/schema.py": "0147201cc5be1705a1ed38a0e63fb5492c2c2c07e04248e9560a6d7ffe28959b",
+  "tests/test_dirsplit_scenarios.py": "153afc71c119eb2110b370c11871442272f40b7f103c7800645963605935b7a5",
+  "tests/test_dirsplit_schema.py": "d99492b6c59a6370886e9582debd5973cae9d0791edb8d76a3d06ff1017eb450",
+  "tests/test_simulation_members.py": "fdc1dd38b1a5c213619a9a0c6c31c1c1d093e38bed75f9d110c55b2d1631f3a2",
+  "tests/test_uncertainty_policy.py": "c328bece2dabcfaf15f827bd4d1fc701fd9070608ac8b77662d1b49554ccca95",
+  "traffic_sim/core/simulation_members.py": "b8f6343c1f0ed686f47c666d660ef09a13c48c9253f04e6545b8150e81a33173",
+  "traffic_sim/simulation/uncertainty_policy.py": "76290724ca6b171020eba9af2f360a93ddccbed414c9ba294fce2c01234b320e",
+  "traffic_sim/simulation/uncertainty_presentation.py": "b3ed45afd67975ffa20111350007738f583c448697a7d03a143db7b7fd06bd3d"
+ },
+ "test_dates": [],
+ "test_edges": [],
+ "tie_rule": "a would-be winner is downgraded to tie when expectation, tail and max_regret prefer different candidates, and to inconclusive when the ranking has not settled across two scenario batches or fewer than min_seeds seeds ran"
+}
