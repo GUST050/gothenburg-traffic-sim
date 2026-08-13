@@ -1239,10 +1239,74 @@ class Handler(SimpleHTTPRequestHandler):
             return self._monthly_search_status()
         if self.path.startswith("/api/jobs"):
             return self._jobs()
+        if self.path.startswith("/api/uncertainty/status"):
+            return self._uncertainty_status()
         if any(self.path.startswith(p) for p in self._MUTATING):
             return self._json(405, {"error": "denna endpoint ändrar "
                                              "tillstånd — använd POST"})
         return super().do_GET()
+
+    def _uncertainty_status(self) -> None:
+        """Read-only status of the v2 direction-uncertainty pipeline.
+
+        Shadow mode (DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13,
+        step 7): production behaviour is unchanged and v2 is opt-in. This
+        endpoint reports what exists so the UI can show the real state
+        instead of implying a calibrated interval that was never measured.
+
+        It mutates nothing, so it is a GET and is deliberately outside
+        `_MUTATING`.
+        """
+        from traffic_sim.simulation.uncertainty_policy import POLICY_VERSION
+        from traffic_sim.simulation.uncertainty_presentation import (
+            PRESENTATION_VERSION, interval_label)
+
+        enabled = os.environ.get("DIRSPLIT_V2_SHADOW", "").strip().lower() \
+            in ("1", "true", "yes", "on")
+
+        ensemble_summary = None
+        calibration_status = "unavailable"
+        try:
+            from dirsplit.ensemble import DEFAULT_PATH, load_ensemble
+            payload = load_ensemble(DEFAULT_PATH)
+            if payload:
+                intervals = payload.get("marginal_intervals") or {}
+                calibration_status = intervals.get("calibration_status",
+                                                   "unavailable")
+                ensemble_summary = {
+                    "schema_version": payload.get("schema_version"),
+                    "n_demand_cases": len(payload.get("demand_cases") or []),
+                    "n_stress_cases": len(payload.get("stress_cases") or []),
+                    "n_scenario_paths": len(payload.get("scenario_paths") or []),
+                    "artifact_digest": payload.get("artifact_digest"),
+                }
+        except Exception as exc:                  # noqa: BLE001 - reported
+            ensemble_summary = {"error": str(exc)}
+
+        legacy_defect = None
+        try:
+            from dirsplit.legacy import load_legacy_archive
+            archive = load_legacy_archive()
+            if archive is not None:
+                legacy_defect = {
+                    "pair_sum_valid": archive.is_pair_sum_valid,
+                    "defects": archive.defect_summary(),
+                }
+        except Exception as exc:                  # noqa: BLE001 - reported
+            legacy_defect = {"error": str(exc)}
+
+        return self._json(200, {
+            "shadow_mode_enabled": enabled,
+            "production_default": "legacy_q10_q50_q90",
+            "policy_version": POLICY_VERSION,
+            "presentation_version": PRESENTATION_VERSION,
+            "direction_ensemble": ensemble_summary,
+            "calibration_status": calibration_status,
+            "interval_label": interval_label(calibration_status),
+            "legacy_archive": legacy_defect,
+            "note": ("v2 är opt-in. Sätt DIRSPLIT_V2_SHADOW=1 för att köra "
+                     "den parallellt; produktionsvägen är oförändrad."),
+        })
 
     def do_POST(self):
         if not self._same_origin_ok():
