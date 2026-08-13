@@ -167,6 +167,16 @@ class TestDiscoveryBuildsRunnableCases:
                  for spec in bench.discovered_specs(tmp_path)}
         assert len(bands) == len(bench.DISCOVERY_BANDS) > 1
 
+    def test_distinct_edges_never_share_a_search_workspace_id(
+            self, tmp_path, monkeypatch):
+        _archive(tmp_path, "2025-09-16")
+        monkeypatch.setattr(bench, "surviving_roads", lambda: [
+            {"edge_id": "123_456_0"},
+            {"edge_id": "123_789_0"},
+        ])
+        specs = bench.discovered_specs(tmp_path)
+        assert len({spec.search_id for spec in specs}) == len(specs)
+
     def test_an_empty_library_discovers_nothing(self, tmp_path):
         assert bench.discovered_specs(tmp_path) == ()
 

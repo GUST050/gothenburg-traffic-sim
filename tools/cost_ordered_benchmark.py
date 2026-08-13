@@ -409,12 +409,19 @@ def discovered_specs(runs_root: Path) -> tuple[ClosureSearchSpec, ...]:
                 for road in roads:
                     for band, hours in DISCOVERY_BANDS:
                         edge = str(road["edge_id"])
+                        # The old identifier used only the first numeric edge
+                        # component. Distinct directed edges that share their
+                        # upstream junction therefore shared one search_id and
+                        # could resume each other's benchmark workspace. Bind
+                        # the complete directed edge into a short stable token.
+                        edge_token = hashlib.sha256(
+                            edge.encode("utf-8")).hexdigest()[:10]
                         specs.append(ClosureSearchSpec(
                             search_id=(
                                 f"cob2-{source[:4]}"
                                 f"-{window[0].replace('-', '')}"
                                 f"-{window[-1].replace('-', '')}"
-                                f"-{edge.split('_')[0][:8]}"
+                                f"-{edge_token}"
                                 f"-{band[0].replace(':', '')}"),
                             directed_edges=(edge,),
                             demand_build_id=f"{source}-{window[0][:4]}",
