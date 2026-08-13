@@ -4209,6 +4209,22 @@ comparison. It ended `no_viable` after the two finalists timed out in adaptive
 collection, without raising the 300 s limit or manufacturing a winner. The
 diagnostic record is `validation/monthly_multimonth_e2e_outcome_v1.json`.
 
+The next benchmark was not allowed to choose another single case after seeing
+v4. `validation/cost_ordered_benchmark_registration_v5.json` instead froze a
+four-case, outcome-blind suite across two archived dates and four distinct
+directed edges; commit `259c492` was pushed before execution. The associated
+outcome measured 18 fewer SUMO candidate verifications and three cases with at
+least two health-viable pilot candidates, but the aggregate equivalence gate
+failed. The strongest case saved 11/13 and retained the same unique winner,
+selected ids, hard failures, health and restart result, yet strict cost-field
+identity still failed because four timeout observations had null exhaustive
+post-SUMO fields. Two other cases classified the same candidate/seed on
+opposite sides of the fixed 300 s wall-clock limit in the two execution
+orders, changing finalist and restart evidence; the fourth was field-identical
+but saved nothing. Every stop proof was valid. This is negative evidence, not
+permission to raise the timeout or weaken a gate. Policy v3, held-out, micro,
+unrestricted UI and global-best remain closed.
+
 ## Current supersession note — 2026-08-09
 
 The earlier statement that a full population was running describes a prior

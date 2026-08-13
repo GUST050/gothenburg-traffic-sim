@@ -7,8 +7,8 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Branch codex/closure-plan-finish. The authorized closure
-  scaling plan and the 2026-08-13 Claude finding review are implemented.
+- Focus and status: `Main. The closure scaling plan, real multi-month product
+  E2E and next preregistered cost-order benchmark are executed.
   Release/adoption gates are closed by real outcomes, not missing
   implementation.`
 - Summary: `Budget v3 separates per-invocation work from the cumulative hard
@@ -16,31 +16,39 @@ which model may continue. See `AGENTS.md`.
   parent prefixes; paused screening has no shortlist and returns before SUMO.
   CLI/API/UI resume the same workspace and restore the exact form after reload.
   The 11,813-parent/23,349-unit six-month case is runnable. Cost-order v3 found
-  a real calendar-order-vs-cost-order cursor bug; fixed and pinned. V4 completed
-  both arms plus fault resume but saved 0/13 and ended no_viable, so adoption
-  remains closed. Findings 1–5 and 12 were stale against the replaced
-  checkpoint path; 6, 9–11 and 13 were hardened. Warm execution now requires
-  the selected cold horizon to equal the full horizon v16 validated.`
+  a real calendar-order-vs-cost-order cursor bug; fixed and pinned. The v5
+  outcome-blind four-case suite saved 18 verifications and had three cases with
+  two health-viable pilots, but failed strict equivalence because wall-clock
+  timeouts changed health/finalists in two cases and timeout observations lacked
+  comparable post-SUMO cost fields. Adoption remains closed. Warm execution
+  still requires the selected cold horizon to equal the full horizon v16
+  validated.`
 - Files changed: `Core budget/search/API/UI sources; cost_ordered_execution;
-  unit, integration, API, provenance and resume tests; ARCHITECTURE.md,
-  IMPROVEMENT_PLAN.md, TASKS.md and the closure plan. New immutable evidence:
-  closure_cost_ordering_golden_v2-v4, libsumo_preflight_v3, cost benchmark
-  registration/outcome v3 and v4, independent_vs_continuous_outcome_v3.`
+  multi-case benchmark harness and directed-edge workspace identity fix; unit,
+  integration, API, provenance and resume tests; architecture, plan and current
+  coordination docs. New immutable evidence includes the product E2E and cost
+  benchmark registration/outcome v5; v1-v4 remain history.`
 - Checks: `Post-review combined closure/API/cost-order suite: 519 passed, 1
-  skipped. Golden v4 reproduces byte-for-byte; its JSON parses; git diff
-  --check is clean. Historical v1-v3 records are unchanged.`
-- Decisions and evidence: `V4: status/selected IDs/final decision/hard failures/
-  health/restart/stopproof match, but no SUMO saving and exhaustive timeout
-  records lack comparable post-SUMO cost fields. IVC v3: 35 missing-demand,
+  skipped. Benchmark/provenance suite: 103 passed, 1 skipped. API suite: 127
+  passed. Golden v4 reproduces byte-for-byte; v5 registration verifies without
+  drift; JSON and diff checks are clean.`
+- Decisions and evidence: `V5: four cases, two dates, four roads, 18 SUMO
+  verifications saved, three health-discriminating cases and four valid stop
+  proofs. One case retained an identical winner while saving 11/13; two cases
+  changed timeout/health/finalist/restart evidence across arm order; one was
+  strictly identical but saved 0. IVC v3: 35 missing-demand,
   25 unpairable, 24 unsupported, 0 measured. Libsumo v3: native library exists,
   Python binding absent.`
 - Blockers or risks: `Policy v3, held-out, micro and global-best cannot be
-  opened. A new attempt needs a pre-outcome, non-cherry-picked benchmark with
-  multiple health-viable cases and calibrated archives matching the frozen IVC
-  dates. External data/libsumo installation needs user authority.`
-- Suggested next action: `None within the current authorized plan. If new
-  evidence inputs are approved, create a new registration version; never edit
-  v1-v4 history or select a case using observed v4 outcomes.`
+  opened. V5 shows that the fixed wall-clock timeout is not classification-
+  stable under arm order and that the exhaustive path lacks deterministic cost
+  fields after some timeouts. A new v6 must be preregistered only after those
+  issues are addressed without raising the timeout or weakening gates.
+  Calibrated archives for frozen IVC dates and libsumo remain unavailable.`
+- Suggested next action: `Preserve v5 as negative evidence. Design and test
+  pre-SUMO exhaustive cost recording plus a paired runtime method, then freeze
+  a new v6 before any outcome. Never edit v1-v5 history or choose cases from
+  observed outcomes.`
 - Actor notes: `No timeout raised, hard cap weakened, historical artifact
   overwritten, policy activated, held-out/micro evidence fabricated, external
   data fetched or dependency installed.`

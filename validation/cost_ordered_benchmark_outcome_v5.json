@@ -1,0 +1,1669 @@
+{
+ "case_results": [
+  {
+   "candidate_count": 13,
+   "case_id": "suite-v1-1-4e376b843342",
+   "comparison": {
+    "cache_hits_consistent": true,
+    "candidate_cost_mismatches": [
+     {
+      "candidate_id": "closure-0e072516e4fec1df8d84",
+      "cost_ordered": 2.8721,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-0e072516e4fec1df8d84",
+      "cost_ordered": 156920.5,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-0e072516e4fec1df8d84",
+      "cost_ordered": 1157,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-0e072516e4fec1df8d84",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-13ef5c27955a167ac3b0",
+      "cost_ordered": 2.9645,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-13ef5c27955a167ac3b0",
+      "cost_ordered": 161537.2,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-13ef5c27955a167ac3b0",
+      "cost_ordered": 1217,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-13ef5c27955a167ac3b0",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-36eb23678de5567fdb59",
+      "cost_ordered": 2.8225,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-36eb23678de5567fdb59",
+      "cost_ordered": 153570.9,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-36eb23678de5567fdb59",
+      "cost_ordered": 1120,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-36eb23678de5567fdb59",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-419beb127a8e538372c7",
+      "cost_ordered": 2.8229,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-419beb127a8e538372c7",
+      "cost_ordered": 153967.3,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-419beb127a8e538372c7",
+      "cost_ordered": 1249,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-419beb127a8e538372c7",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-4f0b8e1be70157b22217",
+      "cost_ordered": 2.7738,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-4f0b8e1be70157b22217",
+      "cost_ordered": 151774.7,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-4f0b8e1be70157b22217",
+      "cost_ordered": 1208,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-4f0b8e1be70157b22217",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-535dd4e3f07284821d53",
+      "cost_ordered": 2.9024,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-535dd4e3f07284821d53",
+      "cost_ordered": 158285.4,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-535dd4e3f07284821d53",
+      "cost_ordered": 1226,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-535dd4e3f07284821d53",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-790db34bfa7838b5c760",
+      "cost_ordered": 2.7705,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-790db34bfa7838b5c760",
+      "cost_ordered": 151694.3,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-790db34bfa7838b5c760",
+      "cost_ordered": 1252,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-790db34bfa7838b5c760",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-a50521393bc43903e76e",
+      "cost_ordered": 2.7856,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-a50521393bc43903e76e",
+      "cost_ordered": 151584.4,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-a50521393bc43903e76e",
+      "cost_ordered": 1100,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-a50521393bc43903e76e",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-ac5ada48eb8490af0768",
+      "cost_ordered": 2.7848,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-ac5ada48eb8490af0768",
+      "cost_ordered": 151612.9,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-ac5ada48eb8490af0768",
+      "cost_ordered": 1232,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-ac5ada48eb8490af0768",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-ffc3080a9dbcd5302a29",
+      "cost_ordered": 2.8645,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-ffc3080a9dbcd5302a29",
+      "cost_ordered": 156631.5,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-ffc3080a9dbcd5302a29",
+      "cost_ordered": 1166,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-ffc3080a9dbcd5302a29",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     }
+    ],
+    "candidate_costs_field_identical": false,
+    "compared_candidate_count": 13,
+    "cost_ordered_only_candidates": [],
+    "cost_ordered_sumo_candidates": 13,
+    "cursor": {
+     "cursor": 13,
+     "cutoff": null,
+     "identity_key": "041c35a92894768c1bcd153a4391e35ccd6ec17832ab88d411cde6be949476f4",
+     "order": [
+      "closure-2a25b7859eb4f3ba0916",
+      "closure-790db34bfa7838b5c760",
+      "closure-4f0b8e1be70157b22217",
+      "closure-ac5ada48eb8490af0768",
+      "closure-a50521393bc43903e76e",
+      "closure-36eb23678de5567fdb59",
+      "closure-419beb127a8e538372c7",
+      "closure-918627761ca0a1eeaf32",
+      "closure-ffc3080a9dbcd5302a29",
+      "closure-0e072516e4fec1df8d84",
+      "closure-535dd4e3f07284821d53",
+      "closure-990b025fa7e11689c7b3",
+      "closure-13ef5c27955a167ac3b0"
+     ],
+     "schema": "cost_ordered_closure_search_v1",
+     "stop_reason": "search_space_exhausted",
+     "verified": [
+      "closure-2a25b7859eb4f3ba0916",
+      "closure-790db34bfa7838b5c760",
+      "closure-4f0b8e1be70157b22217",
+      "closure-ac5ada48eb8490af0768",
+      "closure-a50521393bc43903e76e",
+      "closure-36eb23678de5567fdb59",
+      "closure-419beb127a8e538372c7",
+      "closure-918627761ca0a1eeaf32",
+      "closure-ffc3080a9dbcd5302a29",
+      "closure-0e072516e4fec1df8d84",
+      "closure-535dd4e3f07284821d53",
+      "closure-990b025fa7e11689c7b3",
+      "closure-13ef5c27955a167ac3b0"
+     ],
+     "version": 1,
+     "viable": [
+      "closure-990b025fa7e11689c7b3"
+     ]
+    },
+    "daily_cost_cache_hits": {
+     "cost_ordered": 0,
+     "exhaustive": 0,
+     "published_by_execution_record": 0
+    },
+    "exhaustive_only_candidates": [],
+    "exhaustive_sumo_candidates": 13,
+    "final_decision": {
+     "cost_ordered": {
+      "decision_status": "no_viable",
+      "decision_winner": null,
+      "status": "no_viable",
+      "tie_ids": [],
+      "winner_id": null
+     },
+     "exhaustive": {
+      "decision_status": "no_viable",
+      "decision_winner": null,
+      "status": "no_viable",
+      "tie_ids": [],
+      "winner_id": null
+     }
+    },
+    "final_decision_identical": true,
+    "hard_failure_mismatches": [
+     {
+      "candidate_id": "closure-2a25b7859eb4f3ba0916",
+      "cost_ordered": [
+       "2027-03-22:sumo_execution_failure:q10:1003:sumo timed out after 300s (seed 1003)"
+      ],
+      "exhaustive": []
+     },
+     {
+      "candidate_id": "closure-918627761ca0a1eeaf32",
+      "cost_ordered": [
+       "2027-03-22:sumo_execution_failure:q90:1008:sumo timed out after 300s (seed 1008)"
+      ],
+      "exhaustive": []
+     }
+    ],
+    "hard_failures_identical": false,
+    "health_classifications_identical": false,
+    "health_mismatches": [
+     {
+      "candidate_id": "closure-2a25b7859eb4f3ba0916",
+      "cost_ordered": [
+       false,
+       false
+      ],
+      "exhaustive": [
+       true,
+       true
+      ]
+     },
+     {
+      "candidate_id": "closure-918627761ca0a1eeaf32",
+      "cost_ordered": [
+       false,
+       false
+      ],
+      "exhaustive": [
+       true,
+       true
+      ]
+     }
+    ],
+    "ledger_compared_candidate_count": 13,
+    "ledger_cost_mismatches": [
+     {
+      "candidate_id": "closure-0e072516e4fec1df8d84",
+      "cost_ordered_ledger": 2.8721,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-0e072516e4fec1df8d84",
+      "cost_ordered_ledger": 156920.5,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-0e072516e4fec1df8d84",
+      "cost_ordered_ledger": 1157,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-0e072516e4fec1df8d84",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-13ef5c27955a167ac3b0",
+      "cost_ordered_ledger": 2.9645,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-13ef5c27955a167ac3b0",
+      "cost_ordered_ledger": 161537.2,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-13ef5c27955a167ac3b0",
+      "cost_ordered_ledger": 1217,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-13ef5c27955a167ac3b0",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-36eb23678de5567fdb59",
+      "cost_ordered_ledger": 2.8225,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-36eb23678de5567fdb59",
+      "cost_ordered_ledger": 153570.9,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-36eb23678de5567fdb59",
+      "cost_ordered_ledger": 1120,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-36eb23678de5567fdb59",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-419beb127a8e538372c7",
+      "cost_ordered_ledger": 2.8229,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-419beb127a8e538372c7",
+      "cost_ordered_ledger": 153967.3,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-419beb127a8e538372c7",
+      "cost_ordered_ledger": 1249,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-419beb127a8e538372c7",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-4f0b8e1be70157b22217",
+      "cost_ordered_ledger": 2.7738,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-4f0b8e1be70157b22217",
+      "cost_ordered_ledger": 151774.7,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-4f0b8e1be70157b22217",
+      "cost_ordered_ledger": 1208,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-4f0b8e1be70157b22217",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-535dd4e3f07284821d53",
+      "cost_ordered_ledger": 2.9024,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-535dd4e3f07284821d53",
+      "cost_ordered_ledger": 158285.4,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-535dd4e3f07284821d53",
+      "cost_ordered_ledger": 1226,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-535dd4e3f07284821d53",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-790db34bfa7838b5c760",
+      "cost_ordered_ledger": 2.7705,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-790db34bfa7838b5c760",
+      "cost_ordered_ledger": 151694.3,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-790db34bfa7838b5c760",
+      "cost_ordered_ledger": 1252,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-790db34bfa7838b5c760",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-a50521393bc43903e76e",
+      "cost_ordered_ledger": 2.7856,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-a50521393bc43903e76e",
+      "cost_ordered_ledger": 151584.4,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-a50521393bc43903e76e",
+      "cost_ordered_ledger": 1100,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-a50521393bc43903e76e",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-ac5ada48eb8490af0768",
+      "cost_ordered_ledger": 2.7848,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-ac5ada48eb8490af0768",
+      "cost_ordered_ledger": 151612.9,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-ac5ada48eb8490af0768",
+      "cost_ordered_ledger": 1232,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-ac5ada48eb8490af0768",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-ffc3080a9dbcd5302a29",
+      "cost_ordered_ledger": 2.8645,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-ffc3080a9dbcd5302a29",
+      "cost_ordered_ledger": 156631.5,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-ffc3080a9dbcd5302a29",
+      "cost_ordered_ledger": 1166,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-ffc3080a9dbcd5302a29",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     }
+    ],
+    "ledger_costs_field_identical": false,
+    "no_resource_cap_regression": true,
+    "peak_rss_bytes": {
+     "cost_ordered": 520667136,
+     "exhaustive": 483934208
+    },
+    "resource_caps": {
+     "maximum_daily_units": 10000,
+     "maximum_parent_schedules": 100000
+    },
+    "restart": {
+     "equivalent": false,
+     "interrupted_after_pilots": 1,
+     "performed": true,
+     "reason": "the resumed run did NOT reproduce the uninterrupted outcome",
+     "reference_final_decision": {
+      "decision_status": "no_viable",
+      "decision_winner": null,
+      "status": "no_viable",
+      "tie_ids": [],
+      "winner_id": null
+     },
+     "resumed_final_decision": {
+      "decision_status": null,
+      "decision_winner": null,
+      "status": "no_viable",
+      "tie_ids": [],
+      "winner_id": null
+     }
+    },
+    "restart_equivalent": false,
+    "selected_ids": {
+     "cost_ordered": [
+      "closure-990b025fa7e11689c7b3"
+     ],
+     "exhaustive": [
+      "closure-2a25b7859eb4f3ba0916",
+      "closure-918627761ca0a1eeaf32"
+     ]
+    },
+    "selected_ids_identical": false,
+    "status_identical": true,
+    "stop_proof": {
+     "argument": "every candidate that survived the deterministic no-detour gate was verified, so the finalist set is the exhaustive one",
+     "cutoff_added_vehicle_hours": null,
+     "examined": 13,
+     "first_unexamined_added_vehicle_hours": null,
+     "first_unexamined_candidate_id": null,
+     "minimum_finalists": 2,
+     "practical_equivalence_vehicle_hours": 0.0,
+     "schema": "cost_ordered_closure_search_v1",
+     "selection_band_added_vehicle_hours": null,
+     "stop_reason": "search_space_exhausted",
+     "total_ordered": 13,
+     "unexamined": 0
+    },
+    "stop_proof_check": {
+     "reason": "every ordered candidate was verified",
+     "stop_reason": "search_space_exhausted",
+     "valid": true
+    },
+    "stop_proof_valid": true,
+    "sumo_verifications_saved": 0,
+    "verified_prefix": [
+     "closure-2a25b7859eb4f3ba0916",
+     "closure-790db34bfa7838b5c760",
+     "closure-4f0b8e1be70157b22217",
+     "closure-ac5ada48eb8490af0768",
+     "closure-a50521393bc43903e76e",
+     "closure-36eb23678de5567fdb59",
+     "closure-419beb127a8e538372c7",
+     "closure-918627761ca0a1eeaf32",
+     "closure-ffc3080a9dbcd5302a29",
+     "closure-0e072516e4fec1df8d84",
+     "closure-535dd4e3f07284821d53",
+     "closure-990b025fa7e11689c7b3",
+     "closure-13ef5c27955a167ac3b0"
+    ],
+    "wall_time_s": {
+     "cost_ordered": 475.781,
+     "exhaustive": 4094.47
+    }
+   },
+   "directed_edges": [
+    "26355153_26842525_0"
+   ],
+   "gates": {
+    "checks": {
+     "cache_hits_consistent": true,
+     "candidate_costs_field_identical": false,
+     "final_decision_identical": true,
+     "hard_failures_identical": false,
+     "health_classifications_identical": false,
+     "no_resource_cap_regression": true,
+     "restart_equivalent": false,
+     "selected_ids_identical": false,
+     "status_identical": true,
+     "stop_proof_valid": true,
+     "sumo_verifications_saved": false
+    },
+    "passed": false,
+    "thresholds": {
+     "cache_hits_consistent": true,
+     "candidate_costs_field_identical": true,
+     "final_decision_identical": true,
+     "hard_failures_identical": true,
+     "health_classifications_identical": true,
+     "resource_cap_regression_allowed": false,
+     "restart_equivalent": true,
+     "selected_ids_identical": true,
+     "status_identical": true,
+     "stop_proof_valid": true,
+     "sumo_verifications_saved_minimum": 1
+    }
+   },
+   "pilot_health_viable_candidate_count": 2,
+   "search_content_key": "4e376b8433426f6d42db",
+   "search_id": "cob2-fore-20270322-20270322-b3705acf01-0700",
+   "work_dates": [
+    "2027-03-22"
+   ]
+  },
+  {
+   "candidate_count": 13,
+   "case_id": "suite-v1-2-4b08b788546b",
+   "comparison": {
+    "cache_hits_consistent": true,
+    "candidate_cost_mismatches": [
+     {
+      "candidate_id": "closure-37cd74ab599bcee854ab",
+      "cost_ordered": 0.3997,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-37cd74ab599bcee854ab",
+      "cost_ordered": 21646.9,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-37cd74ab599bcee854ab",
+      "cost_ordered": 636,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-37cd74ab599bcee854ab",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-4ac4a7251fd598594b15",
+      "cost_ordered": 0.4216,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-4ac4a7251fd598594b15",
+      "cost_ordered": 23071.4,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-4ac4a7251fd598594b15",
+      "cost_ordered": 697,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-4ac4a7251fd598594b15",
+      "cost_ordered": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     }
+    ],
+    "candidate_costs_field_identical": false,
+    "compared_candidate_count": 6,
+    "cost_ordered_only_candidates": [],
+    "cost_ordered_sumo_candidates": 6,
+    "cursor": {
+     "cursor": 6,
+     "cutoff": 0.4223,
+     "identity_key": "17cf6f8e8bc28400c4df830bb2ebe8f847e300ab0ff16bcf257bb2c4cf6ee232",
+     "order": [
+      "closure-b82d29ce79ebb41d5508",
+      "closure-37cd74ab599bcee854ab",
+      "closure-0887626f0a98664d78eb",
+      "closure-8cb5f152180d563ae556",
+      "closure-4ac4a7251fd598594b15",
+      "closure-0e6b1005ed9ed364b011",
+      "closure-667f0d8c4d94e56a0611",
+      "closure-eaf9b51a22928280112b",
+      "closure-c2fd6163bff8138d9009",
+      "closure-5699938c7667682f5b88",
+      "closure-f26137845e75aed26986",
+      "closure-d5fa021fcc4582ef2e2e",
+      "closure-e44811d800dc1ed7c46f"
+     ],
+     "schema": "cost_ordered_closure_search_v1",
+     "stop_reason": "band_exhausted",
+     "verified": [
+      "closure-b82d29ce79ebb41d5508",
+      "closure-37cd74ab599bcee854ab",
+      "closure-0887626f0a98664d78eb",
+      "closure-8cb5f152180d563ae556",
+      "closure-4ac4a7251fd598594b15",
+      "closure-0e6b1005ed9ed364b011"
+     ],
+     "version": 1,
+     "viable": [
+      "closure-8cb5f152180d563ae556",
+      "closure-0e6b1005ed9ed364b011"
+     ]
+    },
+    "daily_cost_cache_hits": {
+     "cost_ordered": 0,
+     "exhaustive": 0,
+     "published_by_execution_record": 0
+    },
+    "exhaustive_only_candidates": [
+     "closure-5699938c7667682f5b88",
+     "closure-667f0d8c4d94e56a0611",
+     "closure-c2fd6163bff8138d9009",
+     "closure-d5fa021fcc4582ef2e2e",
+     "closure-e44811d800dc1ed7c46f",
+     "closure-eaf9b51a22928280112b",
+     "closure-f26137845e75aed26986"
+    ],
+    "exhaustive_sumo_candidates": 13,
+    "final_decision": {
+     "cost_ordered": {
+      "decision_status": "no_viable",
+      "decision_winner": null,
+      "status": "no_viable",
+      "tie_ids": [],
+      "winner_id": null
+     },
+     "exhaustive": {
+      "decision_status": "no_viable",
+      "decision_winner": null,
+      "status": "no_viable",
+      "tie_ids": [],
+      "winner_id": null
+     }
+    },
+    "final_decision_identical": true,
+    "hard_failure_mismatches": [
+     {
+      "candidate_id": "closure-0887626f0a98664d78eb",
+      "cost_ordered": [
+       "2027-07-15:sumo_execution_failure:q90:1008:sumo timed out after 300s (seed 1008)"
+      ],
+      "exhaustive": []
+     },
+     {
+      "candidate_id": "closure-b82d29ce79ebb41d5508",
+      "cost_ordered": [
+       "2027-07-15:sumo_execution_failure:q50:1004:sumo timed out after 300s (seed 1004)"
+      ],
+      "exhaustive": []
+     }
+    ],
+    "hard_failures_identical": false,
+    "health_classifications_identical": false,
+    "health_mismatches": [
+     {
+      "candidate_id": "closure-0887626f0a98664d78eb",
+      "cost_ordered": [
+       false,
+       false
+      ],
+      "exhaustive": [
+       true,
+       true
+      ]
+     },
+     {
+      "candidate_id": "closure-b82d29ce79ebb41d5508",
+      "cost_ordered": [
+       false,
+       false
+      ],
+      "exhaustive": [
+       true,
+       true
+      ]
+     }
+    ],
+    "ledger_compared_candidate_count": 13,
+    "ledger_cost_mismatches": [
+     {
+      "candidate_id": "closure-37cd74ab599bcee854ab",
+      "cost_ordered_ledger": 0.3997,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-37cd74ab599bcee854ab",
+      "cost_ordered_ledger": 21646.9,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-37cd74ab599bcee854ab",
+      "cost_ordered_ledger": 636,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-37cd74ab599bcee854ab",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-4ac4a7251fd598594b15",
+      "cost_ordered_ledger": 0.4216,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-4ac4a7251fd598594b15",
+      "cost_ordered_ledger": 23071.4,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-4ac4a7251fd598594b15",
+      "cost_ordered_ledger": 697,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-4ac4a7251fd598594b15",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-667f0d8c4d94e56a0611",
+      "cost_ordered_ledger": 0.423,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-667f0d8c4d94e56a0611",
+      "cost_ordered_ledger": 22510.6,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-667f0d8c4d94e56a0611",
+      "cost_ordered_ledger": 658,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-667f0d8c4d94e56a0611",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-c2fd6163bff8138d9009",
+      "cost_ordered_ledger": 0.4296,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-c2fd6163bff8138d9009",
+      "cost_ordered_ledger": 23954.6,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-c2fd6163bff8138d9009",
+      "cost_ordered_ledger": 715,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-c2fd6163bff8138d9009",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-d5fa021fcc4582ef2e2e",
+      "cost_ordered_ledger": 0.4424,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-d5fa021fcc4582ef2e2e",
+      "cost_ordered_ledger": 24890.5,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-d5fa021fcc4582ef2e2e",
+      "cost_ordered_ledger": 727,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-d5fa021fcc4582ef2e2e",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-e44811d800dc1ed7c46f",
+      "cost_ordered_ledger": 0.4691,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-e44811d800dc1ed7c46f",
+      "cost_ordered_ledger": 26223.6,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-e44811d800dc1ed7c46f",
+      "cost_ordered_ledger": 736,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-e44811d800dc1ed7c46f",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     },
+     {
+      "candidate_id": "closure-f26137845e75aed26986",
+      "cost_ordered_ledger": 0.4308,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-f26137845e75aed26986",
+      "cost_ordered_ledger": 23045.2,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-f26137845e75aed26986",
+      "cost_ordered_ledger": 696,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-f26137845e75aed26986",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     }
+    ],
+    "ledger_costs_field_identical": false,
+    "no_resource_cap_regression": true,
+    "peak_rss_bytes": {
+     "cost_ordered": 521011200,
+     "exhaustive": 521011200
+    },
+    "resource_caps": {
+     "maximum_daily_units": 10000,
+     "maximum_parent_schedules": 100000
+    },
+    "restart": {
+     "equivalent": false,
+     "interrupted_after_pilots": 1,
+     "performed": true,
+     "reason": "the resumed run did NOT reproduce the uninterrupted outcome",
+     "reference_final_decision": {
+      "decision_status": "no_viable",
+      "decision_winner": null,
+      "status": "no_viable",
+      "tie_ids": [],
+      "winner_id": null
+     },
+     "resumed_final_decision": {
+      "decision_status": "no_viable",
+      "decision_winner": null,
+      "status": "no_viable",
+      "tie_ids": [],
+      "winner_id": null
+     }
+    },
+    "restart_equivalent": false,
+    "selected_ids": {
+     "cost_ordered": [
+      "closure-0e6b1005ed9ed364b011",
+      "closure-8cb5f152180d563ae556"
+     ],
+     "exhaustive": [
+      "closure-0887626f0a98664d78eb",
+      "closure-b82d29ce79ebb41d5508"
+     ]
+    },
+    "selected_ids_identical": false,
+    "status_identical": true,
+    "stop_proof": {
+     "argument": "the order is by added_vehicle_hours first, so every unexamined candidate costs at least as much as the first one, which is strictly above the selection band; none can be retained, and none can move the cutoff because every cheaper candidate was already verified",
+     "cutoff_added_vehicle_hours": 0.4223,
+     "examined": 6,
+     "first_unexamined_added_vehicle_hours": 0.423,
+     "first_unexamined_candidate_id": "closure-667f0d8c4d94e56a0611",
+     "minimum_finalists": 2,
+     "practical_equivalence_vehicle_hours": 0.0,
+     "schema": "cost_ordered_closure_search_v1",
+     "selection_band_added_vehicle_hours": 0.4223,
+     "stop_reason": "band_exhausted",
+     "total_ordered": 13,
+     "unexamined": 7
+    },
+    "stop_proof_check": {
+     "first_unexamined_added_vehicle_hours": 0.423,
+     "reason": "the first unexamined candidate is strictly above the band, so no unexamined candidate could be retained",
+     "selection_band_added_vehicle_hours": 0.4223,
+     "stop_reason": "band_exhausted",
+     "valid": true
+    },
+    "stop_proof_valid": true,
+    "sumo_verifications_saved": 7,
+    "verified_prefix": [
+     "closure-b82d29ce79ebb41d5508",
+     "closure-37cd74ab599bcee854ab",
+     "closure-0887626f0a98664d78eb",
+     "closure-8cb5f152180d563ae556",
+     "closure-4ac4a7251fd598594b15",
+     "closure-0e6b1005ed9ed364b011"
+    ],
+    "wall_time_s": {
+     "cost_ordered": 1181.256,
+     "exhaustive": 3212.082
+    }
+   },
+   "directed_edges": [
+    "26355153_96523321_0"
+   ],
+   "gates": {
+    "checks": {
+     "cache_hits_consistent": true,
+     "candidate_costs_field_identical": false,
+     "final_decision_identical": true,
+     "hard_failures_identical": false,
+     "health_classifications_identical": false,
+     "no_resource_cap_regression": true,
+     "restart_equivalent": false,
+     "selected_ids_identical": false,
+     "status_identical": true,
+     "stop_proof_valid": true,
+     "sumo_verifications_saved": true
+    },
+    "passed": false,
+    "thresholds": {
+     "cache_hits_consistent": true,
+     "candidate_costs_field_identical": true,
+     "final_decision_identical": true,
+     "hard_failures_identical": true,
+     "health_classifications_identical": true,
+     "resource_cap_regression_allowed": false,
+     "restart_equivalent": true,
+     "selected_ids_identical": true,
+     "status_identical": true,
+     "stop_proof_valid": true,
+     "sumo_verifications_saved_minimum": 1
+    }
+   },
+   "pilot_health_viable_candidate_count": 2,
+   "search_content_key": "4b08b788546b4193907a",
+   "search_id": "cob2-fore-20270715-20270715-a9a5f9d78a-0700",
+   "work_dates": [
+    "2027-07-15"
+   ]
+  },
+  {
+   "candidate_count": 13,
+   "case_id": "suite-v1-3-cbc0f4626d43",
+   "comparison": {
+    "cache_hits_consistent": true,
+    "candidate_cost_mismatches": [],
+    "candidate_costs_field_identical": false,
+    "compared_candidate_count": 2,
+    "cost_ordered_only_candidates": [],
+    "cost_ordered_sumo_candidates": 2,
+    "cursor": {
+     "cursor": 2,
+     "cutoff": 0.3681,
+     "identity_key": "3cd3d44048e729c0e389b6e662c74da48bbeaf84b7e8fadc6e0574035db13ee9",
+     "order": [
+      "closure-61eb2df917c06cec3a8e",
+      "closure-3ff2278265bb66552481",
+      "closure-0b2bc6e4e90efb9627f0",
+      "closure-0e1141bad587644e1677",
+      "closure-0dd4f02e80241d024e62",
+      "closure-4793602df1390182c9ca",
+      "closure-e07f358d21c62814ffb3",
+      "closure-540ba23752e9ebe34779",
+      "closure-e17029b81e0e92e1bfd3",
+      "closure-b1672efc16b1ea9aa712",
+      "closure-ed1897a25755d680e29f",
+      "closure-bb32335bd4a229f22b7e",
+      "closure-acdc98d30cfac1572b27"
+     ],
+     "schema": "cost_ordered_closure_search_v1",
+     "stop_reason": "band_exhausted",
+     "verified": [
+      "closure-61eb2df917c06cec3a8e",
+      "closure-3ff2278265bb66552481"
+     ],
+     "version": 1,
+     "viable": [
+      "closure-61eb2df917c06cec3a8e",
+      "closure-3ff2278265bb66552481"
+     ]
+    },
+    "daily_cost_cache_hits": {
+     "cost_ordered": 0,
+     "exhaustive": 0,
+     "published_by_execution_record": 0
+    },
+    "exhaustive_only_candidates": [
+     "closure-0b2bc6e4e90efb9627f0",
+     "closure-0dd4f02e80241d024e62",
+     "closure-0e1141bad587644e1677",
+     "closure-4793602df1390182c9ca",
+     "closure-540ba23752e9ebe34779",
+     "closure-acdc98d30cfac1572b27",
+     "closure-b1672efc16b1ea9aa712",
+     "closure-bb32335bd4a229f22b7e",
+     "closure-e07f358d21c62814ffb3",
+     "closure-e17029b81e0e92e1bfd3",
+     "closure-ed1897a25755d680e29f"
+    ],
+    "exhaustive_sumo_candidates": 13,
+    "final_decision": {
+     "cost_ordered": {
+      "decision_status": "unique_winner",
+      "decision_winner": "closure-61eb2df917c06cec3a8e",
+      "status": "unique_winner",
+      "tie_ids": [],
+      "winner_id": "closure-61eb2df917c06cec3a8e"
+     },
+     "exhaustive": {
+      "decision_status": "unique_winner",
+      "decision_winner": "closure-61eb2df917c06cec3a8e",
+      "status": "unique_winner",
+      "tie_ids": [],
+      "winner_id": "closure-61eb2df917c06cec3a8e"
+     }
+    },
+    "final_decision_identical": true,
+    "hard_failure_mismatches": [],
+    "hard_failures_identical": true,
+    "health_classifications_identical": true,
+    "health_mismatches": [],
+    "ledger_compared_candidate_count": 13,
+    "ledger_cost_mismatches": [
+     {
+      "candidate_id": "closure-0b2bc6e4e90efb9627f0",
+      "cost_ordered_ledger": 0.3688,
+      "exhaustive": null,
+      "field": "added_vehicle_hours"
+     },
+     {
+      "candidate_id": "closure-0b2bc6e4e90efb9627f0",
+      "cost_ordered_ledger": 18317.8,
+      "exhaustive": null,
+      "field": "added_metres_total"
+     },
+     {
+      "candidate_id": "closure-0b2bc6e4e90efb9627f0",
+      "cost_ordered_ledger": 1175,
+      "exhaustive": null,
+      "field": "vehicles_affected"
+     },
+     {
+      "candidate_id": "closure-0b2bc6e4e90efb9627f0",
+      "cost_ordered_ledger": 0,
+      "exhaustive": null,
+      "field": "vehicles_no_detour"
+     }
+    ],
+    "ledger_costs_field_identical": false,
+    "no_resource_cap_regression": true,
+    "peak_rss_bytes": {
+     "cost_ordered": 521011200,
+     "exhaustive": 521011200
+    },
+    "resource_caps": {
+     "maximum_daily_units": 10000,
+     "maximum_parent_schedules": 100000
+    },
+    "restart": {
+     "equivalent": true,
+     "interrupted_after_pilots": 1,
+     "performed": true,
+     "reason": "the resumed run reproduced the uninterrupted outcome",
+     "reference_final_decision": {
+      "decision_status": "unique_winner",
+      "decision_winner": "closure-61eb2df917c06cec3a8e",
+      "status": "unique_winner",
+      "tie_ids": [],
+      "winner_id": "closure-61eb2df917c06cec3a8e"
+     },
+     "resumed_final_decision": {
+      "decision_status": "unique_winner",
+      "decision_winner": "closure-61eb2df917c06cec3a8e",
+      "status": "unique_winner",
+      "tie_ids": [],
+      "winner_id": "closure-61eb2df917c06cec3a8e"
+     }
+    },
+    "restart_equivalent": true,
+    "selected_ids": {
+     "cost_ordered": [
+      "closure-3ff2278265bb66552481",
+      "closure-61eb2df917c06cec3a8e"
+     ],
+     "exhaustive": [
+      "closure-3ff2278265bb66552481",
+      "closure-61eb2df917c06cec3a8e"
+     ]
+    },
+    "selected_ids_identical": true,
+    "status_identical": true,
+    "stop_proof": {
+     "argument": "the order is by added_vehicle_hours first, so every unexamined candidate costs at least as much as the first one, which is strictly above the selection band; none can be retained, and none can move the cutoff because every cheaper candidate was already verified",
+     "cutoff_added_vehicle_hours": 0.3681,
+     "examined": 2,
+     "first_unexamined_added_vehicle_hours": 0.3688,
+     "first_unexamined_candidate_id": "closure-0b2bc6e4e90efb9627f0",
+     "minimum_finalists": 2,
+     "practical_equivalence_vehicle_hours": 0.0,
+     "schema": "cost_ordered_closure_search_v1",
+     "selection_band_added_vehicle_hours": 0.3681,
+     "stop_reason": "band_exhausted",
+     "total_ordered": 13,
+     "unexamined": 11
+    },
+    "stop_proof_check": {
+     "first_unexamined_added_vehicle_hours": 0.3688,
+     "reason": "the first unexamined candidate is strictly above the band, so no unexamined candidate could be retained",
+     "selection_band_added_vehicle_hours": 0.3681,
+     "stop_reason": "band_exhausted",
+     "valid": true
+    },
+    "stop_proof_valid": true,
+    "sumo_verifications_saved": 11,
+    "verified_prefix": [
+     "closure-61eb2df917c06cec3a8e",
+     "closure-3ff2278265bb66552481"
+    ],
+    "wall_time_s": {
+     "cost_ordered": 206.147,
+     "exhaustive": 1145.309
+    }
+   },
+   "directed_edges": [
+    "26842525_26355153_0"
+   ],
+   "gates": {
+    "checks": {
+     "cache_hits_consistent": true,
+     "candidate_costs_field_identical": false,
+     "final_decision_identical": true,
+     "hard_failures_identical": true,
+     "health_classifications_identical": true,
+     "no_resource_cap_regression": true,
+     "restart_equivalent": true,
+     "selected_ids_identical": true,
+     "status_identical": true,
+     "stop_proof_valid": true,
+     "sumo_verifications_saved": true
+    },
+    "passed": false,
+    "thresholds": {
+     "cache_hits_consistent": true,
+     "candidate_costs_field_identical": true,
+     "final_decision_identical": true,
+     "hard_failures_identical": true,
+     "health_classifications_identical": true,
+     "resource_cap_regression_allowed": false,
+     "restart_equivalent": true,
+     "selected_ids_identical": true,
+     "status_identical": true,
+     "stop_proof_valid": true,
+     "sumo_verifications_saved_minimum": 1
+    }
+   },
+   "pilot_health_viable_candidate_count": 2,
+   "search_content_key": "cbc0f4626d4336535926",
+   "search_id": "cob2-fore-20270322-20270322-fdc134ec4e-0700",
+   "work_dates": [
+    "2027-03-22"
+   ]
+  },
+  {
+   "candidate_count": 13,
+   "case_id": "suite-v1-4-5ce9482e1c15",
+   "comparison": {
+    "cache_hits_consistent": true,
+    "candidate_cost_mismatches": [],
+    "candidate_costs_field_identical": true,
+    "compared_candidate_count": 13,
+    "cost_ordered_only_candidates": [],
+    "cost_ordered_sumo_candidates": 13,
+    "cursor": {
+     "cursor": 13,
+     "cutoff": 0.0,
+     "identity_key": "070ce5ae9985790760e6592bd7813efe3cdfca5e544359328682badfbf92f2de",
+     "order": [
+      "closure-ca44bbb759e3ae2503c6",
+      "closure-04eca7ab11c7a7ceaea2",
+      "closure-c4307215a8e2df4c17b4",
+      "closure-b11012e1ed0eeb959eab",
+      "closure-2709bde0c952098169f6",
+      "closure-d68d3533bb5220ba736c",
+      "closure-76db6c0fafcf03299673",
+      "closure-0e8bbe5f8865bb0fd83d",
+      "closure-fa57cbc811ca6c569817",
+      "closure-3be70ae8339547361c07",
+      "closure-2085da0cf61dca338db8",
+      "closure-de72e5fe5953e869218f",
+      "closure-d159b217d31d8e68bd40"
+     ],
+     "schema": "cost_ordered_closure_search_v1",
+     "stop_reason": "search_space_exhausted",
+     "verified": [
+      "closure-ca44bbb759e3ae2503c6",
+      "closure-04eca7ab11c7a7ceaea2",
+      "closure-c4307215a8e2df4c17b4",
+      "closure-b11012e1ed0eeb959eab",
+      "closure-2709bde0c952098169f6",
+      "closure-d68d3533bb5220ba736c",
+      "closure-76db6c0fafcf03299673",
+      "closure-0e8bbe5f8865bb0fd83d",
+      "closure-fa57cbc811ca6c569817",
+      "closure-3be70ae8339547361c07",
+      "closure-2085da0cf61dca338db8",
+      "closure-de72e5fe5953e869218f",
+      "closure-d159b217d31d8e68bd40"
+     ],
+     "version": 1,
+     "viable": [
+      "closure-ca44bbb759e3ae2503c6",
+      "closure-04eca7ab11c7a7ceaea2",
+      "closure-c4307215a8e2df4c17b4",
+      "closure-b11012e1ed0eeb959eab",
+      "closure-2709bde0c952098169f6",
+      "closure-d68d3533bb5220ba736c",
+      "closure-76db6c0fafcf03299673",
+      "closure-0e8bbe5f8865bb0fd83d",
+      "closure-fa57cbc811ca6c569817",
+      "closure-3be70ae8339547361c07",
+      "closure-2085da0cf61dca338db8",
+      "closure-de72e5fe5953e869218f",
+      "closure-d159b217d31d8e68bd40"
+     ]
+    },
+    "daily_cost_cache_hits": {
+     "cost_ordered": 0,
+     "exhaustive": 0,
+     "published_by_execution_record": 0
+    },
+    "exhaustive_only_candidates": [],
+    "exhaustive_sumo_candidates": 13,
+    "final_decision": {
+     "cost_ordered": {
+      "decision_status": null,
+      "decision_winner": null,
+      "status": "inconclusive",
+      "tie_ids": [],
+      "winner_id": null
+     },
+     "exhaustive": {
+      "decision_status": null,
+      "decision_winner": null,
+      "status": "inconclusive",
+      "tie_ids": [],
+      "winner_id": null
+     }
+    },
+    "final_decision_identical": true,
+    "hard_failure_mismatches": [],
+    "hard_failures_identical": true,
+    "health_classifications_identical": true,
+    "health_mismatches": [],
+    "ledger_compared_candidate_count": 13,
+    "ledger_cost_mismatches": [],
+    "ledger_costs_field_identical": true,
+    "no_resource_cap_regression": true,
+    "peak_rss_bytes": {
+     "cost_ordered": 521011200,
+     "exhaustive": 521011200
+    },
+    "resource_caps": {
+     "maximum_daily_units": 10000,
+     "maximum_parent_schedules": 100000
+    },
+    "restart": {
+     "equivalent": true,
+     "interrupted_after_pilots": 1,
+     "performed": true,
+     "reason": "the resumed run reproduced the uninterrupted outcome",
+     "reference_final_decision": {
+      "decision_status": null,
+      "decision_winner": null,
+      "status": "inconclusive",
+      "tie_ids": [],
+      "winner_id": null
+     },
+     "resumed_final_decision": {
+      "decision_status": null,
+      "decision_winner": null,
+      "status": "inconclusive",
+      "tie_ids": [],
+      "winner_id": null
+     }
+    },
+    "restart_equivalent": true,
+    "selected_ids": {
+     "cost_ordered": [],
+     "exhaustive": []
+    },
+    "selected_ids_identical": true,
+    "status_identical": true,
+    "stop_proof": {
+     "argument": "every candidate that survived the deterministic no-detour gate was verified, so the finalist set is the exhaustive one",
+     "cutoff_added_vehicle_hours": 0.0,
+     "examined": 13,
+     "first_unexamined_added_vehicle_hours": null,
+     "first_unexamined_candidate_id": null,
+     "minimum_finalists": 2,
+     "practical_equivalence_vehicle_hours": 0.0,
+     "schema": "cost_ordered_closure_search_v1",
+     "selection_band_added_vehicle_hours": 0.0,
+     "stop_reason": "search_space_exhausted",
+     "total_ordered": 13,
+     "unexamined": 0
+    },
+    "stop_proof_check": {
+     "reason": "every ordered candidate was verified",
+     "stop_reason": "search_space_exhausted",
+     "valid": true
+    },
+    "stop_proof_valid": true,
+    "sumo_verifications_saved": 0,
+    "verified_prefix": [
+     "closure-ca44bbb759e3ae2503c6",
+     "closure-04eca7ab11c7a7ceaea2",
+     "closure-c4307215a8e2df4c17b4",
+     "closure-b11012e1ed0eeb959eab",
+     "closure-2709bde0c952098169f6",
+     "closure-d68d3533bb5220ba736c",
+     "closure-76db6c0fafcf03299673",
+     "closure-0e8bbe5f8865bb0fd83d",
+     "closure-fa57cbc811ca6c569817",
+     "closure-3be70ae8339547361c07",
+     "closure-2085da0cf61dca338db8",
+     "closure-de72e5fe5953e869218f",
+     "closure-d159b217d31d8e68bd40"
+    ],
+    "wall_time_s": {
+     "cost_ordered": 55.728,
+     "exhaustive": 396.511
+    }
+   },
+   "directed_edges": [
+    "8710974792_1759741980_0"
+   ],
+   "gates": {
+    "checks": {
+     "cache_hits_consistent": true,
+     "candidate_costs_field_identical": true,
+     "final_decision_identical": true,
+     "hard_failures_identical": true,
+     "health_classifications_identical": true,
+     "no_resource_cap_regression": true,
+     "restart_equivalent": true,
+     "selected_ids_identical": true,
+     "status_identical": true,
+     "stop_proof_valid": true,
+     "sumo_verifications_saved": false
+    },
+    "passed": false,
+    "thresholds": {
+     "cache_hits_consistent": true,
+     "candidate_costs_field_identical": true,
+     "final_decision_identical": true,
+     "hard_failures_identical": true,
+     "health_classifications_identical": true,
+     "resource_cap_regression_allowed": false,
+     "restart_equivalent": true,
+     "selected_ids_identical": true,
+     "status_identical": true,
+     "stop_proof_valid": true,
+     "sumo_verifications_saved_minimum": 1
+    }
+   },
+   "pilot_health_viable_candidate_count": 0,
+   "search_content_key": "5ce9482e1c15161e1b53",
+   "search_id": "cob2-fore-20270715-20270715-38ce6ef5e6-0700",
+   "work_dates": [
+    "2027-07-15"
+   ]
+  }
+ ],
+ "claim_boundary": {
+  "activates_policy_v3": false,
+  "opens_global_best": false,
+  "permits_ui_claim": false,
+  "reason": "policy v3 additionally requires the untouched held-out campaign and every existing release gate"
+ },
+ "content_key": "8d623929cff73bd86cc76516b23509c14b4bca74b322a7903040b5794d99ff35",
+ "evidence_class": "preregistered_benchmark",
+ "gates": {
+  "checks": {
+   "all_case_equivalence_gates": false,
+   "case_count": true,
+   "minimum_cases_with_two_health_viable_candidates": true,
+   "no_execution_errors": true,
+   "positive_total_sumo_saving": true
+  },
+  "measured": {
+   "case_count": 4,
+   "cases_with_two_health_viable_candidates": 3,
+   "total_sumo_verifications_saved": 18
+  },
+  "passed": false,
+  "thresholds": {
+   "case_count": 4,
+   "minimum_cases_with_two_health_viable_candidates": 2,
+   "minimum_distinct_dates": 2,
+   "minimum_distinct_edges": 4,
+   "minimum_total_sumo_verifications_saved": 1,
+   "per_case_equivalence": {
+    "cache_hits_consistent": true,
+    "candidate_costs_field_identical": true,
+    "final_decision_identical": true,
+    "hard_failures_identical": true,
+    "health_classifications_identical": true,
+    "resource_cap_regression_allowed": false,
+    "restart_equivalent": true,
+    "selected_ids_identical": true,
+    "status_identical": true,
+    "stop_proof_valid": true,
+    "sumo_verifications_saved_minimum": 1
+   }
+  }
+ },
+ "kind": "cost_ordered_benchmark_suite_outcome",
+ "measured_at": "2026-08-13",
+ "registration": {
+  "content_key": "b0022573df7b6fb68867bd46233024885d9901da6e11af5df0d019427cb95c6d",
+  "path": "validation/cost_ordered_benchmark_registration_v5.json",
+  "schema": "cost_ordered_benchmark_suite_registration_v1"
+ },
+ "release_evidence": false,
+ "schema": "cost_ordered_benchmark_suite_outcome_v1",
+ "status": "measured"
+}

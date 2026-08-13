@@ -1835,6 +1835,29 @@ different months reached backend preparation, pilot, finalists, five decision
 rounds and publication. Both finalists later timed out at the unchanged 300 s
 limit, so the honest terminal result is `no_viable` and no best claim opens.
 
+### Cost-order multi-case benchmark v5 (2026-08-13)
+
+The single-case benchmark could repeatedly select the already observed March
+case, and its archive-derived search id abbreviated a directed edge to its
+upstream junction. Distinct edges could consequently share one workspace id.
+Discovery now includes a digest of the complete directed edge in the search
+id. The v5 harness freezes four outcome-blind cases round-robin across
+2027-03-22 and 2027-07-15, requiring four distinct edges, and applies the
+unchanged per-case semantic gates plus aggregate health and positive-saving
+gates. Its registration was committed before any v5 outcome was produced.
+
+V5 saved 18 candidate verifications in total and found three cases with at
+least two health-viable pilot candidates, but failed strict equivalence. One
+case preserved winner, selected ids, health, hard failures and restart while
+saving 11/13 verifications, but four exhaustive timeout observations lacked
+the deterministic post-SUMO fields present in the pre-SUMO ledger. Another
+strictly field-identical case saved 0/13. In the remaining two cases the same
+candidate/seed crossed the unchanged 300 s wall-clock boundary in one arm but
+not the other, changing hard-failure, health, selected-id and restart evidence.
+All four stop proofs were independently valid. This is a fail-closed
+reproducibility result: policy v3 is not activated and held-out/micro release
+evidence does not run downstream of it.
+
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).
