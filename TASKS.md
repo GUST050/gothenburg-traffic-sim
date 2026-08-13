@@ -9,87 +9,76 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Closure-search scaling plan: exact large-calendar execution,
-  durable budget paging, product resume, and measured evidence gates.`
-- Status: `IMPLEMENTATION AND THE NEXT PREREGISTERED BENCHMARK ARE COMPLETE.
-  The web product
-  admits the named six-month 360-hour search (11,813 parents / 23,349 daily
-  units), pages larger exact enumerations transactionally, stops before SUMO
-  when paused, and resumes to a byte-identical exhaustive screening. The real
-  v3 benchmark exposed a cost-order cursor identity defect; it is fixed and
-  regression-tested. V5 froze four outcome-blind cases across two months and
-  four roads before execution. It saved 18 SUMO candidate verifications and
-  had three health-discriminating cases, but correctly FAILED strict
-  equivalence because timeout/post-SUMO fields, health, finalist ids and two
-  restart checks were not stable across execution order. Independent-vs-
-  continuous v3 measured 0 cases because all
-  35 structurally pairable preregistered dates lack exact demand envelopes.
-  Policy v3, held-out, micro, unrestricted UI claims and global-best remain
-  closed. The 2026-08-13 bug review is resolved: stale checkpoint findings
-  were verified against the replaced path, remaining budget contracts were
-  hardened, and warm execution is barred whenever its horizon differs from
-  the cold reference covered by v16.`
-- Suggested next action: `Treat v5 as immutable negative evidence. Before a
-  new v6 registration, make deterministic closure cost available on the
-  exhaustive arm before SUMO and design a preregistered paired runtime method
-  that can distinguish semantic failures from candidates crossing the fixed
-  wall-clock timeout under changing host load. Do not raise the timeout,
-  weaken gates, or select cases from observed v5 outcomes.`
+- Current focus: `Direction-split uncertainty v2: improve dirsplit and use
+  central demand, coherent daily demand cases/paths and matched SUMO seeds
+  correctly in multi-month closure optimization.`
+- Status: `RESEARCHED IMPLEMENTATION PLAN COMPLETE; SOURCE IMPLEMENTATION NOT
+  STARTED. The audit shows that current q10/q50/q90 are trained from aggregated
+  station-hour means, are not validated for nominal 80% coverage, and are
+  applied as marginal global surfaces rather than coherent joint day
+  scenarios. q50 barely improves pooled MAE over 50/50 and loses in three of
+  four held-out domain cities. The new plan preserves legacy evidence, uses a
+  central estimate for broad screening, builds empirically validated joint
+  day scenarios for finalists, separates demand-case identity from SUMO seed,
+  and turns observability into evidence/claim strength rather than an
+  arbitrary road ban. Previous closure-scaling implementation remains done;
+  its failed v5 and closed release gates remain unchanged.`
+- Suggested next action: `Implement Step 0 then Step 1 in
+  docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md: pin the
+  legacy q contracts, introduce versioned demand-case schema and adapter, then
+  build the non-aggregated training_table_v2 with day blocks and leakage tests.
+  Do not activate a new policy or rename q10/q90 as probabilities before the
+  calibration and joint-scenario gates pass.`
 - Eligible actors: `Any model or person; no model-specific gate`
-- Safety boundary: `Do not weaken equivalence, provenance, health,
-  survivability, failure-recall, regret, resource or held-out gates. Do not
-  activate policy v3, cost-ordered production selection, held-out/UI/global-
-  best claims after the failed v4 benchmark. Preserve the 100,000-parent and
-  100,000-total-unit hard ceilings and approved worker budget. Do not raise the
-  300 s timeout or continuous 21-workday ceiling to make evidence pass. Do not
-  overwrite frozen v1-v4 records. Do not install libsumo or obtain new external
-  calibration data without explicit user authority. Do not fabricate demand,
-  held-out or microscopic evidence.`
-- Updated: `2026-08-13 Codex execution. Main includes the product lock handoff,
-  real multi-month E2E and frozen v5 suite. Benchmark-focused suite: 103
-  passed, 1 skipped; API suite: 127 passed.`
+- Safety boundary: `Preserve frozen q and closure evidence. Do not weaken
+  calibration, equivalence, provenance, health, survivability, failure-recall,
+  regret, resource or held-out gates. Do not couple demand-case identity to
+  random seeds, splice cost fields across scenarios, silently exclude roads
+  for low observability, or activate policy/UI/global-best claims before a
+  preregistered shadow and held-out result passes. Existing 100,000 ceilings,
+  worker budget, 300 s timeout and closed v5 gates remain unchanged.`
+- Updated: `2026-08-13 Codex research and repository plan. Documentation-only;
+  local code and tests are unchanged.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### CLOSURE-PLAN-COMPLETE — Large exact search and evidence closure
+### DIRSPLIT-UNCERTAINTY-V2 — Calibrated direction scenarios for closure decisions
 
-- Status: `DONE for implementation and every downstream action whose
-  prerequisite passed; release gates deliberately remain closed.`
-- Objective and scope: `Make multi-month, 1-90-workday closure search runnable
-  with one fixed daily start/end time, exact resumable enumeration, and execute
-  every available validation gate without inventing evidence.`
-- Completion outcome: `Transactional parent checkpoints, separate 30,000-unit
-  invocation budget and 100,000-unit cumulative ceiling, CLI/API/UI paused
-  resume, reload form restoration, and exact 360-hour preflight admission. A
-  real benchmark-found cost cursor defect was repaired. Golden v2-v4, benchmark
-  v3/v4, libsumo v3 and reset-vs-continuous v3 records were produced without
-  overwriting history. Post-review hardening makes the parent cap singular,
-  rejects irrelevant budget flags and prevents stale warm/full-horizon
-  equivalence from authorizing a trimmed-cold comparison.`
-- Context or checkpoints: `V5 is measured but not passing: 18 total SUMO
-  verifications saved, three health-discriminating cases and valid stop proofs,
-  but strict equivalence failed under timeout/post-SUMO-field instability.
-  Independent-vs-continuous has
-  35 blocked_missing_demand, 25 unpairable, 24 unsupported, 0 measured.
-  Libsumo Python binding absent. These facts block adoption, held-out and micro;
-  they are outcomes, not unimplemented control flow.`
-- Primary files: `run_monthly_closure_search.py, serve.py,
-  traffic_sim/simulation/unit_budget.py, monthly_search.py,
-  cost_ordered_execution.py, tools/cost_ordered_benchmark_suite.py, web/app.js,
-  web/index.html, focused tests, validation/*v2-v5 records,
-  architecture/plan/current coordination docs.`
-- Constraints and safety: `No policy activation, timeout/cap weakening,
-  historical overwrite, external-data fetch, libsumo install, held-out run or
-  fabricated microsimulation.`
-- Acceptance criteria: `Paused work cannot reach SUMO or be read as a
-  shortlist; multi-leg resume equals uninterrupted output; the named 23,349-
-  unit case is runnable; cost-order restart is self-consistent; real gates are
-  recorded truthfully and claims stay closed when they fail.`
-- Useful checks: `Post-review combined suite 519 passed, 1 skipped; v5 harness
-  and provenance suite 103 passed, 1 skipped; API suite 127 passed; golden v4
-  verify true; diff/JSON checks clean.`
+- Status: `READY — detailed researched plan is complete; implementation awaits
+  Step 0.`
+- Objective and scope: `Improve dirsplit from an aggregated marginal-quantile
+  transfer model into a leakage-tested central model plus calibrated marginal
+  diagnostics and coherent joint daily demand cases. Integrate those cases
+  into multi-month closure screening/finalists with demand uncertainty and SUMO
+  randomness kept separate.`
+- Completion outcome: `Central-only broad screening; lazy scenario generation
+  for finalists; common random numbers for matched baseline/candidate runs;
+  complete-scenario risk reduction; truthful observability and UI states; and
+  versioned shadow/held-out evidence before activation.`
+- Context or checkpoints: `Current artifact: 1,214 aggregated training rows,
+  shrunk pooled domain MAE 0.0557 versus 0.0565 for 50/50, three of four cities
+  worse than baseline, lambda 0.289. Current q10-q90 median width is 0.107 but
+  nominal coverage and joint temporal/spatial validity are unmeasured. Current
+  q route files contain 19,845/20,836/21,749 vehicles and seed identity is
+  entangled with variant identity in several contracts.`
+- Primary files: `dirsplit/dataset.py, train.py, predict.py, coverage.py;
+  demand/intake.py, demand/priors.py, build_sumo_demand.py;
+  traffic_sim/core/contracts.py and the monthly/finalist/ranking/warm-state
+  simulation modules; API/UI contracts; new versioned validation artifacts.`
+- Constraints and safety: `Legacy q archives remain immutable and readable.
+  No probabilistic q claims without coverage validation; no arbitrary road ban
+  from observability; no field-wise scenario splicing; no policy activation or
+  held-out promotion before preregistered gates pass.`
+- Acceptance criteria: `All ten Definition-of-done items in the dated plan:
+  baseline-qualified point model, calibrated labels, coherent days, orthogonal
+  case/seed identity, matched repetitions, complete-scenario ranking,
+  evidence-aware observability, lazy multi-month execution, truthful UI and
+  passing shadow/held-out activation gates.`
+- Useful checks: `For the current documentation change: marker uniqueness,
+  internal-link/path checks and git diff --check. Implementation checks are
+  specified step-by-step in the dated plan.`
 <!-- ACTIVE_TASK_END -->
 
 ## History

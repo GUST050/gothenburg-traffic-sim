@@ -7,51 +7,42 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Main. The closure scaling plan, real multi-month product
-  E2E and next preregistered cost-order benchmark are executed.
-  Release/adoption gates are closed by real outcomes, not missing
-  implementation.`
-- Summary: `Budget v3 separates per-invocation work from the cumulative hard
-  ceiling. Parent commits are transactional; checkpoints bind exact unit and
-  parent prefixes; paused screening has no shortlist and returns before SUMO.
-  CLI/API/UI resume the same workspace and restore the exact form after reload.
-  The 11,813-parent/23,349-unit six-month case is runnable. Cost-order v3 found
-  a real calendar-order-vs-cost-order cursor bug; fixed and pinned. The v5
-  outcome-blind four-case suite saved 18 verifications and had three cases with
-  two health-viable pilots, but failed strict equivalence because wall-clock
-  timeouts changed health/finalists in two cases and timeout observations lacked
-  comparable post-SUMO cost fields. Adoption remains closed. Warm execution
-  still requires the selected cold horizon to equal the full horizon v16
-  validated.`
-- Files changed: `Core budget/search/API/UI sources; cost_ordered_execution;
-  multi-case benchmark harness and directed-edge workspace identity fix; unit,
-  integration, API, provenance and resume tests; architecture, plan and current
-  coordination docs. New immutable evidence includes the product E2E and cost
-  benchmark registration/outcome v5; v1-v4 remain history.`
-- Checks: `Post-review combined closure/API/cost-order suite: 519 passed, 1
-  skipped. Benchmark/provenance suite: 103 passed, 1 skipped. API suite: 127
-  passed. Golden v4 reproduces byte-for-byte; v5 registration verifies without
-  drift; JSON and diff checks are clean.`
-- Decisions and evidence: `V5: four cases, two dates, four roads, 18 SUMO
-  verifications saved, three health-discriminating cases and four valid stop
-  proofs. One case retained an identical winner while saving 11/13; two cases
-  changed timeout/health/finalist/restart evidence across arm order; one was
-  strictly identical but saved 0. IVC v3: 35 missing-demand,
-  25 unpairable, 24 unsupported, 0 measured. Libsumo v3: native library exists,
-  Python binding absent.`
-- Blockers or risks: `Policy v3, held-out, micro and global-best cannot be
-  opened. V5 shows that the fixed wall-clock timeout is not classification-
-  stable under arm order and that the exhaustive path lacks deterministic cost
-  fields after some timeouts. A new v6 must be preregistered only after those
-  issues are addressed without raising the timeout or weakening gates.
-  Calibrated archives for frozen IVC dates and libsumo remain unavailable.`
-- Suggested next action: `Preserve v5 as negative evidence. Design and test
-  pre-SUMO exhaustive cost recording plus a paired runtime method, then freeze
-  a new v6 before any outcome. Never edit v1-v5 history or choose cases from
-  observed outcomes.`
-- Actor notes: `No timeout raised, hard cap weakened, historical artifact
-  overwritten, policy activated, held-out/micro evidence fabricated, external
-  data fetched or dependency installed.`
+- Focus and status: `Main. Direction-split uncertainty v2 is the current focus.
+  A researched implementation plan exists; no source implementation or policy
+  activation has begun.`
+- Summary: `The end-to-end audit found that today's q10/q50/q90 are learned
+  from station-hour means, not raw day-level variation; weekend/off-hour
+  predictions lack training support; applicability only covers static
+  features; and global marginal quantiles are not coherent daily scenarios.
+  q50 has only a 0.0008 pooled MAE advantage over 50/50 after shrinkage and is
+  worse in three of four held-out domain cities. The plan uses central demand
+  for broad screening, empirical joint residual-day scenarios for finalists,
+  multiple matched SUMO seeds, complete-scenario ranking and evidence-aware
+  observability.`
+- Files changed: `Documentation only:
+  docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md;
+  IMPROVEMENT_PLAN.md pointer; current TASKS.md and AGENT_NOTES.md blocks.`
+- Checks: `git diff --check clean; current marker counts are exactly one start
+  and one end; all referenced existing primary source paths were found; plan is
+  720 lines and its measured artifact values were re-read from the repository.
+  No code tests were required because source behavior is unchanged.`
+- Decisions and evidence: `Current q10/q90 remain legacy stress identities,
+  not calibrated probability cases. Demand-case identity and SUMO seed must be
+  orthogonal. Same cases/seeds must be paired across baseline and closure.
+  Low observability widens uncertainty and narrows claims rather than banning a
+  road; topology/no-detour remain hard gates. Existing closure v5 negative
+  evidence and closed gates are unchanged.`
+- Blockers or risks: `Raw Norwegian count availability and simultaneous
+  station-day coverage must be measured in Step 1; they determine how strong a
+  joint residual library can be. Exact calibration tolerances, scenario cap
+  and risk preference must be preregistered before held-out measurement. The
+  current model is not evidence for activating the proposed policy.`
+- Suggested next action: `Implement Step 0 and Step 1: freeze legacy behavior,
+  add the versioned DemandEnsemble schema/adapter, then preserve station-date-
+  hour counts and day blocks in training_table_v2 with leakage tests.`
+- Actor notes: `Research used primary statistical, scenario-generation,
+  traffic-monitoring and microsimulation sources. No existing evidence was
+  edited, external data downloaded, policy activated or runtime gate weakened.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
