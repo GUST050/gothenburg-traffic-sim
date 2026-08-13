@@ -3,8 +3,11 @@
 **Datum:** 2026-08-13
 **Status:** Forsknings- och implementationsplan. Ingen ny modell eller policy är
 aktiverad av detta dokument.
-**Gäller:** `dirsplit/`, demand-byggaren, scenarioavtal, closure-screening,
-SUMO-finalister, observability och webbgränssnitt.
+**Gäller omedelbart:** sensor 107:s lokala ankare, ett avgränsat
+matched-seed-test och `dirsplit/` dataset/modellval.
+**Villkorad senare omfattning:** demand-byggaren, scenarioavtal,
+closure-screening, SUMO-finalister, warm-state, API och webbgränssnitt får bara
+ändras om de explicita beslutsgaterna nedan passerar.
 **Bakåtkompatibilitet:** Befintliga q10/q50/q90-arkiv och frysta
 releaseartefakter är historisk evidens och får inte skrivas om.
 
@@ -13,23 +16,34 @@ releaseartefakter är historisk evidens och får inte skrivas om.
 Programmet ska inte välja mellan "en enda simulering" och "tre kvantiler" som
 om de vore samma sorts lösning. De svarar på olika frågor:
 
-1. En central riktningsprofil används för billig, bred screening och för en
+1. Sensor 107:s publicerade lokala 2025-ankare 52/48 ska maskinbindas med rätt
+   tidssemantik och slå transfermodellens aggregerade nivå. Det får inte
+   felaktigt behandlas som 96 uppmätta kvartsvärden.
+2. En central riktningsprofil används för billig, bred screening och för en
    representativ visualisering.
-2. Osäkerheten i riktningen representeras för finalister av flera **koherenta
-   dags-scenarier**, där vägar och tider varierar tillsammans på ett sätt som
-   har stöd i observerade residualer.
-3. SUMO:s egen slump mäts separat med flera **matchade random seeds**. Samma
+3. Innan någon scenarioarkitektur byggs körs ett litet outcome-blind
+   känslighetstest: ändrar rimlig riktningsvariation viable set, finalistlista
+   eller vinnare när samma SUMO-seeds används?
+4. Om 50/50 vinner modellturneringen **och** känslighetstestet visar att
+   riktningsaxeln är beslutsirrelevant avslutas dirsplit-utbyggnaden. Då används
+   50/50 plus sensor 107:s lokala ankare; ingen ny ensemble-, warm-, API- eller
+   UI-arkitektur byggs.
+5. Om riktningsvariation påverkar beslutet får nästa minimala gren byggas:
+   enkla residualscenarier runt 50/50 om ingen prediktiv signal finns, eller en
+   villkorad modell om den faktiskt vinner held-out.
+6. SUMO:s egen slump mäts separat med flera **matchade random seeds**. Samma
    seed används för basfallet och varje avstängningsalternativ.
-4. Nuvarande q10/q90 behålls som versionsbundna **stressfall**, inte som
+7. Nuvarande q10/q90 behålls som versionsbundna **stressfall**, inte som
    sannolikhetsutsagor, tills deras nominella 80-procentiga intervall har
    validerats utanför träningsdata.
-5. Låg observability ska normalt ge bredare osäkerhet, svagare anspråk och
+8. Låg observability ska normalt ge bredare osäkerhet, svagare anspråk och
    eventuellt ett `inconclusive`-resultat. Den ska inte automatiskt förbjuda en
    väg. Topologi, framkomlighet och no-detour är däremot hårda säkerhetsgrindar
    oavsett datatäckning.
 
-Detta ger en snabb produktväg utan att publicera en vinnare som bara råkade
-vinna under en enda efterfrågebild eller ett enda random seed.
+Detta gör den lilla evidensvägen obligatorisk och den stora produktintegrationen
+villkorad. Målet är inte att få en ensemble till varje pris, utan att bygga den
+minsta lösning som mätbart förbättrar closure-beslutet.
 
 ## Varför dagens q10/q50/q90 inte ska användas som tre sannolika världar
 
@@ -66,6 +80,45 @@ Slutsatsen är inte att 50/50 säkert är sann. Slutsatsen är att den nuvarande
 komplexa punktmodellen ännu inte har visat en robust fördel över en enkel
 baseline, och att q10/q90 ännu inte har visat den sannolikhetsbetydelse som
 namnen antyder.
+
+### Den faktiska beslutsytan är liten
+
+Sensor 107 är ensam om att ha två godkända kanter i sensorkartan. Därför är den
+ensam om att få en tvåvägstotal delad med dirsplit till två Level-1-mål i
+`demand/intake.py::build_targets`. För de övriga fem stationerna går den
+uppmätta riktningen in i Level 1 oförändrad. Den uppskattade motsatta
+körriktningen används som Level-2-tak och Level-3-prior; taket kan släppas vid
+`RUNG_NOBND_TOL1` och priorn vid `RUNG_NOPRIOR_TOL1` innan det uppmätta bandet
+vidgas.
+
+Det innebär att riktningsmodellens största direkta Level-1-effekt finns vid
+107. Övriga effekter är svagare och måste mätas, inte antas. De kan fortfarande
+påverka route pool, PFE och slutlig belastning, vilket routefilernas olika
+fordonsantal visar, men hierarkin begränsar deras auktoritet.
+
+### Sensor 107 ska åtgärdas före modellprojektet
+
+Göteborgs publicerade årsankare för 107 är 3 400/3 100, alltså ungefär 52/48
+för 2025; 2023–24 ligger omkring 50/50. Det är lokal evidens och ska slå en
+norsk transfermodell för samma aggregerade storhet. Men det nuvarande
+maskinregistret beskriver bara `measurement_semantics: two_way_total` och säger
+att per-slot-splitten estimeras. Ankaret är alltså inte ännu ett spårbart
+15-minutersindatafält.
+
+Den omedelbara ändringen ska därför vara liten men korrekt:
+
+- lägg ett provenancebundet `directional_reference` för 107 med år, råa
+  riktningstal, källa, kant/riktningsmappning och tidssemantik;
+- använd 52/48 som aggregerad lokal centralankare för 2025-struktur;
+- tillåt tidsvariation bara där den stöds av data/modell och normalisera så att
+  ankaret återfås över sin deklarerade period;
+- märk 107:s kvartsvärden som estimerade även när deras periodmedel är lokalt
+  förankrat;
+- lägg tester som hindrar att ett års-D-factor serialiseras som 96 oberoende
+  Level-1-mätningar.
+
+En hårdkodad `0.52` i `build_targets` är inte acceptabel eftersom den skulle
+förlora källa, år, riktning och tidssemantik.
 
 ## Forskningsgrund och följd för designen
 
@@ -123,10 +176,12 @@ olika random seeds för att bedöma variation. Trafiksimuleringsforskning om
 common random numbers visar att samma seed över jämförda alternativ kan minska
 variansen i deras differens.
 
-**Planföljd:** `demand_case_id` och `simulation_seed` blir ortogonala axlar.
-Baslinje och kandidat kör exakt samma par av scenario och seed. Minst fyra
-seeds används i den första finalistbatchen; fler läggs till adaptivt när
-skillnaden är nära beslutsgränsen.
+**Planföljd:** Fas 0B mäter om q-fall och `simulation_seed` kan hållas isär med
+ett fristående korsproduktstest. Baslinje och kandidat kör exakt samma par av
+stressfall och seed. Ett nytt produktkontrakt med ortogonala
+`demand_case_id`/seed-axlar införs bara efter Gate P=`YES`. Befintlig
+finalistpolicy har redan fyra initiala repetitioner; den ska återanvändas, inte
+implementeras om.
 
 ### D-factor stödjer en enkel baseline men inte blind säkerhet
 
@@ -138,9 +193,11 @@ baseline och shrinkage-mål, inte som ett universellt facit.
 **Planföljd:** den enklaste modell som klarar held-out-grindarna ska användas.
 Mer modellkomplexitet är inte ett produktmål.
 
-## Målsemantik och invariants
+## Målsemantik och invariants för en öppnad ensemblegren
 
-Följande begrepp får inte längre blandas:
+Följande begrepp behövs bara om Gate P öppnar produktintegrationen. De
+dokumenteras nu för att prototypen ska kunna testas utan semantisk sammanblandning,
+men de motiverar inte att schema- eller produktkod skapas i förväg:
 
 - `central_profile`: bästa punktuppskattning för en väg, dagtyp och slot.
 - `marginal_interval`: kalibrerat eller uttryckligen okalibrerat intervall per
@@ -178,35 +235,39 @@ Obligatoriska invariants:
 ## Målarkitektur
 
 ```text
-råa riktningspar per station–datum–timme
-                  │
-                  ▼
-       dirsplit dataset v2 (ej medelaggregerat)
-                  │
-       ┌──────────┴──────────┐
-       ▼                     ▼
-central modellturnering   held-out residualblock
-       │                     │
-       ▼                     ▼
-central_profile      marginal kalibrering +
-                     gemensamma dags-scenarier
-       └──────────┬──────────┘
-                  ▼
-      DemandEnsembleManifest v2
-                  │
-       ┌──────────┴──────────────┐
-       ▼                         ▼
-central-only bred screening   finalistensemble
-                                 │
-                    samma seeds för bas/kandidat
-                                 │
-                                 ▼
-                  risk-, stabilitets- och CI-beslut
+              lokalt 107-ankare
+                       │
+          ┌────────────┴────────────┐
+          ▼                         ▼
+ befintliga q-stressfall     råa riktningspar
+          │                         │
+          ▼                         ▼
+ matched-seed-test          dataset v2 + modellturnering
+          │                         │
+      Gate S                    Gate M
+ beslutskänslighet?       prediktiv signal?
+          └────────────┬────────────┘
+                       ▼
+                fyrfältsbeslut
+       ┌───────────────┴────────────────┐
+       ▼                                ▼
+ Exit A/C: STOPP                  Gren B/D
+ central-only/legacy        minimal offline prototyp
+                                         │
+                                      Gate P
+                               ┌─────────┴─────────┐
+                               ▼                   ▼
+                            STOPP          produktintegration
 ```
 
-### Ny versionsbunden artefakt
+Det finns alltså två normala, lyckade slutlägen: en liten central-only-lösning
+och en validerad ensemblelösning. `STOPP` betyder att onödig kod inte byggs;
+det betyder inte att forskningen misslyckades.
 
-Föreslagen fil: `sumo/direction_ensemble_v2.json`.
+### Villkorad versionsbunden artefakt
+
+Föreslagen fil **endast om offlineprototypen motiverar den**:
+`sumo/direction_ensemble_v2.json`.
 
 Den ska minst innehålla:
 
@@ -241,7 +302,8 @@ Den ska minst innehålla:
 }
 ```
 
-Ett probabilistiskt scenario har vikt; stressfall saknar vikt. Summan av
+Schemat och dess produktläsare byggs inte i den ovillkorliga fasen. Om grinden
+öppnas har ett probabilistiskt scenario vikt; stressfall saknar vikt. Summan av
 probabilistiska vikter måste vara exakt 1 inom den numeriska tolerans som
 schemat anger. Filen binds till källdata, modell, kalibrering, vägpar och
 slotdefinition med digests.
@@ -297,6 +359,19 @@ out-of-sample-resultat och komplexitet. Beta-binomial är motiverad av att
 etiketten kommer från två antal och att variationen ofta är större än ren
 binomialvariation, men ska också vinna sin plats genom validering.
 
+Turneringen har fyra förregistrerade utfall:
+
+| Punktmodell | Closure-känslighet | Beslut |
+|---|---|---|
+| 50/50 vinner | ingen materiell påverkan | **Exit A:** avveckla dirsplit som releaseberoende; använd 50/50 plus 107-ankaret. Behåll q-filer endast som legacy/stressdiagnostik. |
+| 50/50 vinner | materiell påverkan | **Gren B:** ingen prediktiv ML-modell; pröva en liten residualensemble centrerad på 50/50. |
+| Villkorad modell vinner | ingen materiell påverkan | **Exit C:** använd vinnande centralprofil om den har annan produktnytta, men bygg ingen closure-ensemble. |
+| Villkorad modell vinner | materiell påverkan | **Gren D:** pröva centralmodell plus residualensemble offline. |
+
+Att 50/50 vinner säger att ett villkorat medelvärde inte har visats bättre. Det
+säger inte att den faktiska riktningsandelen saknar spridning. Därför kräver en
+exit både modellresultatet och closure-känslighetstestet.
+
 ### 4. Korrekt valideringsdesign
 
 Använd tre komplementära tester:
@@ -323,9 +398,10 @@ förregistrerade huvudgrupper. Om skillnaden är oklar används den enklare
 modellen och osäkerheten redovisas. Exakta toleranser och bootstrapmetod fryses
 innan testfoldarna mäts.
 
-### 5. Marginal kalibrering utan falska garantier
+### 5. Marginal kalibrering utan falska garantier — endast Gren B/D
 
-Implementera kalibrering på held-out residualer, med block per dag/station så
+Implementera detta bara om riktningsvariation var beslutskänslig. Kalibrera på
+held-out residualer, med block per dag/station så
 att tidsberoende inte behandlas som oberoende rader. CQR eller block-conformal
 kan provas i en forskningsarm, men produktartefakten ska ange:
 
@@ -338,9 +414,10 @@ kan provas i en forskningsarm, men produktartefakten ska ange:
 Nuvarande monotone rearrangement/crossing guard kan behållas, men hela kedjan
 inklusive clamp och shrinkage måste valideras efter efterbehandlingen.
 
-### 6. Koherenta dags-scenarier och flerdagars paths
+### 6. Koherenta dags-scenarier och flerdagars paths — endast Gren B/D
 
-Första implementerbara metoden är ett empiriskt residualbibliotek:
+Den första implementerbara metoden, om grinden öppnas, är ett empiriskt
+residualbibliotek:
 
 1. Fit centralmodellen utan en blockerad stad eller period.
 2. Beräkna residualer på logit-skalan för varje observerat
@@ -372,7 +449,7 @@ extremhändelsefrekvens.
 
 ## Hur detta ska användas i closure-optimeringen
 
-### Fas A — billig screening över alla datum och längder
+### Alltid — billig screening över alla datum och längder
 
 - Använd en central demandprofil och befintliga deterministiska
   topologi-/survivabilitygrindar.
@@ -384,7 +461,26 @@ extremhändelsefrekvens.
   högre osäkerhetsflagga; helt saknade eller semantiskt ogiltiga inputs gör
   resultatet `unavailable` eller tvingar explicit fallback.
 
-### Fas B — finalistensemble
+### Före produktändring — avgränsat känslighetstest
+
+Använd befintliga q10/q50/q90-routeartefakter som namngivna stressfall och ett
+litet fryst urval av closure-kandidater. Kör samma seedlista för varje
+stressfall och samma `(stressfall, seed)` för baslinje och kandidat. Detta är en
+diagnostisk korsprodukt, inte ett nytt `ScenarioSpec` och inte release-evidens.
+
+Mät om riktningsaxeln ändrar:
+
+- hard-failure/viable-status;
+- shortlist/finalist-ID:n;
+- vinnare eller tie inom den befintliga praktiska toleransen;
+- rangkorrelation och maximum regret;
+- runtime och antal ytterligare SUMO-enheter.
+
+Urval, toleranser, seeds och jämförelser fryses före körning. Om ingen materiell
+beslutsskillnad uppstår stängs scenariointegrationen och detta negativa resultat
+bevaras.
+
+### Endast Gren B/D — finalistensemble
 
 För varje finalist och baslinje:
 
@@ -396,11 +492,12 @@ För varje finalist och baslinje:
    kontrollera om finalistmängd, rangordning och regret stabiliseras.
 6. Stoppa med vinnare bara om både scenario- och seedgrindarna passerar.
 
-Batchstorlekarna ovan är en shadow-standard för mätning, inte en aktiverad
-releasepolicy. Det slutliga taket ska bestämmas från runtime- och
-stabilitetsbenchmark innan registreringen fryses.
+Batchstorlekarna ovan är högst en shadow-standard för en senare prototyp, inte
+en aktiverad releasepolicy. De får inte kodas i monthly- eller warm-statevägen
+innan offlinegrinden har passerat. Det slutliga taket bestäms från runtime- och
+stabilitetsbenchmark innan en produktregistrering fryses.
 
-### Fas C — beslut utan syntetisk värsta värld
+### Endast Gren B/D — beslut utan syntetisk värsta värld
 
 Varje scenario path ger en komplett kostnadsvektor efter att alla dess dagar
 har summerats. Reducera därefter med:
@@ -417,7 +514,7 @@ det viktade medelvärdet. Om olika riskmått föredrar olika kandidater ska
 produkten säga `tie` eller `inconclusive` tills en verksamhetsmässig riskpolicy
 har valts och förregistrerats. Koden får inte gömma valet i godtyckliga vikter.
 
-### Fas D — presentation
+### Endast efter godkänd offlineprototyp — presentation
 
 Webben visar:
 
@@ -448,9 +545,10 @@ en evidensprofil med separata dimensioner:
 
 Användning:
 
-- god evidens: normal scenarioensemble och normala anspråk;
-- begränsad evidens: bredare empiriska scenarier, varning och högre krav på
-  beslutstabilitet;
+- god evidens: normal centralprofil; scenarioensemble endast om Gate S/P har
+  öppnat den grenen;
+- begränsad evidens: varning och svagare anspråk; bredare empiriska scenarier
+  endast i en öppnad Gren B/D;
 - extrapolation: konservativ fallback/stressfall och normalt
   `inconclusive` om valet påverkas;
 - inputfel eller omöjlig vägparning: fail-closed `unavailable`.
@@ -461,172 +559,167 @@ rangordna vilka nya riktade mätpunkter som mest minskar beslutets osäkerhet
 (`value_of_information`), men den analysen får inte använda held-out-utfall
 för att välja releasefall.
 
-## Implementationsordning
+## Villkorad implementationsordning
 
-### Steg 0 — frys nuläget och inför språkgränsen
+### Fas 0A — lokal rättning och nulägeslåsning, alltid
 
 **Kod och artefakter**
 
-- Lägg kontraktstester som pinnar nuvarande `direction_split.json`, routefiler,
-  seed↔variantmapping och legacy ranking.
-- Lägg `dirsplit/schema.py` med versionsbundna dataklasser för centralprofil,
-  marginalintervall, demand case, scenario path, stressfall och applicability.
-- Lägg en legacy-adapter som läser q10/q50/q90 utan att ändra gamla arkiv.
-- Byt nya interna namn från `variant` till `demand_case_id`; gamla API-fält
-  behålls endast i legacyobjekt.
+- Lägg sensor 107:s `directional_reference` i det validerade sensorregistret,
+  inklusive år, råa riktningstal, period, källa och kantmappning.
+- Gör minsta möjliga ändring i befintlig dirsplit/predict- eller intakeväg för
+  att ankra periodmedlet utan att fabricera kvartsmätningar.
+- Lägg fokuserade tester för 107:s total, riktning, provenance och periodmedel.
+- Pinna nuvarande q-routefiler, q→seedmapping och closure-ranking i legacytester.
+
+**Ingen ny generell schema- eller product-modul skapas i denna fas.**
 
 **Acceptans**
 
-- Gamla golden- och resume-tester är byte-identiska.
-- En seed kan inte implicera ett demand case i v2-kontraktet.
-- Stressfall kan inte få sannolikhetsvikt.
+- 107:s två riktningar summerar varje slot till den uppmätta tvåvägstotalen.
+- Deklarerad period återger 52/48 inom avrundningstolerans.
+- Kvartsvärden är märkta estimerade, inte Level-1-riktningsmätningar.
+- De fem enkelriktade stationernas Level-1-mål är byte-identiska.
+- Gamla golden- och resume-artefakter är oförändrade.
 
-### Steg 1 — bygg `training_table_v2`
+### Fas 0B — matched-seed-känslighet, alltid och fristående
 
-**Primära filer**
+Bygg högst ett litet verktyg, exempelvis
+`tools/measure_direction_decision_sensitivity.py`. Det ska läsa befintliga
+q10/q50/q90-artefakter, köra en fryst liten closurematris och använda samma
+seedlista för varje q-fall samt samma par för baslinje/kandidat.
 
-- Ändra `dirsplit/dataset.py`.
-- Lägg `dirsplit/dataset_schema.py` och datasetvalidering.
-- Dela tester i dataset-, leakage- och tidsstödstester.
+Det får anropa befintliga runners men får inte ändra `ScenarioSpec`, monthly-,
+warm-state-, API- eller UI-kontrakt. Befintlig finalistkod har redan parade
+bas/kandidatobservationer och fyra initiala repetitioner; fasen mäter den
+kvarvarande sammanblandningen mellan q-fall och seed.
 
-**Acceptans**
+**Förregistrera** vägar, datum, kandidater, seeds, timeout, jämförelsemått och
+materiell tolerans före SUMO-körningen. Spara registration/outcome append-only
+med `release_evidence: false`.
 
-- Råa antal och `day_block_id` överlever till träningen.
-- Inga testdatum påverkar fitade transformationer.
-- Weekend/off-hours är antingen verkligt stödda eller explicit unsupported;
-  ingen tyst vardagsextrapolation återstår.
+**Gate S — är riktning beslutsrelevant?**
 
-### Steg 2 — modellturnering och centralprofil
+- `NO`: samma hard failures, viable set, finalistmängd och vinnare/tie inom
+  förregistrerad tolerans. Scenario- och produktintegration stängs.
+- `YES`: minst ett förregistrerat beslutsfält ändras materiellt. Endast då kan
+  Gren B/D senare öppnas.
+- `INCONCLUSIVE`: timeout, bristande health eller för få matchade observationer.
+  Ingen produktintegration; reparera endast mätbarheten och kör en ny fryst
+  version utan att välja fall från utfallet.
 
-**Primära filer**
+### Fas 1 — dataset v2 och modellturnering, alltid men lokalt i `dirsplit/`
 
-- Refaktorera `dirsplit/train.py` till gemensamt fold-API.
-- Lägg `dirsplit/models.py` och `dirsplit/evaluate.py`.
-- Uppdatera `dirsplit/predict.py` till den vinnande versionsbundna modellen.
+Ändra i första hand befintliga `dirsplit/dataset.py`, `train.py`, `predict.py`
+och `coverage.py`. Lägg högst en gemensam evalueringsmodul om det annars skulle
+duplicera foldlogik; skapa inte separata schema-, models-, calibration- och
+scenariofamiljer i förväg.
 
-**Acceptans**
+Arbetet ska:
 
-- 50/50, shrunk D-factor, LightGBM och count-model får exakt samma folds.
-- Rapporten visar uncertainty på skillnaden, inte bara ett punkt-MAE.
-- Den enklaste statistiskt försvarbara modellen väljs deterministiskt enligt en
-  förregistrerad regel.
+1. bevara råa station–datum–timme-antal och `day_block_id`;
+2. eliminera paired-total/single-direction feature-mismatch;
+3. jämföra 50/50, shrunk D-factor, LightGBM och count-model på samma folds;
+4. rapportera central skillnad med osäkerhet, inte bara punkt-MAE;
+5. mäta temporal/applicability-support och uttryckligen neka tyst helg- och
+   off-hours-extrapolation.
 
-### Steg 3 — marginal kalibrering och applicability
+**Gate M — finns en robust prediktiv riktningssignal?**
 
-**Primära filer**
+- `BASELINE`: 50/50 är bäst eller statistiskt oskiljbar från bästa komplexa
+  modell enligt den frysta regeln.
+- `MODEL`: en villkorad modell vinner robust och utan materiell huvudgruppsskada.
+- `INCONCLUSIVE`: leakage, otillräckliga oberoende block eller instabil ranking.
+  Behåll nuvarande releaseväg som legacy och åtgärda endast evidensfelet.
 
-- Lägg `dirsplit/calibrate.py`.
-- Utöka `dirsplit/coverage.py` till evidensprofilen ovan.
-- Versionera `data/dirsplit/train_report_v2.json` och
-  `data/dirsplit/calibration_report_v2.json`.
+Kombinera Gate S och Gate M enligt fyrfältstabellen i modellavsnittet. Exit A
+och Exit C är fullvärdiga slutresultat och stoppar resten av planen.
 
-**Acceptans**
+### Fas 2 — minimal offline scenario-prototyp, endast Gren B/D
 
-- Täckning och skärpa finns per huvudgrupp med konfidensintervall.
-- Postprocessing, clamp och rearrangement ingår i mätningen.
-- Ett okalibrerat intervall serialiseras som `stress_only`; ordet
-  "80-procentsintervall" kan inte nå UI:t.
+Denna fas får börja bara när Gate S=`YES` och Gate M är avgjord. Implementera
+residualbiblioteket i högst en ny `dirsplit/scenarios.py` plus ett fokuserat
+test. Prototypen skriver en diagnostisk valideringsartefakt, inte ett
+produktionsmanifest, och körs genom det fristående verktyget från Fas 0B.
 
-### Steg 4 — gemensamma dags-scenarier
+- Gren B centrerar residualerna på 50/50, med 107:s lokala periodankare.
+- Gren D centrerar dem på den vinnande villkorade modellen.
+- Båda jämförs mot central-only och de befintliga q-stressfallen.
+- Inga ändringar görs ännu i monthly, warm-state, `ScenarioSpec`, serve eller UI.
 
-**Primära filer**
+**Gate P — förtjänar prototypen produktkod?**
 
-- Lägg `dirsplit/scenarios.py` och `dirsplit/scenario_evaluation.py`.
-- Skriv `sumo/direction_ensemble_v2.json` och en separat valideringsrapport.
+Alla följande måste passera på fryst evidens:
 
-**Acceptans**
+1. marginal kalibrering/skärpa är bättre än eller kompletterar baseline utan
+   falsk täckningsetikett;
+2. tids-/vägberoendet klarar de förregistrerade joint-score-kontrollerna;
+3. closure-beslutet är stabilt när scenarioantalet ökas;
+4. ensemblebeslutet förbättrar ett definierat beslut eller visar att
+   central-only är otillräckligt;
+5. runtime och lagring ryms inom befintliga resursgränser.
 
-- Samma demand-case-ID beskriver hela väg×tidsmatrisen för en dag och samma
-  path-ID binder alla dagar i en flerdagars closure.
-- Reproducerbarhet och content digests är låsta.
-- Marginala och gemensamma scores jämförs mot enkla baselines.
-- Scenarioantalets stabilitetskurva finns innan ett produktionstak väljs.
+Ett `NO` eller `INCONCLUSIVE` stoppar produktintegrationen och bevaras som
+negativ evidens.
 
-### Steg 5 — koppla demand utan att multiplicera hela kalendern i förväg
+### Fas 3 — minsta produktintegration, endast efter Gate P=`YES`
 
-**Primära filer**
+Först nu får ett versionsbundet `DemandEnsembleManifest` och explicit
+`SimulationMember(demand_case_id, seed)` införas. Gör integrationen vertikalt:
 
-- Generalisera `demand/intake.py` och `demand/priors.py` från q-nyckel till
-  demand case.
-- Ändra `build_sumo_demand.py` så central demand kan byggas eager men
-  finalisternas scenario-routefiler byggs lazy och content-adresserat.
-- Generalisera `traffic_sim/simulation/monthly_demand.py` och manifestet.
+1. demand resolver och lazy/content-adresserad routebyggnad för en fryst
+   endags-shadow;
+2. cold finalist runner med samma case×seed för baslinje/kandidat;
+3. komplett scenario-kostnad utan field-wise splicing;
+4. flerdagars path/resume;
+5. API/UI efter att CLI/shadow är differentialtestad;
+6. warm-state sist och endast efter egen cold-vs-warm-ekvivalens för det nya
+   case×seed-kontraktet.
 
-**Acceptans**
+Ändra bara moduler som den vertikala slicen faktiskt når. En generell omskrivning
+av `monthly_search`, `monthly_sumo`, `pilot_selection`, `independent_daily`,
+`deterministic_disruption`, ranking och warm-state i samma PR är förbjuden.
 
-- Central-only v2 reproducerar legacy q50 inom en dokumenterad differential
-  tolerans eller redovisar varje avsiktlig skillnad.
-- En flermånaderssökning skapar inte alla scenario-routefiler för alla
-  kandidater före shortlist.
-- Cache-ID binder datum, case, modell, kalibrering, vägpar och routekälla.
+**Acceptans per slice**
 
-### Steg 6 — separera demand cases och SUMO-seeds
+- legacy q-arkiv är fortsatt läsbara och byte-identiska;
+- central-only reproducerar legacy q50 eller redovisar avsiktlig differens;
+- samma seedlista används för varje case och baslinje/kandidat;
+- paus/cap före konvergens kan inte publicera vinnare;
+- flermånaderssökningen bygger bara scenario-routes för finalister;
+- API/UI läggs inte till innan CLI-resultatet har en sanningsenlig statusmodell.
 
-**Primära filer**
+### Fas 4 — aktivering, endast efter separata shadow- och held-out-grindar
 
-- Versionera `ScenarioSpec` i `traffic_sim/core/contracts.py`.
-- Generalisera `monthly_search.py`, `monthly_sumo.py`,
-  `finalist_decision.py`, `pilot_selection.py`, `independent_daily.py`,
-  `deterministic_disruption.py`, `closure_ranking.py` och warm-stateindex.
-- Ersätt `canonical_seed(variant, repetition)` med explicita
-  `SimulationMember`-identiteter.
+Frys modell, cases, seeds, riskregel, budgets, testdatum och closurefall före
+körning. Kör shadow, restart/provenance, scenario-/seedkonvergens och därefter
+ett orört held-out endast om alla föregående grindar passerar.
 
-**Acceptans**
-
-- Samma seedlista används för varje case och för baslinje/kandidat.
-- Tester kan ändra demand case medan seed hålls fast och tvärtom.
-- Ingen reducerare kan ta fält från olika cases och skapa en falsk kostnad.
-- Paus eller cap före konvergens kan inte bli `unique_winner`.
-
-### Steg 7 — beslutsregel, API och UI i shadow mode
-
-**Primära filer**
-
-- Lägg en versionsbunden risk-/stabilitetspolicy i finalistbeslutet.
-- Utöka `serve.py`, workspace/progress-kontrakt och webbkomponenterna.
-- Behåll nuvarande produktion som default; v2 är opt-in shadow/replay.
-
-**Acceptans**
-
-- UI skiljer central körning, demand-osäkerhet och seed-osäkerhet.
-- Väg med låg observability är inte tyst bortfiltrerad.
-- `stress_only`, `paused`, `unavailable` och `inconclusive` har egna tydliga
-  tillstånd och kan inte läsas som vinnare.
-
-### Steg 8 — evidens och aktivering
-
-Frys före körning:
-
-- modellkandidater, folds och metric hierarchy;
-- nominell täckning och gruppgrindar;
-- scenario-batchar och högsta beräkningsbudget;
-- seedstart, adaptiv repetitionsregel och CI-metod;
-- riskmått, tie-/inconclusive-regel och säkerhetsgrindar;
-- testdatum, vägar och closure-kandidater outcome-blind.
-
-Kör därefter:
-
-1. dirsplit point/interval held-out;
-2. joint-scenario-validering;
-3. central-only mot ensemble shadow replay;
-4. scenario- och seedkonvergens;
-5. restart/cache/provenance;
-6. ett fryst held-out closure-test endast om föregående grindar passerar.
-
-Aktivera inte v2 om den bara är bredare. Den ska antingen ändra ett beslut på
-ett verifierbart bättre sätt eller visa att central-only-beslutet är stabilt,
-samt uppfylla kalibrering, runtime och hälsogrindar. Ett negativt benchmark är
-giltig evidens och stänger aktivering utan att utplånas.
+Aktivera inte en ensemble bara för att den byggts eller är bredare. Den måste
+ge bättre kalibrerad beslutskvalitet inom runtimegränsen. Ett negativt utfall
+stänger aktivering utan att raderas eller följas av en försvagad gate.
 
 ## Testmatris
 
-Minsta nya testgrupper:
+Ovillkorliga testgrupper:
 
+- sensor 107: råa 3 400/3 100, kantorientering, periodmedel, totalbevarande och
+  provenance;
+- legacy: befintliga q-filer, ranking och releaseartefakter oförändrade;
+- känslighet: samma seedkorsprodukt, samma bas/kandidatpopulation, fryst urval
+  och deterministisk Gate S-klassning;
 - dataset: råa antal, DST, helg, missingness, day blocks och leakage;
 - features: paired/single-direction semantik och nya sensorer;
 - modell: foldisolering, determinism, baselinejämförelse och shrinkage;
+- observability: temporal support, feature-semantic och effective sample size.
+
+Endast Gren B/D:
+
 - intervall: pinball, coverage, rearrangement, clamp och group reports;
-- scenario: parsumma, tids-/vägberoende, vikter, stressfall och digests;
+- scenario: parsumma, tids-/vägberoende, vikter, stressfall och digests.
+
+Endast efter Gate P=`YES`:
+
 - demand: lazy build, cacheinvalidisering och legacy q-adapter;
 - simulation: case×seed-korsprodukt, common random numbers och matched pair;
 - ranking: ingen field-wise splicing, hard safety och inconclusive;
@@ -636,11 +729,19 @@ Minsta nya testgrupper:
 
 ## Forsknings- och evidensartefakter
 
-Föreslagna append-only-filer:
+Ovillkorliga append-only-filer:
 
+- `validation/direction_decision_sensitivity_registration_v1.json`;
+- `validation/direction_decision_sensitivity_outcome_v1.json`;
 - `validation/dirsplit_point_benchmark_v1.json`;
+
+Endast Gren B/D:
+
 - `validation/dirsplit_interval_calibration_v1.json`;
 - `validation/dirsplit_joint_scenario_benchmark_v1.json`;
+
+Endast efter Gate P=`YES`:
+
 - `validation/closure_uncertainty_shadow_registration_v1.json`;
 - `validation/closure_uncertainty_shadow_outcome_v1.json`;
 - `validation/closure_uncertainty_heldout_registration_v1.json`;
@@ -653,6 +754,11 @@ plattform, SUMO-version, seeds, scenario-ID:n, start/slut, komplett status och
 ## Det som uttryckligen inte ska göras
 
 - Kör inte en enda q50/seed och kalla resultatet säkert eller robust.
+- Bygg inte schema-, monthly-, warm-state-, API- eller UI-integration innan
+  Gate S, Gate M och Gate P har öppnat motsvarande gren.
+- Tolka inte "50/50 vinner" som "variansen är noll"; använd både Gate M och
+  Gate S för exit.
+- Hårdkoda inte 107 till 0,52 per kvart; bevara års-/periodsemantiken.
 - Kör inte global q10/global q90 och kalla dem sannolika gemensamma dagar utan
   joint validation.
 - Exkludera inte vägar enbart för att observability är låg.
@@ -702,19 +808,31 @@ plattform, SUMO-version, seeds, scenario-ID:n, start/slut, komplett status och
 
 ## Definition of done
 
-Planen är färdigimplementerad först när:
+Planen har flera tillåtna definitioner av done.
 
-1. centralprofilen väljs mot enkla baselines på läckagefri held-out;
-2. q-etiketter endast används för empiriskt validerade marginaler, annars
-   heter de stressfall;
-3. koherenta dags-scenarier har validerad tids-/vägstruktur;
-4. demand case och SUMO-seed är separata i kontrakt, cache och evidens;
-5. finalister kör matchade bas/kandidatpar över flera cases och seeds;
-6. ranking använder kompletta scenarier och kan ge `inconclusive`;
-7. observability påverkar osäkerhet och anspråk, inte ett godtyckligt
-   vägförbud;
-8. flermånaderskörning bygger scenarier lazy och klarar budget/resume;
-9. API/UI redovisar central, scenario-, seed- och applicability-osäkerhet
-   separat;
-10. frysta shadow- och held-out-grindar har passerat utan försvagning och den
-    nya policyn aktiveras i en separat versionsändring.
+### Done för alla utfall
+
+1. Sensor 107:s lokala periodankare är maskinläsbart, provenancebundet och
+   används utan falsk kvartsmätningssemantik.
+2. Gate S är förregistrerad och avgjord med samma seeds över q-stressfallen.
+3. Centralprofilen väljs mot enkla baselines på läckagefri held-out i Gate M.
+4. Observability beskriver evidensstyrka utan ett godtyckligt vägförbud.
+5. Legacy q- och closureartefakter är oförändrade.
+
+### Done för Exit A/C
+
+Gatekombinationen är dokumenterad, scenario-/produktintegrationen är uttryckligt
+stängd och den minsta central-only-lösningen är vald. Inga oanvända schema-,
+monthly-, warm-, API- eller UI-moduler har skapats. Detta är ett lyckat slut.
+
+### Done för Gren B/D-prototyp
+
+Marginaler och koherenta dags-/flerdagarsscenarier är validerade offline, Gate P
+är avgjord och negativ evidens stoppar arbetet om den inte passerar.
+
+### Done för produktensemble, endast efter Gate P=`YES`
+
+Demand case och SUMO-seed är separata; finalister kör matchade par; ranking
+använder kompletta scenarier; flermånadersrutter byggs lazy; CLI/API/UI redovisar
+status sanningsenligt; shadow och held-out passerar utan försvagad gate; och
+aktivering sker i en separat versionsändring.

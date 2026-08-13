@@ -9,26 +9,24 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Direction-split uncertainty v2: improve dirsplit and use
-  central demand, coherent daily demand cases/paths and matched SUMO seeds
-  correctly in multi-month closure optimization.`
-- Status: `RESEARCHED IMPLEMENTATION PLAN COMPLETE; SOURCE IMPLEMENTATION NOT
-  STARTED. The audit shows that current q10/q50/q90 are trained from aggregated
-  station-hour means, are not validated for nominal 80% coverage, and are
-  applied as marginal global surfaces rather than coherent joint day
-  scenarios. q50 barely improves pooled MAE over 50/50 and loses in three of
-  four held-out domain cities. The new plan preserves legacy evidence, uses a
-  central estimate for broad screening, builds empirically validated joint
-  day scenarios for finalists, separates demand-case identity from SUMO seed,
-  and turns observability into evidence/claim strength rather than an
-  arbitrary road ban. Previous closure-scaling implementation remains done;
-  its failed v5 and closed release gates remain unchanged.`
-- Suggested next action: `Implement Step 0 then Step 1 in
-  docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md: pin the
-  legacy q contracts, introduce versioned demand-case schema and adapter, then
-  build the non-aggregated training_table_v2 with day blocks and leakage tests.
-  Do not activate a new policy or rename q10/q90 as probabilities before the
-  calibration and joint-scenario gates pass.`
+- Current focus: `Decision-gated direction split: bind sensor 107's local
+  evidence, measure whether direction changes closure decisions, then compare
+  central models before authorizing any ensemble/product expansion.`
+- Status: `RESEARCHED PLAN REVISED AFTER SCOPE REVIEW; SOURCE IMPLEMENTATION NOT
+  STARTED. Sensor 107 is the only two-edge station whose split directly creates
+  two Level-1 targets; its documented 2025 52/48 anchor is not yet machine-bound
+  with period semantics. The other five measured directions remain untouched
+  Level 1 while their opposite estimates are surrenderable Level-2/3 inputs.
+  The former nine-step integration is replaced by Gate S (closure sensitivity),
+  Gate M (held-out point signal) and Gate P (offline scenario value). 50/50 plus
+  107 is an explicit successful exit. Monthly, warm-state, schemas, API and UI
+  are forbidden before their gates pass. Previous closure v5 evidence and
+  closed release gates remain unchanged.`
+- Suggested next action: `Implement only Fas 0A from the dated plan: provenance-
+  bind sensor 107's yearly directional reference without fabricating per-slot
+  measurements and pin legacy behavior. Then preregister Fas 0B's small
+  matched-seed sensitivity matrix. Do not create DemandEnsemble, monthly,
+  warm-state, API or UI code.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve frozen q and closure evidence. Do not weaken
   calibration, equivalence, provenance, health, survivability, failure-recall,
@@ -36,46 +34,44 @@ owners, states and approval formulas are not active workflow rules. See
   random seeds, splice cost fields across scenarios, silently exclude roads
   for low observability, or activate policy/UI/global-best claims before a
   preregistered shadow and held-out result passes. Existing 100,000 ceilings,
-  worker budget, 300 s timeout and closed v5 gates remain unchanged.`
-- Updated: `2026-08-13 Codex research and repository plan. Documentation-only;
-  local code and tests are unchanged.`
+  worker budget, 300 s timeout and closed v5 gates remain unchanged. Do not
+  hardcode 107's annual 0.52 as 96 measured quarters or proceed past Gate S/M/P
+  without their frozen evidence.`
+- Updated: `2026-08-13 Codex scope correction. Documentation-only; local product
+  code and tests are unchanged.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### DIRSPLIT-UNCERTAINTY-V2 — Calibrated direction scenarios for closure decisions
+### DIRSPLIT-UNCERTAINTY-V2 — Decide the smallest justified direction solution
 
-- Status: `READY — detailed researched plan is complete; implementation awaits
-  Step 0.`
-- Objective and scope: `Improve dirsplit from an aggregated marginal-quantile
-  transfer model into a leakage-tested central model plus calibrated marginal
-  diagnostics and coherent joint daily demand cases. Integrate those cases
-  into multi-month closure screening/finalists with demand uncertainty and SUMO
-  randomness kept separate.`
-- Completion outcome: `Central-only broad screening; lazy scenario generation
-  for finalists; common random numbers for matched baseline/candidate runs;
-  complete-scenario risk reduction; truthful observability and UI states; and
-  versioned shadow/held-out evidence before activation.`
+- Status: `READY — conditional plan complete; implementation begins at Fas 0A.`
+- Objective and scope: `First use local evidence at sensor 107, then establish
+  whether plausible direction variation changes closure decisions and whether
+  any conditional point model beats 50/50. Build scenarios or product contracts
+  only when both questions justify them.`
+- Completion outcome: `Either a documented central-only exit with 50/50/local
+  anchor and no unused infrastructure, or—only after Gate S/M/P—a minimal,
+  validated scenario integration with orthogonal case/seed identity.`
 - Context or checkpoints: `Current artifact: 1,214 aggregated training rows,
   shrunk pooled domain MAE 0.0557 versus 0.0565 for 50/50, three of four cities
   worse than baseline, lambda 0.289. Current q10-q90 median width is 0.107 but
   nominal coverage and joint temporal/spatial validity are unmeasured. Current
   q route files contain 19,845/20,836/21,749 vehicles and seed identity is
   entangled with variant identity in several contracts.`
-- Primary files: `dirsplit/dataset.py, train.py, predict.py, coverage.py;
-  demand/intake.py, demand/priors.py, build_sumo_demand.py;
-  traffic_sim/core/contracts.py and the monthly/finalist/ranking/warm-state
-  simulation modules; API/UI contracts; new versioned validation artifacts.`
+- Primary files now: `data_in/sensors.json; existing dirsplit dataset/train/
+  predict/coverage modules; focused 107/legacy tests; one bounded sensitivity
+  tool and append-only registration/outcome. Demand/monthly/warm/API/UI are
+  explicitly conditional future scope.`
 - Constraints and safety: `Legacy q archives remain immutable and readable.
   No probabilistic q claims without coverage validation; no arbitrary road ban
   from observability; no field-wise scenario splicing; no policy activation or
   held-out promotion before preregistered gates pass.`
-- Acceptance criteria: `All ten Definition-of-done items in the dated plan:
-  baseline-qualified point model, calibrated labels, coherent days, orthogonal
-  case/seed identity, matched repetitions, complete-scenario ranking,
-  evidence-aware observability, lazy multi-month execution, truthful UI and
-  passing shadow/held-out activation gates.`
+- Acceptance criteria: `107 is correctly anchored; Gate S and Gate M are frozen
+  and decided; the four-outcome matrix selects Exit A/C or Gren B/D. Exit is a
+  valid completion. Gate P and product criteria apply only if a scenario branch
+  is actually opened.`
 - Useful checks: `For the current documentation change: marker uniqueness,
   internal-link/path checks and git diff --check. Implementation checks are
   specified step-by-step in the dated plan.`

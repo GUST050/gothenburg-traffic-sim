@@ -10,14 +10,14 @@ Historical Sol/Luna task names and exact-approval wording below describe the
 process used at the time; current collaboration follows the flexible,
 model-independent protocol in `AGENTS.md`.
 
-**Direction uncertainty supplement (2026-08-13):** the researched,
-implementation-ready design for improving `dirsplit`, replacing marginal
-q10/q50/q90 surfaces with validated central estimates plus coherent daily
-scenarios, separating demand cases from SUMO seeds, and using observability
-without arbitrary road bans is
+**Direction uncertainty supplement (2026-08-13, scope-corrected after review):**
+the researched, decision-gated design for improving `dirsplit` is
 [`docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md`](docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md).
-Existing q-archives and release contracts remain immutable legacy evidence
-until that plan's shadow and held-out gates pass.
+It first binds sensor 107's local 52/48 period anchor, runs a small matched-seed
+closure-sensitivity study and compares point models. Joint scenarios and any
+demand/monthly/warm/API/UI integration are conditional on three explicit
+evidence gates; 50/50 plus the local anchor is a planned successful exit.
+Existing q-archives and release contracts remain immutable legacy evidence.
 
 ## Known Errors, Inaccuracies and Assumptions in the Simulation Flow
 
