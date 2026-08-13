@@ -736,6 +736,11 @@ class TestMonthlySearch:
 
         def fake_run(cmd, **kw):
             seen["cmd"] = cmd
+            seen["workspace_held_by_parent"] = (
+                serve._sim_lock._workspace is not None)
+            # The thread slot must remain held while the child owns the
+            # process-wide workspace lock.
+            seen["thread_slot_held"] = serve._sim_lock.locked()
             return FakeCompletedProcess(returncode=1, stderr="stopped")
 
         monkeypatch.setattr(serve, "run_in_new_session", fake_run)
@@ -762,6 +767,8 @@ class TestMonthlySearch:
             serve.MONTHLY_DAILY_UNIT_BUDGET)
         assert cmd[cmd.index("--daily-unit-total-cap") + 1] == str(
             serve.MONTHLY_TOTAL_DAILY_UNIT_CAP)
+        assert seen["workspace_held_by_parent"] is False
+        assert seen["thread_slot_held"] is True
         assert not serve._sim_lock.locked()
 
     def test_budget_pause_is_visible_and_same_spec_resumes(

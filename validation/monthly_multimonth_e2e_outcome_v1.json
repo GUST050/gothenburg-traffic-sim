@@ -1,0 +1,102 @@
+{
+  "schema": "monthly_multimonth_e2e_outcome_v1",
+  "kind": "monthly_multimonth_product_path_outcome",
+  "evidence_class": "diagnostic_product_e2e",
+  "release_evidence": false,
+  "measured_at": "2026-08-13",
+  "search": {
+    "search_id": "e2e-multimonth-main-a70a750-v3",
+    "search_content_key": "6e15f9eb7f098457eeef",
+    "permitted_date_start": "2027-03-22",
+    "permitted_date_end": "2027-07-15",
+    "eligible_dates": [
+      "2027-03-22",
+      "2027-07-15"
+    ],
+    "same_daily_window": "07:00-12:00",
+    "required_work_minutes": 300,
+    "interday_policy": "independent_daily_reset_v1",
+    "period_comparison_policy": "rolling_period_v1"
+  },
+  "preflight": {
+    "exact": true,
+    "parent_schedule_count": 2,
+    "unique_daily_unit_count": 2,
+    "units_outside_demand_year": 0,
+    "size_class": "normal",
+    "resource_policy": "monthly_resource_policy_v1"
+  },
+  "sequence": {
+    "status": "passed",
+    "reached_phases": [
+      "preflight",
+      "enumerate",
+      "screen",
+      "prepare_backend",
+      "pilot",
+      "finalists",
+      "decide",
+      "adaptive_finalists",
+      "publish"
+    ],
+    "screened_candidates": 2,
+    "scoreable_candidates": 2,
+    "pilot_status": "ready",
+    "finalist_artifacts": 6,
+    "robust_decision_artifacts": 5,
+    "period_comparison_complete": true
+  },
+  "search_outcome": {
+    "status": "no_viable",
+    "winner_id": null,
+    "reason": "both finalists reached the unchanged 300 second SUMO timeout during adaptive evidence collection",
+    "hard_failures": [
+      "2027-03-22:q10:1003:sumo timed out after 300s",
+      "2027-07-15:q50:1022:sumo timed out after 300s"
+    ],
+    "global_best_claim_allowed": false,
+    "ui_exposure_allowed": true
+  },
+  "integration_finding": {
+    "status": "fixed_and_regression_tested",
+    "finding": "the API parent held runs/.demand-workspace.lock while waiting for the monthly CLI child, which waits for the same lock",
+    "repair": "retain the in-process simulation slot but explicitly hand the cross-process workspace lock to the child before launch",
+    "verification": "the rerun created its workspace immediately, reached every product phase and published a terminal result; tests/test_serve.py passed 127 tests"
+  },
+  "artifacts": {
+    "root": "runs/closure-search/e2e-multimonth-main-a70a750-v3",
+    "manifest": {
+      "path": "runs/closure-search/e2e-multimonth-main-a70a750-v3/manifest.json",
+      "sha256": "409dbec19be802e1224c8b1eaac69ee41c70f58d561ab91991745b7dbaae246f"
+    },
+    "result": {
+      "path": "runs/closure-search/e2e-multimonth-main-a70a750-v3/artifacts/result.json",
+      "sha256": "f24f0b3eecbe71ea230bf9b608e5d6d4790f092527f7fd1a9889b067b23cd5a8"
+    },
+    "candidate_ledger": {
+      "path": "runs/closure-search/e2e-multimonth-main-a70a750-v3/artifacts/candidate-ledger-manifest.json",
+      "sha256": "88573d7a6880f64bf7ccd5b5b3be60cd0527919d46488e518d1f8581b953c48b"
+    },
+    "screening": {
+      "path": "runs/closure-search/e2e-multimonth-main-a70a750-v3/artifacts/monthly-proxy.json",
+      "sha256": "8c1d73ae13ea529ec777dc6b28334c266ac248439c1edaf037f573babfed2656"
+    },
+    "pilot_selection": {
+      "path": "runs/closure-search/e2e-multimonth-main-a70a750-v3/artifacts/pilot-selection.json",
+      "sha256": "43d86da1fc7fa5014e732d3e894861bf1ed4ed12018c0549c57187b98269f0b6"
+    }
+  },
+  "sources": {
+    "serve.py": "da6dd188d8cee0204dd0ae77599474bd5782f4a3afa63cb52c56365a85ee58d2",
+    "run_monthly_closure_search.py": "1006a0c84ea98eb5b5e8e366ad104c80608d7f90a9f4fd514652fbc8648c33f6",
+    "traffic_sim/simulation/monthly_search.py": "7a63153a119b43ec324506f2b56cf5e06510652c0875e0cf4f04da561bf519c6",
+    "traffic_sim/simulation/monthly_sumo.py": "0f63d4a355c4d566e90e354259a002b3a1a02b87ef766be8e6ed0689c0d88a70",
+    "validation/monthly_search_policy_v2.json": "249a98a95d10be3fbeeaceb2fc071ef1aa5f43b9d15b2cfa9023994f742be83d"
+  },
+  "claim_boundary": {
+    "activates_policy_v3": false,
+    "opens_global_best": false,
+    "permits_release_claim": false,
+    "reason": "a diagnostic two-date product-path execution proves orchestration and honest failure handling, not optimization effectiveness or held-out generalization"
+  }
+}

@@ -1818,6 +1818,23 @@ Because the guard changes a cost-interpreting source, the process-free golden
 was re-frozen as `closure_cost_ordering_golden_v4.json`; v1-v3 remain
 immutable history.
 
+### Monthly API workspace-lock handoff (2026-08-13)
+
+The web server's simulation slot has two layers: a thread slot serializes API
+jobs and `runs/.demand-workspace.lock` serializes writers across processes. A
+real multi-month execution exposed that the server retained both layers while
+waiting for `run_monthly_closure_search.py`; the CLI then waited for the same
+cross-process lock held by its parent. The monthly launch now retains the
+thread slot but releases the workspace flock immediately before spawning the
+CLI, which acquires and owns it for the complete run. Other API simulations
+remain blocked and an external writer that wins the handoff race merely makes
+the CLI wait; no two workspace writers proceed together.
+
+`monthly_multimonth_e2e_outcome_v1.json` records the rerun: two exact dates in
+different months reached backend preparation, pilot, finalists, five decision
+rounds and publication. Both finalists later timed out at the unchanged 300 s
+limit, so the honest terminal result is `no_viable` and no best claim opens.
+
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).

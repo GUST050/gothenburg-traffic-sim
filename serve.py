@@ -313,6 +313,21 @@ class _SimulationSlot:
         finally:
             self._thread_lock.release()
 
+    def handoff_workspace_to_child(self) -> None:
+        """Release only the process-wide workspace lock before a child owns it.
+
+        The server keeps the thread slot, so no second API simulation can
+        start. The monthly CLI is a separate process and acquires the same
+        workspace lock itself for its complete lifetime. Keeping the parent's
+        flock while waiting for that child makes the child wait on its own
+        parent for an hour; this explicit handoff preserves serialization
+        without that self-deadlock.
+        """
+        workspace, self._workspace = self._workspace, None
+        if workspace is None:
+            raise RuntimeError("simulation workspace has already been handed off")
+        workspace.release()
+
     def locked(self) -> bool:
         return self._thread_lock.locked()
 
@@ -2201,6 +2216,10 @@ class Handler(SimpleHTTPRequestHandler):
             # each exact unit once; an unvalidated proxy cannot select the
             # supposed global best.
             cmd += monthly_screening_cli_args(spec)
+            # The CLI owns the shared demand workspace for this job. Retain
+            # the in-process simulation slot (blocking every other API job),
+            # but hand the cross-process flock to the child before launch.
+            _sim_lock.handoff_workspace_to_child()
             res = run_in_new_session(cmd, cwd=str(ROOT),
                                      timeout=MONTHLY_TIMEOUT_S)
             if active_job_cancelled("monthly"):

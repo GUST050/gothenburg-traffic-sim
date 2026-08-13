@@ -4202,6 +4202,13 @@ the old v16 result is not silently generalized. The resulting source drift is
 bound by a new process-free `closure_cost_ordering_golden_v4.json`; v1-v3 were
 not overwritten.
 
+The first real multi-month API run on integrated `main` found and closed a
+parent/child workspace-lock deadlock. The fixed rerun traversed the full product
+sequence for 2027-03-22 and 2027-07-15 and published a complete period
+comparison. It ended `no_viable` after the two finalists timed out in adaptive
+collection, without raising the 300 s limit or manufacturing a winner. The
+diagnostic record is `validation/monthly_multimonth_e2e_outcome_v1.json`.
+
 ## Current supersession note — 2026-08-09
 
 The earlier statement that a full population was running describes a prior
