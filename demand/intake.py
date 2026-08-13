@@ -344,9 +344,18 @@ def build_targets(
     qi_start: int,
     n_intervals: int,
     split_key: str = "edge_shares",
+    shares: dict[str, list[float]] | None = None,
 ) -> list[dict[str, float]]:
-    """Per-quarter measured targets {edge: count} — the level-1 constraints."""
-    est_shares = load_direction_split(split_key)
+    """Per-quarter measured targets {edge: count} — the level-1 constraints.
+
+    ``shares`` lets a caller supply the direction shares directly instead of
+    reading them from the legacy `direction_split.json` under ``split_key``.
+    This is the seam plan step 5 needs: a v2 demand case IS a complete set of
+    per-edge, per-slot shares, so it can be passed straight in without the
+    q-key indirection, and without changing what the legacy path does. When
+    ``shares`` is None the behaviour is byte-for-byte the previous one.
+    """
+    est_shares = load_direction_split(split_key) if shares is None else shares
     out: list[dict[str, float]] = []
     for i in range(n_intervals):
         qi, slot = qi_start + i, (qi_start + i) % 96
