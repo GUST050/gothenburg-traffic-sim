@@ -9,115 +9,77 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Closure-search evidence gates: review of the product
-  integration, a real benchmark runner, archive-driven case discovery, and the
-  five-category independent-vs-continuous outcome`
-- Status: `IMPLEMENTED, REVIEWED AND GREEN; EVERY RELEASE GATE REMAINS OPEN.
-  The review found one defect that voided the durability claim: every resume of
-  a real cost-ordered search failed closed, because IndependentDailyRunner
-  suppresses per-parent pilot artifacts and the resume then demanded evidence
-  that had deliberately never been written. Reproduced, then fixed by disabling
-  compaction whenever a cost source is present — cost-first execution simulates
-  only the boundary set, so the file count compaction exists to bound does not
-  arise; the exhaustive path still compacts. execution_record was also dead
-  code and cost_ordered_result was discarded, so no artifact or result
-  distinguished a cost-ordered run or carried its stop proof; both are
-  published now. A third suspected defect (an orphan cursor stranding a resume)
-  turned out not to be one — workspace verification refuses unledgered
-  artifacts on load — and the speculative fix was reverted and pinned in both
-  directions. tools/cost_ordered_benchmark.py --run is implemented and drives
-  bindings, both arms, the comparison, the gates and the outcome; benchmark
-  cases are now discovered from exact product-resolvable demand envelopes; the
-  independent-vs-continuous outcome reports five categories. Codex review
-  additionally fixed worktree/network identity, single-day discovery,
-  real-archive validation, failed-outcome publication and Darwin libsumo
-  detection. The frozen real v2 benchmark selected 13 schedules on 2027-03-22,
-  but its first exhaustive SUMO verification hit the unchanged 300 s timeout;
-  the separate outcome records `failed_execution` and all gates false. The
-  runtime review found that independent-day cold runs simulated the archive
-  tail and then aborted the whole search on a candidate-local SUMO timeout.
-  Cold independent runs now start at the envelope midnight, use `flush=0`,
-  bind the trimmed window into baseline caches, and record a SUMO timeout as a
-  candidate hard failure. The frozen v2 outcome is unchanged; a diagnostic
-  rerun still found a later 07:15 candidate that exceeds 300 s.`
-- Suggested next action: `Preregister a NEW v3 with the corrected source
-  digests, then run it without --allow-drift. Do not raise the timeout or edit
-  v2. Held-out remains gated behind a passing discriminating benchmark.`
+- Current focus: `Closure-search scaling plan: exact large-calendar execution,
+  durable budget paging, product resume, and measured evidence gates.`
+- Status: `IMPLEMENTATION COMPLETE FOR THE AUTHORIZED SCOPE. The web product
+  admits the named six-month 360-hour search (11,813 parents / 23,349 daily
+  units), pages larger exact enumerations transactionally, stops before SUMO
+  when paused, and resumes to a byte-identical exhaustive screening. The real
+  v3 benchmark exposed a cost-order cursor identity defect; it is fixed and
+  regression-tested. V4 completed exhaustive, cost-ordered and fault-injection
+  resume, but correctly FAILED adoption: 0 of 13 SUMO verifications saved and
+  no viable result. Independent-vs-continuous v3 measured 0 cases because all
+  35 structurally pairable preregistered dates lack exact demand envelopes.
+  Policy v3, held-out, micro, unrestricted UI claims and global-best remain
+  closed. The 2026-08-13 bug review is resolved: stale checkpoint findings
+  were verified against the replaced path, remaining budget contracts were
+  hardened, and warm execution is barred whenever its horizon differs from
+  the cold reference covered by v16.`
+- Suggested next action: `No further source task is required for this plan.
+  New evidence requires new independently justified inputs: a pre-outcome
+  benchmark set with multiple health-viable cases and calibrated archives for
+  the preregistered reset-vs-continuous dates. Do not cherry-pick a new case
+  from the observed v4 outcome.`
 - Eligible actors: `Any model or person; no model-specific gate`
-- Safety boundary: `Do not use held observations in pool, picker, ordering
-  thresholds, finalist selection or certificate. Do not weaken equivalence,
-  provenance, health, survivability, failure-recall, regret, resource or
-  held-out gates. Do not activate policy v3, the cost-ordered screening mode,
-  UI exposure or a global-best claim before the discriminating benchmark and
-  held-out gates actually pass. Do not raise the 100,000-parent or
-  10,000-unit caps, and do not multiply worker pools past the approved seed
-  budget. Do not raise _CONTINUOUS_MAX_WORKDAYS to make a benchmark run — see
-  docs/plans/CONTINUOUS_CLOSURE_CEILING_2026-08-11.md. Do not overwrite any
-  frozen registration or historical outcome; write a NEW version. Do not freeze
-  a registration that selected no case. Do not install libsumo or obtain new
-  external calibration data without explicit user authority; the 2026-07-20
-  no-further-external-data decision stands. Do not fabricate demand, held-out,
-  benchmark or microsimulation evidence.`
-- Updated: `Codex runtime review over f078b64. Focused suites: 175 runtime/
-  demand tests passed; API: 126
-  passed with loopback permission; survivability reproduces byte-for-byte.
-  The real v2 registration and failed outcome are immutable, diagnostic and
-  release_evidence=false. Darwin libsumo preflight v2 correctly finds SUMO
-  1.27.1 and libsumocpp.dylib but no Python binding. git diff --check clean.`
+- Safety boundary: `Do not weaken equivalence, provenance, health,
+  survivability, failure-recall, regret, resource or held-out gates. Do not
+  activate policy v3, cost-ordered production selection, held-out/UI/global-
+  best claims after the failed v4 benchmark. Preserve the 100,000-parent and
+  100,000-total-unit hard ceilings and approved worker budget. Do not raise the
+  300 s timeout or continuous 21-workday ceiling to make evidence pass. Do not
+  overwrite frozen v1-v4 records. Do not install libsumo or obtain new external
+  calibration data without explicit user authority. Do not fabricate demand,
+  held-out or microscopic evidence.`
+- Updated: `2026-08-13 Codex post-review. Combined closure/API/cost-order suite:
+  519 passed, 1 skipped. Golden v4 reproduces byte-for-byte.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### CLOSURE-PLAN-COMPLETE — Provenance, simulator binding, unit budget
+### CLOSURE-PLAN-COMPLETE — Large exact search and evidence closure
 
-- Status: `PHASES 1 AND 4 IMPLEMENTED AND GREEN. Phases 2, 3, 5, 6, 7, 8 and 9
-  require the calibrated archive library, which is not reachable from the
-  environment these commands execute in. Nothing was activated.`
-- Objective and scope: `Complete every safely actionable part of the closure
-  scaling and validation plan, with real measurements.`
-- Completion outcome: `Phase 1 — the registration now binds the SIMULATOR as
-  well as the Python: resolved executable, SHA-256, version, resolution method
-  and platform/machine, each reported as drift with both values named. It also
-  binds the external gate state (monthly_gate_record.json, the adoption
-  certificate, and the manifest the certificate names), where ABSENCE is bound
-  as firmly as presence — a later-appearing certificate silently widening what
-  a replay may claim is exactly the drift this catches. Phase 4 — the
-  10,000-unit cap is replaced by a measured budget in
-  traffic_sim/simulation/unit_budget.py: declared units/ledger-bytes/peak-RSS,
-  a PAUSE with an explicitly incomplete resumable state instead of raising or
-  truncating, and a status that can never be read as exhaustive. The default
-  budget is still 10,000 so nothing changes by accident, and the
-  100,000-parent protection is retained.`
-- Context or checkpoints: `The plan's final acceptance criterion is measured
-  and frozen as validation/closure_search_scaling_measurement_v2.json: the
-  six-month 360 h case enumerates 11,813 parents and 23,349 unique daily units
-  by streaming, in 14.6 s at 26.5 MiB peak RSS — well inside the 64 MiB process
-  gate. It was never memory-bound; the legacy cap refuses it and a declared
-  budget admits it. The 720 h case reproduces at 2,186/5,676 and stays valid
-  under the legacy budget. The v1 baseline is UNCHANGED.`
-- Primary files: `NEW traffic_sim/simulation/unit_budget.py,
-  tests/test_unit_budget.py,
-  validation/closure_search_scaling_measurement_v2.json. MODIFIED
-  tools/cost_ordered_benchmark.py,
-  tests/test_cost_ordered_benchmark_provenance.py, ARCHITECTURE.md,
-  IMPROVEMENT_PLAN.md, TASKS.md, AGENT_NOTES.md. UNCHANGED: every frozen
-  v1/v2 registration, outcome and baseline.`
-- Constraints and safety: `Nothing was activated. No timeout raised, no cap
-  weakened (the daily-unit default is unchanged and the parent cap is intact),
-  no gate loosened, no libsumo installed, no external data obtained, no
-  held-out run. No v3 registration or outcome was written.`
-- Acceptance criteria: `A changed SUMO binary, version or platform is drift; an
-  absent gate that appears is drift; a changed gate/certificate/manifest is
-  drift; changed monthly_sumo.py or product_arm.py is drift; custom
-  registration/outcome paths bind each other; unknown schema is refused;
-  self-tampering is detected; the 360 h case is admitted by a declared budget
-  and still refused by the legacy one; an incomplete search cannot pass as
-  exhaustive.`
-- Useful checks: `pytest -q tests/test_cost_ordered_benchmark_provenance.py
-  (34 passed, 1 skipped); tests/test_unit_budget.py (16 passed); the four
-  required focused modules plus the v1/v2 registration suite (154 passed);
-  git diff --check clean.`
+- Status: `DONE for all actions allowed by the current data/dependency safety
+  boundary; release gates deliberately remain closed.`
+- Objective and scope: `Make multi-month, 1-90-workday closure search runnable
+  with one fixed daily start/end time, exact resumable enumeration, and execute
+  every available validation gate without inventing evidence.`
+- Completion outcome: `Transactional parent checkpoints, separate 30,000-unit
+  invocation budget and 100,000-unit cumulative ceiling, CLI/API/UI paused
+  resume, reload form restoration, and exact 360-hour preflight admission. A
+  real benchmark-found cost cursor defect was repaired. Golden v2-v4, benchmark
+  v3/v4, libsumo v3 and reset-vs-continuous v3 records were produced without
+  overwriting history. Post-review hardening makes the parent cap singular,
+  rejects irrelevant budget flags and prevents stale warm/full-horizon
+  equivalence from authorizing a trimmed-cold comparison.`
+- Context or checkpoints: `V4 is measured but not passing: semantics/restart
+  match, 0/13 SUMO saved, both arms no_viable. Independent-vs-continuous has
+  35 blocked_missing_demand, 25 unpairable, 24 unsupported, 0 measured.
+  Libsumo Python binding absent. These facts block adoption, held-out and micro;
+  they are outcomes, not unimplemented control flow.`
+- Primary files: `run_monthly_closure_search.py, serve.py,
+  traffic_sim/simulation/unit_budget.py, monthly_search.py,
+  cost_ordered_execution.py, web/app.js, web/index.html, focused tests,
+  validation/*v2-v4 records, architecture/plan/current coordination docs.`
+- Constraints and safety: `No policy activation, timeout/cap weakening,
+  historical overwrite, external-data fetch, libsumo install, held-out run or
+  fabricated microsimulation.`
+- Acceptance criteria: `Paused work cannot reach SUMO or be read as a
+  shortlist; multi-leg resume equals uninterrupted output; the named 23,349-
+  unit case is runnable; cost-order restart is self-consistent; real gates are
+  recorded truthfully and claims stay closed when they fail.`
+- Useful checks: `Post-review combined suite 519 passed, 1 skipped; golden v4
+  verify true; diff/JSON checks clean.`
 <!-- ACTIVE_TASK_END -->
 
 ## History

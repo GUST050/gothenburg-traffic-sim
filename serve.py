@@ -220,6 +220,14 @@ MONTHLY_BASELINE_TRIP_P99_S = 3600
 # this cap the bounded-exhaustive CLI fails with a clear message rather than
 # silently truncating the search space.
 MONTHLY_BOUNDED_EXHAUSTIVE_CAP = 12
+# Versioned server resource policy for exact independent-day enumeration.
+# The first value is a per-invocation page size; the second is the cumulative
+# hard safety ceiling. Both are passed explicitly to the CLI and surfaced by
+# preflight/status so they cannot drift as hidden defaults.
+MONTHLY_RESOURCE_POLICY_VERSION = "monthly_resource_policy_v1"
+MONTHLY_DAILY_UNIT_BUDGET = 30_000
+MONTHLY_TOTAL_DAILY_UNIT_CAP = 100_000
+MONTHLY_PARENT_SCHEDULE_CAP = 100_000
 # A monthly search is resumable by design; a timeout here only pauses it
 # (the workspace keeps every completed candidate), so the cap can be
 # generous without risking an unbounded server job.
@@ -230,7 +238,13 @@ PORT     = 8000
 def monthly_screening_cli_args(spec: ClosureSearchSpec) -> list[str]:
     """Choose the safe server-side screening path for one search contract."""
     if spec.interday_policy == "independent_daily_reset_v1":
-        return ["--screening-mode", "independent-exhaustive"]
+        return [
+            "--screening-mode", "independent-exhaustive",
+            "--daily-unit-budget", str(MONTHLY_DAILY_UNIT_BUDGET),
+            "--daily-unit-total-cap", str(MONTHLY_TOTAL_DAILY_UNIT_CAP),
+            "--independent-exhaustive-candidate-cap",
+            str(MONTHLY_PARENT_SCHEDULE_CAP),
+        ]
     if load_passing_heldout_gate() is not None:
         return ["--screening-mode", "proxy"]
     return [
@@ -2012,10 +2026,11 @@ class Handler(SimpleHTTPRequestHandler):
         """Exact size of a search, computed WITHOUT starting anything.
 
         PR B of the scaling plan. A valid six-month, 360-hour search enumerates
-        23,349 unique daily units and is then refused by the 10,000-unit cap —
-        correctly, but only after the user has waited. This answers the same
-        question first, exactly, so the date range, requested work time or
-        workday cap can be changed before any job exists.
+        23,349 unique daily units. The original product refused it at 10,000;
+        the current versioned resource policy admits it and pages larger
+        searches transactionally up to the cumulative safety ceiling. This
+        answers the size question first, exactly, so the date range, requested
+        work time or workday cap can be changed before any job exists.
 
         STRICTLY READ-ONLY, and structurally so rather than by promise: it
         takes no simulation lock, starts no thread, begins no job record,
@@ -2050,6 +2065,8 @@ class Handler(SimpleHTTPRequestHandler):
                 # with, so the estimate describes the run the user would get.
                 baseline_trip_duration_p99_s=MONTHLY_BASELINE_TRIP_P99_S,
                 envelope_policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
+                parent_schedule_limit=MONTHLY_PARENT_SCHEDULE_CAP,
+                daily_unit_limit=MONTHLY_TOTAL_DAILY_UNIT_CAP,
             )
         except UnsupportedPreflightSpec as exc:
             # Refused rather than approximated: a number that claims to be
@@ -2057,7 +2074,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(422, {"error": str(exc)})
         except (TypeError, ValueError) as exc:
             return self._json(400, {"error": f"preflight misslyckades: {exc}"})
-        return self._json(200, report.to_dict())
+        payload = report.to_dict()
+        payload["resource_policy"] = {
+            "version": MONTHLY_RESOURCE_POLICY_VERSION,
+            "maximum_new_daily_units_per_invocation": (
+                MONTHLY_DAILY_UNIT_BUDGET),
+            "maximum_total_daily_units": MONTHLY_TOTAL_DAILY_UNIT_CAP,
+            "maximum_parent_schedules": MONTHLY_PARENT_SCHEDULE_CAP,
+        }
+        return self._json(200, payload)
 
     def _monthly_search(self) -> None:
         # Phase 4 step 6 (IMPROVEMENT_PLAN.md "Persistence, API, and UI").
@@ -2124,6 +2149,8 @@ class Handler(SimpleHTTPRequestHandler):
                                   policy_id=policy.policy_id,
                                   policy_status=policy.status,
                                   objective_method=policy.objective_method,
+                                  resource_policy_version=(
+                                      MONTHLY_RESOURCE_POLICY_VERSION),
                                   edges=list(spec.directed_edges),
                                   closure_search_spec=spec.to_dict(),
                                   started_at=time.time())
@@ -2196,6 +2223,34 @@ class Handler(SimpleHTTPRequestHandler):
                 msg = last_line if last_line and len(last_line) < 300 else \
                     "månadssökningen misslyckades — se serverloggen"
                 self._set_monthly(status="error", error=msg)
+                return
+            manifest_path = (MONTHLY_SEARCH_ROOT / spec.search_id
+                             / "manifest.json")
+            try:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                manifest = None
+            progress = (
+                manifest.get("progress")
+                if isinstance(manifest, dict) else None
+            )
+            if (
+                isinstance(progress, dict)
+                and progress.get("phase") == "paused_budget"
+            ):
+                detail = progress.get("detail") or {}
+                self._set_monthly(
+                    status="paused",
+                    progress=progress,
+                    resume_token=detail.get("resume_token"),
+                    note=(detail.get("message") or
+                          "Sökningen pausades vid resursgränsen. Starta "
+                          "samma sökning igen för att fortsätta."),
+                    closure_search_spec=spec.to_dict(),
+                    edges=list(spec.directed_edges),
+                    resource_policy_version=MONTHLY_RESOURCE_POLICY_VERSION,
+                )
                 return
             result_path = (MONTHLY_SEARCH_ROOT / spec.search_id
                            / "artifacts" / "result.json")

@@ -35,6 +35,19 @@ def test_monthly_command_has_an_explicit_cold_escape_hatch(monkeypatch):
     assert _arguments(monkeypatch, "--cold-execution").warm_execution is False
 
 
+@pytest.mark.parametrize("mode", ["proxy", "bounded-exhaustive"])
+def test_daily_unit_budget_is_refused_for_modes_that_cannot_use_it(
+        monkeypatch, mode):
+    args = _arguments(
+        monkeypatch,
+        "--screening-mode", mode,
+        "--daily-unit-budget", "100",
+    )
+    monkeypatch.setattr(command, "parse_args", lambda: args)
+    with pytest.raises(SystemExit, match="requires --screening-mode"):
+        command.main()
+
+
 def test_parallel_warm_connections_are_refused_before_any_run(monkeypatch):
     args = _arguments(monkeypatch, "--seed-workers", "3")
     monkeypatch.setattr(command, "parse_args", lambda: args)

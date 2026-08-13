@@ -78,6 +78,7 @@ PROGRESS_PHASES = (
     "preflight",
     "enumerate",
     "screen",
+    "paused_budget",
     "cost_units",
     "cost_parents",
     "health_scan",
@@ -321,6 +322,20 @@ class PreparatoryCandidateRunner(CandidateRunner, Protocol):
 
 
 ScreenBuilder = Callable[[Path], Mapping[str, Any]]
+
+
+class ResumableScreenBuilder(Protocol):
+    """Screen builder that can consume an integrity-checked checkpoint."""
+
+    def __call__(self, spec_path: Path) -> Mapping[str, Any]:
+        """Start screening from the beginning."""
+
+    def resume(
+        self,
+        spec_path: Path,
+        checkpoint: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        """Continue after the latest published checkpoint."""
 
 
 def canonical_seed(demand_variant: str, repetition: int) -> int:
@@ -659,19 +674,66 @@ def _screening_artifact(
     screen_builder: ScreenBuilder,
 ) -> dict[str, Any]:
     records = _artifact_records(workspace, kind="monthly_proxy_screening")
+    checkpoints = _artifact_records(
+        workspace, kind="monthly_screening_checkpoint")
     should_publish = False
     if records:
         if len(records) != 1:
             raise ValueError("workspace has duplicate screening artifacts")
         payload = _read_artifact(workspace, records[0])
     else:
-        payload = dict(screen_builder(workspace.spec_path))
+        if checkpoints:
+            resume = getattr(screen_builder, "resume", None)
+            if not callable(resume):
+                raise ValueError(
+                    "screening checkpoint exists but builder cannot resume"
+                )
+            payload = dict(resume(
+                workspace.spec_path,
+                _read_artifact(workspace, checkpoints[-1]),
+            ))
+        else:
+            payload = dict(screen_builder(workspace.spec_path))
         should_publish = True
-    if payload.get("kind") != "monthly_closure_proxy_screening":
-        raise ValueError("monthly screening artifact kind is invalid")
     search = payload.get("search")
     if not isinstance(search, Mapping) or search.get("content_key") != spec.content_key:
         raise ValueError("monthly screening artifact belongs to another search")
+    if payload.get("kind") == "monthly_closure_screening_checkpoint":
+        if records:
+            raise ValueError("completed screening cannot become a checkpoint")
+        state = payload.get("budget_state")
+        checkpoint_state = payload.get("checkpoint_state")
+        if (
+            payload.get("status") != "paused"
+            or payload.get("exhaustive") is not False
+            or not isinstance(state, Mapping)
+            or state.get("complete") is not False
+            or not isinstance(checkpoint_state, Mapping)
+            or checkpoint_state.get("search_content_key") != spec.content_key
+            or not isinstance(payload.get("resume_token"), str)
+            or not payload.get("resume_token")
+            or "shortlist" in payload
+        ):
+            raise ValueError("monthly screening checkpoint is invalid")
+        if should_publish:
+            checkpoint_index = len(checkpoints)
+            _publish_json(
+                workspace,
+                payload,
+                f"screening-checkpoints/checkpoint-{checkpoint_index:04}.json",
+                kind="monthly_screening_checkpoint",
+                provenance={
+                    "search_content_key": spec.content_key,
+                    "resume_token": payload["resume_token"],
+                    "budget_content_key": checkpoint_state.get(
+                        "budget_content_key"),
+                    "checkpoint_index": checkpoint_index,
+                    "complete": False,
+                },
+            )
+        return payload
+    if payload.get("kind") != "monthly_closure_proxy_screening":
+        raise ValueError("monthly screening artifact kind is invalid")
     entries = (payload.get("shortlist") or {}).get("entries")
     if not isinstance(entries, list) or not entries:
         raise ValueError("monthly screening shortlist is empty")
@@ -1465,7 +1527,36 @@ def run_monthly_search(
         shortlist_ids = [
             str(item["schedule_id"])
             for item in screening["shortlist"]["entries"]
-        ]
+        ] if screening.get("kind") == "monthly_closure_proxy_screening" else []
+
+        if screening.get("kind") == "monthly_closure_screening_checkpoint":
+            state = dict(screening["budget_state"])
+            workspace.update_progress(
+                "paused_budget",
+                completed=int(state.get("parent_schedules", 0)),
+                total=len(schedules),
+                detail={
+                    "parent_schedules": int(
+                        state.get("parent_schedules", 0)),
+                    "daily_units": int(state.get("daily_units", 0)),
+                    "leg_daily_units": int(
+                        state.get("leg_daily_units", 0)),
+                    "resume_token": screening["resume_token"],
+                    "stopped_by": state.get("stopped_by"),
+                    "message": screening.get("budget_message"),
+                },
+            )
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "monthly_closure_search_pause",
+                "status": "paused",
+                "search_id": spec.search_id,
+                "search_content_key": spec.content_key,
+                "resume_token": screening["resume_token"],
+                "budget": screening.get("budget"),
+                "budget_state": state,
+                "message": screening.get("budget_message"),
+            }
 
         phase = "prepare_backend"
         if workspace.status == "running":

@@ -7,52 +7,43 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Branch claude/closure-plan-complete. The daily-unit budget
-  is wired into the real screening and preflight path and pauses correctly in
-  the single-leg case. DURABLE RESUME IS NOT DONE and must not be relied on.
-  Nothing was activated.`
-- Summary: `Review findings 5 and 6 are fixed and finding 1 is only partly
-  addressed. Finding 5 was a real bug: the parent that CROSSED the budget was
-  recorded as the resume cursor even though its remaining units were never
-  evaluated, so a resume would have skipped it and silently lost every unit
-  after the crossing point. That parent is now excluded from the eligible list,
-  removed from the parent count and recorded as `abandoned_parent_id`; the
-  cursor is the last parent decomposed COMPLETELY. Finding 6: the enforcement
-  reality is now stated in the module — the product path enforces
-  maximum_daily_units and the unchanged maximum_parent_schedules;
-  maximum_ledger_bytes and maximum_peak_rss_bytes are declared and checked by
-  exceeded() but the streaming enumeration does not sample them, so they are
-  contract and not yet gate.`
-- Blockers or risks: `RESUME DOES NOT REACH PARITY, measured: replaying the
-  brute-force-multi-day case in 300-unit legs produced 193 eligible parents and
-  350 units against 754 and 910 for one uninterrupted run, and never
-  terminated. Root cause identified and written into the code: carrying the
-  evaluated-unit set forward makes the budget behave as a CUMULATIVE total, so
-  each resumed leg starts already at the previous leg's spend and immediately
-  re-crosses the line. Two different meanings were conflated — a budget that
-  bounds MEMORY HELD AT ONCE and one that bounds TOTAL WORK — and they need
-  separate fields and separate resume semantics. Until that is settled,
-  --daily-unit-budget is safe only for the single-leg case the tests cover.
-  Review findings still open: 1 (a budget-stopped screening still returns a
-  payload that flows on into backend preparation rather than terminating the
-  search as paused), 3, 4 (the end-to-end resume regression test), and 7
-  (serve.py/API/UI wiring), so the six-month case is NOT yet runnable from the
-  web product.`
-- Archives: `The calibrated archive library exists on the development host at
-  /Users/gt/Documents/gs-project/runs. It is not reachable from the Linux VM
-  these commands execute in — that VM's root filesystem contains no /Users
-  directory and no mount that could provide one — so every archive-dependent
-  measurement (golden re-freeze, the v3 benchmark, held-out,
-  independent-vs-continuous, worker and micro evidence) has to be run on the
-  development host.`
-- Checks: `141 passed, 1 skipped across unit budget, budget integration,
-  provenance and monthly_sumo. git diff --check clean.`
-- Suggested next action: `Settle the budget semantics first — decide whether
-  the number bounds memory-at-once or total work, split the field if both are
-  wanted, then implement termination-on-pause (finding 1) and the end-to-end
-  resume test (finding 4) before any API/UI wiring.`
-- Actor notes: `Nothing was activated. Policy v3, held-out, UI and global-best
-  claims remain closed. No timeout raised, no cap weakened, no gate loosened.`
+- Focus and status: `Branch codex/closure-plan-finish. The authorized closure
+  scaling plan and the 2026-08-13 Claude finding review are implemented.
+  Release/adoption gates are closed by real outcomes, not missing
+  implementation.`
+- Summary: `Budget v3 separates per-invocation work from the cumulative hard
+  ceiling. Parent commits are transactional; checkpoints bind exact unit and
+  parent prefixes; paused screening has no shortlist and returns before SUMO.
+  CLI/API/UI resume the same workspace and restore the exact form after reload.
+  The 11,813-parent/23,349-unit six-month case is runnable. Cost-order v3 found
+  a real calendar-order-vs-cost-order cursor bug; fixed and pinned. V4 completed
+  both arms plus fault resume but saved 0/13 and ended no_viable, so adoption
+  remains closed. Findings 1–5 and 12 were stale against the replaced
+  checkpoint path; 6, 9–11 and 13 were hardened. Warm execution now requires
+  the selected cold horizon to equal the full horizon v16 validated.`
+- Files changed: `Core budget/search/API/UI sources; cost_ordered_execution;
+  unit, integration, API, provenance and resume tests; ARCHITECTURE.md,
+  IMPROVEMENT_PLAN.md, TASKS.md and the closure plan. New immutable evidence:
+  closure_cost_ordering_golden_v2-v4, libsumo_preflight_v3, cost benchmark
+  registration/outcome v3 and v4, independent_vs_continuous_outcome_v3.`
+- Checks: `Post-review combined closure/API/cost-order suite: 519 passed, 1
+  skipped. Golden v4 reproduces byte-for-byte; its JSON parses; git diff
+  --check is clean. Historical v1-v3 records are unchanged.`
+- Decisions and evidence: `V4: status/selected IDs/final decision/hard failures/
+  health/restart/stopproof match, but no SUMO saving and exhaustive timeout
+  records lack comparable post-SUMO cost fields. IVC v3: 35 missing-demand,
+  25 unpairable, 24 unsupported, 0 measured. Libsumo v3: native library exists,
+  Python binding absent.`
+- Blockers or risks: `Policy v3, held-out, micro and global-best cannot be
+  opened. A new attempt needs a pre-outcome, non-cherry-picked benchmark with
+  multiple health-viable cases and calibrated archives matching the frozen IVC
+  dates. External data/libsumo installation needs user authority.`
+- Suggested next action: `None within the current authorized plan. If new
+  evidence inputs are approved, create a new registration version; never edit
+  v1-v4 history or select a case using observed v4 outcomes.`
+- Actor notes: `No timeout raised, hard cap weakened, historical artifact
+  overwritten, policy activated, held-out/micro evidence fabricated, external
+  data fetched or dependency installed.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History

@@ -4158,6 +4158,50 @@ The project has reached its intended next level when:
 - Replacing the fast citywide mesoscopic model with citywide microscopic
   simulation.
 
+## Closure-search scaling status — 2026-08-11
+
+The implementation cap that rejected the plan's six-month 360-hour example is
+removed from the web product path without making partial searches look
+exhaustive. Enumeration is now paged transactionally at parent boundaries,
+with distinct per-invocation and cumulative unit limits, immutable checkpoints,
+real resume, early termination before the simulator stack and a versioned
+API/UI resource policy. A multi-leg regression reproduces the uninterrupted
+754-parent/910-unit result exactly, and the named 11,813-parent/23,349-unit
+preflight is classified as runnable.
+
+The process-free cost provider and current runner are re-frozen in
+`validation/closure_cost_ordering_golden_v4.json`; the record reproduces byte
+for byte. The real v3 benchmark exposed and preserved a restart-identity bug;
+v4 reran exhaustive, cost-ordered and fault-injection/resume after the fix.
+Semantics and restart matched, but both arms verified 13/13 and ended
+`no_viable`, so the required positive saving was zero. Policy v3, held-out
+adoption, unrestricted UI claims and global-best therefore remain closed.
+
+Libsumo remains a measured non-adoption: SUMO 1.27.1 and `libsumocpp.dylib`
+exist on the development host, but its Python binding does not. No dependency
+is installed and the current process-isolated TraCI backend remains the
+production reference. New external demand/work-zone data and citywide micro
+calibration remain outside the authorized scope; microscopic confirmation is
+therefore conditional on real finalists and available calibrated evidence, not
+fabricated as a plan-completion artifact.
+
+Post-review hardening on 2026-08-13 closed the remaining source-level budget
+findings: unknown stop markers produce readable diagnostics, unused RSS/ledger
+runtime fields were removed, the parent ceiling cannot diverge between CLI and
+budget, irrelevant budget flags fail explicitly, and a first parent larger
+than one page fails instead of emitting a cursor that cannot advance. The
+checkpoint/result type split remains deliberate: paused work has no shortlist
+or normal execution payload and cannot reach final-result materialization.
+
+The review also found that `adf765b` changed the independent-day cold horizon
+after the v16 warm equivalence campaign. Warm execution is now gated per
+observation: it can run only when the selected cold window equals the full
+window v16 covered. A differing window runs trimmed-cold and records the
+unproven reason. A future trimmed-warm optimization needs a new paired campaign;
+the old v16 result is not silently generalized. The resulting source drift is
+bound by a new process-free `closure_cost_ordering_golden_v4.json`; v1-v3 were
+not overwritten.
+
 ## Current supersession note — 2026-08-09
 
 The earlier statement that a full population was running describes a prior

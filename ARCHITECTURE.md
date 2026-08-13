@@ -1765,6 +1765,59 @@ hardening and are also superseded. The current v3 plan is the full-day contract
 described above. Full population and any later product-cache activation remain
 separate work; the unchanged cold path is authoritative on every miss.
 
+### Transactional paging for large closure calendars (2026-08-11)
+
+Independent-day enumeration now has two separate resource concepts. The server
+policy permits at most 30,000 new unique daily units in one invocation, while a
+100,000-unit cumulative ceiling and the existing 100,000-parent ceiling remain
+fatal safety limits for the complete search. The per-invocation count resets on
+resume; cumulative identity and classification do not.
+
+A parent schedule is the transaction boundary. All of its unit identities and
+envelope checks are completed before any parent, unit or eligibility state is
+committed. If the next parent would cross the page budget, it contributes
+nothing to the checkpoint and is reconsidered on the next invocation. The
+checkpoint binds the search, budget, exact evaluated-unit prefix, exact
+classified-parent prefix and cursor. Tampering, a missing cursor or a changed
+budget fails closed.
+
+Paused enumeration is published as `monthly_screening_checkpoint`, never as
+`monthly_proxy_screening`, and contains no shortlist. `run_monthly_search`
+returns before backend preparation, provenance publication, SUMO, pilot or
+finalist work. Repeating the same immutable `ClosureSearchSpec` consumes the
+latest checkpoint; after the final page, the resulting screening payload is
+byte-identical to an uninterrupted enumeration. The web API exposes the
+versioned resource policy and a `paused` state, and the browser restores the
+exact form and directed edges after reload.
+
+The named six-month 360-hour case contains 11,813 parents and 23,349 unique
+daily units. It is therefore admitted by the current server policy instead of
+being rejected by the historical 10,000-unit implementation cap. This changes
+scalability only: independent daily reset, fixed equal daily start/end times,
+the provisional policy boundary and all release/global-best gates remain
+unchanged.
+
+The parent ceiling has one authoritative value when paging is enabled: the
+CLI cap and `DailyUnitBudget.maximum_parent_schedules` must match or preflight
+fails before enumeration. A unit budget is rejected for proxy and bounded
+screening modes, where it cannot be consumed. Checkpoints intentionally use a
+separate schema from completed screening; normal execution fields are absent
+because no result consumer may enter the result path until resume completes.
+
+### Warm/cold window evidence guard (2026-08-13)
+
+The v16 warm-state campaign compared warm execution against the former
+full-archive cold arm. Commit `adf765b` later shortened independent-day cold
+runs to their exact envelope. A production observation now permits the warm
+arm only when its candidate's cold window is still byte-for-byte the full
+window covered by v16. If the windows differ, it records
+`warm_cold_window_equivalence_unproven` and executes the trimmed cold arm.
+This prevents historical warm evidence from authorizing a different reference
+horizon; trimmed warm execution requires a new paired equivalence campaign.
+Because the guard changes a cost-interpreting source, the process-free golden
+was re-frozen as `closure_cost_ordering_golden_v4.json`; v1-v3 remain
+immutable history.
+
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).

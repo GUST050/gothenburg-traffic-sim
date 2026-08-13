@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -85,29 +87,47 @@ class TestTheSealCoversWhatActuallyRuns:
         discovers its own contents would silently shrink when an import moved,
         and a registration must fail loudly instead.
         """
-        import sys
+        # Measure in a fresh interpreter. Looking at this pytest process makes
+        # the result depend on collection/execution order: earlier API, signal
+        # or IVC tests leave unrelated project modules in ``sys.modules`` and
+        # falsely claim the benchmark imports them.
+        probe = r'''
+import json
+from pathlib import Path
+import sys
 
-        import tools.product_arm  # noqa: F401
-        import run_monthly_closure_search  # noqa: F401
-        from traffic_sim.simulation import cost_ordered_execution  # noqa: F401
-        from traffic_sim.simulation import deterministic_disruption  # noqa: F401
-        from traffic_sim.simulation import independent_daily  # noqa: F401
-        from traffic_sim.simulation import monthly_demand  # noqa: F401
-        from traffic_sim.simulation import monthly_search  # noqa: F401
-        from traffic_sim.simulation import monthly_sumo  # noqa: F401
+ROOT = Path.cwd().resolve()
+import tools.product_arm
+import run_monthly_closure_search
+from traffic_sim.simulation import cost_ordered_execution
+from traffic_sim.simulation import deterministic_disruption
+from traffic_sim.simulation import independent_daily
+from traffic_sim.simulation import monthly_demand
+from traffic_sim.simulation import monthly_search
+from traffic_sim.simulation import monthly_sumo
 
-        reached = set()
-        for module in list(sys.modules.values()):
-            filename = getattr(module, "__file__", None)
-            if not filename:
-                continue
-            try:
-                relative = Path(filename).resolve().relative_to(ROOT)
-            except ValueError:
-                continue
-            if relative.parts[0] in ("tests", ".git"):
-                continue
-            reached.add(str(relative))
+reached = set()
+for module in list(sys.modules.values()):
+    filename = getattr(module, "__file__", None)
+    if not filename:
+        continue
+    try:
+        relative = Path(filename).resolve().relative_to(ROOT)
+    except ValueError:
+        continue
+    if relative.parts[0] in ("tests", ".git"):
+        continue
+    reached.add(str(relative))
+print(json.dumps(sorted(reached)))
+'''
+        completed = subprocess.run(
+            [sys.executable, "-c", probe],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        reached = set(json.loads(completed.stdout))
 
         missing = sorted(reached - set(bench.SEMANTIC_SOURCES))
         assert not missing, (

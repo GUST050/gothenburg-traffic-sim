@@ -1,0 +1,58 @@
+{
+ "claim_boundary": {
+  "activates_policy_v3": false,
+  "opens_global_best": false,
+  "permits_ui_claim": false,
+  "reason": "policy v3 activation additionally requires an untouched held-out campaign; a passing benchmark alone does not open it"
+ },
+ "comparison": {
+  "binding_drift_accepted": [],
+  "execution_error": {
+   "message": "cost-ordered resume is invalid: the policy, cost ledger or provider identity changed since the cursor was written",
+   "type": "ValueError"
+  },
+  "workspace_root": "/Users/gt/Documents/gs-project/runs"
+ },
+ "content_key": "1324a5753387b435f9908e95d220b8405465dcf99322b03140dc95740eebc916",
+ "evidence_class": "preregistered_benchmark",
+ "gates": {
+  "checks": {
+   "cache_hits_consistent": false,
+   "candidate_costs_field_identical": false,
+   "final_decision_identical": false,
+   "hard_failures_identical": false,
+   "health_classifications_identical": false,
+   "no_resource_cap_regression": false,
+   "restart_equivalent": false,
+   "selected_ids_identical": false,
+   "status_identical": false,
+   "stop_proof_valid": false,
+   "sumo_verifications_saved": false
+  },
+  "passed": false,
+  "thresholds": {
+   "cache_hits_consistent": true,
+   "candidate_costs_field_identical": true,
+   "final_decision_identical": true,
+   "hard_failures_identical": true,
+   "health_classifications_identical": true,
+   "resource_cap_regression_allowed": false,
+   "restart_equivalent": true,
+   "selected_ids_identical": true,
+   "status_identical": true,
+   "stop_proof_valid": true,
+   "sumo_verifications_saved_minimum": 1
+  }
+ },
+ "kind": "cost_ordered_benchmark_outcome",
+ "measured_at": "2026-08-11",
+ "registration": {
+  "content_key": "d2f85965b62f9a5de2d7488b92971f0e509eccc171e77661c49b3a65d34837d1",
+  "path": "validation/cost_ordered_benchmark_registration_v3.json",
+  "schema": "cost_ordered_benchmark_registration_v3",
+  "search_id": "cob2-fore-20270322-20270322-26355153-0700"
+ },
+ "release_evidence": false,
+ "schema": "cost_ordered_benchmark_outcome_v3",
+ "status": "failed_execution"
+}

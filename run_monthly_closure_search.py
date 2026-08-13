@@ -190,34 +190,49 @@ def _independent_exhaustive_builder(
     budget: "DailyUnitBudget | None" = None,
     resume_state: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Stream the exhaustive independent enumeration under a declared budget.
+    """Stream exact independent enumeration in transactional parent pages.
 
-    With no budget this behaves exactly as before: past `maximum_daily_units`
-    it raises, which is the fail-closed behaviour every existing search relies
-    on. With a budget it PAUSES instead — the enumeration stops at the last
-    complete parent, records where to resume, and the artifact it produces is
-    labelled `independent_daily_budget_stopped_v1` rather than
-    `..._exhaustive_sumo_v1`. That rename is the point: nothing downstream can
-    read a partial enumeration as an exhaustive one, because the word is gone.
+    A declared budget limits NEW unique units in this invocation. State from a
+    previous invocation is cumulative, but the per-leg counter starts at zero.
+    A parent is classified and committed only after every one of its units has
+    been envelope-checked. If it would cross the leg budget, none of that
+    parent's state is retained and the cursor remains on the previous complete
+    parent. Without a budget the legacy hard cap is unchanged.
     """
     spec = load_closure_search_spec(spec_path)
     if spec.interday_policy != "independent_daily_reset_v1":
         raise ValueError(
             "independent exhaustive screening requires the independent policy"
         )
+    if (
+        budget is not None
+        and maximum_candidates != budget.maximum_parent_schedules
+    ):
+        raise ValueError(
+            "independent exhaustive parent cap differs from the declared "
+            "budget"
+        )
+    parent_limit = (
+        budget.maximum_parent_schedules
+        if budget is not None else maximum_candidates
+    )
+    effective_total_limit = (
+        budget.maximum_total_daily_units
+        if budget is not None else maximum_daily_units
+    )
     report = preflight_report or _independent_exhaustive_preflight(
         spec,
         budget=budget,
-        maximum_candidates=maximum_candidates,
-        maximum_daily_units=maximum_daily_units,
+        maximum_candidates=parent_limit,
+        maximum_daily_units=effective_total_limit,
         baseline_trip_duration_p99_s=baseline_trip_duration_p99_s,
     )
     if report is not None:
         if report.search_content_key != spec.content_key:
             raise ValueError(
                 "independent exhaustive preflight belongs to another search")
-        if (report.parent_schedule_limit != maximum_candidates
-                or report.daily_unit_limit != maximum_daily_units):
+        if (report.parent_schedule_limit != parent_limit
+                or report.daily_unit_limit != effective_total_limit):
             raise ValueError(
                 "independent exhaustive preflight uses different resource caps")
     from traffic_sim.simulation.independent_daily import daily_unit_records
@@ -226,87 +241,154 @@ def _independent_exhaustive_builder(
     source_start = date(source_year, 1, 1)
     source_end = date(source_year + 1, 1, 1)
 
-    # PR C: one streaming pass instead of a full parent tuple, a full unit
-    # tuple and the reverse unit->parents graph.  Each parent is enumerated,
-    # its own ordered units are checked, and the parent is released.  The only
-    # retained state is per-UNIQUE-unit — the same thing the 10,000-unit cap
-    # bounds — plus the IDs of the eligible parents.
     unavailable_units: dict[str, str] = {}
     evaluated_units: set[str] = set()
-    unavailable_candidates = []
+    unavailable_candidates: list[dict[str, Any]] = []
     eligible_ids: list[str] = []
     candidate_count = 0
-    # The resume cursor is the last parent that was decomposed COMPLETELY, so a
-    # paused enumeration restarts at a parent boundary rather than in the
-    # middle of one parent's units.
     last_complete_parent: str | None = None
-    budget_stop: dict[str, Any] | None = None
-    # UNRESOLVED, and recorded here rather than hidden: `resume_state` carries
-    # the evaluated-unit set forward so units deduplicate across a pause, which
-    # means the budget behaves as a CUMULATIVE total — a resumed leg starts
-    # already at the previous leg's spend and immediately re-crosses the line.
-    # A search that needs 910 units under a 300-unit budget therefore never
-    # completes, and a resumed run does NOT reproduce an uninterrupted one
-    # (measured: 193 eligible parents against 754). Two different meanings were
-    # conflated: a budget that bounds MEMORY HELD AT ONCE, and one that bounds
-    # TOTAL WORK. They need separate fields and separate resume semantics.
-    # Until that is settled, resume_state is accepted but must not be relied
-    # on: `--daily-unit-budget` is safe for the single-leg case the tests
-    # cover, where it pauses correctly and never reports itself exhaustive.
-    resume_after = None
+    resume_after: str | None = None
     resumed = True
-    if resume_state:
-        resume_after = resume_state.get("resume_after_parent_id")
-        resumed = not resume_after
-        # Carried forward so units are deduplicated ACROSS the pause exactly as
-        # they would be within one run — otherwise a resumed search would
-        # re-count units the first leg already evaluated and stop early.
-        evaluated_units.update(resume_state.get("evaluated_unit_ids") or ())
-        eligible_ids.extend(resume_state.get("eligible_schedule_ids") or ())
-        candidate_count = int(resume_state.get("parent_schedules") or 0)
+    if resume_state is not None:
+        if not isinstance(resume_state, Mapping):
+            raise ValueError(
+                "independent screening checkpoint must be an object")
+        if resume_state.get("schema") != (
+                "independent_daily_enumeration_checkpoint_v1"):
+            raise ValueError("independent screening checkpoint schema is invalid")
+        if resume_state.get("search_content_key") != spec.content_key:
+            raise ValueError(
+                "independent screening checkpoint belongs to another search")
+        if budget is None or resume_state.get(
+                "budget_content_key") != budget.content_key:
+            raise ValueError("independent screening checkpoint budget differs")
+        resume_after_raw = resume_state.get("resume_after_parent_id")
+        if not isinstance(resume_after_raw, str) or not resume_after_raw:
+            raise ValueError("independent screening checkpoint has no resume cursor")
+        resume_after = resume_after_raw
+        resumed = False
+        raw_units = resume_state.get("evaluated_unit_ids")
+        raw_eligible = resume_state.get("eligible_schedule_ids")
+        raw_unavailable_units = resume_state.get("unavailable_units")
+        raw_unavailable_candidates = resume_state.get("unavailable_candidates")
+        if not isinstance(raw_units, list) or any(
+                not isinstance(item, str) or not item for item in raw_units):
+            raise ValueError("checkpoint evaluated units are invalid")
+        if len(raw_units) != len(set(raw_units)):
+            raise ValueError("checkpoint repeats an evaluated unit")
+        if not isinstance(raw_eligible, list) or any(
+                not isinstance(item, str) or not item for item in raw_eligible):
+            raise ValueError("checkpoint eligible schedules are invalid")
+        if len(raw_eligible) != len(set(raw_eligible)):
+            raise ValueError("checkpoint repeats an eligible schedule")
+        if not isinstance(raw_unavailable_units, Mapping) or any(
+                not isinstance(key, str) or not isinstance(value, str)
+                for key, value in raw_unavailable_units.items()):
+            raise ValueError("checkpoint unavailable units are invalid")
+        if not isinstance(raw_unavailable_candidates, list) or any(
+                not isinstance(item, Mapping)
+                for item in raw_unavailable_candidates):
+            raise ValueError("checkpoint unavailable candidates are invalid")
+        evaluated_units.update(raw_units)
+        unavailable_units.update({
+            str(key): str(value)
+            for key, value in raw_unavailable_units.items()
+        })
+        if not set(unavailable_units).issubset(evaluated_units):
+            raise ValueError("checkpoint has an unavailable unevaluated unit")
+        eligible_ids.extend(raw_eligible)
+        unavailable_candidates.extend(
+            dict(item) for item in raw_unavailable_candidates)
+        candidate_count = int(resume_state.get("parent_schedules", -1))
+        if candidate_count < 1:
+            raise ValueError("checkpoint parent count is invalid")
+        unavailable_ids = [
+            str(item.get("schedule_id", ""))
+            for item in unavailable_candidates
+        ]
+        classified_ids = [*eligible_ids, *unavailable_ids]
+        if (
+            any(not item for item in unavailable_ids)
+            or len(classified_ids) != candidate_count
+            or len(classified_ids) != len(set(classified_ids))
+        ):
+            raise ValueError("checkpoint parent classification is inconsistent")
+        last_complete_parent = resume_after
+
+    leg_new_units = 0
+    prefix_units: set[str] = set()
+    prefix_schedule_ids: list[str] = []
+    budget_stop: dict[str, Any] | None = None
     for schedule in iter_closure_schedules(spec):
         if resume_after and not resumed:
-            # Skip the verified prefix. The cursor is the last parent a
-            # previous run decomposed COMPLETELY, so continuation starts
-            # immediately after it and no parent is processed twice.
+            records = list(daily_unit_records(spec, schedule))
+            unit_ids = [unit_id for unit_id, _identity, _build in records]
+            if len(unit_ids) != len(set(unit_ids)):
+                raise ValueError("independent parent repeats a daily unit")
+            prefix_units.update(unit_ids)
+            prefix_schedule_ids.append(schedule.schedule_id)
             if schedule.schedule_id == resume_after:
+                unavailable_ids = [
+                    str(item["schedule_id"])
+                    for item in unavailable_candidates
+                ]
+                if prefix_units != evaluated_units:
+                    raise ValueError("checkpoint evaluated-unit prefix differs")
+                if set(prefix_schedule_ids) != set(
+                        [*eligible_ids, *unavailable_ids]):
+                    raise ValueError("checkpoint parent prefix differs")
                 resumed = True
             continue
-        candidate_count += 1
-        if candidate_count > maximum_candidates:
+        next_parent_count = candidate_count + 1
+        if next_parent_count > parent_limit:
             raise ValueError(
                 f"independent exhaustive screening generated more than "
-                f"{maximum_candidates} parent schedules, above the explicit "
-                f"cap {maximum_candidates}"
+                f"{parent_limit} parent schedules, above the explicit "
+                f"cap {parent_limit}"
             )
-        parent_units: list[str] = []
-        for unit_id, _identity, build in daily_unit_records(spec, schedule):
-            parent_units.append(unit_id)
-            if unit_id in evaluated_units:
-                continue
-            evaluated_units.add(unit_id)
-            # A schedule object is built only for a NEW unique unit, which is
-            # also the only place an envelope needs checking.
-            daily = build()
-            if budget is not None:
-                crossed = unit_budget.exceeded(
-                    budget, daily_units=len(evaluated_units))
-                if crossed is not None:
-                    # PAUSE, do not raise and do not truncate silently. The
-                    # cursor is the last COMPLETE parent, so a resume restarts
-                    # at a parent boundary rather than mid-decomposition.
-                    budget_stop = {
-                        "crossed": crossed,
-                        "resume_after_parent_id": last_complete_parent,
-                        "daily_units": len(evaluated_units),
-                    }
-                    break
-            elif len(evaluated_units) > maximum_daily_units:
+        records = list(daily_unit_records(spec, schedule))
+        parent_units = [unit_id for unit_id, _identity, _build in records]
+        if len(parent_units) != len(set(parent_units)):
+            raise ValueError("independent parent repeats a daily unit")
+        new_records = [
+            (unit_id, build)
+            for unit_id, _identity, build in records
+            if unit_id not in evaluated_units
+        ]
+        parent_new_count = len(new_records)
+        if budget is not None:
+            crossed = unit_budget.exceeded(
+                budget,
+                new_daily_units=leg_new_units + parent_new_count,
+                total_daily_units=len(evaluated_units) + parent_new_count,
+            )
+            if crossed == "maximum_total_daily_units":
                 raise ValueError(
-                    f"independent exhaustive screening generated more than "
-                    f"{maximum_daily_units} unique daily SUMO units, above "
-                    f"the explicit cap {maximum_daily_units}"
+                    "independent exhaustive screening exceeds the declared "
+                    f"total daily-unit safety limit "
+                    f"{budget.maximum_total_daily_units}"
                 )
+            if crossed == "maximum_daily_units":
+                if leg_new_units == 0:
+                    raise ValueError(
+                        f"one parent requires {parent_new_count} new daily "
+                        f"units, above the per-invocation budget "
+                        f"{budget.maximum_daily_units}"
+                    )
+                budget_stop = {
+                    "crossed": crossed,
+                    "abandoned_parent_id": schedule.schedule_id,
+                }
+                break
+        elif len(evaluated_units) + parent_new_count > maximum_daily_units:
+            raise ValueError(
+                f"independent exhaustive screening generated more than "
+                f"{maximum_daily_units} unique daily SUMO units, above "
+                f"the explicit cap {maximum_daily_units}"
+            )
+        parent_unavailable: dict[str, str] = {}
+        for unit_id, build in new_records:
+            daily = build()
             try:
                 envelope = build_simulation_envelope(
                     spec,
@@ -317,17 +399,19 @@ def _independent_exhaustive_builder(
                     policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
                 )
             except ValueError as exc:
-                unavailable_units[unit_id] = str(exc)
+                parent_unavailable[unit_id] = str(exc)
                 continue
             envelope_start = date.fromisoformat(envelope.scenario_start[:10])
             envelope_end = date.fromisoformat(envelope.scenario_end[:10])
             if envelope_start < source_start or envelope_end > source_end:
-                unavailable_units[unit_id] = (
+                parent_unavailable[unit_id] = (
                     "exact warm-up/recovery envelope lies outside the "
                     f"downloaded {source_year} {spec.source} demand year"
                 )
-        if len(set(parent_units)) != len(parent_units):
-            raise ValueError("independent parent repeats a daily unit")
+        # Commit the parent atomically only after all new units were checked.
+        evaluated_units.update(unit_id for unit_id, _build in new_records)
+        unavailable_units.update(parent_unavailable)
+        leg_new_units += parent_new_count
         failed = [
             (unit_id, unavailable_units[unit_id])
             for unit_id in parent_units
@@ -347,44 +431,49 @@ def _independent_exhaustive_builder(
             })
         else:
             eligible_ids.append(schedule.schedule_id)
-        if budget_stop is not None:
-            # This parent was abandoned mid-decomposition: its remaining units
-            # were never evaluated, so it is NOT complete and must not become
-            # the resume cursor. Recording it would skip it on resume and lose
-            # every unit after the one that crossed the budget.
-            budget_stop["abandoned_parent_id"] = schedule.schedule_id
-            eligible_ids = [item for item in eligible_ids
-                            if item != schedule.schedule_id]
-            candidate_count -= 1
-            break
+        candidate_count = next_parent_count
         last_complete_parent = schedule.schedule_id
+    if resume_after and not resumed:
+        raise ValueError("checkpoint resume cursor is absent from the search")
     if budget_stop is not None:
-        # A budget-stopped enumeration is NOT the exhaustive one, so it must
-        # not be compared against a preflight that counted the whole space.
-        payload = _exhaustive_payload(
-            spec_path,
-            spec=spec,
-            schedule_ids=eligible_ids,
-            maximum_candidates=maximum_candidates,
-            proxy_version="independent_daily_budget_stopped_v1",
-        )
+        if last_complete_parent is None:
+            raise ValueError("budget cannot pause before one complete parent")
         state = unit_budget.BudgetState(
             daily_units=len(evaluated_units),
+            leg_daily_units=leg_new_units,
             parent_schedules=candidate_count,
             status=unit_budget.INCOMPLETE_STATUS,
             stopped_by=str(budget_stop["crossed"]),
             resume_after_parent_id=last_complete_parent,
         )
-        payload["budget_state"] = state.to_dict()
-        # Everything continuation needs, persisted with the artifact.
-        payload["budget_state"]["evaluated_unit_ids"] = sorted(evaluated_units)
-        payload["budget_state"]["eligible_schedule_ids"] = list(eligible_ids)
-        payload["budget_state"]["abandoned_parent_id"] = budget_stop.get(
-            "abandoned_parent_id")
-        payload["budget"] = budget.to_dict()
-        payload["exhaustive"] = False
-        payload["budget_message"] = unit_budget.describe(state, budget)
-        return payload
+        checkpoint_state = {
+            "schema": "independent_daily_enumeration_checkpoint_v1",
+            "search_content_key": spec.content_key,
+            "budget_content_key": budget.content_key,
+            "resume_after_parent_id": last_complete_parent,
+            "evaluated_unit_ids": sorted(evaluated_units),
+            "unavailable_units": dict(sorted(unavailable_units.items())),
+            "eligible_schedule_ids": list(eligible_ids),
+            "unavailable_candidates": unavailable_candidates,
+            "parent_schedules": candidate_count,
+        }
+        resume_token = _digest({
+            "checkpoint": checkpoint_state,
+            "budget": budget.to_dict(),
+        })
+        return {
+            "schema_version": 1,
+            "kind": "monthly_closure_screening_checkpoint",
+            "search": spec.to_dict(),
+            "status": "paused",
+            "exhaustive": False,
+            "resume_token": resume_token,
+            "budget": budget.to_dict(),
+            "budget_state": state.to_dict(),
+            "budget_message": unit_budget.describe(state, budget),
+            "checkpoint_state": checkpoint_state,
+            "abandoned_parent_id": budget_stop["abandoned_parent_id"],
+        }
     if budget is None and report is not None and (
         report.parent_schedule_count != candidate_count
         or report.unique_daily_unit_count != len(evaluated_units)
@@ -408,6 +497,7 @@ def _independent_exhaustive_builder(
     if budget is not None:
         state = unit_budget.BudgetState(
             daily_units=len(evaluated_units),
+            leg_daily_units=leg_new_units,
             parent_schedules=candidate_count,
             status=unit_budget.COMPLETE_STATUS)
         payload["budget_state"] = state.to_dict()
@@ -430,6 +520,54 @@ def _independent_exhaustive_builder(
     return payload
 
 
+class _IndependentExhaustiveScreenBuilder:
+    """Callable adapter exposing explicit checkpoint continuation."""
+
+    def __init__(
+        self,
+        *,
+        maximum_candidates: int,
+        maximum_daily_units: int,
+        baseline_trip_duration_p99_s: int,
+        preflight_report: ClosureSearchPreflight | None,
+        budget: DailyUnitBudget | None,
+    ) -> None:
+        self.maximum_candidates = maximum_candidates
+        self.maximum_daily_units = maximum_daily_units
+        self.baseline_trip_duration_p99_s = baseline_trip_duration_p99_s
+        self.preflight_report = preflight_report
+        self.budget = budget
+
+    def _build(
+        self,
+        path: Path,
+        resume_state: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        return _independent_exhaustive_builder(
+            path,
+            maximum_candidates=self.maximum_candidates,
+            maximum_daily_units=self.maximum_daily_units,
+            baseline_trip_duration_p99_s=(
+                self.baseline_trip_duration_p99_s),
+            preflight_report=self.preflight_report,
+            budget=self.budget,
+            resume_state=resume_state,
+        )
+
+    def __call__(self, path: Path) -> dict[str, Any]:
+        return self._build(path, None)
+
+    def resume(
+        self,
+        path: Path,
+        checkpoint: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        state = checkpoint.get("checkpoint_state")
+        if not isinstance(state, Mapping):
+            raise ValueError("screening checkpoint has no resumable state")
+        return self._build(path, state)
+
+
 def _independent_exhaustive_preflight(
     spec,
     *,
@@ -449,12 +587,24 @@ def _independent_exhaustive_preflight(
         raise ValueError(
             "independent exhaustive screening requires the independent policy"
         )
+    if (
+        budget is not None
+        and maximum_candidates != budget.maximum_parent_schedules
+    ):
+        raise ValueError(
+            "independent exhaustive parent cap differs from the declared "
+            "budget"
+        )
+    parent_limit = (
+        budget.maximum_parent_schedules
+        if budget is not None else maximum_candidates
+    )
     try:
         report = preflight(
             spec,
             baseline_trip_duration_p99_s=baseline_trip_duration_p99_s,
             envelope_policy=INDEPENDENT_DAILY_ENVELOPE_POLICY,
-            parent_schedule_limit=maximum_candidates,
+            parent_schedule_limit=parent_limit,
             daily_unit_limit=maximum_daily_units,
         )
     except UnsupportedPreflightSpec:
@@ -463,11 +613,11 @@ def _independent_exhaustive_preflight(
         # that compatibility and enforce both caps while streaming below;
         # supported policies get the earlier, allocation-free refusal.
         return None
-    if report.parent_schedule_count > maximum_candidates:
+    if report.parent_schedule_count > parent_limit:
         raise ValueError(
             f"independent exhaustive preflight counted "
             f"{report.parent_schedule_count} parent schedules, above the "
-            f"explicit cap {maximum_candidates}"
+            f"explicit cap {parent_limit}"
         )
     if report.unique_daily_unit_count > maximum_daily_units and budget is None:
         # Without a declared budget this stays fail-closed, exactly as before.
@@ -706,12 +856,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.set_defaults(warm_execution=True)
     parser.add_argument("--daily-unit-budget", type=int, default=None,
-                        help="Declare a daily-unit BUDGET instead of the "
-                             "legacy hard cap. Above the budget the search "
-                             "pauses with a resumable, explicitly incomplete "
-                             "result; it is never reported as exhaustive. "
-                             "Without this flag the legacy cap applies "
-                             "unchanged.")
+                        help="Maximum NEW unique daily units enumerated in "
+                             "one invocation. Crossing it pauses at a complete "
+                             "parent and the counter resets on resume. Without "
+                             "this flag the legacy hard cap applies unchanged.")
+    parser.add_argument(
+        "--daily-unit-total-cap",
+        type=int,
+        default=unit_budget.DEFAULT_TOTAL_DAILY_UNIT_LIMIT,
+        help="Hard cumulative daily-unit safety cap for the complete search.",
+    )
     parser.add_argument("--workspace-wait-s", type=float, default=3600.0,
                         help="Seconds to wait for the shared demand "
                              "workspace (a horizon pre-warm or the web "
@@ -734,6 +888,21 @@ def main() -> None:
         raise SystemExit("--seed-workers must be at least 1")
     if args.daily_workers < 1:
         raise SystemExit("--daily-workers must be at least 1")
+    if args.daily_unit_budget is not None and args.daily_unit_budget < 1:
+        raise SystemExit("--daily-unit-budget must be positive")
+    if (
+        args.daily_unit_budget is not None
+        and args.screening_mode not in (
+            "independent-exhaustive",
+            "independent-cost-ordered-exact",
+        )
+    ):
+        raise SystemExit(
+            "--daily-unit-budget requires --screening-mode="
+            "independent-exhaustive or independent-cost-ordered-exact"
+        )
+    if args.daily_unit_total_cap < 1:
+        raise SystemExit("--daily-unit-total-cap must be positive")
     if args.warm_execution and args.seed_workers != 1:
         raise SystemExit(
             "warm execution currently requires --seed-workers 1 because the "
@@ -788,7 +957,7 @@ def main() -> None:
                 # budget admits is not refused before it starts by the very cap
                 # the budget replaces.
                 maximum_daily_units=(
-                    args.daily_unit_budget
+                    args.daily_unit_total_cap
                     if args.daily_unit_budget is not None
                     else args.independent_exhaustive_daily_cap),
                 baseline_trip_duration_p99_s=(
@@ -926,11 +1095,11 @@ def main() -> None:
             declared_budget = (
                 DailyUnitBudget(
                     maximum_daily_units=args.daily_unit_budget,
+                    maximum_total_daily_units=args.daily_unit_total_cap,
                     maximum_parent_schedules=(
                         args.independent_exhaustive_candidate_cap))
                 if args.daily_unit_budget is not None else None)
-            screen_builder = lambda path: _independent_exhaustive_builder(
-                path,
+            screen_builder = _IndependentExhaustiveScreenBuilder(
                 maximum_candidates=(
                     args.independent_exhaustive_candidate_cap
                 ),
@@ -971,6 +1140,9 @@ def main() -> None:
             cleanup()
         workspace.release()
 
+    if result.get("status") == "paused":
+        print(json.dumps(result, sort_keys=True))
+        return
     boundary = result.get("claim_boundary", {})
     print(
         f"Monthly closure search {spec.search_id}: {result['status']}; "

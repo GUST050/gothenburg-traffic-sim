@@ -43,7 +43,7 @@ def _labels() -> dict[str, str]:
 class TestPhaseVocabulary:
     def test_the_plans_new_phases_exist(self):
         for phase in ("preflight", "cost_units", "cost_parents",
-                      "health_scan", "finalists"):
+                      "health_scan", "finalists", "paused_budget"):
             assert phase in PROGRESS_PHASES, phase
 
     def test_every_phase_has_a_swedish_label(self):
@@ -119,9 +119,16 @@ class TestTheUiRendersTheDetail:
         source = APP_JS.read_text(encoding="utf-8")
         assert "function monthlyProgressDetail(" in source
         for token in ("kostnadsberäknade", "cacheträffar",
-                      "SUMO-verifierade", "gräns"):
+                      "SUMO-verifierade", "gräns", "unika dagsenheter"):
             assert token in source, token
 
     def test_the_detail_is_shown_beside_the_phase(self):
         source = APP_JS.read_text(encoding="utf-8")
         assert "${label}${counts}${detail}" in source
+
+    def test_a_reloaded_paused_search_restores_the_exact_form(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        assert "function restoreMonthlySearchSpec(" in source
+        assert "state.status === 'paused'" in source
+        assert "restoreMonthlySearchSpec(state.closure_search_spec)" in source
+        assert "starta samma sökning igen" in source

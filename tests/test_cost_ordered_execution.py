@@ -494,6 +494,66 @@ class TestResumeInvalidation:
                 cursor=cursor,
             )
 
+    def test_resume_identity_uses_cost_order_not_calendar_order(self):
+        """A real cursor must be accepted when ledger order is not cost order.
+
+        The v3 real benchmark exposed this: the durable wrapper hashed the
+        calendar-ordered ledger while the state machine hashed its sorted,
+        no-detour-filtered scan.  The first run worked because it had no state;
+        the first resume then rejected its own cursor.
+        """
+        spec = _spec()
+        schedules, prices = _ordered_prices(spec)
+        parents = list(reversed(schedules[:4]))
+        ledger = coe.build_cost_ledger(
+            spec,
+            parents,
+            FakeCostSource(prices, no_detour=(parents[1].schedule_id,)),
+        )
+        policy = _policy(minimum=2).pilot
+        saved = {}
+        evidence = {}
+
+        class Interrupted(RuntimeError):
+            pass
+
+        def verify(candidate_id):
+            item = CandidateEvidence(
+                candidate_id=candidate_id,
+                observations=tuple(PairedObservation(
+                    candidate_id=candidate_id,
+                    demand_variant=variant,
+                    seed=1000 + index,
+                    baseline_time_loss_s=1.0,
+                    candidate_time_loss_s=2.0,
+                    matched_baseline_id="b",
+                    provenance_key="p",
+                ) for index, variant in enumerate(("q10", "q50", "q90"))),
+                disruption=_variant_records(prices[candidate_id]),
+            )
+            evidence[candidate_id] = item
+            return item
+
+        def checkpoint(cursor, _candidate_id, _item):
+            saved["cursor"] = cursor
+            raise Interrupted
+
+        with pytest.raises(Interrupted):
+            coe.run_cost_ordered_execution(
+                spec, ledger, policy, verify=verify, checkpoint=checkpoint)
+
+        resumed = coe.run_cost_ordered_execution(
+            spec,
+            ledger,
+            policy,
+            verify=verify,
+            cursor=saved["cursor"],
+            verified_evidence=evidence,
+        )
+        assert resumed.state.cursor == len(resumed.state.verified)
+        assert set(resumed.state.verified).isdisjoint(
+            {parents[1].schedule_id})
+
     def test_a_ledger_from_another_search_is_refused(self, tmp_path):
         spec = _spec()
         other = _spec(required_work_minutes=2 * 60)

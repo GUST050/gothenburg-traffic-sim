@@ -154,6 +154,31 @@ def test_cold_run_stops_at_schedule_envelope_not_archive_tail(
         96, 2 * 24 * 3600, 24 * 3600, 0)
 
 
+def test_warm_execution_is_gated_when_its_horizon_differs_from_cold(
+        tmp_path, patched_runtime):
+    """The pre-adf765b warm proof cannot authorize the trimmed cold arm."""
+    spec = ClosureSearchSpec.from_dict({
+        **{key: value for key, value in _spec().to_dict().items()
+           if key != "content_key"},
+        "permitted_date_start": "2025-09-17",
+        "permitted_date_end": "2025-09-17",
+        "interday_policy": "independent_daily_reset_v1",
+    })
+    runner = ArchivedDemandSumoRunner(
+        spec,
+        archive=_archive(tmp_path, days=3),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+        warm_execution=True,
+        boundary_controller=object(),
+    )
+    schedule = generate_closure_schedules(spec)[0]
+
+    assert runner._observation_execution_window(schedule) == (
+        False, 96, 2 * 24 * 3600, 24 * 3600, 0)
+
+
 def test_objective_aligned_runner_emits_per_variant_disruption(
         tmp_path, patched_runtime, monkeypatch):
     monkeypatch.setattr(

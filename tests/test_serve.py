@@ -81,7 +81,7 @@ def test_web_shell_is_desktop_only_and_uses_the_professional_palette():
     # Bumped with the step-4 progress phases and their detail line so a cached
     # bundle cannot hide them; the pin exists to force exactly this deliberate
     # edit.
-    assert 'app.js?v=20' in html
+    assert 'app.js?v=21' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
@@ -558,19 +558,26 @@ class TestMonthlySearchPreflight:
         assert body["schema"] == "closure_search_preflight_v1"
         assert body["exact"] is True
 
-    def test_reports_the_size_class_and_the_unchanged_caps(self, base_url):
+    def test_reports_the_size_class_and_versioned_server_policy(self, base_url):
         status, body = post_json_or_error(
             f"{base_url}/api/monthly_search/preflight",
             payload={"closure_search_spec": self._preflight_spec()})
         assert status == 200
         assert body["size_class"] in {
             "normal", "large_but_runnable", "over_resource_budget"}
-        # PR B must not raise or bypass the existing resource limit.
-        assert body["limits"] == {"parent_schedule_limit": 100000,
-                                  "daily_unit_limit": 10000}
+        assert body["limits"] == {
+            "parent_schedule_limit": serve.MONTHLY_PARENT_SCHEDULE_CAP,
+            "daily_unit_limit": serve.MONTHLY_TOTAL_DAILY_UNIT_CAP,
+        }
+        assert body["resource_policy"]["version"] == (
+            serve.MONTHLY_RESOURCE_POLICY_VERSION)
+        assert body["resource_policy"][
+            "maximum_new_daily_units_per_invocation"] == (
+                serve.MONTHLY_DAILY_UNIT_BUDGET)
 
-    def test_an_over_budget_search_is_reported_not_started(self, base_url):
-        """The case the plan names: a valid contract the cap will refuse."""
+    def test_the_six_month_case_is_no_longer_rejected_by_the_old_cap(
+            self, base_url):
+        """The plan's named case fits the versioned cumulative policy."""
         status, body = post_json_or_error(
             f"{base_url}/api/monthly_search/preflight",
             payload={"closure_search_spec": self._preflight_spec(
@@ -579,8 +586,9 @@ class TestMonthlySearchPreflight:
                 required_work_minutes=360 * 60,
                 max_consecutive_start_days=90)})
         assert status == 200
-        assert body["size_class"] == "over_resource_budget"
-        assert body["limit_reasons"]
+        assert body["size_class"] != "over_resource_budget"
+        assert body["unique_daily_unit_count"] == 23_349
+        assert body["limit_reasons"] == []
         assert not serve._sim_lock.locked()
         _, state = get_json(f"{base_url}/api/monthly_search/status")
         assert state.get("status") != "running"
@@ -750,6 +758,70 @@ class TestMonthlySearch:
         assert cmd[cmd.index("--screening-mode") + 1] == (
             "independent-exhaustive"
         )
+        assert cmd[cmd.index("--daily-unit-budget") + 1] == str(
+            serve.MONTHLY_DAILY_UNIT_BUDGET)
+        assert cmd[cmd.index("--daily-unit-total-cap") + 1] == str(
+            serve.MONTHLY_TOTAL_DAILY_UNIT_CAP)
+        assert not serve._sim_lock.locked()
+
+    def test_budget_pause_is_visible_and_same_spec_resumes(
+            self, base_url, monkeypatch):
+        sid = "monthly-api-budget-resume"
+        spec = _closure_search_spec(sid)
+        spec.update({
+            "interday_policy": "independent_daily_reset_v1",
+            "work_allocation_policy": "exact_equal_daily_v1",
+            "period_comparison_policy": "rolling_period_v1",
+            "objective_profile": "closure_cost_v1",
+            "max_consecutive_start_days": 30,
+        })
+        calls = {"count": 0}
+
+        def fake_run(cmd, **kw):
+            calls["count"] += 1
+            workspace = serve.MONTHLY_SEARCH_ROOT / sid
+            (workspace / "artifacts").mkdir(parents=True, exist_ok=True)
+            if calls["count"] == 1:
+                (workspace / "manifest.json").write_text(json.dumps({
+                    "status": "running",
+                    "progress": {
+                        "phase": "paused_budget",
+                        "completed": 10,
+                        "total": 20,
+                        "updated_at": "2026-08-11T00:00:00Z",
+                        "detail": {
+                            "resume_token": "resume-1",
+                            "daily_units": 300,
+                            "leg_daily_units": 300,
+                            "message": "Pausad efter 300 dagsenheter",
+                        },
+                    },
+                }))
+            else:
+                (workspace / "manifest.json").write_text(json.dumps({
+                    "status": "succeeded",
+                    "progress": {"phase": "publish", "completed": 1,
+                                 "total": 1},
+                }))
+                (workspace / "artifacts" / "result.json").write_text(
+                    json.dumps(_monthly_result(sid)))
+            return FakeCompletedProcess(returncode=0, stdout="ok")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        payload = {"closure_search_spec": spec}
+        assert post_json(f"{base_url}/api/monthly_search", payload=payload)[0] == 202
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/monthly_search/status")[1]["status"] == "paused")
+        _, paused = get_json(f"{base_url}/api/monthly_search/status")
+        assert paused["resume_token"] == "resume-1"
+        assert paused["progress"]["phase"] == "paused_budget"
+        assert "Pausad" in paused["note"]
+        assert not serve._sim_lock.locked()
+
+        assert post_json(f"{base_url}/api/monthly_search", payload=payload)[0] == 202
+        assert wait_until(lambda: get_json(
+            f"{base_url}/api/monthly_search/status")[1]["status"] == "done")
+        assert calls["count"] == 2
         assert not serve._sim_lock.locked()
 
     def test_lifecycle_progress_then_curated_result(self, base_url, monkeypatch):

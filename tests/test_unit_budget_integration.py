@@ -56,7 +56,9 @@ class TestTheLegacyBehaviourIsUntouched:
             _spec_file(tmp_path, "brute-force-multi-day"),
             maximum_candidates=1000, maximum_daily_units=10_000,
             baseline_trip_duration_p99_s=3600,
-            budget=DailyUnitBudget(maximum_daily_units=10_000))
+            budget=DailyUnitBudget(
+                maximum_daily_units=10_000,
+                maximum_parent_schedules=1000))
         assert payload["proxy_version"] == (
             "independent_daily_exhaustive_sumo_v1")
         assert payload["exhaustive"] is True
@@ -69,13 +71,31 @@ class TestABudgetPausesInsteadOfRefusing:
             _spec_file(tmp_path, "brute-force-multi-day"),
             maximum_candidates=1000, maximum_daily_units=2,
             baseline_trip_duration_p99_s=3600,
-            budget=DailyUnitBudget(maximum_daily_units=2))
+            budget=DailyUnitBudget(
+                maximum_daily_units=2,
+                maximum_parent_schedules=1000))
         state = payload["budget_state"]
         assert state["status"] == INCOMPLETE_STATUS
         assert state["stopped_by"] == "maximum_daily_units"
         assert state["resume_after_parent_id"], (
             "a pause without a cursor cannot be resumed")
         assert state["resume_after_parent_id"].startswith("closure-")
+        assert payload["kind"] == "monthly_closure_screening_checkpoint"
+        assert "shortlist" not in payload
+
+    def test_a_first_parent_larger_than_one_leg_fails_instead_of_emitting_an_unusable_cursor(
+            self, tmp_path):
+        with pytest.raises(ValueError, match="one parent requires 30 new daily units"):
+            _independent_exhaustive_builder(
+                _spec_file(tmp_path, "six-month-360h"),
+                maximum_candidates=100_000,
+                maximum_daily_units=100_000,
+                baseline_trip_duration_p99_s=3600,
+                budget=DailyUnitBudget(
+                    maximum_daily_units=1,
+                    maximum_parent_schedules=100_000,
+                ),
+            )
 
     def test_a_paused_artifact_cannot_be_read_as_exhaustive(self, tmp_path):
         """The word itself is removed, not merely a flag flipped."""
@@ -83,11 +103,11 @@ class TestABudgetPausesInsteadOfRefusing:
             _spec_file(tmp_path, "brute-force-multi-day"),
             maximum_candidates=1000, maximum_daily_units=2,
             baseline_trip_duration_p99_s=3600,
-            budget=DailyUnitBudget(maximum_daily_units=2))
+            budget=DailyUnitBudget(
+                maximum_daily_units=2,
+                maximum_parent_schedules=1000))
         assert payload["exhaustive"] is False
-        assert "exhaustive" not in payload["proxy_version"]
-        assert payload["proxy_version"] == (
-            "independent_daily_budget_stopped_v1")
+        assert payload["kind"] != "monthly_closure_proxy_screening"
         assert "INCOMPLETE" in payload["budget_message"]
 
     def test_the_pause_stops_at_a_parent_boundary(self, tmp_path):
@@ -96,7 +116,9 @@ class TestABudgetPausesInsteadOfRefusing:
             _spec_file(tmp_path, "brute-force-multi-day"),
             maximum_candidates=1000, maximum_daily_units=2,
             baseline_trip_duration_p99_s=3600,
-            budget=DailyUnitBudget(maximum_daily_units=2))
+            budget=DailyUnitBudget(
+                maximum_daily_units=2,
+                maximum_parent_schedules=1000))
         complete = _independent_exhaustive_builder(
             _spec_file(tmp_path, "brute-force-multi-day"),
             maximum_candidates=1000, maximum_daily_units=10_000,
@@ -106,6 +128,114 @@ class TestABudgetPausesInsteadOfRefusing:
             if "shortlist_schedule_ids" in complete
             else [item["schedule_id"]
                   for item in complete["shortlist"]["entries"]])
+
+    def test_crossing_parent_commits_no_unit(self, tmp_path):
+        from traffic_sim.core.closure_calendar import iter_closure_schedules
+        from traffic_sim.core.contracts import load_closure_search_spec
+        from traffic_sim.simulation.independent_daily import daily_unit_records
+
+        path = _spec_file(tmp_path, "brute-force-multi-day")
+        payload = _independent_exhaustive_builder(
+            path,
+            maximum_candidates=1000,
+            maximum_daily_units=2,
+            baseline_trip_duration_p99_s=3600,
+            budget=DailyUnitBudget(
+                maximum_daily_units=2,
+                maximum_parent_schedules=1000),
+        )
+        state = payload["checkpoint_state"]
+        spec = load_closure_search_spec(path)
+        prefix_units = set()
+        abandoned_units = set()
+        for schedule in iter_closure_schedules(spec):
+            units = {
+                unit_id
+                for unit_id, _identity, _build
+                in daily_unit_records(spec, schedule)
+            }
+            if schedule.schedule_id == payload["abandoned_parent_id"]:
+                abandoned_units = units
+                break
+            prefix_units.update(units)
+        carried = set(state["evaluated_unit_ids"])
+        assert carried == prefix_units
+        assert carried.isdisjoint(abandoned_units - prefix_units)
+
+    def test_multiple_legs_converge_to_uninterrupted_screening(self, tmp_path):
+        path = _spec_file(tmp_path, "brute-force-multi-day")
+        uninterrupted = _independent_exhaustive_builder(
+            path,
+            maximum_candidates=1000,
+            maximum_daily_units=10_000,
+            baseline_trip_duration_p99_s=3600,
+        )
+        budget = DailyUnitBudget(
+            maximum_daily_units=300,
+            maximum_total_daily_units=2_000,
+            maximum_parent_schedules=1000,
+        )
+        payload = _independent_exhaustive_builder(
+            path,
+            maximum_candidates=1000,
+            maximum_daily_units=10_000,
+            baseline_trip_duration_p99_s=3600,
+            budget=budget,
+        )
+        legs = 1
+        while payload["kind"] == "monthly_closure_screening_checkpoint":
+            payload = _independent_exhaustive_builder(
+                path,
+                maximum_candidates=1000,
+                maximum_daily_units=10_000,
+                baseline_trip_duration_p99_s=3600,
+                budget=budget,
+                resume_state=payload["checkpoint_state"],
+            )
+            legs += 1
+            assert legs < 20
+        assert legs > 1
+        assert payload["kind"] == "monthly_closure_proxy_screening"
+        for field in (
+            "candidate_count",
+            "scoreable_candidate_count",
+            "unavailable_candidates",
+            "shortlist",
+            "independent_daily_execution",
+        ):
+            if field == "independent_daily_execution":
+                left = dict(payload[field])
+                right = dict(uninterrupted[field])
+                left.pop("maximum_daily_units", None)
+                right.pop("maximum_daily_units", None)
+                assert left == right
+            else:
+                assert payload[field] == uninterrupted[field]
+
+    def test_checkpoint_tampering_fails_closed(self, tmp_path):
+        path = _spec_file(tmp_path, "brute-force-multi-day")
+        budget = DailyUnitBudget(
+            maximum_daily_units=2,
+            maximum_parent_schedules=1000,
+        )
+        payload = _independent_exhaustive_builder(
+            path,
+            maximum_candidates=1000,
+            maximum_daily_units=10_000,
+            baseline_trip_duration_p99_s=3600,
+            budget=budget,
+        )
+        state = dict(payload["checkpoint_state"])
+        state["evaluated_unit_ids"] = [*state["evaluated_unit_ids"], "forged"]
+        with pytest.raises(ValueError, match="prefix differs"):
+            _independent_exhaustive_builder(
+                path,
+                maximum_candidates=1000,
+                maximum_daily_units=10_000,
+                baseline_trip_duration_p99_s=3600,
+                budget=budget,
+                resume_state=state,
+            )
 
 
 class TestTheSixMonthCaseReachesTheProductGate:
@@ -139,10 +269,25 @@ class TestTheSixMonthCaseReachesTheProductGate:
             _independent_exhaustive_preflight(
                 spec,
                 budget=DailyUnitBudget(
-                    maximum_daily_units=SIX_MONTH_DAILY_UNIT_BUDGET),
+                    maximum_daily_units=SIX_MONTH_DAILY_UNIT_BUDGET,
+                    maximum_parent_schedules=100),
                 maximum_candidates=100,
                 maximum_daily_units=SIX_MONTH_DAILY_UNIT_BUDGET,
                 baseline_trip_duration_p99_s=3600)
+
+    def test_parent_cap_cannot_diverge_between_builder_and_budget(self):
+        spec = ClosureSearchSpec.from_dict(_case("brute-force-multi-day"))
+        with pytest.raises(ValueError, match="parent cap differs"):
+            _independent_exhaustive_preflight(
+                spec,
+                budget=DailyUnitBudget(
+                    maximum_daily_units=100,
+                    maximum_parent_schedules=999,
+                ),
+                maximum_candidates=1000,
+                maximum_daily_units=100,
+                baseline_trip_duration_p99_s=3600,
+            )
 
 
 class TestTheProcessGateIsMeasuredInItsOwnProcess:

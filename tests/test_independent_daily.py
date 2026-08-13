@@ -583,6 +583,8 @@ def test_independent_cli_rejects_before_network_or_search_workspace(monkeypatch)
         bounded_exhaustive_cap=12,
         independent_exhaustive_candidate_cap=1,
         independent_exhaustive_daily_cap=100,
+        daily_unit_budget=None,
+        daily_unit_total_cap=100_000,
         seed_workers=1,
         daily_workers=1,
         warm_execution=False,
@@ -756,9 +758,20 @@ def test_independent_exhaustive_search_is_ui_visible_without_proxy_claim(
 
 
 def test_server_routes_independent_search_to_exact_exhaustive_mode():
-    from serve import monthly_screening_cli_args
+    from serve import (
+        MONTHLY_DAILY_UNIT_BUDGET,
+        MONTHLY_PARENT_SCHEDULE_CAP,
+        MONTHLY_TOTAL_DAILY_UNIT_CAP,
+        monthly_screening_cli_args,
+    )
 
     assert monthly_screening_cli_args(_spec()) == [
         "--screening-mode",
         "independent-exhaustive",
+        "--daily-unit-budget",
+        str(MONTHLY_DAILY_UNIT_BUDGET),
+        "--daily-unit-total-cap",
+        str(MONTHLY_TOTAL_DAILY_UNIT_CAP),
+        "--independent-exhaustive-candidate-cap",
+        str(MONTHLY_PARENT_SCHEDULE_CAP),
     ]

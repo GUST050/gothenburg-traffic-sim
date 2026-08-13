@@ -44,8 +44,8 @@ class TestTheDefaultChangesNothing:
         assert DailyUnitBudget().maximum_parent_schedules == 100_000
 
     def test_a_budget_must_be_positive_integers(self):
-        for field in ("maximum_daily_units", "maximum_peak_rss_bytes",
-                      "maximum_ledger_bytes", "maximum_parent_schedules"):
+        for field in ("maximum_daily_units", "maximum_total_daily_units",
+                      "maximum_parent_schedules"):
             with pytest.raises(ValueError, match=field):
                 DailyUnitBudget(**{field: 0})
 
@@ -63,24 +63,23 @@ class TestTheDefaultChangesNothing:
 
 class TestExceededNamesOneCauseDeterministically:
     def test_inside_every_line_is_none(self):
-        assert exceeded(DailyUnitBudget(), daily_units=1, ledger_bytes=1,
-                        peak_rss_bytes=1) is None
+        assert exceeded(DailyUnitBudget(), new_daily_units=1,
+                        total_daily_units=1) is None
 
-    def test_units_are_reported_first_when_two_lines_cross_together(self):
+    def test_total_is_reported_first_when_two_lines_cross_together(self):
         """Two runs crossing the same two lines must blame the same one."""
         budget = DailyUnitBudget(maximum_daily_units=1,
-                                 maximum_ledger_bytes=1)
-        assert exceeded(budget, daily_units=2, ledger_bytes=2) == (
-            "maximum_daily_units")
+                                 maximum_total_daily_units=1)
+        assert exceeded(budget, new_daily_units=2,
+                        total_daily_units=2) == "maximum_total_daily_units"
 
     def test_each_line_can_be_the_cause_on_its_own(self):
         budget = DailyUnitBudget(maximum_daily_units=10,
-                                 maximum_ledger_bytes=10,
-                                 maximum_peak_rss_bytes=10)
-        assert exceeded(budget, daily_units=1, ledger_bytes=11) == (
-            "maximum_ledger_bytes")
-        assert exceeded(budget, daily_units=1, peak_rss_bytes=11) == (
-            "maximum_peak_rss_bytes")
+                                 maximum_total_daily_units=20)
+        assert exceeded(budget, new_daily_units=11,
+                        total_daily_units=11) == "maximum_daily_units"
+        assert exceeded(budget, new_daily_units=1,
+                        total_daily_units=21) == "maximum_total_daily_units"
 
 
 class TestAnIncompleteSearchCanNeverPassAsExhaustive:
@@ -90,7 +89,8 @@ class TestAnIncompleteSearchCanNeverPassAsExhaustive:
         assert INCOMPLETE_STATUS != COMPLETE_STATUS
 
     def test_a_stopped_state_reports_itself_incomplete(self):
-        state = BudgetState(daily_units=10_001, parent_schedules=4_000,
+        state = BudgetState(daily_units=10_001, leg_daily_units=10_000,
+                            parent_schedules=4_000,
                             status=INCOMPLETE_STATUS,
                             stopped_by="maximum_daily_units",
                             resume_after_parent_id="closure-abc")
@@ -101,13 +101,23 @@ class TestAnIncompleteSearchCanNeverPassAsExhaustive:
         assert payload["resume_after_parent_id"] == "closure-abc"
 
     def test_the_description_says_so_in_words(self):
-        state = BudgetState(daily_units=10_001, parent_schedules=4_000,
+        state = BudgetState(daily_units=10_001, leg_daily_units=10_000,
+                            parent_schedules=4_000,
                             status=INCOMPLETE_STATUS,
                             stopped_by="maximum_daily_units")
         text = describe(state, DailyUnitBudget())
         assert "INCOMPLETE" in text
         assert "not an exhaustive search" in text
         assert "10000" in text.replace(",", "")
+
+    def test_an_unknown_stop_marker_still_produces_a_readable_message(self):
+        state = BudgetState(
+            status=INCOMPLETE_STATUS,
+            stopped_by="newer_runtime_budget",
+        )
+        text = describe(state, DailyUnitBudget())
+        assert "newer_runtime_budget budget (unknown)" in text
+        assert "INCOMPLETE" in text
 
     def test_a_complete_state_says_what_it_covered(self):
         state = BudgetState(daily_units=23_349, parent_schedules=11_813)
@@ -148,17 +158,20 @@ class TestTheSixMonthCaseIsNoLongerRejectedByAConstant:
         assert (parents, len(units)) == (11_813, 23_349), (
             "the plan's frozen numbers must still reproduce")
         legacy = DailyUnitBudget()
-        assert exceeded(legacy, daily_units=len(units)) == (
+        assert exceeded(legacy, new_daily_units=len(units),
+                        total_daily_units=len(units)) == (
             "maximum_daily_units"), "the legacy cap must still refuse it"
         declared = DailyUnitBudget(
             maximum_daily_units=SIX_MONTH_DAILY_UNIT_BUDGET)
-        assert exceeded(declared, daily_units=len(units)) is None, (
+        assert exceeded(declared, new_daily_units=len(units),
+                        total_daily_units=len(units)) is None, (
             "a declared budget that admits the case must admit it")
 
     def test_the_720_hour_case_remains_valid_under_the_legacy_budget(self):
         parents, units = self._enumerate(self._spec("six-month-720h"))
         assert (parents, len(units)) == (2_186, 5_676)
-        assert exceeded(DailyUnitBudget(), daily_units=len(units)) is None
+        assert exceeded(DailyUnitBudget(), new_daily_units=len(units),
+                        total_daily_units=len(units)) is None
 
     # The 64 MiB process gate is measured in a FRESH interpreter by
     # tests/test_unit_budget_integration.py. Asserting it here would measure

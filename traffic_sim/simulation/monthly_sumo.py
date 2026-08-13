@@ -968,8 +968,9 @@ class ArchivedDemandSumoRunner:
         a reset between work days, so start at the envelope midnight and run
         only its declared recovery horizon.  Continuous searches retain
         archive-start execution because overnight carryover is part of that
-        contract.  The warm path is intentionally not routed through this
-        helper until its own equivalence benchmark covers the reset boundary.
+        contract. The observation selector compares this exact cold window
+        with the full window covered by the warm equivalence campaign and
+        blocks warm execution when they differ.
         """
         envelope = self._envelope(schedule)
         end = datetime.fromisoformat(envelope.scenario_end)
@@ -990,6 +991,25 @@ class ArchivedDemandSumoRunner:
             begin_s, flush_s = 0, 3600
             n_intervals = duration_s // 900
         return n_intervals, duration_s, begin_s, flush_s
+
+    def _observation_execution_window(
+        self, schedule: ClosureSchedule,
+    ) -> tuple[bool, int, int, int, int]:
+        """Choose one evidence window and whether warm execution may use it.
+
+        The v16 warm equivalence campaign compared warm execution with the
+        former full-archive cold arm.  The later independent-day cold-window
+        optimisation changed that reference arm.  Until a new paired campaign
+        validates a trimmed warm arm, a warm attempt is allowed only when the
+        exact cold window is still the full window v16 covered.  Otherwise the
+        observation runs on the trimmed cold path; old evidence can never
+        authorize two different horizons for the same schedule.
+        """
+        cold = self._cold_simulation_window(schedule)
+        full = (self.n_intervals, self.duration_s, 0, 3600)
+        warm_allowed = self.warm_execution and cold == full
+        selected = full if warm_allowed else cold
+        return (warm_allowed, *selected)
 
     def _matched_baseline_id_for_window(
         self,
@@ -1874,18 +1894,13 @@ class ArchivedDemandSumoRunner:
         seed: int,
     ) -> tuple[PairedObservation, tuple[str, ...], dict[str, Any] | None]:
         envelope = self._envelope(schedule)
-        if self.warm_execution:
-            # Warm state snapshots are still bound to the full archive until
-            # their separate equivalence gate covers a trimmed horizon.
-            run_n_intervals, run_duration_s, run_begin_s, run_flush_s = (
-                self.n_intervals, self.duration_s, 0, 3600)
-        else:
-            (
-                run_n_intervals,
-                run_duration_s,
-                run_begin_s,
-                run_flush_s,
-            ) = self._cold_simulation_window(schedule)
+        (
+            warm_allowed,
+            run_n_intervals,
+            run_duration_s,
+            run_begin_s,
+            run_flush_s,
+        ) = self._observation_execution_window(schedule)
         matched_baseline_id = self._matched_baseline_id_for_window(
             n_intervals=run_n_intervals,
             duration_s=run_duration_s,
@@ -1900,7 +1915,14 @@ class ArchivedDemandSumoRunner:
         # The warm arm is attempted only when explicitly enabled AND the frozen
         # eligibility rule says this schedule qualifies. Any miss, mismatch or
         # contract error below falls through to the UNCHANGED cold path.
-        if self.warm_execution:
+        if self.warm_execution and not warm_allowed:
+            attempt = WarmAttempt(schedule.schedule_id, variant, seed)
+            attempt.event(
+                "ineligible",
+                reason="warm_cold_window_equivalence_unproven",
+            )
+            self.warm_attempts.append(attempt.finalize(WARM_OUTCOME_FALLBACK))
+        if warm_allowed:
             # EXACTLY ONE attempt is finalized per warm-enabled observation —
             # success or fallback — so an unreported fallback is impossible by
             # construction. LUNA-WARM-10 failed with three silent fallbacks and

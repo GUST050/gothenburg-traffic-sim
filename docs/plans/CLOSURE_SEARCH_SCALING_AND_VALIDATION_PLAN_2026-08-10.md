@@ -1095,3 +1095,98 @@ förblir inaktiv.
 PR G-preflighten är också plattformsrättad. Linux-v1 bevaras; Darwin-v2 hittar
 de paketerade SUMO 1.27.1-binärerna och `lib/libsumocpp.dylib`, men ingen
 Python/SWIG-bindning. Det öppnar ingen grind och ändrar ingen workerbudget.
+
+## 14. Slutlig lokal implementation och mätning 2026-08-11
+
+### Resursbudget, riktig paus och riktig resume
+
+Budgetkontraktet är nu `daily_unit_budget_v3` och skiljer på två storheter:
+`maximum_daily_units` är NYA enheter per invocation och återställs vid resume;
+`maximum_total_daily_units` är ett kumulativt hårt skydd och återställs aldrig.
+100 000-parentgränsen är fortsatt fatal. RSS- och ledgerfält som tidigare
+deklarerades men inte mättes i produktvägen har tagits bort ur runtimekontraktet
+i stället för att ge en falsk garanti.
+
+En parent är transaktionen. En budgetkorsande parent skriver inga unit-ID:n,
+ingen envelopeklassificering och ingen eligibility innan nästa invocation.
+Checkpointen binder exakt search key, budget key, unitprefix, parentprefix och
+cursor. Paus publiceras som `monthly_screening_checkpoint`, utan shortlist, och
+`run_monthly_search` returnerar före backend, SUMO, pilot och finalister.
+
+Resume är differentialtestad över flera 300-enhetersinvocations: 754 parents
+och 910 unika enheter reproducerar den oavbrutna payloaden byte-för-byte.
+API:t använder en versionsbunden serverpolicy (30 000 nya enheter per
+invocation, 100 000 totalt, 100 000 parents), rapporterar `paused`, frigör
+simuleringslåset och återupptar samma workspace när exakt samma spec skickas
+igen. Browsern återställer datum, källa, tidsband, arbetstid, dagtak,
+veckodagar, periodläge och vägar efter reload.
+
+Planens sexmånadersfall med 360 timmar är nu produktkörbart i preflight:
+11 813 parents / 23 349 enheter och inte längre vägrat av den historiska
+10 000-gränsen. Samma start- och sluttid används fortfarande varje vald
+arbetsdag genom `exact_equal_daily_v1`; perioderna kan vara 8 dagar eller upp
+till 90 arbetsdagar och behöver inte vara kalenderveckor.
+
+### Ny golden och verkliga benchmarkutfall
+
+`validation/closure_cost_ordering_golden_v2.json` band då aktuell
+`monthly_sumo.py`; den processfria providern, runner-vägen, sorteringen och den
+namngivna golden-replayen reproducerar byte-för-byte. v1 är orörd historik.
+
+V3-benchmarken reproducerade ett riktigt durabilityfel: wrappern hashade
+kalenderordnad ledger medan state machine hashade den faktiska
+kostnadssorterade, no-detour-filtrerade ordningen. Första körningen lyckades,
+men fault-injection-resume vägrade sin egen cursor. `bound_identity` använder
+nu exakt scanordning medan full originalledger fortsatt binds separat av sin
+content key; ett osorterat/no-detour-regressionstest låser felet.
+
+V4 frystes efter fixen och fullföljde exhaustive, cost-ordered och
+fault-injection/resume. Status, selected IDs, slutbeslut, hårdfel,
+hälsoklassificering, stopproof, cachebokföring och resursgränser var identiska.
+Grinden UNDERKÄNDES ändå korrekt:
+
+- båda armarna verifierade 13/13 och slutade `no_viable`; besparing 0;
+- exhaustive timeoutposter saknade post-SUMO disruptionfält, så full
+  fältegenskap mot cost-ledgern kunde inte bevisas.
+
+Policy v3 aktiveras därför inte och held-out körs inte. Ett annat fall väljs
+inte i efterhand för att få ett positivt utfall.
+
+### Återstående evidensgränser är avgjorda, inte dolda
+
+`validation/independent_vs_continuous_outcome_v3.json` körde samtliga 84
+förregistrerade fall mot den verkliga Mac-arkivroten: 35
+`blocked_missing_demand`, 25 `unpairable`, 24 `unsupported_by_contract`, 0
+`measured`. De frysta datumen har alltså inga exakt matchande demandenvelopes;
+inga syntetiska ersättningar skapades.
+
+`validation/libsumo_preflight_v3.json` bekräftar SUMO 1.27.1, headers och
+`libsumocpp.dylib`, men ingen Python-bindning. Ingen installation gjordes och
+TraCI-backenden behålls. PR I:s förbud mot ny extern data står kvar. Eftersom
+v4 inte gav en hälso-viabel, diskriminerande finalistmängd finns ingen legitim
+held-out- eller microkampanj att köra; båda förblir fail-closed i stället för
+att fyllas med fabricerad evidens.
+
+## 15. Eftergranskning av budget och exekveringsfönster 2026-08-13
+
+De rapporterade pause/resume-felen 1–5 och 12 beskriver den äldre
+`17cc0e6`-vägen. Den aktuella vägen har en separat checkpointtyp utan shortlist,
+returnerar före backend/SUMO/resultat och återupptar med en nollställd
+per-invocation-räknare. Felaktig cursor, ändrat prefix och en budgetkorsande
+halvparent vägras innan något partiellt resultat kan publiceras.
+
+De kvarvarande mindre kontraktsfelen är stängda: `describe()` klarar okända
+stop-markörer, oanvända RSS/ledgerfält är borttagna, parenttaket får inte skilja
+mellan CLI och budget, `--daily-unit-budget` vägras i screeninglägen som inte
+kan använda det och första parent som är större än en sida ger ett explicit
+fel i stället för en null-cursor. Golden v4 binder den aktuella
+cost-order-källan; den gamla v1-filen skrivs inte om.
+
+Warm/cold-fyndet var däremot nytt och giltigt. V16 jämförde mot fullarkivets
+cold-arm, medan `adf765b` senare kortade independent-day-cold till exakt
+envelope. Produktvägen tillåter därför endast warm när samma candidates valda
+cold-fönster fortfarande är fullfönstret som v16 täckte. Vid skillnad körs
+trimmed cold och orsaken `warm_cold_window_equivalence_unproven` bokförs. En
+framtida trimmed-warm-väg kräver en ny parad ekvivalenskampanj.
+Golden v4 binder denna nya källa mot samma existerande observationer utan en
+ny SUMO-körning; v1-v3 är kvar som oförändrad historik.

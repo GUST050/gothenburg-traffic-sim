@@ -2047,11 +2047,39 @@
           };
         }
 
+        function restoreMonthlySearchSpec(spec) {
+          if (!spec || typeof spec !== 'object') return;
+          lastMonthlySpec = spec;
+          monthlySource = spec.source || monthlySource;
+          monthlySourceSeg.querySelectorAll('button').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.source === monthlySource));
+          monthlyDateStart.value = spec.permitted_date_start || '';
+          monthlyDateEnd.value = spec.permitted_date_end || '';
+          monthlyWorkHours.value = Number(spec.required_work_minutes || 0) / 60;
+          monthlyMaxDays.value = spec.max_consecutive_start_days || 1;
+          const band = spec.permitted_daily_band || {};
+          const fullDay = band.earliest_start === '00:00' &&
+            band.latest_end === '24:00';
+          monthlyFullday.checked = fullDay;
+          monthlyBandStart.disabled = fullDay;
+          monthlyBandEnd.disabled = fullDay;
+          if (!fullDay) {
+            monthlyBandStart.value = band.earliest_start || '07:00';
+            monthlyBandEnd.value = band.latest_end || '18:00';
+          }
+          monthlyPeriodMode.checked =
+            spec.period_comparison_policy === 'rolling_period_v1';
+          const allowed = new Set(spec.allowed_weekdays || []);
+          monthlyWeekdays.querySelectorAll('button').forEach(btn =>
+            btn.classList.toggle('active', allowed.has(Number(btn.dataset.day))));
+        }
+
         const MONTHLY_PHASE_LABELS = {
           policy: 'Startar',
           preflight: 'Mäter sökningens storlek',
           enumerate: 'Räknar upp lagliga scheman',
           screen: 'Väljer kandidater',
+          paused_budget: 'Pausad vid resursgränsen',
           cost_units: 'Beräknar dagskostnader',
           cost_parents: 'Summerar kostnad per schema',
           health_scan: 'Kontrollerar körbarhet',
@@ -2083,6 +2111,12 @@
           }
           if (Number.isFinite(detail.parent_schedules) && !parts.length) {
             parts.push(`${detail.parent_schedules} scheman`);
+          }
+          if (Number.isFinite(detail.daily_units)) {
+            parts.push(`${detail.daily_units} unika dagsenheter totalt`);
+          }
+          if (Number.isFinite(detail.leg_daily_units)) {
+            parts.push(`${detail.leg_daily_units} i senaste körningen`);
           }
           return parts.length ? ` · ${parts.join(' · ')}` : '';
         }
@@ -2519,6 +2553,12 @@
                 status.note || 'Avbruten — sökningen kan återupptas.';
               return;
             }
+            if (status.status === 'paused') {
+              monthlyProgress.hidden = false;
+              monthlyProgress.textContent = status.note ||
+                'Pausad vid resursgränsen — starta samma sökning igen för att fortsätta.';
+              return;
+            }
             monthlyProgress.hidden = true;
             renderMonthlyResults(status.result);
           } catch (e) {
@@ -2564,13 +2604,31 @@
                 }));
             const active = states.find(([, state]) =>
               state.status === 'running' || state.status === 'cancelling');
-            if (!active) return;
+            if (!active) {
+              const paused = states.find(([kind, state]) =>
+                kind === 'monthly' && state.status === 'paused');
+              if (!paused) return;
+              const [, state] = paused;
+              await openWorkspace('closure');
+              setClosureTool('monthly');
+              restoreMonthlySearchSpec(state.closure_search_spec);
+              selected.clear();
+              for (const edge of state.edges ||
+                   state.closure_search_spec?.directed_edges || []) {
+                selected.add(edge);
+              }
+              monthlyProgress.hidden = false;
+              monthlyProgress.textContent = state.note ||
+                'Pausad — starta samma sökning igen för att fortsätta.';
+              refreshCloseUI();
+              return;
+            }
 
             const [kind, state] = active;
             await openWorkspace('closure');
             setClosureTool(kind);
             const spec = state.closure_search_spec;
-            if (kind === 'monthly') lastMonthlySpec = spec || lastMonthlySpec;
+            if (kind === 'monthly') restoreMonthlySearchSpec(spec);
             const edges = state.edges || spec?.directed_edges || [];
             for (const edge of edges) selected.add(edge);
             closureJobRunning = kind === 'simulate';
@@ -2605,7 +2663,7 @@
                 monthlyProgress.hidden = true;
                 renderMonthlyResults(done.result);
               }
-            } else if (done.status === 'cancelled') {
+            } else if (done.status === 'cancelled' || done.status === 'paused') {
               announceStudyOutcome('Avstängningsjobbet', 'cancelled',
                                    edges.join(', '));
               if (kind !== 'monthly') {
@@ -2615,7 +2673,9 @@
               } else {
                 monthlyProgress.hidden = false;
                 monthlyProgress.textContent =
-                  done.note || 'Avbruten — sökningen kan återupptas.';
+                  done.note || (done.status === 'paused'
+                    ? 'Pausad — starta samma sökning igen för att fortsätta.'
+                    : 'Avbruten — sökningen kan återupptas.');
               }
             } else if (done.status === 'error') {
               announceStudyOutcome('Avstängningsjobbet', 'error',

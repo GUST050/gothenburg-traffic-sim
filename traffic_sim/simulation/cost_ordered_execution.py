@@ -358,13 +358,21 @@ def bound_identity(
     practical_equivalence_vehicle_hours: float,
 ) -> str:
     """One digest over everything a resume must not survive."""
+    # The state machine binds the exact order it scans: deterministic
+    # no-detour candidates removed, then ClosureCost.sort_key order.  Binding
+    # the ledger's enumeration order here creates a cursor that the state
+    # machine itself rejects on resume whenever calendar order differs from
+    # cost order (the real v3 benchmark reproduced this after one injected
+    # interruption).  The full ledger, including refused candidates and its
+    # original order, remains independently bound by ``ledger_content_key``.
+    ordered, _disqualified = plan_order(ledger.candidates)
     return identity_key(
         search_content_key=ledger.search_content_key,
         policy=policy,
         practical_equivalence_vehicle_hours=(
             practical_equivalence_vehicle_hours),
         provider_identity=ledger.provider_identity,
-        ordered_costs=tuple(item.cost for item in ledger.costs),
+        ordered_costs=ordered,
     )
 
 

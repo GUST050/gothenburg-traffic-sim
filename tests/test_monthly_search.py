@@ -517,6 +517,91 @@ def test_runs_full_resumable_pipeline_and_remains_fail_closed(tmp_path):
         )
 
 
+def test_budget_pause_stops_before_backend_and_resume_matches_uninterrupted(
+    tmp_path,
+):
+    class MustNotRun:
+        def provenance(self):
+            raise AssertionError("backend provenance ran while screening paused")
+
+        def prepare(self, schedules):
+            raise AssertionError("backend preparation ran while screening paused")
+
+        def run_candidate(self, *args, **kwargs):
+            raise AssertionError("SUMO candidate ran while screening paused")
+
+    class TwoLegBuilder:
+        def __init__(self):
+            self.resumes = 0
+
+        def __call__(self, spec_path):
+            spec = load_closure_search_spec(spec_path)
+            return {
+                "schema_version": 1,
+                "kind": "monthly_closure_screening_checkpoint",
+                "search": spec.to_dict(),
+                "status": "paused",
+                "exhaustive": False,
+                "resume_token": "resume-token-1",
+                "budget": {"schema": "test-budget"},
+                "budget_state": {
+                    "complete": False,
+                    "parent_schedules": 1,
+                    "daily_units": 1,
+                    "leg_daily_units": 1,
+                    "stopped_by": "maximum_daily_units",
+                },
+                "budget_message": "paused for test",
+                "checkpoint_state": {
+                    "search_content_key": spec.content_key,
+                    "budget_content_key": "test-budget-key",
+                },
+            }
+
+        def resume(self, spec_path, checkpoint):
+            assert checkpoint["resume_token"] == "resume-token-1"
+            self.resumes += 1
+            return _screen_builder(spec_path)
+
+    spec = _spec("monthly-budget-pause-resume")
+    builder = TwoLegBuilder()
+    paused = run_monthly_search(
+        spec,
+        _policy(),
+        runner=MustNotRun(),
+        screen_builder=builder,
+        root=tmp_path / "paged",
+    )
+    assert paused["status"] == "paused"
+    assert paused["resume_token"] == "resume-token-1"
+    workspace = load_search_workspace(
+        tmp_path / "paged" / spec.search_id)
+    assert workspace.status == "running"
+    assert workspace.manifest["progress"]["phase"] == "paused_budget"
+    kinds = [item["kind"] for item in workspace.manifest["artifacts"]]
+    assert kinds.count("monthly_screening_checkpoint") == 1
+    assert "monthly_proxy_screening" not in kinds
+    assert "monthly_pilot_candidate" not in kinds
+    assert "monthly_closure_search_result" not in kinds
+
+    resumed = run_monthly_search(
+        spec,
+        _policy(),
+        runner=FakeRunner(),
+        screen_builder=builder,
+        root=tmp_path / "paged",
+    )
+    uninterrupted = run_monthly_search(
+        spec,
+        _policy(),
+        runner=FakeRunner(),
+        screen_builder=_screen_builder,
+        root=tmp_path / "uninterrupted",
+    )
+    assert builder.resumes == 1
+    assert resumed == uninterrupted
+
+
 def test_objective_aligned_pipeline_uses_cost_in_pilot_and_final(tmp_path):
     policy = dataclasses.replace(
         _policy(), objective_method="closure_cost_v1"

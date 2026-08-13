@@ -1,0 +1,2420 @@
+{
+ "archives": {
+  "5ac74750843384b3": {
+   "archive": "/Users/gt/Documents/gs-project/runs/demand-20260810-075313-c4604361-2e6f",
+   "demand_build_spec": {
+    "begin": "00:00",
+    "build_key": "5ac74750843384b3",
+    "days": 3,
+    "end": "24:00",
+    "kind": "demand_build",
+    "purpose": "closure_envelope",
+    "schema_version": 1,
+    "source": "forecast",
+    "start_date": "2027-03-21",
+    "structural_reference_date": "2025-09-16"
+   },
+   "demand_meta_sha256": "adeeb14ffe2ffbc4d840966e7a9be7a5dbe18a91a5b3b9774c6f268405fbf587",
+   "epoch_sim": "2027-03-21T00:00:00",
+   "n_intervals": 288,
+   "routes": {
+    "q10": {
+     "path": "/Users/gt/Documents/gs-project/runs/demand-20260810-075313-c4604361-2e6f/calibrated_v1.rou.xml",
+     "sha256": "5d2c67cbe0ccb3077b1ee501e0f2388934968bffcd4bfa65c515d48435f14810"
+    },
+    "q50": {
+     "path": "/Users/gt/Documents/gs-project/runs/demand-20260810-075313-c4604361-2e6f/calibrated.rou.xml",
+     "sha256": "8495edb1fff40a976d87a542850bc209edee6c2ebfefad9a2deac88a5bff2464"
+    },
+    "q90": {
+     "path": "/Users/gt/Documents/gs-project/runs/demand-20260810-075313-c4604361-2e6f/calibrated_v2.rou.xml",
+     "sha256": "9a0e56e02fdb9143c84919d6c012c9ceba37741265be083ce2dc5ead5f73168d"
+    }
+   }
+  }
+ },
+ "claim_boundary": {
+  "activates_policy_v3": false,
+  "opens_global_best": false,
+  "permits_ui_claim": false,
+  "reason": "a registration freezes a question; it measures nothing"
+ },
+ "comparison_metrics": [
+  "candidate_deterministic_costs",
+  "hard_failures",
+  "health_classification",
+  "pilot_status",
+  "selected_ids",
+  "final_decision",
+  "sumo_verifications",
+  "daily_cost_cache_hits",
+  "wall_time_s",
+  "peak_rss_bytes"
+ ],
+ "content_key": "d2f85965b62f9a5de2d7488b92971f0e509eccc171e77661c49b3a65d34837d1",
+ "data_root": "/Users/gt/Documents/gs-project",
+ "demand_variants": [
+  "q50",
+  "q10",
+  "q90"
+ ],
+ "disruption_schema": "deterministic_closure_disruption_v1",
+ "evidence_class": "preregistration",
+ "external_gate_state": {
+  "certificate_manifest": {
+   "named_by_certificate": null,
+   "present": false,
+   "sha256": null
+  },
+  "data_root": "/Users/gt/Documents/gs-project",
+  "validation/monthly_gate_adoption_certificate.json": {
+   "bytes": null,
+   "present": false,
+   "sha256": null
+  },
+  "validation/monthly_gate_record.json": {
+   "bytes": null,
+   "present": false,
+   "sha256": null
+  }
+ },
+ "gate_thresholds": {
+  "cache_hits_consistent": true,
+  "candidate_costs_field_identical": true,
+  "final_decision_identical": true,
+  "hard_failures_identical": true,
+  "health_classifications_identical": true,
+  "resource_cap_regression_allowed": false,
+  "restart_equivalent": true,
+  "selected_ids_identical": true,
+  "status_identical": true,
+  "stop_proof_valid": true,
+  "sumo_verifications_saved_minimum": 1
+ },
+ "hypothesis": "Cost-first execution reaches the same pilot status, the same selected_ids and the same final decision as exhaustive execution, while running SUMO on strictly fewer candidates.",
+ "kind": "cost_ordered_benchmark_registration",
+ "network": {
+  "path": "/Users/gt/Documents/gs-project/sumo/net.net.xml",
+  "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+ },
+ "network_metadata": {
+  "path": "/Users/gt/Documents/gs-project/sumo/network_metadata.json",
+  "sha256": "dc3493454abc0ea44760abc10ee2996a1beef01d6b537617aa6141374f2ae6ad"
+ },
+ "outcome_record": "validation/cost_ordered_benchmark_outcome_v3.json",
+ "output_roots": {
+  "cost_ordered": "runs/closure-search-benchmark-cost-ordered",
+  "daily_cost_cache": "runs/closure-search-benchmark-daily-costs",
+  "exhaustive": "runs/closure-search-benchmark-exhaustive"
+ },
+ "policies": {
+  "cost_ordered": {
+   "path": "validation/monthly_search_policy_v3.json",
+   "sha256": "1d3f3e1ea35f90ecec7e06941391a8a8728f0e7d8603df917dbbdb361ee242b0"
+  },
+  "exhaustive": {
+   "path": "validation/monthly_search_policy_v2.json",
+   "sha256": "249a98a95d10be3fbeeaceb2fc071ef1aa5f43b9d15b2cfa9023994f742be83d"
+  }
+ },
+ "python": {
+  "implementation": "CPython",
+  "version": "3.9.6"
+ },
+ "registered_at": "2026-08-11",
+ "release_evidence": false,
+ "resource_caps": {
+  "daily_workers": 1,
+  "maximum_daily_units": 10000,
+  "maximum_parent_schedules": 100000,
+  "seed_workers": 1
+ },
+ "schema": "cost_ordered_benchmark_registration_v3",
+ "seeds": {
+  "basis": "canonical_seed(variant, repetition) \u2014 unchanged",
+  "repetitions_per_variant": 1
+ },
+ "selected_case": {
+  "candidate_count": 13,
+  "search_content_key": "4e376b8433426f6d42db",
+  "search_id": "cob2-fore-20270322-20270322-26355153-0700",
+  "spec": {
+   "allowed_weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "blackout_dates": [],
+   "closure_type": "full",
+   "content_key": "4e376b8433426f6d42db",
+   "demand_build_id": "forecast-2027",
+   "directed_edges": [
+    "26355153_26842525_0"
+   ],
+   "dst_policy": "exclude_transition_dates",
+   "duration_basis": "required_work_time",
+   "interday_policy": "independent_daily_reset_v1",
+   "kind": "closure_search",
+   "max_consecutive_start_days": 1,
+   "objective_profile": "displaced_vehicles_and_detour_v1",
+   "period_comparison_policy": "rolling_period_v1",
+   "permitted_daily_band": {
+    "earliest_start": "07:00",
+    "latest_end": "15:00"
+   },
+   "permitted_date_end": "2027-03-22",
+   "permitted_date_start": "2027-03-22",
+   "policy_status": "user_supplied_unverified",
+   "required_work_minutes": 300,
+   "resolution_minutes": 15,
+   "same_daily_window": true,
+   "schema_version": 1,
+   "search_id": "cob2-fore-20270322-20270322-26355153-0700",
+   "source": "forecast",
+   "timezone": "Europe/Stockholm",
+   "work_allocation_policy": "exact_equal_daily_v1",
+   "work_to_closure_assumption": "one_to_one"
+  },
+  "unique_daily_unit_count": 13,
+  "work_dates": [
+   "2027-03-22"
+  ],
+  "work_dates_with_calibrated_archive": [
+   "2027-03-22"
+  ]
+ },
+ "selection": {
+  "archives_available": 11,
+  "case_source": "discovered_from_archive_metadata",
+  "evaluated": [
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270101-20270101-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270101-20270101-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270101-20270101-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270101-20270101-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270101-20270101-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270101-20270101-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270101-20270101-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26355153-0600",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270322-20270322-26355153-0700",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26355153-0900",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26355153-1000",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26842525-0600",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270322-20270322-26842525-0700",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26842525-0900",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26842525-1000",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26355153-0600",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270322-20270322-26355153-0700",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26355153-0900",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-26355153-1000",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-96523321-0600",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270322-20270322-96523321-0700",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-96523321-0900",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-96523321-1000",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-87109747-0600",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270322-20270322-87109747-0700",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-87109747-0900",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-87109747-1000",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-90370930-0600",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270322-20270322-90370930-0700",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-90370930-0900",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270322-20270322-90370930-1000",
+    "structurally_eligible": true,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270323-20270323-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270323-20270323-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270323-20270323-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270323-20270323-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270323-20270323-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270323-20270323-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270323-20270323-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 26,
+    "search_id": "cob2-fore-20270322-20270323-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 26
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 26,
+    "search_id": "cob2-fore-20270322-20270323-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 26
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 26,
+    "search_id": "cob2-fore-20270322-20270323-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 26
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 26,
+    "search_id": "cob2-fore-20270322-20270323-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 26
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 26,
+    "search_id": "cob2-fore-20270322-20270323-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 26
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 26,
+    "search_id": "cob2-fore-20270322-20270323-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 26
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 18,
+    "search_id": "cob2-fore-20270322-20270323-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 18
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270714-20270714-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270714-20270714-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270714-20270714-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270714-20270714-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270714-20270714-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270714-20270714-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270714-20270714-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270715-20270715-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270715-20270715-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270715-20270715-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270715-20270715-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270715-20270715-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270715-20270715-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270715-20270715-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270716-20270716-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270716-20270716-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270716-20270716-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270716-20270716-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270716-20270716-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270716-20270716-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270716-20270716-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270719-20270719-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270719-20270719-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270719-20270719-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270719-20270719-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270719-20270719-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270719-20270719-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270719-20270719-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270714-20270719-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270714-20270719-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270714-20270719-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270714-20270719-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270714-20270719-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270714-20270719-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270714-20270719-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270914-20270914-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270914-20270914-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270914-20270914-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270914-20270914-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270914-20270914-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270914-20270914-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270914-20270914-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270915-20270915-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270915-20270915-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270915-20270915-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270915-20270915-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270915-20270915-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270915-20270915-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270915-20270915-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270916-20270916-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270916-20270916-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270916-20270916-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270916-20270916-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270916-20270916-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270916-20270916-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270916-20270916-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270917-20270917-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270917-20270917-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270917-20270917-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270917-20270917-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270917-20270917-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-fore-20270917-20270917-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-fore-20270917-20270917-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270914-20270917-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270914-20270917-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270914-20270917-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270914-20270917-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270914-20270917-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 52,
+    "search_id": "cob2-fore-20270914-20270917-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 52
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 36,
+    "search_id": "cob2-fore-20270914-20270917-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 36
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-hist-20250916-20250916-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26842525-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-hist-20250916-20250916-26842525-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26842525-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26842525-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26355153-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-hist-20250916-20250916-26355153-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26355153-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-26355153-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-96523321-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-hist-20250916-20250916-96523321-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-96523321-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-96523321-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-87109747-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-hist-20250916-20250916-87109747-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-87109747-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-87109747-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-90370930-0600",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 13,
+    "search_id": "cob2-hist-20250916-20250916-90370930-0700",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 13
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-90370930-0900",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   },
+   {
+    "candidate_count": 9,
+    "search_id": "cob2-hist-20250916-20250916-90370930-1000",
+    "structurally_eligible": false,
+    "unique_daily_unit_count": 9
+   }
+  ],
+  "evaluated_case_count": 360,
+  "minimum_structural_candidates": 6,
+  "rule": "most candidates, then fewest unique daily units, then search_id; no outcome, cost or winner is consulted"
+ },
+ "sources": {
+  "run_monthly_closure_search.py": "d9e2373c5c09bd9f2af304e73dbefb3679fd2bf65d9f7eb5edb2e487b16fbfca",
+  "run_monthly_proxy_validation.py": "d76f0ea08dcbf3dc3769267ce4669a87ddadbd2b5da186d3498dfc50367b8c99",
+  "run_scenario.py": "d552557c878e68dc37b897d119648293ae08027d3adbce4c6e12a26baee0e3c9",
+  "screen_monthly_closures.py": "8541696031d7f2c7cbd7522454960c8f7ebc760504837853aff68f9d56f60aba",
+  "suggest_closure_time.py": "66e33ab74570406516728b76facdaa041b3c1e90ae489867f17191c5a5336e41",
+  "tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "tools/cost_ordered_benchmark.py": "9ed844b400151359abee8057bfd5e9a617e71bb0413135483907ed90ac1edeab",
+  "tools/product_arm.py": "32893e45906ca624fa6ac50dfc89bab5caa811db84b7b66d99ebaffbf52ae90a",
+  "traffic_sim/__init__.py": "25b4f77bbc0b564590b3e6ca93403e104500b7f845a1fbf566c986a59a24e814",
+  "traffic_sim/core/__init__.py": "7ad238c2b75b5c4911ce0b07ba29986c529075e11d3a6d5b1897a2ec97b1f388",
+  "traffic_sim/core/closure_calendar.py": "48bcc59312ecbf188aefb0b04f30bc4231390ab4bb7b717aee86f62304cf1b9d",
+  "traffic_sim/core/contracts.py": "d7a7aa6bddf1288aaf28cb014b2d636e68ce719b67a8909b24534c5086a437c6",
+  "traffic_sim/core/fingerprint.py": "71baf5b88a9466c9834bedc89b96fca1f1cc3ac5aab85796dbe1c730a7c2dfd9",
+  "traffic_sim/demand/__init__.py": "c7a052308425fa340c33ae85b1ab937c68ecc228e527868337ae1e7c9cb5ffaf",
+  "traffic_sim/demand/build_lock.py": "82bf7dfaf0d2ef52684d008ed42bc1e9d46171b3efab4e79376ad18bec27ee14",
+  "traffic_sim/demand/route_support.py": "027d93a3f30197d2866bfda22a5079758d6d10133fd52542b02bff0b0802aacb",
+  "traffic_sim/demand/source_identity.py": "18dc67d847d7abb0a679ef492fd169bbf41e954dc736e3348e638c1bac786e4c",
+  "traffic_sim/simulation/__init__.py": "9f32ee0d301da0a5e6cab9b3cee596cd7366472df8db12bea40eba93dd28064f",
+  "traffic_sim/simulation/closure_ledgers.py": "7d3a343b7022447f8256e416a076d6c0c3c02a00573ff4dad9336f08d0b2249a",
+  "traffic_sim/simulation/closure_preflight.py": "2442768d607b43b95c258323b5a60a8c3c012cf27594a160906519f88ed57053",
+  "traffic_sim/simulation/closure_ranking.py": "f47b4193bd62a6bfc8c2d15a0532af0314e25d481186dc2af17feed933ee389d",
+  "traffic_sim/simulation/closure_teleport.py": "1f7a1eebd37ff6396cfd24dc0c4d9d8b928a9a5f788045a96667f18484363057",
+  "traffic_sim/simulation/cost_ordered_execution.py": "10aa5234703e6aea945692039cf76688fe80736d191d3d39bb276d90a6167044",
+  "traffic_sim/simulation/cost_ordered_search.py": "5110756ee952a5bd019987b2ecc49ffd49bdb4478522799edac29567cc2edb92",
+  "traffic_sim/simulation/deterministic_disruption.py": "8f68b28678486d77f6f68d347644f1ede503844d4eeb0ec53a1c2e868166cda1",
+  "traffic_sim/simulation/envelope.py": "d322323d8be0c20e73f10f5f9829ccf1c44382ae81a88bacc7b1cb02dd9ccd79",
+  "traffic_sim/simulation/finalist_decision.py": "8129909b2dc34e12fde8e34525d37c75b60f979868ec765827cdc574f85489a1",
+  "traffic_sim/simulation/heldout_gate.py": "423551e20a5d2d126bcf86bfefdd3ee3f637bd0d708398117a9a4cd75fd1e3cb",
+  "traffic_sim/simulation/independent_daily.py": "08ac36c44af284bdc1f78e4144c0322b5ad234fee4a9d4c60272e9e4150542cc",
+  "traffic_sim/simulation/metadata.py": "792111ff2580e4a3455c33ae28ba16beaa3c316e08bd9f4e181fd353cf25678e",
+  "traffic_sim/simulation/metrics.py": "7f8eac6f834de7f5c22b4b47bfa6a36a4e3596b7fa3f40dbd2e7a256de11a71d",
+  "traffic_sim/simulation/monthly_demand.py": "6d988df0d2e6a4dd375b76e30b491f9ac5bada7cf589a5c815c84cc1e30f3371",
+  "traffic_sim/simulation/monthly_proxy.py": "495df1aeed262183bb878605a4811a24d702f67b23bde81a659778d3b3a0af82",
+  "traffic_sim/simulation/monthly_search.py": "7a63153a119b43ec324506f2b56cf5e06510652c0875e0cf4f04da561bf519c6",
+  "traffic_sim/simulation/monthly_sumo.py": "3e2c92d41dcd6ee9a61af779a891440db80b4236b37378793a8f47e95eaaea6e",
+  "traffic_sim/simulation/monthly_warm_state.py": "d2177582096fe2b0466d6a96bbacda73e9564d5a47a460089b7a4fff7ea3df75",
+  "traffic_sim/simulation/multiday.py": "616f26b2ba0ff60f58549b863a7245133538eafa827a2d65e676ebcd588763dc",
+  "traffic_sim/simulation/period_comparison.py": "5116b87ee26f217ed212ec6175a16337b370bd501b2dc8d4892b37ac46817359",
+  "traffic_sim/simulation/pilot_selection.py": "9f7f0d282b4513e40140bc5d4f6a7dc0c6b034bf1bbf89d9b4013cadf712f2a1",
+  "traffic_sim/simulation/proxy_projection.py": "bd5d69316499c573433f655a6d3e4c36d9f5dff33819ff5e98e7b50c375794e0",
+  "traffic_sim/simulation/proxy_validation.py": "1f06181744f8b6c43e5d05b9a29274057263e4491f14849760baf38c09db75d2",
+  "traffic_sim/simulation/runtime.py": "5402430b6bcf92ef41e916b2d3000f5fdbf3f7680596a289248469e694a68356",
+  "traffic_sim/simulation/search_workspace.py": "6db2a41137ede85e627c86ca53716af932516ae1c2489815ab9825efe1b0e59a",
+  "traffic_sim/simulation/seed_worker_budget.py": "4a4748ac8e217563e0f5f5c5c4beec9d06122a39daf034e75ef95a01b0830392",
+  "traffic_sim/simulation/sensor_fit.py": "ac58dfeb2dfb6071777a0ffc1279de1a7400072cdfe7d33addd8bbe1257135b8",
+  "traffic_sim/simulation/trajectory_contract.py": "8d3e2fd1489c4e9e0dfa3f803fe145765d0b5ece31f8da58936c0fc1fe0103c3",
+  "traffic_sim/simulation/unit_budget.py": "d2c9200db109c9bcc94121c140917814e6b6d505fd80a07e430bcff7f4cbbc64",
+  "traffic_sim/simulation/warm_route_windows.py": "c014d4a0d99ddecfadb04192aba3c1509d325c3c7051478a698ef8960f9b9f19",
+  "traffic_sim/simulation/warm_state_boundary.py": "37467ca596085bbc963b3e47ea12789084318b568372d9c165075b59991d7819",
+  "traffic_sim/simulation/warm_state_cache.py": "9221cb3715c077685837fb156a7c4bf89a445d29c1fa7f82e26a8852f85be93e",
+  "traffic_sim/simulation/warm_state_forensics.py": "b12ac2d21233e4139ff49bdce0c862d598d87ad2440586bea8deed65f3c7c6ab",
+  "traffic_sim/simulation/workspace.py": "aebe4f52d40efc56c319f902897d9883acda6a96d35549ead977dc3d2a3b25c4"
+ },
+ "status": "frozen_before_outcome",
+ "sumo_runtime": {
+  "executable": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/bin/sumo",
+  "machine": "arm64",
+  "platform": "macOS-15.6.1-arm64-arm-64bit",
+  "resolved_by": "sumo_home",
+  "sha256": "adf7bb8425eca761980ea2a2b43e9761c5b464b046ce3b5ed038ff16e300489a",
+  "version": "Eclipse SUMO sumo 1.27.1"
+ }
+}

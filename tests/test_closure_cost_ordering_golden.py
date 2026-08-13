@@ -1,4 +1,4 @@
-"""Static contract for the real-golden PR D/E diagnostic verification."""
+"""Static contract for the current real-golden PR D/E verification."""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RECORD = ROOT / "validation" / "closure_cost_ordering_golden_v1.json"
+# v1-v3 remain immutable historical evidence.  v4 binds the same observations
+# and comparisons after the final warm/cold execution-window contract wording.
+RECORD = ROOT / "validation" / "closure_cost_ordering_golden_v4.json"
 
 
 def _read():

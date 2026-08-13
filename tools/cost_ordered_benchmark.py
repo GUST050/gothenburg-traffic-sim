@@ -95,7 +95,9 @@ DEFAULT_OUTCOME = (
 #: and a registration must fail loudly instead.
 SEMANTIC_SOURCES = (
     "run_monthly_closure_search.py",
+    "run_monthly_proxy_validation.py",
     "run_scenario.py",
+    "screen_monthly_closures.py",
     "suggest_closure_time.py",
     "tools/__init__.py",
     "tools/cost_ordered_benchmark.py",
@@ -135,6 +137,7 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/multiday.py",
     "traffic_sim/simulation/period_comparison.py",
     "traffic_sim/simulation/pilot_selection.py",
+    "traffic_sim/simulation/proxy_projection.py",
     "traffic_sim/simulation/proxy_validation.py",
     "traffic_sim/simulation/runtime.py",
     "traffic_sim/simulation/search_workspace.py",

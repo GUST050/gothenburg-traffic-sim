@@ -1,0 +1,505 @@
+{
+ "claim_boundary": {
+  "activates_policy_v3": false,
+  "opens_global_best": false,
+  "permits_ui_claim": false,
+  "reason": "policy v3 activation additionally requires an untouched held-out campaign; a passing benchmark alone does not open it"
+ },
+ "comparison": {
+  "cache_hits_consistent": true,
+  "candidate_cost_mismatches": [],
+  "candidate_costs_field_identical": false,
+  "compared_candidate_count": 13,
+  "cost_ordered_only_candidates": [],
+  "cost_ordered_sumo_candidates": 13,
+  "cursor": {
+   "cursor": 13,
+   "cutoff": null,
+   "identity_key": "041c35a92894768c1bcd153a4391e35ccd6ec17832ab88d411cde6be949476f4",
+   "order": [
+    "closure-2a25b7859eb4f3ba0916",
+    "closure-790db34bfa7838b5c760",
+    "closure-4f0b8e1be70157b22217",
+    "closure-ac5ada48eb8490af0768",
+    "closure-a50521393bc43903e76e",
+    "closure-36eb23678de5567fdb59",
+    "closure-419beb127a8e538372c7",
+    "closure-918627761ca0a1eeaf32",
+    "closure-ffc3080a9dbcd5302a29",
+    "closure-0e072516e4fec1df8d84",
+    "closure-535dd4e3f07284821d53",
+    "closure-990b025fa7e11689c7b3",
+    "closure-13ef5c27955a167ac3b0"
+   ],
+   "schema": "cost_ordered_closure_search_v1",
+   "stop_reason": "search_space_exhausted",
+   "verified": [
+    "closure-2a25b7859eb4f3ba0916",
+    "closure-790db34bfa7838b5c760",
+    "closure-4f0b8e1be70157b22217",
+    "closure-ac5ada48eb8490af0768",
+    "closure-a50521393bc43903e76e",
+    "closure-36eb23678de5567fdb59",
+    "closure-419beb127a8e538372c7",
+    "closure-918627761ca0a1eeaf32",
+    "closure-ffc3080a9dbcd5302a29",
+    "closure-0e072516e4fec1df8d84",
+    "closure-535dd4e3f07284821d53",
+    "closure-990b025fa7e11689c7b3",
+    "closure-13ef5c27955a167ac3b0"
+   ],
+   "version": 1,
+   "viable": []
+  },
+  "daily_cost_cache_hits": {
+   "cost_ordered": 0,
+   "exhaustive": 0,
+   "published_by_execution_record": 0
+  },
+  "exhaustive_only_candidates": [],
+  "exhaustive_sumo_candidates": 13,
+  "final_decision": {
+   "cost_ordered": {
+    "decision_status": null,
+    "decision_winner": null,
+    "status": "no_viable",
+    "tie_ids": [],
+    "winner_id": null
+   },
+   "exhaustive": {
+    "decision_status": null,
+    "decision_winner": null,
+    "status": "no_viable",
+    "tie_ids": [],
+    "winner_id": null
+   }
+  },
+  "final_decision_identical": true,
+  "hard_failure_mismatches": [],
+  "hard_failures_identical": true,
+  "health_classifications_identical": true,
+  "health_mismatches": [],
+  "ledger_compared_candidate_count": 13,
+  "ledger_cost_mismatches": [
+   {
+    "candidate_id": "closure-0e072516e4fec1df8d84",
+    "cost_ordered_ledger": 2.8721,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-0e072516e4fec1df8d84",
+    "cost_ordered_ledger": 156920.5,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-0e072516e4fec1df8d84",
+    "cost_ordered_ledger": 1157,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-0e072516e4fec1df8d84",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-13ef5c27955a167ac3b0",
+    "cost_ordered_ledger": 2.9645,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-13ef5c27955a167ac3b0",
+    "cost_ordered_ledger": 161537.2,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-13ef5c27955a167ac3b0",
+    "cost_ordered_ledger": 1217,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-13ef5c27955a167ac3b0",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-2a25b7859eb4f3ba0916",
+    "cost_ordered_ledger": 2.685,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-2a25b7859eb4f3ba0916",
+    "cost_ordered_ledger": 146165.9,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-2a25b7859eb4f3ba0916",
+    "cost_ordered_ledger": 1043,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-2a25b7859eb4f3ba0916",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-36eb23678de5567fdb59",
+    "cost_ordered_ledger": 2.8225,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-36eb23678de5567fdb59",
+    "cost_ordered_ledger": 153570.9,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-36eb23678de5567fdb59",
+    "cost_ordered_ledger": 1120,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-36eb23678de5567fdb59",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-419beb127a8e538372c7",
+    "cost_ordered_ledger": 2.8229,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-419beb127a8e538372c7",
+    "cost_ordered_ledger": 153967.3,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-419beb127a8e538372c7",
+    "cost_ordered_ledger": 1249,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-419beb127a8e538372c7",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-4f0b8e1be70157b22217",
+    "cost_ordered_ledger": 2.7738,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-4f0b8e1be70157b22217",
+    "cost_ordered_ledger": 151774.7,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-4f0b8e1be70157b22217",
+    "cost_ordered_ledger": 1208,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-4f0b8e1be70157b22217",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-535dd4e3f07284821d53",
+    "cost_ordered_ledger": 2.9024,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-535dd4e3f07284821d53",
+    "cost_ordered_ledger": 158285.4,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-535dd4e3f07284821d53",
+    "cost_ordered_ledger": 1226,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-535dd4e3f07284821d53",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-790db34bfa7838b5c760",
+    "cost_ordered_ledger": 2.7705,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-790db34bfa7838b5c760",
+    "cost_ordered_ledger": 151694.3,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-790db34bfa7838b5c760",
+    "cost_ordered_ledger": 1252,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-790db34bfa7838b5c760",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-918627761ca0a1eeaf32",
+    "cost_ordered_ledger": 2.8535,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-918627761ca0a1eeaf32",
+    "cost_ordered_ledger": 155525.4,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-918627761ca0a1eeaf32",
+    "cost_ordered_ledger": 1132,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-918627761ca0a1eeaf32",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-990b025fa7e11689c7b3",
+    "cost_ordered_ledger": 2.9241,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-990b025fa7e11689c7b3",
+    "cost_ordered_ledger": 159299.4,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-990b025fa7e11689c7b3",
+    "cost_ordered_ledger": 1191,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-990b025fa7e11689c7b3",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-a50521393bc43903e76e",
+    "cost_ordered_ledger": 2.7856,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-a50521393bc43903e76e",
+    "cost_ordered_ledger": 151584.4,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-a50521393bc43903e76e",
+    "cost_ordered_ledger": 1100,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-a50521393bc43903e76e",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-ac5ada48eb8490af0768",
+    "cost_ordered_ledger": 2.7848,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-ac5ada48eb8490af0768",
+    "cost_ordered_ledger": 151612.9,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   },
+   {
+    "candidate_id": "closure-ac5ada48eb8490af0768",
+    "cost_ordered_ledger": 1232,
+    "exhaustive": null,
+    "field": "vehicles_affected"
+   },
+   {
+    "candidate_id": "closure-ac5ada48eb8490af0768",
+    "cost_ordered_ledger": 0,
+    "exhaustive": null,
+    "field": "vehicles_no_detour"
+   },
+   {
+    "candidate_id": "closure-ffc3080a9dbcd5302a29",
+    "cost_ordered_ledger": 2.8645,
+    "exhaustive": null,
+    "field": "added_vehicle_hours"
+   },
+   {
+    "candidate_id": "closure-ffc3080a9dbcd5302a29",
+    "cost_ordered_ledger": 156631.5,
+    "exhaustive": null,
+    "field": "added_metres_total"
+   }
+  ],
+  "ledger_costs_field_identical": false,
+  "no_resource_cap_regression": true,
+  "peak_rss_bytes": {
+   "cost_ordered": 286703616,
+   "exhaustive": 266813440
+  },
+  "resource_caps": {
+   "maximum_daily_units": 10000,
+   "maximum_parent_schedules": 100000
+  },
+  "restart": {
+   "equivalent": true,
+   "interrupted_after_pilots": 1,
+   "performed": true,
+   "reason": "the resumed run reproduced the uninterrupted outcome",
+   "reference_final_decision": {
+    "decision_status": null,
+    "decision_winner": null,
+    "status": "no_viable",
+    "tie_ids": [],
+    "winner_id": null
+   },
+   "resumed_final_decision": {
+    "decision_status": null,
+    "decision_winner": null,
+    "status": "no_viable",
+    "tie_ids": [],
+    "winner_id": null
+   }
+  },
+  "restart_equivalent": true,
+  "selected_ids": {
+   "cost_ordered": [],
+   "exhaustive": []
+  },
+  "selected_ids_identical": true,
+  "status_identical": true,
+  "stop_proof": {
+   "argument": "every candidate that survived the deterministic no-detour gate was verified, so the finalist set is the exhaustive one",
+   "cutoff_added_vehicle_hours": null,
+   "examined": 13,
+   "first_unexamined_added_vehicle_hours": null,
+   "first_unexamined_candidate_id": null,
+   "minimum_finalists": 2,
+   "practical_equivalence_vehicle_hours": 0.0,
+   "schema": "cost_ordered_closure_search_v1",
+   "selection_band_added_vehicle_hours": null,
+   "stop_reason": "search_space_exhausted",
+   "total_ordered": 13,
+   "unexamined": 0
+  },
+  "stop_proof_check": {
+   "reason": "every ordered candidate was verified",
+   "stop_reason": "search_space_exhausted",
+   "valid": true
+  },
+  "stop_proof_valid": true,
+  "sumo_verifications_saved": 0,
+  "verified_prefix": [
+   "closure-2a25b7859eb4f3ba0916",
+   "closure-790db34bfa7838b5c760",
+   "closure-4f0b8e1be70157b22217",
+   "closure-ac5ada48eb8490af0768",
+   "closure-a50521393bc43903e76e",
+   "closure-36eb23678de5567fdb59",
+   "closure-419beb127a8e538372c7",
+   "closure-918627761ca0a1eeaf32",
+   "closure-ffc3080a9dbcd5302a29",
+   "closure-0e072516e4fec1df8d84",
+   "closure-535dd4e3f07284821d53",
+   "closure-990b025fa7e11689c7b3",
+   "closure-13ef5c27955a167ac3b0"
+  ],
+  "wall_time_s": {
+   "cost_ordered": 3.717,
+   "exhaustive": 4.663
+  }
+ },
+ "content_key": "8abf23320cc16dea7a8af33b5bbae0fad52cc5307c430d7247594ca10a4059c4",
+ "evidence_class": "preregistered_benchmark",
+ "gates": {
+  "checks": {
+   "cache_hits_consistent": true,
+   "candidate_costs_field_identical": false,
+   "final_decision_identical": true,
+   "hard_failures_identical": true,
+   "health_classifications_identical": true,
+   "no_resource_cap_regression": true,
+   "restart_equivalent": true,
+   "selected_ids_identical": true,
+   "status_identical": true,
+   "stop_proof_valid": true,
+   "sumo_verifications_saved": false
+  },
+  "passed": false,
+  "thresholds": {
+   "cache_hits_consistent": true,
+   "candidate_costs_field_identical": true,
+   "final_decision_identical": true,
+   "hard_failures_identical": true,
+   "health_classifications_identical": true,
+   "resource_cap_regression_allowed": false,
+   "restart_equivalent": true,
+   "selected_ids_identical": true,
+   "status_identical": true,
+   "stop_proof_valid": true,
+   "sumo_verifications_saved_minimum": 1
+  }
+ },
+ "kind": "cost_ordered_benchmark_outcome",
+ "measured_at": "2026-08-11",
+ "registration": {
+  "content_key": "e1ce646e122d90b41e024594ec6d490edeee6f8a320b71aaf6af85f0851fd170",
+  "path": "validation/cost_ordered_benchmark_registration_v4.json",
+  "schema": "cost_ordered_benchmark_registration_v3",
+  "search_id": "cob2-fore-20270322-20270322-26355153-0700"
+ },
+ "release_evidence": false,
+ "schema": "cost_ordered_benchmark_outcome_v3",
+ "status": "measured"
+}
