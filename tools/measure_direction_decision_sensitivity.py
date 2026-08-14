@@ -69,7 +69,7 @@ import statistics
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -141,6 +141,21 @@ class MaterialityThresholds:
     require_seed_axis_to_vary: bool = True
     require_clean_closure_integrity: bool = True
     require_healthy_seeds: bool = True
+    require_direction_isolating_stress_cases: bool = True
+    #: How far a direction pair's per-slot shares may sum from 1.0 before the
+    #: stress case is changing VOLUME as well as direction.
+    pair_sum_tolerance: float = 1e-3
+
+
+#: What a direction stress case must be for Gate S to mean anything: the two
+#: directed edges of a station must still sum to the measured two-way total,
+#: so the case moves traffic BETWEEN carriageways without changing how much
+#: there is. See ``measure_pair_sum_isolation``.
+PAIR_SUM_REQUIREMENT = (
+    "each station's two directed shares must sum to 1.0 in every slot, in "
+    "every stress case; otherwise the case changes total demand as well as "
+    "its direction and Gate S cannot attribute a difference to direction"
+)
 
 
 @dataclass(frozen=True)
@@ -163,8 +178,18 @@ class Registration:
     source_digests: Mapping[str, str]
     demand_build_id: str = ""
     network_build_id: str = ""
+    stress_case_isolation: Mapping[str, Any] = field(default_factory=dict)
     release_evidence: bool = False
     note: str = ""
+
+    @property
+    def stress_cases_isolate_direction(self) -> bool:
+        """True only when every stress case preserves the pair sum.
+
+        Absent evidence counts as NOT isolating: a registration that never
+        measured this cannot vouch for it.
+        """
+        return bool(self.stress_case_isolation.get("isolates_direction"))
 
     def to_json(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -178,6 +203,80 @@ class Registration:
     @property
     def content_key(self) -> str:
         return content_digest(self.to_json())
+
+
+def measure_pair_sum_isolation(
+        sumo_dir: Path,
+        tolerance: float = MaterialityThresholds().pair_sum_tolerance,
+) -> dict[str, Any]:
+    """Do the q10/q50/q90 splits change direction only, or volume too?
+
+    Gate S asks whether the DIRECTION axis changes a closure decision. That
+    question is only answerable if the stress cases differ in direction and
+    in nothing else. They do not today: ``dirsplit/predict.py`` writes
+    ``edge_shares_q10`` as ``(e0 -> s10, e1 -> 1 - s90)`` and
+    ``edge_shares_q90`` as ``(e0 -> s90, e1 -> 1 - s10)``, so each outer
+    pair sums to ``1 -/+ (s90 - s10)`` rather than 1. Measured on the
+    tracked model that is about -/+0.12, which means the q10 arm hands the
+    calibrator Level-1 targets summing to well under the measured two-way
+    total and the q90 arm well over it.
+
+    A Gate S run on those artifacts could react to TOTAL VOLUME rather than
+    direction, and there is no way to tell the two apart after the fact. So
+    this is measured before the run, recorded in the frozen registration,
+    and enforced by the gate rather than left as a footnote.
+    """
+    path = sumo_dir / "direction_split.json"
+    if not path.exists():
+        return {"isolates_direction": False,
+                "reason": f"{path} is missing, so isolation is unverified",
+                "requirement": PAIR_SUM_REQUIREMENT}
+    data = json.loads(path.read_text())
+
+    keys = {"q50": "edge_shares", "q10": "edge_shares_q10",
+            "q90": "edge_shares_q90"}
+    per_case: dict[str, Any] = {}
+    worst_overall = 0.0
+    for case, key in keys.items():
+        worst = 0.0
+        offenders: list[str] = []
+        for sensor, record in sorted(data.items()):
+            shares = record.get(key)
+            if not shares:
+                offenders.append(f"{sensor}: no {key}")
+                continue
+            series = list(shares.values())
+            if len(series) != 2:
+                # A single-direction station has no pair to sum; only a
+                # two-edge station carries the invariant.
+                continue
+            deviation = max(abs(a + b - 1.0)
+                            for a, b in zip(series[0], series[1]))
+            worst = max(worst, deviation)
+            if deviation > tolerance:
+                offenders.append(f"{sensor}: max |sum-1| = {deviation:.4f}")
+        worst_overall = max(worst_overall, worst)
+        per_case[case] = {
+            "max_abs_pair_sum_deviation": round(worst, 6),
+            "within_tolerance": worst <= tolerance,
+            "offenders": offenders,
+        }
+
+    isolates = all(entry["within_tolerance"] for entry in per_case.values())
+    return {
+        "isolates_direction": isolates,
+        "tolerance": tolerance,
+        "max_abs_pair_sum_deviation": round(worst_overall, 6),
+        "by_case": per_case,
+        "requirement": PAIR_SUM_REQUIREMENT,
+        "reason": (None if isolates else
+                   "at least one stress case's direction pairs do not sum to "
+                   f"1.0 (worst |sum-1| = {worst_overall:.4f} > {tolerance}), "
+                   "so the case changes total demand as well as direction; "
+                   "rebuild the q artifacts with a pair-sum-preserving "
+                   "construction before running Gate S"),
+        "source": str(path),
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -203,18 +302,39 @@ def route_edge_exposure(route_path: Path) -> dict[str, int]:
     return counts
 
 
-def survives_own_closure(edge_id: str, net_path: Path) -> bool:
+def load_network(net_path: Path):
+    """Read the SUMO network, or refuse to select without it.
+
+    FAIL-CLOSED. The previous version returned ``True`` from the topology
+    filter when ``sumolib`` was absent, so a checkout without SUMO silently
+    selected candidates that sever their own downstream pocket — a topology
+    failure dressed up as a direction-sensitivity observation, inside a
+    selection whose whole purpose is to be frozen and defensible. An
+    unverifiable filter is not a passed filter.
+    """
+    try:
+        import sumolib
+    except ImportError as error:                       # pragma: no cover
+        raise RuntimeError(
+            "sumolib is required to verify that a candidate survives its own "
+            "closure; refusing to freeze a selection whose topology filter "
+            "could not run (pip install eclipse-sumo)") from error
+    if not net_path.exists():
+        raise FileNotFoundError(f"network artifact missing: {net_path}")
+    return sumolib.net.readNet(str(net_path))
+
+
+def survives_own_closure(edge_id: str, net_path: Path, net=None) -> bool:
     """Can traffic still reach this edge's successors once it is closed?
 
     A candidate that severs its own downstream pocket is a topology failure
     rather than a direction-sensitivity observation, so it is filtered out
     before the experiment rather than becoming a confound inside it.
+
+    ``net`` may be a preloaded network; the caller probes many edges against
+    one network and re-reading a 15 MB file per edge is pure waste.
     """
-    try:
-        import sumolib
-    except ImportError:
-        return True                      # cannot probe; do not silently drop
-    net = sumolib.net.readNet(str(net_path))
+    net = net if net is not None else load_network(net_path)
     if not net.hasEdge(edge_id):
         return False
     edge = net.getEdge(edge_id)
@@ -266,19 +386,28 @@ def select_candidates(sumo_dir: Path, sensor_edges: Iterable[str],
                   key=lambda edge: (-exposures["q50"][edge], edge))
 
     net_path = sumo_dir / "net.net.xml"
+    net = load_network(net_path)      # fail-closed: no network, no selection
     chosen: list[str] = []
     probed = 0
     for edge in pool:
         if len(chosen) >= count:
             break
         probed += 1
-        if survives_own_closure(edge, net_path):
+        if survives_own_closure(edge, net_path, net=net):
             chosen.append(edge)
+
+    if len(chosen) < count:
+        raise RuntimeError(
+            f"only {len(chosen)} of {count} requested candidates survive their "
+            f"own closure after probing {probed} of {len(pool)} pool edges; "
+            "freezing a short selection would silently change the "
+            "preregistered experiment")
 
     return chosen, {
         "rule": SELECTION_RULE,
         "pool_size": len(pool),
         "probed": probed,
+        "topology_filter": "sumolib reachability, verified (never fail-open)",
         "excluded_sensor_edges": sorted(excluded),
         "exposure_q50": {edge: exposures["q50"][edge] for edge in chosen},
         "exposure_q10": {edge: exposures["q10"].get(edge, 0) for edge in chosen},
@@ -345,27 +474,74 @@ def demand_window(sumo_dir: Path) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-def closure_window(sumo_dir: Path, begin: str, end: str) -> tuple[str, str]:
+class RegistrationError(RuntimeError):
+    """The frozen experiment cannot be built as specified."""
+
+
+def closure_window(sumo_dir: Path, begin: str, end: str,
+                   date: str | None = None) -> tuple[str, str]:
     """Resolve the registered HH:MM closure window onto the demand calendar.
 
     The registered window is a real constraint, not a label: a closure that
     silently ran for the whole demand day would measure a different scenario
-    from the one that was frozen. Clamped into the demand window so the spec
-    stays valid; the clamp is visible in the registration because both the
-    requested and the resolved window are recorded.
+    from the one that was frozen.
+
+    FAIL-CLOSED on a window that does not fit. The previous version quietly
+    substituted the entire demand window when the requested one fell outside
+    the build — which is the one thing a preregistration exists to prevent:
+    the experiment that ran would not be the experiment that was frozen, and
+    nothing in the artifact would say so. Both a window outside the build
+    and a window that only partly overlaps it now raise, so the operator
+    fixes the registration or the demand build rather than discovering
+    afterwards that a four-hour closure ran for twenty-four.
     """
     import pandas as pd
 
     start_iso, end_iso = demand_window(sumo_dir)
     start, finish = pd.Timestamp(start_iso), pd.Timestamp(end_iso)
-    day = start.normalize()
-    lo = pd.Timestamp(f"{day.strftime('%Y-%m-%d')} {begin}")
-    hi = pd.Timestamp(f"{day.strftime('%Y-%m-%d')} {end}")
-    lo = max(lo, start)
-    hi = min(hi, finish)
-    if hi <= lo:                      # window lies outside this demand build
-        lo, hi = start, finish
+    day = pd.Timestamp(date).normalize() if date else start.normalize()
+    try:
+        lo = pd.Timestamp(f"{day.strftime('%Y-%m-%d')} {begin}")
+        hi = pd.Timestamp(f"{day.strftime('%Y-%m-%d')} {end}")
+    except ValueError as error:
+        raise RegistrationError(
+            f"closure window {begin!r}-{end!r} is not a valid HH:MM range"
+        ) from error
+    if hi <= lo:
+        raise RegistrationError(
+            f"closure window {begin}-{end} on {day.date()} is empty or "
+            "reversed")
+    if lo < start or hi > finish:
+        raise RegistrationError(
+            f"the registered closure window {lo.isoformat()} - "
+            f"{hi.isoformat()} does not fit inside the loaded demand window "
+            f"{start.isoformat()} - {finish.isoformat()}. Refusing to "
+            "substitute the whole demand window: that would silently run a "
+            "different experiment from the one being frozen. Rebuild the "
+            "demand for a window that contains the closure, or register a "
+            "closure window this build actually covers.")
     return lo.isoformat(), hi.isoformat()
+
+
+def validate_registered_date(sumo_dir: Path, date: str) -> str:
+    """The registered date must be the date the demand build actually is.
+
+    A registration that names 2025-09-16 while the loaded demand is a 2027
+    forecast day describes an experiment nobody ran. The demand metadata is
+    the authority; the CLI argument is a claim about it.
+    """
+    with open(sumo_dir / "demand_meta.json") as handle:
+        meta = json.load(handle)
+    actual = str(meta.get("date") or meta.get("start_date") or "")
+    if not actual:
+        raise RegistrationError(
+            f"{sumo_dir}/demand_meta.json carries no date or start_date, so "
+            "the registered date cannot be verified against it")
+    if date != actual:
+        raise RegistrationError(
+            f"registered date {date!r} does not match the loaded demand build "
+            f"({actual!r}). Pass --date {actual} or rebuild the demand.")
+    return actual
 
 
 def build_spec_payload(registration: Registration, *, case_variant: str,
@@ -576,20 +752,40 @@ def seed_axis_varied(observations: Sequence[Observation]) -> dict[str, Any]:
     This is the guard against the exact defect this tool was repaired for: a
     matrix that runs the same simulation under different labels answers
     nothing. Inserted-vehicle counts are simulator-side and seed-sensitive,
-    so a matrix where they never move means the seed axis was inert.
+    so a group where they never move means the seed axis was inert.
+
+    Grouped by ``(stress case, CANDIDATE)``, not by stress case alone. Two
+    candidates close different edges and legitimately insert different
+    numbers of vehicles, so pooling them lets a candidate-to-candidate
+    difference masquerade as seed variation — a matrix in which every seed
+    was byte-identical would still report ``varied: true``. The seed axis is
+    only demonstrated when the numbers move WITHIN a group that differs by
+    nothing except the seed.
     """
-    per_case: dict[str, set[int]] = {}
+    per_group: dict[tuple[str, str], set[int]] = {}
     for obs in observations:
         if obs.vehicles_inserted is not None:
-            per_case.setdefault(obs.stress_case, set()).add(
+            per_group.setdefault((obs.stress_case, obs.candidate), set()).add(
                 int(obs.vehicles_inserted))
-    measurable = {case: sorted(values) for case, values in per_case.items()}
-    varied = any(len(values) > 1 for values in measurable.values())
+    measurable = {f"{case}|{candidate}": sorted(values)
+                  for (case, candidate), values in sorted(per_group.items())}
+    varying = sorted(key for key, values in measurable.items()
+                     if len(values) > 1)
+    inert = sorted(key for key, values in measurable.items()
+                   if len(values) <= 1)
+    # EVERY group must vary. One group that happens to move cannot vouch for
+    # a matrix in which the rest were identical runs.
+    varied = bool(measurable) and not inert
     return {
-        "varied": bool(varied),
-        "distinct_inserted_by_case": measurable,
+        "varied": varied,
+        "grouped_by": "stress_case x candidate",
+        "distinct_inserted_by_group": measurable,
+        "groups_that_varied": varying,
+        "groups_that_did_not_vary": inert,
         "note": ("a matrix whose seeds produce identical simulator output "
-                 "has no seed axis, whatever its labels say"),
+                 "has no seed axis, whatever its labels say; grouping by "
+                 "case alone would let a candidate difference stand in for "
+                 "a seed difference"),
     }
 
 
@@ -640,19 +836,40 @@ def decide_gate_s(observations: Sequence[Observation],
                 f"SUMO health flags raised in {len(unhealthy)} run(s): "
                 f"{unhealthy[:5]}", observations, registration)
 
+    if (thresholds.require_direction_isolating_stress_cases
+            and not registration.stress_cases_isolate_direction):
+        return _inconclusive(
+            "the stress cases do not isolate the direction axis: "
+            + (registration.stress_case_isolation.get("reason")
+               or "the direction-split pairs do not sum to 1"),
+            observations, registration,
+            isolation=registration.stress_case_isolation)
+
     axis = seed_axis_varied(usable)
     if thresholds.require_seed_axis_to_vary and not axis["varied"]:
         return _inconclusive(
-            "the seed axis did not vary: every seed produced identical "
-            "simulator output, so no matched-seed comparison was actually "
-            "performed", observations, registration, seed_axis=axis)
+            "the seed axis did not vary in "
+            f"{len(axis['groups_that_did_not_vary'])} (case, candidate) "
+            "group(s): those seeds produced identical simulator output, so "
+            "no matched-seed comparison was actually performed there",
+            observations, registration, seed_axis=axis)
 
+    # A ranking key that moves across seeds is a BROKEN MEASUREMENT, not
+    # evidence about direction. The deployed key is demand-side and cannot
+    # legitimately vary with the seed, so if it does, this run has not
+    # measured what it claims to and neither YES nor NO is available. The
+    # previous version appended it to material_reasons, which turned a
+    # measurement fault into a YES — the single worst failure mode for a
+    # gate whose YES unlocks product work.
     invariance = seed_invariance(usable)
-    material_reasons: list[str] = []
     if not invariance["ranking_key_is_seed_deterministic"]:
-        material_reasons.append(
-            "the deployed ranking key is NOT seed-deterministic: "
-            + "; ".join(invariance["violations"][:3]))
+        return _inconclusive(
+            "the deployed ranking key is NOT seed-deterministic, so this "
+            "matrix did not isolate direction from simulator noise: "
+            + "; ".join(invariance["violations"][:3]),
+            observations, registration, seed_invariance=invariance)
+
+    material_reasons: list[str] = []
 
     # ── the real policy, applied once per stress case ────────────────────
     decision_by_case = {case: policy_decision_for_case(usable, case)
@@ -690,6 +907,18 @@ def decide_gate_s(observations: Sequence[Observation],
                          sort_keys=True))
 
     # ── per-candidate spread on the deployed ranking key ─────────────────
+    # Only a candidate that is VIABLE somewhere can have its cost spread
+    # count. The deployed policy never ranks a disqualified candidate
+    # against a viable one — a schedule that severs someone's destination is
+    # refused whatever it costs — so a candidate disqualified in every case
+    # has the same fate in every case, and its cost spread cannot change a
+    # decision. Letting it open the gate was a false YES: it credited
+    # direction with moving a number the policy does not read.
+    always_disqualified = {
+        candidate for candidate in registration.candidate_edges
+        if all(candidate in decision_by_case[case]["disqualified"]
+               for case in registration.stress_cases)
+    }
     per_candidate: dict[str, Any] = {}
     for candidate in registration.candidate_edges:
         case_values = {
@@ -702,7 +931,9 @@ def decide_gate_s(observations: Sequence[Observation],
         between = max(present) - min(present)
         reference = abs(statistics.fmean(present)) or 1.0
         relative = between / reference
-        exceeds = relative >= thresholds.relative_objective
+        decision_relevant = candidate not in always_disqualified
+        exceeds = (decision_relevant
+                   and relative >= thresholds.relative_objective)
         per_candidate[candidate] = {
             "added_vehicle_hours_by_case": {
                 case: (None if value is None else round(value, 4))
@@ -710,12 +941,29 @@ def decide_gate_s(observations: Sequence[Observation],
             "between_case_range": round(between, 4),
             "relative_between_case": round(relative, 4),
             "seed_range_within_case": 0.0,
+            "decision_relevant": decision_relevant,
             "material": bool(exceeds),
+            **({"why_not_decision_relevant":
+                "disqualified by the no-detour rule in every stress case, so "
+                "the deployed policy never reads its cost"}
+               if not decision_relevant else {}),
         }
         if exceeds:
             material_reasons.append(
                 f"{candidate}: added_vehicle_hours spans {between:.4f} h "
                 f"across stress cases, {relative:.1%} of its own mean")
+
+    if always_disqualified and always_disqualified == set(
+            registration.candidate_edges):
+        # Nothing was ever viable, so there was no decision to be sensitive
+        # about. Reporting NO here would claim direction is irrelevant on
+        # the strength of an experiment that never ranked anything.
+        return _inconclusive(
+            "every candidate was disqualified by the no-detour rule in every "
+            "stress case, so no viable set was ever formed and there was no "
+            "decision for direction to change",
+            observations, registration,
+            always_disqualified=sorted(always_disqualified))
 
     gate = "YES" if material_reasons else "NO"
     return {
@@ -743,7 +991,14 @@ def decide_gate_s(observations: Sequence[Observation],
 def _inconclusive(reason: str, observations: Sequence[Observation],
                   registration: Registration,
                   failure_reasons: Sequence[str] = (),
-                  seed_axis: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                  **context: Any) -> dict[str, Any]:
+    """One INCONCLUSIVE shape, with whatever evidence the caller measured.
+
+    ``context`` carries the diagnostic the specific refusal produced —
+    ``seed_axis``, ``seed_invariance``, ``isolation``,
+    ``always_disqualified`` — so the artifact records WHY it could not
+    decide, not merely that it could not.
+    """
     payload = {
         "protocol": PROTOCOL,
         "gate_s": "INCONCLUSIVE",
@@ -757,8 +1012,9 @@ def _inconclusive(reason: str, observations: Sequence[Observation],
                  "frozen version without selecting cases from this outcome."),
         "observations": [o.to_json() for o in observations],
     }
-    if seed_axis is not None:
-        payload["seed_axis"] = dict(seed_axis)
+    for key, value in context.items():
+        if value is not None:
+            payload[key] = dict(value) if isinstance(value, Mapping) else value
     return payload
 
 
@@ -773,9 +1029,15 @@ def build_registration(sumo_dir: Path, *, date: str, begin: str, end: str,
     registry = load_registry(Path("data_in/sensors.json"))
     sensor_edges = {edge for record in registry.records.values()
                     for edge in record.approved_edge_ids}
+    # Validate the claim BEFORE selecting: a registration naming a date the
+    # loaded demand is not describes an experiment nobody ran, and the
+    # candidate selection would already be computed from the wrong build.
+    validate_registered_date(sumo_dir, date)
     candidates, selection = select_candidates(sumo_dir, sensor_edges, count)
     demand_id, network_id = demand_identity(sumo_dir)
-    closure_begin, closure_end = closure_window(sumo_dir, begin, end)
+    closure_begin, closure_end = closure_window(sumo_dir, begin, end, date)
+    isolation = measure_pair_sum_isolation(
+        sumo_dir, MaterialityThresholds().pair_sum_tolerance)
 
     digests = {}
     for _name, filename, _variant in STRESS_CASES:
@@ -808,15 +1070,19 @@ def build_registration(sumo_dir: Path, *, date: str, begin: str, end: str,
         source_digests=digests,
         demand_build_id=demand_id,
         network_build_id=network_id,
+        stress_case_isolation=isolation,
         note=("q10/q50/q90 are NAMED STRESS CASES with unvalidated nominal "
               "coverage, not probability statements. This measures spread, "
               "not a distribution. Each (case, seed) pair is bound through "
               "its own one-seed ScenarioSpec, and the decision is read from "
               "the deployed closure_ranking policy. The ranking key is "
               "demand-side and therefore seed-deterministic by construction; "
-              "that invariant is verified per run, and the seed axis is used "
-              "for simulator health, closure integrity and the inertness "
-              "check."),
+              "that invariant is verified per run — a violation is a broken "
+              "measurement and yields INCONCLUSIVE, never YES — and the seed "
+              "axis is used for simulator health, closure integrity and an "
+              "inertness check grouped by (case, candidate). Gate S also "
+              "requires the stress cases to ISOLATE direction: see "
+              "stress_case_isolation."),
     )
 
 
@@ -839,9 +1105,12 @@ def main(argv: list[str] | None = None) -> int:
                              "is provably frozen before execution")
     args = parser.parse_args(argv)
 
-    registration = build_registration(
-        args.sumo_dir, date=args.date, begin=args.begin, end=args.end,
-        seeds=args.seeds, count=args.candidates, timeout_s=args.timeout_s)
+    try:
+        registration = build_registration(
+            args.sumo_dir, date=args.date, begin=args.begin, end=args.end,
+            seeds=args.seeds, count=args.candidates, timeout_s=args.timeout_s)
+    except (RegistrationError, RuntimeError, FileNotFoundError) as error:
+        raise SystemExit(f"cannot freeze this experiment: {error}")
 
     payload = registration.to_json()
     payload["content_key"] = registration.content_key
@@ -867,6 +1136,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  cases     : {list(registration.stress_cases)}")
     print(f"  closure   : {registration.closure_begin} → "
           f"{registration.closure_end}")
+
+    isolation = registration.stress_case_isolation
+    if registration.stress_cases_isolate_direction:
+        print(f"  isolation : direction only (max |pair sum - 1| = "
+              f"{isolation.get('max_abs_pair_sum_deviation')})")
+    else:
+        print("\n  ⚠ THE STRESS CASES DO NOT ISOLATE DIRECTION")
+        print(f"    {isolation.get('reason')}")
+        print("    Gate S will return INCONCLUSIVE: a difference measured on "
+              "these\n    artifacts could be a change in total volume rather "
+              "than direction.")
     if args.freeze_only:
         return 0
 

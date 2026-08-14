@@ -48,6 +48,11 @@ def registration(candidates=("edgeA", "edgeB"), seeds=(1000, 1001, 1002, 1003),
         source_digests={},
         demand_build_id="demand-abc",
         network_build_id="network-def",
+        # Direction-isolating by default, so a test about the DECISION is not
+        # silently answered by the isolation precondition. The confounded
+        # case has its own tests in TestStressCasesMustIsolateDirection.
+        stress_case_isolation={"isolates_direction": True,
+                               "max_abs_pair_sum_deviation": 0.0},
     )
     payload.update(overrides)
     return sens.Registration(**payload)
@@ -404,7 +409,15 @@ class TestTheSeedAxisIsChecked:
         assert result["seed_invariance"]["ranking_key_is_seed_deterministic"]
         assert result["seed_invariance"]["violations"] == []
 
-    def test_a_ranking_key_that_moves_across_seeds_is_a_finding(self):
+    def test_a_ranking_key_that_moves_across_seeds_is_INCONCLUSIVE_not_YES(self):
+        """A broken measurement is not evidence that direction matters.
+
+        The deployed ranking key is demand-side and cannot legitimately vary
+        with the seed. If it does, the matrix did not isolate direction from
+        simulator noise and NEITHER answer is available. Reporting YES here
+        would let a measurement fault unlock product work — the worst
+        failure mode this gate has.
+        """
         obs = observations({
             "edgeA": {"q50": 1.0, "q10": 1.0, "q90": 1.0},
             "edgeB": {"q50": 2.0, "q10": 2.0, "q90": 2.0},
@@ -413,8 +426,173 @@ class TestTheSeedAxisIsChecked:
             if observation.candidate == "edgeA" and observation.seed == 1003:
                 observation.policy["added_vehicle_hours"] = 5.0
         result = sens.decide_gate_s(obs, registration())
+        assert result["gate_s"] == "INCONCLUSIVE"
+        assert "NOT seed-deterministic" in result["reasons"][0]
+        assert result["seed_invariance"]["violations"]
+
+    def test_the_inertness_check_groups_by_case_AND_candidate(self):
+        """Two candidates legitimately insert different vehicle counts.
+
+        Pooling them per stress case lets a candidate-to-candidate
+        difference stand in for a seed difference, so a matrix in which
+        every seed was byte-identical still reported varied: true.
+        """
+        obs = []
+        for case in ("q50", "q10", "q90"):
+            for candidate, inserted in (("edgeA", 20000), ("edgeB", 21000)):
+                for seed in (1000, 1001, 1002, 1003):
+                    obs.append(sens.Observation(
+                        stress_case=case, seed=seed, candidate=candidate,
+                        policy=policy(1.0 if candidate == "edgeA" else 2.0),
+                        closure_integrity="verified_clean",
+                        seed_health_flags=(),
+                        vehicles_inserted=inserted,   # identical per seed
+                        hard_failure=False, failure_reason=None,
+                        runtime_s=1.0))
+        axis = sens.seed_axis_varied(obs)
+        assert axis["varied"] is False
+        assert axis["grouped_by"] == "stress_case x candidate"
+        assert len(axis["groups_that_did_not_vary"]) == 6
+
+        result = sens.decide_gate_s(obs, registration())
+        assert result["gate_s"] == "INCONCLUSIVE"
+        assert "seed axis did not vary" in result["reasons"][0]
+
+    def test_every_group_must_vary_not_merely_one(self):
+        inserted = {}
+        obs = []
+        for case in ("q50", "q10", "q90"):
+            for candidate in ("edgeA", "edgeB"):
+                for seed in (1000, 1001, 1002, 1003):
+                    # edgeA varies with the seed; edgeB never does.
+                    value = (20000 + seed if candidate == "edgeA" else 21000)
+                    obs.append(sens.Observation(
+                        stress_case=case, seed=seed, candidate=candidate,
+                        policy=policy(1.0 if candidate == "edgeA" else 2.0),
+                        closure_integrity="verified_clean",
+                        seed_health_flags=(), vehicles_inserted=value,
+                        hard_failure=False, failure_reason=None,
+                        runtime_s=1.0))
+        axis = sens.seed_axis_varied(obs)
+        assert axis["varied"] is False
+        assert all(key.endswith("edgeB")
+                   for key in axis["groups_that_did_not_vary"])
+
+
+# ── a disqualified candidate cannot open the gate ─────────────────────────
+class TestDisqualifiedCandidatesDoNotOpenTheGate:
+    """The deployed policy never reads a disqualified candidate's cost.
+
+    rank_closures refuses a schedule that severs someone's destination
+    whatever it costs, so a candidate disqualified in EVERY stress case has
+    the same fate in every case and its cost spread cannot change a
+    decision. Crediting direction with moving that number was a false YES.
+    """
+
+    def test_a_candidate_disqualified_everywhere_is_not_material(self):
+        obs = observations({
+            # huge cost spread, but severed in every case
+            "edgeA": {"q50": policy(1.0, no_detour=5),
+                      "q10": policy(0.2, no_detour=5),
+                      "q90": policy(9.0, no_detour=5)},
+            "edgeB": {"q50": 2.0, "q10": 2.0, "q90": 2.0},
+        })
+        result = sens.decide_gate_s(obs, registration())
+        assert result["gate_s"] == "NO"
+        assert result["per_candidate"]["edgeA"]["decision_relevant"] is False
+        assert result["per_candidate"]["edgeA"]["material"] is False
+        assert result["per_candidate"]["edgeA"]["relative_between_case"] > 0.1
+
+    def test_a_candidate_viable_somewhere_still_counts(self):
+        obs = observations({
+            "edgeA": {"q50": policy(1.0),
+                      "q10": policy(0.2),
+                      "q90": policy(9.0, no_detour=5)},
+            "edgeB": {"q50": 2.0, "q10": 2.0, "q90": 2.0},
+        })
+        result = sens.decide_gate_s(obs, registration())
+        assert result["per_candidate"]["edgeA"]["decision_relevant"] is True
         assert result["gate_s"] == "YES"
-        assert any("NOT seed-deterministic" in r for r in result["reasons"])
+
+    def test_nothing_viable_anywhere_is_inconclusive(self):
+        """No viable set was ever formed, so there was no decision."""
+        obs = observations({
+            "edgeA": {"q50": policy(1.0, no_detour=3),
+                      "q10": policy(1.0, no_detour=3),
+                      "q90": policy(1.0, no_detour=3)},
+            "edgeB": {"q50": policy(2.0, no_detour=4),
+                      "q10": policy(2.0, no_detour=4),
+                      "q90": policy(2.0, no_detour=4)},
+        })
+        result = sens.decide_gate_s(obs, registration())
+        assert result["gate_s"] == "INCONCLUSIVE"
+        assert "no viable set was ever formed" in result["reasons"][0]
+
+
+# ── the stress cases must isolate direction ───────────────────────────────
+class TestStressCasesMustIsolateDirection:
+    """q10/q90 as written change TOTAL VOLUME as well as direction.
+
+    dirsplit/predict.py writes edge_shares_q10 as (e0 -> s10, e1 -> 1 - s90)
+    and edge_shares_q90 as (e0 -> s90, e1 -> 1 - s10), so each outer pair
+    sums to 1 -/+ (s90 - s10) rather than 1 — about -/+0.12 on the tracked
+    model. A Gate S difference measured on those artifacts could be a
+    volume effect, and nothing afterwards can separate the two.
+    """
+
+    def write(self, tmp_path, *, q10_lo=0.4, q10_hi=0.6, q90_lo=0.6,
+              q90_hi=0.4):
+        payload = {"107": {
+            "edge_shares": {"n": [0.52] * 96, "s": [0.48] * 96},
+            "edge_shares_q10": {"n": [q10_lo] * 96, "s": [q10_hi] * 96},
+            "edge_shares_q90": {"n": [q90_lo] * 96, "s": [q90_hi] * 96},
+        }}
+        (tmp_path / "direction_split.json").write_text(json.dumps(payload))
+        return tmp_path
+
+    def test_pair_sums_of_one_isolate_direction(self, tmp_path):
+        report = sens.measure_pair_sum_isolation(self.write(tmp_path))
+        assert report["isolates_direction"] is True
+        assert report["max_abs_pair_sum_deviation"] < 1e-9
+
+    def test_the_real_defect_is_detected(self, tmp_path):
+        """The shipped construction: q10 sums low, q90 sums high."""
+        sumo = self.write(tmp_path, q10_lo=0.41, q10_hi=0.47,
+                          q90_lo=0.59, q90_hi=0.53)
+        report = sens.measure_pair_sum_isolation(sumo)
+        assert report["isolates_direction"] is False
+        assert report["by_case"]["q50"]["within_tolerance"] is True
+        assert report["by_case"]["q10"]["within_tolerance"] is False
+        assert report["by_case"]["q90"]["within_tolerance"] is False
+        assert "rebuild the q artifacts" in report["reason"]
+
+    def test_a_missing_split_file_is_not_isolation(self, tmp_path):
+        report = sens.measure_pair_sum_isolation(tmp_path)
+        assert report["isolates_direction"] is False
+        assert "missing" in report["reason"]
+
+    def test_the_gate_refuses_to_decide_on_confounded_stress_cases(self):
+        obs = observations({
+            "edgeA": {"q50": 1.0, "q10": 0.5, "q90": 1.5},
+            "edgeB": {"q50": 9.0, "q10": 9.0, "q90": 9.0},
+        })
+        confounded = registration(stress_case_isolation={
+            "isolates_direction": False,
+            "reason": "q10/q90 pairs sum to 0.88/1.12"})
+        result = sens.decide_gate_s(obs, confounded)
+        assert result["gate_s"] == "INCONCLUSIVE"
+        assert "do not isolate the direction axis" in result["reasons"][0]
+
+    def test_absent_isolation_evidence_counts_as_not_isolating(self):
+        """A registration that never measured it cannot vouch for it."""
+        assert registration(stress_case_isolation={}
+                            ).stress_cases_isolate_direction is False
+
+    def test_isolation_travels_inside_the_frozen_key(self):
+        clean = registration()
+        dirty = registration(stress_case_isolation={
+            "isolates_direction": False})
+        assert clean.content_key != dirty.content_key
 
 
 # ── fail-closed ───────────────────────────────────────────────────────────
@@ -584,9 +762,18 @@ class TestSelectionIsOutcomeBlind:
 
 # ── the closure window resolves onto the demand calendar ──────────────────
 class TestClosureWindowResolution:
-    def write(self, tmp_path, epoch="2025-09-16T00:00:00", n_intervals=96):
+    """A window that does not fit must FAIL, never be substituted.
+
+    The previous version quietly replaced a non-fitting window with the
+    entire demand window, which is the one thing a preregistration exists to
+    prevent: a four-hour closure would have run for twenty-four and nothing
+    in the artifact would have said so.
+    """
+
+    def write(self, tmp_path, epoch="2025-09-16T00:00:00", n_intervals=96,
+              date="2025-09-16"):
         (tmp_path / "demand_meta.json").write_text(json.dumps(
-            {"epoch_sim": epoch, "n_intervals": n_intervals}))
+            {"epoch_sim": epoch, "n_intervals": n_intervals, "date": date}))
         return tmp_path
 
     def test_a_subwindow_of_a_whole_day_is_kept(self, tmp_path):
@@ -594,19 +781,87 @@ class TestClosureWindowResolution:
         assert begin.startswith("2025-09-16T06:00")
         assert end.startswith("2025-09-16T10:00")
 
-    def test_a_window_outside_the_demand_build_falls_back_to_the_whole_run(
-            self, tmp_path):
-        """Better a stated whole-window closure than an invalid spec."""
+    def test_a_window_outside_the_demand_build_is_refused(self, tmp_path):
         sumo = self.write(tmp_path, epoch="2025-09-16T12:00:00", n_intervals=8)
-        begin, end = sens.closure_window(sumo, "06:00", "10:00")
-        assert begin.startswith("2025-09-16T12:00")
-        assert end.startswith("2025-09-16T14:00")
+        with pytest.raises(sens.RegistrationError,
+                           match="does not fit inside the loaded demand"):
+            sens.closure_window(sumo, "06:00", "10:00")
 
-    def test_the_window_is_clamped_into_the_demand_window(self, tmp_path):
+    def test_a_partly_overlapping_window_is_refused_not_clamped(self,
+                                                                 tmp_path):
+        """A clamp silently shortens the frozen experiment."""
         sumo = self.write(tmp_path, epoch="2025-09-16T08:00:00", n_intervals=8)
-        begin, end = sens.closure_window(sumo, "06:00", "10:00")
-        assert begin.startswith("2025-09-16T08:00")
-        assert end.startswith("2025-09-16T10:00")
+        with pytest.raises(sens.RegistrationError,
+                           match="does not fit inside the loaded demand"):
+            sens.closure_window(sumo, "06:00", "10:00")
+
+    def test_the_refusal_says_what_to_do(self, tmp_path):
+        sumo = self.write(tmp_path, epoch="2025-09-16T12:00:00", n_intervals=8)
+        with pytest.raises(sens.RegistrationError) as raised:
+            sens.closure_window(sumo, "06:00", "10:00")
+        assert "Rebuild the demand" in str(raised.value)
+
+    def test_a_reversed_window_is_refused(self, tmp_path):
+        with pytest.raises(sens.RegistrationError, match="empty or reversed"):
+            sens.closure_window(self.write(tmp_path), "10:00", "06:00")
+
+    def test_the_window_resolves_onto_the_registered_date(self, tmp_path):
+        sumo = self.write(tmp_path, epoch="2025-09-16T00:00:00",
+                          n_intervals=192, date="2025-09-16")
+        begin, end = sens.closure_window(sumo, "06:00", "10:00", "2025-09-17")
+        assert begin.startswith("2025-09-17T06:00")
+        assert end.startswith("2025-09-17T10:00")
+
+
+# ── the registered date must be the demand build's own date ───────────────
+class TestTheRegisteredDateIsVerified:
+    def write(self, tmp_path, **meta):
+        payload = {"epoch_sim": "2025-09-16T00:00:00", "n_intervals": 96,
+                   "date": "2025-09-16"}
+        payload.update(meta)
+        (tmp_path / "demand_meta.json").write_text(json.dumps(payload))
+        return tmp_path
+
+    def test_a_matching_date_is_accepted(self, tmp_path):
+        assert sens.validate_registered_date(
+            self.write(tmp_path), "2025-09-16") == "2025-09-16"
+
+    def test_a_mismatched_date_is_refused(self, tmp_path):
+        """A registration naming a day the demand is not describes an
+        experiment nobody ran."""
+        with pytest.raises(sens.RegistrationError, match="does not match"):
+            sens.validate_registered_date(self.write(tmp_path), "2027-09-14")
+
+    def test_a_multi_day_build_is_matched_on_its_start_date(self, tmp_path):
+        sumo = self.write(tmp_path, date=None, start_date="2025-09-16")
+        assert sens.validate_registered_date(sumo, "2025-09-16")
+
+    def test_a_build_with_no_date_cannot_be_verified(self, tmp_path):
+        sumo = self.write(tmp_path, date=None)
+        with pytest.raises(sens.RegistrationError, match="carries no date"):
+            sens.validate_registered_date(sumo, "2025-09-16")
+
+
+# ── the topology filter never fails open ──────────────────────────────────
+class TestTheTopologyFilterFailsClosed:
+    def test_a_missing_network_is_refused(self, tmp_path):
+        with pytest.raises((FileNotFoundError, RuntimeError)):
+            sens.load_network(tmp_path / "net.net.xml")
+
+    def test_selection_refuses_rather_than_returning_a_short_list(self):
+        """A short selection silently changes the frozen experiment."""
+        import inspect
+
+        source = inspect.getsource(sens.select_candidates)
+        assert "load_network" in source
+        assert "would silently change the" in source
+
+    def test_the_filter_is_not_allowed_to_return_true_on_import_error(self):
+        import inspect
+
+        source = inspect.getsource(sens.load_network)
+        assert "raise RuntimeError" in source
+        assert "return True" not in source
 
 
 # ── thresholds are frozen in code ─────────────────────────────────────────

@@ -9,6 +9,7 @@ import sys
 import subprocess
 import xml.etree.ElementTree as ET
 from collections import Counter
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -323,6 +324,100 @@ def test_write_counts_splits_two_way_total_by_direction_share(monkeypatch, tmp_p
     counts = {e.get("id"): float(e.get("count")) for e in root.find("interval")}
     assert counts["edgeN"] == 60.0
     assert counts["edgeS"] == 40.0
+
+
+def _counts(tmp_path, sensor_edges, flows, **kwargs):
+    out_path = tmp_path / "counts.xml"
+    bsd.write_counts(flows, sensor_edges, qi_start=0, n_intervals=1,
+                     out_path=out_path, **kwargs)
+    root = ET.parse(out_path).getroot()
+    return {e.get("id"): float(e.get("count")) for e in root.find("interval")}
+
+
+def test_write_counts_never_splits_a_single_direction_station(monkeypatch,
+                                                              tmp_path):
+    """A directional station's value IS that direction's count.
+
+    build_targets grew this guard on 2026-08-06; write_counts never did.
+    Since the direction model started predicting BOTH carriageways at every
+    station, the measured edge of a single-direction sensor resolves to
+    about 0.5 in the split file, so a measured 50 was written out as ~24 --
+    silently, and at 100% GEH against the halved target. Measured on the
+    real artifacts: sensor 1076's edge carries a modelled share of 0.48.
+    """
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    write_direction_split(tmp_path, {"measured": [0.48] * 96})
+
+    counts = _counts(tmp_path, {"1076": ["measured"]}, {"measured": [50.0]})
+    assert counts["measured"] == 50.0
+
+
+def test_write_counts_applies_the_published_local_anchor(monkeypatch,
+                                                          tmp_path):
+    """The routeSampler branch must not disagree with the PFE branch.
+
+    Both build the same measured Level-1 targets from the same inputs; an
+    anchor reaching one and not the other would calibrate the two branches
+    to different numbers.
+    """
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    registry = tmp_path / "sensors.json"
+    monkeypatch.setattr(dintake, "SENSOR_REGISTRY_PATH", registry)
+    registry.write_text(Path("data_in/sensors.json").read_text())
+
+    n_edge = "60786979_3575001205_0"
+    s_edge = "1455801464_18241874_0"
+    write_direction_split(tmp_path, {n_edge: [0.5] * 96, s_edge: [0.5] * 96})
+    flows = {n_edge: [200.0] * 96, s_edge: [200.0] * 96}
+    sensor_edges = {"107": [n_edge, s_edge]}
+
+    plain = _counts(tmp_path, sensor_edges, flows)
+    assert plain[n_edge] == plain[s_edge] == 100.0
+
+    anchored = _counts(tmp_path, sensor_edges, flows,
+                       anchor_day="2025-09-16")
+    assert anchored[n_edge] > anchored[s_edge]
+    # the measured two-way total survives the split
+    assert anchored[n_edge] + anchored[s_edge] == pytest.approx(200.0)
+    assert anchored[n_edge] / 200.0 == pytest.approx(3400 / 6500, abs=5e-3)
+
+
+def test_write_counts_leaves_a_forecast_year_unanchored(monkeypatch, tmp_path):
+    """107's reference declares calendar 2025; 2027 is outside it."""
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    registry = tmp_path / "sensors.json"
+    monkeypatch.setattr(dintake, "SENSOR_REGISTRY_PATH", registry)
+    registry.write_text(Path("data_in/sensors.json").read_text())
+
+    n_edge = "60786979_3575001205_0"
+    s_edge = "1455801464_18241874_0"
+    write_direction_split(tmp_path, {n_edge: [0.5] * 96, s_edge: [0.5] * 96})
+    flows = {n_edge: [200.0] * 96, s_edge: [200.0] * 96}
+    sensor_edges = {"107": [n_edge, s_edge]}
+
+    assert _counts(tmp_path, sensor_edges, flows, anchor_day="2027-09-14") == \
+        _counts(tmp_path, sensor_edges, flows)
+
+
+def test_both_demand_branches_agree_on_the_anchored_targets(monkeypatch,
+                                                             tmp_path):
+    """PFE and routeSampler must produce the SAME measured targets."""
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    registry = tmp_path / "sensors.json"
+    monkeypatch.setattr(dintake, "SENSOR_REGISTRY_PATH", registry)
+    registry.write_text(Path("data_in/sensors.json").read_text())
+
+    n_edge = "60786979_3575001205_0"
+    s_edge = "1455801464_18241874_0"
+    write_direction_split(tmp_path, {n_edge: [0.5] * 96, s_edge: [0.5] * 96})
+    flows = {n_edge: [200.0] * 96, s_edge: [200.0] * 96}
+    sensor_edges = {"107": [n_edge, s_edge]}
+
+    counts = _counts(tmp_path, sensor_edges, flows, anchor_day="2025-09-16")
+    targets = dintake.build_targets(flows, sensor_edges, 0, 1,
+                                    anchor_day="2025-09-16")[0]
+    for edge in (n_edge, s_edge):
+        assert counts[edge] == pytest.approx(targets[edge], abs=0.05)
 
 
 def test_clear_stale_scenarios_removes_only_json(monkeypatch, tmp_path):

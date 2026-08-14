@@ -1214,7 +1214,9 @@ def main() -> None:
                 anchor_day=args.start_date, anchor_epoch=source_epoch)
             counts_path = SUMO_DIR / f"counts{suffix}.xml"
             n = write_counts(flows, sensor_edges, qi_start, n_intervals,
-                             counts_path, split_key=key)
+                             counts_path, split_key=key,
+                             anchor_day=args.start_date,
+                             anchor_epoch=source_epoch)
             print(f"Wrote {counts_path}  ({n} edge×interval measurements)")
             print(f"Sampling routes to match counts ({key}) …")
             run_tool("routeSampler.py", [

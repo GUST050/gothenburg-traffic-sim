@@ -1,0 +1,62 @@
+{
+ "protocol": "dirsplit_gate_m_v2",
+ "selection_rule": "simplest_defensible_v2",
+ "gate_m": "INCONCLUSIVE",
+ "winner": null,
+ "recorded": "2026-08-14",
+ "release_evidence": false,
+ "supersedes": "validation/dirsplit_gate_m_outcome_v2.json",
+ "reason": "required fold kind(s) could not be built: blocked_date",
+ "summary": "The VERDICT is unchanged from v2 — Gate M cannot be decided from the aggregated table, because blocked_date folds do not exist in it. The NUMBERS are superseded: review found that v2's evaluated model still was not the deployed one, so its diagnostic figures described a model the project does not ship. v2 is preserved unedited; its measured_under_v2 block should not be quoted.",
+ "why_v2_numbers_are_superseded": {
+  "one_model_per_city_instead_of_per_station": "Deployment (dirsplit/train.py) trains a separate locally weighted model for each target sensor, centred on that sensor's own feature vector, and its own leave-city-out validation does the same for each held-out station. v2's held_out_predictions fit ONE model per fold, centred on the mean of the whole held-out city. That is a different estimator, and the difference is largest exactly where the kernel is doing work. Fixed: held_out_predictions now groups the test side by station_id and fits one model per held-out station, in sorted order so every candidate still pools rows in the same order and the paired bootstrap stays valid.",
+  "the_nested_shrinkage_reused_the_wrong_centre": "v2 fit lambda by a nested leave-city-out on the training side, but re-used the OUTER fold's single centre for every inner prediction. Deployment pools inner predictions that each came from a model weighted toward THEIR OWN held-out station. So v2 calibrated lambda for a model that was not the one being shrunk. Fixed: _fit_shrinkage takes a {station: centre} map and re-centres per inner held-out station.",
+  "numerical_warnings": "The real v2 run emitted divide-by-zero, overflow and invalid-value warnings from the similarity kernel and the shrinkage regression. The output happened to be finite and the report happened to reproduce, but 'happened to' is not a property. Fixed with explicit floors (MIN_BANDWIDTH, MAX_KERNEL_EXPONENT, MIN_SHRINKAGE_DENOMINATOR), a finiteness check on the weights, a uniform-weight fallback when no training row resembles the target, and a finite-only shrinkage regression. The run below completed under `python3 -W error::RuntimeWarning` with no warning raised."
+ },
+ "measured_under_v3": {
+  "note": "DIAGNOSTIC ONLY. The gate is INCONCLUSIVE, so none of these numbers decides anything; they are recorded so the next run has a reference point.",
+  "command": "python3 -W error::RuntimeWarning -m dirsplit.evaluate",
+  "input": {
+   "source": "data/dirsplit/training_table.csv",
+   "raw_rows": 15346,
+   "rows_kept": 3665,
+   "stations": 81,
+   "oneway_stations_dropped": 97,
+   "blocks": 162,
+   "block_definition": "station x day-type",
+   "deployed_training_window_rows": 1214,
+   "has_day_level_dates": false
+  },
+  "pooled_all_group": {
+   "constant_5050": {
+    "leave_city_out": {"mae": 0.062691},
+    "leave_station_out": {"mae": 0.059795}
+   },
+   "shrunk_dfactor": {
+    "leave_city_out": {"mae": 0.060547, "paired_diff_ci95": [-0.003588, -0.000746], "beats_baseline": true},
+    "leave_station_out": {"mae": 0.058071, "paired_diff_ci95": [-0.003831, 0.000498], "beats_baseline": false}
+   },
+   "beta_binomial_dfactor": {
+    "leave_city_out": {"mae": 0.060892, "paired_diff_ci95": [-0.003093, -0.000542], "beats_baseline": true},
+    "leave_station_out": {"mae": 0.058294, "paired_diff_ci95": [-0.003334, 0.000507], "beats_baseline": false}
+   },
+   "similarity_weighted_lgbm": {
+    "leave_city_out": {"mae": 0.064779, "paired_diff_ci95": [0.000384, 0.003873], "loses_to_baseline": true},
+    "leave_station_out": {"mae": 0.062374, "paired_diff_ci95": [-0.000412, 0.0059], "loses_to_baseline": false}
+   }
+  },
+  "observation": "Under the corrected per-station deployment-equivalent fit, the LightGBM candidate is still worse than 50/50 on leave-city-out (CI95 entirely above zero) and indistinguishable on leave-station-out. The per-station correction moved it from -4.7% to -3.3% on leave-city-out, i.e. the earlier figure overstated the loss. The two hierarchical D-factor candidates beat 50/50 on leave-city-out and tie on leave-station-out. None of this promotes anything: rule 4 requires the win under every fold kind, and rule 6 has already returned INCONCLUSIVE for the missing one.",
+  "caveat": "Even this is not exactly deployment. Deployment fits on ALL cities at once and predicts Gothenburg; a leave-city-out fold necessarily withholds one city's rows. The estimator and the weighting now match; the training population per fold cannot, by construction."
+ },
+ "provenance": {
+  "report": "data/dirsplit/gate_m_report.json",
+  "content_key": "e624a5104ca950b6",
+  "note": "The report now carries a full content_key over its own payload plus digests of the training table and of the evaluate/train/dataset/features modules, so a stale report is distinguishable from a current one. v1 and v2 had neither."
+ },
+ "what_would_decide_it": {
+  "requirement": "dataset v2 as described in the plan's 'Dataset v2' section: one row per station_id x local_date x hour x heading, with raw toward/away counts and a stable day_block_id, so blocked_date folds exist and blocks become station x date.",
+  "blocker_in_this_environment": "dirsplit/dataset.py rebuilds the table from raw Statens vegvesen volumes, which are gitignored and re-fetched from trafikkdata-api.atlas.vegvesen.no. That host is denied by this session's policy-enforcing egress proxy.",
+  "not_a_workaround": "Synthesising dates, or splitting the aggregate table on any proxy for time, would fabricate the exact evidence the gate is asking for. Left undone."
+ },
+ "consequence": "Fas 2, Fas 3 and Fas 4 remain closed. Gate M is neither BASELINE nor MODEL."
+}

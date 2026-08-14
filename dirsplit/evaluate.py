@@ -28,6 +28,7 @@ Three properties this module enforces rather than assumes:
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 from dataclasses import dataclass, field
@@ -501,15 +502,34 @@ class SimilarityWeightedLGBM(Candidate):
             num_leaves=31, subsample=0.8, colsample_bytree=0.8,
             min_child_samples=20, random_state=42, n_jobs=-1, verbose=-1)
 
+    #: Numerical floors. Every one of these guards a real failure mode seen
+    #: on the tracked table: a degenerate bandwidth divides by zero, a large
+    #: standardised distance overflows the squared exponent, and a
+    #: near-constant prediction makes the shrinkage regression's denominator
+    #: vanish. The previous version emitted divide-by-zero, overflow and
+    #: invalid-value warnings on the real run; it happened to produce finite
+    #: output, but "happened to" is not a property.
+    MIN_BANDWIDTH = 1e-6
+    MAX_KERNEL_EXPONENT = 700.0          # exp(-700) underflows to 0 cleanly
+    MIN_SHRINKAGE_DENOMINATOR = 1e-9
+
     def _weights(self, rows, matrix, centre_z):
-        """Deployment's own sample weight: evidence x station x similarity."""
+        """Deployment's own sample weight: evidence x station x similarity.
+
+        Guarded end to end: the bandwidth has a floor, the kernel exponent is
+        clipped before ``exp``, and the result is required to be finite.
+        """
         static = matrix[:, :len(FEATURE_NAMES)]
         standardised = (static - self._mu) / self._sd
         spread = np.sqrt(
             ((standardised - standardised.mean(axis=0)) ** 2).sum(axis=1))
-        bandwidth = float(np.median(spread)) or 1.0
+        bandwidth = float(np.median(spread))
+        if not math.isfinite(bandwidth) or bandwidth < self.MIN_BANDWIDTH:
+            bandwidth = 1.0
         distances = np.sqrt(((standardised - centre_z) ** 2).sum(axis=1))
-        similarity = np.exp(-0.5 * (distances / bandwidth) ** 2)
+        exponent = np.clip(0.5 * (distances / bandwidth) ** 2,
+                           0.0, self.MAX_KERNEL_EXPONENT)
+        similarity = np.exp(-exponent)
 
         counts: dict[str, int] = {}
         for row in rows:
@@ -518,17 +538,32 @@ class SimilarityWeightedLGBM(Candidate):
                             dtype=float)
         station = np.array([1.0 / counts[r.station_id] for r in rows],
                            dtype=float)
-        return evidence * station * similarity
+        weights = evidence * station * similarity
+        if not np.all(np.isfinite(weights)):
+            raise ValueError(
+                "similarity weights are not finite; refusing to fit a model "
+                "on weights that cannot be interpreted")
+        if weights.sum() <= 0:
+            # Every training row is infinitely far from the target in feature
+            # space. Uniform weights are the honest fallback: it says "no row
+            # resembles this target" rather than silently fitting on zeros.
+            weights = np.full(len(weights), 1.0 / max(len(weights), 1))
+        return weights
 
-    def _fit_shrinkage(self, rows, centre_z) -> float:
+    def _fit_shrinkage(self, rows, centres_z) -> float:
         """Fit lambda the way deployment does, but INSIDE the training fold.
 
         `train.py` regresses observed deviation from 0.5 on predicted
-        deviation over pooled leave-city-out predictions. Reproduced here by
-        a nested leave-city-out over the TRAINING side only, so no held-out
-        row of the outer fold contributes. Skipping it would evaluate a
-        model with roughly four times the deviation the project actually
-        ships.
+        deviation over pooled leave-city-out predictions, where each pooled
+        prediction came from a model weighted toward ITS OWN held-out
+        station. Reproduced here by a nested leave-city-out over the TRAINING
+        side only, re-centring the kernel on each inner held-out station —
+        the previous version reused the OUTER fold's single centre for every
+        inner prediction, which fits lambda for a model that is not the one
+        being calibrated.
+
+        ``centres_z`` maps an inner station id to its standardised centre;
+        stations absent from it are skipped rather than silently pooled.
         """
         cities = sorted({r.city for r in rows})
         if len(cities) < 2:
@@ -537,21 +572,47 @@ class SimilarityWeightedLGBM(Candidate):
         observed: list[float] = []
         for held in cities:
             inner_train = [r for r in rows if r.city != held]
-            inner_test = [r for r in rows if r.city == held]
-            if len(inner_train) < 30 or not inner_test:
+            if len(inner_train) < 30:
                 continue
             matrix = self._matrix(inner_train)
-            model = self._new_model()
-            model.fit(matrix, np.array([r.share for r in inner_train]),
-                      sample_weight=self._weights(inner_train, matrix, centre_z))
-            values = np.clip(model.predict(self._matrix(inner_test)), 0.1, 0.9)
-            predicted.extend((values - 0.5).tolist())
-            observed.extend([r.share - 0.5 for r in inner_test])
+            target = np.array([r.share for r in inner_train])
+            by_station: dict[str, list[Row]] = {}
+            for row in rows:
+                if row.city == held:
+                    by_station.setdefault(row.station_id, []).append(row)
+            for station, inner_test in sorted(by_station.items()):
+                centre_z = centres_z.get(station)
+                if centre_z is None:
+                    continue
+                model = self._new_model()
+                model.fit(matrix, target,
+                          sample_weight=self._weights(inner_train, matrix,
+                                                      centre_z))
+                values = np.clip(model.predict(self._matrix(inner_test)),
+                                 0.1, 0.9)
+                predicted.extend((values - 0.5).tolist())
+                observed.extend([r.share - 0.5 for r in inner_test])
         if not predicted:
             return 1.0
         dp = np.array(predicted)
         dy = np.array(observed)
-        return float(np.clip((dp @ dy) / max(dp @ dp, 1e-12), 0.0, 1.0))
+        finite = np.isfinite(dp) & np.isfinite(dy)
+        if not finite.any():
+            return 1.0
+        dp, dy = dp[finite], dy[finite]
+        denominator = float(dp @ dp)
+        if not math.isfinite(denominator) or \
+                denominator < self.MIN_SHRINKAGE_DENOMINATOR:
+            # Predictions carry no deviation to calibrate, so there is
+            # nothing to shrink toward 0.5 that is not already there.
+            return 1.0
+        value = float(dp @ dy) / denominator
+        return float(np.clip(value, 0.0, 1.0)) if math.isfinite(value) else 1.0
+
+    def station_centre(self, rows) -> np.ndarray:
+        """Standardised kernel centre for one target station's rows."""
+        static = self._matrix(rows)[:, :len(FEATURE_NAMES)]
+        return ((static.mean(axis=0) - self._mu) / self._sd)
 
     def fit(self, rows, target_features=None):
         # Deployment trains on weekday 06-20 only. Rows outside that window
@@ -571,14 +632,25 @@ class SimilarityWeightedLGBM(Candidate):
 
         # Centre the kernel on the TARGET, as deployment does. Falling back
         # to the training centroid only when no target is supplied keeps the
-        # candidate usable standalone; ``score`` always supplies one.
+        # candidate usable standalone; ``held_out_predictions`` always
+        # supplies ONE STATION's features, because deployment fits one model
+        # per target sensor rather than one model per city.
         if target_features is not None and len(target_features):
             centre_z = ((np.asarray(target_features, dtype=float).mean(axis=0)
                          - self._mu) / self._sd)
         else:
             centre_z = ((static - self._mu) / self._sd).mean(axis=0)
 
-        self._shrinkage = self._fit_shrinkage(trainable, centre_z)
+        # Every TRAINING station's own centre, so the nested shrinkage fit
+        # can re-centre per inner held-out station exactly as deployment's
+        # pooled leave-city-out calibration does.
+        by_station: dict[str, list[Row]] = {}
+        for row in trainable:
+            by_station.setdefault(row.station_id, []).append(row)
+        centres_z = {station: self.station_centre(group)
+                     for station, group in by_station.items()}
+
+        self._shrinkage = self._fit_shrinkage(trainable, centres_z)
         self._model = self._new_model()
         self._model.fit(matrix, target,
                         sample_weight=self._weights(trainable, matrix, centre_z))
@@ -694,6 +766,42 @@ def groups_of(row: Row) -> tuple[str, ...]:
     return tuple(groups)
 
 
+def content_digest(payload: Any) -> str:
+    """Stable SHA-256 over a JSON-serialisable payload."""
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def provenance_digests(table_path: Path) -> dict[str, Any]:
+    """Bind a report to the data and the source code that produced it.
+
+    Without this a Gate M report is a floating claim: it names its rule and
+    its row counts, but nothing ties it to the exact table it read or the
+    exact scoring code that read it, so a later table refresh or a change to
+    the candidates would leave a stale report indistinguishable from a
+    current one.
+    """
+    def digest_file(path: Path) -> str | None:
+        try:
+            return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        except OSError:
+            return None
+
+    module = Path(__file__).resolve()
+    return {
+        "training_table": str(table_path),
+        "training_table_digest": digest_file(table_path),
+        "evaluate_module_digest": digest_file(module),
+        "trainer_module_digest": digest_file(module.parent / "train.py"),
+        "dataset_module_digest": digest_file(module.parent / "dataset.py"),
+        "features_module_digest": digest_file(module.parent / "features.py"),
+        "note": ("digests bind this report to the exact table and scoring "
+                 "code it came from; a report whose digests no longer match "
+                 "the tree is stale, not current"),
+    }
+
+
 @dataclass(frozen=True)
 class HeldOut:
     """One candidate's pooled held-out predictions over a set of folds.
@@ -723,10 +831,22 @@ def held_out_predictions(candidate: Candidate,
                          folds: Sequence[Fold]) -> HeldOut:
     """Fit per fold on the training side only, then pool held-out rows.
 
-    The held-out rows' STATIC FEATURES are handed to ``fit`` as
-    ``target_features`` so a locally weighted candidate is centred where the
-    deployment centres it. Their LABELS are not passed and are used only
-    afterwards, to score.
+    ONE MODEL PER HELD-OUT STATION, not one per fold. Deployment
+    (`dirsplit/train.py`) trains a separate locally weighted model for each
+    target sensor, centred on that sensor's own feature vector, and its own
+    leave-city-out validation does the same for each held-out station. A
+    leave-city-out fold that fit a single model centred on the whole city's
+    mean would be evaluating a model the project does not ship — the
+    difference matters most exactly where the kernel is doing work.
+
+    The held-out station's STATIC FEATURES are handed to ``fit`` as
+    ``target_features``; that is what deployment knows about a Gothenburg
+    edge before any local measurement exists. Their LABELS are not passed
+    and are used only afterwards, to score.
+
+    Stations are visited in sorted order within each fold, and folds in the
+    order given, so every candidate produces rows in the same order and
+    ``compare`` can pair them row by row.
     """
     import copy
 
@@ -736,15 +856,18 @@ def held_out_predictions(candidate: Candidate,
     groups: list[tuple[str, ...]] = []
 
     for fold in folds:
-        target_features = np.array([r.features for r in fold.test],
-                                   dtype=float)
-        fitted = copy.deepcopy(candidate).fit(
-            list(fold.train), target_features=target_features)
-        predicted.extend(np.asarray(
-            fitted.predict(list(fold.test)), dtype=float).tolist())
-        actual.extend(r.share for r in fold.test)
-        blocks.extend(r.block for r in fold.test)
-        groups.extend(groups_of(r) for r in fold.test)
+        by_station: dict[str, list[Row]] = {}
+        for row in fold.test:
+            by_station.setdefault(row.station_id, []).append(row)
+        for _station, rows in sorted(by_station.items()):
+            target_features = np.array([r.features for r in rows], dtype=float)
+            fitted = copy.deepcopy(candidate).fit(
+                list(fold.train), target_features=target_features)
+            predicted.extend(np.asarray(
+                fitted.predict(list(rows)), dtype=float).tolist())
+            actual.extend(r.share for r in rows)
+            blocks.extend(r.block for r in rows)
+            groups.extend(groups_of(r) for r in rows)
 
     return HeldOut(np.array(predicted, dtype=float),
                    np.array(actual, dtype=float),
@@ -990,7 +1113,7 @@ def run(path: Path = TABLE_PATH) -> dict[str, Any]:
     decision = decide_gate_m(reports, candidates, meta,
                              comparisons=comparisons,
                              fold_kinds=sorted(folds_by_kind))
-    return {
+    report = {
         "protocol": "dirsplit_gate_m_v2",
         "selection_rule": SELECTION_RULE,
         "selection_rule_text": SELECTION_RULE_TEXT,
@@ -1000,6 +1123,7 @@ def run(path: Path = TABLE_PATH) -> dict[str, Any]:
         "required_fold_kinds": list(REQUIRED_FOLD_KINDS),
         "release_evidence": False,
         "input": meta,
+        "provenance": provenance_digests(path),
         "temporal_support": temporal_support(rows),
         "fold_kinds": sorted(folds_by_kind),
         "blocked_date_available": bool(date_folds),
@@ -1007,6 +1131,11 @@ def run(path: Path = TABLE_PATH) -> dict[str, Any]:
         "pairwise_comparisons": comparisons,
         **decision,
     }
+    # A content key over everything above, so a report cannot be edited
+    # after the fact without the edit being visible, and so two reports can
+    # be compared for identity in one field instead of by eye.
+    report["content_key"] = content_digest(report)
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:

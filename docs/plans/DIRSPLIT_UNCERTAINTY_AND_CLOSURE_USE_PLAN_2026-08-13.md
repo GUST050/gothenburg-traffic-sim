@@ -10,8 +10,21 @@ aktiverad av detta dokument.
 
 | Grind | Status | Bevis |
 |---|---|---|
-| Gate S | `NOT_RUN` — extern egress-policy | `validation/dirsplit_direction_sensitivity_blocker_v2.json` |
-| Gate M | `INCONCLUSIVE` — `blocked_date` kan inte byggas | `validation/dirsplit_gate_m_outcome_v2.json` |
+| Gate S | `NOT_RUN` — extern egress-policy **och** konfunderade stressfall | `validation/dirsplit_direction_sensitivity_blocker_v3.json` |
+| Gate M | `INCONCLUSIVE` — `blocked_date` kan inte byggas | `validation/dirsplit_gate_m_outcome_v3.json` |
+
+**NYTT BLOCKERANDE FYND (2026-08-14): q10/q90 isolerar inte riktningsaxeln.**
+`dirsplit/predict.py` skriver `edge_shares_q10` som `(e0 → s10, e1 → 1 − s90)`
+och `edge_shares_q90` som `(e0 → s90, e1 → 1 − s10)`, så varje ytterpar
+summerar till `1 ∓ (s90 − s10)` i stället för 1. Uppmätt på de artefakter som
+byggdes i denna session: **största |parsumma − 1| = 0,297** (tolerans 0,001);
+q50 summerar exakt till 1. Ett Gate S-utfall på dessa filer kan alltså bero på
+ändrad TOTAL trafikvolym snarare än ändrad riktning, och i efterhand går de
+två inte att skilja åt. Verktyget mäter detta vid registreringen, lägger in
+resultatet i den frysta content-nyckeln och returnerar `INCONCLUSIVE` när
+isolationen inte är styrkt. **Att bygga om q-artefakterna med bevarad parsumma
+är därför en förutsättning för ett meningsfullt Gate S, inte en förbättring.**
+Det arbetet hör till Fas 2 och är inte utfört.
 
 En tidigare publicerad `Gate M = BASELINE` är **ÅTERKALLAD som beslut**.
 v1-filerna är bevarade oredigerade och uttryckligen ersatta; inget i dem får
@@ -19,8 +32,10 @@ citeras som ett aktuellt resultat. Särskilt gäller att påståendet "den
 deployade LightGBM-modellen är 31,6–39,2 % sämre" inte stöds — det mätte en
 annan modell på en annan population.
 
-Granskningen fann tre kritiska och tre höga fel. Alla är åtgärdade i koden,
-men en åtgärdad grind är fortfarande en okörd grind:
+Två granskningsrundor har genomförts. Den första fann tre kritiska och tre
+höga fel; den andra fann att den reparerade beslutsregeln fortfarande kunde ge
+ett FALSKT `YES` på tre separata sätt. Alla är åtgärdade i koden, men en
+åtgärdad grind är fortfarande en okörd grind:
 
 1. **Gate S körde inte olika q-fall eller seeds.** Verktyget byggde sitt
    kommando utan routefil och utan seed, läste ett `disruption`-fält som
@@ -40,11 +55,36 @@ men en åtgärdad grind är fortfarande en okörd grind:
    sker mot den *aktuella* incumbenten, och en obyggbar foldtyp ger
    `INCONCLUSIVE`.
 
+Runda 2 (2026-08-14) åtgärdade dessutom:
+
+4. **Ett rankningsvärde som varierar mellan seeds gav `YES`.** Nyckeln är
+   efterfrågesidig och *kan inte* variera med seed; när den gör det har
+   mätningen misslyckats och varken `YES` eller `NO` är tillgängligt. Nu
+   `INCONCLUSIVE`.
+5. **En kandidat som var diskvalificerad i alla q-fall kunde öppna grinden**
+   genom sin kostnadsspridning, trots att policyn aldrig läser den kostnaden.
+   Nu `decision_relevant: false`; är *alla* diskvalificerade blir utfallet
+   `INCONCLUSIVE` — ingen viable set bildades, alltså fanns inget beslut att
+   vara känsligt för.
+6. **Seed-variationskontrollen grupperade fel** (per q-fall, inte per
+   `(q-fall, kandidat)`), så en skillnad mellan kandidater kunde maskera sig
+   som en skillnad mellan seeds. Nu måste *varje* grupp variera.
+7. **Ett closure-fönster utanför demand-perioden ersattes tyst** med hela
+   fönstret. Nu ett hårt fel.
+8. Topologifiltret failade öppet utan `sumolib`; registreringens datum
+   validerades inte mot `demand_meta.json`; Gate M-rapporten saknade
+   digest-/content-key-bindning. Alla åtgärdade.
+
 En strukturell iakttagelse värd att bevara: den deployade rankningsnyckeln
 (`closure_disruption`) är efterfrågesidig och därmed **seed-deterministisk per
 konstruktion**. Det gamla "spridningskvot mot seed-brus"-testet på den nyckeln
-var därför en tautologi. v2 verifierar invarianten i stället och vägrar
+var därför en tautologi. Verktyget verifierar invarianten i stället och vägrar
 publicera om seed-axeln visade sig vara inert.
+
+Gate M mätte i runda 1 fortfarande inte exakt den deployade modellen: den
+anpassade **en modell per stad** i stället för en per station, och den
+nästlade shrinkage-beräkningen återanvände fel centrum. Båda är rättade;
+`blocked_date` saknas fortfarande, så utfallet är oförändrat `INCONCLUSIVE`.
 **Gäller omedelbart:** sensor 107:s lokala ankare, ett avgränsat
 matched-seed-test och `dirsplit/` dataset/modellval.
 **Villkorad senare omfattning:** demand-byggaren, scenarioavtal,

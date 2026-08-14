@@ -13,6 +13,7 @@ Plan requirements for Fas 1:
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -416,14 +417,91 @@ class TestTheTournamentMatchesDeployment:
         assert list(ev.DEPLOYED_TRAINING_HOURS) == list(range(6, 21))
 
     def test_the_lgbm_is_centred_on_the_target_not_the_training_cloud(self):
-        """Deployment weights toward the road it will predict."""
+        """Deployment weights toward the road it will predict.
+
+        Checked on the SAMPLE WEIGHTS and the raw model, because the shipped
+        prediction also passes through shrinkage, and on a synthetic fixture
+        with no transferable signal lambda is legitimately 0 — which would
+        hide a real difference in the kernel behind two identical 0.5s.
+        """
         rows = (spread(cities=("oslo",), share=0.70, jitter=0.02, seed=20)
                 + spread(cities=("bergen",), share=0.30, jitter=0.02, seed=21))
         near = np.zeros((1, len(FEATURE_NAMES)))
         far = np.full((1, len(FEATURE_NAMES)), 5.0)
         a = ev.SimilarityWeightedLGBM().fit(rows, target_features=near)
         b = ev.SimilarityWeightedLGBM().fit(rows, target_features=far)
-        assert not np.allclose(a.predict(rows), b.predict(rows))
+
+        trainable = [r for r in rows if ev.in_deployed_training_window(r)]
+        matrix = a._matrix(trainable)
+        centre_near = (np.asarray(near, dtype=float).mean(axis=0)
+                       - a._mu) / a._sd
+        centre_far = (np.asarray(far, dtype=float).mean(axis=0)
+                      - a._mu) / a._sd
+        assert not np.allclose(a._weights(trainable, matrix, centre_near),
+                               a._weights(trainable, matrix, centre_far))
+        assert not np.allclose(a._model.predict(matrix),
+                               b._model.predict(matrix))
+
+    def test_one_model_is_fit_per_held_out_station_not_per_fold(self):
+        """Deployment trains a separate model per target sensor."""
+        rows = (spread(stations=("A", "B", "C"), cities=("oslo",),
+                       share=0.6, jitter=0.02, seed=30)
+                + spread(stations=("A", "B"), cities=("bergen",),
+                         share=0.4, jitter=0.02, seed=31))
+        fold = ev.leave_city_out(rows)[1]          # holds out oslo
+        held_stations = {r.station_id for r in fold.test}
+        assert len(held_stations) == 3
+
+        seen: list[np.ndarray] = []
+
+        class Recorder(ev.Constant5050):
+            def fit(self, rows, target_features=None):
+                seen.append(np.asarray(target_features))
+                return self
+
+        ev.held_out_predictions(Recorder(), [fold])
+        assert len(seen) == 3, "one fit per held-out station, not one per fold"
+        # each centre describes exactly one station's rows
+        assert {len(matrix) for matrix in seen} == {
+            sum(1 for r in fold.test if r.station_id == s)
+            for s in held_stations}
+
+    def test_pooled_rows_stay_aligned_across_candidates(self):
+        """compare() pairs row by row, so every candidate needs one order."""
+        rows = spread(stations=("A", "B"), jitter=0.03, seed=32)
+        folds = ev.leave_city_out(rows)
+        first = ev.held_out_predictions(ev.Constant5050(), folds)
+        second = ev.held_out_predictions(ev.ShrunkDFactor(), folds)
+        assert first.blocks == second.blocks
+        assert np.allclose(first.actual, second.actual)
+
+    def test_the_nested_shrinkage_recentres_per_inner_station(self):
+        """Lambda must calibrate the model being shipped, not another one."""
+        import inspect
+
+        source = inspect.getsource(ev.SimilarityWeightedLGBM._fit_shrinkage)
+        assert "centres_z" in source
+        assert "centres_z.get(station)" in source
+
+    def test_the_weights_are_numerically_guarded(self):
+        """No divide-by-zero, overflow or invalid value on a degenerate fit."""
+        rows = [row(station="flat", hour=h, share=0.5, n_obs=1.0)
+                for h in range(6, 21)] * 3
+        model = ev.SimilarityWeightedLGBM()
+        model._mu = np.zeros(len(FEATURE_NAMES))
+        model._sd = np.ones(len(FEATURE_NAMES))
+        matrix = model._matrix(rows)
+        with np.errstate(all="raise"):
+            weights = model._weights(
+                rows, matrix, np.full(len(FEATURE_NAMES), 1e6))
+        assert np.all(np.isfinite(weights))
+        assert weights.sum() > 0
+
+    def test_a_degenerate_shrinkage_regression_returns_a_finite_lambda(self):
+        rows = spread(share=0.5, jitter=0.0, seed=33)
+        model = ev.SimilarityWeightedLGBM().fit(rows)
+        assert math.isfinite(model._shrinkage)
+        assert 0.0 <= model._shrinkage <= 1.0
 
     def test_the_target_features_carry_no_labels(self):
         """The kernel centre is street geometry, never a held-out share."""
@@ -549,3 +627,65 @@ class TestTheWithdrawnV1Outcome:
         payload = json.loads(self.V2.read_text())
         assert "dataset v2" in payload["what_would_decide_it"]["requirement"]
         assert payload["what_would_decide_it"]["blocker_in_this_environment"]
+
+    V3 = Path("validation/dirsplit_gate_m_outcome_v3.json")
+
+    def test_v3_supersedes_v2_and_keeps_the_verdict(self):
+        """The numbers moved; the verdict did not."""
+        if not self.V3.is_file():
+            pytest.skip("no v3 outcome in this checkout")
+        payload = json.loads(self.V3.read_text())
+        assert payload["supersedes"] == str(self.V2)
+        assert payload["gate_m"] == "INCONCLUSIVE"
+        assert payload["release_evidence"] is False
+
+    def test_v3_explains_why_the_v2_numbers_are_superseded(self):
+        if not self.V3.is_file():
+            pytest.skip("no v3 outcome in this checkout")
+        why = json.loads(self.V3.read_text())["why_v2_numbers_are_superseded"]
+        assert "one_model_per_city_instead_of_per_station" in why
+        assert "the_nested_shrinkage_reused_the_wrong_centre" in why
+        assert "numerical_warnings" in why
+
+    def test_v3_admits_what_still_is_not_deployment(self):
+        """A fold necessarily withholds a city; deployment does not."""
+        if not self.V3.is_file():
+            pytest.skip("no v3 outcome in this checkout")
+        payload = json.loads(self.V3.read_text())
+        assert payload["measured_under_v3"]["caveat"]
+
+
+# ── the report is bound to what produced it ───────────────────────────────
+class TestTheReportCarriesProvenance:
+    PATH = Path("data/dirsplit/gate_m_report.json")
+
+    def report(self):
+        if not self.PATH.is_file():
+            pytest.skip("Gate M has not been run in this checkout")
+        return json.loads(self.PATH.read_text())
+
+    def test_it_digests_its_input_table_and_its_own_source(self):
+        provenance = self.report()["provenance"]
+        for key in ("training_table_digest", "evaluate_module_digest",
+                    "trainer_module_digest", "dataset_module_digest",
+                    "features_module_digest"):
+            assert provenance[key], key
+
+    def test_the_content_key_covers_the_payload(self):
+        report = self.report()
+        recorded = report.pop("content_key")
+        assert recorded == ev.content_digest(report)
+
+    def test_the_digests_match_the_live_tree(self):
+        """A report whose digests have drifted is stale, not current."""
+        report = self.report()
+        live = ev.provenance_digests(Path(report["provenance"]["training_table"]))
+        for key, value in live.items():
+            if key.endswith("_digest"):
+                assert report["provenance"][key] == value, key
+
+    def test_the_content_key_changes_when_the_payload_does(self):
+        report = self.report()
+        report.pop("content_key")
+        mutated = dict(report, gate_m="MODEL")
+        assert ev.content_digest(mutated) != ev.content_digest(report)

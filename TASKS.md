@@ -9,11 +9,14 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Decision-gated direction split. Review found both gates
-  technically wrong and the 107 anchor disconnected from the product; all are
-  repaired. NEITHER gate is decided: Gate S = NOT_RUN (external egress
-  policy), Gate M = INCONCLUSIVE. The four-quadrant matrix cannot be entered
-  from either side and no exit may be declared.`
+- Current focus: `Decision-gated direction split, after TWO review rounds.
+  Round 1 found both gates technically wrong and the 107 anchor disconnected
+  from the product. Round 2 found Gate S could still return a FALSE YES by
+  three routes, and — the load-bearing one — that the q10/q90 stress cases do
+  not isolate the direction axis at all. All repaired. NEITHER gate is
+  decided: Gate S = NOT_RUN (egress policy AND confounded stress cases),
+  Gate M = INCONCLUSIVE. The four-quadrant matrix cannot be entered from
+  either side and no exit may be declared.`
 - Status: `FAS 0A NOW ACTUALLY WIRED: sensor 107 carries a provenance-bound
   directional_reference (3400/3100 of 6500, calendar-year 2025, source and
   verification, bearing->edge resolved from segment geometry at 352.1/174.4
@@ -27,6 +30,50 @@ owners, states and approval formulas are not active workflow rules. See
   annual average daily D-factor. A 2027 forecast date is correctly refused by
   the reference's declared 2025 period. The pair still sums to exactly 1.0
   every slot; the five single-direction stations are byte-identical.
+  ROUND 2 (2026-08-14) — GATE S COULD STILL RETURN A FALSE YES. Three
+  separate routes, all closed: (a) a ranking key that varied across seeds was
+  treated as evidence that direction matters, when it is a BROKEN
+  MEASUREMENT — the deployed key is demand-side and cannot vary with the
+  seed, so a violation now yields INCONCLUSIVE; (b) a candidate disqualified
+  by the no-detour rule in EVERY stress case could open the gate through its
+  cost spread, although the policy never reads that cost — it is now
+  decision_relevant: false, and if every candidate is disqualified the
+  outcome is INCONCLUSIVE because no viable set was ever formed; (c) the
+  seed-inertness check grouped by stress case alone, so a
+  candidate-to-candidate difference could stand in for a seed difference —
+  it now groups by (case, candidate) and requires EVERY group to vary.
+  Also closed: a closure window outside the demand build was silently
+  replaced by the whole window (now a hard error), the topology filter
+  failed open without sumolib (now fail-closed, network read once), and the
+  registered date was never checked against demand_meta.json (now verified
+  before selection runs).
+  NEW BLOCKING FINDING — THE STRESS CASES DO NOT ISOLATE DIRECTION.
+  dirsplit/predict.py writes edge_shares_q10 as (e0 -> s10, e1 -> 1 - s90)
+  and edge_shares_q90 as (e0 -> s90, e1 -> 1 - s10), so each outer pair sums
+  to 1 -/+ (s90 - s10) rather than 1. Measured on the artifacts rebuilt this
+  session: max |pair sum - 1| = 0.297 against a 0.001 tolerance; q50 sums to
+  exactly 1. A Gate S difference on those files could be a change in TOTAL
+  VOLUME rather than direction, and nothing afterwards can separate the two.
+  measure_pair_sum_isolation now runs at registration time, its result is
+  inside the frozen content key, and decide_gate_s returns INCONCLUSIVE when
+  isolation is not certified. REBUILDING THE q ARTIFACTS WITH A
+  PAIR-SUM-PRESERVING CONSTRUCTION IS A PREREQUISITE FOR A MEANINGFUL GATE S,
+  not an improvement; that work belongs to Fas 2 and was not done.
+  SECOND 107 GAP CLOSED: write_counts (the routeSampler branch) still loaded
+  the unanchored split, so the two demand branches would have calibrated to
+  different targets from identical inputs. It now takes the same
+  anchor_day/anchor_epoch. While fixing it, found that write_counts ALSO
+  lacked the single-direction guard build_targets grew on 2026-08-06 —
+  measured on the real artifacts, sensor 1076's edge carries a modelled
+  share of 0.48, so every measured single-direction count was being written
+  out at 48% of its value. Both fixed and pinned.
+  GATE M ROUND 2: the evaluation still was not the deployed model — it fit
+  ONE model per held-out city instead of one per station, and the nested
+  shrinkage reused the outer fold's centre. Both fixed; the run also now
+  completes under -W error::RuntimeWarning after explicit numerical floors.
+  Verdict unchanged (INCONCLUSIVE); the LightGBM leave-city-out figure moved
+  from -4.7% to -3.3%, so the earlier number overstated the loss. The report
+  now carries a content key plus digests of the table and the scoring code.
   FAS 0B RUN PATH REPAIRED, STILL NOT RUN: review found the tool could not
   have produced evidence — it never varied the route file or the seed (every
   q case and every seed ran the same simulation; DIRSPLIT_SENSITIVITY_SEED is
@@ -44,8 +91,10 @@ owners, states and approval formulas are not active workflow rules. See
   verifies that invariant and refuses to publish if the seed axis was inert.
   Still NOT_RUN: build_candidates.py needs overpass-api.de and the session
   proxy answers 403 to CONNECT (also geodata.scb.se), re-verified 2026-08-14.
-  Gate S = NOT_RUN. Evidence:
-  validation/dirsplit_direction_sensitivity_blocker_v2.json.
+  Gate S = NOT_RUN, now for TWO reasons: the egress denial, and the
+  stress-case confound above. Evidence:
+  validation/dirsplit_direction_sensitivity_blocker_v3.json (supersedes v2,
+  which is preserved unedited).
   FAS 1 REDECIDED AS INCONCLUSIVE: the published BASELINE is WITHDRAWN. Three
   reasons, each sufficient. (a) Rule 6 of the frozen text makes an
   unbuildable fold kind INCONCLUSIVE; dirsplit/dataset.py aggregates away
@@ -60,18 +109,19 @@ owners, states and approval formulas are not active workflow rules. See
   worse" is withdrawn. The rule is now simplest_defensible_v2, which also
   requires the win under EVERY fold kind and compares a candidate against the
   CURRENT incumbent rather than always against 50/50. GATE M = INCONCLUSIVE.
-  Evidence: validation/dirsplit_gate_m_outcome_v2.json (supersedes v1, which
-  is preserved unedited).
+  Evidence: validation/dirsplit_gate_m_outcome_v3.json (supersedes v2, which
+  supersedes v1; both preserved unedited).
   Fas 2, 3 and 4 remain closed. Previous closure v5 evidence and closed
   release gates are unchanged.`
 - Suggested next action: `Two independent unblocks, neither optional.
-  (1) Gate S: run the repaired tool on a machine that already has
-  sumo/calibrated*.rou.xml — per review, --freeze-only completes there in
-  about a second. Otherwise grant egress to overpass-api.de (and
-  geodata.scb.se for a DeSO refresh) or supply a cached POI/candidate
-  artifact, then: python3 build_sumo_demand.py --begin 06:00 --end 10:00;
-  python3 tools/measure_direction_decision_sensitivity.py --freeze-only; then
-  the same command without --freeze-only.
+  (1) Gate S needs BOTH unblocks before it can say anything. Evidence
+  quality first: rebuild q10/q90 with a pair-sum-preserving construction, or
+  every run returns INCONCLUSIVE by design. Then inputs: run on a machine
+  that already has sumo/calibrated*.rou.xml, or grant egress to
+  overpass-api.de (and geodata.scb.se for a DeSO refresh), then: python3
+  build_sumo_demand.py --begin 06:00 --end 10:00; python3
+  tools/measure_direction_decision_sensitivity.py --freeze-only; then the
+  same command without --freeze-only.
   (2) Gate M: build dataset v2 — one row per station_id x local_date x hour x
   heading with raw toward/away counts and a stable day_block_id — so
   blocked_date folds exist and blocks become station x date. That needs
@@ -91,11 +141,16 @@ owners, states and approval formulas are not active workflow rules. See
   inconclusive gate is at least as restrictive as a negative one. Do not
   quote the withdrawn Gate M = BASELINE or the withdrawn 31.6-39.2% figure as
   a current result. A gate whose tooling is wrong must be repaired and rerun,
-  never reported from the broken run.`
-- Updated: `2026-08-14 Claude. Gate S tooling, the 107 product wiring and the
-  Gate M rule/population/model repaired on
-  claude/gate-s-critical-findings-brkzye; both gates now undecided and
-  honestly labelled.`
+  never reported from the broken run. A measurement fault must never be
+  reported as a positive finding: if the ranking key moves across seeds, or
+  the stress cases do not isolate direction, the answer is INCONCLUSIVE, not
+  YES. Do not run Gate S for evidence on q artifacts whose direction pairs
+  do not sum to 1.`
+- Updated: `2026-08-14 Claude, round 2. Gate S can no longer return a false
+  YES (three routes closed), its inertness check is grouped correctly, the
+  stress cases must now prove they isolate direction, the 107 anchor reaches
+  BOTH demand branches, and Gate M evaluates one model per station as
+  deployment does. Both gates remain undecided.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -103,9 +158,11 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### DIRSPLIT-UNCERTAINTY-V2 — Decide the smallest justified direction solution
 
-- Status: `IN PROGRESS — Fas 0A now wired into the product path. Fas 0B tool
-  repaired but still NOT_RUN. Fas 1 redecided as INCONCLUSIVE. Matrix not
-  closable from either side.`
+- Status: `IN PROGRESS — Fas 0A wired into BOTH demand branches. Fas 0B tool
+  repaired twice and still NOT_RUN, now also blocked on evidence quality:
+  the q10/q90 stress cases do not isolate direction. Fas 1 INCONCLUSIVE, with
+  its diagnostic numbers re-measured on a per-station deployment-equivalent
+  fit. Matrix not closable from either side.`
 - Objective and scope: `First use local evidence at sensor 107, then establish
   whether plausible direction variation changes closure decisions and whether
   any conditional point model beats 50/50. Build scenarios or product contracts
@@ -139,10 +196,11 @@ owners, states and approval formulas are not active workflow rules. See
   held-out promotion before preregistered gates pass. An INCONCLUSIVE gate is
   not a negative result and must not be reported as one. Published outcome
   artifacts are append-only: supersede with a new version, never edit.`
-- Acceptance criteria: `107 is correctly anchored AND the anchor reaches the
-  real Level-1 target path (done). Gate S and Gate M are frozen and decided
-  (both still pending: Gate S needs the route files, Gate M needs dataset
-  v2). The four-outcome matrix then selects Exit A/C or Gren B/D.`
+- Acceptance criteria: `107 is correctly anchored AND the anchor reaches
+  BOTH demand branches, PFE and routeSampler (done). Gate S and Gate M are
+  frozen and decided — both still pending: Gate S needs pair-sum-preserving
+  q artifacts AND the route files, Gate M needs dataset v2. The four-outcome
+  matrix then selects Exit A/C or Gren B/D.`
 - Useful checks: `python3 -m pytest tests/test_sensor_107_directional_reference.py
   tests/test_dirsplit_legacy_pin.py tests/test_direction_decision_sensitivity.py
   tests/test_dirsplit_gate_m.py -q`;
