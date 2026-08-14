@@ -1,0 +1,75 @@
+{
+ "protocol": "dirsplit_direction_decision_sensitivity_v1",
+ "gate_s": "NOT_RUN",
+ "release_evidence": false,
+ "recorded": "2026-08-14",
+ "summary": "Gate S could not be executed in this environment. The run path and its tests are complete; the blocker is an external network policy denial, not a code defect. No Gate S result is claimed and none was fabricated.",
+ "what_was_verified_locally": {
+  "sumo": "Eclipse SUMO 1.27.1 installed; sumo, netconvert and duarouter on PATH",
+  "traci": "resolves from SUMO_HOME=/usr/local/lib/python3.11/dist-packages/sumo (tools/traci)",
+  "sumo_net": "built successfully from the tracked web/data/graph.graphml: sumo/net.net.xml, 7125 indexed edges, SUMO edge IDs identical to network.geojson",
+  "direction_split": "built successfully from the tracked data/dirsplit/model.pkl: sumo/direction_split.json, 6 sensors, both directions, q10/q50/q90",
+  "level_2_bounds": "observability LP completed (36 neighbour edges)",
+  "level_3_priors": "prior_flows completed; corridor coupling produced 3 edges",
+  "assignment_priors": "completed in 126.5 s"
+ },
+ "blocker": {
+  "stage": "build_candidates.py, invoked by build_sumo_demand.py",
+  "cause": "the candidate-route generator fetches OSM POI activity mass from the Overpass API, which this session's policy-enforcing egress proxy denies",
+  "error": "requests.exceptions.ProxyError: HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+  "proxy_evidence": "GET http://127.0.0.1:36103/__agentproxy/status reports recentRelayFailures kind=connect_rejected, detail='gateway answered 403 to CONNECT (policy denial or upstream failure)' for overpass-api.de:443 and geodata.scb.se:443",
+  "policy_note": "/root/.ccr/README.md states organization policy denials (403/407) must be reported rather than retried, so no workaround was attempted",
+  "denied_hosts": [
+   "overpass-api.de:443",
+   "geodata.scb.se:443",
+   "api.scb.se:443",
+   "trafikkdata-api.atlas.vegvesen.no:443",
+   "nominatim.openstreetmap.org:443"
+  ]
+ },
+ "consequence": {
+  "missing_inputs": [
+   "sumo/calibrated.rou.xml (q50 stress case)",
+   "sumo/calibrated_v1.rou.xml (q10 stress case)",
+   "sumo/calibrated_v2.rou.xml (q90 stress case)"
+  ],
+  "registration": "NOT frozen. dirsplit_sensitivity_selection_v1 selects candidates from per-edge demand exposure in all three route files, so the frozen selection cannot be computed without them. Freezing a registration with a placeholder candidate set would defeat the point of preregistering.",
+  "outcome": "NOT written.",
+  "gate_matrix": "Gate S is neither NO nor YES. The plan treats INCONCLUSIVE as forbidding product integration; an unrunnable gate is at least as restrictive, so Fas 2, Fas 3 and Fas 4 remain closed."
+ },
+ "observed_while_preparing_inputs": {
+  "note": "Measured on the real sumo/direction_split.json produced above, not inferred from code. Recorded because it is the first direct measurement of this property on a genuine artifact; the repair belongs to Fas 2 and is NOT performed here.",
+  "pair_sum_identity": {
+   "q50": "sums to exactly 1.0000 at every sensor and slot",
+   "q10": "sums to 0.7030-0.9480; mean deviation -0.1220 across the six sensors",
+   "q90": "sums to 1.0520-1.2970; mean deviation +0.1220 across the six sensors"
+  },
+  "per_sensor_mean_deviation": {
+   "107": {"q10": -0.117, "q90": 0.117},
+   "1074": {"q10": -0.0965, "q90": 0.0965},
+   "1076": {"q10": -0.1174, "q90": 0.1174},
+   "133": {"q10": -0.1343, "q90": 0.1343},
+   "134": {"q10": -0.1267, "q90": 0.1267},
+   "2276": {"q10": -0.1399, "q90": 0.1399}
+  },
+  "median_interval_width_lead_edge": 0.107,
+  "mechanism": "dirsplit/predict.py writes edge_shares_q10 as (e0 -> s10, e1 -> 1 - s90) and edge_shares_q90 as (e0 -> s90, e1 -> 1 - s10), so each outer pair sums to 1 -/+ (s90 - s10) rather than 1.",
+  "relevance_to_sensor_107": "107 is the only station whose split forms two Level-1 targets, so there the q10 arm asks the calibrator to hit targets summing to 76-93% of the measured two-way total and the q90 arm 105-124%."
+ },
+ "exact_reproduction": {
+  "environment": [
+   "pip install eclipse-sumo",
+   "export SUMO_HOME=/usr/local/lib/python3.11/dist-packages/sumo",
+   "export PYTHONPATH=$SUMO_HOME/tools"
+  ],
+  "inputs_that_succeed": [
+   "python3 build_sumo_net.py",
+   "python3 -m dirsplit.predict"
+  ],
+  "input_that_is_blocked": "python3 build_sumo_demand.py --begin 06:00 --end 10:00",
+  "then_when_unblocked": [
+   "python3 tools/measure_direction_decision_sensitivity.py --freeze-only",
+   "python3 tools/measure_direction_decision_sensitivity.py"
+  ]
+ }
+}
