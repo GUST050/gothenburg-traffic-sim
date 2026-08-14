@@ -15,6 +15,49 @@
       },
       "coordinate_reference_system": "EPSG:3007",
       "coordinates": null,
+      "directional_reference": {
+        "aggregation": "annual_average_daily_two_way",
+        "bearing_to_edge": {
+          "N": "60786979_3575001205_0",
+          "S": "1455801464_18241874_0"
+        },
+        "comparison_periods": [
+          {
+            "approximate_split": "50/50",
+            "raw_counts": null,
+            "year": 2023
+          },
+          {
+            "approximate_split": "50/50",
+            "raw_counts": null,
+            "year": 2024
+          }
+        ],
+        "edge_bearing_deg": {
+          "1455801464_18241874_0": 174.4,
+          "60786979_3575001205_0": 352.1
+        },
+        "note": "Local published evidence for the AGGREGATE direction split at sensor 107. It outranks the transferred dirsplit model for the same aggregate quantity, but it constrains only the declared period mean: per-slot shares remain estimated and must stay labelled as such.",
+        "period": {
+          "end": "2025-12-31",
+          "kind": "calendar_year",
+          "start": "2025-01-01",
+          "year": 2025
+        },
+        "raw_counts": {
+          "N": 3400,
+          "S": 3100
+        },
+        "source": "Goteborgs Stad trafikmangder catalogue (Power BI)",
+        "source_detail": "Published D-factor for station 107 Skanegatan",
+        "time_semantics": "period_aggregate_not_per_slot",
+        "total": 6500,
+        "verification": {
+          "date": "2026-08-13",
+          "method": "catalogue D-factor; edge orientation resolved from web/data/network.geojson segment bearings",
+          "status": "verified"
+        }
+      },
       "manual_snap": null,
       "measured_bearing": null,
       "measurement_semantics": "two_way_total",

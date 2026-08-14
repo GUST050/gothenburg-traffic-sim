@@ -311,13 +311,33 @@ def load_sensor_edges() -> dict[str, list[str]]:
     return result
 
 
-def load_direction_split(key: str = "edge_shares") -> dict[str, list[float]]:
+SENSOR_REGISTRY_PATH = Path("data_in/sensors.json")
+
+
+def load_direction_split(key: str = "edge_shares",
+                         anchor_day: str | None = None
+                         ) -> dict[str, list[float]]:
     """{edge_id: [96 shares]} from the estimated split file, {} if not built.
 
     key selects the quantile: "edge_shares" (q50 point estimate) or
     "edge_shares_q10"/"edge_shares_q90" (interval bounds from
     dirsplit/predict.py — used to build demand VARIANTS so Monte Carlo
-    includes direction uncertainty)."""
+    includes direction uncertainty).
+
+    ``anchor_day`` (Fas 0A) opts into the published local anchor. When a
+    calendar day is supplied, any two-way station whose registry record
+    carries a verified ``directional_reference`` covering that day has its
+    estimated per-slot shares shifted so the declared period reproduces the
+    published aggregate — sensor 107's 3 400/3 100, about 52/48, for 2025.
+
+    Local evidence outranks a transferred model for the same aggregate
+    quantity, but only for that quantity: the shift is a single offset over
+    the whole series, so the per-slot values remain ESTIMATED and the time
+    variation the model supports is preserved. Nothing here turns an annual
+    D-factor into 96 measurements.
+
+    ``anchor_day=None`` is the default and reproduces the previous behaviour
+    byte for byte, so every existing caller is unaffected."""
     path = SUMO_DIR / "direction_split.json"
     if not path.exists():
         return {}
@@ -326,7 +346,39 @@ def load_direction_split(key: str = "edge_shares") -> dict[str, list[float]]:
     shares: dict[str, list[float]] = {}
     for d in data.values():
         shares.update(d.get(key) or d["edge_shares"])
+    if anchor_day is not None:
+        shares = apply_directional_anchors(shares, anchor_day)
     return shares
+
+
+def apply_directional_anchors(shares: dict[str, list[float]], day: str,
+                              registry_path: Path | None = None
+                              ) -> dict[str, list[float]]:
+    """Anchor every two-way pair whose reference covers ``day``.
+
+    Stations without a ``directional_reference`` are returned untouched, so
+    the five single-direction sensors — whose measured direction is already a
+    Level-1 target with nothing to anchor — cannot be affected by this path
+    at all. A pair whose edges are missing from the split file is skipped
+    rather than partially anchored.
+    """
+    from traffic_sim.intake.sensors import anchored_pair_shares, load_registry
+
+    path = registry_path or SENSOR_REGISTRY_PATH
+    if not path.exists():
+        return shares
+    registry = load_registry(path)
+    anchored = dict(shares)
+    for sensor_id, record in registry.records.items():
+        reference = record.directional_reference
+        if reference is None or not reference.covers(day):
+            continue
+        edges = sorted(reference.bearing_to_edge.values())
+        if any(edge not in anchored for edge in edges):
+            continue
+        anchored.update(anchored_pair_shares(
+            reference, {edge: anchored[edge] for edge in edges}))
+    return anchored
 
 
 def has_split_quantiles() -> bool:
