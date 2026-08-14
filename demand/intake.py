@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, Mapping
 
 import numpy as np
 import pandas as pd
@@ -315,7 +316,9 @@ SENSOR_REGISTRY_PATH = Path("data_in/sensors.json")
 
 
 def load_direction_split(key: str = "edge_shares",
-                         anchor_day: str | None = None
+                         anchor_day: str | None = None,
+                         anchor_flows: Mapping[str, list] | None = None,
+                         anchor_epoch: Any = None,
                          ) -> dict[str, list[float]]:
     """{edge_id: [96 shares]} from the estimated split file, {} if not built.
 
@@ -336,31 +339,102 @@ def load_direction_split(key: str = "edge_shares",
     variation the model supports is preserved. Nothing here turns an annual
     D-factor into 96 measurements.
 
+    ``anchor_flows``/``anchor_epoch`` are the measured-flow series and its
+    epoch (typically the SAME ``flows``/epoch the caller is already using to
+    build Level-1 targets). When given, the annual mean is matched
+    VOLUME-WEIGHTED — a busy morning slot counts for more than an empty
+    small-hours slot, which is what an annual average daily D-factor actually
+    is — instead of an unweighted mean of 96 slot values. Omitting them falls
+    back to uniform weights.
+
     ``anchor_day=None`` is the default and reproduces the previous behaviour
     byte for byte, so every existing caller is unaffected."""
     path = SUMO_DIR / "direction_split.json"
-    if not path.exists():
+    if not path.exists() and anchor_day is None:
         return {}
-    with open(path) as f:
-        data = json.load(f)
     shares: dict[str, list[float]] = {}
-    for d in data.values():
-        shares.update(d.get(key) or d["edge_shares"])
+    if path.exists():
+        with open(path) as f:
+            data = json.load(f)
+        for d in data.values():
+            shares.update(d.get(key) or d["edge_shares"])
     if anchor_day is not None:
-        shares = apply_directional_anchors(shares, anchor_day)
+        # The anchor is LOCAL evidence and must not be conditional on
+        # whether the transferred Norwegian model happens to be built: a
+        # checkout without direction_split.json would otherwise fall back to
+        # a flat 50/50 at sensor 107 while the city has published 52/48.
+        # apply_directional_anchors seeds a flat base for any reference pair
+        # the split file does not cover, so the anchor becomes the only
+        # direction information rather than being dropped.
+        shares = apply_directional_anchors(
+            shares, anchor_day, flows=anchor_flows, epoch=anchor_epoch)
     return shares
 
 
+def sensor_period_weights(reference, flows: Mapping[str, list],
+                          epoch: Any = None) -> list[float] | None:
+    """96-slot volume weights for a ``directional_reference``'s period.
+
+    An annual average daily D-factor is a volume-weighted quantity, so the
+    weight profile is derived from the SAME measured two-way total the
+    reference's own raw counts came from. Per CLAUDE.md's "reporting trap",
+    both directed edges of a two-way sensor carry the identical total each
+    slot, so either bearing's series gives the same profile.
+
+    Buckets every quarter by time-of-day (``qi % 96``) and averages across
+    whichever days in ``flows`` fall inside the reference's declared period
+    (``epoch`` locates each quarter on the calendar; without it every quarter
+    in ``flows`` is used as-is, which is correct for this project's own
+    full-year ``flows.json``). Returns ``None`` when nothing usable is found,
+    so the caller can fall back to ``anchor_period_mean``'s uniform default.
+    """
+    edge_id = next(iter(reference.bearing_to_edge.values()), None)
+    series = flows.get(edge_id) if edge_id else None
+    if not series:
+        return None
+    epoch_ts = pd.Timestamp(epoch) if epoch is not None else None
+    sums = [0.0] * 96
+    counts = [0] * 96
+    for qi, value in enumerate(series):
+        if value is None:
+            continue
+        if epoch_ts is not None:
+            day = (epoch_ts + qi * INTERVAL).strftime("%Y-%m-%d")
+            if not reference.covers(day):
+                continue
+        slot = qi % 96
+        sums[slot] += float(value)
+        counts[slot] += 1
+    if not any(counts):
+        return None
+    return [sums[i] / counts[i] if counts[i] else 0.0 for i in range(96)]
+
+
 def apply_directional_anchors(shares: dict[str, list[float]], day: str,
-                              registry_path: Path | None = None
+                              registry_path: Path | None = None,
+                              flows: Mapping[str, list] | None = None,
+                              epoch: Any = None,
                               ) -> dict[str, list[float]]:
     """Anchor every two-way pair whose reference covers ``day``.
 
     Stations without a ``directional_reference`` are returned untouched, so
     the five single-direction sensors — whose measured direction is already a
     Level-1 target with nothing to anchor — cannot be affected by this path
-    at all. A pair whose edges are missing from the split file is skipped
-    rather than partially anchored.
+    at all.
+
+    A reference pair the caller did not supply is seeded with a FLAT even
+    base and then anchored, rather than skipped. That is the case where no
+    transferred model exists for the pair: skipping would leave sensor 107
+    on a 50/50 fallback while the city has published 52/48, which is the
+    published local measurement losing to a guess. The result carries no
+    time variation, because none was measured — only the period level is
+    local evidence.
+
+    ``flows``/``epoch``, when supplied, derive volume weights
+    (``sensor_period_weights``) so the period mean is matched the way an
+    annual D-factor actually is — volume-weighted, not an unweighted mean of
+    96 slot values. Omitting them keeps the previous uniform-weight
+    behaviour.
     """
     from traffic_sim.intake.sensors import anchored_pair_shares, load_registry
 
@@ -374,10 +448,10 @@ def apply_directional_anchors(shares: dict[str, list[float]], day: str,
         if reference is None or not reference.covers(day):
             continue
         edges = sorted(reference.bearing_to_edge.values())
-        if any(edge not in anchored for edge in edges):
-            continue
-        anchored.update(anchored_pair_shares(
-            reference, {edge: anchored[edge] for edge in edges}))
+        base = {edge: list(anchored.get(edge) or [0.5] * 96) for edge in edges}
+        weights = (sensor_period_weights(reference, flows, epoch)
+                  if flows is not None else None)
+        anchored.update(anchored_pair_shares(reference, base, weights=weights))
     return anchored
 
 
@@ -396,9 +470,31 @@ def build_targets(
     qi_start: int,
     n_intervals: int,
     split_key: str = "edge_shares",
+    anchor_day: str | None = None,
+    anchor_epoch: Any = None,
 ) -> list[dict[str, float]]:
-    """Per-quarter measured targets {edge: count} — the level-1 constraints."""
-    est_shares = load_direction_split(split_key)
+    """Per-quarter measured targets {edge: count} — the level-1 constraints.
+
+    ``anchor_day`` (Fas 0A) wires sensor 107's published local 52/48 anchor
+    into the real Level-1 target path: when the build's own calendar date is
+    passed here, any two-way station with a verified ``directional_reference``
+    covering that day has its estimated split shifted to reproduce the
+    published aggregate (see ``load_direction_split``/
+    ``apply_directional_anchors``). ``flows`` doubles as the volume-weighting
+    source — for a historical build it already IS the full 2025
+    ``flows.json`` the reference's own raw counts came from. A 2027 forecast
+    date is correctly refused: the reference's declared period is calendar
+    year 2025, so ``anchor_day=None`` is only needed for callers that must
+    reproduce the previous byte-identical behaviour (audits, LOSO folds).
+
+    A multi-day build passes its START date. That is sufficient rather than
+    approximate: the anchor constrains a PERIOD (calendar year 2025), and
+    ``validate_date_range`` already forbids a range from leaving its source
+    year, so every day of the build falls inside the same declared period.
+    """
+    est_shares = load_direction_split(
+        split_key, anchor_day=anchor_day, anchor_flows=flows,
+        anchor_epoch=anchor_epoch)
     out: list[dict[str, float]] = []
     for i in range(n_intervals):
         qi, slot = qi_start + i, (qi_start + i) % 96

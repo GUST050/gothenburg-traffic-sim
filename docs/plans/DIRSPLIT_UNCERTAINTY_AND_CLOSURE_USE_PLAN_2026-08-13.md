@@ -3,6 +3,48 @@
 **Datum:** 2026-08-13
 **Status:** Forsknings- och implementationsplan. Ingen ny modell eller policy är
 aktiverad av detta dokument.
+
+## Grindstatus 2026-08-14 (efter granskning)
+
+**Ingen av grindarna är avgjord.** Fas 2, 3 och 4 är stängda.
+
+| Grind | Status | Bevis |
+|---|---|---|
+| Gate S | `NOT_RUN` — extern egress-policy | `validation/dirsplit_direction_sensitivity_blocker_v2.json` |
+| Gate M | `INCONCLUSIVE` — `blocked_date` kan inte byggas | `validation/dirsplit_gate_m_outcome_v2.json` |
+
+En tidigare publicerad `Gate M = BASELINE` är **ÅTERKALLAD som beslut**.
+v1-filerna är bevarade oredigerade och uttryckligen ersatta; inget i dem får
+citeras som ett aktuellt resultat. Särskilt gäller att påståendet "den
+deployade LightGBM-modellen är 31,6–39,2 % sämre" inte stöds — det mätte en
+annan modell på en annan population.
+
+Granskningen fann tre kritiska och tre höga fel. Alla är åtgärdade i koden,
+men en åtgärdad grind är fortfarande en okörd grind:
+
+1. **Gate S körde inte olika q-fall eller seeds.** Verktyget byggde sitt
+   kommando utan routefil och utan seed, läste ett `disruption`-fält som
+   produkten inte producerar, använde inte sitt eget registrerade
+   06:00–10:00-fönster, och reducerade ett privat mål i stället för de
+   förregistrerade beslutsfälten. Nu binds varje `(fall, seed)` genom en egen
+   en-seeds `ScenarioSpec` (befintligt kontrakt, oförändrat) och beslutet tas
+   av `closure_ranking` oförändrad.
+2. **Sensor 107:s ankare nådde inte produkten.** `load_direction_split`
+   hade en `anchor_day`-parameter som ingen produktanropare skickade.
+   `build_targets` tar nu `anchor_day`/`anchor_epoch` och alla tre
+   anropsställen i `build_sumo_demand.py` skickar byggets eget datum.
+   Års-D-factorn matchas **volymviktat** från samma `flows`.
+3. **Gate M mätte fel population och fel modell, under kod som inte
+   implementerade sin egen frysta regel.** Regeln är nu
+   `simplest_defensible_v2`: vinst krävs under *varje* foldtyp, jämförelsen
+   sker mot den *aktuella* incumbenten, och en obyggbar foldtyp ger
+   `INCONCLUSIVE`.
+
+En strukturell iakttagelse värd att bevara: den deployade rankningsnyckeln
+(`closure_disruption`) är efterfrågesidig och därmed **seed-deterministisk per
+konstruktion**. Det gamla "spridningskvot mot seed-brus"-testet på den nyckeln
+var därför en tautologi. v2 verifierar invarianten i stället och vägrar
+publicera om seed-axeln visade sig vara inert.
 **Gäller omedelbart:** sensor 107:s lokala ankare, ett avgränsat
 matched-seed-test och `dirsplit/` dataset/modellval.
 **Villkorad senare omfattning:** demand-byggaren, scenarioavtal,

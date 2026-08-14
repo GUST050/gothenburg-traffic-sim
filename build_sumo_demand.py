@@ -1083,7 +1083,9 @@ def main() -> None:
                 variant_inputs = {}
                 for suffix, key in variants:
                     targets = build_targets(flows, sensor_edges, qi_start,
-                                            n_intervals, split_key=key)
+                                            n_intervals, split_key=key,
+                                            anchor_day=args.start_date,
+                                            anchor_epoch=source_epoch)
                     targets_by_variant[key] = targets
                     bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors(suffix)
                     out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
@@ -1141,7 +1143,9 @@ def main() -> None:
                 break
 
             targets = build_targets(flows, sensor_edges, qi_start,
-                                    n_intervals, split_key="edge_shares")
+                                    n_intervals, split_key="edge_shares",
+                                    anchor_day=args.start_date,
+                                    anchor_epoch=source_epoch)
             targets_by_variant["edge_shares"] = targets
             bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors("")
             report = timed(
@@ -1206,7 +1210,8 @@ def main() -> None:
         generate_candidates()
         for suffix, key in variants:
             targets_by_variant[key] = build_targets(
-                flows, sensor_edges, qi_start, n_intervals, split_key=key)
+                flows, sensor_edges, qi_start, n_intervals, split_key=key,
+                anchor_day=args.start_date, anchor_epoch=source_epoch)
             counts_path = SUMO_DIR / f"counts{suffix}.xml"
             n = write_counts(flows, sensor_edges, qi_start, n_intervals,
                              counts_path, split_key=key)

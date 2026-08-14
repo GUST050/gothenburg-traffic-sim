@@ -7,60 +7,74 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Branch claude/dirsplit-gated-plan-v2, based on main at
-  340b628. Fas 0A, Fas 0B and Fas 1 of the gated plan are implemented. Gate M
-  is decided = BASELINE. Gate S could not be run here. No exit declared.`
-- Summary: `Fas 0A binds sensor 107's published D-factor as an AGGREGATE with
-  period, source, raw counts and a geometry-resolved bearing->edge mapping,
-  and anchors it with a single logit offset so the declared period reproduces
-  52/48 while the partner direction is derived as 1-s. Fas 0B delivers the
-  bounded matched-seed tool with frozen materiality thresholds and a
-  fail-closed Gate S rule, but its inputs cannot be built here. Fas 1 runs the
-  four-candidate tournament over leakage-free blocked folds and finds the
-  deployed LightGBM significantly worse than 50/50.`
-- Files changed: `data_in/sensors.json (additive only);
-  traffic_sim/intake/sensors.py; demand/intake.py;
-  dirsplit/evaluate.py (new, the one module Fas 1 allows);
-  tools/measure_direction_decision_sensitivity.py (new);
-  tests/test_sensor_107_directional_reference.py,
-  tests/test_dirsplit_legacy_pin.py,
-  tests/test_direction_decision_sensitivity.py,
-  tests/test_dirsplit_gate_m.py; data/dirsplit/gate_m_report.json;
-  validation/dirsplit_gate_m_outcome_v1.json;
-  validation/dirsplit_direction_sensitivity_blocker_v1.json.`
-- Checks: `118 passed, 2 skipped across the four new test files. Existing
-  suites unaffected: test_sensor_registry, test_demand_intake,
-  test_build_sumo_demand, test_build_data -- 96 passed. Registry diff is purely
-  additive.`
-- Decisions and evidence: `GATE M = BASELINE. On 1,514 rows / 39 stations / 74
-  blocks the deployed similarity_weighted_lgbm scores -31.6% (leave-city-out)
-  and -39.2% (leave-station-out) against 50/50 with the paired block-bootstrap
-  CI entirely above zero; shrunk_dfactor and beta_binomial_dfactor tie at
-  about +4.5%. This agrees in sign with the tracked train_report.json.
-  GATE S = NOT_RUN. Also measured, on the real direction_split.json built here
-  from the tracked model: q50 pairs sum to exactly 1.0000 while q10 sums to
-  0.7030-0.9480 and q90 to 1.0520-1.2970 (mean -/+0.1220). At sensor 107 that
-  means the q10 arm would ask the calibrator to hit Level-1 targets summing to
-  76-93% of the measured two-way total. The repair belongs to Fas 2 and was
-  not performed.`
+- Focus and status: `Branch claude/gate-s-critical-findings-brkzye, continuing
+  claude/dirsplit-gated-plan-v2. Review found both gates technically wrong and
+  the 107 anchor disconnected from the product. All three are repaired.
+  Gate S = NOT_RUN (external egress policy). Gate M = INCONCLUSIVE. The
+  previously published Gate M = BASELINE is WITHDRAWN as a decision. No exit
+  declared.`
+- Summary: `Three critical and three high findings were addressed. (1) The
+  Gate S tool never varied the route file or the seed, read a disruption field
+  the product does not emit, ignored its own registered closure window, and
+  reduced a private objective instead of the deployed decision fields — all
+  four fixed, with the (case, seed) pair now bound through a one-seed
+  ScenarioSpec and the decision taken by closure_ranking unchanged. (2) The
+  107 anchor was a helper no product caller invoked; build_targets now takes
+  anchor_day/anchor_epoch and all three build_sumo_demand call sites pass the
+  build's own date, with the annual D-factor matched VOLUME-WEIGHTED from the
+  same flows. (3) Gate M ran on the wrong population and a model that is not
+  the deployed one, under code that did not implement its own frozen rule; the
+  rule is now simplest_defensible_v2 and the gate returns INCONCLUSIVE because
+  blocked_date folds cannot be built from the aggregated table.`
+- Files changed: `tools/measure_direction_decision_sensitivity.py (rewritten
+  run path and reducer, protocol v2); dirsplit/evaluate.py (deployed
+  population screen, deployed LightGBM, pairwise comparisons, required fold
+  kinds, rule v2); demand/intake.py (anchor_day/anchor_epoch on build_targets,
+  sensor_period_weights, flat-base anchoring); build_sumo_demand.py (three
+  build_targets call sites); tests/test_direction_decision_sensitivity.py,
+  tests/test_dirsplit_gate_m.py, tests/test_sensor_107_directional_reference.py;
+  data/dirsplit/gate_m_report.json (regenerated);
+  validation/dirsplit_gate_m_outcome_v2.json (new, supersedes v1);
+  validation/dirsplit_direction_sensitivity_blocker_v2.json (new, supersedes
+  v1). No v1 evidence file was edited.`
+- Checks: `Full suite run with sumo/net.net.xml present. The three touched
+  suites: 49+2s (sensitivity), 59 (gate M), 64 (sensor 107).`
+- Decisions and evidence: `GATE M = INCONCLUSIVE, not BASELINE. Rule 6 of the
+  frozen text says a fold kind that could not be built is INCONCLUSIVE;
+  dirsplit/dataset.py aggregates away local_date, so blocked_date yields zero
+  folds and the v1 code skipped it and published BASELINE anyway. Under the
+  corrected DEPLOYED population (observed weekday-daytime share screen: 81
+  stations / 3,665 rows / 162 blocks, not the OSM-oneway-flag 39 stations /
+  1,514 rows) and the deployed LightGBM (target-centred kernel, n_obs**0.5
+  evidence weight, weekday 06-20 fit, shrinkage fit by nested leave-city-out),
+  the LightGBM is worse than 50/50 on leave-city-out (CI95 [+0.000768,
+  +0.004979]) and indistinguishable on leave-station-out. That is DIAGNOSTIC
+  only. The claim "the deployed LightGBM is 31.6-39.2% worse" is withdrawn:
+  it measured a different model on a different population.
+  GATE S = NOT_RUN, and now for an honest reason. Recorded while repairing:
+  the deployed ranking key (closure_disruption) is demand-side and therefore
+  seed-deterministic BY CONSTRUCTION, so v1's "between-case spread beats seed
+  noise" ratio on it was a tautology; v2 verifies the invariant instead and
+  uses the seed axis for health, closure integrity and an inertness check.`
 - Blockers or risks: `Gate S is blocked by organization egress policy, not by
-  code. build_candidates.py needs overpass-api.de; the proxy answers 403 to
-  CONNECT for it and for geodata.scb.se, api.scb.se,
-  trafikkdata-api.atlas.vegvesen.no and nominatim.openstreetmap.org.
+  code — re-verified 2026-08-14. build_candidates.py needs overpass-api.de;
+  the proxy answers 403 to CONNECT for it and for geodata.scb.se.
   /root/.ccr/README.md requires reporting such denials rather than retrying, so
   no workaround was attempted. The same denial prevents raw day-level
-  Norwegian volumes, so Fas 1 could not build blocked_date folds and its block
-  unit is station x day-type rather than station x date.`
-- Suggested next action: `Grant egress to overpass-api.de (and geodata.scb.se
-  for a DeSO refresh) or supply a cached POI/candidate artifact, then run
-  build_sumo_demand.py, freeze the Fas 0B registration and run it. If Gate S
-  returns NO, Exit A applies together with the decided Gate M = BASELINE. Do
-  not open Fas 2 on Gate M alone.`
-- Actor notes: `SUMO 1.27.1 was installed locally and TraCI resolved from
+  Norwegian volumes, which is exactly why Gate M cannot build blocked_date
+  folds and is INCONCLUSIVE.`
+- Suggested next action: `Run the repaired Gate S on a machine that already
+  has sumo/calibrated*.rou.xml — per the review, --freeze-only completes there
+  in about a second. Separately, build dataset v2 (station x date x hour x
+  heading with raw counts and day_block_id) to make Gate M decidable; that
+  needs Norwegian volume egress. Do NOT open Fas 2/3/4: neither gate is
+  decided, so the four-quadrant table cannot be entered from either side.`
+- Actor notes: `SUMO installed locally and resolved from
   SUMO_HOME=/usr/local/lib/python3.11/dist-packages/sumo. sumo/net.net.xml and
   sumo/direction_split.json were rebuilt from tracked inputs; both are
-  gitignored intermediates and were not committed. No existing evidence was
-  edited, no policy activated and no runtime gate weakened.`
+  gitignored intermediates and were not committed. No existing evidence file
+  was edited, no policy activated and no runtime gate weakened. The v1
+  outcome and v1 blocker are preserved unchanged and explicitly superseded.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History

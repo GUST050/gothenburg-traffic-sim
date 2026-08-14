@@ -44,31 +44,62 @@ from .features import FEATURE_NAMES
 REPORT_PATH = DATA_DIR / "gate_m_report.json"
 
 #: Frozen before any fold was scored.
-SELECTION_RULE = "simplest_defensible_v1"
+#:
+#: v2 (2026-08-14) after review. v1's TEXT and its CODE were different rules,
+#: and the code was the looser of the two in three ways, each of which could
+#: promote a model the frozen rule forbids:
+#:
+#:   * ``wins``/``loses`` were accumulated ACROSS fold kinds, so a win under
+#:     leave-city-out plus a tie under leave-station-out promoted — while
+#:     rule 4 requires the win under EVERY fold kind;
+#:   * every candidate was compared against 50/50 only, so a more complex
+#:     model could displace an already-promoted simpler one without ever
+#:     being shown better than it;
+#:   * a missing fold kind was skipped instead of returning INCONCLUSIVE,
+#:     which rule 6 requires — the aggregated legacy table carries no dates,
+#:     so ``blocked_date`` cannot be built from it at all.
+#:
+#: The version is bumped rather than edited in place so the recorded v1
+#: outcome stays readable as what it was: a decision taken under a rule the
+#: code did not implement.
+SELECTION_RULE = "simplest_defensible_v2"
 BOOTSTRAP_SAMPLES = 2000
 BOOTSTRAP_SEED = 20260814
 
 #: A candidate must not lose in any of these to be promoted.
 PRIMARY_GROUPS = ("all", "weekday_peak")
 
+#: Every one of these must produce folds before Gate M can be decided. The
+#: plan names all three (geographic transfer, new road, future day) as
+#: complementary — a model validated on two of them has not been shown to
+#: generalise along the third, and the third is the one a multi-month closure
+#: search depends on.
+REQUIRED_FOLD_KINDS = ("leave_city_out", "leave_station_out", "blocked_date")
+
 SELECTION_RULE_TEXT = """\
 Frozen before any fold was scored.
 
 1. Candidates are ordered by complexity ascending; constant_5050 is the
    incumbent.
-2. A more complex candidate replaces the incumbent only if, on pooled
-   held-out predictions, BOTH hold:
+2. A more complex candidate replaces the CURRENT INCUMBENT only if, on
+   pooled held-out predictions, BOTH hold against that incumbent (not
+   against 50/50 once the incumbent is something else):
    a. in every primary group the 95% block-bootstrap CI on the paired
-      difference (candidate MAE - 50/50 MAE) does not lie entirely above
+      difference (candidate MAE - incumbent MAE) does not lie entirely above
       zero, i.e. it never significantly loses; and
    b. in at least one primary group that CI lies entirely below zero.
 3. Ties, unmeasurable groups and non-finite CIs count as "does not win".
-4. The rule is applied per fold kind; promotion requires it under every fold
-   kind that produced results.
+4. The rule is applied per fold kind; promotion requires BOTH conditions to
+   hold under EVERY fold kind, not under one of them.
 5. If nothing is promoted, Gate M = BASELINE and the uncertainty is reported
    rather than modelled away.
 6. Gate M = INCONCLUSIVE if leakage is detected, if fewer than
-   MIN_INDEPENDENT_BLOCKS blocks exist, or if a fold kind could not be built.
+   MIN_INDEPENDENT_BLOCKS blocks exist, or if any of REQUIRED_FOLD_KINDS
+   could not be built.
+7. The evaluated population and the evaluated model must be the ones the
+   deployment uses. A tournament run on a different station screen, or on a
+   LightGBM weighted toward a different centre, measures a model that is not
+   the deployed one and cannot speak about it.
 """
 
 MIN_INDEPENDENT_BLOCKS = 8
@@ -119,34 +150,80 @@ def _float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+#: The deployed one-way screen (dirsplit/train.py::load_table). A station
+#: whose weekday daytime mean share sits outside this band is one-way-ish and
+#: is dropped, because its 0/1 labels poison the fit.
+DEPLOYED_TWO_WAY_BAND = (0.15, 0.85)
+DEPLOYED_TRAINING_HOURS = range(6, 21)
+
+
+def deployed_oneway_stations(records: Sequence[Mapping[str, Any]]) -> set[str]:
+    """Stations the deployed trainer screens out, by its own definition.
+
+    This is OBSERVED-SHARE based, not the OSM ``oneway`` feature flag. The
+    two disagree badly on this table — the OSM flag drops 139 of 178
+    stations and leaves 39, while the deployed screen drops 97 and leaves
+    81 — so a tournament run on the OSM flag is scoring a different
+    population from the one the deployment trains and predicts on, and its
+    verdict cannot transfer. Reproduced here rather than imported because
+    ``train.py::load_table`` also reads the file, fits and prints; this
+    needs only the screen.
+    """
+    by_direction: dict[tuple[str, str], list[float]] = {}
+    for record in records:
+        if (int(_float(record.get("is_weekend"))) == 0
+                and int(_float(record.get("hour"))) in DEPLOYED_TRAINING_HOURS):
+            by_direction.setdefault(
+                (record["station_id"], record["heading"]), []).append(
+                    _float(record.get("share")))
+    low, high = DEPLOYED_TWO_WAY_BAND
+    return {station for (station, _heading), shares in by_direction.items()
+            if shares and not low <= float(np.mean(shares)) <= high}
+
+
+def in_deployed_training_window(row: "Row") -> bool:
+    """Would the deployed trainer have trained on this row?
+
+    Weekday 06-20 only. Rows outside it stay in the EVALUATION set — that is
+    how the report can say what happens where the model is used but was
+    never trained — but the LightGBM candidate must not FIT on them, or it
+    would be a different model from the deployed one.
+    """
+    return (not row.is_weekend
+            and row.hour in DEPLOYED_TRAINING_HOURS)
+
+
 def load_rows(path: Path = TABLE_PATH, *, drop_oneway: bool = True,
               orient_toward_centre: bool = True) -> tuple[list[Row], dict]:
     """Load the tracked table into Row objects.
 
     Reproduces the two screens the deployed trainer applies, so the
     tournament measures the same population the deployment predicts:
-    one-way-ish stations are dropped (their 0/1 shares poison training), and
-    only the toward-centre direction of each pair is kept (a mirrored pair
-    contributes the same information twice).
+    one-way-ish stations are dropped by their OBSERVED weekday-daytime share
+    (``deployed_oneway_stations``, exactly train.py's rule), and only the
+    toward-centre direction of each pair is kept — by train.py's own
+    ``radial_cos > 0`` test, not by taking each station's argmax, because
+    the two differ for a station whose headings both point away from the
+    centre.
     """
     raw: list[dict] = []
     with open(path) as handle:
         raw = list(csv.DictReader(handle))
 
-    oneway_stations: set[str] = set()
-    if drop_oneway:
-        for record in raw:
-            if _float(record.get("oneway")) >= 0.5:
-                oneway_stations.add(record["station_id"])
+    oneway_stations = deployed_oneway_stations(raw) if drop_oneway else set()
 
     has_dates = "local_date" in (raw[0] if raw else {})
 
+    rc_index = FEATURE_NAMES.index("radial_cos")
     rows: list[Row] = []
     for record in raw:
         if record["station_id"] in oneway_stations:
             continue
         share = _float(record.get("share"))
         if not 0.0 < share < 1.0:
+            continue
+        features = tuple(_float(record.get(c)) for c in FEATURE_NAMES)
+        if orient_toward_centre and features[rc_index] <= 0:
             continue
         is_weekend = int(_float(record.get("is_weekend")))
         local_date = record.get("local_date") if has_dates else None
@@ -162,32 +239,28 @@ def load_rows(path: Path = TABLE_PATH, *, drop_oneway: bool = True,
             n_obs=_float(record.get("n_obs"), 1.0),
             mean_total=_float(record.get("mean_total_veh_h"), 1.0),
             block=block,
-            features=tuple(_float(record.get(c)) for c in FEATURE_NAMES),
+            features=features,
             profile=tuple(_float(record.get(c)) for c in PROFILE_FEATURES),
             day_block_id=(f"{record['city']}|{local_date}" if local_date
                           else None),
             local_date=local_date,
         ))
 
-    if orient_toward_centre:
-        rc_index = FEATURE_NAMES.index("radial_cos")
-        best: dict[str, tuple[float, str]] = {}
-        for row in rows:
-            radial = row.features[rc_index]
-            current = best.get(row.station_id)
-            if current is None or radial > current[0]:
-                best[row.station_id] = (radial, row.heading)
-        keep = {station: heading for station, (_r, heading) in best.items()}
-        rows = [r for r in rows if keep.get(r.station_id) == r.heading]
-
+    trainable = [r for r in rows if in_deployed_training_window(r)]
     return rows, {
         "source": str(path),
         "raw_rows": len(raw),
+        "oneway_screen": "observed weekday-daytime mean share outside "
+                         f"{DEPLOYED_TWO_WAY_BAND} (dirsplit/train.py)",
         "oneway_stations_dropped": len(oneway_stations),
+        "orientation_screen": "radial_cos > 0 (dirsplit/train.py)",
         "rows_kept": len(rows),
         "stations": len({r.station_id for r in rows}),
         "cities": sorted({r.city for r in rows}),
         "blocks": len({r.block for r in rows}),
+        "deployed_training_window_rows": len(trainable),
+        "deployed_training_window_stations": len(
+            {r.station_id for r in trainable}),
         "has_day_level_dates": has_dates,
         "block_definition": ("station x date" if has_dates
                              else "station x day-type"),
@@ -228,7 +301,20 @@ class Candidate:
     name = "base"
     complexity = 0
 
-    def fit(self, rows: Sequence[Row]) -> "Candidate":
+    def fit(self, rows: Sequence[Row],
+            target_features: np.ndarray | None = None) -> "Candidate":
+        """Fit on the training side of a fold.
+
+        ``target_features`` is the STATIC FEATURE matrix of the rows this
+        model will be asked to predict — never their labels. It exists
+        because the deployment is locally weighted toward a KNOWN target
+        road: `train.py` fits each sensor's model with a Gaussian kernel
+        centred on that sensor's own feature vector, which it knows before
+        any Gothenburg measurement exists. A fold that withheld the held-out
+        station's features would therefore be evaluating a model the project
+        does not deploy. Passing labels here would be leakage; passing
+        features is the deployment.
+        """
         raise NotImplementedError
 
     def predict(self, rows: Sequence[Row]) -> np.ndarray:
@@ -241,7 +327,7 @@ class Constant5050(Candidate):
     name = "constant_5050"
     complexity = 0
 
-    def fit(self, rows):
+    def fit(self, rows, target_features=None):
         return self
 
     def predict(self, rows):
@@ -265,7 +351,7 @@ class ShrunkDFactor(Candidate):
         self._blocks: dict[tuple[int, int], int] = {}
         self._k = float("inf")
 
-    def fit(self, rows):
+    def fit(self, rows, target_features=None):
         buckets: dict[tuple[int, int], list[float]] = {}
         blocks: dict[tuple[int, int], set[str]] = {}
         for row in rows:
@@ -315,7 +401,7 @@ class BetaBinomialDFactor(Candidate):
         self._cell: dict[tuple[int, int], float] = {}
         self._k = float("inf")
 
-    def fit(self, rows):
+    def fit(self, rows, target_features=None):
         buckets: dict[tuple[int, int], list[Row]] = {}
         for row in rows:
             buckets.setdefault((row.hour, row.is_weekend), []).append(row)
@@ -352,11 +438,36 @@ class BetaBinomialDFactor(Candidate):
 
 
 class SimilarityWeightedLGBM(Candidate):
-    """The deployed approach, entered under the same folds.
+    """The DEPLOYED approach, entered under the same folds.
 
     Standardisation and bandwidth are fit on the TRAINING side of each fold,
     which is the leakage requirement; the deployed trainer computes them once
     over everything.
+
+    CORRECTED 2026-08-14. The first version of this candidate differed from
+    the deployed model in four ways at once, so its verdict described a
+    model this project does not ship:
+
+    * it weighted toward the TRAINING population's own centroid, while
+      `train.py` weights toward the target — the Gothenburg sensor's feature
+      vector when deploying, the held-out station's when validating. A model
+      centred on the training cloud is the general model, not the locally
+      weighted one;
+    * it used no ``n_obs ** 0.5`` evidence weight, so a station-hour backed
+      by one day counted as much as one backed by twenty;
+    * it fit on every row, including weekends and nights the deployed
+      trainer excludes;
+    * it applied no shrinkage, while the deployment ships
+      ``0.5 + lambda * (pred - 0.5)`` with ``lambda`` around 0.26-0.29 —
+      i.e. it deploys about a quarter of the raw deviation.
+
+    On the target-centred weighting and leakage: ``target_features`` carries
+    the held-out rows' STATIC STREET FEATURES only, never their labels.
+    That is exactly the information the deployment has about a Gothenburg
+    edge before any local measurement exists, so using it is reproducing the
+    deployment rather than peeking at the answer. ``score`` builds the
+    matrix from ``fold.test`` features and the fit never sees ``r.share``
+    for a test row.
     """
 
     name = "similarity_weighted_lgbm"
@@ -367,6 +478,7 @@ class SimilarityWeightedLGBM(Candidate):
         self._model = None
         self._mu = None
         self._sd = None
+        self._shrinkage = 1.0
 
     def _matrix(self, rows):
         out = np.zeros((len(rows), len(FEATURE_NAMES)
@@ -381,43 +493,104 @@ class SimilarityWeightedLGBM(Candidate):
             out[index, tail + 2] = float(row.is_weekend)
         return out
 
-    def fit(self, rows):
+    def _new_model(self):
         import lightgbm as lgb
 
-        if len(rows) < 30:
-            self._model = None
-            return self
-        matrix = self._matrix(rows)
-        target = np.array([r.share for r in rows], dtype=float)
+        return lgb.LGBMRegressor(
+            n_estimators=self.n_estimators, learning_rate=0.05, max_depth=5,
+            num_leaves=31, subsample=0.8, colsample_bytree=0.8,
+            min_child_samples=20, random_state=42, n_jobs=-1, verbose=-1)
 
+    def _weights(self, rows, matrix, centre_z):
+        """Deployment's own sample weight: evidence x station x similarity."""
         static = matrix[:, :len(FEATURE_NAMES)]
-        self._mu = static.mean(axis=0)
-        self._sd = static.std(axis=0)
-        self._sd[self._sd < 1e-9] = 1.0
         standardised = (static - self._mu) / self._sd
-        centre = standardised.mean(axis=0)
-        distances = np.sqrt(((standardised - centre) ** 2).sum(axis=1))
-        bandwidth = float(np.median(distances)) or 1.0
+        spread = np.sqrt(
+            ((standardised - standardised.mean(axis=0)) ** 2).sum(axis=1))
+        bandwidth = float(np.median(spread)) or 1.0
+        distances = np.sqrt(((standardised - centre_z) ** 2).sum(axis=1))
         similarity = np.exp(-0.5 * (distances / bandwidth) ** 2)
 
         counts: dict[str, int] = {}
         for row in rows:
             counts[row.station_id] = counts.get(row.station_id, 0) + 1
-        station_weight = np.array(
-            [1.0 / counts[r.station_id] for r in rows], dtype=float)
+        evidence = np.array([max(r.n_obs, 1.0) ** 0.5 for r in rows],
+                            dtype=float)
+        station = np.array([1.0 / counts[r.station_id] for r in rows],
+                           dtype=float)
+        return evidence * station * similarity
 
-        self._model = lgb.LGBMRegressor(
-            n_estimators=self.n_estimators, learning_rate=0.05, max_depth=5,
-            num_leaves=31, subsample=0.8, colsample_bytree=0.8,
-            min_child_samples=20, random_state=42, n_jobs=-1, verbose=-1)
+    def _fit_shrinkage(self, rows, centre_z) -> float:
+        """Fit lambda the way deployment does, but INSIDE the training fold.
+
+        `train.py` regresses observed deviation from 0.5 on predicted
+        deviation over pooled leave-city-out predictions. Reproduced here by
+        a nested leave-city-out over the TRAINING side only, so no held-out
+        row of the outer fold contributes. Skipping it would evaluate a
+        model with roughly four times the deviation the project actually
+        ships.
+        """
+        cities = sorted({r.city for r in rows})
+        if len(cities) < 2:
+            return 1.0
+        predicted: list[float] = []
+        observed: list[float] = []
+        for held in cities:
+            inner_train = [r for r in rows if r.city != held]
+            inner_test = [r for r in rows if r.city == held]
+            if len(inner_train) < 30 or not inner_test:
+                continue
+            matrix = self._matrix(inner_train)
+            model = self._new_model()
+            model.fit(matrix, np.array([r.share for r in inner_train]),
+                      sample_weight=self._weights(inner_train, matrix, centre_z))
+            values = np.clip(model.predict(self._matrix(inner_test)), 0.1, 0.9)
+            predicted.extend((values - 0.5).tolist())
+            observed.extend([r.share - 0.5 for r in inner_test])
+        if not predicted:
+            return 1.0
+        dp = np.array(predicted)
+        dy = np.array(observed)
+        return float(np.clip((dp @ dy) / max(dp @ dp, 1e-12), 0.0, 1.0))
+
+    def fit(self, rows, target_features=None):
+        # Deployment trains on weekday 06-20 only. Rows outside that window
+        # stay in the EVALUATION set so the report can show what happens
+        # where the model is used but was never trained.
+        trainable = [r for r in rows if in_deployed_training_window(r)]
+        if len(trainable) < 30:
+            self._model = None
+            return self
+        matrix = self._matrix(trainable)
+        target = np.array([r.share for r in trainable], dtype=float)
+
+        static = matrix[:, :len(FEATURE_NAMES)]
+        self._mu = static.mean(axis=0)
+        self._sd = static.std(axis=0)
+        self._sd[self._sd < 1e-9] = 1.0
+
+        # Centre the kernel on the TARGET, as deployment does. Falling back
+        # to the training centroid only when no target is supplied keeps the
+        # candidate usable standalone; ``score`` always supplies one.
+        if target_features is not None and len(target_features):
+            centre_z = ((np.asarray(target_features, dtype=float).mean(axis=0)
+                         - self._mu) / self._sd)
+        else:
+            centre_z = ((static - self._mu) / self._sd).mean(axis=0)
+
+        self._shrinkage = self._fit_shrinkage(trainable, centre_z)
+        self._model = self._new_model()
         self._model.fit(matrix, target,
-                        sample_weight=station_weight * similarity)
+                        sample_weight=self._weights(trainable, matrix, centre_z))
         return self
 
     def predict(self, rows):
         if self._model is None:
             return np.full(len(rows), 0.5, dtype=float)
-        return np.clip(self._model.predict(self._matrix(rows)), 0.1, 0.9)
+        raw = np.clip(self._model.predict(self._matrix(rows)), 0.1, 0.9)
+        # Deployment ships 0.5 + lambda * (pred - 0.5); evaluating the raw
+        # prediction would score a model nobody runs.
+        return np.clip(0.5 + self._shrinkage * (raw - 0.5), 0.1, 0.9)
 
 
 def default_candidates() -> list[Candidate]:
@@ -521,40 +694,87 @@ def groups_of(row: Row) -> tuple[str, ...]:
     return tuple(groups)
 
 
-def score(candidate: Candidate, folds: Sequence[Fold]) -> dict[str, Any]:
-    """Fit per fold on the training side only, then pool held-out errors."""
+@dataclass(frozen=True)
+class HeldOut:
+    """One candidate's pooled held-out predictions over a set of folds.
+
+    Kept as an object rather than collapsed straight into a report because
+    the frozen rule compares a candidate against the CURRENT INCUMBENT, not
+    always against 50/50. That comparison is impossible once only summary
+    statistics survive, which is how the previous version ended up letting a
+    complex model displace a simpler promoted one without ever being shown
+    better than it.
+    """
+
+    predicted: np.ndarray
+    actual: np.ndarray
+    blocks: tuple[str, ...]
+    groups: tuple[tuple[str, ...], ...]
+
+    @property
+    def error(self) -> np.ndarray:
+        return np.abs(self.actual - self.predicted)
+
+    def mask(self, group: str) -> np.ndarray:
+        return np.array([group in g for g in self.groups], dtype=bool)
+
+
+def held_out_predictions(candidate: Candidate,
+                         folds: Sequence[Fold]) -> HeldOut:
+    """Fit per fold on the training side only, then pool held-out rows.
+
+    The held-out rows' STATIC FEATURES are handed to ``fit`` as
+    ``target_features`` so a locally weighted candidate is centred where the
+    deployment centres it. Their LABELS are not passed and are used only
+    afterwards, to score.
+    """
     import copy
 
-    errors: list[float] = []
-    baseline: list[float] = []
+    predicted: list[float] = []
+    actual: list[float] = []
     blocks: list[str] = []
     groups: list[tuple[str, ...]] = []
 
     for fold in folds:
-        fitted = copy.deepcopy(candidate).fit(list(fold.train))
-        predicted = fitted.predict(list(fold.test))
-        actual = np.array([r.share for r in fold.test], dtype=float)
-        errors.extend(np.abs(actual - predicted).tolist())
-        baseline.extend(np.abs(actual - 0.5).tolist())
+        target_features = np.array([r.features for r in fold.test],
+                                   dtype=float)
+        fitted = copy.deepcopy(candidate).fit(
+            list(fold.train), target_features=target_features)
+        predicted.extend(np.asarray(
+            fitted.predict(list(fold.test)), dtype=float).tolist())
+        actual.extend(r.share for r in fold.test)
         blocks.extend(r.block for r in fold.test)
         groups.extend(groups_of(r) for r in fold.test)
 
-    if not errors:
-        return {"n": 0, "groups": {}}
+    return HeldOut(np.array(predicted, dtype=float),
+                   np.array(actual, dtype=float),
+                   tuple(blocks), tuple(groups))
 
-    err = np.array(errors)
-    base = np.array(baseline)
+
+def compare(candidate: HeldOut, reference: HeldOut) -> dict[str, Any]:
+    """Group-wise paired comparison of two candidates' held-out errors.
+
+    Both sides must come from the SAME folds, so the rows line up and the
+    difference is paired row by row — the whole point of running every
+    candidate over one fold set.
+    """
+    if len(candidate.error) != len(reference.error):
+        raise ValueError(
+            "paired comparison needs both candidates scored on the same "
+            f"folds ({len(candidate.error)} vs {len(reference.error)} rows)")
+    err, base = candidate.error, reference.error
     per_group: dict[str, Any] = {}
     for name in ("all", "weekday", "weekend", "weekday_peak", "off_hours"):
-        mask = np.array([name in g for g in groups], dtype=bool)
+        mask = candidate.mask(name)
         if not mask.any():
             continue
         low, high = paired_difference_ci(
-            err[mask], base[mask], [b for b, m in zip(blocks, mask) if m])
+            err[mask], base[mask],
+            [b for b, m in zip(candidate.blocks, mask) if m])
         base_mae = float(np.mean(base[mask]))
         per_group[name] = {
             "n": int(mask.sum()),
-            "n_blocks": len({b for b, m in zip(blocks, mask) if m}),
+            "n_blocks": len({b for b, m in zip(candidate.blocks, mask) if m}),
             "mae": round(float(np.mean(err[mask])), 6),
             "mae_5050": round(base_mae, 6),
             "improvement_pct": round(
@@ -564,44 +784,125 @@ def score(candidate: Candidate, folds: Sequence[Fold]) -> dict[str, Any]:
             "beats_baseline": bool(high < 0),
             "loses_to_baseline": bool(low > 0),
         }
+    if not len(err):
+        return {"n": 0, "groups": {}}
     return {
         "n": int(len(err)),
-        "n_blocks": len(set(blocks)),
+        "n_blocks": len(set(candidate.blocks)),
         "mae": round(float(np.mean(err)), 6),
         "mae_5050": round(float(np.mean(base)), 6),
         "groups": per_group,
     }
 
 
+def score(candidate: Candidate, folds: Sequence[Fold],
+          reference: Candidate | None = None) -> dict[str, Any]:
+    """Fit per fold on the training side only, then pool held-out errors.
+
+    ``reference`` defaults to ``constant_5050``, which is what the published
+    report compares against. The decision rule uses ``compare`` directly so
+    it can hold the CURRENT incumbent fixed instead.
+    """
+    held = held_out_predictions(candidate, folds)
+    if not len(held.error):
+        return {"n": 0, "groups": {}}
+    baseline = held_out_predictions(reference or Constant5050(), folds)
+    return compare(held, baseline)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Gate M
 # ──────────────────────────────────────────────────────────────────────────
+def _inconclusive_gate_m(reason: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "gate_m": "INCONCLUSIVE",
+        "winner": None,
+        "reason": reason,
+        "selection_rule": SELECTION_RULE,
+        "note": ("INCONCLUSIVE is not BASELINE. It says the evidence needed "
+                 "to decide was not available, so the current release path "
+                 "stays as legacy and only the evidence defect is repaired."),
+        **extra,
+    }
+
+
 def decide_gate_m(reports: Mapping[str, Mapping[str, Any]],
                   candidates: Sequence[Candidate],
-                  meta: Mapping[str, Any]) -> dict[str, Any]:
-    """Apply SELECTION_RULE_TEXT. BASELINE / MODEL / INCONCLUSIVE."""
+                  meta: Mapping[str, Any],
+                  comparisons: Mapping[str, Mapping[str, Mapping[str, Any]]]
+                  | None = None,
+                  fold_kinds: Sequence[str] | None = None) -> dict[str, Any]:
+    """Apply SELECTION_RULE_TEXT. BASELINE / MODEL / INCONCLUSIVE.
+
+    ``comparisons[candidate][incumbent][fold_kind]`` holds the paired
+    comparison of that candidate against that incumbent, in the same shape
+    ``compare`` returns. Rule 2 needs it: once a simpler model has been
+    promoted, a more complex one must beat THAT, not 50/50. Without it the
+    function falls back to the reports' vs-50/50 entries, which is only
+    valid while the incumbent is still 50/50 — so the fallback is recorded
+    in the result rather than applied silently.
+    """
     ordered = sorted(candidates, key=lambda c: (c.complexity, c.name))
     incumbent = ordered[0].name
     detail: dict[str, Any] = {}
 
     if meta.get("blocks", 0) < MIN_INDEPENDENT_BLOCKS:
-        return {
-            "gate_m": "INCONCLUSIVE",
-            "winner": None,
-            "reason": (f"only {meta.get('blocks')} independent blocks; "
-                       f"{MIN_INDEPENDENT_BLOCKS} are required before a "
-                       "difference can be called robust"),
-            "selection_rule": SELECTION_RULE,
-        }
+        return _inconclusive_gate_m(
+            f"only {meta.get('blocks')} independent blocks; "
+            f"{MIN_INDEPENDENT_BLOCKS} are required before a difference can "
+            "be called robust")
 
+    # Rule 6: a fold kind that could not be built is missing evidence, not
+    # evidence of no effect. The aggregated legacy table carries no dates, so
+    # blocked_date cannot be built from it — which is exactly the case this
+    # guard exists for.
+    available = set(fold_kinds if fold_kinds is not None
+                    else {kind for report in reports.values() for kind in report})
+    missing = [kind for kind in REQUIRED_FOLD_KINDS if kind not in available]
+    if missing:
+        return _inconclusive_gate_m(
+            "required fold kind(s) could not be built: "
+            + ", ".join(missing)
+            + ". A model validated only on the fold kinds that happened to be "
+              "constructible has not been shown to generalise along the one "
+              "that was not.",
+            missing_fold_kinds=missing,
+            available_fold_kinds=sorted(available))
+
+    fallback_used = comparisons is None
     for candidate in ordered[1:]:
         report = reports.get(candidate.name) or {}
         if not report:
             detail[candidate.name] = {"promoted": False, "why": "no results"}
             continue
-        wins = loses = False
+
+        against = (((comparisons or {}).get(candidate.name) or {})
+                   .get(incumbent))
+        if against is None:
+            if candidate.name == incumbent or incumbent != ordered[0].name:
+                # No paired comparison against the CURRENT incumbent exists,
+                # and the incumbent is no longer 50/50, so the report's
+                # vs-50/50 entries cannot answer rule 2.
+                detail[candidate.name] = {
+                    "promoted": False,
+                    "why": f"no paired comparison against incumbent "
+                           f"{incumbent}"}
+                continue
+            against = report          # incumbent is 50/50: the report is it
+
         notes: dict[str, str] = {}
-        for kind, stats in report.items():
+        # Rule 4: BOTH conditions must hold under EVERY fold kind. Evaluated
+        # per kind and then AND-ed, instead of pooling wins and losses across
+        # kinds — a win under one fold kind and a tie under another is not a
+        # win under every fold kind.
+        promoted_per_kind: list[bool] = []
+        for kind in sorted(REQUIRED_FOLD_KINDS):
+            stats = against.get(kind)
+            if not stats:
+                notes[f"{kind}:*"] = "unmeasured"
+                promoted_per_kind.append(False)
+                continue
+            wins = loses = False
             for group in PRIMARY_GROUPS:
                 entry = (stats.get("groups") or {}).get(group)
                 if not entry:
@@ -615,21 +916,34 @@ def decide_gate_m(reports: Mapping[str, Mapping[str, Any]],
                     notes[f"{kind}:{group}"] = "wins"
                 else:
                     notes[f"{kind}:{group}"] = "tie"
-        promoted = wins and not loses
-        detail[candidate.name] = {"promoted": promoted, "notes": notes}
+            promoted_per_kind.append(wins and not loses)
+
+        promoted = bool(promoted_per_kind) and all(promoted_per_kind)
+        detail[candidate.name] = {
+            "promoted": promoted,
+            "compared_against": incumbent,
+            "notes": notes,
+        }
         if promoted:
             incumbent = candidate.name
 
     gate = "BASELINE" if incumbent == "constant_5050" else "MODEL"
-    return {
+    result = {
         "gate_m": gate,
         "winner": incumbent,
-        "reason": ("no candidate won a primary group without losing another"
-                   if gate == "BASELINE"
-                   else f"{incumbent} wins a primary group and loses none"),
+        "reason": ("no candidate won a primary group under every fold kind "
+                   "without losing one" if gate == "BASELINE"
+                   else f"{incumbent} wins a primary group under every fold "
+                        "kind and loses none, against the incumbent it "
+                        "replaced"),
         "selection_rule": SELECTION_RULE,
         "detail": detail,
     }
+    if fallback_used:
+        result["comparison_basis"] = (
+            "constant_5050 only — no paired candidate-vs-incumbent "
+            "comparisons were supplied")
+    return result
 
 
 def run(path: Path = TABLE_PATH) -> dict[str, Any]:
@@ -644,30 +958,53 @@ def run(path: Path = TABLE_PATH) -> dict[str, Any]:
     if date_folds:
         builders["blocked_date"] = blocked_date
 
-    reports: dict[str, dict[str, Any]] = {}
+    # Every candidate is scored on ONE fold set per kind, and its pooled
+    # held-out predictions are kept, so any pair can be compared row by row
+    # afterwards. Re-fitting per comparison would be both slower and unable
+    # to guarantee the pairing.
+    folds_by_kind = {kind: build(rows) for kind, build in builders.items()}
+    folds_by_kind = {kind: folds for kind, folds in folds_by_kind.items()
+                     if folds}
+    held: dict[str, dict[str, HeldOut]] = {}
     for candidate in candidates:
-        per_kind: dict[str, Any] = {}
-        for kind, build in builders.items():
-            folds = build(rows)
-            if folds:
-                per_kind[kind] = score(candidate, folds)
+        per_kind = {kind: held_out_predictions(candidate, folds)
+                    for kind, folds in folds_by_kind.items()}
         if per_kind:
-            reports[candidate.name] = per_kind
+            held[candidate.name] = per_kind
 
-    decision = decide_gate_m(reports, candidates, meta)
+    baseline = Constant5050().name
+    reports: dict[str, dict[str, Any]] = {
+        name: {kind: compare(value, held[baseline][kind])
+               for kind, value in per_kind.items()}
+        for name, per_kind in held.items()
+    }
+    comparisons: dict[str, dict[str, dict[str, Any]]] = {
+        name: {
+            other: {kind: compare(value, held[other][kind])
+                    for kind, value in per_kind.items()}
+            for other in held if other != name
+        }
+        for name, per_kind in held.items()
+    }
+
+    decision = decide_gate_m(reports, candidates, meta,
+                             comparisons=comparisons,
+                             fold_kinds=sorted(folds_by_kind))
     return {
-        "protocol": "dirsplit_gate_m_v1",
+        "protocol": "dirsplit_gate_m_v2",
         "selection_rule": SELECTION_RULE,
         "selection_rule_text": SELECTION_RULE_TEXT,
         "bootstrap_samples": BOOTSTRAP_SAMPLES,
         "bootstrap_seed": BOOTSTRAP_SEED,
         "primary_groups": list(PRIMARY_GROUPS),
+        "required_fold_kinds": list(REQUIRED_FOLD_KINDS),
         "release_evidence": False,
         "input": meta,
         "temporal_support": temporal_support(rows),
-        "fold_kinds": sorted(builders),
+        "fold_kinds": sorted(folds_by_kind),
         "blocked_date_available": bool(date_folds),
         "reports": reports,
+        "pairwise_comparisons": comparisons,
         **decision,
     }
 

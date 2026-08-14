@@ -1,0 +1,102 @@
+{
+ "protocol": "dirsplit_direction_decision_sensitivity_v2",
+ "gate_s": "NOT_RUN",
+ "release_evidence": false,
+ "recorded": "2026-08-14",
+ "supersedes": "validation/dirsplit_direction_sensitivity_blocker_v1.json",
+ "summary": "Gate S still cannot be executed in this environment, for the same external network-policy reason as v1. What HAS changed is that the v1 tool would not have produced evidence even with its inputs present: review found four defects that each independently emptied the result. Those are fixed. This record exists so nobody reads the v1 blocker as 'the tool was ready and only the data was missing'.",
+ "why_a_v2_exists": {
+  "v1_tool_was_not_evidence_producing": true,
+  "defects_found_and_fixed": [
+   {
+    "id": "S1",
+    "severity": "critical",
+    "was": "_run_one built its run_scenario.py command without the route file and without the seed. Every q10/q50/q90 arm and every seed ran the SAME simulation; --seeds 1 always meant seed 1000. The DIRSPLIT_SENSITIVITY_SEED environment variable it set is read by nothing in the repository.",
+    "consequence": "Gate S would have compared identical runs and reported NO for a difference it never varied.",
+    "now": "Each (stress case, seed) pair is bound through its own ScenarioSpec file with a one-member seed_set and an explicit demand_variant_mapping, which is the EXISTING contract's own way of naming (demand case, seed) orthogonally. run_scenario resolves the variant to its route file itself. No ScenarioSpec, monthly, warm-state, API or UI contract was changed.",
+    "pinned_by": "tests/test_direction_decision_sensitivity.py::TestTheRunPathVariesWhatItClaimsTo"
+   },
+   {
+    "id": "S2",
+    "severity": "critical",
+    "was": "The reducer read disruption['total_time_loss_s'], which run_scenario does not emit. Its disruption record carries added_vehicle_hours, added_metres_total, vehicles_affected, vehicles_no_detour and the vehicles_denied_departure / vehicles_severed_destination split.",
+    "consequence": "Every observation would have been None and Gate S would have returned INCONCLUSIVE for a reason unrelated to direction.",
+    "now": "POLICY_FIELDS is asserted equal to closure_ranking.REQUIRED_FIELDS, and a scenario artifact missing any of them fails the run rather than defaulting to zero.",
+    "pinned_by": "tests/test_direction_decision_sensitivity.py::TestTheObjectiveExists"
+   },
+   {
+    "id": "S3",
+    "severity": "critical",
+    "was": "The registered 06:00-10:00 window was recorded in the registration and then never applied; --close shut the edge for the whole demand window.",
+    "consequence": "The measured scenario was not the frozen one.",
+    "now": "closure_window() resolves the registered HH:MM window onto the demand calendar, clamps it into the demand build's own window, and both the requested and the resolved window are part of the frozen content key.",
+    "pinned_by": "tests/test_direction_decision_sensitivity.py::TestClosureWindowResolution"
+   },
+   {
+    "id": "S4",
+    "severity": "high",
+    "was": "The registration named hard failures, viable set, ranking and winner, but the reducer checked only process failures and the mean of one private objective. It never read SUMO health, closure integrity, vehicles_no_detour, the viable set, the finalist set, or the winner from the real closure policy.",
+    "consequence": "Gate S could not answer the question the plan asks.",
+    "now": "The decision is taken by traffic_sim.simulation.closure_ranking, unchanged: worst_variant_cost then rank_closures, once per stress case, giving a viable set, a ranking, a winner and a disqualified set per case. Closure integrity must be verified_clean and seed_health_flags must be empty in every run, or the outcome is INCONCLUSIVE.",
+    "pinned_by": "tests/test_direction_decision_sensitivity.py::TestTheRealPolicyDecides, ::TestAllPreregisteredFieldsAreMeasured, ::TestFailClosed"
+   }
+  ]
+ },
+ "structural_finding_recorded_while_repairing": {
+  "claim": "The deployed closure ranking key is seed-deterministic by construction.",
+  "basis": "run_scenario.closure_disruption reads the calibrated route file and free-flow edge costs. It is demand-side and congestion-independent, so for a fixed (route file, closure) it cannot vary with the SUMO seed.",
+  "why_it_matters_for_gate_s": "The v1 materiality rule compared between-case spread against within-case SEED spread on that key. Since the seed spread there is structurally zero, the ratio would have been infinite for any nonzero between-case difference — a tautology, not a test.",
+  "how_v2_handles_it": [
+   "the invariant is VERIFIED per (case, candidate) rather than assumed; a ranking key that moves across seeds is reported as a finding, because it would mean the deployed ranking carries undeclared Monte Carlo noise",
+   "materiality on that key is judged by relative between-case range against the frozen 10% threshold, plus the viable-set / ranking / winner comparisons",
+   "the seed axis governs what it actually governs: simulator health, closure integrity, and an inertness check that refuses to publish any answer if every seed produced identical simulator output"
+  ]
+ },
+ "still_blocked_here": {
+  "stage": "build_candidates.py, invoked by build_sumo_demand.py",
+  "cause": "the candidate-route generator fetches OSM POI activity mass from the Overpass API, and SCB DeSO population from geodata.scb.se; this session's policy-enforcing egress proxy denies both",
+  "verified_on": "2026-08-14",
+  "proxy_evidence": "GET $HTTPS_PROXY/__agentproxy/status reports recentRelayFailures kind=connect_rejected, detail='gateway answered 403 to CONNECT (policy denial or upstream failure)' for overpass-api.de:443 and geodata.scb.se:443",
+  "policy_note": "/root/.ccr/README.md states organization policy denials (403/407) must be reported rather than retried, so no workaround was attempted",
+  "missing_inputs": [
+   "sumo/calibrated.rou.xml (q50 stress case)",
+   "sumo/calibrated_v1.rou.xml (q10 stress case)",
+   "sumo/calibrated_v2.rou.xml (q90 stress case)"
+  ],
+  "inputs_that_did_build_here": [
+   "sumo/net.net.xml (from the tracked web/data/graph.graphml; 7125 indexed edges, SUMO edge IDs identical to network.geojson)",
+   "sumo/direction_split.json (from the tracked data/dirsplit/model.pkl; 6 sensors, both directions, q10/q50/q90)"
+  ],
+  "registration": "NOT frozen. dirsplit_sensitivity_selection_v1 selects candidates from per-edge demand exposure in all three route files, so the frozen selection cannot be computed without them. Freezing a registration with a placeholder candidate set would defeat the point of preregistering.",
+  "outcome": "NOT written. No Gate S result is claimed and none was fabricated."
+ },
+ "observed_while_preparing_inputs": {
+  "note": "Re-measured on the sumo/direction_split.json rebuilt in this session. Unchanged from v1; repeated here so this record stands alone. The repair belongs to Fas 2 and is NOT performed here.",
+  "pair_sum_identity": {
+   "q50": "sums to exactly 1.0000 at every sensor and slot",
+   "q10": "sums below 1 by about 0.12 on average",
+   "q90": "sums above 1 by about 0.12 on average"
+  },
+  "mechanism": "dirsplit/predict.py writes edge_shares_q10 as (e0 -> s10, e1 -> 1 - s90) and edge_shares_q90 as (e0 -> s90, e1 -> 1 - s10), so each outer pair sums to 1 -/+ (s90 - s10) rather than 1.",
+  "relevance_to_sensor_107": "107 is the only station whose split forms two Level-1 targets, so there the q10 arm asks the calibrator to hit targets summing to well under the measured two-way total and the q90 arm well over it."
+ },
+ "exact_reproduction": {
+  "environment": [
+   "pip install eclipse-sumo",
+   "export SUMO_HOME=$(python3 -c 'import sumo,os;print(os.path.dirname(sumo.__file__))')",
+   "export PYTHONPATH=$SUMO_HOME/tools",
+   "export PATH=$SUMO_HOME/bin:$PATH"
+  ],
+  "inputs_that_succeed": [
+   "python3 build_sumo_net.py",
+   "python3 -m dirsplit.predict"
+  ],
+  "input_that_is_blocked": "python3 build_sumo_demand.py --begin 06:00 --end 10:00",
+  "then_when_unblocked": [
+   "python3 tools/measure_direction_decision_sensitivity.py --freeze-only",
+   "python3 tools/measure_direction_decision_sensitivity.py"
+  ],
+  "note_for_a_machine_that_already_has_the_route_files": "The three route files, sumo/net.net.xml and sumo/direction_split.json are all the tool needs. --freeze-only completes in about a second there; it reads the route files for exposure and writes validation/dirsplit_direction_sensitivity_registration_v2.json."
+ },
+ "gate_matrix": "Gate S is neither NO nor YES. The plan treats INCONCLUSIVE as forbidding product integration; an unrunnable gate is at least as restrictive, so Fas 2, Fas 3 and Fas 4 remain closed. Gate M is separately INCONCLUSIVE (validation/dirsplit_gate_m_outcome_v2.json), so neither axis of the four-quadrant table is decided."
+}
