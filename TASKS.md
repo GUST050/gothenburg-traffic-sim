@@ -9,24 +9,45 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Decision-gated direction split: bind sensor 107's local
-  evidence, measure whether direction changes closure decisions, then compare
-  central models before authorizing any ensemble/product expansion.`
-- Status: `RESEARCHED PLAN REVISED AFTER SCOPE REVIEW; SOURCE IMPLEMENTATION NOT
-  STARTED. Sensor 107 is the only two-edge station whose split directly creates
-  two Level-1 targets; its documented 2025 52/48 anchor is not yet machine-bound
-  with period semantics. The other five measured directions remain untouched
-  Level 1 while their opposite estimates are surrenderable Level-2/3 inputs.
-  The former nine-step integration is replaced by Gate S (closure sensitivity),
-  Gate M (held-out point signal) and Gate P (offline scenario value). 50/50 plus
-  107 is an explicit successful exit. Monthly, warm-state, schemas, API and UI
-  are forbidden before their gates pass. Previous closure v5 evidence and
-  closed release gates remain unchanged.`
-- Suggested next action: `Implement only Fas 0A from the dated plan: provenance-
-  bind sensor 107's yearly directional reference without fabricating per-slot
-  measurements and pin legacy behavior. Then preregister Fas 0B's small
-  matched-seed sensitivity matrix. Do not create DemandEnsemble, monthly,
-  warm-state, API or UI code.`
+- Current focus: `Decision-gated direction split. Fas 0A, 0B and Fas 1 are
+  implemented. Gate M is DECIDED = BASELINE. Gate S is BLOCKED by an external
+  egress policy, so the four-quadrant matrix cannot be closed and no exit may
+  be declared yet.`
+- Status: `FAS 0A DONE: sensor 107 carries a provenance-bound
+  directional_reference (3400/3100 of 6500, calendar-year 2025, source and
+  verification, bearing->edge resolved from segment geometry at 352.1/174.4
+  deg). Anchoring shifts an estimated series by ONE logit offset so the
+  declared period reproduces the aggregate while the partner is derived as
+  1-s; the pair sums to exactly 1.0 every slot and the measured two-way total
+  survives build_targets. The five single-direction stations are untouched:
+  load_direction_split(anchor_day=None) is byte-identical to before.
+  FAS 0B DONE AS A RUN PATH, NOT AS A RESULT: the bounded matched-seed tool,
+  its frozen materiality thresholds and its fail-closed Gate S rule exist and
+  are tested, but the three q route files cannot be built here.
+  build_candidates.py needs overpass-api.de and the session proxy answers 403
+  to CONNECT (also geodata.scb.se, api.scb.se,
+  trafikkdata-api.atlas.vegvesen.no, nominatim.openstreetmap.org). No
+  registration was frozen, because the frozen candidate selection is computed
+  from per-edge demand exposure in those files; a placeholder would defeat
+  preregistration. Gate S = NOT_RUN.
+  FAS 1 DONE AND DECIDED: one shared evaluation module runs constant_5050,
+  shrunk_dfactor, beta_binomial_dfactor and similarity_weighted_lgbm over the
+  same leakage-free blocked folds. On 1,514 rows / 39 stations / 74 blocks the
+  deployed LightGBM is significantly WORSE than 50/50 (leave-city-out -31.6%,
+  leave-station-out -39.2%, paired block-bootstrap CI entirely above zero) and
+  the two hierarchical models tie. GATE M = BASELINE.
+  blocked_date folds were impossible: the tracked table carries no dates and
+  raw day-level volumes need the same denied host.
+  Fas 2, 3 and 4 remain closed. Previous closure v5 evidence and closed
+  release gates are unchanged.`
+- Suggested next action: `Unblock Gate S, then decide the matrix. Either grant
+  egress to overpass-api.de (and geodata.scb.se for a DeSO refresh) or supply a
+  cached POI/candidate artifact, then run: python3 build_sumo_demand.py
+  --begin 06:00 --end 10:00; python3
+  tools/measure_direction_decision_sensitivity.py --freeze-only; then the same
+  command without --freeze-only. If Gate S returns NO, Exit A applies with
+  Gate M = BASELINE and the dirsplit build-out ends there. Do not open Fas 2
+  on Gate M alone.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve frozen q and closure evidence. Do not weaken
   calibration, equivalence, provenance, health, survivability, failure-recall,
@@ -35,10 +56,11 @@ owners, states and approval formulas are not active workflow rules. See
   for low observability, or activate policy/UI/global-best claims before a
   preregistered shadow and held-out result passes. Existing 100,000 ceilings,
   worker budget, 300 s timeout and closed v5 gates remain unchanged. Do not
-  hardcode 107's annual 0.52 as 96 measured quarters or proceed past Gate S/M/P
-  without their frozen evidence.`
-- Updated: `2026-08-13 Codex scope correction. Documentation-only; local product
-  code and tests are unchanged.`
+  hardcode 107's annual 0.52 as 96 measured quarters. Gate M = BASELINE is NOT
+  an exit on its own; Exit A additionally requires Gate S = NO. An unrunnable
+  Gate S is at least as restrictive as INCONCLUSIVE.`
+- Updated: `2026-08-14 Claude. Fas 0A/0B/1 implemented on
+  claude/dirsplit-gated-plan-v2; Gate M decided, Gate S externally blocked.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -46,35 +68,42 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### DIRSPLIT-UNCERTAINTY-V2 — Decide the smallest justified direction solution
 
-- Status: `READY — conditional plan complete; implementation begins at Fas 0A.`
+- Status: `IN PROGRESS — Fas 0A, 0B and Fas 1 delivered. Gate M decided
+  (BASELINE). Gate S blocked externally. Matrix not closable yet.`
 - Objective and scope: `First use local evidence at sensor 107, then establish
   whether plausible direction variation changes closure decisions and whether
   any conditional point model beats 50/50. Build scenarios or product contracts
   only when both questions justify them.`
-- Completion outcome: `Either a documented central-only exit with 50/50/local
-  anchor and no unused infrastructure, or—only after Gate S/M/P—a minimal,
-  validated scenario integration with orthogonal case/seed identity.`
-- Context or checkpoints: `Current artifact: 1,214 aggregated training rows,
-  shrunk pooled domain MAE 0.0557 versus 0.0565 for 50/50, three of four cities
-  worse than baseline, lambda 0.289. Current q10-q90 median width is 0.107 but
-  nominal coverage and joint temporal/spatial validity are unmeasured. Current
-  q route files contain 19,845/20,836/21,749 vehicles and seed identity is
-  entangled with variant identity in several contracts.`
-- Primary files now: `data_in/sensors.json; existing dirsplit dataset/train/
-  predict/coverage modules; focused 107/legacy tests; one bounded sensitivity
-  tool and append-only registration/outcome. Demand/monthly/warm/API/UI are
-  explicitly conditional future scope.`
-- Constraints and safety: `Legacy q archives remain immutable and readable.
-  No probabilistic q claims without coverage validation; no arbitrary road ban
+- Completion outcome: `Still open. Exit A requires Gate S = NO alongside the
+  decided Gate M = BASELINE; Gate S has not been run, so no exit is claimed.`
+- Context or checkpoints: `Gate M measured on 1,514 rows / 39 stations / 74
+  blocks: LightGBM -31.6% (leave-city-out) and -39.2% (leave-station-out)
+  against 50/50 with the paired CI entirely above zero; shrunk and
+  beta-binomial D-factors tie at about +4.5%. Evidence:
+  data/dirsplit/gate_m_report.json and validation/dirsplit_gate_m_outcome_v1.json.
+  Gate S blocker recorded in
+  validation/dirsplit_direction_sensitivity_blocker_v1.json. Measured on the
+  real sumo/direction_split.json while preparing inputs: q50 pairs sum to
+  exactly 1.0000, q10 to 0.7030-0.9480 and q90 to 1.0520-1.2970 (mean -/+
+  0.1220, median interval width 0.107). That repair belongs to Fas 2 and was
+  not performed.`
+- Primary files now: `data_in/sensors.json; traffic_sim/intake/sensors.py;
+  demand/intake.py; dirsplit/evaluate.py;
+  tools/measure_direction_decision_sensitivity.py; the four focused test files.
+  Demand/monthly/warm/API/UI remain explicitly conditional future scope and
+  were not touched.`
+- Constraints and safety: `Legacy q archives remain immutable and readable. No
+  probabilistic q claims without coverage validation; no arbitrary road ban
   from observability; no field-wise scenario splicing; no policy activation or
-  held-out promotion before preregistered gates pass.`
-- Acceptance criteria: `107 is correctly anchored; Gate S and Gate M are frozen
-  and decided; the four-outcome matrix selects Exit A/C or Gren B/D. Exit is a
-  valid completion. Gate P and product criteria apply only if a scenario branch
-  is actually opened.`
-- Useful checks: `For the current documentation change: marker uniqueness,
-  internal-link/path checks and git diff --check. Implementation checks are
-  specified step-by-step in the dated plan.`
+  held-out promotion before preregistered gates pass. Gate M alone must not
+  open an exit.`
+- Acceptance criteria: `107 is correctly anchored (done). Gate S and Gate M are
+  frozen and decided (Gate M done; Gate S pending an unblocked run). The
+  four-outcome matrix then selects Exit A/C or Gren B/D.`
+- Useful checks: `python3 -m pytest tests/test_sensor_107_directional_reference.py
+  tests/test_dirsplit_legacy_pin.py tests/test_direction_decision_sensitivity.py
+  tests/test_dirsplit_gate_m.py -q` (118 passed, 2 skipped);
+  `python3 -m dirsplit.evaluate` reproduces the Gate M report.
 <!-- ACTIVE_TASK_END -->
 
 ## History
