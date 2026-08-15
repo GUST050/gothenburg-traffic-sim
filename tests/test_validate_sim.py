@@ -83,7 +83,7 @@ class TestControlledPublicationCounts:
             Candidate(0.0, ["B"]),
             Candidate(0.0, ["X"]),
         ]
-        original = pfe.round_preserving_measured
+        original = pfe.repair_integer_bounds
 
         precomputed, report = controlled_publication_counts(
             shapes,
@@ -101,10 +101,13 @@ class TestControlledPublicationCounts:
         assert counts[0] + counts[1] == 1
         assert counts[1] + counts[2] == 1
         assert purpose_enforced is False
-        assert report["method_counts"] == {"production_joint_projection": 1}
-        assert report["evidence_class"] == "production_joint_projection"
+        assert report["method_counts"] == {
+            "exact_condensed_contract_l1": 1,
+        }
+        assert report["evidence_class"] == (
+            "validation_exact_equivalent_projection")
         assert report["max_abs_active_measurement_residual"] == 0
-        assert pfe.round_preserving_measured is original
+        assert pfe.repair_integer_bounds is original
 
 
 class TestCorridorPriorsForFold:

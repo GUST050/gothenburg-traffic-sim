@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from statistics import median
 
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import assess_output_fit
@@ -280,10 +281,64 @@ def _multi_day_section(meta: dict | None, baseline: dict | None) -> dict:
     }
 
 
-def _held_out_section(loso: dict | None) -> dict:
+def _held_out_identity_reasons(contract: dict,
+                               meta: dict | None,
+                               expected_mode: str) -> list[str]:
+    """Return exact reasons a held-out report is not about the live demand.
+
+    Spatial and temporal LOSO are characterization rather than release gates,
+    but characterization from another pool/window must still fail closed.  A
+    stale ratio is not made current merely by labelling it ``info``.
+    """
+    expected_reference = (meta or {}).get("epoch_sim")
+    expected_through = ((meta or {}).get("build_options") or {}).get(
+        "through_share_target")
+    checks = (
+        ("candidate pool",
+         contract.get("candidate_pool_sha256"),
+         sha256_file(SUMO_DIR / "candidates.rou.xml")),
+        ("network",
+         contract.get("network_sha256"),
+         sha256_file(SUMO_DIR / "net.net.xml")),
+        ("reference window",
+         contract.get("reference_window_start"),
+         expected_reference),
+        ("through-share target",
+         contract.get("through_share_target"),
+         expected_through),
+        ("evaluation mode",
+         contract.get("evaluation_mode"),
+         expected_mode),
+        ("interval count",
+         contract.get("n_intervals"),
+         (meta or {}).get("n_intervals")),
+    )
+    reasons = [
+        f"{label}: report={recorded!r}, current={current!r}"
+        for label, recorded, current in checks
+        if recorded is None or current is None or str(recorded) != str(current)
+    ]
+    if contract.get("source") != (meta or {}).get("source"):
+        reasons.append(
+            f"source: report={contract.get('source')!r}, "
+            f"current={(meta or {}).get('source')!r}")
+    return reasons
+
+
+def _held_out_section(loso: dict | None,
+                      meta: dict | None) -> dict:
     if not loso or not loso.get("stations"):
         return {"status": "missing", "reason": "loso_report.json saknas — "
                 "kör validate_sim.py"}
+    contract = loso.get("comparison_contract") or {}
+    stale_reasons = _held_out_identity_reasons(
+        contract, meta, "same_window_loso")
+    if stale_reasons:
+        return {
+            "status": "missing",
+            "reason": "spatial LOSO är inaktuellt för nuvarande release: "
+                      + "; ".join(stale_reasons),
+        }
     ratios = {}
     for sid, st in sorted(loso["stations"].items()):
         for edge, ed in st.get("edges", {}).items():
@@ -295,9 +350,10 @@ def _held_out_section(loso: dict | None) -> dict:
         # geometry (documented in IMPROVEMENT_PLAN.md: 1076's 0.05 is honest
         # parsimony). Displayed, never blocking.
         "status": "info",
+        "protocol": contract.get("protocol"),
         "window": loso.get("window"),
         "ratios": ratios,
-        "median_ratio": vals[len(vals) // 2] if vals else None,
+        "median_ratio": median(vals) if vals else None,
         "note": "utelämnad-station-återskapande; karakterisering, inte grind "
                 "— extrema veck kan spegla sensorns informationsisolering, "
                 "inte modellfel",
@@ -313,32 +369,8 @@ def _temporal_holdout_section(report: dict | None,
                       "validate_sim.py --holdout-date YYYY-MM-DD",
         }
     contract = report.get("comparison_contract") or {}
-    expected_reference = (meta or {}).get("epoch_sim")
-    expected_through = ((meta or {}).get("build_options") or {}).get(
-        "through_share_target")
-    stale_reasons = []
-    checks = (
-        ("candidate pool",
-         contract.get("candidate_pool_sha256"),
-         sha256_file(SUMO_DIR / "candidates.rou.xml")),
-        ("network",
-         contract.get("network_sha256"),
-         sha256_file(SUMO_DIR / "net.net.xml")),
-        ("reference window",
-         contract.get("reference_window_start"),
-         expected_reference),
-        ("through-share target",
-         contract.get("through_share_target"),
-         expected_through),
-    )
-    for label, recorded, current in checks:
-        if recorded is None or current is None or str(recorded) != str(current):
-            stale_reasons.append(
-                f"{label}: report={recorded!r}, current={current!r}")
-    if contract.get("source") != (meta or {}).get("source"):
-        stale_reasons.append(
-            f"source: report={contract.get('source')!r}, "
-            f"current={(meta or {}).get('source')!r}")
+    stale_reasons = _held_out_identity_reasons(
+        contract, meta, "temporal_holdout")
     if stale_reasons:
         return {
             "status": "missing",
@@ -372,7 +404,7 @@ def _temporal_holdout_section(report: dict | None,
         "minimum_coverage": contract.get("minimum_temporal_coverage"),
         "observed_quarters": observed,
         "ratios": ratios,
-        "median_ratio": values[len(values) // 2] if values else None,
+        "median_ratio": median(values) if values else None,
         "note": "fryst kandidatpool/nät/priorer utvärderade på en annan "
                 "historisk dag; utelämnad stations egna värden används "
                 "endast för jämförelse",
@@ -402,7 +434,7 @@ def assemble() -> dict:
         "simulation": simulation,
         "sensor_output": sensor_output,
         "multi_day": _multi_day_section(meta, current_baseline),
-        "held_out": _held_out_section(loso),
+        "held_out": _held_out_section(loso, meta),
         "temporal_holdout": _temporal_holdout_section(temporal, meta),
     }
     gated = [s for s in sections.values() if s["status"] in ("pass", "warn")]

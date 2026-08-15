@@ -13,10 +13,10 @@ stället för en tyst fallback. Det är också starkt på att reproducera de
 sensorer som används i kalibreringen.
 
 Den stora begränsningen är information, inte optimeringskod. Sex stationer på
-sju riktade kanter ska informera ett nät med 7 125 kanter. När en station tas
-bort i leave-one-station-out kan den återskapade dygnsvolymen ligga mellan
-0,685 och 2,613 gånger det uppmätta värdet. Alla sex stationer är dessutom
-klassade som underidentifierade i den riktade observabilitetsdiagnostiken.
+sju riktade kanter ska informera ett nät med 7 125 kanter. Den identitetsbundna
+06–10-körningen ger spatiala held-out-kvoter 0,466–1,354 (median 0,613), och
+den oberoende dagen ger 0,445–1,356 (median 0,623). Alla sex stationer är
+dessutom klassade som underidentifierade i båda körningarna.
 
 Revisionen hittade också ett konkret lokalt bevisfel:
 `web/data/validation.json` binder aktuell demand-meta
@@ -25,11 +25,15 @@ en äldre `baseline.json` med build-id `fa259a2892a974c27e8c`. Webbgränssnittet
 kunde varna när en aktiv studies build-id skiljde sig, men själva rapporten
 sa fortfarande `overall=pass` och blandade därmed två byggen internt.
 
-**Rättat 2026-08-15:** rapporten har nu en egen `scenario_identity`-grind.
+**Rättat och verifierat 2026-08-15:** rapporten har nu en egen
+`scenario_identity`-grind.
 Vid mismatch blir totalsvaret `warn` och gammal simulation/sensor-output märks
-`missing` med den exakta identitetskonflikten. Den gamla baslinjen är inte
-omklassad till aktuell evidens; en ny matchad baslinje måste fortfarande
-byggas innan dessa sektioner kan bli gröna igen.
+`missing` med den exakta identitetskonflikten. En ny matchad treseedsbaslinje
+har därefter byggts, staging-validerats och publicerats för build
+`4afe9e3ae2e74a4b872e`: alla 14 994 fordonsinstanser sattes in, inga blev
+ofärdiga eller teleporterade och slutlig sensor-output fick 100 % GEH<5.
+`validation.json` är därför åter `overall=pass` utan varningar eller saknade
+sektioner; detta är fortfarande diagnostik, inte en releasepromovering.
 
 ## Så ska bevisen läsas
 
@@ -84,10 +88,10 @@ heter `calibrated.rou.xml` kan komma från olika datum, modeller eller nät.
   för 48 verkliga körningar.
 - Historiska beslut skrivs inte över; nya beslut får en ny versionsfil.
 
-**Rättat kontraktsfel:** valideringssammanställningen kontrollerar nu att
+**Rättat kontraktsfel och körd kontroll:** valideringssammanställningen kontrollerar nu att
 `baseline.json` har samma build-id innan den läser simulation och
-sensor-output. Den aktuella mismatchen redovisas därför som `overall=warn` i
-stället för att gamla scenariofält återanvänds.
+sensor-output. Mismatchfallet ger `overall=warn`; den nu publicerade matchade
+baslinjen passerar samma kontroll med exakt build-id.
 
 ## Steg 2 — sensordata och sensorregister
 
@@ -293,15 +297,15 @@ en avståndsfunktion vars sigma härleds från LOSO, och scenarier lägger till
 spridning mellan seeds.
 
 **Bra bevis (H/D):** LOSO visar öppet när modellen missar i stället för att
-dölja det. Den befintliga rapporten visar ratios 0,685–2,613 och median 1,443.
-Observabilitetsdiagnostiken visar att fler seeds eller fler liknande rutter
-inte kan skapa den information som saknas.
+dölja det. Spatial körning på referensfönstret ger 0,466–1,354 och median
+0,613. Temporal körning på 2025-09-17 med samma frysta pool/nät/priorer ger
+0,445–1,356 och median 0,623. Det stabila mönstret över två dagar är negativt
+bevis för nätets omätta nivå/allokering, inte för dirsplitten.
 
-**Begränsningar:** LOSO-rapporten är karakterisering, inte releasegrind, och
-den aktuella temporal-holdout-sektionen är `missing` eftersom kandidatpoolens
-hash och referensfönstret inte längre matchar aktuell demand. Confidence är
-dessutom huvudsakligen avståndsbaserad och kan ge högre värde på en parallell
-men topologiskt frånkopplad gata.
+**Begränsningar:** LOSO-rapporterna är karakterisering, inte releasegrind.
+Samtliga stationer är fortfarande underidentifierade. Confidence är dessutom
+huvudsakligen avståndsbaserad och kan ge högre värde på en parallell men
+topologiskt frånkopplad gata.
 
 ## Steg 12 — webb, API och release
 
@@ -321,7 +325,7 @@ både mismatch och en baseline som saknar identitet.
 
 ## Var nästa förbättring finns
 
-### 1. Slutförd P0: valideringsrapporten är byggkoherent
+### 1. Slutförd P0: valideringsrapport och baslinje är byggkoherenta
 
 Felet reproducerades lokalt och rättades samma dag eftersom det kunde ge en
 missvisande grön rapport.
@@ -336,21 +340,26 @@ Implementerad lösning:
 4. `overall` får inte bli `pass` om rapporten blandar identiteter.
 5. Regressionstest täcker både mismatch och identitetslös baseline.
 
-Första halvan är klar: rapporten kan inte använda gamla scenariofält under ett
-nytt demand-id. En ny matchad baseline är nästa separata evidenskörning och
-ska återställa grönt resultat endast om dess egna grindar passerar.
+Hela kedjan är nu körd. Den matchade baslinjen passerade staginggrinden,
+publicerades atomiskt och återställde grönt resultat först efter att simulation
+och slutlig sensor-output passerade. Registrering och utfall finns i
+`validation/matched_baseline_*_v1.json`.
 
-### 2. Omedelbar evidensförbättring: bygg matchad baseline och temporal holdout
+### 2. Slutförd evidensförbättring: spatial och temporal held-out
 
-Publicera först en baseline som är byggd från aktuell demandidentitet. Den
-temporala rapporten säger dessutom uttryckligen `missing` på grund av gammal
-kandidatpoolhash och annat referensfönster. Kör därefter en ny historisk
-held-out-dag mot den nuvarande kandidatpoolen, nätet, through-share-target och
-demandidentiteten.
+Spatial och temporal LOSO är omkörda mot samma kandidatpool, nät,
+through-share-target och 06–10-referens. Identitetskontrollen är fail-closed.
+En temporal publicerings-MILP nådde först tidsgränsen; en valideringsspecifik,
+algebraiskt komprimerad heltals-L1-formulering över hela ursprungsdomänen löste
+den blockerande kvarten optimalt utan ändring av förseglad demand-kod. En
+snabbare floor/ceil-diagnostik avvisades före slutevidens när ett överlappande
+marginalmotexempel visade att den kunde missa globalt optimum. Resultat och negativ evidens
+finns i `validation/current_heldout_outcome_v1.json`.
 
-### 3. Största fundamentala accuracy-förbättring: 3–5 gränssensorer
+### 3. Uppskjuten extern hävstång: 3–5 gränssensorer
 
-Hämta mätta flöden från Trafikverkets vägtrafikflödeskarta/Lastkajen/open API
+Nya sensorer är uttryckligen uppskjutna tills data anländer. När beslutet
+öppnas igen är mätta flöden från Trafikverkets vägtrafikflödeskarta/Lastkajen/open API
 vid E6, E20, Rv40 och Oscarsleden och lägg dem genom det befintliga
 SensorRegistry-flödet. De ligger vid områdets portar och gör in-/utflöde och
 genomfart delvis identifierbara för första gången.
@@ -370,7 +379,7 @@ through-share-känslighet. Den gamla `sensor_placement_screen_v1.json` får bara
 vara en första spatial lista; verklig placering ska rangordnas efter
 informationsvinst och portflöde, inte enbart avstånd till närmaste sensor.
 
-### 4. Nästa fysiska förbättring: importera NVDB-struktur
+### 4. Nästa aktiva förbättring: importera NVDB-struktur
 
 Ersätt i första hand standardvärdena på de vägar som bär mest kalibrerad trafik
 eller ofta ingår i avstängningsvinnare. Börja med körfält, skyltad hastighet,
@@ -407,10 +416,10 @@ sådana data skulle mer beteendekod bara byta ett antagande mot ett annat.
 | Riktningspunkt | Gate M=`MODEL`, 0,0604 mot 0,0617 | **Liten men held-out-stödd förbättring** |
 | Riktningens beslutspåverkan | Gate S=`NO`, 48/48 clean | **Starkt negativt bevis för den frysta matrisen** |
 | Kandidat-/OD-struktur | inga aktuella structure flags; provenancebunden | **Bra intern kontroll, nivåerna är fortfarande priorer** |
-| Spatial generalisering | LOSO 0,685–2,613; alla stationer underidentifierade | **Inte tillräckligt bra för stark citywide accuracy** |
-| Temporal generalisering | current temporal holdout är stale/missing | **Saknat aktuellt bevis** |
+| Spatial generalisering | LOSO 0,466–1,354, median 0,613; alla stationer underidentifierade | **Inte tillräckligt bra för stark citywide accuracy** |
+| Temporal generalisering | 2025-09-17: 0,445–1,356, median 0,623; identitetsmatchad | **Aktuellt negativt generaliseringsbevis** |
 | SUMO-health | flera bundna kampanjer och 48 clean Gate S-runs | **Bra exekveringsbevis för testade fall** |
-| Aktuell validation.json | mismatch fångas; `overall=warn`, gamla scenariosektioner `missing` | **Fail-closed identitet; aktuellt simulationsbevis saknas** |
+| Aktuell validation.json | matchad baseline; `overall=pass`, 0 varningar, 0 saknade sektioner | **Byggkoherent diagnostiskt simulationsbevis** |
 | Vägnätets fysik | full audit, men 70 % lane defaults och syntetiska signaler | **Ärligt redovisat, inte lokalt validerat** |
 | Årsuppvärmning | plan/preflight klar, pilot 3/3267 | **Redo att köras, inte färdig produkt** |
 

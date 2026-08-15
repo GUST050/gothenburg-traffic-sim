@@ -1,7 +1,7 @@
 # Gothenburg Traffic Simulation Improvement Plan
 
-**Date:** 2026-07-18 (consolidated 2026-07-15; status re-verified against the
-working tree 2026-07-18)
+**Date:** 2026-07-18 (consolidated 2026-07-15; current evidence re-verified
+2026-08-15)
 **Status:** Canonical improvement plan — active implementation is in progress.
 **Structural authority:** `ARCHITECTURE.md` remains the source of truth for
 the six-stage pipeline and fixed contracts. This is the only improvement,
@@ -54,6 +54,19 @@ time shape alone accounts for 0.101%. A separate level/shape product remains
 negative evidence because its station-blocked confidence interval crosses
 zero.
 
+**Current baseline/held-out refresh (2026-08-15):** a preregistered matched
+06–10 baseline for demand build `4afe9e3ae2e74a4b872e` passed staging and was
+published atomically. All three seed/variant arms inserted 4,998/4,998
+vehicles, with no unfinished vehicles or teleports; raw final sensor output
+has 100% GEH<5. Spatial and temporal LOSO were then rerun against the same
+candidate pool, network, through-share target and reference window. Spatial
+ratios are 0.466–1.354 (median 0.613); the independent 2025-09-17 window gives
+0.445–1.356 (median 0.6225). All six stations remain underidentified. The
+stable underdelivery is current negative evidence for unmeasured network
+allocation. New sensors are deferred by user decision, so the next active
+physical improvement is a reviewed NVDB import for the 4,990 defaulted lane
+counts and 631 defaulted speeds. More dirsplit work remains closed.
+
 ## Known Errors, Inaccuracies and Assumptions in the Simulation Flow
 
 Audited end to end 2026-07-17 (raw data → network → demand → calibration →
@@ -66,8 +79,8 @@ silently forgotten.  Ordered by pipeline stage.
 ### A. Sensor data (the ground truth itself)
 1. **Six stations in two ~400 m clusters** constrain 7 directed edges of
    7 125.  Everything else is prior-driven inference; held-out accuracy is
-   currently a typical factor 1.56 (geometric absolute error; LOSO
-   2026-07-18 median ratio 0.994, range 0.763–2.576).
+   currently shows strong underdelivery (identity-matched spatial LOSO median
+   0.613, range 0.466–1.354; temporal median 0.6225, range 0.445–1.356).
    Only more/better-placed sensors or external counts fundamentally fix
    this — that is the product's own pitch, not a bug, but every downstream
    number inherits it.
@@ -1182,6 +1195,12 @@ normal traffic it compares against.
 sensor-snap manifest, a validated normal scenario, a reproducible validation
 report with final sensor output fit, and no purpose-level claim when purpose
 compatibility fails.
+
+**Current status 2026-08-15:** the active 06–10 diagnostic baseline satisfies
+this technical exit condition and `validation.json` is build-coherent with no
+warnings or missing sections. This does not promote it to a golden release;
+the next normal-baseline accuracy work is the reviewed road-structure import
+in Stage 5. Stage 4 waits for actual new sensor data.
 
 ### Stage 2: Make road-closure simulation a proper incident study
 

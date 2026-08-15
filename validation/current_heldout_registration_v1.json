@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "registration_id": "current_spatial_temporal_loso_pair_v1",
+  "registered_at": "2026-08-15T15:32:21Z",
+  "amended_before_paired_run_at": "2026-08-15T20:04:00Z",
+  "amendment_reason": "The first temporal diagnostic exposed a fail-closed HiGHS time limit in the unrestricted integer publication model. The paired evidence run uses an exact algebraically condensed L1 formulation over the full nonnegative-integer route domain; it preserves the objective and all registered hard constraints while leaving the sealed production demand source unchanged. Preliminary floor/ceil diagnostics were rejected before final evidence because that restriction is not globally equivalent under overlapping margins; both final reports are rerun under the condensed protocol.",
+  "git_base_commit": "b39679fd9a952676bbb1d120a3c665348cc21299",
+  "purpose": "Replace mutually inconsistent spatial and temporal LOSO reports with one identity-matched pair for the current 2025-09-16 06:00-10:00 demand release.",
+  "evidence_class": "held_out_characterization",
+  "release_evidence": false,
+  "shared_contract": {
+    "demand_build_id": "4afe9e3ae2e74a4b872e",
+    "demand_build_key": "022a772f5057a253",
+    "source": "historical",
+    "reference_window_start": "2025-09-16T06:00:00",
+    "reference_window_end": "2025-09-16T10:00:00",
+    "n_intervals": 16,
+    "candidate_pool_sha256": "75947f43c083d80d20d6ee39e994a6aadde89d0d27933d4a5299175ee2a2ac8a",
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "through_share_target": 0.25,
+    "stations": ["107", "133", "134", "1074", "1076", "2276"]
+  },
+  "runs": [
+    {
+      "evaluation_mode": "same_window_loso",
+      "protocol": "loso_pfe_meso_v13_exact_condensed_projection",
+      "command": "python3 validate_sim.py",
+      "output": "web/data/loso_report.json"
+    },
+    {
+      "evaluation_mode": "temporal_holdout",
+      "protocol": "temporal_loso_pfe_meso_v10_exact_condensed_projection",
+      "holdout_date": "2025-09-17",
+      "evaluation_window_start": "2025-09-17T06:00:00",
+      "evaluation_window_end": "2025-09-17T10:00:00",
+      "command": "python3 validate_sim.py --holdout-date 2025-09-17",
+      "output": "web/data/temporal_holdout_report.json"
+    }
+  ],
+  "input_sha256": {
+    "validate_sim.py": "30bf42aa6b7bc0892c11ab2fc09210723eb50207335be0b3a4df95fe8c5ced03",
+    "traffic_sim/confidence/loso.py": "d9a072a533b21bfec34061c8917a8810763d4ea361d866588130579bc1f15fb5",
+    "traffic_sim/confidence/controlled_rounding.py": "3038dea19f59fb2f6d72ffa75a59b98b4954953384280873d9e2bff547db6f49",
+    "sumo/candidates.rou.xml": "75947f43c083d80d20d6ee39e994a6aadde89d0d27933d4a5299175ee2a2ac8a",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "sumo/demand_meta.json": "d442fadd39cdb1e9bf785b312014d693d06358864286ced6c4678a673ee1420d",
+    "web/data/flows.json": "cd8793581c02d89d0106fd3e4ae35e46eaddb19cf29f5bb047d49e9556f22be6",
+    "data_in/sensors.json": "2fe62df67ac1db513fad05682f6c5412324a9b3ebbf88731ad37ca5788508000",
+    "assignment_priors.py": "2d5e7201120bfcb0beaf0fe5e36ade8d57664230bc56825a1a5add3aef5ad92d",
+    "prior_flows.py": "6e70cee39ab70dd6281e0b649655ca7d57eb5aa55f9750319bb4da645b978317"
+  },
+  "decision_policy": {
+    "threshold": null,
+    "spatial_and_temporal_outputs_must_match_shared_contract": true,
+    "missing_or_mismatched_identity": "validation section is missing/stale",
+    "interpretation": "Report measured ratios and observability honestly; do not tune a pass threshold on six clustered stations."
+  }
+}

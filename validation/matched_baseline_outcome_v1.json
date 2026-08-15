@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "registration": "validation/matched_baseline_registration_v1.json",
+  "completed_at": "2026-08-15T15:32:00Z",
+  "outcome": "PASS_AND_PUBLISHED",
+  "evidence_class": "diagnostic",
+  "release_evidence": false,
+  "demand_build_id": "4afe9e3ae2e74a4b872e",
+  "demand_build_key": "022a772f5057a253",
+  "staging_validation": {
+    "validator": "serve.validate_staged_scenarios",
+    "passed": true,
+    "reason": ""
+  },
+  "simulation": {
+    "scenario_id": "baseline",
+    "simulation_mode": "meso",
+    "seeds": [
+      {"seed": 1000, "variant": "q10", "loaded": 4998, "inserted": 4998, "unfinished": 0, "teleports": 0},
+      {"seed": 1001, "variant": "q50", "loaded": 4998, "inserted": 4998, "unfinished": 0, "teleports": 0},
+      {"seed": 1002, "variant": "q90", "loaded": 4998, "inserted": 4998, "unfinished": 0, "teleports": 0}
+    ],
+    "collisions": 0
+  },
+  "sensor_output": {
+    "direction_geh_lt_5_pct": 100.0,
+    "direction_mean_abs_error": 6.2515,
+    "direction_max_abs_error": 17.028438,
+    "station_geh_lt_5_pct": 100.0,
+    "station_mean_abs_error": 7.180555,
+    "station_max_abs_error": 27.666667,
+    "target_provenance": "demand_metadata",
+    "observation_provenance": "demand_metadata"
+  },
+  "publication": {
+    "published": true,
+    "files": [
+      "web/data/scenarios/baseline.json",
+      "web/data/scenarios/baseline_traj.json",
+      "web/data/scenarios/index.json"
+    ],
+    "previous_live_backup": "runs/prepublish-baseline-fa259a2892a974c27e8c-20260815T152748Z",
+    "note": "The previous live closure scenario set is recoverable from the backup and repository history."
+  },
+  "output_sha256": {
+    "web/data/scenarios/baseline.json": "e4a78adf249b6083ab96f8461a8a0267df4e23a9e5811d394d0f0aaf21e3014c",
+    "web/data/scenarios/index.json": "9fbfda065218cd02f297dc28b65735a516f45e5c40edc95b830e7df24404bbda"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "registration": "validation/current_heldout_registration_v1.json",
+  "completed_at": "2026-08-15T20:46:39Z",
+  "outcome": "COMPLETE_CHARACTERIZATION",
+  "evidence_class": "held_out_characterization",
+  "release_evidence": false,
+  "shared_identity": {
+    "demand_build_id": "4afe9e3ae2e74a4b872e",
+    "demand_build_key": "022a772f5057a253",
+    "candidate_pool_sha256": "75947f43c083d80d20d6ee39e994a6aadde89d0d27933d4a5299175ee2a2ac8a",
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "reference_window_start": "2025-09-16T06:00:00",
+    "reference_window_end": "2025-09-16T10:00:00",
+    "n_intervals": 16,
+    "through_share_target": 0.25
+  },
+  "projection_diagnostic": {
+    "initial_temporal_result": "FAIL_CLOSED_BEFORE_REPORT",
+    "reason": "HiGHS status 1 time limit in the unrestricted 3,395-route integer L1 publication model; not a proof of infeasibility.",
+    "failed_station": "107",
+    "failed_quarter_index": 8,
+    "production_solver_time_limit_seconds": 20.0,
+    "extended_diagnostics": [60.0, 180.0],
+    "extended_result": "time limit at both budgets",
+    "rejected_diagnostic": "A floor/ceil-only model solved in 0.0252 seconds but was rejected before final evidence after an overlapping-margin counterexample proved that domain restriction can miss the unrestricted L1 optimum.",
+    "resolution": "Validation-only algebraically condensed integer L1 formulation over the full nonnegative route-count domain, with identical objective, hard margins, retained bounds, purpose groups and rounded interval total; production general MILP remains fail-closed fallback.",
+    "isolated_blocking_quarter_solver_seconds": 0.4941,
+    "isolated_blocking_quarter_mip_gap": 0.0,
+    "isolated_blocking_quarter_route_l1": 518.730089,
+    "sealed_demand_source_changed": false
+  },
+  "spatial_loso": {
+    "protocol": "loso_pfe_meso_v13_exact_condensed_projection",
+    "output": "web/data/loso_report.json",
+    "ratios": {"107": 1.185, "1074": 0.554, "1076": 0.466, "133": 0.672, "134": 0.509, "2276": 1.354},
+    "median_ratio": 0.613,
+    "min_ratio": 0.466,
+    "max_ratio": 1.354,
+    "all_stations_observability": "underidentified",
+    "max_abs_active_measurement_residual": 0
+  },
+  "temporal_loso": {
+    "protocol": "temporal_loso_pfe_meso_v10_exact_condensed_projection",
+    "output": "web/data/temporal_holdout_report.json",
+    "evaluation_window_start": "2025-09-17T06:00:00",
+    "evaluation_window_end": "2025-09-17T10:00:00",
+    "ratios": {"107": 1.178, "1074": 0.577, "1076": 0.445, "133": 0.668, "134": 0.519, "2276": 1.356},
+    "median_ratio": 0.6225,
+    "min_ratio": 0.445,
+    "max_ratio": 1.356,
+    "all_stations_observability": "underidentified",
+    "max_abs_active_measurement_residual": 0
+  },
+  "validation_report": {
+    "path": "web/data/validation.json",
+    "overall": "pass",
+    "warnings": 0,
+    "missing_sections": 0,
+    "scenario_identity": "pass",
+    "simulation": "pass",
+    "sensor_output": "pass",
+    "held_out": "info",
+    "temporal_holdout": "info"
+  },
+  "output_sha256": {
+    "web/data/loso_report.json": "7486b61a7d7083380f94741a1b7383fa1a09d4f47be189d89bc46b9bde219a48",
+    "web/data/temporal_holdout_report.json": "e63f4e739c6e6d903ebf48815b291ec598ae3f2c33e879e5fd95201a48368399",
+    "web/data/validation.json": "64dba9e1a0645cdada6a5d4f45c1db352503d9fe391b9122324487fbbfec8056"
+  },
+  "decision": "The matched baseline and identity-bound held-out pair close the stale-evidence task. The stable 0.67 median underdelivery across both days is negative evidence for citywide allocation accuracy. With new sensors deferred, reviewed NVDB road structure is the next actionable physical improvement; dirsplit model work remains closed."
+}

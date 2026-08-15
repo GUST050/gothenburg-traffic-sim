@@ -8,15 +8,15 @@ See `AGENTS.md` for the flexible actor protocol.
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Close and commit the trained direction-split work together
-  with its Gate M/S evidence and the full program/evidence audit.`
-- Status: `DONE. Gate M v5 selects the trained q50 model, Gate S v6 returns NO
-  on 48/48 clean runs, and the validation-report build-coherence defect found
-  by the audit now fails closed. Current validation is truthfully overall=warn
-  because the retained baseline belongs to an older demand build.`
-- Suggested next action: `Build and deliberately publish a baseline matching
-  demand build 4afe9e3ae2e74a4b872e, then rebuild current temporal holdout.
-  The largest later accuracy gain is 3-5 measured boundary/cordon stations.`
+- Current focus: `Use the completed matched baseline and current spatial/
+  temporal held-out pair to select the next actionable accuracy improvement.`
+- Status: `DONE. Baseline build 4afe9e3ae2e74a4b872e passed staging and is
+  published; validation is overall=pass with zero warnings/missing sections.
+  Identity-matched spatial LOSO is 0.466–1.354 (median 0.613) and temporal
+  LOSO is 0.445–1.356 (median 0.6225); all six stations are underidentified.`
+- Suggested next action: `With new sensors deferred, execute a reviewed NVDB
+  road-structure import/audit for high-flow and closure-relevant edges first.
+  Preserve stable edge IDs and compare routing/LOSO before and after.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve historical q, closure and release evidence. Never
   weaken calibration, lineage, health, topology, no-detour, held-out or resource
@@ -26,49 +26,46 @@ See `AGENTS.md` for the flexible actor protocol.
   not calibrated intervals or release evidence. Root paths recorded by frozen
   evidence remain interfaces; archived evidence may be losslessly compressed
   but not silently rewritten or deleted.`
-- Updated: `2026-08-15 Codex — dirsplit closeout, evidence audit, fail-closed
-  validation identity and repository cleanup integrated; 908 focused tests
-  plus 4 loopback server tests pass, and merge verification is complete.`
+- Updated: `2026-08-15 Codex — matched baseline published, current paired LOSO
+  completed, exact validation projection added without changing sealed demand,
+  and improvement order updated to NVDB while sensors wait.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### DIRSPLIT-CLOSEOUT-1 — Finish direction split and bind the evidence chain
+### CURRENT-BASELINE-HELDOUT-1 — Bind current baseline and generalization evidence
 
-- Status: `DONE — implementation, generated data/model, gates, diagnostics,
-  documentation and fail-closed validation identity are aligned.`
-- Objective and scope: `Train the direction split on supported source data,
-  preserve local measurements and 50/50 fallback semantics, repair paired
-  stress artifacts, measure decision sensitivity, and document what the full
-  program can and cannot claim.`
-- Completion outcome: `Weekday 06-20 trained q50 is active where supported;
-  local directional references take precedence; 50/50 remains the fallback;
-  q10/q90 remain uncalibrated stress cases. Gate M v5=MODEL and Gate S v6=NO
-  are separate, provenance-bound decisions. Mixed-build validation now warns
-  and withholds stale scenario evidence.`
-- Context or checkpoints: `Training uses 232 500 usable source rows and the
-  product model uses 23 472 supported rows from 83 stations. Gate S has 48/48
-  usable observations, zero hard failures and identical viable set, ranking,
-  winner and decision costs across q10/q50/q90. Spatial LOSO remains
-  underidentified and no release claim was added.`
-- Primary files: `dirsplit/; demand/; traffic_sim/demand/pfe.py;
-  build_sumo_demand.py; prior_flows.py; data/dirsplit/; validation/dirsplit_*;
-  tools/measure_direction_decision_sensitivity.py;
-  tools/measure_dirsplit_magnitude_shape.py;
-  traffic_sim/confidence/report.py; tests/; README.md; ARCHITECTURE.md;
-  IMPROVEMENT_PLAN.md; docs/PROGRAMGENOMGANG_OCH_EVIDENSAUDIT_2026-08-15.md.`
-- Constraints and safety: `Preserve measured counts, source provenance and
-  historical evidence. Learned opposite direction is soft plus ceiling-only;
-  q10/q90 and Gate S are diagnostic, not calibrated intervals or release
-  evidence. Do not treat an old baseline as current.`
-- Acceptance criteria: `Met: data/model artifacts are reproducible and parse;
-  complementary pairs are valid; Gate M/S outcomes and activation policy are
-  explicit; relevant tests pass; validation report fails closed across build
-  mismatch; documentation describes the deployed policy and limitations.`
-- Useful checks: `git diff --check; parse every changed JSON; load model.pkl;
-  focused dirsplit/demand/PFE/Gate S/validation-report pytest suites; verify
-  validation overall=warn and the exact baseline/demand build identities.`
+- Status: `DONE — registered baseline and held-out pair are complete and
+  identity-bound; no release claim was added.`
+- Objective and scope: `Replace stale mixed-build simulation/held-out evidence
+  with a staged, validated baseline and one current spatial/temporal pair.`
+- Completion outcome: `Three baseline arms passed health and output fit; both
+  LOSO reports bind pool 75947f43…, network 68ecde39…, 06–10 reference and
+  through-share 0.25. validation.json is overall=pass.`
+- Context or checkpoints: `The first temporal attempt failed closed on HiGHS
+  time limit, not infeasibility. An exact algebraically condensed integer L1
+  model solved the blocking quarter in 0.494 s over the full route domain;
+  production demand source and fingerprint remain unchanged. A floor/ceil
+  diagnostic was rejected before final evidence because it was not globally
+  equivalent under overlapping margins.`
+- Primary files: `traffic_sim/confidence/report.py;
+  traffic_sim/confidence/controlled_rounding.py;
+  traffic_sim/confidence/loso.py; web/data/validation.json;
+  web/data/loso_report.json; web/data/temporal_holdout_report.json;
+  web/data/scenarios/; validation/*baseline*_v1.json;
+  validation/current_heldout_*_v1.json; IMPROVEMENT_PLAN.md;
+  docs/PROGRAMGENOMGANG_OCH_EVIDENSAUDIT_2026-08-15.md.`
+- Constraints and safety: `Keep reports characterization-only; never weaken
+  solver, identity, sensor, health or publication gates. Preserve prior live
+  scenarios in the recorded backup. New sensors wait for real data.`
+- Acceptance criteria: `Met: staging validator passed before publication;
+  scenario/demand identity passes; both LOSO protocols match registered
+  pool/network/window; all active measurement residuals are zero; temporal
+  evidence is current; documentation and coordination state are updated.`
+- Useful checks: `git diff --check; parse changed JSON; focused controlled-
+  rounding/LOSO/validation-report tests; run validation_report.py and require
+  overall=pass with zero warning/missing sections.`
 <!-- ACTIVE_TASK_END -->
 
 ## History

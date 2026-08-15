@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 
+from collections import Counter
 from datetime import date as calendar_date
 import json
 import multiprocessing as mp
@@ -58,6 +59,9 @@ from demand.intake import (activity_purpose_shares_for_window, classify_day,
                            observed_sensor_series)
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.confidence import picker_diagnostics, route_support
+from traffic_sim.confidence.controlled_rounding import (
+    exact_condensed_contract_repair,
+)
 from traffic_sim.intake.sensors import load_registry
 from traffic_sim.simulation.runtime import sumo_home
 
@@ -254,51 +258,70 @@ def controlled_publication_counts(
     structure_groups: list[tuple[list[int], float]],
     stability_edges: list[str] | None = None,
 ) -> tuple[list[tuple[np.ndarray, bool] | None], dict]:
-    """Precompute counts through the same joint production publisher.
+    """Precompute LOSO counts under the production publication contract.
 
-    The former validation-only monkeypatch has been retired: LOSO and demand
-    publication now exercise one implementation, so treatment evidence cannot
-    accidentally validate code that annual warming never uses.
+    LOSO adds one narrow exact acceleration for its validation-only inactive
+    sensor equalities: the unrestricted integer L1 model is algebraically
+    condensed without changing its domain or objective. If it cannot prove an
+    optimum, the untouched production general MILP is the fail-closed fallback.
     """
     precomputed: list[tuple[np.ndarray, bool] | None] = []
     residuals: list[int] = []
     route_l1 = 0.0
     inconsistent_quarters = 0
     processed = 0
-    for quarter, solution in enumerate(solutions):
-        if solution is None:
-            precomputed.append(None)
-            continue
-        purpose_mix = purpose_mixes_per_q[quarter]
-        result = pfe.quarter_publish_counts(
-            shapes,
-            solution,
-            targets_per_q[quarter],
-            bounds_per_q[quarter],
-            rungs[quarter],
-            purpose_mix,
-            bool(purpose_mix),
-            enforce_integer_bounds,
-            structure_groups,
-            stability_edges,
-        )
-        precomputed.append(result)
-        counts, _purpose_enforced = result
-        quarter_residuals = []
-        for edge, target in targets_per_q[quarter].items():
-            touching = [j for j, shape in enumerate(shapes)
-                        if edge in shape.edges]
-            if not touching:
+    method_counts: Counter = Counter()
+    production_repair = pfe.repair_integer_bounds
+
+    def validation_repair(*args, **kwargs):
+        accelerated = exact_condensed_contract_repair(*args, **kwargs)
+        if accelerated is not None:
+            repaired, metadata = accelerated
+            method_counts[metadata["method"]] += 1
+            return repaired
+        method_counts["production_general_fallback"] += 1
+        return production_repair(*args, **kwargs)
+
+    # quarter_publish_counts resolves this symbol at call time. Scope the
+    # override to the serial LOSO publication loop and restore it on failures.
+    pfe.repair_integer_bounds = validation_repair
+    try:
+        for quarter, solution in enumerate(solutions):
+            if solution is None:
+                precomputed.append(None)
                 continue
-            residual = abs(int(counts[touching].sum()) - int(round(target)))
-            residuals.append(residual)
-            quarter_residuals.append(residual)
-        inconsistent_quarters += int(any(quarter_residuals))
-        route_l1 += float(np.abs(counts.astype(float) - solution).sum())
-        processed += 1
+            purpose_mix = purpose_mixes_per_q[quarter]
+            result = pfe.quarter_publish_counts(
+                shapes,
+                solution,
+                targets_per_q[quarter],
+                bounds_per_q[quarter],
+                rungs[quarter],
+                purpose_mix,
+                bool(purpose_mix),
+                enforce_integer_bounds,
+                structure_groups,
+                stability_edges,
+            )
+            precomputed.append(result)
+            counts, _purpose_enforced = result
+            quarter_residuals = []
+            for edge, target in targets_per_q[quarter].items():
+                touching = [j for j, shape in enumerate(shapes)
+                            if edge in shape.edges]
+                if not touching:
+                    continue
+                residual = abs(int(counts[touching].sum()) - int(round(target)))
+                residuals.append(residual)
+                quarter_residuals.append(residual)
+            inconsistent_quarters += int(any(quarter_residuals))
+            route_l1 += float(np.abs(counts.astype(float) - solution).sum())
+            processed += 1
+    finally:
+        pfe.repair_integer_bounds = production_repair
     return precomputed, {
-        "evidence_class": "production_joint_projection",
-        "method_counts": {"production_joint_projection": processed},
+        "evidence_class": "validation_exact_equivalent_projection",
+        "method_counts": dict(sorted(method_counts.items())),
         "quarters_processed": processed,
         "quarters_with_inconsistent_integer_margins": inconsistent_quarters,
         "max_abs_active_measurement_residual": max(residuals, default=0),
@@ -373,26 +396,23 @@ def calibrate_fold_parallel(
         # the solver has respected its ceiling.
         publication_bounds = (
             integer_bounds_pq if integer_bounds_pq is not None else bounds_pq)
-        precomputed_counts = None
-        controlled_rounding_report = None
-        if controlled_integer_rounding:
-            precomputed_counts, controlled_rounding_report = (
-                controlled_publication_counts(
-                    shapes,
-                    solutions,
-                    targets,
-                    publication_bounds,
-                    rungs,
-                    _PFE_PAR_PURPOSE_MIXES,
-                    enforce_integer_bounds=integer_bounds_pq is not None,
-                    structure_groups=[
-                        (members, cap_share)
-                        for _name, members, cap_share
-                        in (_PFE_PAR_STRUCTURE_GROUPS or [])
-                    ],
-                    stability_edges=stability_edges,
-                )
+        precomputed_counts, controlled_rounding_report = (
+            controlled_publication_counts(
+                shapes,
+                solutions,
+                targets,
+                publication_bounds,
+                rungs,
+                _PFE_PAR_PURPOSE_MIXES,
+                enforce_integer_bounds=integer_bounds_pq is not None,
+                structure_groups=[
+                    (members, cap_share)
+                    for _name, members, cap_share
+                    in (_PFE_PAR_STRUCTURE_GROUPS or [])
+                ],
+                stability_edges=stability_edges,
             )
+        )
         calibration_report = pfe.write_calibration_report(
             shapes, out_path, targets, solutions, publication_bounds, rungs,
             enforce_integer_bounds=integer_bounds_pq is not None,
@@ -404,9 +424,8 @@ def calibrate_fold_parallel(
             stability_edges=stability_edges,
             observability_groups=observability_groups,
             required_anchor_edges=stability_edges)
-        if controlled_rounding_report is not None:
-            calibration_report["controlled_integer_rounding"] = (
-                controlled_rounding_report)
+        calibration_report["controlled_integer_rounding"] = (
+            controlled_rounding_report)
         if picker_diagnostics_path is not None:
             context = dict(picker_diagnostics_context or {})
             diagnostic = picker_diagnostics.build_fold_diagnostics(
@@ -788,9 +807,9 @@ def main() -> None:
                   # accidental comparison of different dates, candidate
                   # pools, networks or LOSO procedures as a sensor benefit.
                   "protocol": (
-                      "temporal_loso_pfe_meso_v8_observability_gate"
+                      "temporal_loso_pfe_meso_v10_exact_condensed_projection"
                       if evaluation_mode == "temporal_holdout"
-                      else "loso_pfe_meso_v11_observability_gate"),
+                      else "loso_pfe_meso_v13_exact_condensed_projection"),
                   "source": meta.get("source"),
                   "window_start": demand_start.isoformat(),
                   "window_end": demand_end.isoformat(),
@@ -818,7 +837,13 @@ def main() -> None:
                   # Compatibility key retained for consumers of v8 reports;
                   # it now describes the production path and is always true.
                   "controlled_integer_rounding": True,
-                  "integer_projection": "production_joint_integer_v2_shadow_margins",
+                  "integer_projection": (
+                      "validation_exact_condensed_l1_then_"
+                      "production_general_v1"),
+                  "integer_projection_equivalence": (
+                      "same exact margins, retained bounds, purpose groups, "
+                      "rounded interval total and route-L1 objective; "
+                      "production general MILP is fail-closed fallback"),
                   "inactive_sensor_shadow_margins": (
                       "rounded continuous fold prediction; observed held "
                       "counts absent; soft below active sensors and hard bounds"),

@@ -1,10 +1,10 @@
 {
  "schema_version": 1,
- "generated_at": "2026-08-15T13:45:44Z",
+ "generated_at": "2026-08-15T20:46:28Z",
  "demand_window": "2025-09-16",
  "demand_source": "historical",
  "demand_build_id": "4afe9e3ae2e74a4b872e",
- "overall": "warn",
+ "overall": "pass",
  "sections": {
   "counts_fit": {
    "status": "pass",
@@ -90,19 +90,51 @@
    "gate": "fritid ska ha l\u00e4ngst medianresa (Trafikanalys RVU Tabell 3); exakt \u00e4rende\u00d7tid-mix per kvart n\u00e4r den \u00e4r f\u00f6renlig med sensorerna; varje tilldelad rutt m\u00e5ste ha kompatibel proveniens"
   },
   "scenario_identity": {
-   "status": "warn",
-   "reason": "inaktuell baseline f\u00f6r aktiv demand: baseline=fa259a2892a974c27e8c, demand=4afe9e3ae2e74a4b872e",
+   "status": "pass",
    "demand_build_id": "4afe9e3ae2e74a4b872e",
-   "baseline_demand_build_id": "fa259a2892a974c27e8c",
+   "baseline_demand_build_id": "4afe9e3ae2e74a4b872e",
    "gate": "baseline och demand_meta m\u00e5ste b\u00e4ra samma build-id innan simulerings- eller sensor-output-evidens f\u00e5r anv\u00e4ndas"
   },
   "simulation": {
-   "status": "missing",
-   "reason": "scenarioevidens anv\u00e4nds inte: inaktuell baseline f\u00f6r aktiv demand: baseline=fa259a2892a974c27e8c, demand=4afe9e3ae2e74a4b872e"
+   "status": "pass",
+   "flags": [],
+   "seeds": [
+    {
+     "seed": 1000,
+     "inserted": 4998,
+     "loaded": 4998,
+     "unfinished": 0,
+     "teleports": 0
+    },
+    {
+     "seed": 1001,
+     "inserted": 4998,
+     "loaded": 4998,
+     "unfinished": 0,
+     "teleports": 0
+    },
+    {
+     "seed": 1002,
+     "inserted": 4998,
+     "loaded": 4998,
+     "unfinished": 0,
+     "teleports": 0
+    }
+   ],
+   "gate": "alla fordon insatta, <2% ofullbordade, teleporteringar under tr\u00f6skel, per fr\u00f6"
   },
   "sensor_output": {
-   "status": "missing",
-   "reason": "scenarioevidens anv\u00e4nds inte: inaktuell baseline f\u00f6r aktiv demand: baseline=fa259a2892a974c27e8c, demand=4afe9e3ae2e74a4b872e"
+   "status": "pass",
+   "contract": "raw_edgeData_hourly_ensemble_vs_frozen_15min_targets",
+   "uses_raw_ensemble_mean": true,
+   "aggregation_minutes": 60,
+   "edge_quarters": 28,
+   "geh_lt_5_pct": 100.0,
+   "mean_abs_error": 6.2515,
+   "max_abs_error": 17.028438,
+   "station_edge_quarters": 24,
+   "station_max_abs_error": 27.666667,
+   "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "multi_day": {
    "status": "pass",
@@ -112,21 +144,49 @@
   },
   "held_out": {
    "status": "info",
-   "window": "2025-09-16 \u2192 2025-09-17 (exclusive)",
+   "protocol": "loso_pfe_meso_v13_exact_condensed_projection",
+   "window": "2025-09-16 \u2192 2025-09-16 (exclusive)",
    "ratios": {
-    "107:station_total": 1.443,
-    "1074:60790252_60790253_0": 0.884,
-    "1076:30420757_30421744_0": 0.685,
-    "133:26842525_26355153_0": 0.769,
-    "134:26355153_96523321_0": 2.613,
-    "2276:26355153_91615277_0": 2.499
+    "107:station_total": 1.185,
+    "1074:60790252_60790253_0": 0.554,
+    "1076:30420757_30421744_0": 0.466,
+    "133:26842525_26355153_0": 0.672,
+    "134:26355153_96523321_0": 0.509,
+    "2276:26355153_91615277_0": 1.354
    },
-   "median_ratio": 1.443,
+   "median_ratio": 0.613,
    "note": "utel\u00e4mnad-station-\u00e5terskapande; karakterisering, inte grind \u2014 extrema veck kan spegla sensorns informationsisolering, inte modellfel"
   },
   "temporal_holdout": {
-   "status": "missing",
-   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26', current='75947f43c083d80d20d6ee39e994a6aadde89d0d27933d4a5299175ee2a2ac8a'; reference window: report='2025-09-16T00:00:00', current='2025-09-16T06:00:00'"
+   "status": "info",
+   "protocol": "temporal_loso_pfe_meso_v10_exact_condensed_projection",
+   "reference_window": {
+    "start": "2025-09-16T06:00:00",
+    "end": "2025-09-16T10:00:00"
+   },
+   "evaluation_window": {
+    "start": "2025-09-17T06:00:00",
+    "end": "2025-09-17T10:00:00"
+   },
+   "minimum_coverage": 0.9,
+   "observed_quarters": {
+    "107:station_total": 16,
+    "1074:60790252_60790253_0": 16,
+    "1076:30420757_30421744_0": 16,
+    "133:26842525_26355153_0": 16,
+    "134:26355153_96523321_0": 16,
+    "2276:26355153_91615277_0": 16
+   },
+   "ratios": {
+    "107:station_total": 1.178,
+    "1074:60790252_60790253_0": 0.577,
+    "1076:30420757_30421744_0": 0.445,
+    "133:26842525_26355153_0": 0.668,
+    "134:26355153_96523321_0": 0.519,
+    "2276:26355153_91615277_0": 1.356
+   },
+   "median_ratio": 0.6225,
+   "note": "fryst kandidatpool/n\u00e4t/priorer utv\u00e4rderade p\u00e5 en annan historisk dag; utel\u00e4mnad stations egna v\u00e4rden anv\u00e4nds endast f\u00f6r j\u00e4mf\u00f6relse"
   }
  }
 }

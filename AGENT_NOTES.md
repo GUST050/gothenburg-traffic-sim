@@ -6,43 +6,35 @@ Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Direction-split closeout, evidence audit and repository
-  cleanup are integrated, verified and committed on
-  codex/fix-dirsplit-gates-v3.`
-- Summary: `The supported weekday 06-20 q50 model, local-anchor and 50/50
-  fallback semantics, complementary stress pairs, Gate M/S evidence and
-  fail-closed validation identity are preserved. The traffic_sim migration is
-  also complete: 12 compatibility shims and dead volume_priors.py are removed,
-  five signal-study modules live in signals/, benchmark_seed_workers.py lives
-  in tools/, and the large archived validation record is losslessly gzipped.`
-- Files changed: `Direction-split training/evaluation/prediction and evidence;
-  demand/PFE integration; validation identity gate; canonical traffic_sim
-  imports; signals/ and tools/ layout; package and integration tests;
-  README/architecture/improvement plan/program audit and current coordination
-  blocks.`
-- Checks: `The integrated cleanup/dirsplit/demand/PFE/Gate-S/validation-report
-  surface passes 908 tests with 1 skipped; all four changed server dispatch
-  tests pass with local loopback binding. Direct invocation works for the
-  moved signal and seed-benchmark CLIs. The gzipped archive expands to its
-  members.json SHA-256, demand source identity is unchanged from c379629, and
-  git diff --check is clean. The known historical whole-suite freeze/campaign
-  drift was not rewritten or represented as a green global suite.`
-- Decisions and evidence: `Gate M v5=MODEL selects
-  similarity_weighted_lgbm_no_profile. Gate S v6=NO on 48/48 clean runs means
-  q stress does not change the frozen closure decision and is not release
-  evidence. Root paths recorded by immutable evidence remain interfaces;
-  unbound signal scripts may live in signals/. Frozen evidence was compressed,
-  not deleted, and the archived bytes remain bound by their existing hash.`
-- Blockers or risks: `The retained published baseline is older than current
-  demand, so simulation and sensor-output sections remain withheld until a
-  deliberate matched baseline run. Temporal holdout is stale/missing. The
-  repository-wide suite still contains historical freeze/campaign identity
-  failures. Six stations in two clusters cannot validate citywide traffic.`
-- Suggested next action: `After integrated checks pass, build and deliberately
-  publish a baseline matching demand build 4afe9e3ae2e74a4b872e, then rebuild
-  temporal holdout before adding boundary/cordon sensors.`
-- Actor notes: `No push, release or publication was performed. Historical
-  Gate M/S records remain separate versioned artifacts.`
+- Focus and status: `Matched baseline plus current spatial/temporal LOSO are
+  complete on codex/fix-dirsplit-gates-v3; final repository checks remain.`
+- Summary: `Baseline build 4afe9e3ae2e74a4b872e passed staging and replaced
+  the stale live set. Spatial and temporal reports now share exact pool, net,
+  reference and through-share identity. validation.json is overall=pass.`
+- Files changed: `Fail-closed held-out identity in confidence/report.py;
+  exact condensed LOSO projection in controlled_rounding.py and loso.py;
+  tests; current baseline/LOSO/scenario/validation artifacts; two registrations,
+  two outcomes; improvement plan, program audit and current blocks.`
+- Checks: `Matched three-arm simulation inserted 14,994/14,994 vehicles with
+  zero unfinished/teleports; raw output fit is 100% GEH<5. Spatial LOSO
+  0.466–1.354 median 0.613; temporal 0.445–1.356 median 0.6225; every station
+  underidentified and every active integer measurement residual zero. The
+  scenario/LOSO/publication, PFE/demand and server/API suites pass 623 tests
+  with 1 skipped; JSON/hash verification and git diff --check pass.`
+- Decisions and evidence: `The temporal blocker was a 20/60/180-second solver
+  time limit, not infeasibility. The exact condensed full-domain L1 model
+  solved the captured hard model optimally in 0.494 s and remains validation-
+  only; a non-equivalent floor/ceil diagnostic was rejected. Sealed demand
+  code is unchanged. Both reports are characterization, not release evidence.`
+- Blockers or risks: `Six clustered stations still cannot support strong
+  citywide accuracy. New sensors are deferred. 4,990 lane counts and 631
+  speeds remain defaults; synthetic signals and OD/assignment priors remain.`
+- Suggested next action: `Import reviewed NVDB road structure on high-flow and
+  closure-relevant edges, preserving stable IDs and producing before/after
+  network, routing, held-out and scenario comparisons.`
+- Actor notes: `The old live closure set was replaced only after staging pass
+  and is recoverable at runs/prepublish-baseline-fa259a2892a974c27e8c-
+  20260815T152748Z. No release promotion or push has been performed.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
