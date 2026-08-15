@@ -394,3 +394,161 @@ class TestLegacyPathUnchanged:
             other = [s for s in payload["sensors"]
                      if s["sensor_id"] == sensor_id][0]
             assert "directional_reference" not in other
+
+
+# ── the anchor reaches the real demand path ───────────────────────────────
+class TestTheAnchorIsWiredIntoProduction:
+    """Review finding 3: anchor_day existed but no production caller passed it.
+
+    build_targets called load_direction_split(split_key) with no day, so the
+    52/48 anchor affected no real demand build at all.
+    """
+
+    FLOWS = {N_EDGE: [200.0] * 96, S_EDGE: [200.0] * 96}
+    SENSORS = {"107": [N_EDGE, S_EDGE]}
+
+    def test_build_targets_accepts_a_calendar_day(self):
+        import inspect
+        from demand.intake import build_targets
+
+        assert "anchor_day" in inspect.signature(build_targets).parameters
+
+    def test_every_production_call_site_passes_it(self):
+        source = Path("build_sumo_demand.py").read_text()
+        assert source.count("anchor_day=anchor_day") == 3
+        # and none of them still calls build_targets without it
+        import re
+        calls = re.findall(r"build_targets\(([^)]*)\)", source, re.S)
+        assert calls, "no build_targets call found"
+        for call in calls:
+            assert "anchor_day" in call
+
+    def test_an_anchored_day_moves_the_targets(self, monkeypatch):
+        import demand.intake as intake
+        from demand.intake import build_targets
+
+        monkeypatch.setattr(
+            intake, "load_direction_split",
+            lambda key="edge_shares", anchor_day=None: {
+                N_EDGE: [0.5] * 96, S_EDGE: [0.5] * 96})
+        plain = build_targets(self.FLOWS, self.SENSORS, 0, 4)
+        anchored = build_targets(self.FLOWS, self.SENSORS, 0, 4,
+                                 anchor_day="2025-09-16")
+        assert plain[0][N_EDGE] == pytest.approx(100.0)
+        assert anchored[0][N_EDGE] > plain[0][N_EDGE]
+
+    def test_the_measured_total_survives_anchoring(self, monkeypatch):
+        import demand.intake as intake
+        from demand.intake import build_targets
+
+        monkeypatch.setattr(
+            intake, "load_direction_split",
+            lambda key="edge_shares", anchor_day=None: {
+                N_EDGE: [0.5] * 96, S_EDGE: [0.5] * 96})
+        anchored = build_targets(self.FLOWS, self.SENSORS, 0, 8,
+                                 anchor_day="2025-09-16")
+        for quarter in anchored:
+            assert quarter[N_EDGE] + quarter[S_EDGE] == pytest.approx(200.0)
+
+    def test_a_day_outside_the_period_is_left_unanchored(self, monkeypatch):
+        import demand.intake as intake
+        from demand.intake import build_targets
+
+        monkeypatch.setattr(
+            intake, "load_direction_split",
+            lambda key="edge_shares", anchor_day=None: {
+                N_EDGE: [0.5] * 96, S_EDGE: [0.5] * 96})
+        plain = build_targets(self.FLOWS, self.SENSORS, 0, 4)
+        forecast = build_targets(self.FLOWS, self.SENSORS, 0, 4,
+                                 anchor_day="2027-09-14")
+        assert forecast == plain
+
+    def test_the_refusal_for_a_forecast_day_is_reported(self):
+        from demand.intake import describe_directional_anchor
+
+        assert describe_directional_anchor("2025-09-16") == {
+            "anchored_sensors": ["107"], "out_of_period_sensors": []}
+        assert describe_directional_anchor("2027-09-14") == {
+            "anchored_sensors": [], "out_of_period_sensors": ["107"]}
+
+
+class TestTheAnchorIsVolumeWeighted:
+    """A published annual average DAILY split is a volume-weighted quantity.
+
+    Matching it against the unweighted mean of 96 slot shares lets a quiet
+    03:00 slot count as much as the morning peak, which is a different
+    number.
+    """
+
+    SENSORS = {"107": [N_EDGE, S_EDGE]}
+
+    def peaky_flows(self):
+        # 12 busy slots, 84 near-empty ones
+        series = [500.0 if 28 <= i < 40 else 5.0 for i in range(96)]
+        return {N_EDGE: list(series), S_EDGE: list(series)}
+
+    def test_weights_come_from_the_whole_day_not_the_window(self):
+        from demand.intake import day_two_way_weights
+
+        weights = day_two_way_weights(self.peaky_flows(), self.SENSORS, 32)
+        assert len(weights["107"]) == 96
+        assert weights["107"][30] == pytest.approx(500.0)
+        assert weights["107"][0] == pytest.approx(5.0)
+
+    def test_a_missing_quarter_contributes_zero_weight(self):
+        from demand.intake import day_two_way_weights
+
+        flows = {N_EDGE: [None] * 96, S_EDGE: [None] * 96}
+        flows[N_EDGE][10] = 100.0
+        weights = day_two_way_weights(flows, self.SENSORS, 0)
+        assert weights["107"][10] == pytest.approx(100.0)
+        assert weights["107"][0] == pytest.approx(0.0)
+
+    def test_single_direction_sensors_get_no_weights(self):
+        from demand.intake import day_two_way_weights
+
+        weights = day_two_way_weights(
+            {"60790252_60790253_0": [10.0] * 96},
+            {"1074": ["60790252_60790253_0"]}, 0)
+        assert weights == {}
+
+    def test_the_weighted_anchor_differs_from_the_unweighted_one(self,
+                                                                 monkeypatch):
+        """If they were the same, the weighting would be doing nothing."""
+        import demand.intake as intake
+        from demand.intake import apply_directional_anchors, day_two_way_weights
+
+        shares = {N_EDGE: [0.30] * 48 + [0.70] * 48,
+                  S_EDGE: [0.70] * 48 + [0.30] * 48}
+        flows = {N_EDGE: [1.0] * 48 + [999.0] * 48,
+                 S_EDGE: [1.0] * 48 + [999.0] * 48}
+        weights = day_two_way_weights(flows, self.SENSORS, 0)
+        unweighted = apply_directional_anchors(
+            dict(shares), "2025-09-16", REGISTRY)
+        weighted = apply_directional_anchors(
+            dict(shares), "2025-09-16", REGISTRY, weights=weights)
+        assert unweighted[N_EDGE] != weighted[N_EDGE]
+
+    def test_the_weighted_mean_reproduces_the_anchor(self):
+        from demand.intake import apply_directional_anchors, day_two_way_weights
+
+        shares = {N_EDGE: [0.30] * 48 + [0.70] * 48,
+                  S_EDGE: [0.70] * 48 + [0.30] * 48}
+        flows = {N_EDGE: [1.0] * 48 + [999.0] * 48,
+                 S_EDGE: [1.0] * 48 + [999.0] * 48}
+        weights = day_two_way_weights(flows, self.SENSORS, 0)
+        out = apply_directional_anchors(dict(shares), "2025-09-16", REGISTRY,
+                                        weights=weights)
+        total = sum(weights["107"])
+        weighted_mean = sum(w * v for w, v in zip(weights["107"], out[N_EDGE])) \
+            / total
+        assert weighted_mean == pytest.approx(3400 / 6500,
+                                              abs=sr.ANCHOR_TOLERANCE)
+
+    def test_a_day_with_no_measurements_falls_back_without_dividing_by_zero(self):
+        from demand.intake import apply_directional_anchors
+
+        shares = {N_EDGE: [0.5] * 96, S_EDGE: [0.5] * 96}
+        out = apply_directional_anchors(dict(shares), "2025-09-16", REGISTRY,
+                                        weights={"107": [0.0] * 96})
+        assert all(0.0 < v < 1.0 for v in out[N_EDGE])

@@ -351,8 +351,32 @@ def load_direction_split(key: str = "edge_shares",
     return shares
 
 
+def day_two_way_weights(flows: dict[str, list],
+                        sensor_edges: dict[str, list[str]],
+                        qi_start: int) -> dict[str, list[float]]:
+    """{sensor_id: 96 measured two-way totals} for the day containing qi_start.
+
+    A missing quarter contributes zero weight rather than a guess, so the
+    anchored mean is taken over what was actually measured.
+    """
+    day_start = qi_start - (qi_start % 96)
+    out: dict[str, list[float]] = {}
+    for sensor_id, edges in sensor_edges.items():
+        if len(edges) < 2:
+            continue
+        series = flows.get(edges[0], [])
+        weights: list[float] = []
+        for offset in range(96):
+            index = day_start + offset
+            value = series[index] if index < len(series) else None
+            weights.append(float(value) if value is not None else 0.0)
+        out[str(sensor_id)] = weights
+    return out
+
+
 def apply_directional_anchors(shares: dict[str, list[float]], day: str,
-                              registry_path: Path | None = None
+                              registry_path: Path | None = None,
+                              weights: dict[str, list[float]] | None = None
                               ) -> dict[str, list[float]]:
     """Anchor every two-way pair whose reference covers ``day``.
 
@@ -376,8 +400,15 @@ def apply_directional_anchors(shares: dict[str, list[float]], day: str,
         edges = sorted(reference.bearing_to_edge.values())
         if any(edge not in anchored for edge in edges):
             continue
+        sensor_weights = (weights or {}).get(str(sensor_id))
+        if sensor_weights is not None and sum(sensor_weights) <= 0:
+            # Nothing was measured on this day, so there is no volume to
+            # weight by. Fall back to the unweighted mean rather than
+            # silently dividing by zero, and leave the fallback visible.
+            sensor_weights = None
         anchored.update(anchored_pair_shares(
-            reference, {edge: anchored[edge] for edge in edges}))
+            reference, {edge: anchored[edge] for edge in edges},
+            weights=sensor_weights))
     return anchored
 
 
@@ -396,9 +427,32 @@ def build_targets(
     qi_start: int,
     n_intervals: int,
     split_key: str = "edge_shares",
+    anchor_day: str | None = None,
 ) -> list[dict[str, float]]:
-    """Per-quarter measured targets {edge: count} — the level-1 constraints."""
+    """Per-quarter measured targets {edge: count} — the level-1 constraints.
+
+    ``anchor_day`` applies the published local direction anchor (Fas 0A) for
+    the calendar day being built. Only a two-way station whose registry record
+    carries a verified ``directional_reference`` covering that day is touched,
+    which today means sensor 107 alone; the five single-direction stations are
+    structurally unreachable by this path because their measured direction is
+    already a Level-1 target with nothing to anchor.
+
+    The anchor is matched VOLUME-WEIGHTED over the day's measured two-way
+    totals, because the published quantity is an annual average DAILY split
+    and an unweighted mean of 96 slot shares is a different number: a quiet
+    03:00 slot would otherwise count as much as the morning peak. Weights come
+    from the whole 96-slot day containing ``qi_start``, not from the
+    calibration window, since the anchor describes a day rather than a
+    four-hour window.
+
+    ``anchor_day=None`` reproduces the previous behaviour exactly.
+    """
     est_shares = load_direction_split(split_key)
+    if anchor_day is not None:
+        est_shares = apply_directional_anchors(
+            est_shares, anchor_day,
+            weights=day_two_way_weights(flows, sensor_edges, qi_start))
     out: list[dict[str, float]] = []
     for i in range(n_intervals):
         qi, slot = qi_start + i, (qi_start + i) % 96
@@ -468,3 +522,30 @@ def observed_sensor_series(
 from demand.priors import (ensure_assignment_priors, ensure_bounds,
                            ensure_observability, ensure_priors,
                            structural_bounds_and_priors)
+
+
+def describe_directional_anchor(day: str,
+                                registry_path: Path | None = None
+                                ) -> dict[str, list[str]]:
+    """Which stations the anchor applies to on ``day``, and which it refuses.
+
+    Reported at build time so an unanchored forecast day is visibly a
+    consequence of the reference's declared period rather than a silent gap.
+    """
+    from traffic_sim.intake.sensors import load_registry
+
+    path = registry_path or SENSOR_REGISTRY_PATH
+    result: dict[str, list[str]] = {"anchored_sensors": [],
+                                    "out_of_period_sensors": []}
+    if not path.exists():
+        return result
+    registry = load_registry(path)
+    for sensor_id, record in sorted(registry.records.items()):
+        reference = record.directional_reference
+        if reference is None:
+            continue
+        if reference.covers(day):
+            result["anchored_sensors"].append(sensor_id)
+        else:
+            result["out_of_period_sensors"].append(sensor_id)
+    return result

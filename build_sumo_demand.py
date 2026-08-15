@@ -472,7 +472,8 @@ def parse_args() -> argparse.Namespace:
 # Date/window intake — moved to demand/intake.py (H1, 2026-07-14).
 # Patch SUMO_DIR/GEO_PATH on demand.intake for these functions.
 from demand.intake import (activity_purpose_shares_for_window, build_targets,
-                           classify_day, demand_metadata, has_split_quantiles,
+                           classify_day, demand_metadata,
+                           describe_directional_anchor, has_split_quantiles,
                            day_pool_blocks, load_direction_split,
                            load_sensor_edges, multi_day_blocks,
                            observed_sensor_series, real_day_shape,
@@ -577,6 +578,21 @@ def main() -> None:
     purpose_departure_offset_s = int((t0 - t0.normalize()).total_seconds())
     activity_purpose_shares = activity_purpose_shares_for_window(t0, n_intervals)
     use_weekend_shape, day_kind = classify_day(args.start_date, t0.dayofweek)
+
+    # Fas 0A: the published local direction anchor applies only to a calendar
+    # day inside its declared period, so a 2027 forecast build is correctly
+    # NOT anchored by the 2025 reference. That refusal is recorded rather
+    # than silent -- the reason a forecast day carries an unanchored split is
+    # a property of the evidence, not an oversight.
+    anchor_day = args.start_date
+    anchor_status = describe_directional_anchor(anchor_day)
+    if anchor_status["anchored_sensors"]:
+        print(f"  direction anchor: {anchor_status['anchored_sensors']} "
+              f"anchored to their published period aggregate for {anchor_day}")
+    elif anchor_status["out_of_period_sensors"]:
+        print(f"  direction anchor: NOT applied for {anchor_day} — "
+              f"{anchor_status['out_of_period_sensors']} have a reference "
+              f"covering a different period; split stays fully estimated")
     print(f"Window: {t0} → {t1}  ({n_intervals} × 15 min)  source={args.source}"
           f"  {day_kind}")
 
@@ -1083,7 +1099,8 @@ def main() -> None:
                 variant_inputs = {}
                 for suffix, key in variants:
                     targets = build_targets(flows, sensor_edges, qi_start,
-                                            n_intervals, split_key=key)
+                                            n_intervals, split_key=key,
+                                            anchor_day=anchor_day)
                     targets_by_variant[key] = targets
                     bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors(suffix)
                     out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
@@ -1141,7 +1158,8 @@ def main() -> None:
                 break
 
             targets = build_targets(flows, sensor_edges, qi_start,
-                                    n_intervals, split_key="edge_shares")
+                                    n_intervals, split_key="edge_shares",
+                                    anchor_day=anchor_day)
             targets_by_variant["edge_shares"] = targets
             bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors("")
             report = timed(
@@ -1206,7 +1224,8 @@ def main() -> None:
         generate_candidates()
         for suffix, key in variants:
             targets_by_variant[key] = build_targets(
-                flows, sensor_edges, qi_start, n_intervals, split_key=key)
+                flows, sensor_edges, qi_start, n_intervals, split_key=key,
+                anchor_day=anchor_day)
             counts_path = SUMO_DIR / f"counts{suffix}.xml"
             n = write_counts(flows, sensor_edges, qi_start, n_intervals,
                              counts_path, split_key=key)
