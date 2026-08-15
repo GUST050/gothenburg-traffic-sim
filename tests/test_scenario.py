@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import run_scenario
-from study_contracts import ScenarioSpec
+from traffic_sim.core.contracts import ScenarioSpec
 
 SCEN_DIR   = Path(__file__).parent.parent / "web" / "data" / "scenarios"
 INDEX_PATH = SCEN_DIR / "index.json"
@@ -338,7 +338,7 @@ class TestScenarioSpecIntegration:
     def test_spec_validation_checks_demand_network_and_window(self, tmp_path):
         net = tmp_path / "net.net.xml"
         net.write_text("<net/>")
-        from pipeline_fingerprint import sha256_file
+        from traffic_sim.core.fingerprint import sha256_file
         spec = ScenarioSpec.from_dict({
             "scenario_id": "baseline",
             "demand_build_id": "demand-a",

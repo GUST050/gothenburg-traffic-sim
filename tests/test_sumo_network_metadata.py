@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import sumo_network_metadata as nm
+from traffic_sim.simulation import metadata as nm
 
 
 def tiny_net(path: Path) -> None:

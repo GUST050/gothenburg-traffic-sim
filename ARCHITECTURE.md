@@ -135,18 +135,35 @@ separate:
   audits and disruption metrics are in `traffic_sim/simulation/`; run/release
   bookkeeping is in `traffic_sim/ops/`.
 
-The former root modules (`study_contracts.py`, `pipeline_fingerprint.py`,
-`sensor_registry.py`, `candidate_cache.py`, `closure_metrics.py`,
-`sumo_network_metadata.py`, `sumo_runtime.py`, `network_audit.py`,
-`release_registry.py`, `runs.py`, `pfe.py`, `pfe_kernel.py`,
-`validate_sim.py` and `validation_report.py`) are now thin compatibility
-imports or CLI wrappers. They contain no second implementation. This preserves
-existing scripts, tests and external command examples while giving new code
-one canonical import location.
-New reusable code must be added to `traffic_sim/` first; a root shim is added
-only when an existing public command or import still requires it. Fingerprint
-maps hash the canonical package files, so changing an implementation invalidates
-the relevant cache or published build.
+**The migration into `traffic_sim/` is finished (2026-08-15).** Twelve root
+modules (`study_contracts.py`, `pipeline_fingerprint.py`, `sensor_registry.py`,
+`candidate_cache.py`, `closure_metrics.py`, `sumo_network_metadata.py`,
+`sumo_runtime.py`, `network_audit.py`, `release_registry.py`, `runs.py`,
+`pfe.py`, `pfe_kernel.py`) were six-line compatibility shims that rebound
+`sys.modules`; every import site was rewritten to the canonical module and the
+shims were deleted. `tests/test_package_layout.py` now pins the *absence* of
+those names, so a shim cannot quietly return. New reusable code goes into
+`traffic_sim/`; no root shim is added again. Fingerprint maps hash the
+canonical package files, so changing an implementation invalidates the relevant
+cache or published build.
+
+`validate_sim.py` and `validation_report.py` remain in the root as genuine CLI
+wrappers, not shims: `make validate-temporal` runs them by name and
+`build_sumo_demand.py` (a sealed demand source), `run_scenario.py` and
+`serve.py` import them.
+
+**What may and may not move.** A root path is an interface when something
+immutable records it. The campaign runners
+(`run_monthly_closure_search.py`, `run_monthly_proxy_validation.py`,
+`run_monthly_warm_state_validation.py`, `screen_monthly_closures.py`,
+`suggest_closure_time.py`) and `run_scenario.py` have their **paths** recorded
+inside frozen `validation/` artifacts and `tools/freeze_*.py`, so they stay
+where they are — moving one would break evidence that cannot be regenerated.
+The signal-study modules carried no such binding and were therefore collected
+into `signals/` (`signal_lab.py`, `signal_optimize.py`, `signal_regulation.py`,
+`signal_meso_screen.py`, `signal_closure_combine.py`); `serve.py` invokes them
+as `signals/<name>.py`. Before moving any root file, check for its path inside
+`validation/` and `tools/freeze_*.py` first.
 
 ### Closure-integrity boundary
 

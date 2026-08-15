@@ -1486,7 +1486,7 @@ class _SharedPrep:  # pragma: no cover - only under --execute
     def read_outputs(self, work_dir, seed, variant, query):
         import numpy as np                                   # noqa: PLC0415
         import run_scenario as rs                            # noqa: PLC0415
-        import closure_metrics as cm                         # noqa: PLC0415
+        from traffic_sim.simulation import metrics as cm  # noqa: PLC0415
         work_dir = Path(work_dir)
         close = query["closed_edges"]
         route = self._selected_route.get(str(work_dir), _seed_route(variant))

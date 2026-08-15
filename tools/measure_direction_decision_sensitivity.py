@@ -473,7 +473,7 @@ def load_network(net_path: Path):
     try:
         import importlib
 
-        from sumo_runtime import sumo_home
+        from traffic_sim.simulation.runtime import sumo_home
 
         tools = (sumo_home() / "tools").resolve()
         expected = (tools / "sumolib").resolve()

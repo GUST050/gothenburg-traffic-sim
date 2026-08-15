@@ -6,44 +6,43 @@ Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Direction-split closeout and full program/evidence audit
-  complete on branch codex/fix-dirsplit-gates-v3; ready for one local commit.`
-- Summary: `The package trains and evaluates the supported q50 direction model,
-  preserves local-anchor and 50/50 fallback semantics, repairs complementary
-  stress pairs, measures Gate S decision sensitivity, records negative
-  magnitude/shape evidence, and documents the end-to-end program. The audit's
-  mixed-build validation defect is also fixed fail-closed.`
-- Files changed: `Direction dataset/train/evaluate/predict pipeline; demand
-  intake/priors/publication/calibration and PFE; generated training/model/Gate
-  M artifacts; Gate S registrations/outcomes and diagnostic tool; focused
-  tests; README/architecture/improvement plan/program audit; validation report
-  identity gate and current coordination blocks.`
-- Checks: `568 dirsplit/demand/PFE/Gate-S/validation-report tests passed with
-  1 skipped; all changed JSON parsed; model.pkl loaded;
-  Python syntax passed using a temporary bytecode cache; git diff --check
-  passed. Current validation reproduces demand=4afe9e3ae2e74a4b872e and
-  baseline=fa259a2892a974c27e8c, now overall=warn with stale sections withheld.
-  A whole-suite diagnostic was interrupted at 74% after 13m18s: 3 693 passed,
-  27 skipped and 110 failed. The failures shown are historical freeze/campaign
-  drift against current demand, source hashes and warming schemas; those
-  immutable records were not rewritten to manufacture a green suite.`
+- Focus and status: `Direction-split closeout, evidence audit and repository
+  cleanup are integrated, verified and committed on
+  codex/fix-dirsplit-gates-v3.`
+- Summary: `The supported weekday 06-20 q50 model, local-anchor and 50/50
+  fallback semantics, complementary stress pairs, Gate M/S evidence and
+  fail-closed validation identity are preserved. The traffic_sim migration is
+  also complete: 12 compatibility shims and dead volume_priors.py are removed,
+  five signal-study modules live in signals/, benchmark_seed_workers.py lives
+  in tools/, and the large archived validation record is losslessly gzipped.`
+- Files changed: `Direction-split training/evaluation/prediction and evidence;
+  demand/PFE integration; validation identity gate; canonical traffic_sim
+  imports; signals/ and tools/ layout; package and integration tests;
+  README/architecture/improvement plan/program audit and current coordination
+  blocks.`
+- Checks: `The integrated cleanup/dirsplit/demand/PFE/Gate-S/validation-report
+  surface passes 908 tests with 1 skipped; all four changed server dispatch
+  tests pass with local loopback binding. Direct invocation works for the
+  moved signal and seed-benchmark CLIs. The gzipped archive expands to its
+  members.json SHA-256, demand source identity is unchanged from c379629, and
+  git diff --check is clean. The known historical whole-suite freeze/campaign
+  drift was not rewritten or represented as a green global suite.`
 - Decisions and evidence: `Gate M v5=MODEL selects
   similarity_weighted_lgbm_no_profile. Gate S v6=NO on 48/48 clean runs means
-  q stress does not change the frozen closure decision; it is not release
-  evidence. Next improvement is a matched current baseline and temporal
-  holdout, not another dirsplit model. More boundary measurements remain the
-  largest fundamental information gain.`
+  q stress does not change the frozen closure decision and is not release
+  evidence. Root paths recorded by immutable evidence remain interfaces;
+  unbound signal scripts may live in signals/. Frozen evidence was compressed,
+  not deleted, and the archived bytes remain bound by their existing hash.`
 - Blockers or risks: `The retained published baseline is older than current
-  demand, so simulation and sensor-output sections are intentionally missing
-  until a deliberate matched baseline run. Temporal holdout is stale/missing.
-  The repository-wide suite is not globally green because many historical
-  freeze tests still assert retired live identities. Six stations in two
-  clusters cannot validate citywide flows, queues or travel times.`
-- Suggested next action: `Build/publish a baseline for demand build
-  4afe9e3ae2e74a4b872e, confirm scenario_identity=pass and final output gates,
-  then rebuild temporal holdout before adding boundary/cordon sensors.`
+  demand, so simulation and sensor-output sections remain withheld until a
+  deliberate matched baseline run. Temporal holdout is stale/missing. The
+  repository-wide suite still contains historical freeze/campaign identity
+  failures. Six stations in two clusters cannot validate citywide traffic.`
+- Suggested next action: `After integrated checks pass, build and deliberately
+  publish a baseline matching demand build 4afe9e3ae2e74a4b872e, then rebuild
+  temporal holdout before adding boundary/cordon sensors.`
 - Actor notes: `No push, release or publication was performed. Historical
-  Gate M/S records were kept as separate versioned artifacts.`
+  Gate M/S records remain separate versioned artifacts.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History

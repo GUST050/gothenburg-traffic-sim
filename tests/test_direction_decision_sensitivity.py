@@ -977,7 +977,7 @@ class TestTheTopologyFilterFailsClosed:
         import inspect
 
         source = inspect.getsource(sens.load_network)
-        assert "from sumo_runtime import sumo_home" in source
+        assert "from traffic_sim.simulation.runtime import sumo_home" in source
         assert 'sumo_home() / "tools"' in source
         assert "origin.relative_to(expected)" in source
 

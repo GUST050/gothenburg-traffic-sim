@@ -23,9 +23,12 @@ See `AGENTS.md` for the flexible actor protocol.
   gates. The trained model runs only on weekday 06-20 support; 50/50 is the
   point fallback elsewhere. Learned opposite flow is soft plus ceiling-only,
   never a positive floor. Gate S and q10/q90 remain diagnostic stress evidence,
-  not calibrated intervals or release evidence.`
-- Updated: `2026-08-15 Codex — dirsplit closeout, evidence audit and internal
-  validation identity gate completed and verified.`
+  not calibrated intervals or release evidence. Root paths recorded by frozen
+  evidence remain interfaces; archived evidence may be losslessly compressed
+  but not silently rewritten or deleted.`
+- Updated: `2026-08-15 Codex — dirsplit closeout, evidence audit, fail-closed
+  validation identity and repository cleanup integrated; 908 focused tests
+  plus 4 loopback server tests pass, and merge verification is complete.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->

@@ -1,6 +1,6 @@
 """Candidate cache must be exact, complete, and interruption-safe."""
 
-import candidate_cache
+from traffic_sim.demand import cache as candidate_cache
 
 
 def _outputs(tmp_path):

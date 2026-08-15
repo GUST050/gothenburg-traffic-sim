@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import signal_optimize as so
+from signals import signal_optimize as so
 
 
 def signal_run(seed, variant, time_loss, teleports=0, unfinished=0):

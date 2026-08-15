@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from study_contracts import (
+from traffic_sim.core.contracts import (
     AnalysisWindow,
     ClosureSpec,
     DemandBuildSpec,

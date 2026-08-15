@@ -114,7 +114,7 @@ class TestEveryClosureSimulatorAgrees:
     """
 
     def test_the_signal_study_applies_the_policy_to_a_real_closure(self):
-        import signal_optimize
+        from signals import signal_optimize
         source = Path(signal_optimize.__file__).read_text()
         assert ("condition_teleport_policy = (ct.CLOSURE_TIME_TO_TELEPORT_S\n"
                 "                                 if closed_edges else None)"
