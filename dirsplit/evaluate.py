@@ -57,19 +57,29 @@ Frozen before any fold was scored.
 1. Candidates are ordered by complexity ascending; constant_5050 is the
    incumbent.
 2. A more complex candidate replaces the incumbent only if, on pooled
-   held-out predictions, BOTH hold:
-   a. in every primary group the 95% block-bootstrap CI on the paired
+   held-out predictions and UNDER EVERY FOLD KIND THAT RAN, all three hold:
+   a. in every primary group, the 95% block-bootstrap CI on the paired
       difference (candidate MAE - 50/50 MAE) does not lie entirely above
-      zero, i.e. it never significantly loses; and
-   b. in at least one primary group that CI lies entirely below zero.
+      zero, i.e. it never significantly loses to the null;
+   b. in at least one primary group under every fold kind, that CI lies
+      entirely below zero, i.e. it significantly beats the null; and
+   c. it also significantly beats the CURRENT INCUMBENT in at least one
+      primary group under every fold kind, measured by the same paired
+      block-bootstrap CI. A more complex model may not displace a simpler
+      one merely by both beating 50/50.
 3. Ties, unmeasurable groups and non-finite CIs count as "does not win".
-4. The rule is applied per fold kind; promotion requires it under every fold
-   kind that produced results.
-5. If nothing is promoted, Gate M = BASELINE and the uncertainty is reported
+4. If nothing is promoted, Gate M = BASELINE and the uncertainty is reported
    rather than modelled away.
-6. Gate M = INCONCLUSIVE if leakage is detected, if fewer than
-   MIN_INDEPENDENT_BLOCKS blocks exist, or if a fold kind could not be built.
+5. Gate M = INCONCLUSIVE if leakage is detected, if fewer than
+   MIN_INDEPENDENT_BLOCKS independent blocks exist, or if any REQUIRED fold
+   kind could not be built. A gate that could not be measured is not a gate
+   that returned a negative answer.
 """
+
+#: Fold kinds that MUST be constructible. blocked_date needs a date-preserving
+#: dataset; without it the "does this transfer to a future day" question is
+#: unanswered, so the gate is INCONCLUSIVE rather than BASELINE.
+REQUIRED_FOLD_KINDS = ("leave_city_out", "leave_station_out", "blocked_date")
 
 MIN_INDEPENDENT_BLOCKS = 8
 
@@ -119,25 +129,61 @@ def _float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+#: Weekday-daytime mean share outside this band marks a station as
+#: "one-way-ish". This is the DEPLOYED trainer's definition
+#: (dirsplit/train.py::load_table) and is reproduced exactly, because
+#: screening on the OSM `oneway` feature instead selects a different and much
+#: smaller population -- 39 stations rather than 81 -- and a tournament run on
+#: a different population cannot speak about the deployed model.
+ONEWAY_SHARE_BAND = (0.15, 0.85)
+
+#: The deployed trainer fits on weekday 06-20 rows only. Predictions outside
+#: that band are extrapolation; the tournament still SCORES them so the gap is
+#: visible, but the fact is recorded rather than left implicit.
+DEPLOYED_TRAINING_BAND = {"weekday_hours": (6, 20), "weekend": False}
+
+
+def _oneway_stations(raw: Sequence[Mapping[str, Any]]) -> set[str]:
+    """Stations screened out by the deployed observed-share rule."""
+    by_key: dict[tuple[str, str], list[float]] = {}
+    for record in raw:
+        if record.get("is_weekend") != "0":
+            continue
+        try:
+            hour = int(_float(record.get("hour")))
+        except (TypeError, ValueError):
+            continue
+        if not 6 <= hour <= 20:
+            continue
+        by_key.setdefault((record["station_id"], record["heading"]), []).append(
+            _float(record.get("share")))
+    low, high = ONEWAY_SHARE_BAND
+    return {
+        station for (station, _heading), shares in by_key.items()
+        if shares and not low <= (sum(shares) / len(shares)) <= high
+    }
+
+
 def load_rows(path: Path = TABLE_PATH, *, drop_oneway: bool = True,
               orient_toward_centre: bool = True) -> tuple[list[Row], dict]:
     """Load the tracked table into Row objects.
 
-    Reproduces the two screens the deployed trainer applies, so the
-    tournament measures the same population the deployment predicts:
-    one-way-ish stations are dropped (their 0/1 shares poison training), and
-    only the toward-centre direction of each pair is kept (a mirrored pair
-    contributes the same information twice).
+    Reproduces the two screens the DEPLOYED trainer applies, so the
+    tournament measures the population the deployment actually predicts:
+    one-way-ish stations are screened out by their OBSERVED weekday-daytime
+    shares (not by the OSM `oneway` feature), and only the toward-centre
+    direction is kept, using the deployed `radial_cos > 0` rule rather than a
+    per-station maximum.
     """
     raw: list[dict] = []
     with open(path) as handle:
         raw = list(csv.DictReader(handle))
 
-    oneway_stations: set[str] = set()
-    if drop_oneway:
-        for record in raw:
-            if _float(record.get("oneway")) >= 0.5:
-                oneway_stations.add(record["station_id"])
+    oneway_stations = _oneway_stations(raw) if drop_oneway else set()
+    osm_oneway_stations = {
+        record["station_id"] for record in raw
+        if _float(record.get("oneway")) >= 0.5
+    }
 
     has_dates = "local_date" in (raw[0] if raw else {})
 
@@ -170,20 +216,19 @@ def load_rows(path: Path = TABLE_PATH, *, drop_oneway: bool = True,
         ))
 
     if orient_toward_centre:
+        # The deployed rule: keep the direction whose radial_cos is positive.
         rc_index = FEATURE_NAMES.index("radial_cos")
-        best: dict[str, tuple[float, str]] = {}
-        for row in rows:
-            radial = row.features[rc_index]
-            current = best.get(row.station_id)
-            if current is None or radial > current[0]:
-                best[row.station_id] = (radial, row.heading)
-        keep = {station: heading for station, (_r, heading) in best.items()}
-        rows = [r for r in rows if keep.get(r.station_id) == r.heading]
+        rows = [r for r in rows if r.features[rc_index] > 0]
 
     return rows, {
         "source": str(path),
         "raw_rows": len(raw),
+        "oneway_rule": "deployed_observed_share_band",
+        "oneway_share_band": list(ONEWAY_SHARE_BAND),
         "oneway_stations_dropped": len(oneway_stations),
+        "osm_oneway_stations_would_drop": len(osm_oneway_stations),
+        "stations_before_screen": len({r["station_id"] for r in raw}),
+        "deployed_training_band": DEPLOYED_TRAINING_BAND,
         "rows_kept": len(rows),
         "stations": len({r.station_id for r in rows}),
         "cities": sorted({r.city for r in rows}),
@@ -227,6 +272,12 @@ def temporal_support(rows: Sequence[Row]) -> dict[str, Any]:
 class Candidate:
     name = "base"
     complexity = 0
+
+    #: No entrant here is the deployed dirsplit model. Every one of them is
+    #: fit on THIS table and THESE folds; the deployment is fit with a
+    #: similarity kernel aimed at the Gothenburg sensor edges. A score here
+    #: is evidence about the entrant, never about the deployed model.
+    deployment_equivalent = False
 
     def fit(self, rows: Sequence[Row]) -> "Candidate":
         raise NotImplementedError
@@ -351,16 +402,29 @@ class BetaBinomialDFactor(Candidate):
         return np.clip(out, 0.1, 0.9)
 
 
-class SimilarityWeightedLGBM(Candidate):
-    """The deployed approach, entered under the same folds.
+class LgbmReimplementation(Candidate):
+    """A gradient-boosting entrant. NOT the deployed model.
 
-    Standardisation and bandwidth are fit on the TRAINING side of each fold,
-    which is the leakage requirement; the deployed trainer computes them once
-    over everything.
+    Named this way deliberately. It differs from `dirsplit/train.py` in at
+    least two ways that matter, so a result here cannot be reported as a
+    statement about the deployed model:
+
+    * the similarity kernel is centred on the TRAINING population's centroid,
+      while deployment centres it on the Gothenburg target (and, in the
+      leave-city-out arm, on the held-out station itself);
+    * standardisation and bandwidth are fit inside each fold, which is the
+      leakage requirement here, while deployment computes them once over
+      everything.
+
+    It earns its place in the tournament as "does gradient boosting on these
+    features beat an even split under leakage-free folds", which is a real
+    question. It does not answer "is the shipped model worse than 50/50";
+    answering that needs the deployed trainer itself under these folds.
     """
 
-    name = "similarity_weighted_lgbm"
+    name = "lgbm_reimplementation"
     complexity = 3
+    deployment_equivalent = False
 
     def __init__(self, n_estimators: int = 400):
         self.n_estimators = n_estimators
@@ -422,7 +486,7 @@ class SimilarityWeightedLGBM(Candidate):
 
 def default_candidates() -> list[Candidate]:
     return [Constant5050(), ShrunkDFactor(), BetaBinomialDFactor(),
-            SimilarityWeightedLGBM()]
+            LgbmReimplementation()]
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -521,7 +585,30 @@ def groups_of(row: Row) -> tuple[str, ...]:
     return tuple(groups)
 
 
-def score(candidate: Candidate, folds: Sequence[Fold]) -> dict[str, Any]:
+@dataclass(frozen=True)
+class Pooled:
+    """Held-out errors pooled across one fold kind, in fold/test-row order.
+
+    Rule 2c compares a candidate against the CURRENT INCUMBENT, not only
+    against 50/50. That comparison has to be paired row-by-row on the same
+    held-out predictions, so the raw arrays are kept rather than only the
+    summary statistics that go into the report.
+    """
+
+    err: np.ndarray
+    baseline: np.ndarray
+    blocks: tuple[str, ...]
+    groups: tuple[tuple[str, ...], ...]
+
+    def mask_for(self, group: str) -> np.ndarray:
+        return np.array([group in g for g in self.groups], dtype=bool)
+
+    def alignment_key(self) -> tuple[str, ...]:
+        """Two Pooled objects are pairable only if this matches."""
+        return self.blocks
+
+
+def pooled_errors(candidate: Candidate, folds: Sequence[Fold]) -> Pooled:
     """Fit per fold on the training side only, then pool held-out errors."""
     import copy
 
@@ -539,11 +626,39 @@ def score(candidate: Candidate, folds: Sequence[Fold]) -> dict[str, Any]:
         blocks.extend(r.block for r in fold.test)
         groups.extend(groups_of(r) for r in fold.test)
 
-    if not errors:
+    return Pooled(np.array(errors, dtype=float),
+                  np.array(baseline, dtype=float),
+                  tuple(blocks), tuple(groups))
+
+
+def pairwise_ci(candidate: Pooled, incumbent: Pooled,
+                group: str) -> tuple[float, float]:
+    """95% block-bootstrap CI on (candidate MAE - incumbent MAE) in a group.
+
+    Returns NaNs when the two pools are not row-aligned, which counts as
+    "does not win" under rule 3.
+    """
+    if candidate.alignment_key() != incumbent.alignment_key():
+        return (float("nan"), float("nan"))
+    mask = candidate.mask_for(group)
+    if not mask.any():
+        return (float("nan"), float("nan"))
+    return paired_difference_ci(
+        candidate.err[mask], incumbent.err[mask],
+        [b for b, m in zip(candidate.blocks, mask) if m])
+
+
+def score(candidate: Candidate, folds: Sequence[Fold],
+          pooled: Pooled | None = None) -> dict[str, Any]:
+    """Summarise pooled held-out errors into the reportable statistics."""
+    if pooled is None:
+        pooled = pooled_errors(candidate, folds)
+
+    err, base = pooled.err, pooled.baseline
+    blocks, groups = pooled.blocks, pooled.groups
+    if err.size == 0:
         return {"n": 0, "groups": {}}
 
-    err = np.array(errors)
-    base = np.array(baseline)
     per_group: dict[str, Any] = {}
     for name in ("all", "weekday", "weekend", "weekday_peak", "off_hours"):
         mask = np.array([name in g for g in groups], dtype=bool)
@@ -576,47 +691,133 @@ def score(candidate: Candidate, folds: Sequence[Fold]) -> dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────
 # Gate M
 # ──────────────────────────────────────────────────────────────────────────
+def _inconclusive_m(reason: str) -> dict[str, Any]:
+    return {
+        "gate_m": "INCONCLUSIVE",
+        "winner": None,
+        "reason": reason,
+        "selection_rule": SELECTION_RULE,
+    }
+
+
 def decide_gate_m(reports: Mapping[str, Mapping[str, Any]],
                   candidates: Sequence[Candidate],
-                  meta: Mapping[str, Any]) -> dict[str, Any]:
-    """Apply SELECTION_RULE_TEXT. BASELINE / MODEL / INCONCLUSIVE."""
+                  meta: Mapping[str, Any],
+                  pooled: Mapping[tuple[str, str], Pooled] | None = None,
+                  ) -> dict[str, Any]:
+    """Apply SELECTION_RULE_TEXT. BASELINE / MODEL / INCONCLUSIVE.
+
+    ``pooled`` maps (candidate name, fold kind) to the held-out errors that
+    rule 2c needs to compare a candidate against the current incumbent. It
+    is optional only so that the function stays callable on a stored report;
+    without it no candidate can demonstrate 2c, so nothing is promoted.
+    """
     ordered = sorted(candidates, key=lambda c: (c.complexity, c.name))
     incumbent = ordered[0].name
     detail: dict[str, Any] = {}
+    pooled = pooled or {}
+
+    if meta.get("leakage_detected"):
+        return _inconclusive_m(
+            "leakage was detected in the fold construction; a held-out "
+            "difference measured through a leak is not evidence")
+
+    ran_kinds = sorted({kind for report in reports.values() for kind in report})
+    missing = [kind for kind in REQUIRED_FOLD_KINDS if kind not in ran_kinds]
+    if missing:
+        return _inconclusive_m(
+            f"required fold kind(s) {', '.join(missing)} could not be built "
+            f"from this table (ran: {', '.join(ran_kinds) or 'none'}); a gate "
+            "that could not be measured is not a gate that answered no")
 
     if meta.get("blocks", 0) < MIN_INDEPENDENT_BLOCKS:
-        return {
-            "gate_m": "INCONCLUSIVE",
-            "winner": None,
-            "reason": (f"only {meta.get('blocks')} independent blocks; "
-                       f"{MIN_INDEPENDENT_BLOCKS} are required before a "
-                       "difference can be called robust"),
-            "selection_rule": SELECTION_RULE,
-        }
+        return _inconclusive_m(
+            f"only {meta.get('blocks')} independent blocks; "
+            f"{MIN_INDEPENDENT_BLOCKS} are required before a difference can "
+            "be called robust")
 
     for candidate in ordered[1:]:
         report = reports.get(candidate.name) or {}
         if not report:
             detail[candidate.name] = {"promoted": False, "why": "no results"}
             continue
-        wins = loses = False
+
         notes: dict[str, str] = {}
-        for kind, stats in report.items():
+        loses_anywhere = False
+        wins_null: dict[str, bool] = {}
+        beats_incumbent: dict[str, bool] = {}
+
+        for kind in ran_kinds:
+            stats = report.get(kind)
+            if stats is None:
+                notes[kind] = "candidate not scored on this fold kind"
+                wins_null[kind] = False
+                beats_incumbent[kind] = False
+                continue
+
+            won_here = False
+            beat_here = False
             for group in PRIMARY_GROUPS:
                 entry = (stats.get("groups") or {}).get(group)
                 if not entry:
                     notes[f"{kind}:{group}"] = "unmeasured"
                     continue
                 if entry.get("loses_to_baseline"):
-                    loses = True
-                    notes[f"{kind}:{group}"] = "loses"
-                elif entry.get("beats_baseline"):
-                    wins = True
-                    notes[f"{kind}:{group}"] = "wins"
+                    loses_anywhere = True
+                    notes[f"{kind}:{group}"] = "loses to 50/50"
+                    continue
+                if entry.get("beats_baseline"):
+                    won_here = True
+                    notes[f"{kind}:{group}"] = "beats 50/50"
                 else:
-                    notes[f"{kind}:{group}"] = "tie"
-        promoted = wins and not loses
-        detail[candidate.name] = {"promoted": promoted, "notes": notes}
+                    notes[f"{kind}:{group}"] = "tie with 50/50"
+
+                mine = pooled.get((candidate.name, kind))
+                theirs = pooled.get((incumbent, kind))
+                if mine is None or theirs is None:
+                    notes[f"{kind}:{group}:vs_{incumbent}"] = "unpairable"
+                    continue
+                low, high = pairwise_ci(mine, theirs, group)
+                if math.isnan(low) or math.isnan(high):
+                    notes[f"{kind}:{group}:vs_{incumbent}"] = "unpairable"
+                elif high < 0:
+                    beat_here = True
+                    notes[f"{kind}:{group}:vs_{incumbent}"] = (
+                        f"beats incumbent [{low:.4f}, {high:.4f}]")
+                else:
+                    notes[f"{kind}:{group}:vs_{incumbent}"] = (
+                        f"no win over incumbent [{low:.4f}, {high:.4f}]")
+
+            wins_null[kind] = won_here
+            beats_incumbent[kind] = beat_here
+
+        wins_everywhere = all(wins_null.get(k, False) for k in ran_kinds)
+        beats_everywhere = all(beats_incumbent.get(k, False)
+                               for k in ran_kinds)
+        promoted = (not loses_anywhere) and wins_everywhere and beats_everywhere
+
+        if promoted:
+            why = f"beats 50/50 and {incumbent} under every fold kind"
+        elif loses_anywhere:
+            why = "significantly loses to 50/50 in a primary group"
+        elif not wins_everywhere:
+            missing_kinds = [k for k in ran_kinds if not wins_null.get(k)]
+            why = ("no significant win over 50/50 under fold kind(s) "
+                   + ", ".join(missing_kinds))
+        else:
+            missing_kinds = [k for k in ran_kinds
+                             if not beats_incumbent.get(k)]
+            why = (f"does not significantly beat the incumbent {incumbent} "
+                   "under fold kind(s) " + ", ".join(missing_kinds))
+
+        detail[candidate.name] = {
+            "promoted": promoted,
+            "compared_against_incumbent": incumbent,
+            "why": why,
+            "wins_over_null_by_fold_kind": wins_null,
+            "beats_incumbent_by_fold_kind": beats_incumbent,
+            "notes": notes,
+        }
         if promoted:
             incumbent = candidate.name
 
@@ -624,10 +825,13 @@ def decide_gate_m(reports: Mapping[str, Mapping[str, Any]],
     return {
         "gate_m": gate,
         "winner": incumbent,
-        "reason": ("no candidate won a primary group without losing another"
+        "reason": ("no candidate beat both 50/50 and the incumbent under "
+                   "every fold kind that ran"
                    if gate == "BASELINE"
-                   else f"{incumbent} wins a primary group and loses none"),
+                   else f"{incumbent} beats 50/50 and every simpler incumbent "
+                        "under every fold kind that ran"),
         "selection_rule": SELECTION_RULE,
+        "fold_kinds_scored": ran_kinds,
         "detail": detail,
     }
 
@@ -645,16 +849,21 @@ def run(path: Path = TABLE_PATH) -> dict[str, Any]:
         builders["blocked_date"] = blocked_date
 
     reports: dict[str, dict[str, Any]] = {}
+    pooled: dict[tuple[str, str], Pooled] = {}
     for candidate in candidates:
         per_kind: dict[str, Any] = {}
         for kind, build in builders.items():
             folds = build(rows)
-            if folds:
-                per_kind[kind] = score(candidate, folds)
+            if not folds:
+                continue
+            held_out = pooled_errors(candidate, folds)
+            if held_out.err.size:
+                pooled[(candidate.name, kind)] = held_out
+            per_kind[kind] = score(candidate, folds, pooled=held_out)
         if per_kind:
             reports[candidate.name] = per_kind
 
-    decision = decide_gate_m(reports, candidates, meta)
+    decision = decide_gate_m(reports, candidates, meta, pooled=pooled)
     return {
         "protocol": "dirsplit_gate_m_v1",
         "selection_rule": SELECTION_RULE,

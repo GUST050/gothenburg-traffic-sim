@@ -1,7 +1,9 @@
 {
+ "artifact": "dirsplit_gate_m_outcome_v2",
  "blocked_date_available": false,
  "bootstrap_samples": 2000,
  "bootstrap_seed": 20260814,
+ "correction_note": "v1 is WITHDRAWN. Two defects, both found in external review: (1) it screened the training population with an OSM oneway>=0.5 feature test (39 stations, 1514 rows) while the deployed dirsplit model screens on the OBSERVED share band [0.15, 0.85] (81 stations, 3665 rows), so v1 scored a different population than the deployment; and (2) it named its gradient-boosting entrant 'similarity_weighted_lgbm' and reported its -31.6% / -39.2% scores as if they were the DEPLOYED LightGBM's. They were not: the entrant is fit on this table, on these folds, with a similarity kernel aimed at the training centroid, while the deployment aims its kernel at the Gothenburg sensor edges and is evaluated on a held-out Gothenburg station. The claim 'the deployed LightGBM is 31.6-39.2% worse than 50/50' is WITHDRAWN as unsupported; nothing here measures the deployed model. The entrant is renamed lgbm_reimplementation and every candidate carries deployment_equivalent = false.",
  "fold_kinds": [
   "leave_city_out",
   "leave_station_out"
@@ -640,6 +642,7 @@
  },
  "selection_rule": "simplest_defensible_v1",
  "selection_rule_text": "Frozen before any fold was scored.\n\n1. Candidates are ordered by complexity ascending; constant_5050 is the\n   incumbent.\n2. A more complex candidate replaces the incumbent only if, on pooled\n   held-out predictions and UNDER EVERY FOLD KIND THAT RAN, all three hold:\n   a. in every primary group, the 95% block-bootstrap CI on the paired\n      difference (candidate MAE - 50/50 MAE) does not lie entirely above\n      zero, i.e. it never significantly loses to the null;\n   b. in at least one primary group under every fold kind, that CI lies\n      entirely below zero, i.e. it significantly beats the null; and\n   c. it also significantly beats the CURRENT INCUMBENT in at least one\n      primary group under every fold kind, measured by the same paired\n      block-bootstrap CI. A more complex model may not displace a simpler\n      one merely by both beating 50/50.\n3. Ties, unmeasurable groups and non-finite CIs count as \"does not win\".\n4. If nothing is promoted, Gate M = BASELINE and the uncertainty is reported\n   rather than modelled away.\n5. Gate M = INCONCLUSIVE if leakage is detected, if fewer than\n   MIN_INDEPENDENT_BLOCKS independent blocks exist, or if any REQUIRED fold\n   kind could not be built. A gate that could not be measured is not a gate\n   that returned a negative answer.\n",
+ "supersedes": "dirsplit_gate_m_outcome_v1",
  "temporal_support": {
   "refusal": "Predictions for an unsupported (hour, day-type) cell are extrapolation and must be labelled as such, not emitted as if they were trained.",
   "weekday_hours_observed": [
@@ -698,5 +701,9 @@
   "weekend_hours_unsupported": [],
   "weekend_rows": 1865
  },
- "winner": null
+ "winner": null,
+ "withdrawn_claims": [
+  "the deployed LightGBM is 31.6% worse than 50/50 leave-city-out",
+  "the deployed LightGBM is 39.2% worse than 50/50 leave-station-out"
+ ]
 }

@@ -655,6 +655,8 @@
  },
  "selection_rule": "simplest_defensible_v1",
  "selection_rule_text": "Frozen before any fold was scored.\n\n1. Candidates are ordered by complexity ascending; constant_5050 is the\n   incumbent.\n2. A more complex candidate replaces the incumbent only if, on pooled\n   held-out predictions, BOTH hold:\n   a. in every primary group the 95% block-bootstrap CI on the paired\n      difference (candidate MAE - 50/50 MAE) does not lie entirely above\n      zero, i.e. it never significantly loses; and\n   b. in at least one primary group that CI lies entirely below zero.\n3. Ties, unmeasurable groups and non-finite CIs count as \"does not win\".\n4. The rule is applied per fold kind; promotion requires it under every fold\n   kind that produced results.\n5. If nothing is promoted, Gate M = BASELINE and the uncertainty is reported\n   rather than modelled away.\n6. Gate M = INCONCLUSIVE if leakage is detected, if fewer than\n   MIN_INDEPENDENT_BLOCKS blocks exist, or if a fold kind could not be built.\n",
+ "status": "WITHDRAWN",
+ "superseded_by": "dirsplit_gate_m_outcome_v2",
  "temporal_support": {
   "refusal": "Predictions for an unsupported (hour, day-type) cell are extrapolation and must be labelled as such, not emitted as if they were trained.",
   "weekday_hours_observed": [
@@ -713,5 +715,7 @@
   "weekend_hours_unsupported": [],
   "weekend_rows": 773
  },
- "winner": "constant_5050"
+ "winner": "constant_5050",
+ "withdrawal_reason": "v1 is WITHDRAWN. Two defects, both found in external review: (1) it screened the training population with an OSM oneway>=0.5 feature test (39 stations, 1514 rows) while the deployed dirsplit model screens on the OBSERVED share band [0.15, 0.85] (81 stations, 3665 rows), so v1 scored a different population than the deployment; and (2) it named its gradient-boosting entrant 'similarity_weighted_lgbm' and reported its -31.6% / -39.2% scores as if they were the DEPLOYED LightGBM's. They were not: the entrant is fit on this table, on these folds, with a similarity kernel aimed at the training centroid, while the deployment aims its kernel at the Gothenburg sensor edges and is evaluated on a held-out Gothenburg station. The claim 'the deployed LightGBM is 31.6-39.2% worse than 50/50' is WITHDRAWN as unsupported; nothing here measures the deployed model. The entrant is renamed lgbm_reimplementation and every candidate carries deployment_equivalent = false.",
+ "withdrawn_on": "2026-08-15"
 }

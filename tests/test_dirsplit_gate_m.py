@@ -110,8 +110,8 @@ class TestNothingIsFitOutsideTheFold:
     def test_the_lgbm_standardisation_is_fit_per_fold(self):
         rows = spread(jitter=0.05, seed=4)
         folds = ev.leave_city_out(rows)
-        a = ev.SimilarityWeightedLGBM().fit(list(folds[0].train))
-        b = ev.SimilarityWeightedLGBM().fit(list(folds[1].train))
+        a = ev.LgbmReimplementation().fit(list(folds[0].train))
+        b = ev.LgbmReimplementation().fit(list(folds[1].train))
         assert a._mu is not None and b._mu is not None
         assert not np.allclose(a._mu, b._mu) or len(folds[0].train) == \
             len(folds[1].train)
@@ -122,9 +122,20 @@ class TestCandidates:
     def test_all_four_are_registered_in_complexity_order(self):
         names = [c.name for c in ev.default_candidates()]
         assert names == ["constant_5050", "shrunk_dfactor",
-                         "beta_binomial_dfactor", "similarity_weighted_lgbm"]
+                         "beta_binomial_dfactor", "lgbm_reimplementation"]
         complexities = [c.complexity for c in ev.default_candidates()]
         assert complexities == sorted(complexities)
+
+    def test_no_candidate_claims_to_be_the_deployed_model(self):
+        """The tournament entrant is a re-implementation, not the deployment.
+
+        It is fit on this table, on these folds, weighted toward the
+        training centroid - not toward the Gothenburg sensor edges the
+        deployed dirsplit model targets. Its score is therefore evidence
+        about this entrant, never about the deployed model.
+        """
+        for candidate in ev.default_candidates():
+            assert candidate.deployment_equivalent is False
 
     def test_the_null_predicts_a_half(self):
         rows = spread(share=0.8)
@@ -226,8 +237,33 @@ class TestTemporalSupport:
 
 
 # ── the frozen Gate M rule ────────────────────────────────────────────────
+ALL_KINDS = ev.REQUIRED_FOLD_KINDS
+
+
+def pool(err_value, *, blocks=20, per_block=5,
+         groups=("all", "weekday", "weekday_peak")):
+    """A Pooled whose MAE is ``err_value`` with negligible spread.
+
+    Constant-per-row errors make the block bootstrap collapse onto the true
+    difference, so a rule test asserts on the rule and not on sampling noise.
+    """
+    count = blocks * per_block
+    return ev.Pooled(
+        np.full(count, float(err_value)),
+        np.full(count, 0.10),
+        tuple(f"b{i // per_block}" for i in range(count)),
+        tuple(groups for _ in range(count)),
+    )
+
+
+def pools(values, kinds=ALL_KINDS):
+    """Aligned pools for every (candidate, fold kind) pair."""
+    return {(name, kind): pool(value)
+            for name, value in values.items() for kind in kinds}
+
+
 class TestGateMRule:
-    def build(self, *, wins=(), loses=(), kinds=("leave_city_out",)):
+    def build(self, *, wins=(), loses=(), kinds=ALL_KINDS):
         report = {}
         for kind in kinds:
             groups = {}
@@ -251,25 +287,92 @@ class TestGateMRule:
     def test_a_candidate_that_loses_anywhere_is_not_promoted(self):
         reports = {"shrunk_dfactor": self.build(wins=("all",),
                                                 loses=("weekday_peak",))}
-        result = ev.decide_gate_m(reports, ev.default_candidates(), self.META)
+        result = ev.decide_gate_m(
+            reports, ev.default_candidates(), self.META,
+            pooled=pools({"constant_5050": 0.10, "shrunk_dfactor": 0.05}))
         assert result["gate_m"] == "BASELINE"
 
-    def test_a_clean_win_is_model(self):
+    def test_a_clean_win_under_every_fold_kind_is_model(self):
         reports = {"shrunk_dfactor": self.build(wins=("all",))}
-        result = ev.decide_gate_m(reports, ev.default_candidates(), self.META)
+        result = ev.decide_gate_m(
+            reports, ev.default_candidates(), self.META,
+            pooled=pools({"constant_5050": 0.10, "shrunk_dfactor": 0.05}))
         assert result["gate_m"] == "MODEL"
         assert result["winner"] == "shrunk_dfactor"
 
     def test_a_tie_does_not_promote(self):
-        reports = {"similarity_weighted_lgbm": self.build()}
+        reports = {"lgbm_reimplementation": self.build()}
         result = ev.decide_gate_m(reports, ev.default_candidates(), self.META)
         assert result["gate_m"] == "BASELINE"
 
-    def test_the_simplest_winner_is_kept(self):
-        reports = {"shrunk_dfactor": self.build(wins=("all",)),
-                   "similarity_weighted_lgbm": self.build()}
-        result = ev.decide_gate_m(reports, ev.default_candidates(), self.META)
+    def test_a_win_in_only_one_fold_kind_does_not_promote(self):
+        """Rule 2b requires a win under EVERY fold kind that ran."""
+        report = self.build(wins=("all",))
+        for kind in ALL_KINDS[1:]:
+            report[kind] = self.build(kinds=(kind,))[kind]
+        result = ev.decide_gate_m(
+            {"shrunk_dfactor": report}, ev.default_candidates(), self.META,
+            pooled=pools({"constant_5050": 0.10, "shrunk_dfactor": 0.05}))
+        assert result["gate_m"] == "BASELINE"
+        detail = result["detail"]["shrunk_dfactor"]
+        assert detail["wins_over_null_by_fold_kind"][ALL_KINDS[0]] is True
+        assert detail["wins_over_null_by_fold_kind"][ALL_KINDS[1]] is False
+
+    def test_beating_5050_without_beating_the_incumbent_does_not_promote(self):
+        """Rule 2c: a complex model may not displace a simpler one merely
+        by both beating the null."""
+        reports = {
+            "shrunk_dfactor": self.build(wins=("all",)),
+            "lgbm_reimplementation": self.build(wins=("all",)),
+        }
+        result = ev.decide_gate_m(
+            reports, ev.default_candidates(), self.META,
+            pooled=pools({"constant_5050": 0.10,
+                          "shrunk_dfactor": 0.05,
+                          "lgbm_reimplementation": 0.051}))
         assert result["winner"] == "shrunk_dfactor"
+        lgbm = result["detail"]["lgbm_reimplementation"]
+        assert lgbm["promoted"] is False
+        assert lgbm["compared_against_incumbent"] == "shrunk_dfactor"
+
+    def test_beating_the_promoted_incumbent_does_promote(self):
+        reports = {
+            "shrunk_dfactor": self.build(wins=("all",)),
+            "lgbm_reimplementation": self.build(wins=("all",)),
+        }
+        result = ev.decide_gate_m(
+            reports, ev.default_candidates(), self.META,
+            pooled=pools({"constant_5050": 0.10,
+                          "shrunk_dfactor": 0.05,
+                          "lgbm_reimplementation": 0.02}))
+        assert result["winner"] == "lgbm_reimplementation"
+
+    def test_without_pooled_errors_nothing_is_promoted(self):
+        """Fail closed: rule 2c cannot be checked, so it is not waived."""
+        reports = {"shrunk_dfactor": self.build(wins=("all",))}
+        result = ev.decide_gate_m(reports, ev.default_candidates(), self.META)
+        assert result["gate_m"] == "BASELINE"
+        notes = result["detail"]["shrunk_dfactor"]["notes"]
+        assert any("unpairable" in v for v in notes.values())
+
+    def test_a_missing_required_fold_kind_is_inconclusive(self):
+        """No date-preserving table means blocked_date cannot be built."""
+        reports = {"shrunk_dfactor": self.build(
+            wins=("all",), kinds=("leave_city_out", "leave_station_out"))}
+        result = ev.decide_gate_m(
+            reports, ev.default_candidates(), self.META,
+            pooled=pools({"constant_5050": 0.10, "shrunk_dfactor": 0.05},
+                         kinds=("leave_city_out", "leave_station_out")))
+        assert result["gate_m"] == "INCONCLUSIVE"
+        assert result["winner"] is None
+        assert "blocked_date" in result["reason"]
+
+    def test_detected_leakage_is_inconclusive(self):
+        reports = {"shrunk_dfactor": self.build(wins=("all",))}
+        result = ev.decide_gate_m(reports, ev.default_candidates(),
+                                  {"blocks": 50, "leakage_detected": True})
+        assert result["gate_m"] == "INCONCLUSIVE"
+        assert "leak" in result["reason"]
 
     def test_too_few_blocks_is_inconclusive_not_baseline(self):
         """'We could not measure it' is not 'the model does not help'."""
@@ -279,10 +382,20 @@ class TestGateMRule:
         assert result["gate_m"] == "INCONCLUSIVE"
         assert result["winner"] is None
 
+    def test_unaligned_pools_cannot_be_paired(self):
+        """A pairing that does not line up row-for-row is not evidence."""
+        mine = pool(0.02, blocks=20)
+        theirs = pool(0.10, blocks=10)
+        low, high = ev.pairwise_ci(mine, theirs, "all")
+        assert np.isnan(low) and np.isnan(high)
+
     def test_the_decision_is_deterministic(self):
         reports = {"shrunk_dfactor": self.build(wins=("all",))}
-        first = ev.decide_gate_m(reports, ev.default_candidates(), self.META)
-        second = ev.decide_gate_m(reports, ev.default_candidates(), self.META)
+        pooled = pools({"constant_5050": 0.10, "shrunk_dfactor": 0.05})
+        first = ev.decide_gate_m(reports, ev.default_candidates(), self.META,
+                                 pooled=pooled)
+        second = ev.decide_gate_m(reports, ev.default_candidates(), self.META,
+                                  pooled=pooled)
         assert first["gate_m"] == second["gate_m"]
         assert first["selection_rule"] == ev.SELECTION_RULE
 
@@ -310,7 +423,20 @@ class TestRealGateMReport:
         report = self.report()
         assert set(report["reports"]) == {
             "constant_5050", "shrunk_dfactor", "beta_binomial_dfactor",
-            "similarity_weighted_lgbm"}
+            "lgbm_reimplementation"}
+
+    def test_a_table_without_dates_cannot_decide_the_gate(self):
+        """blocked_date is required; the legacy table has no dates."""
+        report = self.report()
+        if report["blocked_date_available"]:
+            pytest.skip("this checkout has a date-preserving table")
+        assert report["gate_m"] == "INCONCLUSIVE"
+        assert "blocked_date" in report["reason"]
+
+    def test_it_names_the_population_screen_it_used(self):
+        info = self.report()["input"]
+        assert info["oneway_rule"] == "deployed_observed_share_band"
+        assert info["oneway_share_band"] == list(ev.ONEWAY_SHARE_BAND)
 
     def test_every_candidate_carries_a_paired_ci(self):
         report = self.report()
