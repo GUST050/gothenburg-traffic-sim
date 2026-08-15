@@ -138,8 +138,12 @@ def _float(value: Any, default: float = 0.0) -> float:
 ONEWAY_SHARE_BAND = (0.15, 0.85)
 
 #: The deployed trainer fits on weekday 06-20 rows only. Predictions outside
-#: that band are extrapolation; the tournament still SCORES them so the gap is
-#: visible, but the fact is recorded rather than left implicit.
+#: that band are extrapolation; the tournament deliberately does NOT apply the
+#: band, so the night and weekend cells the deployment silently extrapolates
+#: into are scored and visible. This is a REAL difference from the deployment
+#: and is why no candidate here may be called deployment-equivalent; the
+#: report carries deployed_training_band_applied = false so a reader cannot
+#: mistake the two.
 DEPLOYED_TRAINING_BAND = {"weekday_hours": (6, 20), "weekend": False}
 
 
@@ -229,6 +233,7 @@ def load_rows(path: Path = TABLE_PATH, *, drop_oneway: bool = True,
         "osm_oneway_stations_would_drop": len(osm_oneway_stations),
         "stations_before_screen": len({r["station_id"] for r in raw}),
         "deployed_training_band": DEPLOYED_TRAINING_BAND,
+        "deployed_training_band_applied": False,
         "rows_kept": len(rows),
         "stations": len({r.station_id for r in rows}),
         "cities": sorted({r.city for r in rows}),

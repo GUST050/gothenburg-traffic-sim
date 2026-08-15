@@ -25,6 +25,7 @@
    ],
    "weekend": false
   },
+  "deployed_training_band_applied": false,
   "has_day_level_dates": false,
   "oneway_rule": "deployed_observed_share_band",
   "oneway_share_band": [
