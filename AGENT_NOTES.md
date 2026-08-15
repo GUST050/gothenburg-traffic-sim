@@ -31,8 +31,9 @@ which model may continue. See `AGENTS.md`.
   that seal already carried 8 unrelated drifts, so nothing newly failed),
   run_monthly_closure_search.py (operator hint pointing at a moved file).`
 - Checks: `Full suite compared against a clean pre-change worktree at 340b628:
-  316 failed / 4463 passed before, 316 failed / 4475 passed after — no new
-  failures, the +12 exactly the net new tests in test_package_layout.py. The
+  316 failed / 4463 passed before, 316 failed / 4477 passed after the review
+  fixes — no new failures, and the +14 is exactly the net new tests
+  (test_package_layout 14 -> 27, plus one in test_benchmark_speed). The
   demand source seal was verified byte-identical across all 28 bound sources,
   so the demand fingerprint and the annual plan key did NOT move —
   REPO_STRUCTURE step 4 (regenerate the plan key) turned out to be
