@@ -38,7 +38,7 @@ actually emit that specific warning text under this project's real
 invocation despite the underlying short-edge condition being present.
 
 Usage:
-  python3 signal_meso_screen.py [--window-start 07:00] [--window-end 09:00]
+  python3 signals/signal_meso_screen.py [--window-start 07:00] [--window-end 09:00]
       [--seeds 3] [--out PATH]
 """
 
@@ -54,8 +54,9 @@ from pathlib import Path
 
 from scipy import stats as scipy_stats
 
-if __package__ in (None, ""):  # support `python3 signals/<name>.py`
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:   # support `python3 signals/<name>.py`
+    sys.path.insert(0, str(ROOT))
 
 from traffic_sim.simulation import metrics as cm
 import run_scenario as rs

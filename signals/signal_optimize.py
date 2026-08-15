@@ -37,7 +37,7 @@ result row carries tls_provenance="synthetic" with an explicit caveat
 string, matching signal_lab.py's (D1) same honesty field.
 
 Usage:
-  python3 signal_optimize.py [--window-start 07:00] [--window-end 09:00]
+  python3 signals/signal_optimize.py [--window-start 07:00] [--window-end 09:00]
       [--seeds 3] [--out PATH]
 
 Requires everything signal_lab.py requires, plus sumo/plain.nod.xml +
@@ -62,8 +62,9 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
-if __package__ in (None, ""):  # support `python3 signals/<name>.py`
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:   # support `python3 signals/<name>.py`
+    sys.path.insert(0, str(ROOT))
 
 from traffic_sim.simulation import metrics as cm
 from traffic_sim.simulation import closure_teleport as ct

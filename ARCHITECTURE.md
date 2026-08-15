@@ -143,10 +143,16 @@ those names, so a shim cannot quietly return. New reusable code goes into
 canonical package files, so changing an implementation invalidates the relevant
 cache or published build.
 
-`validate_sim.py` and `validation_report.py` remain in the root as genuine CLI
-wrappers, not shims: `make validate-temporal` runs them by name and
+`validate_sim.py` and `validation_report.py` remain in the root and **still use
+the same `sys.modules` rebind**. They were not retired because they are
+dual-purpose: `make validate-temporal` runs them as commands, while
 `build_sumo_demand.py` (a sealed demand source), `run_scenario.py` and
-`serve.py` import them.
+`serve.py` import them and reach through to the implementation's attributes
+(`validation_report.write_report()`, `validation_report.OUT_PATH`). The rebind
+is therefore load-bearing, not vestigial, and
+`tests/test_package_layout.py::test_cli_wrapper_rebinds_to_its_implementation`
+asserts the identity rather than assuming it. Retiring these two means
+rewriting a sealed demand source, which is a separate, deliberate change.
 
 **What may and may not move.** A root path is an interface when something
 immutable records it. The campaign runners
@@ -158,8 +164,20 @@ where they are — moving one would break evidence that cannot be regenerated.
 The signal-study modules carried no such binding and were therefore collected
 into `signals/` (`signal_lab.py`, `signal_optimize.py`, `signal_regulation.py`,
 `signal_meso_screen.py`, `signal_closure_combine.py`); `serve.py` invokes them
-as `signals/<name>.py`. Before moving any root file, check for its path inside
-`validation/` and `tools/freeze_*.py` first.
+as `signals/<name>.py`.
+
+Before moving **or editing** any file, check `validation/` for BOTH bindings:
+
+- a recorded **path** — moving the file breaks it;
+- a recorded **`sha256`** of its contents — editing the file breaks it.
+
+The second is the easy one to miss.
+`validation/release_candidate_boundary_v2.json` seals 29 files by digest,
+including `tests/test_scenario.py` and `tools/benchmark_persistent_sumo.py`;
+the 2026-08-15 import rewrite edited both and drifted their digests. That seal
+already carried 8 unrelated drifts so nothing newly failed, but "no path
+recorded" is not the same as "safe to edit". Check with
+`grep -rl "<file path>" validation/`.
 
 ### Closure-integrity boundary
 

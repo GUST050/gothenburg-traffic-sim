@@ -924,7 +924,7 @@ def main() -> None:
             f"--seed-workers {args.seed_workers} exceeds the {approved} "
             "approved by the recorded resource benchmark "
             f"({SEED_WORKER_BENCHMARK_RECORD}). Run "
-            "benchmark_seed_workers.py to establish identical evidence and a "
+            "tools/benchmark_seed_workers.py to establish identical evidence and a "
             "measured peak RSS first; parallel SUMO stays closed until then."
         )
     if args.daily_workers > approved:

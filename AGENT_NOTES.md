@@ -13,36 +13,50 @@ which model may continue. See `AGENTS.md`.
   demand, calibration, closure or direction-split behaviour.`
 - Summary: `Finished the stalled traffic_sim/ migration that
   docs/plans/REPO_STRUCTURE_2026-08-07.md specified: rewrote every import site
-  and deleted the 12 root compatibility shims; deleted volume_priors.py (dead,
-  a rejected approach with no importer or test); collected the five unbound
+  and deleted the 12 root compatibility shims; collected the five unbound
   signal-study modules into signals/; moved benchmark_seed_workers.py to
-  tools/. Root .py went 45 -> 26. Compressed one 36.9 MB pure-archive evidence
+  tools/. Root .py went 45 -> 27. Compressed one 36.9 MB pure-archive evidence
   artifact to 3.2 MB (validation/ 64 MB -> 31 MB), verified byte-exact against
-  the sha256 already bound in its members.json.`
-- Files changed: `Deleted 12 root shims + volume_priors.py +
+  the sha256 already bound in its members.json. A follow-up review pass fixed
+  six real regressions from the first commit; see the review-fix entry below.`
+- Files changed: `Deleted 12 root shims +
   docs/plans/REPO_STRUCTURE_2026-08-07.md; moved 5 signal modules into
   signals/ and benchmark_seed_workers.py into tools/; rewrote imports in 21
-  tests and 3 tools; serve.py (subprocess paths + one import) is the only
-  evidence-bound source touched, and only because correctness required it;
-  README.md, ARCHITECTURE.md, docs/README.md updated; validation/README.md
-  added.`
-- Checks: `Full suite run and compared against the recorded baseline. The
-  demand source seal was verified byte-identical to HEAD across all 28 bound
-  sources, so the demand fingerprint and the annual plan key did NOT move —
+  tests and 3 tools; README.md, ARCHITECTURE.md, docs/README.md updated;
+  validation/README.md and a .gitignore rule for restored evidence added.
+  Evidence-bound sources touched, all because correctness required it:
+  serve.py (subprocess paths + import), tests/test_scenario.py and
+  tools/benchmark_persistent_sumo.py (import rewrites — both are sha256-sealed
+  in validation/release_candidate_boundary_v2.json and their digests drifted;
+  that seal already carried 8 unrelated drifts, so nothing newly failed),
+  run_monthly_closure_search.py (operator hint pointing at a moved file).`
+- Checks: `Full suite compared against a clean pre-change worktree at 340b628:
+  316 failed / 4463 passed before, 316 failed / 4475 passed after — no new
+  failures, the +12 exactly the net new tests in test_package_layout.py. The
+  demand source seal was verified byte-identical across all 28 bound sources,
+  so the demand fingerprint and the annual plan key did NOT move —
   REPO_STRUCTURE step 4 (regenerate the plan key) turned out to be
   unnecessary. Both signals/ invocation styles verified; every Makefile target
   path verified to resolve.`
 - Decisions and evidence: `Two rules drove every choice. (1) A root path is an
-  interface when something immutable records it: the campaign runners and
-  run_scenario.py have their paths inside frozen validation/ artifacts and
-  tools/freeze_*.py, so they stayed; signals/ had zero such bindings, so it
-  moved. (2) Do not touch a sealed demand source for cosmetic reasons — a
-  comment fix in assignment_priors.py was written and then reverted for exactly
-  this reason, which is why the fingerprint held. Frozen evidence was
-  compressed, never deleted; the user was asked first and chose compression.`
+  interface when something immutable records it. Check validation/ for BOTH a
+  recorded path AND a recorded sha256 — the first commit checked only paths,
+  which is how two content-sealed files were edited unnoticed; ARCHITECTURE.md
+  now states both. (2) Do not touch a sealed demand source for cosmetic
+  reasons — a comment fix in assignment_priors.py was written and then reverted
+  for exactly this reason, which is why the fingerprint held. Frozen evidence
+  was compressed, never deleted; the user was asked first and chose
+  compression. volume_priors.py was deleted as dead code and then RESTORED:
+  ARCHITECTURE.md:1577 designates it "kept as the documented negative study",
+  so absence of importers did not make it dead.`
 - Blockers or risks: `None introduced. The pre-existing seal-drift failures are
   untouched and remain a design decision about evidence (OPEN_ISSUES §8), not a
-  tidying question.`
+  tidying question. Found but deliberately NOT fixed here (unrelated to the
+  cleanup, needs its own change): tools/benchmark_speed.py sumo_version()
+  catches (ImportError, OSError, SubprocessError) but a local sumo/ directory
+  makes "import sumo" resolve as a namespace package with __file__ = None, so
+  Path(None) raises an uncaught TypeError. The Makefile creates sumo/ on every
+  build, so this triggers on a normal dev machine; reproduced on 340b628.`
 - Suggested next action: `Resume DIRSPLIT-UNCERTAINTY-V2 Fas 0A exactly as
   TASKS.md ACTIVE_TASK states it — provenance-bind sensor 107's yearly
   directional reference and pin legacy behaviour. Nothing about that task
