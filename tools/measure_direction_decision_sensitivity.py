@@ -73,6 +73,11 @@ STRESS_CASES: tuple[tuple[str, str], ...] = (
     ("q90", "calibrated_v2.rou.xml"),
 )
 
+#: Case name -> the variant token run_scenario's ScenarioSpec understands.
+#: run_scenario.variant_path resolves q50/q10/q90 to the route-file index, so
+#: pinning the token is what actually selects the demand arm.
+VARIANT_BY_CASE: Mapping[str, str] = {name: name for name, _f in STRESS_CASES}
+
 
 # ──────────────────────────────────────────────────────────────────────────
 # frozen materiality thresholds
@@ -101,6 +106,7 @@ class Registration:
     date: str
     window_begin: str
     window_end: str
+    demand_window_begin: str
     seeds: tuple[int, ...]
     stress_cases: tuple[str, ...]
     candidate_edges: tuple[str, ...]
@@ -125,6 +131,31 @@ class Registration:
     @property
     def content_key(self) -> str:
         return content_digest(self.to_json())
+
+    def closure_window_s(self, duration_s: int) -> tuple[int, int]:
+        """The registered closure window, as offsets into the demand window.
+
+        The demand build defines the simulated day; the registered
+        window_begin/window_end name when the closure is ACTIVE inside it. An
+        earlier version passed neither, so every candidate was closed for the
+        whole run regardless of what the registration said.
+        """
+        begin = _seconds_of_day(self.window_begin)
+        end = _seconds_of_day(self.window_end)
+        epoch_offset = _seconds_of_day(self.demand_window_begin)
+        begin_s = max(0, begin - epoch_offset)
+        end_s = min(int(duration_s), end - epoch_offset)
+        if end_s <= begin_s:
+            raise ValueError(
+                f"registered closure window {self.window_begin}-"
+                f"{self.window_end} does not overlap the {duration_s}s demand "
+                f"window starting {self.demand_window_begin}")
+        return begin_s, end_s
+
+
+def _seconds_of_day(value: str) -> int:
+    hours, _, minutes = str(value).partition(":")
+    return int(hours) * 3600 + int(minutes or 0) * 60
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -238,95 +269,211 @@ def select_candidates(sumo_dir: Path, sensor_edges: Iterable[str],
 # ──────────────────────────────────────────────────────────────────────────
 @dataclass
 class Observation:
+    """One (stress case, seed, candidate) result, with its decision fields.
+
+    ``added_vehicle_hours`` is the product's own quantity and is ALREADY a
+    paired within-run difference: run_scenario computes the cheapest legal
+    path with and without the closure over the same calibrated routes. The
+    matched-seed design therefore holds by construction for the objective,
+    and running the identical seed list across the stress cases is what
+    additionally removes simulator noise from the BETWEEN-CASE comparison.
+    """
+
     stress_case: str
     seed: int
     candidate: str
-    added_time_loss_s: float | None
+    added_vehicle_hours: float | None
+    vehicles_affected: int | None
+    vehicles_considered: int | None
+    vehicles_no_detour: int | None
+    health_flags: tuple[str, ...]
+    teleports: int | None
+    collisions: int | None
+    viable: bool
     hard_failure: bool
     failure_reason: str | None
     runtime_s: float
 
 
+def _demand_identity(sumo_dir: Path) -> tuple[dict, str, int]:
+    """(meta, demand_build_id, duration_s) for the loaded demand build."""
+    import pandas as pd
+
+    meta_path = sumo_dir / "demand_meta.json"
+    if not meta_path.exists():
+        raise FileNotFoundError(
+            f"{meta_path} is missing; build demand before running Gate S")
+    meta = json.loads(meta_path.read_text())
+
+    sys.path.insert(0, str(ROOT))
+    import run_scenario as rs
+
+    demand_id = str(meta.get("build_id") or rs.demand_signature(meta))
+    duration_s = int(meta["n_intervals"]) * int(meta["interval_minutes"]) * 60 \
+        if "interval_minutes" in meta else int(meta["n_intervals"]) * 900
+    return meta, demand_id, duration_s
+
+
+def _spec_payload(*, name: str, meta: dict, demand_id: str, network_id: str,
+                  duration_s: int, seed: int, variant: str,
+                  closures: Sequence[str], closure_begin_s: int,
+                  closure_end_s: int) -> dict[str, Any]:
+    """A ScenarioSpec pinning exactly ONE seed to ONE demand variant.
+
+    This is the only supported way to control which route file and which seed
+    a run uses: run_scenario has no CLI flag for either, and its ``--seeds``
+    argument is a COUNT rather than a value. Building the spec here is what
+    makes the q10/q50/q90 arms genuinely different runs instead of three
+    identical ones.
+
+    A single-seed spec is legal: run_scenario only enforces three-variant
+    coverage when the spec carries three or more seeds.
+    """
+    import pandas as pd
+
+    start = pd.Timestamp(meta["epoch_sim"])
+    end = start + pd.Timedelta(seconds=duration_s)
+    closure_start = start + pd.Timedelta(seconds=closure_begin_s)
+    closure_end = start + pd.Timedelta(seconds=closure_end_s)
+    return {
+        "schema_version": 1,
+        "scenario_id": name,
+        "demand_build_id": demand_id,
+        "network_build_id": network_id,
+        "start_time": start.isoformat(),
+        "end_time": end.isoformat(),
+        "closures": [
+            {
+                "edge_id": edge,
+                "start_time": closure_start.isoformat(),
+                "end_time": closure_end.isoformat(),
+                "closure_type": "full",
+            }
+            for edge in closures
+        ],
+        "simulation_mode": "meso",
+        "seed_set": [seed],
+        "demand_variant_mapping": [[seed, variant]],
+    }
+
+
 def run_matrix(registration: Registration, sumo_dir: Path,
                out_dir: Path) -> list[Observation]:
-    """Run every (stress case, seed, candidate) plus its matched baseline."""
-    observations: list[Observation] = []
-    out_dir.mkdir(parents=True, exist_ok=True)
+    """Run every (stress case, seed, candidate) as its own pinned run."""
+    sys.path.insert(0, str(ROOT))
+    from traffic_sim.core.contracts import SCHEMA_VERSION  # noqa: F401
+    import run_scenario as rs
 
-    for case_name, filename in STRESS_CASES:
-        if case_name not in registration.stress_cases:
-            continue
-        route_path = sumo_dir / filename
+    meta, demand_id, duration_s = _demand_identity(sumo_dir)
+    network_id = rs.sha256_file(sumo_dir / "net.net.xml")
+    if network_id is None:
+        raise FileNotFoundError(f"{sumo_dir / 'net.net.xml'} is missing")
+
+    begin_s, end_s = registration.closure_window_s(duration_s)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    observations: list[Observation] = []
+
+    for case_name in registration.stress_cases:
+        variant = VARIANT_BY_CASE[case_name]
         for seed in registration.seeds:
-            baseline = _run_one(route_path, [], seed, registration, out_dir,
-                                f"base_{case_name}_{seed}")
             for candidate in registration.candidate_edges:
-                result = _run_one(route_path, [candidate], seed, registration,
-                                  out_dir, f"cand_{case_name}_{seed}_"
-                                           f"{candidate}")
-                added = None
-                if (baseline["time_loss"] is not None
-                        and result["time_loss"] is not None):
-                    added = result["time_loss"] - baseline["time_loss"]
-                observations.append(Observation(
-                    stress_case=case_name, seed=seed, candidate=candidate,
-                    added_time_loss_s=added,
-                    hard_failure=result["hard_failure"],
-                    failure_reason=result["reason"],
-                    runtime_s=result["runtime_s"],
-                ))
+                tag = f"{case_name}_{seed}_{candidate}"
+                spec = _spec_payload(
+                    name=tag, meta=meta, demand_id=demand_id,
+                    network_id=network_id, duration_s=duration_s, seed=seed,
+                    variant=variant, closures=[candidate],
+                    closure_begin_s=begin_s, closure_end_s=end_s)
+                observations.append(_run_one(
+                    spec, registration, out_dir, tag,
+                    stress_case=case_name, seed=seed, candidate=candidate))
     return observations
 
 
-def _run_one(route_path: Path, closures: Sequence[str], seed: int,
-             registration: Registration, out_dir: Path,
-             tag: str) -> dict[str, Any]:
-    """One SUMO run through the existing runner, with a fixed timeout."""
+def _run_one(spec: Mapping[str, Any], registration: Registration,
+             out_dir: Path, tag: str, *, stress_case: str, seed: int,
+             candidate: str) -> Observation:
+    """One SUMO run driven by a written ScenarioSpec."""
+    run_dir = out_dir / tag
+    run_dir.mkdir(parents=True, exist_ok=True)
+    spec_path = run_dir / "spec.json"
+    spec_path.write_text(json.dumps(spec, indent=1, sort_keys=True) + "\n")
+
     command = [
         sys.executable, str(ROOT / "run_scenario.py"),
-        "--seeds", "1",
+        "--scenario-spec", str(spec_path),
         "--no-trajectories",
-        "--out-dir", str(out_dir / tag),
+        "--out-dir", str(run_dir),
         "--name", tag,
     ]
-    if closures:
-        command += ["--close", *closures]
+
+    def failed(reason: str, runtime: float) -> Observation:
+        return Observation(
+            stress_case=stress_case, seed=seed, candidate=candidate,
+            added_vehicle_hours=None, vehicles_affected=None,
+            vehicles_considered=None, vehicles_no_detour=None,
+            health_flags=(), teleports=None, collisions=None, viable=False,
+            hard_failure=True, failure_reason=reason, runtime_s=runtime)
 
     started = time.time()
-    env = dict(os.environ)
-    env.setdefault("DIRSPLIT_SENSITIVITY_SEED", str(seed))
     try:
         completed = subprocess.run(
             command, cwd=ROOT, capture_output=True, text=True,
-            timeout=registration.timeout_s, env=env,
-        )
+            timeout=registration.timeout_s)
     except subprocess.TimeoutExpired:
-        return {"time_loss": None, "hard_failure": True,
-                "reason": f"timeout after {registration.timeout_s}s",
-                "runtime_s": time.time() - started}
+        return failed(f"timeout after {registration.timeout_s}s",
+                      time.time() - started)
     runtime = time.time() - started
     if completed.returncode != 0:
-        return {"time_loss": None, "hard_failure": True,
-                "reason": f"exit {completed.returncode}: "
-                          f"{completed.stderr.strip()[-300:]}",
-                "runtime_s": runtime}
+        return failed(f"exit {completed.returncode}: "
+                      f"{completed.stderr.strip()[-300:]}", runtime)
 
-    scenario = out_dir / tag / f"{tag}.json"
-    if not scenario.exists():
-        candidates = sorted((out_dir / tag).glob("*.json"))
-        scenario = candidates[0] if candidates else None
-    if scenario is None:
-        return {"time_loss": None, "hard_failure": True,
-                "reason": "no scenario artifact produced",
-                "runtime_s": runtime}
-    payload = json.loads(scenario.read_text())
+    scenario_path = run_dir / f"{tag}.json"
+    if not scenario_path.exists():
+        found = sorted(p for p in run_dir.glob("*.json")
+                       if p.name not in ("spec.json", "index.json"))
+        if not found:
+            return failed("no scenario artifact produced", runtime)
+        scenario_path = found[0]
+
+    payload = json.loads(scenario_path.read_text())
     disruption = payload.get("disruption") or {}
-    return {
-        "time_loss": disruption.get("total_time_loss_s"),
-        "hard_failure": False,
-        "reason": None,
-        "runtime_s": runtime,
-    }
+    if not disruption:
+        return failed("scenario carries no disruption block", runtime)
+
+    health = payload.get("seed_health") or []
+    flags = tuple(str(f) for f in (payload.get("seed_health_flags") or []))
+    teleports = sum(int(h.get("teleports") or 0) for h in health) or 0
+    collisions = sum(int(h.get("collisions") or 0) for h in health) or 0
+
+    no_detour = disruption.get("vehicles_no_detour")
+    # Viability is a HARD gate: a candidate that strands vehicles with no
+    # legal detour, or that trips a health flag, is not a usable closure and
+    # must not be averaged into a decision as if it were.
+    viable = (not flags and int(no_detour or 0) == 0)
+
+    return Observation(
+        stress_case=stress_case, seed=seed, candidate=candidate,
+        added_vehicle_hours=_as_float(disruption.get("added_vehicle_hours")),
+        vehicles_affected=_as_int(disruption.get("vehicles_affected")),
+        vehicles_considered=_as_int(disruption.get("vehicles_considered")),
+        vehicles_no_detour=_as_int(no_detour),
+        health_flags=flags, teleports=teleports, collisions=collisions,
+        viable=viable, hard_failure=False, failure_reason=None,
+        runtime_s=runtime)
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -334,12 +481,17 @@ def _run_one(route_path: Path, closures: Sequence[str], seed: int,
 # ──────────────────────────────────────────────────────────────────────────
 def decide_gate_s(observations: Sequence[Observation],
                   registration: Registration) -> dict[str, Any]:
-    """Compare between-case spread against within-case seed spread.
+    """Compare the PREREGISTERED decision fields across the stress cases.
 
-    Fail-closed: missing observations, timeouts or a matrix that is not
-    complete produce ``INCONCLUSIVE``, never ``NO``. "We could not measure
-    it" and "we measured it and it does not matter" are different answers and
-    must not be collapsed.
+    The registration names hard failures, the viable set, the ranking and the
+    winner, so all four are compared here — an earlier version reduced only
+    the mean of a single objective, which could not answer the plan's
+    question at all.
+
+    Fail-closed: an incomplete matrix, a timeout or any run that produced no
+    usable objective yields ``INCONCLUSIVE``, never ``NO``. "We could not
+    measure it" and "we measured it and it does not matter" are different
+    answers and must not collapse into each other.
     """
     expected = (len(registration.stress_cases) * len(registration.seeds)
                 * len(registration.candidate_edges))
@@ -349,82 +501,128 @@ def decide_gate_s(observations: Sequence[Observation],
             "observations", observations, registration)
 
     failures = [o for o in observations if o.hard_failure]
-    usable = [o for o in observations if not o.hard_failure
-              and o.added_time_loss_s is not None]
-    if len(usable) < expected:
+    if failures:
         return _inconclusive(
-            f"{expected - len(usable)} observation(s) failed or produced no "
-            "objective", observations, registration,
+            f"{len(failures)} observation(s) failed to produce a result",
+            observations, registration,
             failure_reasons=sorted({o.failure_reason for o in failures
                                     if o.failure_reason}))
 
-    per_candidate: dict[str, Any] = {}
-    material_reasons: list[str] = []
+    missing = [o for o in observations if o.added_vehicle_hours is None]
+    if missing:
+        return _inconclusive(
+            f"{len(missing)} observation(s) carry no {registration.objective}",
+            observations, registration)
 
+    material: list[str] = []
+
+    # ── hard-failure and viability fields, per case ──────────────────────
+    viable_by_case: dict[str, set[str]] = {}
+    no_detour_by_case: dict[str, dict[str, int]] = {}
+    health_by_case: dict[str, list[str]] = {}
+    for obs in observations:
+        if obs.viable:
+            viable_by_case.setdefault(obs.stress_case, set()).add(obs.candidate)
+        else:
+            viable_by_case.setdefault(obs.stress_case, set())
+        bucket = no_detour_by_case.setdefault(obs.stress_case, {})
+        bucket[obs.candidate] = max(bucket.get(obs.candidate, 0),
+                                    int(obs.vehicles_no_detour or 0))
+        health_by_case.setdefault(obs.stress_case, []).extend(obs.health_flags)
+
+    viable_sets = {case: tuple(sorted(edges))
+                   for case, edges in viable_by_case.items()}
+    viable_identical = len(set(viable_sets.values())) == 1
+    if not viable_identical:
+        material.append(f"viable set differs between stress cases: {viable_sets}")
+
+    no_detour_identical = True
+    for candidate in registration.candidate_edges:
+        values = {case: no_detour_by_case[case].get(candidate, 0)
+                  for case in registration.stress_cases}
+        if len(set(values.values())) > 1:
+            no_detour_identical = False
+            material.append(
+                f"{candidate}: vehicles_no_detour differs between stress "
+                f"cases: {values}")
+
+    # ── objective spread, direction versus seed noise ────────────────────
+    per_candidate: dict[str, Any] = {}
     for candidate in registration.candidate_edges:
         by_case: dict[str, list[float]] = {}
-        for obs in usable:
+        for obs in observations:
             if obs.candidate == candidate:
                 by_case.setdefault(obs.stress_case, []).append(
-                    float(obs.added_time_loss_s))
-        case_means = {case: statistics.fmean(values)
-                      for case, values in by_case.items()}
-        within_ranges = [max(values) - min(values)
-                         for values in by_case.values() if len(values) > 1]
-        within = statistics.fmean(within_ranges) if within_ranges else 0.0
+                    float(obs.added_vehicle_hours))
+        case_means = {case: statistics.fmean(v) for case, v in by_case.items()}
+        within = [max(v) - min(v) for v in by_case.values() if len(v) > 1]
+        within_mean = statistics.fmean(within) if within else 0.0
         between = (max(case_means.values()) - min(case_means.values())
                    if len(case_means) > 1 else 0.0)
-        ratio = (between / within) if within > 0 else float("inf") \
-            if between > 0 else 0.0
+        if within_mean > 0:
+            ratio: float | None = between / within_mean
+        else:
+            ratio = None if between > 0 else 0.0
         reference = abs(statistics.fmean(case_means.values())) or 1.0
         relative = between / reference
+        exceeds = ((ratio is None and between > 0)
+                   or (ratio is not None
+                       and ratio >= registration.thresholds.spread_ratio)) \
+            and relative >= registration.thresholds.relative_objective
 
-        exceeds = (ratio >= registration.thresholds.spread_ratio
-                   and relative >= registration.thresholds.relative_objective)
         per_candidate[candidate] = {
-            "case_means": {k: round(v, 3) for k, v in case_means.items()},
-            "between_case_range": round(between, 3),
-            "mean_within_case_seed_range": round(within, 3),
-            "spread_ratio": (None if ratio == float("inf") else round(ratio, 3)),
+            "case_means": {k: round(v, 6) for k, v in case_means.items()},
+            "between_case_range": round(between, 6),
+            "mean_within_case_seed_range": round(within_mean, 6),
+            "spread_ratio": (None if ratio is None else round(ratio, 3)),
             "relative_between_case": round(relative, 4),
             "material": bool(exceeds),
         }
         if exceeds:
-            material_reasons.append(
-                f"{candidate}: between-case range {between:.1f}s is "
-                f"{ratio:.1f}x the seed range and {relative:.1%} of the mean")
+            material.append(
+                f"{candidate}: between-case range {between:.4g} "
+                f"{registration.objective} is "
+                + (f"{ratio:.1f}x the seed range" if ratio is not None
+                   else "nonzero while the seed range is zero")
+                + f" and {relative:.1%} of the mean")
 
-    ranking_by_case = {}
+    # ── ranking and winner, over VIABLE candidates only ──────────────────
+    ranking_by_case: dict[str, list[str]] = {}
     for case in registration.stress_cases:
-        means = {c: per_candidate[c]["case_means"].get(case)
-                 for c in registration.candidate_edges}
-        ranking_by_case[case] = [c for c, _v in
-                                 sorted(means.items(), key=lambda kv: kv[1])]
+        usable = [c for c in registration.candidate_edges
+                  if c in viable_by_case.get(case, set())]
+        ranking_by_case[case] = sorted(
+            usable, key=lambda c: per_candidate[c]["case_means"].get(case, 0.0))
     rankings_identical = len({tuple(v) for v in ranking_by_case.values()}) == 1
     if not rankings_identical:
-        material_reasons.append(
-            f"candidate ranking differs between stress cases: "
-            f"{ranking_by_case}")
+        material.append(
+            f"candidate ranking differs between stress cases: {ranking_by_case}")
 
-    winners = {case: order[0] for case, order in ranking_by_case.items()}
+    winners = {case: (order[0] if order else None)
+               for case, order in ranking_by_case.items()}
     winner_identical = len(set(winners.values())) == 1
     if not winner_identical:
-        material_reasons.append(f"winner differs between stress cases: {winners}")
+        material.append(f"winner differs between stress cases: {winners}")
 
-    gate = "YES" if material_reasons else "NO"
     return {
         "protocol": PROTOCOL,
-        "gate_s": gate,
+        "gate_s": "YES" if material else "NO",
         "registration_key": registration.content_key,
         "release_evidence": False,
-        "reasons": material_reasons,
+        "objective": registration.objective,
+        "reasons": material,
         "per_candidate": per_candidate,
+        "viable_set_by_case": {k: list(v) for k, v in viable_sets.items()},
+        "viable_set_identical": viable_identical,
+        "vehicles_no_detour_by_case": no_detour_by_case,
+        "vehicles_no_detour_identical": no_detour_identical,
+        "health_flags_by_case": {k: sorted(set(v))
+                                 for k, v in health_by_case.items()},
         "ranking_by_case": ranking_by_case,
         "winner_by_case": winners,
         "rankings_identical": rankings_identical,
         "winner_identical": winner_identical,
         "n_observations": len(observations),
-        "n_usable": len(usable),
         "n_hard_failures": len(failures),
         "total_runtime_s": round(sum(o.runtime_s for o in observations), 1),
         "observations": [asdict(o) for o in observations],
@@ -453,8 +651,8 @@ def _inconclusive(reason: str, observations: Sequence[Observation],
 # CLI
 # ──────────────────────────────────────────────────────────────────────────
 def build_registration(sumo_dir: Path, *, date: str, begin: str, end: str,
-                       seeds: Sequence[int], count: int,
-                       timeout_s: int) -> Registration:
+                       seeds: Sequence[int], count: int, timeout_s: int,
+                       demand_window_begin: str = "06:00") -> Registration:
     from traffic_sim.intake.sensors import load_registry
 
     registry = load_registry(Path("data_in/sensors.json"))
@@ -478,20 +676,27 @@ def build_registration(sumo_dir: Path, *, date: str, begin: str, end: str,
         protocol=PROTOCOL,
         selection_rule=SELECTION_RULE,
         date=date, window_begin=begin, window_end=end,
+        demand_window_begin=demand_window_begin,
         seeds=tuple(seeds),
         stress_cases=tuple(name for name, _f in STRESS_CASES),
         candidate_edges=tuple(candidates),
         candidate_selection=selection,
         timeout_s=timeout_s,
-        objective="added_total_time_loss_s",
-        comparison_fields=("hard_failure", "viable_set", "candidate_ranking",
-                           "winner", "added_total_time_loss_s"),
+        objective="added_vehicle_hours",
+        comparison_fields=("hard_failure", "seed_health_flags",
+                           "vehicles_no_detour", "viable_set",
+                           "candidate_ranking", "winner",
+                           "added_vehicle_hours"),
         thresholds=MaterialityThresholds(),
         source_digests=digests,
         note=("q10/q50/q90 are NAMED STRESS CASES with unvalidated nominal "
               "coverage, not probability statements. This measures spread, "
-              "not a distribution. Matched seeds separate the direction "
-              "effect from simulator noise."),
+              "not a distribution. Each run is pinned by its own "
+              "ScenarioSpec to exactly one seed and one demand variant, "
+              "because run_scenario has no CLI flag for either and its "
+              "--seeds argument is a count. added_vehicle_hours is already a "
+              "paired within-run difference against the same routes without "
+              "the closure."),
     )
 
 
@@ -505,6 +710,10 @@ def main(argv: list[str] | None = None) -> int:
                         default=[1000, 1001, 1002, 1003])
     parser.add_argument("--candidates", type=int, default=4)
     parser.add_argument("--timeout-s", type=int, default=300)
+    parser.add_argument("--demand-window-begin", default="06:00",
+                        help="start of the DEMAND window the build covers; "
+                             "the registered closure window is expressed as "
+                             "an offset into it")
     parser.add_argument("--out-dir", type=Path,
                         default=Path("runs/dirsplit_sensitivity"))
     parser.add_argument("--registration", type=Path, default=REGISTRATION_PATH)
@@ -516,7 +725,8 @@ def main(argv: list[str] | None = None) -> int:
 
     registration = build_registration(
         args.sumo_dir, date=args.date, begin=args.begin, end=args.end,
-        seeds=args.seeds, count=args.candidates, timeout_s=args.timeout_s)
+        seeds=args.seeds, count=args.candidates, timeout_s=args.timeout_s,
+        demand_window_begin=args.demand_window_begin)
 
     payload = registration.to_json()
     payload["content_key"] = registration.content_key
