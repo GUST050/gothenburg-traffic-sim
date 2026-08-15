@@ -118,4 +118,7 @@ class TestTheRegistryIsWiredUp:
         for row in singles:
             spec = row.get("opposite_direction")
             assert spec and spec.get("edge_id"), row["sensor_id"]
-            assert spec["measurement_status"] == "unmeasured_estimated"
+            assert spec["measurement_status"] == "unmeasured"
+            assert "neither a transferred dirsplit bound nor a soft dirsplit prior" \
+                in spec["note"]
+            assert "explicitly diagnostic build" in spec["note"]

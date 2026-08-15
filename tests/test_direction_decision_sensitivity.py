@@ -19,6 +19,7 @@ and the reducer is checked against the deployed closure policy.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -388,17 +389,78 @@ class TestTheRealPolicyDecides:
             assert entry["winner"] == "edgeA"
 
 
+class TestExecutedVariantIdentity:
+    def test_private_closure_route_name_proves_the_semantic_arm(
+            self, tmp_path):
+        reg = registration(candidate_edges=("edgeA",), seeds=(1000,))
+        tag = "cand_q10_1000_edgeA"
+        spec = sens.build_spec_payload(
+            reg, case_variant="q10", seed=1000, closures=["edgeA"],
+            scenario_id=tag, start_time="2025-09-16T06:00:00",
+            end_time="2025-09-16T10:00:00")
+        run_dir = tmp_path / tag
+        run_dir.mkdir()
+        (run_dir / "spec.json").write_text(json.dumps(spec))
+        (run_dir / f"{tag}.json").write_text(json.dumps({
+            "scenario_spec": spec,
+            "scenario": {"closure_integrity": "verified_clean"},
+            "seed_health": [{
+                "seed": 1000,
+                "variant": f"calibrated_v1.rou_{tag}.rou.xml",
+                "inserted": 25,
+            }],
+            "seed_health_flags": [],
+            "disruption": policy(1.0),
+        }))
+
+        result = sens._run_one(
+            spec, reg, tmp_path, tag, reuse_existing=True)
+
+        assert result["hard_failure"] is False
+        assert result["executed_variant"] == "q10"
+        assert result["executed_seed"] == 1000
+
+    def test_semantic_mapping_and_physical_route_must_both_match(
+            self, tmp_path):
+        reg = registration(candidate_edges=("edgeA",), seeds=(1000,))
+        tag = "cand_q10_1000_edgeA"
+        spec = sens.build_spec_payload(
+            reg, case_variant="q10", seed=1000, closures=["edgeA"],
+            scenario_id=tag, start_time="2025-09-16T06:00:00",
+            end_time="2025-09-16T10:00:00")
+        run_dir = tmp_path / tag
+        run_dir.mkdir()
+        (run_dir / "spec.json").write_text(json.dumps(spec))
+        (run_dir / f"{tag}.json").write_text(json.dumps({
+            "scenario_spec": spec,
+            "scenario": {"closure_integrity": "verified_clean"},
+            "seed_health": [{
+                "seed": 1000,
+                "variant": f"calibrated_v2.rou_{tag}.rou.xml",
+                "inserted": 25,
+            }],
+            "seed_health_flags": [],
+            "disruption": policy(1.0),
+        }))
+
+        result = sens._run_one(
+            spec, reg, tmp_path, tag, reuse_existing=True)
+
+        assert result["hard_failure"] is True
+        assert "does not prove" in result["reason"]
+
+
 # ── the seed axis has to be real ──────────────────────────────────────────
 class TestTheSeedAxisIsChecked:
-    def test_an_inert_seed_axis_is_inconclusive(self):
-        """Identical simulator output at every seed means no seed axis."""
+    def test_identical_inserted_counts_do_not_invalidate_real_seed_identity(self):
+        """A legitimate seed need not change one chosen observable."""
         obs = observations(
             {"edgeA": {"q50": 1.0, "q10": 1.0, "q90": 1.0},
              "edgeB": {"q50": 2.0, "q10": 2.0, "q90": 2.0}},
             inserted_by_seed={s: 20000 for s in (1000, 1001, 1002, 1003)})
         result = sens.decide_gate_s(obs, registration())
-        assert result["gate_s"] == "INCONCLUSIVE"
-        assert "seed axis did not vary" in result["reasons"][0]
+        assert result["gate_s"] == "NO"
+        assert result["seed_execution_identity"]["verified"] is True
 
     def test_the_ranking_key_is_verified_seed_deterministic(self):
         obs = observations({
@@ -430,53 +492,15 @@ class TestTheSeedAxisIsChecked:
         assert "NOT seed-deterministic" in result["reasons"][0]
         assert result["seed_invariance"]["violations"]
 
-    def test_the_inertness_check_groups_by_case_AND_candidate(self):
-        """Two candidates legitimately insert different vehicle counts.
-
-        Pooling them per stress case lets a candidate-to-candidate
-        difference stand in for a seed difference, so a matrix in which
-        every seed was byte-identical still reported varied: true.
-        """
-        obs = []
-        for case in ("q50", "q10", "q90"):
-            for candidate, inserted in (("edgeA", 20000), ("edgeB", 21000)):
-                for seed in (1000, 1001, 1002, 1003):
-                    obs.append(sens.Observation(
-                        stress_case=case, seed=seed, candidate=candidate,
-                        policy=policy(1.0 if candidate == "edgeA" else 2.0),
-                        closure_integrity="verified_clean",
-                        seed_health_flags=(),
-                        vehicles_inserted=inserted,   # identical per seed
-                        hard_failure=False, failure_reason=None,
-                        runtime_s=1.0))
-        axis = sens.seed_axis_varied(obs)
-        assert axis["varied"] is False
-        assert axis["grouped_by"] == "stress_case x candidate"
-        assert len(axis["groups_that_did_not_vary"]) == 6
-
+    def test_a_mismatched_executed_seed_is_inconclusive(self):
+        obs = observations({
+            "edgeA": {"q50": 1.0, "q10": 1.0, "q90": 1.0},
+            "edgeB": {"q50": 2.0, "q10": 2.0, "q90": 2.0},
+        })
+        obs[0].executed_seed = 9999
         result = sens.decide_gate_s(obs, registration())
         assert result["gate_s"] == "INCONCLUSIVE"
-        assert "seed axis did not vary" in result["reasons"][0]
-
-    def test_every_group_must_vary_not_merely_one(self):
-        inserted = {}
-        obs = []
-        for case in ("q50", "q10", "q90"):
-            for candidate in ("edgeA", "edgeB"):
-                for seed in (1000, 1001, 1002, 1003):
-                    # edgeA varies with the seed; edgeB never does.
-                    value = (20000 + seed if candidate == "edgeA" else 21000)
-                    obs.append(sens.Observation(
-                        stress_case=case, seed=seed, candidate=candidate,
-                        policy=policy(1.0 if candidate == "edgeA" else 2.0),
-                        closure_integrity="verified_clean",
-                        seed_health_flags=(), vehicles_inserted=value,
-                        hard_failure=False, failure_reason=None,
-                        runtime_s=1.0))
-        axis = sens.seed_axis_varied(obs)
-        assert axis["varied"] is False
-        assert all(key.endswith("edgeB")
-                   for key in axis["groups_that_did_not_vary"])
+        assert "seed/variant identity" in result["reasons"][0]
 
 
 # ── a disqualified candidate cannot open the gate ─────────────────────────
@@ -547,7 +571,23 @@ class TestStressCasesMustIsolateDirection:
             "edge_shares_q10": {"n": [q10_lo] * 96, "s": [q10_hi] * 96},
             "edge_shares_q90": {"n": [q90_lo] * 96, "s": [q90_hi] * 96},
         }}
-        (tmp_path / "direction_split.json").write_text(json.dumps(payload))
+        split = tmp_path / "direction_split.json"
+        split.write_text(json.dumps(payload))
+        artifacts = {"direction_split": split}
+        for case, filename, _variant in sens.STRESS_CASES:
+            route = tmp_path / filename
+            route.write_text(
+                '<routes><vehicle id="v" depart="0">'
+                '<route edges="a b"/></vehicle></routes>')
+            artifacts[sens.ROUTE_ARTIFACT_KEYS[case]] = route
+        digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+        (tmp_path / "demand_meta.json").write_text(json.dumps({
+            "build_id": "fixture-build", "n_intervals": 96,
+            "build_fingerprint": {"artifacts": {
+                key: {"sha256": digest(path)}
+                for key, path in artifacts.items()
+            }},
+        }))
         return tmp_path
 
     def test_pair_sums_of_one_isolate_direction(self, tmp_path):
@@ -564,7 +604,70 @@ class TestStressCasesMustIsolateDirection:
         assert report["by_case"]["q50"]["within_tolerance"] is True
         assert report["by_case"]["q10"]["within_tolerance"] is False
         assert report["by_case"]["q90"]["within_tolerance"] is False
-        assert "rebuild the q artifacts" in report["reason"]
+        assert "failed strict split" in report["reason"]
+
+    @pytest.mark.parametrize("defect", ["missing", "length", "nan"])
+    def test_malformed_series_never_pass_fail_open(self, tmp_path, defect):
+        sumo = self.write(tmp_path)
+        path = sumo / "direction_split.json"
+        payload = json.loads(path.read_text())
+        if defect == "missing":
+            payload["107"].pop("edge_shares_q90")
+        elif defect == "length":
+            payload["107"]["edge_shares"]["n"] = [0.52]
+        else:
+            payload["107"]["edge_shares"]["n"][0] = float("nan")
+        path.write_text(json.dumps(payload))
+        meta_path = sumo / "demand_meta.json"
+        meta = json.loads(meta_path.read_text())
+        meta["build_fingerprint"]["artifacts"]["direction_split"]["sha256"] = \
+            hashlib.sha256(path.read_bytes()).hexdigest()
+        meta_path.write_text(json.dumps(meta))
+        assert sens.measure_pair_sum_isolation(sumo)[
+            "isolates_direction"] is False
+
+    def test_stale_route_file_breaks_build_lineage(self, tmp_path):
+        sumo = self.write(tmp_path)
+        (sumo / "calibrated_v1.rou.xml").write_text(
+            '<routes><vehicle id="changed" depart="0">'
+            '<route edges="a b"/></vehicle></routes>')
+        report = sens.measure_pair_sum_isolation(sumo)
+        assert report["isolates_direction"] is False
+        assert report["lineage"]["verified"] is False
+
+    def test_different_live_departure_population_is_not_direction_only(
+            self, tmp_path):
+        sumo = self.write(tmp_path)
+        route = sumo / "calibrated_v2.rou.xml"
+        route.write_text(
+            '<routes><vehicle id="v" depart="900">'
+            '<route edges="a b"/></vehicle></routes>')
+        meta_path = sumo / "demand_meta.json"
+        meta = json.loads(meta_path.read_text())
+        meta["build_fingerprint"]["artifacts"]["calibrated_v2"]["sha256"] = \
+            hashlib.sha256(route.read_bytes()).hexdigest()
+        meta_path.write_text(json.dumps(meta))
+        report = sens.measure_pair_sum_isolation(sumo)
+        assert report["lineage"]["verified"] is True
+        assert report["route_departure_population"]["verified_equal"] is False
+        assert report["isolates_direction"] is False
+
+    def test_known_invalid_registration_stops_before_the_matrix(self):
+        invalid = registration(stress_case_isolation={
+            "isolates_direction": False, "reason": "fixture"})
+        with pytest.raises(sens.RegistrationError, match="before simulation"):
+            sens.require_runnable_registration(invalid)
+
+    def test_known_invalid_inputs_do_not_consume_a_registration_version(
+            self, tmp_path, monkeypatch):
+        invalid = registration(stress_case_isolation={
+            "isolates_direction": False, "reason": "fixture"})
+        monkeypatch.setattr(sens, "build_registration",
+                            lambda *_args, **_kwargs: invalid)
+        target = tmp_path / "registration-v3.json"
+        with pytest.raises(SystemExit, match="cannot freeze this experiment"):
+            sens.main(["--registration", str(target), "--freeze-only"])
+        assert not target.exists()
 
     def test_a_missing_split_file_is_not_isolation(self, tmp_path):
         report = sens.measure_pair_sum_isolation(tmp_path)
@@ -696,7 +799,8 @@ class TestAllPreregisteredFieldsAreMeasured:
         })
         result = sens.decide_gate_s(obs, registration())
         for key in ("decision_by_case", "winner_by_case", "rankings_identical",
-                    "winner_identical", "seed_axis", "seed_invariance"):
+                    "winner_identical", "seed_execution_identity",
+                    "seed_invariance"):
             assert key in result, key
         entry = result["decision_by_case"]["q50"]
         for key in ("viable_set", "ranking", "winner", "disqualified"):
@@ -755,9 +859,9 @@ class TestSelectionIsOutcomeBlind:
 
     def test_the_protocol_records_the_repair(self):
         """The repaired tool must not publish under the broken protocol id."""
-        assert sens.PROTOCOL.endswith("_v2")
-        assert "_v2" in str(sens.REGISTRATION_PATH)
-        assert "_v2" in str(sens.OUTCOME_PATH)
+        assert sens.PROTOCOL.endswith("_v3")
+        assert "_v3" in str(sens.REGISTRATION_PATH)
+        assert "_v3" in str(sens.OUTCOME_PATH)
 
 
 # ── the closure window resolves onto the demand calendar ──────────────────
@@ -863,17 +967,30 @@ class TestTheTopologyFilterFailsClosed:
         assert "raise RuntimeError" in source
         assert "return True" not in source
 
+    def test_the_filter_resolves_sumolib_from_the_active_sumo(self):
+        """Gate S must work with the repository's eclipse-sumo package.
+
+        A bare ``import sumolib`` fails in that supported installation because
+        the package lives below ``<SUMO_HOME>/tools``.  The topology gate must
+        use the same deterministic resolver as simulation entry points.
+        """
+        import inspect
+
+        source = inspect.getsource(sens.load_network)
+        assert "from sumo_runtime import sumo_home" in source
+        assert 'sumo_home() / "tools"' in source
+        assert "origin.relative_to(expected)" in source
+
 
 # ── thresholds are frozen in code ─────────────────────────────────────────
 class TestThresholdsAreFrozen:
     def test_the_defaults_are_the_registered_ones(self):
         thresholds = sens.MaterialityThresholds()
-        assert thresholds.spread_ratio == 2.0
         assert thresholds.relative_objective == 0.10
         assert thresholds.require_identical_viable_set
         assert thresholds.require_identical_ranking
         assert thresholds.require_identical_winner
-        assert thresholds.require_seed_axis_to_vary
+        assert thresholds.require_seed_execution_identity
         assert thresholds.require_clean_closure_integrity
         assert thresholds.require_healthy_seeds
 
@@ -902,3 +1019,89 @@ class TestRealArtifacts:
         assert outcome["registration_key"] == reg["content_key"]
         assert outcome["release_evidence"] is False
         assert outcome["gate_s"] in ("NO", "YES", "INCONCLUSIVE")
+
+
+class TestHistoricalExitADecision:
+    PATH = Path("validation/dirsplit_exit_a_decision_v2.json")
+
+    def payload(self):
+        return json.loads(self.PATH.read_text())
+
+    def test_it_binds_both_final_gate_outcomes(self):
+        payload = self.payload()
+        assert payload["decision"] == "EXIT_A"
+        assert payload["basis"]["gate_s"]["result"] == "NO"
+        assert payload["basis"]["gate_m"] == {
+            "result": "BASELINE",
+            "winner": "constant_5050",
+            "path": "validation/dirsplit_gate_m_outcome_v4.json",
+            "sha256": payload["basis"]["gate_m"]["sha256"],
+        }
+        for gate in payload["basis"].values():
+            assert hashlib.sha256(Path(gate["path"]).read_bytes()).hexdigest() \
+                == gate["sha256"]
+
+    def test_its_content_key_covers_the_decision(self):
+        payload = self.payload()
+        recorded = payload.pop("content_key")
+        assert recorded == sens.content_digest(payload)
+
+    def test_it_preserves_the_superseded_decision(self):
+        previous = self.payload()["supersedes"]
+        assert hashlib.sha256(Path(previous["path"]).read_bytes()).hexdigest() \
+            == previous["sha256"]
+
+    def test_diagnostic_stress_is_not_promoted_to_release_evidence(self):
+        payload = self.payload()
+        assert payload["release_evidence"] is False
+        policy = payload["product_policy"]["diagnostic_stress"]
+        assert "--direction-stress-variants" in policy
+        assert "do not become release evidence" in policy
+
+
+class TestTrainedQ50Activation:
+    PATH = Path("validation/dirsplit_trained_q50_activation_v2.json")
+
+    def payload(self):
+        return json.loads(self.PATH.read_text())
+
+    def test_it_supersedes_the_previous_activation_without_rewriting_it(self):
+        previous = self.payload()["supersedes"]
+        assert previous["path"] == \
+            "validation/dirsplit_trained_q50_activation_v1.json"
+        assert hashlib.sha256(Path(previous["path"]).read_bytes()).hexdigest() \
+            == previous["sha256"]
+
+    def test_its_content_key_covers_the_activation(self):
+        payload = self.payload()
+        recorded = payload.pop("content_key")
+        assert recorded == sens.content_digest(payload)
+
+    def test_it_binds_the_live_sources_and_artifacts(self):
+        payload = self.payload()
+        for path, digest in {**payload["sources"],
+                             **payload["artifacts"]}.items():
+            assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest
+
+    def test_it_binds_the_positive_gate_and_current_gate_s(self):
+        basis = self.payload()["basis"]
+        gate = basis["gate_m"]
+        assert gate["result"] == "MODEL"
+        assert gate["winner"] == "similarity_weighted_lgbm_no_profile"
+        assert hashlib.sha256(Path(gate["path"]).read_bytes()).hexdigest() \
+            == gate["sha256"]
+        gate_s = basis["gate_s"]
+        assert gate_s["result"] == "NO"
+        assert gate_s["observations"] == gate_s["usable"] == 48
+        assert gate_s["hard_failures"] == 0
+        for path_key, digest_key in (
+            ("path", "sha256"),
+            ("registration_path", "registration_sha256"),
+        ):
+            assert hashlib.sha256(
+                Path(gate_s[path_key]).read_bytes()).hexdigest() == \
+                gate_s[digest_key]
+        outcome = json.loads(Path(gate_s["path"]).read_text())
+        assert outcome["registration_key"] == gate_s["registration_key"]
+        assert outcome["release_evidence"] is False
+        assert self.payload()["release_evidence"] is False

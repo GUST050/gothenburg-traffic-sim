@@ -1,4 +1,4 @@
-"""Fas 1: leakage-free folds, four candidates, a frozen Gate M rule.
+"""Fas 1: leakage-free folds, candidates, and a frozen Gate M rule.
 
 Plan requirements for Fas 1:
   1. preserve raw station-date-hour counts and day_block_id;
@@ -12,8 +12,10 @@ Plan requirements for Fas 1:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import csv
 from pathlib import Path
 
 import numpy as np
@@ -92,6 +94,40 @@ class TestFoldsAreLeakageFree:
                   for f in ev.leave_city_out(rows)]
         assert first == second
 
+    def test_v2_loader_keeps_real_day_blocks_and_drops_audit_rows(
+            self, tmp_path):
+        path = tmp_path / "training-v2.csv"
+        header = ["station_id", "city", "heading", "hour", "is_weekend",
+                  "share", "n_obs", "total_count", "local_date",
+                  "day_block_id", "usable"] + list(FEATURE_NAMES) + \
+            list(ev.PROFILE_FEATURES)
+        base = {name: 0.0 for name in FEATURE_NAMES}
+        base["radial_cos"] = 0.8
+        profile = {name: 0.0 for name in ev.PROFILE_FEATURES}
+        records = [
+            {"station_id": "S1", "city": "oslo", "heading": "toward",
+             "hour": 8, "is_weekend": 0, "share": 0.6, "n_obs": 1,
+             "total_count": 100, "local_date": "2025-09-01",
+             "day_block_id": "S1|2025-09-01", "usable": 1,
+             **base, **profile},
+            {"station_id": "S1", "city": "oslo", "heading": "toward",
+             "hour": 9, "is_weekend": 0, "share": "", "n_obs": 1,
+             "total_count": "", "local_date": "2025-09-01",
+             "day_block_id": "S1|2025-09-01", "usable": 0,
+             **base, **profile},
+        ]
+        with open(path, "w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=header)
+            writer.writeheader()
+            writer.writerows(records)
+        rows, meta = ev.load_rows(path, drop_oneway=False)
+        assert len(rows) == 1
+        assert rows[0].block == "S1|2025-09-01"
+        assert rows[0].day_block_id == "S1|2025-09-01"
+        assert rows[0].mean_total == 100
+        assert meta["has_day_level_dates"] is True
+        assert meta["unusable_or_invalid_rows"] == 1
+
 
 class TestNothingIsFitOutsideTheFold:
     def test_scoring_does_not_mutate_the_candidate(self):
@@ -118,14 +154,24 @@ class TestNothingIsFitOutsideTheFold:
             len(folds[1].train)
 
 
-# ── the four candidates ───────────────────────────────────────────────────
+# ── the candidates ────────────────────────────────────────────────────────
 class TestCandidates:
-    def test_all_four_are_registered_in_complexity_order(self):
+    def test_all_five_are_registered_in_complexity_order(self):
         names = [c.name for c in ev.default_candidates()]
         assert names == ["constant_5050", "shrunk_dfactor",
-                         "beta_binomial_dfactor", "similarity_weighted_lgbm"]
+                         "beta_binomial_dfactor",
+                         "similarity_weighted_lgbm_no_profile",
+                         "similarity_weighted_lgbm"]
         complexities = [c.complexity for c in ev.default_candidates()]
         assert complexities == sorted(complexities)
+
+    def test_single_direction_candidate_really_removes_total_profile(self):
+        rows = spread()[:2]
+        paired = ev.SimilarityWeightedLGBM(use_profile_features=True)
+        single = ev.SimilarityWeightedLGBM(use_profile_features=False)
+        assert paired._matrix(rows).shape[1] - single._matrix(rows).shape[1] \
+            == len(ev.PROFILE_FEATURES)
+        assert single.name.endswith("_no_profile")
 
     def test_the_null_predicts_a_half(self):
         rows = spread(share=0.8)
@@ -387,6 +433,9 @@ class TestGateMRule:
     def test_the_rule_version_records_the_correction(self):
         assert ev.SELECTION_RULE == "simplest_defensible_v2"
 
+    def test_the_measurement_protocol_records_the_v3_estimator(self):
+        assert ev.GATE_M_PROTOCOL == "dirsplit_gate_m_v3"
+
 
 # ── the tournament measures the deployed population and model ─────────────
 class TestTheTournamentMatchesDeployment:
@@ -442,6 +491,38 @@ class TestTheTournamentMatchesDeployment:
         assert not np.allclose(a._model.predict(matrix),
                                b._model.predict(matrix))
 
+    def test_the_published_point_model_is_the_q50_quantile_estimator(self):
+        rows = spread(jitter=0.03, seed=34)
+        target = np.array([r.features for r in rows[:15]], dtype=float)
+        model = ev.SimilarityWeightedLGBM(n_estimators=5).fit(
+            rows, target_features=target, shrinkage_override=0.5)
+        params = model._model.get_params()
+        assert params["objective"] == "quantile"
+        assert params["alpha"] == pytest.approx(0.5)
+
+    def test_the_point_model_falls_back_outside_training_support(self):
+        rows = spread(jitter=0.03, seed=35)
+        target = np.array([r.features for r in rows[:15]], dtype=float)
+        model = ev.SimilarityWeightedLGBM(n_estimators=5).fit(
+            rows, target_features=target, shrinkage_override=0.5)
+        queries = [row(hour=8, weekend=0), row(hour=3, weekend=0),
+                   row(hour=8, weekend=1)]
+        prediction = model.predict(queries)
+        assert 0.1 <= prediction[0] <= 0.9
+        assert prediction[1:].tolist() == [0.5, 0.5]
+
+    def test_shrinkage_domain_is_defined_by_gothenburg_target_features(self):
+        near = [row(station="near", city="oslo", hour=h, radial=0.9)
+                for h in range(6, 21)]
+        far = [row(station="far", city="bergen", hour=h, radial=-5.0)
+               for h in range(6, 21)]
+        model = ev.SimilarityWeightedLGBM(n_estimators=5)
+        trainable, _matrix, _target = model._prepare_training(near + far)
+        target = np.array([near[0].features], dtype=float)
+        domain = model._domain_stations(trainable, target)
+        assert "near" in domain
+        assert "far" not in domain
+
     def test_one_model_is_fit_per_held_out_station_not_per_fold(self):
         """Deployment trains a separate model per target sensor."""
         rows = (spread(stations=("A", "B", "C"), cities=("oslo",),
@@ -465,6 +546,25 @@ class TestTheTournamentMatchesDeployment:
         assert {len(matrix) for matrix in seen} == {
             sum(1 for r in fold.test if r.station_id == s)
             for s in held_stations}
+
+    def test_fold_shrinkage_is_computed_once_not_once_per_station(self):
+        rows = spread(stations=("A", "B", "C"), jitter=0.02, seed=35)
+        fold = ev.leave_city_out(rows)[0]
+        calls = []
+
+        class Counting(ev.SimilarityWeightedLGBM):
+            def prepare_shrinkage(self, rows, deployment_target_features=None):
+                calls.append(len(rows))
+                return 0.5
+
+            def fit(self, rows, target_features=None, **kwargs):
+                return self
+
+            def predict(self, rows):
+                return np.full(len(rows), 0.5)
+
+        ev.held_out_predictions(Counting(n_estimators=1), [fold])
+        assert calls == [len(fold.train)]
 
     def test_pooled_rows_stay_aligned_across_candidates(self):
         """compare() pairs row by row, so every candidate needs one order."""
@@ -558,10 +658,11 @@ class TestRealGateMReport:
     def test_it_names_its_frozen_selection_rule(self):
         assert self.report()["selection_rule"] == ev.SELECTION_RULE
 
-    def test_it_reports_all_four_candidates(self):
+    def test_it_reports_all_five_candidates(self):
         report = self.report()
         assert set(report["reports"]) == {
             "constant_5050", "shrunk_dfactor", "beta_binomial_dfactor",
+            "similarity_weighted_lgbm_no_profile",
             "similarity_weighted_lgbm"}
 
     def test_every_candidate_carries_a_paired_ci(self):
@@ -578,7 +679,8 @@ class TestRealGateMReport:
         """Not the OSM-flag population, which is less than half the size."""
         report = self.report()
         assert "observed weekday-daytime" in report["input"]["oneway_screen"]
-        assert report["input"]["stations"] == 81
+        assert report["input"]["stations"] == 97
+        assert report["input"]["has_day_level_dates"] is True
 
     def test_a_missing_blocked_date_fold_left_it_undecided(self):
         report = self.report()
@@ -592,6 +694,8 @@ class TestRealGateMReport:
         report = self.report()
         pairwise = report["pairwise_comparisons"]
         assert pairwise["similarity_weighted_lgbm"]["shrunk_dfactor"]
+        assert pairwise["similarity_weighted_lgbm_no_profile"][
+            "similarity_weighted_lgbm"]
 
 
 # ── the v1 outcome is withdrawn, not quietly rewritten ────────────────────
@@ -654,6 +758,33 @@ class TestTheWithdrawnV1Outcome:
         payload = json.loads(self.V3.read_text())
         assert payload["measured_under_v3"]["caveat"]
 
+    V4 = Path("validation/dirsplit_gate_m_outcome_v4.json")
+
+    def test_v4_decides_the_gate_from_dataset_v2(self):
+        payload = json.loads(self.V4.read_text())
+        assert payload["supersedes"] == str(self.V3)
+        assert payload["protocol"] == ev.GATE_M_PROTOCOL
+        assert payload["gate_m"] == "BASELINE"
+        assert payload["winner"] == "constant_5050"
+        assert set(payload["dataset"]["required_folds_present"]) == set(
+            ev.REQUIRED_FOLD_KINDS)
+
+    V5 = Path("validation/dirsplit_gate_m_outcome_v5.json")
+
+    def test_v5_supersedes_v4_with_the_support_aware_model(self):
+        payload = json.loads(self.V5.read_text())
+        previous = payload["supersedes"]
+        assert previous["path"] == str(self.V4)
+        assert hashlib.sha256(self.V4.read_bytes()).hexdigest() \
+            == previous["sha256"]
+        assert payload["gate_m"] == "MODEL"
+        assert payload["winner"] == "similarity_weighted_lgbm_no_profile"
+        report_path = Path(payload["report"]["path"])
+        assert hashlib.sha256(report_path.read_bytes()).hexdigest() \
+            == payload["report"]["sha256"]
+        assert payload["report"]["content_key"] == json.loads(
+            report_path.read_text())["content_key"]
+
 
 # ── the report is bound to what produced it ───────────────────────────────
 class TestTheReportCarriesProvenance:
@@ -668,7 +799,7 @@ class TestTheReportCarriesProvenance:
         provenance = self.report()["provenance"]
         for key in ("training_table_digest", "evaluate_module_digest",
                     "trainer_module_digest", "dataset_module_digest",
-                    "features_module_digest"):
+                    "features_module_digest", "dataset_meta_digest"):
             assert provenance[key], key
 
     def test_the_content_key_covers_the_payload(self):
@@ -687,5 +818,5 @@ class TestTheReportCarriesProvenance:
     def test_the_content_key_changes_when_the_payload_does(self):
         report = self.report()
         report.pop("content_key")
-        mutated = dict(report, gate_m="MODEL")
+        mutated = dict(report, gate_m="BASELINE")
         assert ev.content_digest(mutated) != ev.content_digest(report)

@@ -1,0 +1,1110 @@
+{
+ "decision_by_case": {
+  "q10": {
+   "added_vehicle_hours": {
+    "18241874_9439210780_0": 0.0167,
+    "30420876_30420904_0": 1.5594,
+    "9037093028_1305379743_0": 0.3246,
+    "9037093028_30420757_0": 0.2099
+   },
+   "disqualified": [
+    "30420876_30420904_0"
+   ],
+   "ranking": [
+    "18241874_9439210780_0",
+    "9037093028_30420757_0",
+    "9037093028_1305379743_0"
+   ],
+   "viable_set": [
+    "18241874_9439210780_0",
+    "9037093028_1305379743_0",
+    "9037093028_30420757_0"
+   ],
+   "winner": "18241874_9439210780_0"
+  },
+  "q50": {
+   "added_vehicle_hours": {
+    "18241874_9439210780_0": 0.0167,
+    "30420876_30420904_0": 1.5594,
+    "9037093028_1305379743_0": 0.3246,
+    "9037093028_30420757_0": 0.2099
+   },
+   "disqualified": [
+    "30420876_30420904_0"
+   ],
+   "ranking": [
+    "18241874_9439210780_0",
+    "9037093028_30420757_0",
+    "9037093028_1305379743_0"
+   ],
+   "viable_set": [
+    "18241874_9439210780_0",
+    "9037093028_1305379743_0",
+    "9037093028_30420757_0"
+   ],
+   "winner": "18241874_9439210780_0"
+  },
+  "q90": {
+   "added_vehicle_hours": {
+    "18241874_9439210780_0": 0.0167,
+    "30420876_30420904_0": 1.5594,
+    "9037093028_1305379743_0": 0.3246,
+    "9037093028_30420757_0": 0.2099
+   },
+   "disqualified": [
+    "30420876_30420904_0"
+   ],
+   "ranking": [
+    "18241874_9439210780_0",
+    "9037093028_30420757_0",
+    "9037093028_1305379743_0"
+   ],
+   "viable_set": [
+    "18241874_9439210780_0",
+    "9037093028_1305379743_0",
+    "9037093028_30420757_0"
+   ],
+   "winner": "18241874_9439210780_0"
+  }
+ },
+ "gate_s": "NO",
+ "n_hard_failures": 0,
+ "n_observations": 48,
+ "n_usable": 48,
+ "observations": [
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 0.0,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  }
+ ],
+ "per_candidate": {
+  "18241874_9439210780_0": {
+   "added_vehicle_hours_by_case": {
+    "q10": 0.0167,
+    "q50": 0.0167,
+    "q90": 0.0167
+   },
+   "between_case_range": 0.0,
+   "decision_relevant": true,
+   "material": false,
+   "relative_between_case": 0.0,
+   "seed_range_within_case": 0.0
+  },
+  "30420876_30420904_0": {
+   "added_vehicle_hours_by_case": {
+    "q10": 1.5594,
+    "q50": 1.5594,
+    "q90": 1.5594
+   },
+   "between_case_range": 0.0,
+   "decision_relevant": false,
+   "material": false,
+   "relative_between_case": 0.0,
+   "seed_range_within_case": 0.0,
+   "why_not_decision_relevant": "disqualified by the no-detour rule in every stress case, so the deployed policy never reads its cost"
+  },
+  "9037093028_1305379743_0": {
+   "added_vehicle_hours_by_case": {
+    "q10": 0.3246,
+    "q50": 0.3246,
+    "q90": 0.3246
+   },
+   "between_case_range": 0.0,
+   "decision_relevant": true,
+   "material": false,
+   "relative_between_case": 0.0,
+   "seed_range_within_case": 0.0
+  },
+  "9037093028_30420757_0": {
+   "added_vehicle_hours_by_case": {
+    "q10": 0.2099,
+    "q50": 0.2099,
+    "q90": 0.2099
+   },
+   "between_case_range": 0.0,
+   "decision_relevant": true,
+   "material": false,
+   "relative_between_case": 0.0,
+   "seed_range_within_case": 0.0
+  }
+ },
+ "policy": "traffic_sim.simulation.closure_ranking (deployed, unchanged)",
+ "protocol": "dirsplit_direction_decision_sensitivity_v3",
+ "rankings_identical": true,
+ "reasons": [],
+ "registration_key": "77980fae30549c6159ee3916d14a75c60aa4eeb09fc24bbd071e6957f790c095",
+ "release_evidence": false,
+ "seed_execution_identity": {
+  "basis": "scenario.seed_set and seed_health(seed, variant) must exactly match the preregistered ScenarioSpec",
+  "verified": true,
+  "violations": []
+ },
+ "seed_invariance": {
+  "basis": "closure_disruption is demand-side and congestion-independent, so this is an invariant of the deployed policy, verified here rather than assumed",
+  "ranking_key_is_seed_deterministic": true,
+  "violations": []
+ },
+ "total_runtime_s": 0.0,
+ "winner_by_case": {
+  "q10": "18241874_9439210780_0",
+  "q50": "18241874_9439210780_0",
+  "q90": "18241874_9439210780_0"
+ },
+ "winner_identical": true
+}

@@ -17,12 +17,16 @@ of this hierarchy, and its provenance is carried all the way to the map:
    exact values where the system is locked, and intervals (min/max bounds)
    where it is not. Also yields consistency alarms between sensors.
    (Literature: link-flow observability, Castillo et al. 2015.)
-3. **LEARNED PRIOR, INSIDE THE BOUNDS** — for what remains: the expected
-   pattern for "a street of this type at this hour", learned from cities
-   where directions/volumes ARE measured (Norwegian open directional data
-   today — the validated dirsplit model; FCD fusion when the city licenses
-   probe data). Soft pull, never overrides levels 1–2. (An informative
-   prior is REQUIRED for identifiability — Marzano et al.)
+3. **JUSTIFIED PRIOR, INSIDE THE BOUNDS** — for what remains: use only a
+   prior whose transfer value is measured and disclosed by the relevant
+   held-out decision gate. Soft pulls never override levels 1–2. On explicit
+   user direction 2026-08-15, dirsplit is reopened as a trained experimental
+   path: q50 is used only in its weekday 06–20 training support, 50/50 is the
+   fallback outside support, and unmeasured opposite carriageways receive a
+   soft model-bound prior plus a ceiling but never a hard floor. The full Gate
+   M rerun remains the authority for robustness claims. (An informative prior
+   is required for identifiability, but an unsupported learned prior is not
+   information — Marzano et al.)
 4. **RECONCILIATION** — a single convex program selects concrete vehicle
    routes that (a) match level 1 exactly (within GEH tolerance), (b) never
    violate level 2, (c) stay close to level 3, with an entropy-flavoured
@@ -378,13 +382,16 @@ Output: `observability.json` (exact values, intervals, alarms, classes).
 
 ### C — Destinations (PFE-lite, evolves `build_sumo_demand.py`)
 1. Candidate routes: randomTrips pool, **weighted by the prior** —
-   gravity-style OD plausibility (SCB population/workplaces) and the
-   learned street/time profiles (dirsplit model, in its correct role).
+   gravity-style OD plausibility (SCB population/workplaces) and measured or
+   separately validated corridor structure. The rejected dirsplit transfer
+   model is not a release prior.
 2. Solve the PFE LP (scipy): route-use variables ≥ 0; hard equalities at
    measured edges (per 15 min, per direction where known); inequalities
    from B; L1 deviation terms pulling edge flows toward level-3 priors with
    weights ∝ 1/uncertainty; total-count regularisation.
-3. Emit routes (q50 + uncertainty variants) + the implied OD matrix.
+3. Emit one central direction case into three compatibility route slots for
+   the monthly runner's SUMO seeds + the implied OD matrix. Explicit
+   `--direction-stress-variants` substitutes q10/q90 only for diagnostics.
 routeSampler is kept as reference implementation/fallback (it cannot
 express per-edge weights or intervals — verified against its docs).
 BUILT (pfe.py + prior_flows.py + --engine pfe): unserveable counts are
@@ -634,6 +641,14 @@ For future dates, C consumes D's series instead of history — same code path.
 SUMO **mesoscopic** Monte Carlo (43× faster than micro at equal/better
 sensor delivery, 0.87–0.96), identical edge IDs, local rerouters for
 closures, interactive API. Gate: baseline delivery ≥ 0.85 at stations.
+
+The assembled validation report also binds scenario evidence internally:
+`traffic_sim/confidence/report.py` compares the active
+`demand_meta.build_id` with the baseline's scenario/spec demand identity
+before simulation health or final sensor-output fit is admitted. A mismatch
+adds a `scenario_identity` warning, withholds both stale sections and prevents
+`overall=pass`; the UI's active-study warning is therefore no longer the only
+line of defence.
 
 Recurring monthly closure searches now have a separate internal screening
 path: `traffic_sim/simulation/monthly_proxy.py` ranks exact calendar
@@ -1858,6 +1873,75 @@ All four stop proofs were independently valid. This is a fail-closed
 reproducibility result: policy v3 is not activated and held-out/micro release
 evidence does not run downstream of it.
 
+## Direction-split decision gates (protocol v3, 2026-08-14)
+
+Direction uncertainty was tested as a conditional extension, not introduced as
+an unconditional fourth demand architecture. Sensor 107's provenance-bound
+local D-factor is applied in both PFE and routeSampler target paths.
+
+`tools/measure_direction_decision_sensitivity.py` implements Gate S. Before it
+can freeze a registration or launch SUMO it verifies all q-share pairs, the
+SHA-256 lineage from `demand_meta.json` to the split and route files, and an
+identical 15-minute departure population across q10/q50/q90. Each execution is
+bound to the runner-reported seed and variant. The demand-side closure ranking
+key must remain seed-deterministic; a mismatch, confounded route population or
+health failure is `INCONCLUSIVE`, never evidence that direction matters. The
+final v5 outcome contains 48/48 usable matched-seed observations and decides
+Gate S as `NO`: hard failures, viable set, ranking, winner and all
+decision-relevant costs are identical across q10/q50/q90.
+
+`dirsplit/evaluate.py` implements Gate M under
+`dirsplit_gate_m_v3`. Its LightGBM candidate follows the deployed q50 quantile
+objective, target-centred Gothenburg domain filtering and nested shrinkage.
+Shrinkage is estimated once from each outer training fold and shared by the
+station-specific models in that fold. Dataset v2 preserves raw simultaneous
+counts, local dates and 5,524 day blocks from 188 provenance-bound volume
+files; the aggregate is diagnostic only. The 2026-08-14 v3 tournament includes
+all required folds and decides Gate M as `BASELINE` with `constant_5050`.
+Reports bind raw-source manifest, table, evaluation source, model source and
+deployment target matrix by digest.
+
+The corrected q10/q90 construction obtains the second edge as the complement
+of the same quantile arm, so each pair sums to one. Complementarity alone does
+not hold total demand fixed at single-direction stations. The flat PFE
+orchestrator therefore solves and integer-publishes q50 first, then carries its
+exact per-quarter totals as invariant equalities through every q10/q90
+relaxation rung. HiGHS is single-threaded inside each already-parallel fork
+worker; this avoids the macOS post-fork task-executor deadlock while preserving
+the 20-second per-MILP limit. Rebuilding provenance-bound Gate S inputs was an
+input repair inside Fas 0B. Combined with Gate M=`BASELINE`, Gate S=`NO`
+selects Exit A: normal demand uses constant 50/50 plus applicable local anchors
+and no transferred bound or soft dirsplit prior on an unmeasured opposite
+carriageway. Three physical
+route slots remain for the monthly runner's established three-seed contract,
+but are central-demand replicas by default. Only
+`--direction-stress-variants` substitutes registered q10/q90 diagnostics;
+doing so does not create release evidence. Conditional ensemble, warm-state,
+API and UI phases are closed. The gate outcomes and exact product-source
+digests are bound by `validation/dirsplit_exit_a_decision_v2.json`; v2
+supersedes but does not rewrite the append-only v1 decision after contract
+hardening removed unused transferred split/prior inputs from release
+fingerprints and made q-arm validation fail closed.
+
+**Superseding active direction policy (2026-08-15):** on explicit user
+direction, the model was retrained from dataset v2 and the unconditional q50
+overwrite was removed. The deployable estimator is now
+`similarity_weighted_lgbm_no_profile`: profile-shape features are excluded
+because five Göteborg targets measure only one carriageway while the training
+profiles describe paired totals. It runs only on its weekday 06–20 training
+support; q50 falls back to 0.5 and q10/q90 widen to 0.1/0.9 outside support.
+The exact-policy Gate M rerun is `MODEL`: it wins a primary group under
+blocked-date, leave-city-out and leave-station-out folds and loses none.
+Unmeasured opposite carriageways receive a model-hash-bound soft prior and a
+ceiling-only interval, never a hard positive floor. The active artifact/source
+binding is `validation/dirsplit_trained_q50_activation_v2.json`, which
+supersedes but does not rewrite v1. A rebuilt equal-population stress route
+family has exact complementary q pairs; registration v4 and outcome v6 bind
+48/48 healthy matched-seed runs. Gate S is `NO` with identical viable set,
+ranking, winner and decision costs across q10/q50/q90. The run remains a
+frozen diagnostic (`release_evidence=false`), and q10/q90 remain named stress
+cases without a calibrated coverage claim.
+
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).
 2. **C — PFE-lite LP** (replaces routeSampler as primary; keeps its I/O).
@@ -1866,10 +1950,13 @@ evidence does not run downstream of it.
 5. data_in/sensors.json metadata file (A's last hard-coding removed).
 
 ## Parked (validated studies, not on the critical path)
-`dirsplit/` transfer model — now level 3's engine for street/time priors;
-its leave-city-out validation (λ=0.26, matches the city's measured 52/48 at
-107) is the evidence it belongs there. `estimate_directions.py` (Gaussian),
-`build_dataset.py` (GNN prep — revisit only at high sensor density).
+`dirsplit/` transfer model — retained as a negative/diagnostic study, not a
+release prior. Gate M v3 found no candidate that robustly beat
+`constant_5050` across blocked-date, leave-city-out and leave-station-out
+folds; Gate S v5 found no closure-decision sensitivity across its registered
+stress range. Revisit only with materially new local directional evidence.
+`estimate_directions.py` (Gaussian) and `build_dataset.py` (GNN prep) remain
+research paths, not product dependencies.
 
 ## Key references
 - Bell & Shield (1996); Chen et al. (2009); Yang & Sun — **Path Flow

@@ -11,7 +11,8 @@ import validation_report as vr
 def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
                   structure_flags=(), seed_flags=(), with_baseline=True,
                   with_loso=True, with_temporal=True, purpose_incompatible=None,
-                  purpose_mix_relaxed=None):
+                  purpose_mix_relaxed=None,
+                  baseline_build_id="buildid0123456789ab"):
     sumo = tmp_path / "sumo"
     sumo.mkdir()
     web = tmp_path / "web" / "data"
@@ -54,6 +55,7 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
     (sumo / "net.net.xml").write_bytes(network_bytes)
     if with_baseline:
         (web / "scenarios" / "baseline.json").write_text(json.dumps({
+            "scenario": {"build_id": baseline_build_id},
             "flows": {"e": [1]},
             "seed_health": [{"seed": 1000, "loaded": 21600, "inserted": 21600,
                              "running_at_end": 0, "waiting_at_end": 0,
@@ -105,6 +107,29 @@ class TestStudyIdentity:
         del meta["build_id"]
         meta_path.write_text(json.dumps(meta))
         assert vr.assemble()["demand_build_id"] is None
+
+    def test_mismatched_baseline_fails_closed(self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch, baseline_build_id="stale-build")
+
+        report = vr.assemble()
+
+        identity = report["sections"]["scenario_identity"]
+        assert identity["status"] == "warn"
+        assert identity["demand_build_id"] == "buildid0123456789ab"
+        assert identity["baseline_demand_build_id"] == "stale-build"
+        assert report["sections"]["simulation"]["status"] == "missing"
+        assert report["sections"]["sensor_output"]["status"] == "missing"
+        assert "inaktuell baseline" in report["sections"]["simulation"]["reason"]
+        assert report["overall"] == "warn"
+
+    def test_unidentified_baseline_fails_closed(self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch, baseline_build_id=None)
+
+        report = vr.assemble()
+
+        assert report["sections"]["scenario_identity"]["status"] == "warn"
+        assert report["sections"]["simulation"]["status"] == "missing"
+        assert report["overall"] == "warn"
 
 
 class TestAssemble:

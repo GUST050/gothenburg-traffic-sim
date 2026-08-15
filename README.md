@@ -44,11 +44,12 @@ presented with it rather than a false claim of citywide accuracy.
 | Scandinavium | 1074, 1076 | Single direction |
 | Scandinavium | 107 | Genuinely two-way (both directions measured) |
 
-Direction is **not** recoverable from the delivered two-way totals for the
-5 single-direction sensors — every "Total" value is treated as a sum of both
-directions permanently. A trained model (see `dirsplit/` below) estimates
-the split for simulation purposes; it is disclosed as an estimate, not a
-measurement.
+Direction is only partly measured. Sensor 107 carries a two-way total plus a
+published local period D-factor; the other five stations measure one reviewed
+carriageway each and leave the opposite carriageway unmeasured. A trained model
+(see `dirsplit/` below) estimates the missing allocation for simulation
+purposes. The measured carriageway remains a hard count; the opposite estimate
+is a soft prior/ceiling and is never presented as a measurement.
 
 ## Architecture
 
@@ -191,12 +192,14 @@ prediction is trusted.
 **Deployed finding:** real two-way city streets are only *mildly* asymmetric
 — typical weekday deviation from 50/50 is 5–8 percentage points (e.g. 55/45),
 not the 80/20 an earlier, unvalidated Gaussian AM/PM heuristic
-(`estimate_directions.py`, kept only as a fallback when the trained model is
-absent) assumed. Predictions are James-Stein-shrunk toward 50/50 (only
+(`estimate_directions.py`, retained only as historical/diagnostic code)
+assumed. Predictions are James-Stein-shrunk toward 50/50 (only
 ~26% of the raw predicted deviation is treated as transferable signal,
 calibrated against pooled leave-city-out error) and reported as q10/q50/q90
-— the three build three separate demand variants, and Monte Carlo seeds are
-spread across them so direction uncertainty reaches the displayed confidence.
+stress surfaces. Normal demand uses q50 in all three compatibility seed slots;
+only an explicit `--direction-stress-variants` build substitutes q10/q90.
+Those arms are uncalibrated stress cases, not probability intervals or release
+evidence.
 
 ```bash
 make dirsplit-stations   # station metadata (open API, no key)

@@ -47,6 +47,7 @@ import os
 import hashlib
 import json
 import math
+import warnings
 from typing import Iterable, Mapping, Sequence
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -919,19 +920,35 @@ def repair_integer_bounds(
     else:
         route_lower = np.maximum(0.0, base - 20.0)
         route_upper = base + 20.0
-    result = milp(
-        c=np.r_[np.zeros(n), np.ones(2 * n),
-                np.full(n_measurement_deviations, sensor_miss_penalty),
-                np.full(n_preferred_deviations, preferred_miss_penalty)],
-        integrality=np.r_[np.ones(n),
-                          np.zeros(2 * n + n_extra_deviations)],
-        bounds=Bounds(np.r_[route_lower,
-                            np.zeros(2 * n + n_extra_deviations)],
-                      np.r_[route_upper,
-                            np.full(2 * n + n_extra_deviations, np.inf)]),
-        constraints=LinearConstraint(vstack(rows, format="csr"), lower, upper),
-        options={"time_limit": 20.0},
-    )
+    # The production publisher runs independent repairs in a ``fork`` pool.
+    # Letting each HiGHS instance also create a task executor is both severe
+    # oversubscription and unsafe after fork on macOS: a live 48-quarter build
+    # left every worker in ``HighsTaskExecutor`` for hours, before the solver
+    # could honour its 20-second limit. One solver thread per already-parallel
+    # worker avoids that deadlock and makes tie handling reproducible.
+    # SciPy forwards ``threads`` to HiGHS but warns because it is not in
+    # SciPy's smaller public option allow-list. Suppress only that known
+    # forwarding notice; every numerical/solver warning remains visible.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Unrecognized options detected: .*'threads'.*",
+            category=RuntimeWarning,
+        )
+        result = milp(
+            c=np.r_[np.zeros(n), np.ones(2 * n),
+                    np.full(n_measurement_deviations, sensor_miss_penalty),
+                    np.full(n_preferred_deviations, preferred_miss_penalty)],
+            integrality=np.r_[np.ones(n),
+                              np.zeros(2 * n + n_extra_deviations)],
+            bounds=Bounds(np.r_[route_lower,
+                                np.zeros(2 * n + n_extra_deviations)],
+                          np.r_[route_upper,
+                                np.full(2 * n + n_extra_deviations, np.inf)]),
+            constraints=LinearConstraint(
+                vstack(rows, format="csr"), lower, upper),
+            options={"time_limit": 20.0, "threads": 1},
+        )
     if not result.success or result.x is None:
         # Only HiGHS status 2 is a proof of infeasibility.  A time/iteration
         # limit (status 1) or numerical/unknown failure must never be treated
@@ -1079,6 +1096,7 @@ def solve_interval_with_relaxation(
     route_cost: np.ndarray | None = None,
     groups: list[tuple[list[int], float, float]] | None = None,
     required_groups: list[tuple[list[int], float, float]] | None = None,
+    invariant_groups: list[tuple[list[int], float, float]] | None = None,
     allow_structural_relaxation: bool = True,
     touch_index: TouchIndex | None = None,
 ) -> tuple[np.ndarray | None, int]:
@@ -1104,6 +1122,12 @@ def solve_interval_with_relaxation(
     RUNG_NOQUOTA_TOL1 -- after the Level-2 bounds, before any widening of the
     measurement band.
 
+    ``invariant_groups`` are experimental controls rather than behavioural
+    priors. They remain active on every rung. The direction-stress builder
+    uses one all-route equality to keep q10/q90 at q50's exact published
+    vehicle total for the quarter; dropping it would silently turn a
+    direction experiment back into a direction-plus-volume experiment.
+
     CORRECTED 2026-08-06. They used to remain active at EVERY rung, on the
     stated grounds that the solver "never reaches an apparently valid count
     fit by publishing a route with a fabricated purpose label". That
@@ -1121,13 +1145,15 @@ def solve_interval_with_relaxation(
     prevents an optional cap from winning only by discarding those existing
     Level-2 bounds (or by taking the LP no-bounds fallback); the caller then
     keeps its earlier, stronger solution instead."""
+    invariant_groups = [group for group in (invariant_groups or []) if group[0]]
     required_groups = [group for group in (required_groups or []) if group[0]]
     groups = [group for group in (groups or []) if group[0]]
 
     def active_groups(include_structural: bool,
                       include_required: bool = True
                       ) -> list[tuple[list[int], float, float]]:
-        return ((required_groups if include_required else [])
+        return (invariant_groups
+                + (required_groups if include_required else [])
                 + (groups if include_structural else []))
 
     sol = solve_interval_entropy(shapes, targets, bounds, priors,
@@ -1265,6 +1291,7 @@ def solve_interval_with_structure_guard(
     structure_groups: list[tuple[str, list[int], float]] | None = None,
     purpose_mix: Counter | dict[str, int] | None = None,
     touch_index: TouchIndex | None = None,
+    fixed_total: int | None = None,
 ) -> tuple[np.ndarray | None, int]:
     """Two-pass structure preservation around the relaxation ladder.
 
@@ -1282,9 +1309,24 @@ def solve_interval_with_structure_guard(
     pipeline and validate_sim's LOSO folds both delegate here, so LOSO can
     never silently calibrate under a different constraint set than the
     system that ships (the validated-vs-shipped mismatch class this
-    project has already had to fix twice)."""
+    project has already had to fix twice).
+
+    ``fixed_total`` is used only for direction stress arms. It is an
+    experimental invariant, not a plausibility prior, and therefore survives
+    every relaxation rung. ``None`` leaves normal q50/LOSO behaviour exactly
+    unchanged."""
+    invariant_groups = []
+    if fixed_total is not None:
+        if (isinstance(fixed_total, bool)
+                or not isinstance(fixed_total, (int, np.integer))
+                or fixed_total < 0):
+            raise ValueError("fixed_total must be a non-negative integer")
+        total = float(fixed_total)
+        invariant_groups = [(list(range(len(shapes))), total, total)]
+
     sol, rung = solve_interval_with_relaxation(
         shapes, targets, bounds, priors, route_cost=route_cost,
+        invariant_groups=invariant_groups,
         touch_index=touch_index)
     purpose_groups: list[tuple[list[int], float, float]] = []
     if sol is not None and purpose_mix:
@@ -1298,7 +1340,8 @@ def solve_interval_with_structure_guard(
             shapes, purpose_mix, int(round(float(sol.sum()))))
         purpose_sol, purpose_rung = solve_interval_with_relaxation(
             shapes, targets, bounds, priors, route_cost=route_cost,
-            required_groups=purpose_groups, touch_index=touch_index)
+            required_groups=purpose_groups,
+            invariant_groups=invariant_groups, touch_index=touch_index)
         if purpose_sol is not None:
             sol, rung = purpose_sol, purpose_rung
         else:
@@ -1346,6 +1389,7 @@ def solve_interval_with_structure_guard(
                 groups=[(members, 0.0, cap_share * total)
                         for members, cap_share in active.values()],
                 required_groups=purpose_groups,
+                invariant_groups=invariant_groups,
                 allow_structural_relaxation=allow_structural_relaxation,
                 touch_index=touch_index)
             if capped_sol is None or capped_rung > rung:

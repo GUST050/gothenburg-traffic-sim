@@ -31,6 +31,7 @@ import csv
 import hashlib
 import json
 import math
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
@@ -38,11 +39,13 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 import numpy as np
 
 from .config import DATA_DIR
+from .dataset import DATASET_PROTOCOL, META_PATH
 from .dataset import OUT_PATH as TABLE_PATH
 from .dataset import PROFILE_FEATURES
 from .features import FEATURE_NAMES
 
 REPORT_PATH = DATA_DIR / "gate_m_report.json"
+GATE_M_PROTOCOL = "dirsplit_gate_m_v3"
 
 #: Frozen before any fold was scored.
 #:
@@ -211,13 +214,21 @@ def load_rows(path: Path = TABLE_PATH, *, drop_oneway: bool = True,
     with open(path) as handle:
         raw = list(csv.DictReader(handle))
 
-    oneway_stations = deployed_oneway_stations(raw) if drop_oneway else set()
+    # Dataset v2 preserves invalid/missing cells for auditability. They are
+    # evidence about coverage, not labels, and must never enter a fit or the
+    # one-way screen. Legacy tables have no ``usable`` column and retain their
+    # old behaviour.
+    eligible = [record for record in raw
+                if record.get("usable", "1") == "1"
+                and 0.0 < _float(record.get("share")) < 1.0]
+    oneway_stations = deployed_oneway_stations(eligible) \
+        if drop_oneway else set()
 
     has_dates = "local_date" in (raw[0] if raw else {})
 
     rc_index = FEATURE_NAMES.index("radial_cos")
     rows: list[Row] = []
-    for record in raw:
+    for record in eligible:
         if record["station_id"] in oneway_stations:
             continue
         share = _float(record.get("share"))
@@ -238,12 +249,15 @@ def load_rows(path: Path = TABLE_PATH, *, drop_oneway: bool = True,
             is_weekend=is_weekend,
             share=share,
             n_obs=_float(record.get("n_obs"), 1.0),
-            mean_total=_float(record.get("mean_total_veh_h"), 1.0),
+            mean_total=_float(
+                record.get("mean_total_veh_h") or record.get("total_count"),
+                1.0),
             block=block,
             features=features,
             profile=tuple(_float(record.get(c)) for c in PROFILE_FEATURES),
-            day_block_id=(f"{record['city']}|{local_date}" if local_date
-                          else None),
+            day_block_id=(record.get("day_block_id")
+                          or (f"{record['station_id']}|{local_date}"
+                              if local_date else None)),
             local_date=local_date,
         ))
 
@@ -251,6 +265,7 @@ def load_rows(path: Path = TABLE_PATH, *, drop_oneway: bool = True,
     return rows, {
         "source": str(path),
         "raw_rows": len(raw),
+        "unusable_or_invalid_rows": len(raw) - len(eligible),
         "oneway_screen": "observed weekday-daytime mean share outside "
                          f"{DEPLOYED_TWO_WAY_BAND} (dirsplit/train.py)",
         "oneway_stations_dropped": len(oneway_stations),
@@ -469,38 +484,83 @@ class SimilarityWeightedLGBM(Candidate):
     deployment rather than peeking at the answer. ``score`` builds the
     matrix from ``fold.test`` features and the fit never sees ``r.share``
     for a test row.
+
+    The tournament enters this estimator twice. The current paired-total
+    deployment uses the four profile-shape features. The lower-complexity
+    ``similarity_weighted_lgbm_no_profile`` removes them, making its feature
+    semantics valid for a Gothenburg target where only one direction is
+    measured. It is a separate candidate rather than silently filling a
+    two-way-total feature with a one-direction proxy.
     """
 
     name = "similarity_weighted_lgbm"
-    complexity = 3
+    complexity = 4
 
-    def __init__(self, n_estimators: int = 400):
+    def __init__(self, n_estimators: int = 400, *,
+                 use_profile_features: bool = True):
         self.n_estimators = n_estimators
+        self.use_profile_features = bool(use_profile_features)
+        if not self.use_profile_features:
+            # A separately named, simpler candidate for single-direction
+            # deployment targets, where a two-way TOTAL profile does not
+            # exist with the training semantics.
+            self.name = "similarity_weighted_lgbm_no_profile"
+            self.complexity = 3
         self._model = None
         self._mu = None
         self._sd = None
         self._shrinkage = 1.0
 
     def _matrix(self, rows):
+        profile_width = len(PROFILE_FEATURES) \
+            if self.use_profile_features else 0
         out = np.zeros((len(rows), len(FEATURE_NAMES)
-                        + len(PROFILE_FEATURES) + 3), dtype=float)
+                        + profile_width + 3), dtype=float)
         for index, row in enumerate(rows):
             base = len(FEATURE_NAMES)
             out[index, :base] = row.features
-            out[index, base:base + len(PROFILE_FEATURES)] = row.profile
-            tail = base + len(PROFILE_FEATURES)
+            if self.use_profile_features:
+                out[index, base:base + profile_width] = row.profile
+            tail = base + profile_width
             out[index, tail] = math.sin(2 * math.pi * row.hour / 24)
             out[index, tail + 1] = math.cos(2 * math.pi * row.hour / 24)
             out[index, tail + 2] = float(row.is_weekend)
         return out
 
-    def _new_model(self):
+    def _new_model(self, alpha: float | None = None):
         import lightgbm as lgb
 
-        return lgb.LGBMRegressor(
+        options = dict(
             n_estimators=self.n_estimators, learning_rate=0.05, max_depth=5,
             num_leaves=31, subsample=0.8, colsample_bytree=0.8,
-            min_child_samples=20, random_state=42, n_jobs=-1, verbose=-1)
+            min_child_samples=20, random_state=42,
+            # This evaluator fits thousands of small, sequential fold models.
+            # LightGBM's all-core setting is pure scheduling here: on the
+            # reference host it was 10.6x slower (6.97 vs 0.65 s for ten
+            # identical 400-tree fits) and does not change the estimator.
+            n_jobs=1, verbose=-1)
+        if alpha is not None:
+            options.update(objective="quantile", alpha=alpha)
+        return lgb.LGBMRegressor(**options)
+
+    @staticmethod
+    def _predict_model(model, matrix: np.ndarray) -> np.ndarray:
+        """Predict without LightGBM/sklearn's synthetic-name warning.
+
+        LightGBM assigns ``Column_N`` names even when fitted on a NumPy array;
+        current sklearn then warns that the next NumPy array has no names.
+        Both arrays have the same deterministic column order. Suppress only
+        that cosmetic UserWarning locally; numerical/runtime warnings remain
+        visible and are still promoted by the Gate M verification command.
+        """
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="X does not have valid feature names, but .* was "
+                        "fitted with feature names",
+                category=UserWarning,
+                module="sklearn.utils.validation")
+            return np.asarray(model.predict(matrix), dtype=float)
 
     #: Numerical floors. Every one of these guards a real failure mode seen
     #: on the tracked table: a degenerate bandwidth divides by zero, a large
@@ -534,7 +594,7 @@ class SimilarityWeightedLGBM(Candidate):
         counts: dict[str, int] = {}
         for row in rows:
             counts[row.station_id] = counts.get(row.station_id, 0) + 1
-        evidence = np.array([max(r.n_obs, 1.0) ** 0.5 for r in rows],
+        evidence = np.array([max(r.approx_total_count, 1.0) ** 0.5 for r in rows],
                             dtype=float)
         station = np.array([1.0 / counts[r.station_id] for r in rows],
                            dtype=float)
@@ -544,13 +604,13 @@ class SimilarityWeightedLGBM(Candidate):
                 "similarity weights are not finite; refusing to fit a model "
                 "on weights that cannot be interpreted")
         if weights.sum() <= 0:
-            # Every training row is infinitely far from the target in feature
-            # space. Uniform weights are the honest fallback: it says "no row
-            # resembles this target" rather than silently fitting on zeros.
-            weights = np.full(len(weights), 1.0 / max(len(weights), 1))
+            raise ValueError(
+                "all similarity weights are zero; the target is outside the "
+                "training support and cannot be evaluated as deployment")
         return weights
 
-    def _fit_shrinkage(self, rows, centres_z) -> float:
+    def _fit_shrinkage(self, rows, centres_z,
+                       domain_stations: set[str] | None = None) -> float:
         """Fit lambda the way deployment does, but INSIDE the training fold.
 
         `train.py` regresses observed deviation from 0.5 on predicted
@@ -578,7 +638,9 @@ class SimilarityWeightedLGBM(Candidate):
             target = np.array([r.share for r in inner_train])
             by_station: dict[str, list[Row]] = {}
             for row in rows:
-                if row.city == held:
+                if (row.city == held
+                        and (domain_stations is None
+                             or row.station_id in domain_stations)):
                     by_station.setdefault(row.station_id, []).append(row)
             for station, inner_test in sorted(by_station.items()):
                 centre_z = centres_z.get(station)
@@ -588,47 +650,92 @@ class SimilarityWeightedLGBM(Candidate):
                 model.fit(matrix, target,
                           sample_weight=self._weights(inner_train, matrix,
                                                       centre_z))
-                values = np.clip(model.predict(self._matrix(inner_test)),
-                                 0.1, 0.9)
+                values = np.clip(
+                    self._predict_model(model, self._matrix(inner_test)),
+                    0.1, 0.9)
                 predicted.extend((values - 0.5).tolist())
                 observed.extend([r.share - 0.5 for r in inner_test])
         if not predicted:
             return 1.0
         dp = np.array(predicted)
         dy = np.array(observed)
-        finite = np.isfinite(dp) & np.isfinite(dy)
-        if not finite.any():
-            return 1.0
-        dp, dy = dp[finite], dy[finite]
-        denominator = float(dp @ dp)
+        if not np.all(np.isfinite(dp)) or not np.all(np.isfinite(dy)):
+            raise ValueError(
+                "nested shrinkage produced non-finite held-out values; "
+                "refusing to discard failed rows from the calibration")
+        denominator = float(np.sum(dp * dp, dtype=np.float64))
         if not math.isfinite(denominator) or \
                 denominator < self.MIN_SHRINKAGE_DENOMINATOR:
             # Predictions carry no deviation to calibrate, so there is
             # nothing to shrink toward 0.5 that is not already there.
             return 1.0
-        value = float(dp @ dy) / denominator
-        return float(np.clip(value, 0.0, 1.0)) if math.isfinite(value) else 1.0
+        value = float(np.sum(dp * dy, dtype=np.float64)) / denominator
+        if not math.isfinite(value):
+            raise ValueError("nested shrinkage coefficient is not finite")
+        return float(np.clip(value, 0.0, 1.0))
 
     def station_centre(self, rows) -> np.ndarray:
         """Standardised kernel centre for one target station's rows."""
         static = self._matrix(rows)[:, :len(FEATURE_NAMES)]
         return ((static.mean(axis=0) - self._mu) / self._sd)
 
-    def fit(self, rows, target_features=None):
-        # Deployment trains on weekday 06-20 only. Rows outside that window
-        # stay in the EVALUATION set so the report can show what happens
-        # where the model is used but was never trained.
+    def _prepare_training(self, rows):
         trainable = [r for r in rows if in_deployed_training_window(r)]
         if len(trainable) < 30:
             self._model = None
-            return self
+            return trainable, None, None
         matrix = self._matrix(trainable)
         target = np.array([r.share for r in trainable], dtype=float)
-
         static = matrix[:, :len(FEATURE_NAMES)]
         self._mu = static.mean(axis=0)
         self._sd = static.std(axis=0)
         self._sd[self._sd < 1e-9] = 1.0
+        return trainable, matrix, target
+
+    def _domain_stations(self, rows,
+                         deployment_target_features: np.ndarray | None
+                         ) -> set[str] | None:
+        """Deployment's Gothenburg-domain subset, fitted inside the fold."""
+        if deployment_target_features is None or not len(
+                deployment_target_features):
+            return None
+        target = np.asarray(deployment_target_features, dtype=float)
+        if target.ndim != 2 or target.shape[1] != len(FEATURE_NAMES) \
+                or not np.all(np.isfinite(target)):
+            raise ValueError("deployment target features are malformed")
+        static = self._matrix(rows)[:, :len(FEATURE_NAMES)]
+        standardised = (static - self._mu) / self._sd
+        target_centre = (target.mean(axis=0) - self._mu) / self._sd
+        distances = np.sqrt(((standardised - target_centre) ** 2).sum(axis=1))
+        cutoff = float(np.median(distances))
+        return {row.station_id for row, distance in zip(rows, distances)
+                if distance <= cutoff}
+
+    def prepare_shrinkage(
+            self, rows,
+            deployment_target_features: np.ndarray | None = None) -> float:
+        """Fit the fold-level lambda once; it is shared by target stations."""
+        trainable, _matrix, _target = self._prepare_training(rows)
+        if len(trainable) < 30:
+            return 1.0
+        by_station: dict[str, list[Row]] = {}
+        for row in trainable:
+            by_station.setdefault(row.station_id, []).append(row)
+        centres_z = {station: self.station_centre(group)
+                     for station, group in by_station.items()}
+        domain = self._domain_stations(trainable, deployment_target_features)
+        return self._fit_shrinkage(trainable, centres_z, domain)
+
+    def fit(self, rows, target_features=None, *, shrinkage_override=None,
+            deployment_target_features=None):
+        # Deployment trains on weekday 06-20 only. Rows outside that window
+        # stay in the EVALUATION set so the report can show what happens
+        # where the model is used but was never trained.
+        trainable, matrix, target = self._prepare_training(rows)
+        if len(trainable) < 30:
+            return self
+        assert matrix is not None and target is not None
+        static = matrix[:, :len(FEATURE_NAMES)]
 
         # Centre the kernel on the TARGET, as deployment does. Falling back
         # to the training centroid only when no target is supplied keeps the
@@ -641,17 +748,15 @@ class SimilarityWeightedLGBM(Candidate):
         else:
             centre_z = ((static - self._mu) / self._sd).mean(axis=0)
 
-        # Every TRAINING station's own centre, so the nested shrinkage fit
-        # can re-centre per inner held-out station exactly as deployment's
-        # pooled leave-city-out calibration does.
-        by_station: dict[str, list[Row]] = {}
-        for row in trainable:
-            by_station.setdefault(row.station_id, []).append(row)
-        centres_z = {station: self.station_centre(group)
-                     for station, group in by_station.items()}
-
-        self._shrinkage = self._fit_shrinkage(trainable, centres_z)
-        self._model = self._new_model()
+        self._shrinkage = (float(shrinkage_override)
+                           if shrinkage_override is not None else
+                           self.prepare_shrinkage(
+                               rows, deployment_target_features))
+        # Production publishes q50 from the alpha=.5 quantile model. The
+        # nested lambda is intentionally calibrated with the mean regressor,
+        # matching train.py, but the final point estimate must be the model
+        # predict.py actually reads.
+        self._model = self._new_model(alpha=0.5)
         self._model.fit(matrix, target,
                         sample_weight=self._weights(trainable, matrix, centre_z))
         return self
@@ -659,14 +764,24 @@ class SimilarityWeightedLGBM(Candidate):
     def predict(self, rows):
         if self._model is None:
             return np.full(len(rows), 0.5, dtype=float)
-        raw = np.clip(self._model.predict(self._matrix(rows)), 0.1, 0.9)
+        raw = np.clip(
+            self._predict_model(self._model, self._matrix(rows)), 0.1, 0.9)
         # Deployment ships 0.5 + lambda * (pred - 0.5); evaluating the raw
         # prediction would score a model nobody runs.
-        return np.clip(0.5 + self._shrinkage * (raw - 0.5), 0.1, 0.9)
+        result = np.clip(0.5 + self._shrinkage * (raw - 0.5), 0.1, 0.9)
+        # The trainer fits weekday 06-20 only. A model output elsewhere is an
+        # extrapolation, not a trained split. Deployment falls back to the
+        # maximum-entropy point estimate outside that support, so the
+        # tournament must score the same hybrid policy.
+        supported = np.array(
+            [in_deployed_training_window(row) for row in rows], dtype=bool)
+        result[~supported] = 0.5
+        return result
 
 
 def default_candidates() -> list[Candidate]:
     return [Constant5050(), ShrunkDFactor(), BetaBinomialDFactor(),
+            SimilarityWeightedLGBM(use_profile_features=False),
             SimilarityWeightedLGBM()]
 
 
@@ -782,13 +897,15 @@ def provenance_digests(table_path: Path) -> dict[str, Any]:
     the candidates would leave a stale report indistinguishable from a
     current one.
     """
-    def digest_file(path: Path) -> str | None:
+    def digest_file(path: Path) -> str:
         try:
             return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-        except OSError:
-            return None
+        except OSError as error:
+            raise FileNotFoundError(
+                f"cannot provenance-bind Gate M: missing {path}") from error
 
     module = Path(__file__).resolve()
+    meta_path = table_path.with_name(META_PATH.name)
     return {
         "training_table": str(table_path),
         "training_table_digest": digest_file(table_path),
@@ -796,10 +913,76 @@ def provenance_digests(table_path: Path) -> dict[str, Any]:
         "trainer_module_digest": digest_file(module.parent / "train.py"),
         "dataset_module_digest": digest_file(module.parent / "dataset.py"),
         "features_module_digest": digest_file(module.parent / "features.py"),
+        "dataset_meta": str(meta_path),
+        "dataset_meta_digest": digest_file(meta_path),
         "note": ("digests bind this report to the exact table and scoring "
                  "code it came from; a report whose digests no longer match "
                  "the tree is stale, not current"),
     }
+
+
+def validate_dataset_provenance(table_path: Path) -> dict[str, Any]:
+    """Verify the v2 table all the way back to its raw-file manifest."""
+    meta_path = table_path.with_name(META_PATH.name)
+    try:
+        meta = json.loads(meta_path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(
+            f"Gate M requires a readable dataset-v2 manifest: {meta_path}") \
+            from error
+    if meta.get("protocol") != DATASET_PROTOCOL:
+        raise ValueError(
+            f"Gate M requires {DATASET_PROTOCOL}, got {meta.get('protocol')!r}")
+    live_table = hashlib.sha256(table_path.read_bytes()).hexdigest()
+    if meta.get("primary_table_sha256") != live_table:
+        raise ValueError(
+            "training table does not match training_table_meta.json; rebuild "
+            "the dataset instead of evaluating mixed provenance")
+    sources = meta.get("source_volume_files")
+    if not isinstance(sources, list) or not sources:
+        raise ValueError("dataset-v2 manifest binds no raw volume files")
+    source_key = hashlib.sha256(json.dumps(
+        sources, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    if source_key != meta.get("source_content_key"):
+        raise ValueError("dataset-v2 raw source content key is invalid")
+    drifted = []
+    for record in sources:
+        try:
+            live = hashlib.sha256(Path(record["path"]).read_bytes()).hexdigest()
+        except (KeyError, OSError, TypeError):
+            drifted.append(str(record.get("path", "<missing path>")))
+            continue
+        if live != record.get("sha256"):
+            drifted.append(str(record["path"]))
+    if drifted:
+        raise ValueError(
+            "dataset-v2 raw volume provenance drifted for "
+            f"{len(drifted)} file(s): {drifted[:3]}")
+    return {
+        "protocol": meta["protocol"],
+        "manifest": str(meta_path),
+        "manifest_sha256": hashlib.sha256(meta_path.read_bytes()).hexdigest(),
+        "source_content_key": source_key,
+        "source_volume_files": len(sources),
+        "rows": int(meta.get("rows", 0)),
+        "usable_rows": int(meta.get("usable_rows", 0)),
+        "day_blocks": int(meta.get("day_blocks", 0)),
+    }
+
+
+def deployment_target_matrix() -> np.ndarray:
+    """Static features of the Gothenburg sensors deployment predicts."""
+    from .train import target_static_features
+
+    targets = target_static_features()
+    if not targets:
+        raise ValueError("deployment exposes no Gothenburg target features")
+    matrix = np.asarray([targets[key] for key in sorted(targets)], dtype=float)
+    if (matrix.ndim != 2 or matrix.shape[1] != len(FEATURE_NAMES)
+            or not np.all(np.isfinite(matrix))):
+        raise ValueError("deployment target feature matrix is malformed")
+    return matrix
 
 
 @dataclass(frozen=True)
@@ -828,7 +1011,9 @@ class HeldOut:
 
 
 def held_out_predictions(candidate: Candidate,
-                         folds: Sequence[Fold]) -> HeldOut:
+                         folds: Sequence[Fold],
+                         deployment_target_features: np.ndarray | None = None,
+                         ) -> HeldOut:
     """Fit per fold on the training side only, then pool held-out rows.
 
     ONE MODEL PER HELD-OUT STATION, not one per fold. Deployment
@@ -856,13 +1041,27 @@ def held_out_predictions(candidate: Candidate,
     groups: list[tuple[str, ...]] = []
 
     for fold in folds:
+        fold_shrinkage = None
+        if isinstance(candidate, SimilarityWeightedLGBM):
+            # Lambda depends on the outer training fold, not on which target
+            # station is predicted. Computing it inside every station fit
+            # multiplied the real tournament into thousands of redundant
+            # LightGBM fits.
+            fold_shrinkage = copy.deepcopy(candidate).prepare_shrinkage(
+                list(fold.train), deployment_target_features)
         by_station: dict[str, list[Row]] = {}
         for row in fold.test:
             by_station.setdefault(row.station_id, []).append(row)
         for _station, rows in sorted(by_station.items()):
             target_features = np.array([r.features for r in rows], dtype=float)
-            fitted = copy.deepcopy(candidate).fit(
-                list(fold.train), target_features=target_features)
+            fitted = copy.deepcopy(candidate)
+            if isinstance(fitted, SimilarityWeightedLGBM):
+                fitted.fit(
+                    list(fold.train), target_features=target_features,
+                    shrinkage_override=fold_shrinkage,
+                    deployment_target_features=deployment_target_features)
+            else:
+                fitted.fit(list(fold.train), target_features=target_features)
             predicted.extend(np.asarray(
                 fitted.predict(list(rows)), dtype=float).tolist())
             actual.extend(r.share for r in rows)
@@ -1070,8 +1269,10 @@ def decide_gate_m(reports: Mapping[str, Mapping[str, Any]],
 
 
 def run(path: Path = TABLE_PATH) -> dict[str, Any]:
+    dataset_provenance = validate_dataset_provenance(path)
     rows, meta = load_rows(path)
     candidates = default_candidates()
+    deployment_targets = deployment_target_matrix()
 
     builders: dict[str, Callable[[Sequence[Row]], list[Fold]]] = {
         "leave_city_out": leave_city_out,
@@ -1090,7 +1291,8 @@ def run(path: Path = TABLE_PATH) -> dict[str, Any]:
                      if folds}
     held: dict[str, dict[str, HeldOut]] = {}
     for candidate in candidates:
-        per_kind = {kind: held_out_predictions(candidate, folds)
+        per_kind = {kind: held_out_predictions(
+                        candidate, folds, deployment_targets)
                     for kind, folds in folds_by_kind.items()}
         if per_kind:
             held[candidate.name] = per_kind
@@ -1114,7 +1316,7 @@ def run(path: Path = TABLE_PATH) -> dict[str, Any]:
                              comparisons=comparisons,
                              fold_kinds=sorted(folds_by_kind))
     report = {
-        "protocol": "dirsplit_gate_m_v2",
+        "protocol": GATE_M_PROTOCOL,
         "selection_rule": SELECTION_RULE,
         "selection_rule_text": SELECTION_RULE_TEXT,
         "bootstrap_samples": BOOTSTRAP_SAMPLES,
@@ -1123,7 +1325,12 @@ def run(path: Path = TABLE_PATH) -> dict[str, Any]:
         "required_fold_kinds": list(REQUIRED_FOLD_KINDS),
         "release_evidence": False,
         "input": meta,
+        "dataset": dataset_provenance,
         "provenance": provenance_digests(path),
+        "deployment_target_features": {
+            "rows": int(deployment_targets.shape[0]),
+            "sha256": content_digest(deployment_targets.tolist()),
+        },
         "temporal_support": temporal_support(rows),
         "fold_kinds": sorted(folds_by_kind),
         "blocked_date_available": bool(date_folds),

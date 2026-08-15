@@ -74,9 +74,10 @@ def write_counts(
 ) -> int:
     """15-min edgeData intervals; sim time 0 = window start. Returns n written.
 
-    Direction share per Total edge comes from the estimated split file
-    (dirsplit model or Gaussian fallback) when available, else an even
-    split. "S" sensor edges always take the full count.
+    The release share per Total edge is the registered maximum-entropy 50/50
+    policy plus any applicable local anchor. Explicit q10/q90 ``split_key``
+    values retain the transferred-model stress cases for diagnostics. "S"
+    sensor edges always take the full count.
 
     ``anchor_day``/``anchor_epoch`` carry sensor 107's published local
     anchor, exactly as ``demand.intake.build_targets`` does. This is the
@@ -89,7 +90,10 @@ def write_counts(
         split_key, anchor_day=anchor_day, anchor_flows=flows,
         anchor_epoch=anchor_epoch)
     if est_shares:
-        print(f"  Using ESTIMATED direction split ({split_key})"
+        label = ("RELEASE 50/50 direction policy"
+                 if split_key == "edge_shares"
+                 else "DIAGNOSTIC estimated direction stress")
+        print(f"  Using {label} ({split_key})"
               + (f", anchored for {anchor_day}" if anchor_day else ""))
     else:
         print("  No direction_split.json — falling back to even split")

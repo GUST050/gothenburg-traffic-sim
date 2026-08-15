@@ -1,0 +1,224 @@
+{
+ "claim_boundary": "This artifact measures magnitude and a rejected shape candidate. It does not replace Gate M, calibrate q10/q90 probabilities, measure realised PFE opposite flow, or decide closure sensitivity.",
+ "content_key": "821dc51a7eee5517bafbc7a1d7810abe065ed3f8ca30326fc46dc457dc8663c2",
+ "dataset": {
+  "aggregate_raw_rows": 15346,
+  "day_blocks": 5524,
+  "note": "The aggregate is diagnostic only; training and Gate M read the date-level primary table.",
+  "primary_rows": 247464,
+  "primary_usable_rows": 232500,
+  "protocol": "dirsplit_training_table_v2",
+  "source_content_key": "866a1f52136f79d7e6bf3cddf7c3df0eff931d8b5f5ed8769d6a598b22d8add6",
+  "source_volume_files": 188
+ },
+ "decision_authority": "diagnostic_only",
+ "inputs": {
+  "aggregate_diagnostic": {
+   "path": "data/dirsplit/training_table_aggregated.csv",
+   "sha256": "d533be26f6c0fdc168d6d5e4362c64983b0aae45b2f8bc057bb9d8079baa8e7b"
+  },
+  "dataset_meta": {
+   "path": "data/dirsplit/training_table_meta.json",
+   "sha256": "0b89424e75f8002b7e729ffddb38480a39384d0958dcf7080b280f7f54764c33"
+  },
+  "direction_split": {
+   "path": "sumo/direction_split.json",
+   "sha256": "354b74909e20a555769affd5f8db7eecc41727336d3dd2dc4d7bd2c70d371d6a"
+  },
+  "flows": {
+   "path": "web/data/flows.json",
+   "sha256": "cd8793581c02d89d0106fd3e4ae35e46eaddb19cf29f5bb047d49e9556f22be6"
+  },
+  "measurement_script": {
+   "path": "tools/measure_dirsplit_magnitude_shape.py",
+   "sha256": "dd522f74522851c53680a606c0e6756d44ebf0ec6f0eb4e8d7f1cbc0a82b64cd"
+  },
+  "network": {
+   "path": "web/data/network.geojson",
+   "sha256": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+  },
+  "primary_table": {
+   "path": "data/dirsplit/training_table.csv",
+   "sha256": "3eae6fdc353a7c334f5ffaec0b4b311c66b4782f660d24ca6e1dca0b414c630e"
+  },
+  "prior_flows": {
+   "path": "sumo/prior_flows.json",
+   "sha256": "01cf77e3ea6fd6ffe5c7102f22b01233892a13b90f6c22274a017349d8c83050"
+  },
+  "sensors": {
+   "path": "data_in/sensors.json",
+   "sha256": "2fe62df67ac1db513fad05682f6c5412324a9b3ebbf88731ad37ca5788508000"
+  }
+ },
+ "level1": {
+  "active_q50_shape_vs_flat_same_local_level": {
+   "pct_of_all_measured_mass": 0.101367,
+   "reallocated_vehicles": 8593.054
+  },
+  "active_q50_with_local_anchor_vs_flat_5050": {
+   "pct_of_all_measured_mass": 0.603642,
+   "reallocated_vehicles": 51171.965
+  },
+  "active_volume_weighted_share_by_sensor": {
+   "107": 0.522937955843306
+  },
+  "anchor_day": "2025-09-16",
+  "interpretation": "raw_transferred_policy excludes local directional references; active_q50 includes them. The shape-only comparison holds each active sensor's volume-weighted level fixed.",
+  "raw_transferred_policy_vs_flat_5050": {
+   "q10_stress": {
+    "max_abs_share_deviation_from_5050": 0.4,
+    "pct_of_all_measured_mass": 2.114156,
+    "reallocated_vehicles": 179221.354
+   },
+   "q50": {
+    "max_abs_share_deviation_from_5050": 0.01,
+    "pct_of_all_measured_mass": 0.104391,
+    "reallocated_vehicles": 8849.473
+   },
+   "q90_stress": {
+    "max_abs_share_deviation_from_5050": 0.4,
+    "pct_of_all_measured_mass": 4.233881,
+    "reallocated_vehicles": 358914.764
+   }
+  },
+  "two_way_level1_mass": 2230886.0,
+  "two_way_pct_of_measured_mass": 26.316295
+ },
+ "level23": {
+  "authority": "q50 is a soft Level-3 prior; the stress envelope contributes a zero-to-upper Level-2 ceiling. These are pre-PFE quantities, not realised simulated traffic, and the ceiling/priors yield before the measured Level-1 band is widened.",
+  "by_sensor": {
+   "1074": {
+    "implicit_opposite_q50": 1027270.605,
+    "measured_annual_mass": 1014580.0,
+    "measured_edge": "60790252_60790253_0",
+    "opposite_edge": "60790253_60790252_0",
+    "stress_envelope_high": 2096770.777,
+    "stress_envelope_low": 758160.238
+   },
+   "1076": {
+    "implicit_opposite_q50": 1541900.201,
+    "measured_annual_mass": 1529550.0,
+    "measured_edge": "30420757_30421744_0",
+    "opposite_edge": "559960490_1305379743_0",
+    "stress_envelope_high": 3366539.632,
+    "stress_envelope_low": 1075142.851
+   },
+   "133": {
+    "implicit_opposite_q50": 1229377.846,
+    "measured_annual_mass": 1257939.0,
+    "measured_edge": "26842525_26355153_0",
+    "opposite_edge": "26355153_26842525_0",
+    "stress_envelope_high": 2438559.395,
+    "stress_envelope_low": 830101.658
+   },
+   "134": {
+    "implicit_opposite_q50": 948011.466,
+    "measured_annual_mass": 947602.0,
+    "measured_edge": "26355153_96523321_0",
+    "opposite_edge": "96523321_26355153_0",
+    "stress_envelope_high": 1940342.195,
+    "stress_envelope_low": 647199.158
+   },
+   "2276": {
+    "implicit_opposite_q50": 1494721.303,
+    "measured_annual_mass": 1496647.0,
+    "measured_edge": "26355153_91615277_0",
+    "opposite_edge": "91615277_26355153_0",
+    "stress_envelope_high": 3096389.523,
+    "stress_envelope_low": 1043336.717
+   }
+  },
+  "implicit_opposite_q50_annualised": 6241281.42,
+  "single_direction_measured_mass": 6246318.0,
+  "stress_envelope_high_annualised": 12938601.522,
+  "stress_envelope_low_annualised": 4353940.622,
+  "stress_envelope_width_annualised": 8584660.9
+ },
+ "measured_mass": {
+  "by_sensor": {
+   "107": 2230886.0,
+   "1074": 1014580.0,
+   "1076": 1529550.0,
+   "133": 1257939.0,
+   "134": 947602.0,
+   "2276": 1496647.0
+  },
+  "deduplication": "each directional station is counted once; the identical flow copied onto both edges of a two-way Total sensor is counted once",
+  "semantics": {
+   "107": "two_way_total",
+   "1074": "directional",
+   "1076": "directional",
+   "133": "directional",
+   "134": "directional",
+   "2276": "directional"
+  },
+  "total": 8477204.0
+ },
+ "pair_sum_validation": {
+  "arms": [
+   "q50",
+   "q10_stress",
+   "q90_stress"
+  ],
+  "max_abs_pair_sum_deviation": 0.0,
+  "passes_exact_pair_sum": true,
+  "sensors": 6,
+  "slots_checked": 1728
+ },
+ "protocol": "dirsplit_magnitude_shape_diagnostic_v1",
+ "recorded": "2026-08-15",
+ "release_evidence": false,
+ "reproduction_command": "MPLCONFIGDIR=/tmp/gs-dirsplit-mpl PYTHONDONTWRITEBYTECODE=1 python3 tools/measure_dirsplit_magnitude_shape.py --emit-evidence validation/dirsplit_magnitude_shape_diagnostic_v1.json",
+ "shape_transfer": {
+  "cities": [
+   "bergen",
+   "oslo",
+   "stavanger",
+   "trondheim"
+  ],
+  "decision": "NEGATIVE_EVIDENCE",
+  "decision_text": "A level/shape product candidate is not justified unless the station-blocked leave-city-out confidence interval is wholly below zero.",
+  "deployment_window_rows": 1214,
+  "hour_lookup_improvement_vs_flat_pct": 7.0432,
+  "hour_lookup_paired_station_block_bootstrap": {
+   "ci95": [
+    -0.00722106,
+    0.00015928
+   ],
+   "difference": "hour_lookup_absolute_error - flat_absolute_error",
+   "samples": 2000,
+   "seed": 20260814,
+   "significant_win": false
+  },
+  "leave_city_out_mae": {
+   "flat_no_shape": 0.04897915,
+   "leave_city_hour_lookup_15_values": 0.04552945,
+   "leave_city_lgbm_19_features": 0.04836509
+  },
+  "level_variance_fraction": 0.3909,
+  "lgbm_improvement_vs_flat_pct": 1.2537,
+  "mean_shape_by_hour": {
+   "10": 0.009667,
+   "11": 0.001385,
+   "12": -0.004677,
+   "13": -0.014859,
+   "14": -0.029784,
+   "15": -0.042019,
+   "16": -0.031068,
+   "17": -0.011714,
+   "18": -0.008101,
+   "19": -0.008863,
+   "20": -0.015298,
+   "6": 0.056149,
+   "7": 0.046333,
+   "8": 0.033269,
+   "9": 0.020272
+  },
+  "raw_rows": 15346,
+  "screened_rows": 3694,
+  "shape_variance_fraction": 0.6091,
+  "source": "data/dirsplit/training_table_aggregated.csv",
+  "source_role": "diagnostic aggregate only; not used by Gate M/training",
+  "stations": 81
+ }
+}

@@ -9,6 +9,7 @@ Patch SUMO_DIR/GEO_PATH HERE for these functions.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -62,9 +63,20 @@ def demand_metadata(*, start_date: str, days: int, source: str, begin: str,
         "epoch_sim": epoch_sim.isoformat(),
         "direction_split": direction_split,
         "n_variants": n_variants,
-        "note": "Total sensor counts split over the two directed edges using "
-                "the estimated time-of-day split (estimate_directions.py); "
-                "direction is not measured in the delivered data.",
+        "note": (
+            "Total sensor counts use the provenance-bound data-trained q50 "
+            "direction split plus applicable local directional anchors; "
+            "50/50 is only a missing-model fallback and q10/q90 remain "
+            "explicit uncertainty variants."
+            if direction_split.startswith("trained_q50") else
+            "Total sensor counts use the Gate-M-selected maximum-entropy "
+            "50/50 direction policy plus applicable local directional "
+            "anchors; transferred-model q10/q90 values are diagnostic stress "
+            "inputs only."
+            if direction_split.startswith("constant_5050") else
+            "Total sensor counts use the declared estimated direction split; "
+            "direction is not measured in the delivered data."
+        ),
     }
     if demand_spec is not None:
         meta["demand_spec"] = dict(demand_spec)
@@ -315,17 +327,116 @@ def load_sensor_edges() -> dict[str, list[str]]:
 SENSOR_REGISTRY_PATH = Path("data_in/sensors.json")
 
 
+def _validated_direction_share_block(
+        data: Any, key: str, *, path: Path,
+) -> dict[str, list[float]]:
+    """Flatten one complete, complementary direction arm.
+
+    Diagnostic q arms are evidence inputs, not best-effort hints. A partial
+    file previously fell back to q50 independently per station, so an
+    explicitly requested q10/q90 run could silently be a hybrid stress case.
+    Validate the exact two-edge, 96-slot contract before returning anything.
+    """
+    if not isinstance(data, dict) or not data:
+        raise ValueError(f"{path} must contain a non-empty sensor object")
+
+    flattened: dict[str, list[float]] = {}
+    for sensor_id, record in sorted(data.items(), key=lambda item: str(item[0])):
+        if not isinstance(record, dict):
+            raise ValueError(
+                f"{path} sensor {sensor_id!r} must contain an object")
+        central = record.get("edge_shares")
+        block = record.get(key)
+        if not isinstance(central, dict) or len(central) != 2:
+            raise ValueError(
+                f"{path} sensor {sensor_id!r} needs exactly two central edges")
+        if not isinstance(block, dict) or len(block) != 2:
+            raise ValueError(
+                f"{path} sensor {sensor_id!r} is missing a complete {key} arm")
+        if set(block) != set(central):
+            raise ValueError(
+                f"{path} sensor {sensor_id!r} {key} edges differ from edge_shares")
+
+        series_by_edge: dict[str, list[float]] = {}
+        for edge_id, raw_series in block.items():
+            if edge_id in flattened:
+                raise ValueError(
+                    f"{path} edge {edge_id!r} appears under multiple sensors")
+            if not isinstance(raw_series, list) or len(raw_series) != 96:
+                raise ValueError(
+                    f"{path} sensor {sensor_id!r} edge {edge_id!r} {key} "
+                    "must contain exactly 96 slots")
+            values: list[float] = []
+            for slot, raw_value in enumerate(raw_series):
+                if isinstance(raw_value, bool):
+                    raise ValueError(
+                        f"{path} {sensor_id!r}/{edge_id}/{key}[{slot}] is boolean")
+                try:
+                    value = float(raw_value)
+                except (TypeError, ValueError) as error:
+                    raise ValueError(
+                        f"{path} {sensor_id!r}/{edge_id}/{key}[{slot}] is not numeric") \
+                        from error
+                if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+                    raise ValueError(
+                        f"{path} {sensor_id!r}/{edge_id}/{key}[{slot}] "
+                        "must be finite and within [0, 1]")
+                values.append(value)
+            series_by_edge[str(edge_id)] = values
+
+        left, right = series_by_edge.values()
+        for slot, (a, b) in enumerate(zip(left, right)):
+            if not math.isclose(a + b, 1.0, rel_tol=0.0, abs_tol=1e-9):
+                raise ValueError(
+                    f"{path} sensor {sensor_id!r} {key}[{slot}] does not sum to 1")
+        flattened.update(series_by_edge)
+    return flattened
+
+
+def _unsupported_day_fallback(data: Any, key: str) -> Any:
+    """Maximum-entropy point plus broad interval for untrained weekends."""
+    if not isinstance(data, dict):
+        return data
+    output = {}
+    for sensor_id, record in data.items():
+        if not isinstance(record, dict):
+            output[sensor_id] = record
+            continue
+        central = record.get("edge_shares")
+        if not isinstance(central, dict) or len(central) != 2:
+            output[sensor_id] = record
+            continue
+        left, right = central
+        if key == "edge_shares_q10":
+            values = (0.1, 0.9)
+        elif key == "edge_shares_q90":
+            values = (0.9, 0.1)
+        else:
+            values = (0.5, 0.5)
+        updated = dict(record)
+        updated[key] = {
+            left: [values[0]] * 96,
+            right: [values[1]] * 96,
+        }
+        output[sensor_id] = updated
+    return output
+
+
 def load_direction_split(key: str = "edge_shares",
                          anchor_day: str | None = None,
                          anchor_flows: Mapping[str, list] | None = None,
                          anchor_epoch: Any = None,
                          ) -> dict[str, list[float]]:
-    """{edge_id: [96 shares]} from the estimated split file, {} if not built.
+    """{edge_id: [96 shares]} from the registered direction policy.
 
-    key selects the quantile: "edge_shares" (q50 point estimate) or
+    ``edge_shares`` is the trained q50 point estimate, followed by any
+    applicable Level-1 local anchor (currently sensor 107's published 52/48
+    D-factor). 50/50 is the fallback only when no trained split exists.
+
+    The explicit diagnostic keys select the legacy model stress cases:
     "edge_shares_q10"/"edge_shares_q90" (interval bounds from
-    dirsplit/predict.py — used to build demand VARIANTS so Monte Carlo
-    includes direction uncertainty).
+    dirsplit/predict.py). They are retained for registered sensitivity work,
+    but normal demand builds do not request them.
 
     ``anchor_day`` (Fas 0A) opts into the published local anchor. When a
     calendar day is supplied, any two-way station whose registry record
@@ -347,18 +458,25 @@ def load_direction_split(key: str = "edge_shares",
     is — instead of an unweighted mean of 96 slot values. Omitting them falls
     back to uniform weights.
 
-    ``anchor_day=None`` is the default and reproduces the previous behaviour
-    byte for byte, so every existing caller is unaffected."""
+    ``anchor_day=None`` omits calendar-specific anchors and returns the
+    trained central q50 policy for ``edge_shares``."""
     path = SUMO_DIR / "direction_split.json"
     if not path.exists() and anchor_day is None:
         return {}
     shares: dict[str, list[float]] = {}
     if path.exists():
-        with open(path) as f:
-            data = json.load(f)
-        for d in data.values():
-            shares.update(d.get(key) or d["edge_shares"])
-    if anchor_day is not None:
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"invalid direction split JSON: {path}") from error
+        if anchor_day is not None and pd.Timestamp(anchor_day).dayofweek >= 5:
+            # The model is trained on weekdays 06-20. Weekend point estimates
+            # therefore fall back instead of silently replaying a weekday
+            # pattern; q arms widen to the declared [0.1, 0.9] support.
+            data = _unsupported_day_fallback(data, key)
+        shares = _validated_direction_share_block(data, key, path=path)
+    if anchor_day is not None and key == "edge_shares":
         # The anchor is LOCAL evidence and must not be conditional on
         # whether the transferred Norwegian model happens to be built: a
         # checkout without direction_split.json would otherwise fall back to
@@ -459,9 +577,14 @@ def has_split_quantiles() -> bool:
     path = SUMO_DIR / "direction_split.json"
     if not path.exists():
         return False
-    with open(path) as f:
-        data = json.load(f)
-    return any("edge_shares_q10" in d for d in data.values())
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"invalid direction split JSON: {path}") from error
+    _validated_direction_share_block(data, "edge_shares_q10", path=path)
+    _validated_direction_share_block(data, "edge_shares_q90", path=path)
+    return True
 
 
 def build_targets(

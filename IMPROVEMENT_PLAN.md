@@ -18,6 +18,41 @@ closure-sensitivity study and compares point models. Joint scenarios and any
 demand/monthly/warm/API/UI integration are conditional on three explicit
 evidence gates; 50/50 plus the local anchor is a planned successful exit.
 Existing q-archives and release contracts remain immutable legacy evidence.
+The 2026-08-14 protocol-v3 repair makes Gate S fail before registration when
+q files change total demand, repairs q10/q90 pair sums at the source, holds
+their exact per-quarter totals equal to q50, and binds the live route lineage
+and executed seed/variant. Dataset v2 decides Gate M as `BASELINE` under all
+three required folds. A fresh bound 4,948-vehicle demand set then produced 48
+healthy matched-seed SUMO observations and Gate S=`NO`: hard failures, viable
+set, ranking, winner and every decision-relevant cost were identical across
+q10/q50/q90. The plan therefore completed through Exit A. Product demand uses
+constant 50/50 plus applicable local anchors; inferred opposite-carriageway
+bounds and q stress cases are excluded by default. The three legacy physical
+route slots remain central-demand seed replicas for monthly compatibility;
+`--direction-stress-variants` is diagnostic only. Conditional scenario,
+monthly-schema, warm, API and UI expansion is closed by evidence.
+
+**Direction training reopened 2026-08-15 by explicit user request:** Exit A
+remains immutable historical evidence, but it is no longer the active product
+choice. Trainer v2 now binds the 247,464-row date-level table to 188 raw volume
+files, trains q10/q50/q90 on the supported weekday 06–20 population, and uses
+50/50 only as an out-of-support fallback. Normal demand consumes trained q50;
+the five unmeasured opposite carriageways receive model-hash-bound soft priors
+and ceiling-only uncertainty bounds. No hard lower bound may manufacture
+traffic. The exact-policy rerun decides Gate M=`MODEL`, winner
+`similarity_weighted_lgbm_no_profile`: it wins a primary group in every fold
+kind and loses none. The activation remains `release_evidence=false` because
+q10/q90 are uncalibrated stress cases. A new direction-only build then froze
+registration v4 against exact complementary pairs and equal 4,998-vehicle
+departure profiles. Gate S outcome v6 is `NO`: all 48 matched-seed runs were
+usable, with zero hard failures and identical viable set, ranking, winner and
+decision costs across q10/q50/q90. This is diagnostic evidence for that frozen
+2025-09-16 06-10 matrix, not release evidence. The magnitude diagnostic also
+shows that transferred q50 reallocates 0.104% of all measured mass versus
+50/50; local anchoring raises the active difference to 0.604%, while model
+time shape alone accounts for 0.101%. A separate level/shape product remains
+negative evidence because its station-blocked confidence interval crosses
+zero.
 
 ## Known Errors, Inaccuracies and Assumptions in the Simulation Flow
 
@@ -36,12 +71,16 @@ silently forgotten.  Ordered by pipeline stage.
    Only more/better-placed sensors or external counts fundamentally fix
    this — that is the product's own pitch, not a bug, but every downstream
    number inherits it.
-2. **Direction is modelled, not measured**, at the five single-direction
-   stations' opposite carriageways and inside every "Total" sum: the
-   dirsplit model is shrunk λ=0.256 toward 50/50 and validated only
-   region-transfer (Nordic cities) plus two local spot checks (107: 52/48;
-   1076 AM/PM 0.90).  The q10/q50/q90 variants carry this uncertainty into
-   the ensemble — but the *center* of that interval is still a model.
+2. **Direction is only partly measured.** Sensor 107 has a provenance-bound
+   local period D-factor (52/48 in 2025). At the five single-direction
+   stations, the observed carriageway remains Level 1 and the opposite is
+   explicitly unmeasured. The active experimental policy uses the
+   provenance-bound no-profile q50 model only on weekday 06–20 support, with
+   50/50 outside support; learned opposite flow is a soft prior plus a
+   ceiling, never a hard positive floor. Gate M v5 selected the model. q10/q90
+   remain uncalibrated diagnostic stress surfaces, and the current 48-run
+   Gate S v6 found no closure-decision sensitivity in its frozen 2025-09-16
+   06–10 matrix.
 3. **One year (2025), local time**: DST days each miss 4 quarters (kept as
    null); the 2027 forecast is LightGBM point estimates at the 6 sensors
    only, and simulating 2027 assumes 2025 structure (bounds/priors/
@@ -1074,7 +1113,10 @@ registry and benchmark harness confirmed present):
   release structure in Phase 0/1 must be an EXTENSION of it, never a
   second registry.
 - The assembled per-build validation report (`web/data/validation.json` +
-  the 🛡 panel) exists; Phase 6's study view builds on it.
+  the 🛡 panel) exists; Phase 6's study view builds on it. **Extended
+  2026-08-15:** the report now verifies baseline/demand build equality
+  internally, withholds stale simulation and sensor-output sections and
+  prevents a mixed-build `overall=pass`.
 - A results-preserving speed benchmark harness exists
   (`make benchmark-speed`, semantic hashes).
 - Security hardening is done: mutating endpoints are POST-only with an
@@ -3010,6 +3052,11 @@ whether it completed healthily, and what the result is allowed to claim.
   Chrome in both states (matching → normal shield with the build id in
   the provenance line; mismatched → warning state), plus regression tests
   on the report side.
+  **Internal-report correction 2026-08-15:** the earlier implementation only
+  protected the UI. The report assembler itself could still combine current
+  demand fields with an old baseline and emit `overall=pass`. A new
+  `scenario_identity` section now fails that combination closed and regression
+  tests cover mismatch and missing baseline identity.
 
   KNOWN STATE while doing this (2026-07-20): the tracked
   `web/data/validation.json` is deliberately left at its last COHERENT

@@ -1,0 +1,196 @@
+{
+ "candidate_edges": [
+  "18241874_9439210780_0",
+  "30420876_30420904_0",
+  "9037093028_30420757_0",
+  "9037093028_1305379743_0"
+ ],
+ "candidate_selection": {
+  "excluded_sensor_edges": [
+   "1455801464_18241874_0",
+   "26355153_91615277_0",
+   "26355153_96523321_0",
+   "26842525_26355153_0",
+   "30420757_30421744_0",
+   "60786979_3575001205_0",
+   "60790252_60790253_0"
+  ],
+  "exposure_q10": {
+   "18241874_9439210780_0": 1372,
+   "30420876_30420904_0": 1182,
+   "9037093028_1305379743_0": 971,
+   "9037093028_30420757_0": 1033
+  },
+  "exposure_q50": {
+   "18241874_9439210780_0": 1469,
+   "30420876_30420904_0": 1215,
+   "9037093028_1305379743_0": 996,
+   "9037093028_30420757_0": 1014
+  },
+  "exposure_q90": {
+   "18241874_9439210780_0": 1379,
+   "30420876_30420904_0": 1303,
+   "9037093028_1305379743_0": 1027,
+   "9037093028_30420757_0": 987
+  },
+  "pool_size": 2738,
+  "probed": 12,
+  "rule": "dirsplit_sensitivity_selection_v1",
+  "topology_filter": "sumolib reachability, verified (never fail-open)"
+ },
+ "closure_begin": "2025-09-16T06:00:00",
+ "closure_end": "2025-09-16T10:00:00",
+ "comparison_fields": [
+  "hard_failure",
+  "closure_integrity",
+  "seed_health_flags",
+  "vehicles_no_detour",
+  "viable_set",
+  "candidate_ranking",
+  "winner",
+  "added_vehicle_hours"
+ ],
+ "content_key": "77980fae30549c6159ee3916d14a75c60aa4eeb09fc24bbd071e6957f790c095",
+ "date": "2025-09-16",
+ "demand_build_id": "6385877aaa5370c16c50",
+ "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+ "note": "q10/q50/q90 are NAMED STRESS CASES with unvalidated nominal coverage, not probability statements. This measures spread, not a distribution. Each (case, seed) pair is bound through its own one-seed ScenarioSpec, and the decision is read from the deployed closure_ranking policy. The ranking key is demand-side and therefore seed-deterministic by construction; that invariant is verified per run \u2014 a violation is a broken measurement and yields INCONCLUSIVE, never YES \u2014 and the seed axis is verified from scenario and seed-health identity records. Gate S also requires the stress cases to ISOLATE direction: see stress_case_isolation.",
+ "objective": "added_vehicle_hours (deployed closure_ranking key)",
+ "protocol": "dirsplit_direction_decision_sensitivity_v3",
+ "release_evidence": false,
+ "seeds": [
+  1000,
+  1001,
+  1002,
+  1003
+ ],
+ "selection_rule": "dirsplit_sensitivity_selection_v1",
+ "source_digests": {
+  "calibrated.rou.xml": "332dc0614aa1cdb924a22cf5b0ff27d778a5cad0f2369e9a6031ea592b7815a5",
+  "calibrated_v1.rou.xml": "1ddaaf69d612203e69a9af5f3fc397041b215736898a660885de3cde19e8cb46",
+  "calibrated_v2.rou.xml": "637434fe6609f1c8f8ea3db641eb2b038cac1a0db6b9783afdadd5c4226aa70d",
+  "demand_meta.json": "b79455dd515673aa6af6a05b905b1092dbdd54389eef30fcba08182f82f297f2",
+  "direction_split.json": "41b46572a059254a6cfba9e848e85307f00adc9b5d40c224c77d9f77e34be6a6",
+  "net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+ },
+ "stress_case_isolation": {
+  "by_case": {
+   "q10": {
+    "max_abs_pair_sum_deviation": 0.0,
+    "offenders": [],
+    "within_tolerance": true
+   },
+   "q50": {
+    "max_abs_pair_sum_deviation": 0.0,
+    "offenders": [],
+    "within_tolerance": true
+   },
+   "q90": {
+    "max_abs_pair_sum_deviation": 0.0,
+    "offenders": [],
+    "within_tolerance": true
+   }
+  },
+  "isolates_direction": true,
+  "lineage": {
+   "demand_build_id": "6385877aaa5370c16c50",
+   "errors": [],
+   "live_digests": {
+    "calibrated_q50": "332dc0614aa1cdb924a22cf5b0ff27d778a5cad0f2369e9a6031ea592b7815a5",
+    "calibrated_v1": "1ddaaf69d612203e69a9af5f3fc397041b215736898a660885de3cde19e8cb46",
+    "calibrated_v2": "637434fe6609f1c8f8ea3db641eb2b038cac1a0db6b9783afdadd5c4226aa70d",
+    "direction_split": "41b46572a059254a6cfba9e848e85307f00adc9b5d40c224c77d9f77e34be6a6"
+   },
+   "verified": true
+  },
+  "max_abs_pair_sum_deviation": 0.0,
+  "reason": null,
+  "requirement": "each station's two directed shares must sum to 1.0 in every slot, in every stress case; otherwise the case changes total demand as well as its direction and Gate S cannot attribute a difference to direction",
+  "route_departure_population": {
+   "errors": [],
+   "profiles_by_case": {
+    "q10": [
+     76,
+     131,
+     195,
+     209,
+     249,
+     313,
+     371,
+     438,
+     463,
+     420,
+     383,
+     422,
+     336,
+     314,
+     286,
+     342
+    ],
+    "q50": [
+     76,
+     131,
+     195,
+     209,
+     249,
+     313,
+     371,
+     438,
+     463,
+     420,
+     383,
+     422,
+     336,
+     314,
+     286,
+     342
+    ],
+    "q90": [
+     76,
+     131,
+     195,
+     209,
+     249,
+     313,
+     371,
+     438,
+     463,
+     420,
+     383,
+     422,
+     336,
+     314,
+     286,
+     342
+    ]
+   },
+   "vehicles_by_case": {
+    "q10": 4948,
+    "q50": 4948,
+    "q90": 4948
+   },
+   "verified_equal": true
+  },
+  "source": "sumo/direction_split.json",
+  "tolerance": 0.001
+ },
+ "stress_cases": [
+  "q50",
+  "q10",
+  "q90"
+ ],
+ "thresholds": {
+  "pair_sum_tolerance": 0.001,
+  "relative_objective": 0.1,
+  "require_clean_closure_integrity": true,
+  "require_direction_isolating_stress_cases": true,
+  "require_healthy_seeds": true,
+  "require_identical_ranking": true,
+  "require_identical_viable_set": true,
+  "require_identical_winner": true,
+  "require_seed_execution_identity": true
+ },
+ "timeout_s": 300,
+ "window_begin": "06:00",
+ "window_end": "10:00"
+}

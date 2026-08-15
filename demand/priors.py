@@ -10,6 +10,7 @@ Patch subprocess/GEO_PATH HERE.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -17,6 +18,17 @@ from pathlib import Path
 
 GEO_PATH = Path("web/data/network.geojson")
 STRUCTURAL_REFERENCE_DATE = "2025-09-16"
+
+
+def direction_priors_are_current(data: dict, date: str, *,
+                                 model_path: Path = Path(
+                                     "data/dirsplit/model.pkl")) -> bool:
+    """Whether a learned opposite-direction prior matches the live model."""
+    if (data.get("schema_version") != "dirsplit_prior_v2"
+            or data.get("date") != date or not model_path.is_file()):
+        return False
+    return data.get("model_sha256") == hashlib.sha256(
+        model_path.read_bytes()).hexdigest()
 
 def ensure_bounds(date: str, begin: str, end: str) -> dict:
     """Level-2 interval bounds for this window — computed on demand."""
@@ -153,7 +165,7 @@ def ensure_priors(date: str) -> dict:
     if path.exists():
         with open(path) as f:
             d = json.load(f)
-        if d.get("date") == date:
+        if direction_priors_are_current(d, date):
             return d
     print("Computing level-3 priors (prior_flows) …")
     res = subprocess.run([sys.executable, "prior_flows.py", "--date", date],
@@ -163,7 +175,11 @@ def ensure_priors(date: str) -> dict:
         print("  (no priors available — continuing without level 3)")
         return {"edges": {}}
     with open(path) as f:
-        return json.load(f)
+        rebuilt = json.load(f)
+    if not direction_priors_are_current(rebuilt, date):
+        print("  rebuilt direction priors do not match the live model; ignoring")
+        return {"edges": {}}
+    return rebuilt
 
 
 def build_interval_constraints(
@@ -256,6 +272,7 @@ def opposite_direction_bounds(
     qi_start: int,
     registry_path: Path | None = None,
     split_key: str = "edge_shares",
+    anchor_day: str | None = None,
 ) -> list[dict[str, tuple[float, float]]]:
     """Level-2 bounds for the UNMEASURED carriageway at each station.
 
@@ -287,7 +304,8 @@ def opposite_direction_bounds(
     rows = registry if isinstance(registry, list) else registry.get(
         "sensors", registry)
 
-    shares = {key: load_direction_split(key) for key in
+    split_kwargs = {"anchor_day": anchor_day} if anchor_day is not None else {}
+    shares = {key: load_direction_split(key, **split_kwargs) for key in
               (split_key, "edge_shares_q10", "edge_shares_q90")}
     pairs = []
     for row in rows:

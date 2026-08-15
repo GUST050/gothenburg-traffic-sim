@@ -1,0 +1,1525 @@
+{
+ "decision_by_case": {
+  "q10": {
+   "added_vehicle_hours": {
+    "18241874_9439210780_0": 0.0167,
+    "30420876_30420904_0": 1.5594,
+    "9037093028_1305379743_0": 0.3246,
+    "9037093028_30420757_0": 0.2099
+   },
+   "disqualified": [
+    "30420876_30420904_0"
+   ],
+   "ranking": [
+    "18241874_9439210780_0",
+    "9037093028_30420757_0",
+    "9037093028_1305379743_0"
+   ],
+   "viable_set": [
+    "18241874_9439210780_0",
+    "9037093028_1305379743_0",
+    "9037093028_30420757_0"
+   ],
+   "winner": "18241874_9439210780_0"
+  },
+  "q50": {
+   "added_vehicle_hours": {
+    "18241874_9439210780_0": 0.0167,
+    "30420876_30420904_0": 1.5594,
+    "9037093028_1305379743_0": 0.3246,
+    "9037093028_30420757_0": 0.2099
+   },
+   "disqualified": [
+    "30420876_30420904_0"
+   ],
+   "ranking": [
+    "18241874_9439210780_0",
+    "9037093028_30420757_0",
+    "9037093028_1305379743_0"
+   ],
+   "viable_set": [
+    "18241874_9439210780_0",
+    "9037093028_1305379743_0",
+    "9037093028_30420757_0"
+   ],
+   "winner": "18241874_9439210780_0"
+  },
+  "q90": {
+   "added_vehicle_hours": {
+    "18241874_9439210780_0": 0.0167,
+    "30420876_30420904_0": 1.5594,
+    "9037093028_1305379743_0": 0.3246,
+    "9037093028_30420757_0": 0.2099
+   },
+   "disqualified": [
+    "30420876_30420904_0"
+   ],
+   "ranking": [
+    "18241874_9439210780_0",
+    "9037093028_30420757_0",
+    "9037093028_1305379743_0"
+   ],
+   "viable_set": [
+    "18241874_9439210780_0",
+    "9037093028_1305379743_0",
+    "9037093028_30420757_0"
+   ],
+   "winner": "18241874_9439210780_0"
+  }
+ },
+ "execution_provenance": {
+  "content_key": "4a3bc0e1c120b360b2eaee6f5f5343e2b466ac6e036dfa7a6768b9094362846b",
+  "execution_artifact_count": 96,
+  "execution_artifacts": {
+   "cand_q10_1000_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1000_18241874_9439210780_0/cand_q10_1000_18241874_9439210780_0.json",
+    "sha256": "e223d947791faf3aee290db37e2339b0066706be754e4b7c36bb2a869492e810"
+   },
+   "cand_q10_1000_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1000_18241874_9439210780_0/spec.json",
+    "sha256": "04063416d802714449fc378fa8c93cf426a342106c3531ced874e3a6edf56089"
+   },
+   "cand_q10_1000_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1000_30420876_30420904_0/cand_q10_1000_30420876_30420904_0.json",
+    "sha256": "9b87e1ae866a25884b7c47edebd135129efd4b8e3c59884d85650562f17396b7"
+   },
+   "cand_q10_1000_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1000_30420876_30420904_0/spec.json",
+    "sha256": "25e38ba2434fa4ed813afebd138a4127292da4d0f92cb60fe787ae1ca40e2970"
+   },
+   "cand_q10_1000_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1000_9037093028_1305379743_0/cand_q10_1000_9037093028_1305379743_0.json",
+    "sha256": "4a04177b96ecd9c35a153515e51f36255cb0ee4c8e0d4007f49a05e5703cb2f7"
+   },
+   "cand_q10_1000_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1000_9037093028_1305379743_0/spec.json",
+    "sha256": "31d75e257dd0a191af60dadee7769f57b3fa7bcbf2103f28e5e68510c085488b"
+   },
+   "cand_q10_1000_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1000_9037093028_30420757_0/cand_q10_1000_9037093028_30420757_0.json",
+    "sha256": "b712ec5e3bbff84abcb384f9904f2954ae99b0b3077b92de5d328a91ca4c97e3"
+   },
+   "cand_q10_1000_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1000_9037093028_30420757_0/spec.json",
+    "sha256": "ab58ac711aafe58def5b3c009b32c34fb7d5edaf9e65cb9fd523082a6dce0fbd"
+   },
+   "cand_q10_1001_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1001_18241874_9439210780_0/cand_q10_1001_18241874_9439210780_0.json",
+    "sha256": "656a3c4319dee77a9a6dff17c9cee4cf3120518b0c3e6be0c460f4759f8d66d4"
+   },
+   "cand_q10_1001_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1001_18241874_9439210780_0/spec.json",
+    "sha256": "b04031a7adf6787d353a6af54d4910b853f230fd19f09696d82671cd72682d0e"
+   },
+   "cand_q10_1001_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1001_30420876_30420904_0/cand_q10_1001_30420876_30420904_0.json",
+    "sha256": "43c7075ef0589ea4570bcd24e4555e1ef3089f40f31a2a7e537ac3d9ce855986"
+   },
+   "cand_q10_1001_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1001_30420876_30420904_0/spec.json",
+    "sha256": "4509f1300c555b45d4940f7bc0ce3b8fa15a8f29fcc53a3a0d58907b2d440b1a"
+   },
+   "cand_q10_1001_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1001_9037093028_1305379743_0/cand_q10_1001_9037093028_1305379743_0.json",
+    "sha256": "e52b7b196987a91868841ae6ddae7f589a16340173148c63ec63122dc2fecb52"
+   },
+   "cand_q10_1001_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1001_9037093028_1305379743_0/spec.json",
+    "sha256": "2b677ca5c5e7f7acb3ad01cbea9efa7bde2b89d29b1008ba137e1df192086024"
+   },
+   "cand_q10_1001_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1001_9037093028_30420757_0/cand_q10_1001_9037093028_30420757_0.json",
+    "sha256": "0c15b9e584062a23ecb1559e217238ed63f5322ef7f4c4a078dad9ec42619b28"
+   },
+   "cand_q10_1001_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1001_9037093028_30420757_0/spec.json",
+    "sha256": "db300836fe6e58c2bd55cbe18f23bd492d71d73ee3c091129e34833139a10310"
+   },
+   "cand_q10_1002_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1002_18241874_9439210780_0/cand_q10_1002_18241874_9439210780_0.json",
+    "sha256": "81438de86b6a48bdc86b8dfaf5af08b358d30a969297165ee0a75d5ecd736ef9"
+   },
+   "cand_q10_1002_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1002_18241874_9439210780_0/spec.json",
+    "sha256": "eff9c3d176d8f0450f3396263b58a0b5eaa393cb3a297703a56fd9189c38e123"
+   },
+   "cand_q10_1002_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1002_30420876_30420904_0/cand_q10_1002_30420876_30420904_0.json",
+    "sha256": "5f2a6b385c4ba3f3c8caae496df8e1dd4858d90eca0a38bb80e97ccf172b6882"
+   },
+   "cand_q10_1002_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1002_30420876_30420904_0/spec.json",
+    "sha256": "496da6c51661b72bd33fabb048a2fe2a46f9aba325c7bd4cb66587077dd9063e"
+   },
+   "cand_q10_1002_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1002_9037093028_1305379743_0/cand_q10_1002_9037093028_1305379743_0.json",
+    "sha256": "25952a264f6296be1a8497261e6b519e4a7ffbf5b3cf8ebdf660cdf39c0aa256"
+   },
+   "cand_q10_1002_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1002_9037093028_1305379743_0/spec.json",
+    "sha256": "131c61b16781a07bfaa167636bf16a56ac24501da2f558d3c7dc066bda28e97b"
+   },
+   "cand_q10_1002_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1002_9037093028_30420757_0/cand_q10_1002_9037093028_30420757_0.json",
+    "sha256": "c8701f555d6204595bed6a6aca1f2ef41b085543c3f9677e74e101a135713484"
+   },
+   "cand_q10_1002_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1002_9037093028_30420757_0/spec.json",
+    "sha256": "dcf9523b6f85344bd9f0b2c38e7680252bfa544a9dfb926dfae2db6599446559"
+   },
+   "cand_q10_1003_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1003_18241874_9439210780_0/cand_q10_1003_18241874_9439210780_0.json",
+    "sha256": "89c166a4e55844be422cdbb51df167c9abb26600dab7dfb8098be68ca63bf164"
+   },
+   "cand_q10_1003_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1003_18241874_9439210780_0/spec.json",
+    "sha256": "8ea1d28be764f90c4e60191f8e9c172489cfee331fad2390645360ac38563ffb"
+   },
+   "cand_q10_1003_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1003_30420876_30420904_0/cand_q10_1003_30420876_30420904_0.json",
+    "sha256": "08a3dbf7f716850f16e274459ba1d1d7a4cb11bc59613f4cd84ba55b67442e70"
+   },
+   "cand_q10_1003_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1003_30420876_30420904_0/spec.json",
+    "sha256": "ae1b7989ddaff4da1f291ad2ea816305c1fd2a6accc52896953042c58dee8d4a"
+   },
+   "cand_q10_1003_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1003_9037093028_1305379743_0/cand_q10_1003_9037093028_1305379743_0.json",
+    "sha256": "ef9bd0baee266e17eb5f75a093e9cc63cb866ef7152fc92db5e53ea6d25d962f"
+   },
+   "cand_q10_1003_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1003_9037093028_1305379743_0/spec.json",
+    "sha256": "add46e4c8c3237ea4906bd6b275ac3fb3e17bfca0e82b12e702e4f24021d04ef"
+   },
+   "cand_q10_1003_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1003_9037093028_30420757_0/cand_q10_1003_9037093028_30420757_0.json",
+    "sha256": "e359ee7f56e4d3627f373381838cab8da4da81447340421bfe686a3bcd4f15db"
+   },
+   "cand_q10_1003_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q10_1003_9037093028_30420757_0/spec.json",
+    "sha256": "6d557c5a6fb823295800f4ac7b13d89ffa15fbbdd590dad12b56099856c2d0c0"
+   },
+   "cand_q50_1000_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1000_18241874_9439210780_0/cand_q50_1000_18241874_9439210780_0.json",
+    "sha256": "f792aa4acc003ad5ee0e9ecc7e229f412cbf666c9ab764bc5f3944925b0d1d87"
+   },
+   "cand_q50_1000_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1000_18241874_9439210780_0/spec.json",
+    "sha256": "e4b83bbf286637efc482e3236607103da009295658de4dfe1afb18ffd6580774"
+   },
+   "cand_q50_1000_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1000_30420876_30420904_0/cand_q50_1000_30420876_30420904_0.json",
+    "sha256": "d408d730d0f152fbe780c4103619968982b333e9c2e6128198439926ce8d5d7c"
+   },
+   "cand_q50_1000_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1000_30420876_30420904_0/spec.json",
+    "sha256": "c7a84e695f31599f27e93c94b1123e5527e15461095116b36fcdea952c198333"
+   },
+   "cand_q50_1000_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1000_9037093028_1305379743_0/cand_q50_1000_9037093028_1305379743_0.json",
+    "sha256": "ee74d554880bcb2c2b70ea9c502bcaf6d1e21d4d9d7af70502e836dfec023b8f"
+   },
+   "cand_q50_1000_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1000_9037093028_1305379743_0/spec.json",
+    "sha256": "b0f16d1e5f666ba5128e5998b4c99d3874418d7ab82ade13252e8a2990505bd5"
+   },
+   "cand_q50_1000_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1000_9037093028_30420757_0/cand_q50_1000_9037093028_30420757_0.json",
+    "sha256": "03f38097c59d05fa3f6210d001f9b5f9f09719fd5c81141a2abdbe7932d4e07b"
+   },
+   "cand_q50_1000_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1000_9037093028_30420757_0/spec.json",
+    "sha256": "a1a36210cb7c0306f0e110a38e42febc4c271eb1f51b2b7374a8a5ae78f05252"
+   },
+   "cand_q50_1001_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1001_18241874_9439210780_0/cand_q50_1001_18241874_9439210780_0.json",
+    "sha256": "5e3c0720221bf48f53f59b6f7a9b3396924f98516395de804273b718fcdae01a"
+   },
+   "cand_q50_1001_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1001_18241874_9439210780_0/spec.json",
+    "sha256": "523c04e176b76f4dbf29d326850c283bd4ffaecffbe67077c0d6077ce6cd923c"
+   },
+   "cand_q50_1001_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1001_30420876_30420904_0/cand_q50_1001_30420876_30420904_0.json",
+    "sha256": "3889062d08e2a036a79c8d20783ab8c71f782e45dfacd9d4c3935d022a4e11af"
+   },
+   "cand_q50_1001_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1001_30420876_30420904_0/spec.json",
+    "sha256": "23e4ed07474fe40987ef6e75c9aef777415e847056572f1a2ab393652b88a43c"
+   },
+   "cand_q50_1001_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1001_9037093028_1305379743_0/cand_q50_1001_9037093028_1305379743_0.json",
+    "sha256": "2ac9282d408df2d7ad7f4ed4883bd5ddc42e36a4450b16fb5eba260ec09b9905"
+   },
+   "cand_q50_1001_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1001_9037093028_1305379743_0/spec.json",
+    "sha256": "6f9e7693870c314aa8a1e785c22338d134603f95947dbfdfd6b3f0367adc34bc"
+   },
+   "cand_q50_1001_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1001_9037093028_30420757_0/cand_q50_1001_9037093028_30420757_0.json",
+    "sha256": "f73a2eb6baae00c9ad01a3e890835947db3194d16b661da35b71faf8131b1eb1"
+   },
+   "cand_q50_1001_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1001_9037093028_30420757_0/spec.json",
+    "sha256": "f59a20cca69f7f8cb56ef4b12313f960f351a2ec464c3bba33b719e68d5d8b6a"
+   },
+   "cand_q50_1002_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1002_18241874_9439210780_0/cand_q50_1002_18241874_9439210780_0.json",
+    "sha256": "71a4daca854d7410a3840164f77ab7fe9f34c3187ce8f00fbb264daf47a6173c"
+   },
+   "cand_q50_1002_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1002_18241874_9439210780_0/spec.json",
+    "sha256": "931a289d48f8405143ceef25403ed00a29d3d2a5be06aa3e99b3228d86064d6e"
+   },
+   "cand_q50_1002_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1002_30420876_30420904_0/cand_q50_1002_30420876_30420904_0.json",
+    "sha256": "565eb85b15b39df2bfcb28ad466224ce023803a71c95fcf9702ab73334496906"
+   },
+   "cand_q50_1002_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1002_30420876_30420904_0/spec.json",
+    "sha256": "45d7b069dade5c7f13b12bfcdfca3d74aa8908c3f12c52a0a016608956d99602"
+   },
+   "cand_q50_1002_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1002_9037093028_1305379743_0/cand_q50_1002_9037093028_1305379743_0.json",
+    "sha256": "9ad7adaed743f901a44a189eaa2a1fea587d1ccd97e6f6b9987c6bf307d4cc8e"
+   },
+   "cand_q50_1002_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1002_9037093028_1305379743_0/spec.json",
+    "sha256": "328228d56db758e2cdff2a31983b3ea3f8a4bd6c39f32d9f67bdb12b096a39da"
+   },
+   "cand_q50_1002_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1002_9037093028_30420757_0/cand_q50_1002_9037093028_30420757_0.json",
+    "sha256": "5d19b2ce9542d58f88df1ca4e8eb8bb9126a5a230d31bb1ae972e4dbec74c57c"
+   },
+   "cand_q50_1002_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1002_9037093028_30420757_0/spec.json",
+    "sha256": "887607bfd76b8927bb1d7fe7ac1c575a7dc837016927a2f3590c2c981c718142"
+   },
+   "cand_q50_1003_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1003_18241874_9439210780_0/cand_q50_1003_18241874_9439210780_0.json",
+    "sha256": "02e24b4edc9417c3aea464916b694e49df3059d97cfcfd3a092475537ef11b18"
+   },
+   "cand_q50_1003_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1003_18241874_9439210780_0/spec.json",
+    "sha256": "c9327c11c2c09589dd7bca0f4416f42449d8b1bda320306885f841fbdd32925e"
+   },
+   "cand_q50_1003_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1003_30420876_30420904_0/cand_q50_1003_30420876_30420904_0.json",
+    "sha256": "bc17384248f5cd075e85bdbd24fb9c3c8dc8683aaca7ecfc49384cc6833d4574"
+   },
+   "cand_q50_1003_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1003_30420876_30420904_0/spec.json",
+    "sha256": "037103c8f81f7e3572d6bf3f2e34c0752f0df0b9661c9ba91279826726de2413"
+   },
+   "cand_q50_1003_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1003_9037093028_1305379743_0/cand_q50_1003_9037093028_1305379743_0.json",
+    "sha256": "c19ca8080ba2ecadc31853171f78246e998b42cfae78d4ab584a394e535da843"
+   },
+   "cand_q50_1003_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1003_9037093028_1305379743_0/spec.json",
+    "sha256": "63003e5abe6cc0845dc8ba232c9312f19de9058992ef4c2123a1d2ead6532320"
+   },
+   "cand_q50_1003_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1003_9037093028_30420757_0/cand_q50_1003_9037093028_30420757_0.json",
+    "sha256": "e7dac95c8e6150cc405a2ca66ebfde799a7ee831829160f5c4f8d9f6c422a4ff"
+   },
+   "cand_q50_1003_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q50_1003_9037093028_30420757_0/spec.json",
+    "sha256": "0dc0823ececdda3be42f8598856c78712cbec1d9db8dca35c12a7baabdee047a"
+   },
+   "cand_q90_1000_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1000_18241874_9439210780_0/cand_q90_1000_18241874_9439210780_0.json",
+    "sha256": "87f28551f66cb48a82dcf122318d6d007579a7d8c5ac4252af2468c368a3c42f"
+   },
+   "cand_q90_1000_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1000_18241874_9439210780_0/spec.json",
+    "sha256": "0e6adbd397df096bb09154d517baecc9aff5a8bf8adb6521fb6a1c2ce28dbf43"
+   },
+   "cand_q90_1000_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1000_30420876_30420904_0/cand_q90_1000_30420876_30420904_0.json",
+    "sha256": "8722a7b31767d78300ebf1af4810dc5855834b0324beab122a8f6a90de0857e1"
+   },
+   "cand_q90_1000_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1000_30420876_30420904_0/spec.json",
+    "sha256": "dfd5a7f28e6b3ccc788661f304e038503beba43888141fc4a902fa0f5f845b9c"
+   },
+   "cand_q90_1000_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1000_9037093028_1305379743_0/cand_q90_1000_9037093028_1305379743_0.json",
+    "sha256": "71b550a39e40535347f3d2ee8a13dccc5d4119917307f295d650650e4387ea41"
+   },
+   "cand_q90_1000_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1000_9037093028_1305379743_0/spec.json",
+    "sha256": "f42d860056873a634a790d7f7222292bb2970b464e56d3ce5eeab45d15daf059"
+   },
+   "cand_q90_1000_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1000_9037093028_30420757_0/cand_q90_1000_9037093028_30420757_0.json",
+    "sha256": "d2f69c51e4e7edc8988a88d1d761f3957a3a6ab187eee035f4ef1ef264f93020"
+   },
+   "cand_q90_1000_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1000_9037093028_30420757_0/spec.json",
+    "sha256": "319a7377828d8859313fb8eef5af9e1c87c416bad46893467abd2b4e77bbd80e"
+   },
+   "cand_q90_1001_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1001_18241874_9439210780_0/cand_q90_1001_18241874_9439210780_0.json",
+    "sha256": "9fe512cf786792d6b4e94fcc0d3d9148c45a6cd379e27abae855d996ca642d3a"
+   },
+   "cand_q90_1001_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1001_18241874_9439210780_0/spec.json",
+    "sha256": "eed5f04c443cb11f24e19fb6c29268d3af895b3921cd83eec2b0b22db45a4a08"
+   },
+   "cand_q90_1001_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1001_30420876_30420904_0/cand_q90_1001_30420876_30420904_0.json",
+    "sha256": "baad3a0f7d5376c7a6aae2a53fc59ffdd362aa79979974a91fb95918c9748e70"
+   },
+   "cand_q90_1001_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1001_30420876_30420904_0/spec.json",
+    "sha256": "7fedc5bff9213befa64a5489874883a41473ac96bd47ae59a03b8657af208c47"
+   },
+   "cand_q90_1001_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1001_9037093028_1305379743_0/cand_q90_1001_9037093028_1305379743_0.json",
+    "sha256": "01e13ea90826f8cec423edbcf2d2a864ecbd14c806c72d0b45c5694375edfeb6"
+   },
+   "cand_q90_1001_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1001_9037093028_1305379743_0/spec.json",
+    "sha256": "6254d2ec255a83158d14eb38b425fcd3b9ea9fb3cc4282d87b125d88a83c2209"
+   },
+   "cand_q90_1001_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1001_9037093028_30420757_0/cand_q90_1001_9037093028_30420757_0.json",
+    "sha256": "c193f109b1711310984ec208040e49c1722234162347ed6e1467be4255c0d6eb"
+   },
+   "cand_q90_1001_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1001_9037093028_30420757_0/spec.json",
+    "sha256": "e2e591f2e61119dbff5fa59401d43056b6f76f5170c00a4a6ca74a3b57fefe80"
+   },
+   "cand_q90_1002_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1002_18241874_9439210780_0/cand_q90_1002_18241874_9439210780_0.json",
+    "sha256": "b17215d08ab2c99d76559279d79f6f75f0d51efc8490e8ce8c1be6dafedf71c9"
+   },
+   "cand_q90_1002_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1002_18241874_9439210780_0/spec.json",
+    "sha256": "e9d50ae727a1507f86b6886a91d4ea5ef2936f9604c6002ab5a1657190fa58f5"
+   },
+   "cand_q90_1002_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1002_30420876_30420904_0/cand_q90_1002_30420876_30420904_0.json",
+    "sha256": "a4862dc88acfd288590361a9f361a21bae3130a2294af1d259ff2e5d05fe0d8e"
+   },
+   "cand_q90_1002_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1002_30420876_30420904_0/spec.json",
+    "sha256": "91230748b1511eec4c4ea480aebbee7bf2b0258af02b0e0f873d1d9c114a6d01"
+   },
+   "cand_q90_1002_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1002_9037093028_1305379743_0/cand_q90_1002_9037093028_1305379743_0.json",
+    "sha256": "89ca13e104805ff91c17c036556e664761992d5c6655b562495e3db005796171"
+   },
+   "cand_q90_1002_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1002_9037093028_1305379743_0/spec.json",
+    "sha256": "a01b518b4499539aee913fbfe1a917c25330d981b616de54a7108113ddc41cde"
+   },
+   "cand_q90_1002_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1002_9037093028_30420757_0/cand_q90_1002_9037093028_30420757_0.json",
+    "sha256": "a2fe141323e1b86dacb95289190cdb5065ae56ef0e803472b2706d95d5632c67"
+   },
+   "cand_q90_1002_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1002_9037093028_30420757_0/spec.json",
+    "sha256": "35d10b55d4a7c8303240fef264858c8b8372a265c5aec9864cd410eb0afa0b20"
+   },
+   "cand_q90_1003_18241874_9439210780_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1003_18241874_9439210780_0/cand_q90_1003_18241874_9439210780_0.json",
+    "sha256": "309358f1e92a8101f6aec3fbb978aebdf1ad7dfd77aeaa73d9c52b14f7019c32"
+   },
+   "cand_q90_1003_18241874_9439210780_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1003_18241874_9439210780_0/spec.json",
+    "sha256": "39958a1bec9112742fca2a65e6364e90236320e2ded75a6fa5f80a51c0992c71"
+   },
+   "cand_q90_1003_30420876_30420904_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1003_30420876_30420904_0/cand_q90_1003_30420876_30420904_0.json",
+    "sha256": "9a97abea8912ccbbb4dbe0860e4d6c5cac85c875712af0a93052e96d19b8beb0"
+   },
+   "cand_q90_1003_30420876_30420904_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1003_30420876_30420904_0/spec.json",
+    "sha256": "17f3af8eb7d8e6d69cddf29751d4f0f3f9e32a5f2076bc64f55c0716db593a5d"
+   },
+   "cand_q90_1003_9037093028_1305379743_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1003_9037093028_1305379743_0/cand_q90_1003_9037093028_1305379743_0.json",
+    "sha256": "eeab409adf054ae316268a3d4c7732dc488743fbeaf5ffec74be00451e48a39b"
+   },
+   "cand_q90_1003_9037093028_1305379743_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1003_9037093028_1305379743_0/spec.json",
+    "sha256": "4537343692ce8b0c4479f03c43cc9874963a8f1d09ece77411bd065f2b46eef3"
+   },
+   "cand_q90_1003_9037093028_30420757_0/scenario": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1003_9037093028_30420757_0/cand_q90_1003_9037093028_30420757_0.json",
+    "sha256": "975df9d7a1dcf77940fdb1de255bb834709fdf3d16794cd55e4b0929c4466042"
+   },
+   "cand_q90_1003_9037093028_30420757_0/spec": {
+    "path": "runs/dirsplit_sensitivity/cand_q90_1003_9037093028_30420757_0/spec.json",
+    "sha256": "42fbc7daa119093803aeac190790a246dbd81ac7f16b80700c110f7b99688287"
+   }
+  },
+  "protocol": "dirsplit_gate_s_execution_provenance_v1",
+  "registration_key": "77980fae30549c6159ee3916d14a75c60aa4eeb09fc24bbd071e6957f790c095",
+  "reused_existing": true,
+  "runtime_source": {
+   "path": "validation/dirsplit_direction_sensitivity_outcome_v3.json",
+   "sha256": "7200b762df715486e4c7942b5562617fc2cccc764306a33cdf41e7208095c7be"
+  },
+  "sources": {
+   "closure_ranking.py": {
+    "path": "/Users/gt/Documents/gs-project/traffic_sim/simulation/closure_ranking.py",
+    "sha256": "f47b4193bd62a6bfc8c2d15a0532af0314e25d481186dc2af17feed933ee389d"
+   },
+   "contracts.py": {
+    "path": "/Users/gt/Documents/gs-project/traffic_sim/core/contracts.py",
+    "sha256": "d7a7aa6bddf1288aaf28cb014b2d636e68ce719b67a8909b24534c5086a437c6"
+   },
+   "measure_direction_decision_sensitivity.py": {
+    "path": "/Users/gt/Documents/gs-project/tools/measure_direction_decision_sensitivity.py",
+    "sha256": "df543a7e992c7540aed5fdf57b363fbf8178539515f54adcc0fec752fa2541a3"
+   },
+   "run_scenario.py": {
+    "path": "/Users/gt/Documents/gs-project/run_scenario.py",
+    "sha256": "d552557c878e68dc37b897d119648293ae08027d3adbce4c6e12a26baee0e3c9"
+   }
+  }
+ },
+ "gate_s": "NO",
+ "n_hard_failures": 0,
+ "n_observations": 48,
+ "n_usable": 48,
+ "observations": [
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 33.201245069503784,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.511598110198975,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 15.762090921401978,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.771985054016113,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 17.892314910888672,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.472949981689453,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 15.854199171066284,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.786585092544556,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 18.21853804588318,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.51200008392334,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 16.422872066497803,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 14.262775182723999,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 18.242745876312256,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.36474609375,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 16.43044400215149,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q50",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.76278805732727,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q50",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 18.35300302505493,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 18.403188943862915,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 16.451059818267822,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.85749101638794,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 18.159780025482178,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.444586992263794,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 16.195513248443604,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.776907920837402,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 18.169633150100708,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.54105496406555,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 16.211142778396606,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.680135250091553,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 17.980095863342285,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.606536865234375,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 15.863143920898438,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q10",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.815047979354858,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q10",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 18.120858907699585,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.437541961669922,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 16.05180597305298,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1000,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.815788984298706,
+   "seed": 1000,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 17.970407009124756,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.77457618713379,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 15.894617795944214,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1001,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.775494813919067,
+   "seed": 1001,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 18.007622003555298,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.555320024490356,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 15.838396787643433,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1002,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.696797132492065,
+   "seed": 1002,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "18241874_9439210780_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 1020.5,
+    "added_vehicle_hours": 0.0167,
+    "vehicles_affected": 1449.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 18.142539024353027,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "30420876_30420904_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 79942.9,
+    "added_vehicle_hours": 1.5594,
+    "vehicles_affected": 1287.0,
+    "vehicles_no_detour": 1.0
+   },
+   "runtime_s": 17.482046127319336,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_30420757_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 10786.0,
+    "added_vehicle_hours": 0.2099,
+    "vehicles_affected": 1021.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 15.817185163497925,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  },
+  {
+   "candidate": "9037093028_1305379743_0",
+   "closure_integrity": "verified_clean",
+   "executed_seed": 1003,
+   "executed_variant": "q90",
+   "failure_reason": null,
+   "hard_failure": false,
+   "policy": {
+    "added_metres_total": 24267.0,
+    "added_vehicle_hours": 0.3246,
+    "vehicles_affected": 997.0,
+    "vehicles_no_detour": 0.0
+   },
+   "runtime_s": 13.852517127990723,
+   "seed": 1003,
+   "seed_health_flags": [],
+   "seed_identity_verified": true,
+   "stress_case": "q90",
+   "vehicles_inserted": 4948
+  }
+ ],
+ "per_candidate": {
+  "18241874_9439210780_0": {
+   "added_vehicle_hours_by_case": {
+    "q10": 0.0167,
+    "q50": 0.0167,
+    "q90": 0.0167
+   },
+   "between_case_range": 0.0,
+   "decision_relevant": true,
+   "material": false,
+   "relative_between_case": 0.0,
+   "seed_range_within_case": 0.0
+  },
+  "30420876_30420904_0": {
+   "added_vehicle_hours_by_case": {
+    "q10": 1.5594,
+    "q50": 1.5594,
+    "q90": 1.5594
+   },
+   "between_case_range": 0.0,
+   "decision_relevant": false,
+   "material": false,
+   "relative_between_case": 0.0,
+   "seed_range_within_case": 0.0,
+   "why_not_decision_relevant": "disqualified by the no-detour rule in every stress case, so the deployed policy never reads its cost"
+  },
+  "9037093028_1305379743_0": {
+   "added_vehicle_hours_by_case": {
+    "q10": 0.3246,
+    "q50": 0.3246,
+    "q90": 0.3246
+   },
+   "between_case_range": 0.0,
+   "decision_relevant": true,
+   "material": false,
+   "relative_between_case": 0.0,
+   "seed_range_within_case": 0.0
+  },
+  "9037093028_30420757_0": {
+   "added_vehicle_hours_by_case": {
+    "q10": 0.2099,
+    "q50": 0.2099,
+    "q90": 0.2099
+   },
+   "between_case_range": 0.0,
+   "decision_relevant": true,
+   "material": false,
+   "relative_between_case": 0.0,
+   "seed_range_within_case": 0.0
+  }
+ },
+ "policy": "traffic_sim.simulation.closure_ranking (deployed, unchanged)",
+ "protocol": "dirsplit_direction_decision_sensitivity_v3",
+ "rankings_identical": true,
+ "reasons": [],
+ "registration_key": "77980fae30549c6159ee3916d14a75c60aa4eeb09fc24bbd071e6957f790c095",
+ "release_evidence": false,
+ "seed_execution_identity": {
+  "basis": "scenario_spec seed/mapping and the semantic prefix of the private route recorded by seed_health must both exactly match the preregistered ScenarioSpec",
+  "verified": true,
+  "violations": []
+ },
+ "seed_invariance": {
+  "basis": "closure_disruption is demand-side and congestion-independent, so this is an invariant of the deployed policy, verified here rather than assumed",
+  "ranking_key_is_seed_deterministic": true,
+  "violations": []
+ },
+ "total_runtime_s": 802.2,
+ "winner_by_case": {
+  "q10": "18241874_9439210780_0",
+  "q50": "18241874_9439210780_0",
+  "q90": "18241874_9439210780_0"
+ },
+ "winner_identical": true
+}

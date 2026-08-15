@@ -170,6 +170,57 @@ def _simulation_section(baseline: dict | None) -> dict:
     }
 
 
+def _baseline_build_id(baseline: dict | None) -> str | None:
+    """Return the demand identity carried by a published scenario.
+
+    New scenario payloads state the identity in ``scenario.build_id`` while
+    older versioned payloads may only carry it in ``scenario_spec``.  The
+    demand signature is the final backwards-compatible source because it is
+    the content identity used to invalidate stale scenarios.
+    """
+    if not isinstance(baseline, dict):
+        return None
+    scenario = baseline.get("scenario")
+    spec = baseline.get("scenario_spec")
+    candidates = (
+        scenario.get("build_id") if isinstance(scenario, dict) else None,
+        spec.get("demand_build_id") if isinstance(spec, dict) else None,
+        scenario.get("demand_signature") if isinstance(scenario, dict) else None,
+        baseline.get("demand_signature"),
+    )
+    return next((str(value) for value in candidates if value), None)
+
+
+def _scenario_identity_section(meta: dict | None,
+                               baseline: dict | None) -> dict:
+    """Fail closed when scenario evidence belongs to another demand build."""
+    demand_id = (meta or {}).get("build_id")
+    baseline_id = _baseline_build_id(baseline)
+    result = {
+        "demand_build_id": demand_id,
+        "baseline_demand_build_id": baseline_id,
+        "gate": "baseline och demand_meta måste bära samma build-id innan "
+                "simulerings- eller sensor-output-evidens får användas",
+    }
+    if baseline is None:
+        return {"status": "missing", "reason": "baseline.json saknas", **result}
+    if demand_id is None or baseline_id is None:
+        return {
+            "status": "warn",
+            "reason": "build-id saknas i demand_meta eller baseline; "
+                      "scenarioevidensen kan inte bindas till aktiv demand",
+            **result,
+        }
+    if str(demand_id) != baseline_id:
+        return {
+            "status": "warn",
+            "reason": "inaktuell baseline för aktiv demand: "
+                      f"baseline={baseline_id}, demand={demand_id}",
+            **result,
+        }
+    return {"status": "pass", **result}
+
+
 def _sensor_output_section(meta: dict | None,
                            baseline: dict | None) -> dict:
     """Report fit against SUMO edgeData, not only PFE's pre-SUMO targets."""
@@ -334,13 +385,23 @@ def assemble() -> dict:
     loso = _load(WEB_DATA / "loso_report.json")
     temporal = _load(WEB_DATA / "temporal_holdout_report.json")
 
+    scenario_identity = _scenario_identity_section(meta, baseline)
+    current_baseline = baseline if scenario_identity["status"] == "pass" else None
+    if baseline is not None and current_baseline is None:
+        stale_reason = "scenarioevidens används inte: " + scenario_identity["reason"]
+        simulation = {"status": "missing", "reason": stale_reason}
+        sensor_output = {"status": "missing", "reason": stale_reason}
+    else:
+        simulation = _simulation_section(current_baseline)
+        sensor_output = _sensor_output_section(meta, current_baseline)
     sections = {
         "counts_fit": _counts_section(meta),
         "structure": _structure_section(meta),
         "purposes": _purpose_section(meta),
-        "simulation": _simulation_section(baseline),
-        "sensor_output": _sensor_output_section(meta, baseline),
-        "multi_day": _multi_day_section(meta, baseline),
+        "scenario_identity": scenario_identity,
+        "simulation": simulation,
+        "sensor_output": sensor_output,
+        "multi_day": _multi_day_section(meta, current_baseline),
         "held_out": _held_out_section(loso),
         "temporal_holdout": _temporal_holdout_section(temporal, meta),
     }

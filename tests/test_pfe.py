@@ -718,6 +718,27 @@ class TestRouteIndexGroups:
         assert rung == ref_rung
         assert sol == pytest.approx(ref)
 
+    def test_direction_stress_fixed_total_survives_relaxation(self):
+        # The impossible Level-2 bound is allowed to yield to the measured
+        # count, but the experiment's population control is not: q stress
+        # arms must retain q50's exact total on every ladder rung.
+        cands = [cand("m"), cand("unmeasured")]
+        sol, rung = pfe.solve_interval_with_structure_guard(
+            cands, {"m": 10.0}, {"unmeasured": (0.0, 0.0)}, {},
+            fixed_total=15,
+        )
+
+        assert sol is not None
+        assert rung == pfe.RUNG_NOBND_TOL1
+        assert sol.sum() == pytest.approx(15.0, abs=1e-6)
+
+    @pytest.mark.parametrize("invalid", [True, -1, 2.5, "2"])
+    def test_direction_stress_fixed_total_requires_an_exact_integer(self,
+                                                                    invalid):
+        with pytest.raises(ValueError, match="non-negative integer"):
+            pfe.solve_interval_with_structure_guard(
+                [cand("m")], {"m": 1.0}, {}, {}, fixed_total=invalid)
+
     def test_integer_repair_enforces_a_group_cap_preserving_measured(self):
         # The rounding-stage leak this exists for: a rounded vector that
         # satisfies the measured count but puts too much of it on the
@@ -746,6 +767,25 @@ class TestRouteIndexGroups:
         cands = [cand("m")]
         counts = np.array([5])
         assert (repair_integer_bounds(counts, cands, {"m": 5.0}, {}) == counts).all()
+
+    def test_integer_repair_disables_nested_highs_threads(self, monkeypatch):
+        """The process-parallel publisher must not fork HiGHS executors."""
+        real_milp = pfe.milp
+        seen_options = []
+
+        def recording_milp(*args, **kwargs):
+            seen_options.append(dict(kwargs.get("options", {})))
+            return real_milp(*args, **kwargs)
+
+        monkeypatch.setattr(pfe, "milp", recording_milp)
+        repaired = pfe.repair_integer_bounds(
+            np.array([8, 2]),
+            [cand("m", "stub"), cand("m", "onward")],
+            {"m": 10.0}, {}, groups=[([0], 0.0, 3.0)],
+        )
+
+        assert repaired is not None
+        assert seen_options == [{"time_limit": 20.0, "threads": 1}]
 
 
 class TestBoundViolationsFromRounding:

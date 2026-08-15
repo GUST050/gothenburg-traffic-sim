@@ -1,41 +1,79 @@
 # Plan för dirsplit, efterfrågeosäkerhet och korrekt användning i vägavstängning
 
 **Datum:** 2026-08-13
-**Status:** Forsknings- och implementationsplan. Ingen ny modell eller policy är
-aktiverad av detta dokument.
+**Status:** Genomförd till **Exit A** 2026-08-14. Ingen conditional ensemble-,
+warm-, API- eller UI-utbyggnad ska göras för riktningsaxeln.
 
-## Grindstatus 2026-08-14 (efter granskning)
+**Efterföljande ändring 2026-08-15:** användaren öppnade uttryckligen
+dirsplit-träningen igen för att ersätta ovillkorlig 50/50 med en datatränad
+split. Exit A och dess filer bevaras som historik och skrivs inte om. Den nya
+körvägen använder tränad q50 inom vardag 06–20, 50/50 som fallback utanför
+träningsstödet och modellhashbundna mjuka motriktningspriorer. Den fulla Gate
+M-valideringen gav `MODEL` med vinnaren
+`similarity_weighted_lgbm_no_profile`: minst en primärgrupp vinner i varje
+foldtyp och ingen förlorar. Det gamla Gate S-resultatet får fortfarande inte
+presenteras som bevis för den nya q-artefakten. Därför byggdes en ny
+riktningsisolerad routefamilj med exakt 4 998 fordon och samma 16-kvartars
+avgångsprofil i samtliga armar. Registrering v4 binder exakt komplementära
+q-par, routehashar och seed/variant-identitet. Gate S outcome v6 är `NO` på
+48/48 användbara körningar med noll hårda fel: viable set, ranking, vinnare
+och samtliga beslutskostnader är identiska mellan q10/q50/q90. Detta gäller
+den frysta diagnostiska matrisen 2025-09-16 kl. 06–10; q-armarna är fortfarande
+okalibrerade stressfall och resultatet är inte releaseevidens.
 
-**Ingen av grindarna är avgjord.** Fas 2, 3 och 4 är stängda.
+En separat storleks-/formdiagnostik visar att överförd q50 omfördelar 0,104 %
+av all uppmätt massa mot 50/50. Den aktiva kombinationen med lokalt ankare
+omfördelar 0,604 %, medan modellens tidsform ensam står för 0,101 %. En ny
+nivå/form-produkt byggs inte: dess stationsblockerade konfidensintervall
+korsar noll.
+
+## Slutbeslut 2026-08-14 (efter tre granskningsrundor)
+
+**Gate M=`BASELINE` och Gate S=`NO`: planen tar Exit A.** Fas 2, 3 och 4
+är stängda som ett lyckat negativt resultat, inte blockerade i väntan på mer
+arbete.
 
 | Grind | Status | Bevis |
 |---|---|---|
-| Gate S | `NOT_RUN` — extern egress-policy **och** konfunderade stressfall | `validation/dirsplit_direction_sensitivity_blocker_v3.json` |
-| Gate M | `INCONCLUSIVE` — `blocked_date` kan inte byggas | `validation/dirsplit_gate_m_outcome_v3.json` |
+| Gate S | `NO` — samma hard failures, viable set, ranking och vinnare i alla registrerade q-fall; 48/48 observationer användbara | `validation/dirsplit_direction_sensitivity_outcome_v5.json` |
+| Gate M | `BASELINE` — `constant_5050` behålls | `validation/dirsplit_gate_m_outcome_v4.json` |
 
-**NYTT BLOCKERANDE FYND (2026-08-14): q10/q90 isolerar inte riktningsaxeln.**
-`dirsplit/predict.py` skriver `edge_shares_q10` som `(e0 → s10, e1 → 1 − s90)`
-och `edge_shares_q90` som `(e0 → s90, e1 → 1 − s10)`, så varje ytterpar
-summerar till `1 ∓ (s90 − s10)` i stället för 1. Uppmätt på de artefakter som
-byggdes i denna session: **största |parsumma − 1| = 0,297** (tolerans 0,001);
-q50 summerar exakt till 1. Ett Gate S-utfall på dessa filer kan alltså bero på
-ändrad TOTAL trafikvolym snarare än ändrad riktning, och i efterhand går de
-två inte att skilja åt. Verktyget mäter detta vid registreringen, lägger in
-resultatet i den frysta content-nyckeln och returnerar `INCONCLUSIVE` när
-isolationen inte är styrkt. **Att bygga om q-artefakterna med bevarad parsumma
-är därför en förutsättning för ett meningsfullt Gate S, inte en förbättring.**
-Det arbetet hör till Fas 2 och är inte utfört.
+Det maskinläsbara Exit A-beslutet och dess källkodshashar finns i
+`validation/dirsplit_exit_a_decision_v2.json`. Den append-only filen ersätter
+v1 efter kontraktshärdning; Gate M, Gate S och produktbeslutet är oförändrade.
 
-En tidigare publicerad `Gate M = BASELINE` är **ÅTERKALLAD som beslut**.
-v1-filerna är bevarade oredigerade och uttryckligen ersatta; inget i dem får
+Det tidigare blockerande q-felet är löst och bevarat som historik i
+`validation/dirsplit_direction_sensitivity_blocker_v4.json`. q10/q90-paren
+görs komplementära, och flat PFE låser dessutom q10/q90 till q50:s exakta
+publicerade total i varje kvart. Det nya provenancebundna bygget gav
+**4 948 fordon i vart och ett av q10/q50/q90** och identisk 16-kvartars
+avgångsprofil. Gate S körde därefter 4 kandidater × 3 q-fall × 4 matchade seeds
+= 48 verkliga SUMO-fall. Alla var health-clean. Tre kandidater var viable i
+samtliga fall och hade exakt samma kostnader/ranking; den fjärde var
+no-detour-diskvalificerad i samtliga fall. Utfallet är därför ett giltigt
+`NO`, inte `INCONCLUSIVE`.
+
+**Produktkonsekvensen är implementerad:** releasevägen använder generell
+50/50 plus tillämpligt lokalt ankare (sensor 107 under dess giltiga period).
+Vid de fem enkelriktat observerade stationerna används mätningen på den
+observerade körbanan, men ingen transfermodell får sätta vare sig hård gräns
+eller mjuk dirsplit-prior på den ouppmätta motriktningen. Det etablerade
+monthly-kontraktets tre fysiska
+routeplatser finns kvar för tre SUMO-seeds, men alla tre byggs från samma
+centrala riktningstillstånd. q10/q90 fyller dem endast med den uttryckliga
+diagnostikflaggan `--direction-stress-variants` och blir aldrig automatiskt
+releaseevidens.
+
+Tidigare v1/v2-resultat för Gate M är **ÅTERKALLADE som beslut**.
+Filerna är bevarade oredigerade och uttryckligen ersatta; inget i dem får
 citeras som ett aktuellt resultat. Särskilt gäller att påståendet "den
 deployade LightGBM-modellen är 31,6–39,2 % sämre" inte stöds — det mätte en
 annan modell på en annan population.
 
-Två granskningsrundor har genomförts. Den första fann tre kritiska och tre
+Tre granskningsrundor har genomförts. Den första fann tre kritiska och tre
 höga fel; den andra fann att den reparerade beslutsregeln fortfarande kunde ge
 ett FALSKT `YES` på tre separata sätt. Alla är åtgärdade i koden, men en
-åtgärdad grind är fortfarande en okörd grind:
+alla redovisade fel är åtgärdade och den slutliga grinden är omkörd:
 
 1. **Gate S körde inte olika q-fall eller seeds.** Verktyget byggde sitt
    kommando utan routefil och utan seed, läste ett `disruption`-fält som
@@ -66,9 +104,10 @@ Runda 2 (2026-08-14) åtgärdade dessutom:
    Nu `decision_relevant: false`; är *alla* diskvalificerade blir utfallet
    `INCONCLUSIVE` — ingen viable set bildades, alltså fanns inget beslut att
    vara känsligt för.
-6. **Seed-variationskontrollen grupperade fel** (per q-fall, inte per
-   `(q-fall, kandidat)`), så en skillnad mellan kandidater kunde maskera sig
-   som en skillnad mellan seeds. Nu måste *varje* grupp variera.
+6. **Seed-kontrollen drog slutsats från ett godtyckligt utfall.** Identiska
+   insatta fordonsantal betyder inte att seed-parametern ignorerats. Nu
+   verifieras i stället den exekverade `seed_set`- och variantidentiteten i
+   runnerns egna scenario- och health-poster; mismatch ger `INCONCLUSIVE`.
 7. **Ett closure-fönster utanför demand-perioden ersattes tyst** med hela
    fönstret. Nu ett hårt fel.
 8. Topologifiltret failade öppet utan `sumolib`; registreringens datum
@@ -78,13 +117,22 @@ Runda 2 (2026-08-14) åtgärdade dessutom:
 En strukturell iakttagelse värd att bevara: den deployade rankningsnyckeln
 (`closure_disruption`) är efterfrågesidig och därmed **seed-deterministisk per
 konstruktion**. Det gamla "spridningskvot mot seed-brus"-testet på den nyckeln
-var därför en tautologi. Verktyget verifierar invarianten i stället och vägrar
-publicera om seed-axeln visade sig vara inert.
+var därför en tautologi. Verktyget verifierar invarianten i stället och binder
+varje körning till runnerns exekverade seed- och variantidentitet; mismatch
+eller en seed-beroende demandnyckel ger `INCONCLUSIVE`.
 
 Gate M mätte i runda 1 fortfarande inte exakt den deployade modellen: den
-anpassade **en modell per stad** i stället för en per station, och den
-nästlade shrinkage-beräkningen återanvände fel centrum. Båda är rättade;
-`blocked_date` saknas fortfarande, så utfallet är oförändrat `INCONCLUSIVE`.
+anpassade **en modell per stad** i stället för en per station, använde en
+standardregressor i stället för den deployade q50-kvantilen, och den
+nästlade shrinkage-beräkningen återanvände fel centrum. Alla är rättade;
+Gothenburgs målområde används nu även när shrinkage väljs, och lambda beräknas
+en gång per yttre fold och återanvänds för foldens stationsmodeller;
+Lokala råfiler visade sig finnas för 188 stationer. Dataset v2 är nu byggt med
+247 464 datumrader och 5 524 dagsblock, alla tre foldtyper finns, och rapporten
+binds till 188 levande källfilshashar. Resultatet är `BASELINE`: ingen kandidat
+vann under blocked-date, leave-city-out och leave-station-out utan att förlora
+en primärgrupp. Det betyder att 50/50 är den minsta försvarbara generella
+modellen; sensor 107:s lokala ankare gäller fortfarande där det har auktoritet.
 **Gäller omedelbart:** sensor 107:s lokala ankare, ett avgränsat
 matched-seed-test och `dirsplit/` dataset/modellval.
 **Villkorad senare omfattning:** demand-byggaren, scenarioavtal,
@@ -680,6 +728,15 @@ kvarvarande sammanblandningen mellan q-fall och seed.
 materiell tolerans före SUMO-körningen. Spara registration/outcome append-only
 med `release_evidence: false`.
 
+**Tillåten indatareparation före grinden.** Fas 0B måste först styrka att
+stressfallen ändrar riktning och inget annat. Varje stations två shares ska
+vara ändliga, ha 96 slots, ligga i `[0,1]` och summera till 1 inom 0,001.
+`demand_meta.json` ska binda splitfilen och alla tre routefilerna med SHA-256,
+och routefilerna ska ha exakt samma avgångspopulation per 15-minutersslot.
+Ett fel här stoppar före både registrering och SUMO. Att rätta q-konstruktionen
+och bygga nya, versionsbundna demand-artefakter är Fas 0B-indataarbete; det
+öppnar inte Fas 2 och får inte skriva över historiska evidensfiler.
+
 **Gate S — är riktning beslutsrelevant?**
 
 - `NO`: samma hard failures, viable set, finalistmängd och vinnare/tie inom
@@ -689,6 +746,12 @@ med `release_evidence: false`.
 - `INCONCLUSIVE`: timeout, bristande health eller för få matchade observationer.
   Ingen produktintegration; reparera endast mätbarheten och kör en ny fryst
   version utan att välja fall från utfallet.
+
+Seedens verklighet verifieras från den exekverade scenarioidentiteten och
+seed-health-posten. Ett visst resultatvärde behöver inte variera mellan seeds;
+däremot ger fel seed eller fel demand-variant `INCONCLUSIVE`. Den
+efterfrågesidiga rankingnyckeln ska vara seed-deterministisk, och en avvikelse
+från den invarianten är ett mätfel, inte ett `YES`.
 
 ### Fas 1 — dataset v2 och modellturnering, alltid men lokalt i `dirsplit/`
 
@@ -723,6 +786,10 @@ Denna fas får börja bara när Gate S=`YES` och Gate M är avgjord. Implementer
 residualbiblioteket i högst en ny `dirsplit/scenarios.py` plus ett fokuserat
 test. Prototypen skriver en diagnostisk valideringsartefakt, inte ett
 produktionsmanifest, och körs genom det fristående verktyget från Fas 0B.
+
+Fas 2 omfattar inte reparation eller provenancebunden ombyggnad av de tre
+stressfiler som Gate S behöver som indata; den begränsningen hör till Fas 0B
+ovan. Fas 2 börjar först när en giltig Gate S faktiskt har gett `YES`.
 
 - Gren B centrerar residualerna på 50/50, med 107:s lokala periodankare.
 - Gren D centrerar dem på den vinnande villkorade modellen.

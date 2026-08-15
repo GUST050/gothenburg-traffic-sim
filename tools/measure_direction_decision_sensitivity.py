@@ -49,9 +49,10 @@ tool therefore:
 
 * VERIFIES the invariant per case rather than assuming it (a case whose
   ranking key moves across seeds is a finding, not noise to average);
-* uses the seed axis for what it actually governs — simulator health,
-  closure integrity and inserted-vehicle counts — and requires the seeds to
-  have demonstrably differed before any answer is published.
+* verifies the executed seed and resolved variant from the scenario and
+  seed-health records. It does not demand that an arbitrary outcome such as
+  inserted-vehicle count differ: a valid seed can legitimately produce the
+  same count in a fixed-route run.
 
 This tool deliberately does not touch `ScenarioSpec`, the monthly path, the
 warm-state cache, the API or the UI. It calls the existing runner and reduces
@@ -93,12 +94,12 @@ def content_digest(payload: Any) -> str:
 
 
 SELECTION_RULE = "dirsplit_sensitivity_selection_v1"
-PROTOCOL = "dirsplit_direction_decision_sensitivity_v2"
+PROTOCOL = "dirsplit_direction_decision_sensitivity_v3"
 
 REGISTRATION_PATH = Path(
-    "validation/dirsplit_direction_sensitivity_registration_v2.json")
+    "validation/dirsplit_direction_sensitivity_registration_v3.json")
 OUTCOME_PATH = Path(
-    "validation/dirsplit_direction_sensitivity_outcome_v2.json")
+    "validation/dirsplit_direction_sensitivity_outcome_v3.json")
 
 #: Route artifacts written by build_sumo_demand, in a fixed order, each with
 #: the ScenarioSpec demand-variant name that selects it. The name is what
@@ -128,17 +129,15 @@ class MaterialityThresholds:
     there is no simulator noise to clear, so the question is whether the
     between-case difference is large relative to the decision itself.
 
-    ``spread_ratio`` still governs the SIMULATOR-side quantity, where seed
-    noise is real: a between-case difference in inserted vehicles smaller
-    than the seed-to-seed range is not a direction effect.
+    Seed execution is verified from runner identity records, not inferred
+    from an outcome threshold.
     """
 
-    spread_ratio: float = 2.0
     relative_objective: float = 0.10
     require_identical_viable_set: bool = True
     require_identical_ranking: bool = True
     require_identical_winner: bool = True
-    require_seed_axis_to_vary: bool = True
+    require_seed_execution_identity: bool = True
     require_clean_closure_integrity: bool = True
     require_healthy_seeds: bool = True
     require_direction_isolating_stress_cases: bool = True
@@ -156,6 +155,12 @@ PAIR_SUM_REQUIREMENT = (
     "every stress case; otherwise the case changes total demand as well as "
     "its direction and Gate S cannot attribute a difference to direction"
 )
+
+ROUTE_ARTIFACT_KEYS = {
+    "q50": "calibrated_q50",
+    "q10": "calibrated_v1",
+    "q90": "calibrated_v2",
+}
 
 
 @dataclass(frozen=True)
@@ -226,12 +231,68 @@ def measure_pair_sum_isolation(
     this is measured before the run, recorded in the frozen registration,
     and enforced by the gate rather than left as a footnote.
     """
+    import math
+    import xml.etree.ElementTree as ET
+
     path = sumo_dir / "direction_split.json"
     if not path.exists():
         return {"isolates_direction": False,
                 "reason": f"{path} is missing, so isolation is unverified",
                 "requirement": PAIR_SUM_REQUIREMENT}
-    data = json.loads(path.read_text())
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        return {"isolates_direction": False,
+                "reason": f"{path} is unreadable: {error}",
+                "requirement": PAIR_SUM_REQUIREMENT}
+    if not isinstance(data, dict) or not data:
+        return {"isolates_direction": False,
+                "reason": f"{path} carries no sensor records",
+                "requirement": PAIR_SUM_REQUIREMENT}
+
+    meta_path = sumo_dir / "demand_meta.json"
+    try:
+        meta = json.loads(meta_path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        return {"isolates_direction": False,
+                "reason": f"{meta_path} is unreadable: {error}",
+                "requirement": PAIR_SUM_REQUIREMENT}
+    fingerprint = meta.get("build_fingerprint") or {}
+    recorded_artifacts = fingerprint.get("artifacts") or {}
+
+    def sha256_file(file_path: Path) -> str:
+        digest = hashlib.sha256()
+        with open(file_path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    lineage_errors: list[str] = []
+    live_digests: dict[str, str] = {}
+    lineage_paths = {"direction_split": path}
+    lineage_paths.update({
+        ROUTE_ARTIFACT_KEYS[case]: sumo_dir / filename
+        for case, filename, _variant in STRESS_CASES
+    })
+    for artifact, artifact_path in lineage_paths.items():
+        recorded = (recorded_artifacts.get(artifact) or {}).get("sha256")
+        if not artifact_path.is_file():
+            lineage_errors.append(f"{artifact}: missing {artifact_path}")
+            continue
+        live = sha256_file(artifact_path)
+        live_digests[artifact] = live
+        if not recorded:
+            lineage_errors.append(
+                f"{artifact}: demand_meta build fingerprint has no digest")
+        elif live != recorded:
+            lineage_errors.append(
+                f"{artifact}: live digest does not match demand_meta build")
+
+    n_intervals = meta.get("n_intervals")
+    if isinstance(n_intervals, bool) or not isinstance(n_intervals, int) \
+            or n_intervals <= 0:
+        lineage_errors.append("demand_meta.n_intervals is not a positive integer")
+        n_intervals = 0
 
     keys = {"q50": "edge_shares", "q10": "edge_shares_q10",
             "q90": "edge_shares_q90"}
@@ -241,40 +302,132 @@ def measure_pair_sum_isolation(
         worst = 0.0
         offenders: list[str] = []
         for sensor, record in sorted(data.items()):
+            if not isinstance(record, dict):
+                offenders.append(f"{sensor}: record is not an object")
+                continue
             shares = record.get(key)
-            if not shares:
+            if not isinstance(shares, dict) or not shares:
                 offenders.append(f"{sensor}: no {key}")
                 continue
             series = list(shares.values())
             if len(series) != 2:
-                # A single-direction station has no pair to sum; only a
-                # two-edge station carries the invariant.
+                offenders.append(
+                    f"{sensor}: {key} must contain exactly two directed edges")
                 continue
-            deviation = max(abs(a + b - 1.0)
-                            for a, b in zip(series[0], series[1]))
+            if not all(isinstance(values, list) for values in series):
+                offenders.append(f"{sensor}: {key} series must be arrays")
+                continue
+            lengths = {len(values) for values in series}
+            if lengths != {96}:
+                offenders.append(
+                    f"{sensor}: {key} needs two complete 96-slot series, got "
+                    f"{sorted(lengths)}")
+                continue
+            pairs: list[tuple[float, float]] = []
+            malformed = False
+            for slot, (left, right) in enumerate(zip(series[0], series[1])):
+                if (isinstance(left, bool) or isinstance(right, bool)
+                        or not isinstance(left, (int, float))
+                        or not isinstance(right, (int, float))
+                        or not math.isfinite(float(left))
+                        or not math.isfinite(float(right))
+                        or not 0.0 <= float(left) <= 1.0
+                        or not 0.0 <= float(right) <= 1.0):
+                    offenders.append(
+                        f"{sensor}: {key} slot {slot} is not a finite share")
+                    malformed = True
+                    break
+                pairs.append((float(left), float(right)))
+            if malformed:
+                continue
+            deviation = max(abs(a + b - 1.0) for a, b in pairs)
             worst = max(worst, deviation)
             if deviation > tolerance:
                 offenders.append(f"{sensor}: max |sum-1| = {deviation:.4f}")
         worst_overall = max(worst_overall, worst)
         per_case[case] = {
             "max_abs_pair_sum_deviation": round(worst, 6),
-            "within_tolerance": worst <= tolerance,
+            "within_tolerance": not offenders and worst <= tolerance,
             "offenders": offenders,
         }
 
-    isolates = all(entry["within_tolerance"] for entry in per_case.values())
+    # The split is only an input. Gate S simulates the calibrated route files,
+    # so certify the live files too: all must belong to this exact demand build
+    # and carry the same 15-minute departure population. Otherwise a stale
+    # route file or calibration drift can reintroduce total-volume differences
+    # even when the split itself sums perfectly.
+    departure_profiles: dict[str, list[int]] = {}
+    route_errors: list[str] = []
+    if n_intervals:
+        for case, filename, _variant in STRESS_CASES:
+            route_path = sumo_dir / filename
+            profile = [0] * n_intervals
+            if not route_path.is_file():
+                route_errors.append(f"{case}: missing {route_path}")
+                continue
+            try:
+                for _event, element in ET.iterparse(route_path, events=("end",)):
+                    if element.tag in {"flow", "trip"}:
+                        route_errors.append(
+                            f"{case}: unsupported <{element.tag}> demand; exact "
+                            "vehicle departures cannot be certified")
+                    elif element.tag == "vehicle":
+                        try:
+                            depart = float(element.attrib["depart"])
+                        except (KeyError, TypeError, ValueError):
+                            route_errors.append(
+                                f"{case}: vehicle has no finite numeric depart")
+                        else:
+                            if not math.isfinite(depart) or depart < 0:
+                                route_errors.append(
+                                    f"{case}: vehicle has invalid depart {depart}")
+                            else:
+                                slot = int(depart // 900)
+                                if not 0 <= slot < n_intervals:
+                                    route_errors.append(
+                                        f"{case}: departure {depart} lies outside "
+                                        "the demand window")
+                                else:
+                                    profile[slot] += 1
+                    element.clear()
+            except ET.ParseError as error:
+                route_errors.append(f"{case}: route XML is invalid: {error}")
+            departure_profiles[case] = profile
+    profiles_match = (len(departure_profiles) == len(STRESS_CASES)
+                      and len({tuple(profile)
+                               for profile in departure_profiles.values()}) == 1)
+    if not profiles_match:
+        route_errors.append(
+            "q10/q50/q90 do not carry the same 15-minute departure profile")
+
+    isolates = (not lineage_errors and not route_errors
+                and all(entry["within_tolerance"]
+                        for entry in per_case.values()))
     return {
         "isolates_direction": isolates,
         "tolerance": tolerance,
         "max_abs_pair_sum_deviation": round(worst_overall, 6),
         "by_case": per_case,
+        "lineage": {
+            "verified": not lineage_errors,
+            "errors": lineage_errors,
+            "live_digests": live_digests,
+            "demand_build_id": meta.get("build_id"),
+        },
+        "route_departure_population": {
+            "verified_equal": not route_errors and profiles_match,
+            "errors": route_errors,
+            "vehicles_by_case": {
+                case: sum(profile)
+                for case, profile in departure_profiles.items()
+            },
+            "profiles_by_case": departure_profiles,
+        },
         "requirement": PAIR_SUM_REQUIREMENT,
         "reason": (None if isolates else
-                   "at least one stress case's direction pairs do not sum to "
-                   f"1.0 (worst |sum-1| = {worst_overall:.4f} > {tolerance}), "
-                   "so the case changes total demand as well as direction; "
-                   "rebuild the q artifacts with a pair-sum-preserving "
-                   "construction before running Gate S"),
+                   "the stress artifacts failed strict split, build-lineage, "
+                   "or equal-departure validation; direction is not isolated "
+                   f"(worst |sum-1| = {worst_overall:.4f})"),
         "source": str(path),
     }
 
@@ -312,13 +465,30 @@ def load_network(net_path: Path):
     selection whose whole purpose is to be frozen and defensible. An
     unverifiable filter is not a passed filter.
     """
+    # eclipse-sumo installs ``sumolib`` below <SUMO_HOME>/tools rather than as
+    # a top-level site package.  Use the same deterministic installation
+    # resolver as the simulator instead of relying on an ambient PYTHONPATH.
+    # The origin check matters: accepting a different globally installed
+    # sumolib would validate topology with a SUMO nobody selected.
     try:
-        import sumolib
-    except ImportError as error:                       # pragma: no cover
+        import importlib
+
+        from sumo_runtime import sumo_home
+
+        tools = (sumo_home() / "tools").resolve()
+        expected = (tools / "sumolib").resolve()
+        if not expected.is_dir():
+            raise RuntimeError(f"{expected} does not exist")
+        if str(tools) not in sys.path:
+            sys.path.insert(0, str(tools))
+        sumolib = importlib.import_module("sumolib")
+        origin = Path(sumolib.__file__).resolve()
+        origin.relative_to(expected)
+    except Exception as error:                         # pragma: no cover
         raise RuntimeError(
-            "sumolib is required to verify that a candidate survives its own "
-            "closure; refusing to freeze a selection whose topology filter "
-            "could not run (pip install eclipse-sumo)") from error
+            "sumolib is required from the active SUMO installation to verify "
+            "that a candidate survives its own closure; refusing to freeze "
+            "a selection whose topology filter could not run") from error
     if not net_path.exists():
         raise FileNotFoundError(f"network artifact missing: {net_path}")
     return sumolib.net.readNet(str(net_path))
@@ -437,6 +607,9 @@ class Observation:
     hard_failure: bool
     failure_reason: str | None
     runtime_s: float
+    seed_identity_verified: bool = True
+    executed_seed: int | None = None
+    executed_variant: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -574,7 +747,9 @@ def build_spec_payload(registration: Registration, *, case_variant: str,
 
 
 def run_matrix(registration: Registration, sumo_dir: Path,
-               out_dir: Path) -> list[Observation]:
+               out_dir: Path, *, reuse_existing: bool = False,
+               replay_runtimes: Mapping[tuple[str, int, str], float] | None = None,
+               ) -> list[Observation]:
     """Run every (stress case, seed, candidate) plus its matched baseline."""
     observations: list[Observation] = []
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -590,7 +765,11 @@ def run_matrix(registration: Registration, sumo_dir: Path,
                     registration, case_variant=variant, seed=seed,
                     closures=[candidate], scenario_id=tag,
                     start_time=start_time, end_time=end_time)
-                result = _run_one(spec_payload, registration, out_dir, tag)
+                result = _run_one(
+                    spec_payload, registration, out_dir, tag,
+                    reuse_existing=reuse_existing,
+                    replay_runtime_s=(replay_runtimes or {}).get(
+                        (case_name, seed, candidate)))
                 observations.append(Observation(
                     stress_case=case_name, seed=seed, candidate=candidate,
                     policy=result["policy"],
@@ -600,12 +779,17 @@ def run_matrix(registration: Registration, sumo_dir: Path,
                     hard_failure=result["hard_failure"],
                     failure_reason=result["reason"],
                     runtime_s=result["runtime_s"],
+                    seed_identity_verified=result["seed_identity_verified"],
+                    executed_seed=result["executed_seed"],
+                    executed_variant=result["executed_variant"],
                 ))
     return observations
 
 
 def _run_one(spec_payload: Mapping[str, Any], registration: Registration,
-             out_dir: Path, tag: str) -> dict[str, Any]:
+             out_dir: Path, tag: str, *, reuse_existing: bool = False,
+             replay_runtime_s: float | None = None
+             ) -> dict[str, Any]:
     """One SUMO run through the existing runner, with a fixed timeout.
 
     The (demand case, seed) pair travels in a ScenarioSpec file rather than
@@ -616,7 +800,16 @@ def _run_one(spec_payload: Mapping[str, Any], registration: Registration,
     run_dir = out_dir / tag
     run_dir.mkdir(parents=True, exist_ok=True)
     spec_path = run_dir / "spec.json"
-    spec_path.write_text(json.dumps(spec_payload, indent=1, sort_keys=True))
+    if reuse_existing:
+        try:
+            stored_spec = json.loads(spec_path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            return _failed(f"existing spec is unavailable: {error}", 0.0)
+        if stored_spec != dict(spec_payload):
+            return _failed(
+                "existing spec does not match the frozen registration", 0.0)
+    else:
+        spec_path.write_text(json.dumps(spec_payload, indent=1, sort_keys=True))
 
     command = [
         sys.executable, str(ROOT / "run_scenario.py"),
@@ -626,18 +819,21 @@ def _run_one(spec_payload: Mapping[str, Any], registration: Registration,
     ]
 
     started = time.time()
-    try:
-        completed = subprocess.run(
-            command, cwd=ROOT, capture_output=True, text=True,
-            timeout=registration.timeout_s,
-        )
-    except subprocess.TimeoutExpired:
-        return _failed(f"timeout after {registration.timeout_s}s",
-                       time.time() - started)
-    runtime = time.time() - started
-    if completed.returncode != 0:
-        return _failed(f"exit {completed.returncode}: "
-                       f"{completed.stderr.strip()[-300:]}", runtime)
+    if reuse_existing:
+        runtime = float(replay_runtime_s or 0.0)
+    else:
+        try:
+            completed = subprocess.run(
+                command, cwd=ROOT, capture_output=True, text=True,
+                timeout=registration.timeout_s,
+            )
+        except subprocess.TimeoutExpired:
+            return _failed(f"timeout after {registration.timeout_s}s",
+                           time.time() - started)
+        runtime = time.time() - started
+        if completed.returncode != 0:
+            return _failed(f"exit {completed.returncode}: "
+                           f"{completed.stderr.strip()[-300:]}", runtime)
 
     scenario = run_dir / f"{tag}.json"
     if not scenario.exists():
@@ -657,6 +853,28 @@ def _run_one(spec_payload: Mapping[str, Any], registration: Registration,
 
     health = [record for record in (payload.get("seed_health") or [])
               if isinstance(record, dict)]
+    expected_seeds = [int(seed) for seed in spec_payload["seed_set"]]
+    expected_mapping = {int(seed): str(variant) for seed, variant in
+                        spec_payload["demand_variant_mapping"].items()}
+    executed_spec = payload.get("scenario_spec") or {}
+    scenario_seeds = executed_spec.get("seed_set")
+    executed_mapping = {
+        int(seed): str(variant) for seed, variant in
+        (executed_spec.get("demand_variant_mapping") or {}).items()
+    }
+    observed_pairs = [
+        (record.get("seed"), _semantic_health_variant(record.get("variant")))
+                      for record in health]
+    expected_pairs = [(seed, expected_mapping[seed]) for seed in expected_seeds]
+    identity_verified = (scenario_seeds == expected_seeds
+                         and executed_mapping == expected_mapping
+                         and observed_pairs == expected_pairs)
+    if not identity_verified:
+        return _failed(
+            "scenario artifact does not prove the requested seed/variant "
+            f"identity: expected {expected_pairs}, scenario seeds "
+            f"{scenario_seeds}, mapping {executed_mapping}, health "
+            f"{observed_pairs}", runtime)
     inserted = None
     if health:
         values = [record.get("inserted") for record in health
@@ -669,16 +887,93 @@ def _run_one(spec_payload: Mapping[str, Any], registration: Registration,
             "closure_integrity"),
         "seed_health_flags": list(payload.get("seed_health_flags") or []),
         "vehicles_inserted": inserted,
+        "seed_identity_verified": True,
+        "executed_seed": expected_seeds[0],
+        "executed_variant": expected_mapping[expected_seeds[0]],
         "hard_failure": False,
         "reason": None,
         "runtime_s": runtime,
     }
 
 
+def _semantic_health_variant(route_label: Any) -> str | None:
+    """Map the route SUMO actually loaded back to the semantic q arm.
+
+    ``seed_health.variant`` is deliberately the private closure-route
+    filename, not the ScenarioSpec label. The old Gate S reader compared it
+    directly with ``q10``/``q50``/``q90`` and rejected every valid run. The
+    private name retains the canonical source prefix, so require both that
+    physical evidence and the independent semantic mapping in
+    ``scenario_spec``.
+    """
+    if not isinstance(route_label, str):
+        return None
+    name = Path(route_label).name
+    if name == "calibrated_v1.rou.xml" or name.startswith("calibrated_v1.rou_"):
+        return "q10"
+    if name == "calibrated_v2.rou.xml" or name.startswith("calibrated_v2.rou_"):
+        return "q90"
+    if name == "calibrated.rou.xml" or name.startswith("calibrated.rou_"):
+        return "q50"
+    return None
+
+
 def _failed(reason: str, runtime: float) -> dict[str, Any]:
     return {"policy": None, "closure_integrity": None,
             "seed_health_flags": [], "vehicles_inserted": None,
+            "seed_identity_verified": False, "executed_seed": None,
+            "executed_variant": None,
             "hard_failure": True, "reason": reason, "runtime_s": runtime}
+
+
+def execution_provenance(registration: Registration, out_dir: Path, *,
+                         reused_existing: bool,
+                         runtime_source: Path | None = None) -> dict[str, Any]:
+    """Bind the reducer and every stored execution artifact by SHA-256."""
+    def digest(path: Path) -> str:
+        value = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                value.update(chunk)
+        return value.hexdigest()
+
+    sources = {
+        "measure_direction_decision_sensitivity.py": Path(__file__).resolve(),
+        "run_scenario.py": ROOT / "run_scenario.py",
+        "closure_ranking.py": (
+            ROOT / "traffic_sim/simulation/closure_ranking.py"),
+        "contracts.py": ROOT / "traffic_sim/core/contracts.py",
+    }
+    artifacts: dict[str, dict[str, str]] = {}
+    for case in registration.stress_cases:
+        for seed in registration.seeds:
+            for candidate in registration.candidate_edges:
+                tag = f"cand_{case}_{seed}_{candidate}"
+                run_dir = out_dir / tag
+                for kind, path in (
+                    ("spec", run_dir / "spec.json"),
+                    ("scenario", run_dir / f"{tag}.json"),
+                ):
+                    if not path.is_file():
+                        raise RegistrationError(
+                            f"cannot seal Gate S: missing {path}")
+                    artifacts[f"{tag}/{kind}"] = {
+                        "path": str(path), "sha256": digest(path)}
+
+    payload = {
+        "protocol": "dirsplit_gate_s_execution_provenance_v1",
+        "registration_key": registration.content_key,
+        "reused_existing": bool(reused_existing),
+        "sources": {name: {"path": str(path), "sha256": digest(path)}
+                    for name, path in sources.items()},
+        "execution_artifacts": artifacts,
+        "execution_artifact_count": len(artifacts),
+    }
+    if runtime_source is not None:
+        payload["runtime_source"] = {
+            "path": str(runtime_source), "sha256": digest(runtime_source)}
+    payload["content_key"] = content_digest(payload)
+    return payload
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -746,46 +1041,34 @@ def seed_invariance(observations: Sequence[Observation]) -> dict[str, Any]:
     }
 
 
-def seed_axis_varied(observations: Sequence[Observation]) -> dict[str, Any]:
-    """Did the seeds actually produce different simulations?
+def seed_execution_identity(observations: Sequence[Observation]) -> dict[str, Any]:
+    """Verify seed identity from runner output, not from an outcome heuristic.
 
-    This is the guard against the exact defect this tool was repaired for: a
-    matrix that runs the same simulation under different labels answers
-    nothing. Inserted-vehicle counts are simulator-side and seed-sensitive,
-    so a group where they never move means the seed axis was inert.
-
-    Grouped by ``(stress case, CANDIDATE)``, not by stress case alone. Two
-    candidates close different edges and legitimately insert different
-    numbers of vehicles, so pooling them lets a candidate-to-candidate
-    difference masquerade as seed variation — a matrix in which every seed
-    was byte-identical would still report ``varied: true``. The seed axis is
-    only demonstrated when the numbers move WITHIN a group that differs by
-    nothing except the seed.
+    Fixed-route simulations may insert exactly the same number of vehicles at
+    several legitimate seeds. Requiring that count to vary confuses "the seed
+    was executed" with "one chosen observable happened to move". The runner's
+    scenario and health records carry the actual seed and resolved variant;
+    those identities are the auditable contract.
     """
-    per_group: dict[tuple[str, str], set[int]] = {}
+    violations = []
     for obs in observations:
-        if obs.vehicles_inserted is not None:
-            per_group.setdefault((obs.stress_case, obs.candidate), set()).add(
-                int(obs.vehicles_inserted))
-    measurable = {f"{case}|{candidate}": sorted(values)
-                  for (case, candidate), values in sorted(per_group.items())}
-    varying = sorted(key for key, values in measurable.items()
-                     if len(values) > 1)
-    inert = sorted(key for key, values in measurable.items()
-                   if len(values) <= 1)
-    # EVERY group must vary. One group that happens to move cannot vouch for
-    # a matrix in which the rest were identical runs.
-    varied = bool(measurable) and not inert
+        expected_variant = obs.stress_case
+        executed_seed = (obs.seed if obs.executed_seed is None
+                         and obs.seed_identity_verified else obs.executed_seed)
+        executed_variant = (expected_variant if obs.executed_variant is None
+                            and obs.seed_identity_verified
+                            else obs.executed_variant)
+        if (not obs.seed_identity_verified or executed_seed != obs.seed
+                or executed_variant != expected_variant):
+            violations.append(
+                f"{obs.stress_case}/{obs.seed}/{obs.candidate}: executed "
+                f"seed={executed_seed}, variant={executed_variant}")
     return {
-        "varied": varied,
-        "grouped_by": "stress_case x candidate",
-        "distinct_inserted_by_group": measurable,
-        "groups_that_varied": varying,
-        "groups_that_did_not_vary": inert,
-        "note": ("a matrix whose seeds produce identical simulator output "
-                 "has no seed axis, whatever its labels say; grouping by "
-                 "case alone would let a candidate difference stand in for "
-                 "a seed difference"),
+        "verified": not violations,
+        "violations": violations,
+        "basis": ("scenario_spec seed/mapping and the semantic prefix of "
+                  "the private route recorded by seed_health must both "
+                  "exactly match the preregistered ScenarioSpec"),
     }
 
 
@@ -794,7 +1077,7 @@ def decide_gate_s(observations: Sequence[Observation],
     """Decide Gate S on the preregistered decision fields.
 
     Fail-closed: missing observations, timeouts, unclean closure integrity,
-    unhealthy seeds or an inert seed axis produce ``INCONCLUSIVE``, never
+    unhealthy seeds or an unverified seed identity produce ``INCONCLUSIVE``, never
     ``NO``. "We could not measure it" and "we measured it and it does not
     matter" are different answers and must not be collapsed.
     """
@@ -845,14 +1128,13 @@ def decide_gate_s(observations: Sequence[Observation],
             observations, registration,
             isolation=registration.stress_case_isolation)
 
-    axis = seed_axis_varied(usable)
-    if thresholds.require_seed_axis_to_vary and not axis["varied"]:
+    seed_identity = seed_execution_identity(usable)
+    if (thresholds.require_seed_execution_identity
+            and not seed_identity["verified"]):
         return _inconclusive(
-            "the seed axis did not vary in "
-            f"{len(axis['groups_that_did_not_vary'])} (case, candidate) "
-            "group(s): those seeds produced identical simulator output, so "
-            "no matched-seed comparison was actually performed there",
-            observations, registration, seed_axis=axis)
+            "the runner output does not match the preregistered seed/variant "
+            "identity", observations, registration,
+            seed_execution_identity=seed_identity)
 
     # A ranking key that moves across seeds is a BROKEN MEASUREMENT, not
     # evidence about direction. The deployed key is demand-side and cannot
@@ -977,7 +1259,7 @@ def decide_gate_s(observations: Sequence[Observation],
         "rankings_identical": rankings_identical,
         "winner_identical": winner_identical,
         "winner_by_case": winners,
-        "seed_axis": axis,
+        "seed_execution_identity": seed_identity,
         "seed_invariance": invariance,
         "policy": "traffic_sim.simulation.closure_ranking (deployed, unchanged)",
         "n_observations": len(observations),
@@ -1079,11 +1361,21 @@ def build_registration(sumo_dir: Path, *, date: str, begin: str, end: str,
               "demand-side and therefore seed-deterministic by construction; "
               "that invariant is verified per run — a violation is a broken "
               "measurement and yields INCONCLUSIVE, never YES — and the seed "
-              "axis is used for simulator health, closure integrity and an "
-              "inertness check grouped by (case, candidate). Gate S also "
+              "axis is verified from scenario and seed-health identity "
+              "records. Gate S also "
               "requires the stress cases to ISOLATE direction: see "
               "stress_case_isolation."),
     )
+
+
+def require_runnable_registration(registration: Registration) -> None:
+    """Stop a known-invalid Gate S before the first expensive SUMO run."""
+    if not registration.stress_cases_isolate_direction:
+        raise RegistrationError(
+            "Gate S is INCONCLUSIVE before simulation: the frozen stress "
+            "artifacts failed strict split, build-lineage, or equal-departure "
+            "validation. No SUMO matrix was started. Rebuild the demand "
+            "artifacts and freeze a new v3 registration.")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1103,6 +1395,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--freeze-only", action="store_true",
                         help="write the registration and stop, so selection "
                              "is provably frozen before execution")
+    parser.add_argument(
+        "--reuse-existing", action="store_true",
+        help="re-reduce an already completed matrix after validating every "
+             "stored spec and executed seed/route identity; never starts SUMO")
     args = parser.parse_args(argv)
 
     try:
@@ -1110,6 +1406,16 @@ def main(argv: list[str] | None = None) -> int:
             args.sumo_dir, date=args.date, begin=args.begin, end=args.end,
             seeds=args.seeds, count=args.candidates, timeout_s=args.timeout_s)
     except (RegistrationError, RuntimeError, FileNotFoundError) as error:
+        raise SystemExit(f"cannot freeze this experiment: {error}")
+
+    # A registration is append-only evidence.  Do not spend its canonical
+    # version key on inputs that are already known to confound direction with
+    # total volume (or whose route lineage cannot be verified).  The blocker
+    # record is the right artifact for that diagnostic state; a Gate S
+    # registration is only meaningful once the experiment is runnable.
+    try:
+        require_runnable_registration(registration)
+    except RegistrationError as error:
         raise SystemExit(f"cannot freeze this experiment: {error}")
 
     payload = registration.to_json()
@@ -1138,20 +1444,31 @@ def main(argv: list[str] | None = None) -> int:
           f"{registration.closure_end}")
 
     isolation = registration.stress_case_isolation
-    if registration.stress_cases_isolate_direction:
-        print(f"  isolation : direction only (max |pair sum - 1| = "
-              f"{isolation.get('max_abs_pair_sum_deviation')})")
-    else:
-        print("\n  ⚠ THE STRESS CASES DO NOT ISOLATE DIRECTION")
-        print(f"    {isolation.get('reason')}")
-        print("    Gate S will return INCONCLUSIVE: a difference measured on "
-              "these\n    artifacts could be a change in total volume rather "
-              "than direction.")
+    print(f"  isolation : direction only (max |pair sum - 1| = "
+          f"{isolation.get('max_abs_pair_sum_deviation')})")
     if args.freeze_only:
         return 0
 
-    observations = run_matrix(registration, args.sumo_dir, args.out_dir)
+    replay_runtimes: dict[tuple[str, int, str], float] = {}
+    runtime_source = None
+    if args.reuse_existing and OUTCOME_PATH.is_file():
+        previous = json.loads(OUTCOME_PATH.read_text())
+        for observation in previous.get("observations", []):
+            replay_runtimes[(
+                str(observation["stress_case"]), int(observation["seed"]),
+                str(observation["candidate"]),
+            )] = float(observation.get("runtime_s") or 0.0)
+        runtime_source = OUTCOME_PATH
+
+    observations = run_matrix(
+        registration, args.sumo_dir, args.out_dir,
+        reuse_existing=args.reuse_existing,
+        replay_runtimes=replay_runtimes)
     outcome = decide_gate_s(observations, registration)
+    outcome["execution_provenance"] = execution_provenance(
+        registration, args.out_dir,
+        reused_existing=args.reuse_existing,
+        runtime_source=runtime_source)
 
     args.outcome.parent.mkdir(parents=True, exist_ok=True)
     if args.outcome.exists():

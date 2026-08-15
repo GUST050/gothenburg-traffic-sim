@@ -298,8 +298,10 @@ class TestAnchorIsNotAQuarterTimeSeries:
             "the reference must carry raw counts and a period, not a "
             "pre-divided per-slot constant")
 
-    def test_the_record_still_says_the_split_is_estimated(self, registry):
-        assert "estimated" in registry["107"].notes.lower()
+    def test_the_record_says_per_slot_direction_is_not_measured(self, registry):
+        note = registry["107"].notes.lower()
+        assert "50/50 fallback" in note
+        assert "no per-slot direction is measured" in note
 
     def test_the_station_semantics_are_still_two_way_total(self, registry):
         assert registry["107"].measurement_semantics == "two_way_total"
