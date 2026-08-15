@@ -34,8 +34,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import pfe
-from pfe import Candidate
+from traffic_sim.demand import pfe
+from traffic_sim.demand.pfe import Candidate
 
 BASELINE_PATH = (Path(__file__).resolve().parent.parent
                  / "tests" / "data" / "pfe_benchmark_baseline.json")

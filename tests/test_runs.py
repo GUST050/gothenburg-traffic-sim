@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import runs as runs_mod
+from traffic_sim.ops import runs as runs_mod
 
 
 class TestRunRegistry:

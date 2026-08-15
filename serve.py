@@ -150,7 +150,7 @@ from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from signal_optimize import SIGNAL_CONDITION_COUNT
+from signals.signal_optimize import SIGNAL_CONDITION_COUNT
 from traffic_sim.core.contracts import (ClosureSearchSpec, DemandBuildSpec,
                                          ScenarioSpec,
                                          write_closure_search_spec,
@@ -1980,12 +1980,12 @@ class Handler(SimpleHTTPRequestHandler):
             seed_count = len(spec.seed_set) if spec is not None else OPTIMIZE_SEEDS
             if closure:
                 out_path = OPTIMIZE_CLOSURE_OUT
-                cmd = [sys.executable, "signal_closure_combine.py",
+                cmd = [sys.executable, "signals/signal_closure_combine.py",
                       "--seeds", str(seed_count), "--out", str(out_path)]
                 n_sumo_runs = 2   # D4: exactly two passes, each OPTIMIZE_SEEDS seeds
             else:
                 out_path = OPTIMIZE_OUT
-                cmd = [sys.executable, "signal_optimize.py",
+                cmd = [sys.executable, "signals/signal_optimize.py",
                       "--seeds", str(seed_count), "--out", str(out_path)]
                 n_sumo_runs = OPTIMIZE_SIGNAL_CONDITIONS
             if spec_path is not None:

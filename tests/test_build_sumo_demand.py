@@ -955,7 +955,7 @@ class TestVariantPublication:
     """All direction variants must publish atomically as one demand build."""
 
     def test_rejected_variant_keeps_every_previous_output(self, monkeypatch, tmp_path):
-        import pfe
+        from traffic_sim.demand import pfe
 
         final_q50 = tmp_path / "calibrated.rou.xml"
         final_q10 = tmp_path / "calibrated_v1.rou.xml"

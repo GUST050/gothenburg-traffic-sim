@@ -148,7 +148,7 @@ Closed edges reroute live in SUMO; a vehicle with genuinely no detour around
 a closure has its route truncated at the last reachable edge (it drives most
 of the trip and "parks" short of the closure) rather than being deleted
 outright or silently teleported through the closed edge. Disruption quality
-for a closure (`closure_metrics.py`) is scored primarily by Δ total
+for a closure (`traffic_sim/simulation/metrics.py`) is scored primarily by Δ total
 `timeLoss` against a same-demand baseline, with teleports and stranded
 vehicles as hard disqualifying guards — GEH (sensor-fit) is deliberately
 **not** used here, since it's blind to waiting time.
@@ -156,7 +156,7 @@ vehicles as hard disqualifying guards — GEH (sensor-fit) is deliberately
 Every SUMO network build also writes `sumo/network_audit.json`, a provenance
 sidecar showing imported versus defaulted speed/lane values, movement and
 restriction tags, roundabouts, and the TLS membership produced by netconvert.
-Golden artifacts can be staged and activated through `release_registry.py`.
+Golden artifacts can be staged and activated through `traffic_sim/ops/releases.py`.
 Each normal/closure/signal case is an integrity-checked bundle, so its scenario,
 trajectory and exact route inputs cannot drift independently. Case-specific
 subdirectories preserve same-named run manifests without collisions.
@@ -235,8 +235,11 @@ cross-validated — with a single year of data each holiday is observed once.
 
 ## Repository layout
 
+Shared implementation lives in one package; the repository root holds only
+entry points that are invoked as commands.
+
 ```
-traffic_sim/
+traffic_sim/            canonical implementation package
   core/                 shared contracts and content fingerprints
   intake/               sensor registry and data-intake helpers
   demand/               PFE solver/kernel and candidate-artifact cache
@@ -244,35 +247,59 @@ traffic_sim/
   simulation/           SUMO runtime, network metadata/audits, disruption metrics
   ops/                  run and release registries
 
-build_data.py           intake CLI -> network.geojson, flows.json, graph.graphml
-build_features.py       flow matrix, adjacency, normal profile and splits
-build_dataset.py        windowed datasets for a future GNN
-train_agent1.py         LightGBM baseline + holiday factors
-build_agent1_flows.py   2027 forecast -> flows_forecast.json
-build_sumo_net.py       graph.graphml -> SUMO network (stable edge IDs)
-build_candidates.py     DeSO/OSM/RVU-grounded candidate routes
-build_sumo_demand.py    demand orchestration and calibrated SUMO routes
-run_scenario.py         baseline/closure Monte Carlo runs
-serve.py                static web + optional local API
-observability.py,       demand-estimation stages (root CLI modules)
-assignment_priors.py,
-prior_flows.py
-pfe.py, pfe_kernel.py   compatibility imports for traffic_sim/demand/
-validate_sim.py         stable CLI wrapper for traffic_sim/confidence/loso.py
-validation_report.py    stable CLI wrapper for traffic_sim/confidence/report.py
+pipeline entry points
+  build_data.py         intake CLI -> network.geojson, flows.json, graph.graphml
+  build_features.py     flow matrix, adjacency, normal profile and splits
+  build_dataset.py      windowed datasets for a future GNN
+  train_agent1.py       LightGBM baseline + holiday factors
+  build_agent1_flows.py 2027 forecast -> flows_forecast.json
+  build_sumo_net.py     graph.graphml -> SUMO network (stable edge IDs)
+  build_candidates.py   DeSO/OSM/RVU-grounded candidate routes
+  build_sumo_demand.py  demand orchestration and calibrated SUMO routes
+  run_scenario.py       baseline/closure Monte Carlo runs
+  serve.py              static web + optional local API
+  observability.py,     demand-estimation stages
+  assignment_priors.py,
+  prior_flows.py
+  calibrate_theta.py,   candidate-pool and direction-split calibration
+  estimate_directions.py
+  fetch_deso.py         SCB DeSO population fetch
+  warm_demand_horizon.py  pre-warm the demand day library
+  sensor_contribution.py  sensor contribution / placement screen
+  validate_sim.py       CLI for traffic_sim/confidence/loso.py
+  validation_report.py  CLI for traffic_sim/confidence/report.py
+  explore.py            one-off data exploration and plots
+
+campaign runners        evidence-bound paths — recorded inside validation/
+  run_monthly_closure_search.py, run_monthly_proxy_validation.py,
+  run_monthly_warm_state_validation.py, screen_monthly_closures.py,
+  suggest_closure_time.py
+
+signals/                signal-timing lab, optimizer and closure combination
 dirsplit/               trained direction-split model package
 demand/                 demand model components and data contracts
 web/                    static Leaflet browser runtime
 web/data/               generated artifacts and exact graph snapshot
 data_in/                user-delivered sensor/DeSO/POI inputs
+validation/             frozen campaign evidence (see validation/README.md)
 sumo/, runs/, cache/    generated intermediates, manifests and caches
-tools/                  bounded experiments and probes
+tools/                  bounded experiments, probes, freezes and benchmarks
 tests/                  contract + pipeline tests
+docs/                   dated plans, reviews and history (see docs/README.md)
 ARCHITECTURE.md         structural source of truth
 IMPROVEMENT_PLAN.md     canonical improvement and delivery plan
 ```
 
-Former shared root modules remain compatibility imports or CLI wrappers
-pointing at `traffic_sim/`; they are intentionally not duplicate source. Run existing
-commands from the repository root so relative artifact paths and Makefile
-contracts remain deterministic.
+There are no compatibility shims: every import names its real module. Two root
+files are deliberately thin CLI wrappers rather than shims — `validate_sim.py`
+and `validation_report.py` — because `make validate-temporal` and three
+production modules invoke them by that name.
+
+The campaign runners stay in the root because their **paths** are recorded
+inside frozen `validation/` artifacts and `tools/freeze_*.py`; moving one
+would break evidence that cannot be regenerated. `signals/` carries no such
+binding, which is why it could move.
+
+Run every command from the repository root so relative artifact paths and
+Makefile contracts remain deterministic. The `signals/` modules work both as
+`python3 -m signals.signal_optimize` and `python3 signals/signal_optimize.py`.

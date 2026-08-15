@@ -12,13 +12,14 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import pfe
-from pfe import (Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
-                 RUNG_LP_FALLBACK, RUNG_RELAX_TOL4X, calibrate,
-                 build_touch_index, largest_remainder_round, path_size_weights,
-                 solve_calibration_intervals, solve_interval,
-                 solve_interval_entropy, solve_interval_with_relaxation,
-                 solve_interval_with_structure_guard, write_calibration_report)
+from traffic_sim.demand import pfe
+from traffic_sim.demand.pfe import (
+    Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
+    RUNG_LP_FALLBACK, RUNG_RELAX_TOL4X, calibrate,
+    build_touch_index, largest_remainder_round, path_size_weights,
+    solve_calibration_intervals, solve_interval,
+    solve_interval_entropy, solve_interval_with_relaxation,
+    solve_interval_with_structure_guard, write_calibration_report)
 from traffic_sim.demand.structure_caps import integer_structure_cap
 
 
@@ -724,7 +725,7 @@ class TestRouteIndexGroups:
         # capped group must be repaired by shifting whole vehicles to
         # uncapped routes serving the SAME measured edge — never by
         # changing the measured total.
-        from pfe import repair_integer_bounds
+        from traffic_sim.demand.pfe import repair_integer_bounds
         cands = [cand("m", "stub"), cand("m", "onward")]
         counts = np.array([8, 2])   # group route carries 8 of 10
         repaired = repair_integer_bounds(
@@ -735,14 +736,14 @@ class TestRouteIndexGroups:
         assert repaired[0] + repaired[1] == 10
 
     def test_integer_repair_group_infeasible_returns_none(self):
-        from pfe import repair_integer_bounds
+        from traffic_sim.demand.pfe import repair_integer_bounds
         cands = [cand("m", "stub")]          # only ONE route serves m
         counts = np.array([10])
         assert repair_integer_bounds(
             counts, cands, {"m": 10.0}, {}, groups=[([0], 0.0, 3.0)]) is None
 
     def test_integer_repair_no_groups_no_bounds_is_a_noop(self):
-        from pfe import repair_integer_bounds
+        from traffic_sim.demand.pfe import repair_integer_bounds
         cands = [cand("m")]
         counts = np.array([5])
         assert (repair_integer_bounds(counts, cands, {"m": 5.0}, {}) == counts).all()
@@ -786,7 +787,7 @@ class TestBoundViolationsFromRounding:
         # The continuous solution may legitimately use RUNG_RELAX_TOL4X.
         # Reimposing M=10 exactly at the integer stage would conflict with
         # U<=6, but M=6 lies within the same allowed measurement band.
-        from pfe import repair_integer_bounds
+        from traffic_sim.demand.pfe import repair_integer_bounds
         cands = [cand("M", "U")]
         repaired = repair_integer_bounds(
             np.array([10]), cands, {"M": 10.0}, {"U": (0.0, 6.0)},

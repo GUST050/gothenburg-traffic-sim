@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import closure_metrics as cm
+from traffic_sim.simulation import metrics as cm
 import run_scenario
 import suggest_closure_time as sct
 

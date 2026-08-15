@@ -37,8 +37,15 @@ owners, states and approval formulas are not active workflow rules. See
   worker budget, 300 s timeout and closed v5 gates remain unchanged. Do not
   hardcode 107's annual 0.52 as 96 measured quarters or proceed past Gate S/M/P
   without their frozen evidence.`
-- Updated: `2026-08-13 Codex scope correction. Documentation-only; local product
-  code and tests are unchanged.`
+- Updated: `2026-08-15 repository cleanup and structure, at the user's direct
+  request. The traffic_sim/ migration is finished (12 root shims deleted, every
+  import names its real module), volume_priors.py removed as dead code, the
+  five unbound signal modules collected into signals/, and one 36.9 MB
+  pure-archive evidence artifact compressed to 3.2 MB byte-exact. No demand,
+  calibration, closure or direction-split behaviour changed, and the demand
+  source fingerprint was verified unmoved. The ACTIVE_TASK below is unaffected
+  and remains the next piece of product work. Prior entry: 2026-08-13 Codex
+  scope correction, documentation-only.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
