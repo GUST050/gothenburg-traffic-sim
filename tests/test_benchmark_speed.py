@@ -852,6 +852,19 @@ class TestFailedProvenanceCommandsFailClosed:
                             lambda *a, **k: Result())
         assert benchmark_speed.sumo_version() is None
 
+    def test_namespace_sumo_directory_is_not_an_installation(self, monkeypatch):
+        namespace = type(sys)("sumo")
+        namespace.__file__ = None
+        monkeypatch.setitem(sys.modules, "sumo", namespace)
+        monkeypatch.setattr(
+            benchmark_speed.subprocess,
+            "run",
+            lambda *args, **kwargs: pytest.fail(
+                "namespace package must be rejected before subprocess"),
+        )
+
+        assert benchmark_speed.sumo_version() is None
+
     def test_a_successful_sumo_version_is_used(self, monkeypatch):
         class Result:
             returncode = 0

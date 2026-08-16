@@ -8,7 +8,7 @@ Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
 
 - Focus and status: `Matched baseline plus current spatial/temporal LOSO are
   complete on codex/fix-dirsplit-gates-v3; reviewed repository-cleanup fixes
-  are being integrated before the next accuracy task.`
+  are integrated and the isolated sumo_version namespace defect is fixed.`
 - Summary: `Baseline build 4afe9e3ae2e74a4b872e passed staging and replaced
   the stale live set. Spatial and temporal reports share exact pool, net,
   reference and through-share identity. validation.json is overall=pass.
@@ -24,7 +24,9 @@ Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
   0.466–1.354 median 0.613; temporal 0.445–1.356 median 0.6225; every station
   underidentified and every active integer measurement residual zero. The
   scenario/LOSO/publication, PFE/demand and server/API suites pass 623 tests
-  with 1 skipped; JSON/hash verification and git diff --check pass.`
+  with 1 skipped. Cleanup integration adds 150 passing targeted layout,
+  signal, fingerprint and SUMO-provenance checks; the namespace regression is
+  pinned directly. JSON/hash verification and git diff --check pass.`
 - Decisions and evidence: `The temporal blocker was a 20/60/180-second solver
   time limit, not infeasibility. The exact condensed full-domain L1 model
   solved the captured hard model optimally in 0.494 s and remains validation-
@@ -33,11 +35,10 @@ Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
   is a retained negative study rather than dead code.`
 - Blockers or risks: `Six clustered stations still cannot support strong
   citywide accuracy. New sensors are deferred. 4,990 lane counts and 631
-  speeds remain defaults. A pre-existing tools/benchmark_speed.py bug remains:
-  sumo_version() raises TypeError when local sumo/ shadows the Python package.`
-- Suggested next action: `Fix and test the isolated sumo_version() namespace-
-  package case, then import reviewed NVDB road structure on high-flow and
-  closure-relevant edges with stable IDs and before/after evidence.`
+  speeds remain defaults; synthetic signals and OD/assignment priors remain.`
+- Suggested next action: `Import reviewed NVDB road structure on high-flow and
+  closure-relevant edges with stable IDs and before/after network, routing,
+  held-out and scenario evidence.`
 - Actor notes: `The old live closure set is recoverable at
   runs/prepublish-baseline-fa259a2892a974c27e8c-20260815T152748Z. No release
   promotion has been performed.`

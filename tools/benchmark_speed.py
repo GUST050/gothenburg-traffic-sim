@@ -135,7 +135,16 @@ def file_fingerprints() -> dict[str, str | None]:
 def sumo_version() -> str | None:
     try:
         import sumo
-        home = Path(sumo.__file__).resolve().parent
+        # A repository-local ``sumo/`` directory can resolve as a PEP 420
+        # namespace package when the real Python package is absent. Namespace
+        # packages intentionally have no source file; treating ``None`` as a
+        # path raises TypeError before this fail-closed probe can return. It is
+        # not a usable SUMO installation, so reject it explicitly without
+        # broadening the exception handler around unrelated programming errors.
+        module_file = getattr(sumo, "__file__", None)
+        if not module_file:
+            return None
+        home = Path(module_file).resolve().parent
         result = subprocess.run([str(home / "bin/sumo"), "--version"],
                                 capture_output=True, text=True, timeout=20,
                                 check=False)
