@@ -198,6 +198,18 @@ calibrated against pooled leave-city-out error) and reported as q10/q50/q90
 — the three build three separate demand variants, and Monte Carlo seeds are
 spread across them so direction uncertainty reaches the displayed confidence.
 
+**Measured out-of-sample, 2026-08-16 — read this before trusting the above.**
+The shrinkage coefficient λ is fitted on the pooled held-out pairs and then
+scored on those same pairs, so the published margin over 50/50 is an upper
+bound rather than a generalisation result. Refitting λ on three cities and
+scoring it on the fourth (`make dirsplit-validate`) gives pooled MAE 0.0568
+against 50/50's 0.0565, with a station-level bootstrap 95% CI of
+[−0.0030, +0.0041] — the model is **statistically indistinguishable from
+writing 0.5**. The deployed `[q10, q90]` interval covers **39.3%** of held-out
+observations against a nominal 80%. Evidence:
+`validation/dirsplit_gate_m_20260816.json`; remediation plan:
+`docs/plans/DIRSPLIT_REMEDIATION_PLAN_2026-08-16.md`.
+
 ```bash
 make dirsplit-stations   # station metadata (open API, no key)
 make dirsplit-volumes    # hourly volumes by direction (resumable)
@@ -206,6 +218,7 @@ make dirsplit-dataset    # assemble the shared training table
 make dirsplit-train      # per-sensor locally-weighted LightGBM quantile models
 make dirsplit-predict    # → sumo/direction_split.json (edge_shares_q10/q50/q90)
 make dirsplit-coverage   # are our sensor edges inside the training cloud?
+make dirsplit-validate   # nested-λ, interval coverage, orientation → validation/
 ```
 
 `make demand` automatically prefers the trained model over the Gaussian

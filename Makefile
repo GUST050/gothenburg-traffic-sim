@@ -5,7 +5,7 @@
 # validated station record to data_in/sensors.json, then `make refresh`.
 # Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
-.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso benchmark-speed validate-temporal
+.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso benchmark-speed validate-temporal dirsplit-validate
 
 all: data features agent1 forecast test
 
@@ -92,6 +92,13 @@ dirsplit-train:
 
 dirsplit-predict:
 	python3 -m dirsplit.predict
+
+# Out-of-sample check of the direction model's published claims: nested
+# shrinkage lambda (train.py fits lambda on the rows it then scores), measured
+# interval coverage, and the per-sensor kernel's position relative to the
+# training cloud. ~12 min; writes an evidence artifact to validation/.
+dirsplit-validate:
+	python3 -m dirsplit.validate --out validation/dirsplit_gate_m.json
 
 data:
 	python3 build_data.py $(if $(DATA_DIR),--data_dir "$(DATA_DIR)") $(if $(COORDS),--coords "$(COORDS)")
