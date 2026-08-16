@@ -1,0 +1,53 @@
+{
+ "protocol": "dirsplit_gate_m_v2",
+ "selection_rule": "simplest_defensible_v2",
+ "gate_m": "INCONCLUSIVE",
+ "winner": null,
+ "recorded": "2026-08-14",
+ "release_evidence": false,
+ "supersedes": "validation/dirsplit_gate_m_outcome_v1.json",
+ "reason": "required fold kind(s) could not be built: blocked_date",
+ "summary": "Gate M cannot be decided from the aggregated training table. The v1 outcome (BASELINE) is WITHDRAWN as a decision: it was produced by code that did not implement its own frozen rule, on a station population that is not the one the deployment trains on, with a LightGBM that is not the deployed model. The v1 file is kept unedited as the record of what was published; nothing in it should be quoted as a current result.",
+ "why_v1_is_withdrawn": {
+  "missing_required_fold": "dirsplit/dataset.py aggregates raw observations to a mean per station/direction/hour/day-type, so the tracked table carries no local_date. blocked_date therefore produces zero folds. v1's code skipped the kind and published BASELINE; its own SELECTION_RULE_TEXT rule 6 says a fold kind that could not be built is INCONCLUSIVE. Skipping turned 'the future-day evidence was never gathered' into 'the model does not help'.",
+  "wrong_population": "v1's load_rows screened stations by the OSM feature column oneway >= 0.5. The deployed trainer (dirsplit/train.py::load_table) screens by OBSERVED weekday 06-20 mean share outside [0.15, 0.85]. Measured on data/dirsplit/training_table.csv (178 stations, 15346 rows): the OSM screen drops 139 stations and leaves 39; the deployed screen drops 97 and leaves 81. v1 also oriented each station by argmax radial_cos rather than the deployed radial_cos > 0 test.",
+  "wrong_model": "v1's SimilarityWeightedLGBM weighted training rows toward the TRAINING population's own centroid, applied no n_obs**0.5 evidence weight, fit on every row including weekends and nights the deployed trainer excludes, and applied no shrinkage. The deployment centres its kernel on the target (the Gothenburg sensor's feature vector, or the held-out station when validating) and ships 0.5 + lambda*(pred-0.5) with lambda about 0.26-0.29.",
+  "withdrawn_claim": "The statement that 'the deployed LightGBM model is 31.6-39.2% worse' is NOT supported and must not be repeated. It compared a different model on a different population.",
+  "loose_promotion_rule": "v1's code pooled wins and losses ACROSS fold kinds, so a win under leave-city-out plus a tie under leave-station-out promoted, while rule 4 requires the win under every fold kind. It also compared every candidate against 50/50 only, so a more complex model could displace an already-promoted simpler one without being shown better than it."
+ },
+ "what_v2_changed": {
+  "code": "dirsplit/evaluate.py",
+  "selection_rule": "simplest_defensible_v1 -> simplest_defensible_v2; the version is bumped rather than edited in place so v1 stays readable as what it was",
+  "required_fold_kinds": ["leave_city_out", "leave_station_out", "blocked_date"],
+  "population": "deployed_oneway_stations() reproduces train.py's observed-share screen; orientation is radial_cos > 0",
+  "model": "SimilarityWeightedLGBM now takes target_features (static street features of the rows it will predict, never their labels), weights by n_obs**0.5 x per-station normalisation x kernel toward that target, fits only on weekday 06-20, and fits its shrinkage lambda by a NESTED leave-city-out inside the training fold",
+  "decision": "candidates are compared against the CURRENT INCUMBENT via pairwise held-out comparisons, per fold kind, AND-ed across kinds"
+ },
+ "measured_under_v2": {
+  "note": "Reported as DIAGNOSTIC only. The gate is INCONCLUSIVE, so none of these numbers decides anything; they are recorded so the next run has a reference point.",
+  "input": {
+   "source": "data/dirsplit/training_table.csv",
+   "raw_rows": 15346,
+   "rows_kept": 3665,
+   "stations": 81,
+   "oneway_stations_dropped": 97,
+   "blocks": 162,
+   "block_definition": "station x day-type",
+   "deployed_training_window_rows": 1214,
+   "has_day_level_dates": false
+  },
+  "pooled_all_group_mae": {
+   "constant_5050": {"leave_city_out": 0.062691, "leave_station_out": 0.059795},
+   "shrunk_dfactor": {"leave_city_out": 0.060547, "leave_station_out": 0.058071},
+   "beta_binomial_dfactor": {"leave_city_out": 0.060892, "leave_station_out": 0.058294},
+   "similarity_weighted_lgbm": {"leave_city_out": 0.065613, "leave_station_out": 0.062416}
+  },
+  "observation": "Under the corrected population and the deployed weighting, the LightGBM candidate is WORSE than 50/50 on leave-city-out (CI95 [+0.000768, +0.004979], entirely above zero) and indistinguishable on leave-station-out. The two hierarchical D-factor candidates beat 50/50 on leave-city-out and tie on leave-station-out. None of this promotes anything, because rule 4 requires the win under every fold kind and rule 6 has already returned INCONCLUSIVE for the missing one."
+ },
+ "what_would_decide_it": {
+  "requirement": "dataset v2 as described in the plan's 'Dataset v2' section: one row per station_id x local_date x hour x heading, with raw toward/away counts and a stable day_block_id, so blocked_date folds exist and blocks are station x date rather than station x day-type.",
+  "blocker_in_this_environment": "dirsplit/dataset.py rebuilds the table from raw Statens vegvesen volumes, which are gitignored and re-fetched from trafikkdata-api.atlas.vegvesen.no. That host is denied by this session's policy-enforcing egress proxy (recorded in validation/dirsplit_direction_sensitivity_blocker_v1.json), so dataset v2 could not be built here.",
+  "not_a_workaround": "Synthesising dates, or splitting the aggregate table on any proxy for time, would fabricate the exact evidence the gate is asking for. Left undone."
+ },
+ "consequence": "Fas 2, Fas 3 and Fas 4 remain closed. Gate M is neither BASELINE nor MODEL, so the four-quadrant table in the plan cannot be entered from this side, and the current release path stays as legacy."
+}

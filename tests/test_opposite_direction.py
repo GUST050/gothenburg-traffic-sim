@@ -28,7 +28,7 @@ class TestMeasuredValuesAreNeverSplit:
         import demand.intake as intake
         # A share exists for the measured edge, as it now does in production.
         monkeypatch.setattr(intake, "load_direction_split",
-                            lambda key="edge_shares": {"m": [0.5] * 96})
+                            lambda key="edge_shares", **_: {"m": [0.5] * 96})
         targets = build_targets({"m": [50.0]}, {"1076": ["m"]}, 0, 1)
         assert targets[0]["m"] == 50.0, (
             "a directional station's value IS that direction's count; "
@@ -37,8 +37,8 @@ class TestMeasuredValuesAreNeverSplit:
     def test_a_two_way_total_is_still_split(self, monkeypatch):
         import demand.intake as intake
         monkeypatch.setattr(intake, "load_direction_split",
-                            lambda key="edge_shares": {"n": [0.6] * 96,
-                                                       "s": [0.4] * 96})
+                            lambda key="edge_shares", **_: {"n": [0.6] * 96,
+                                                            "s": [0.4] * 96})
         targets = build_targets({"n": [100.0], "s": [100.0]},
                                 {"107": ["n", "s"]}, 0, 1)
         assert targets[0]["n"] == 60.0
@@ -47,7 +47,7 @@ class TestMeasuredValuesAreNeverSplit:
     def test_a_two_way_pair_without_a_model_falls_back_to_even(self, monkeypatch):
         import demand.intake as intake
         monkeypatch.setattr(intake, "load_direction_split",
-                            lambda key="edge_shares": {})
+                            lambda key="edge_shares", **_: {})
         targets = build_targets({"n": [100.0], "s": [100.0]},
                                 {"107": ["n", "s"]}, 0, 1)
         assert targets[0]["n"] == targets[0]["s"] == 50.0
@@ -118,4 +118,7 @@ class TestTheRegistryIsWiredUp:
         for row in singles:
             spec = row.get("opposite_direction")
             assert spec and spec.get("edge_id"), row["sensor_id"]
-            assert spec["measurement_status"] == "unmeasured_estimated"
+            assert spec["measurement_status"] == "unmeasured"
+            assert "neither a transferred dirsplit bound nor a soft dirsplit prior" \
+                in spec["note"]
+            assert "explicitly diagnostic build" in spec["note"]

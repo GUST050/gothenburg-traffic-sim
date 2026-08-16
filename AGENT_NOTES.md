@@ -1,78 +1,94 @@
 # Agent Notes
 
-Only the single marked `CURRENT_HANDOFF` block is current coordination context.
-All other entries are preserved history and do not assign roles or restrict
-which model may continue. See `AGENTS.md`.
+Only the marked `CURRENT_HANDOFF` block is current coordination context.
+Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
 
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Main. Gate M is measured and decided (BASELINE). Fas A of
-  the 2026-08-16 remediation plan is landed: an evidence harness, its tests and
-  an artifact. No model, pipeline, scenario or policy behaviour is changed.`
-- Summary: `The August audit suspected the direction model was weak; it is now
-  measured. train.py fits the shrinkage lambda by least squares on the pooled
-  held-out pairs and then reports its MAE on those same pairs, so the published
-  0.0557-vs-0.0565 margin is an upper bound, not a generalisation result.
-  Refitting lambda on three cities and scoring on the fourth gives 0.0568
-  versus 0.0565 for 50/50 (-0.53%); a 2,000-draw station-level bootstrap over
-  41 stations gives delta +0.00030, 95% CI [-0.00301, +0.00406], P(model
-  better)=0.32 — indistinguishable from writing 0.5. The per-fold lambda ranges
-  0.166-0.484, which is the mechanism. Two further findings: the deployed
-  [q10, q90] interval covers 39.3% of held-out observations against a nominal
-  80% (under-dispersion; the shrinkage re-centring makes it marginally worse,
-  41.2% -> 39.3%), and target_static_features() returns the away-from-centre
-  carriageway for the four single-direction sensors 1076/133/134/2276, so their
-  per-sensor kernels are centred outside the toward-centre-only training
-  support while predict.py predicts on the mirrored side. Every per-sensor
-  kernel effectively spans 68-91% of the training set, so "each road trained
-  for itself" overstates the locality.`
-- Files changed: `New: dirsplit/validate.py; tests/test_dirsplit_validate.py;
-  validation/dirsplit_gate_m_20260816.json;
-  docs/plans/DIRSPLIT_REMEDIATION_PLAN_2026-08-16.md. Edited: Makefile
-  (dirsplit-validate target); CLAUDE.md and README.md stale-figure
-  corrections; current TASKS.md and AGENT_NOTES.md blocks. No tracked model,
-  demand, scenario or release artifact touched.`
-- Checks: `python3 -m pytest tests/test_dirsplit_validate.py -q -> 22 passed.
-  Full suite run before commit. python3 -m dirsplit.validate reproduces
-  data/dirsplit/train_report.json exactly (lambda 0.289, raw 0.0641, shrunk
-  0.0557, 50/50 0.0565) before measuring anything new, which is what makes the
-  new numbers comparable. git diff --check clean; marker counts are exactly one
-  start/end pair.`
-- Decisions and evidence: `Gate M = BASELINE for the deployed model. This does
-  NOT close the model tournament (dataset v2 and simpler candidates are
-  untested) and does NOT imply zero variance — Gate S is still open and is now
-  the only gate separating Exit A from Gren B. The remediation plan adds Fas F0,
-  a preregistered last-chance retrain after mirroring the four mis-oriented
-  target vectors, whose decision rule requires the bootstrap CI to exclude zero
-  rather than a positive point estimate. Sensor 107's annual D-factor remains a
-  local period anchor, not 96 directed measurements. Existing closure v5
-  evidence and frozen q archives are unchanged.`
-- Blockers or risks: `The q10/q90 labels are shipping today at 39.3% measured
-  coverage; Fas E must rename or recalibrate them before the next published
-  build, independently of Gate S. The raw, citable source/period semantics for
-  107's 3,400/3,100 values must still be bound (Fas B). Gate S must be
-  preregistered before rerunning SUMO. Only four cities exist, so a nested
-  lambda has three blocks to fit on and city-level dependence is not captured
-  by the station-level bootstrap — stated as a limitation in the plan, not
-  worked around.`
-- Suggested next action: `Fas B of the 2026-08-16 plan: the provenance-bound 107
-  reference with its four named regression tests. Then preregister Fas C
-  (Gate S): 4 demand cases x 4 matched seeds x 6 closures, common random
-  numbers, decision rule written to validation/ before the first run. Do not
-  build schemas or product integration.`
-- Actor notes: `Measurements used dirsplit's own load_table/kernel_weights/
-  make_model/target_static_features so the pipeline is identical to training.
-  Research drew on FHWA TMG factor groups, GLUE/equifinality, ensemble
-  under-dispersion diagnostics, DfT TAG proportionality and Bayesian demand
-  calibration; sources are listed in the plan. lightgbm, scikit-learn, osmnx
-  and pytest were installed into this session to run the harness. No existing
-  evidence was edited, no external data downloaded, no policy activated and no
-  runtime gate weakened.`
+- Focus and status: `The canonical plan has been hardened for reproducible
+  solver/evidence execution and a reversible NVDB network import; implementation
+  is READY, not yet evidence-complete.`
+- Summary: `Primary-source research corrected the prior implication that
+  SciPy <1.17 is a permanent solution. The plan now requires Python 3.11.15 plus
+  exact platform locks, a real-model root-cause reproducer, an independently
+  checked SciPy/highspy comparison, separate reference/live/canary CI lanes,
+  portable future Gate S bundles and a staged gold-set-calibrated NVDB patch.`
+- Files changed: `IMPROVEMENT_PLAN.md; TASKS.md; AGENT_NOTES.md in this planning
+  turn. The prior local commit 77fc15e still contains the emergency dependency,
+  CI and Gate S provenance repairs.`
+- Checks: `Primary sources reviewed for SciPy 1.17 milp option forwarding,
+  HiGHS scheduler/thread rules, Python spawn/EOL status, pip/PyPA locks, SLSA
+  provenance structure, Trafikverket NVDB lane semantics and SUMO PlainXML.
+  Current-marker counts are exact, the active/historical implementation order
+  is explicitly superseded, and git diff --check passes.`
+- Decisions and evidence: `Keep scipy>=1.11,<1.17 only as an emergency barrier
+  until A1-A5 pass. Do not guess whether SciPy, HiGHS, the global scheduler or
+  process inheritance caused status 4. Prefer serial public SciPy if it meets a
+  preregistered resource budget; use spawn-isolated highspy only if needed and
+  equally exact. Import speed before direction-sensitive lanes; do not
+  auto-edit topology, direction, connections or TLS in the first NVDB campaign.`
+- Blockers or risks: `A Python-3.11.15 evidence environment and exact platform
+  locks do not yet exist locally. Historical Gate S runs remain machine-local.
+  Six clustered stations still underidentify allocation; NVDB improves
+  documented physical inputs but cannot by itself prove traffic accuracy. The
+  loso.py console-only median remains deferred to the next registered rerun.`
+- Suggested next action: `Execute work packages A1-A2 and B1, then select the
+  solver adapter through A3-A5. Begin NVDB work package D only after that
+  reference environment is stable.`
+- Actor notes: `No solver source, sealed demand source, network, release,
+  demand, frozen evidence or external system was changed. Nothing was pushed.`
+- Cross-check merged (Claude, 2026-08-16): `A nested-lambda/coverage harness
+  (dirsplit/validate.py, tests/test_dirsplit_validate.py, 22 tests,
+  make dirsplit-validate) and the evidence record
+  validation/dirsplit_train_report_leakage_diagnostic_v1.json. It audits
+  data/dirsplit/train_report.json only: train.py fits the shrinkage lambda by
+  least squares on the pooled held-out pairs and reports its MAE on those same
+  pairs, so the 0.0557-vs-0.0565 margin CLAUDE.md and README.md quote is an
+  upper bound. Refit on three cities and scored on the fourth it is 0.0568
+  versus 0.0565, bootstrap CI [-0.00301, +0.00406]. THIS IS NOT A GATE M
+  RESULT. dirsplit/evaluate.py::_fit_shrinkage already fits lambda inside the
+  training fold, and dirsplit_gate_m_outcome_v5.json (MODEL,
+  similarity_weighted_lgbm_no_profile, 247,464-row v2 table, three fold kinds)
+  remains the sole current authority; the harness reproduces v5's own
+  leave_city_out/all-rows tie on the superseded v1 table and the superseded
+  profile model. Its genuinely new number is interval coverage: the deployed
+  [q10, q90] covers 39.3% of held-out observations against a nominal 80% (per
+  city 31.3-50.0%; the shrinkage re-centring moves it 41.2% -> 39.3%). That
+  quantifies the already-declared "uncalibrated stress case" status rather than
+  changing it. Also recorded: target_static_features() returns the
+  away-from-centre carriageway for 1076/133/134/2276, outside the
+  toward-centre-only training support, and every per-sensor kernel effectively
+  spans 68-91% of the training set.`
+- Solver finding (Claude, 2026-08-16): `tools/reproduce_highs_thread_option.py
+  plus validation/highs_thread_option_order_dependence_v1.json. The status-4
+  integer-repair failure is ORDER-dependent, not caused by SciPy 1.17 rejecting
+  the forwarded option: threads=1 succeeds when it is the first HiGHS solve in a
+  process and fails permanently after any default-thread solve, which is the
+  documented HiGHS global scheduler and is inherited across fork. Bisected on
+  CPython 3.11.15: 1.13.1 and 1.14.1 unaffected; 1.15.3, 1.16.3 and 1.17.1 all
+  affected. The boundary is 1.15, so scipy>=1.11,<1.17 ADMITS two broken minor
+  versions and a clean install resolves to a failing one — tests/test_pfe.py
+  fails 38 tests on the fail-closed path when the file runs in order while the
+  same tests pass in isolation. RECOMMENDED and deliberately NOT applied:
+  narrow to <1.15 in requirements.txt, CI and the pin test. Not applied because
+  it constrains every environment and A2 owns the production root cause.
+  ARCHITECTURE.md and IMPROVEMENT_PLAN correction 1 are annotated, not
+  rewritten.`
+- Corrections accepted from review: `Two of four review points were wrong and
+  are withdrawn. The solver pin IS tested — tests/test_pfe.py already has a real
+  milp call asserting threads=1 plus a check that the range is pinned in both
+  requirements.txt and CI; that test's diagnostics were improved rather than
+  duplicated. Gate M was NOT re-decided; v5=MODEL stands and the earlier
+  BASELINE wording is retracted, mirroring the plan's own note that a prior
+  Gate M claim "matte en annan modell pa en annan population". Work package C
+  stays conditional. The spawn proposal was too coarse: integer repair runs in
+  the collect_counts pool over fork-inherited module globals, so A3 now reads
+  serial SciPy -> spawn SciPy with an explicit initializer -> spawn highspy.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
 
-Everything before 2026-08-06 lives in `docs/history/AGENT_NOTES_history.md`
-(14,681 lines). Preserved context only — per
-`AGENTS.md`, nothing outside the marked block above is current.
+Everything before 2026-08-06 lives in
+`docs/history/AGENT_NOTES_history.md` (14,681 lines). It is preserved context
+only; per `AGENTS.md`, nothing outside the marked block above is current.

@@ -1,6 +1,7 @@
 {
- "n_rows": 1214,
- "bandwidth": 3.445,
+ "protocol": "dirsplit_train_v2",
+ "n_rows": 23472,
+ "bandwidth": 3.414,
  "input_cols": [
   "hw_rank",
   "speed_kmh",
@@ -14,56 +15,75 @@
   "major_behind_km",
   "major_ahead_km",
   "major_asym",
-  "am_pm_ratio",
-  "peak_hour_am",
-  "peak_hour_pm",
-  "weekend_ratio",
   "hour_sin",
   "hour_cos",
   "is_weekend"
  ],
+ "use_profile_features": false,
+ "dataset": {
+  "protocol": "dirsplit_training_table_v2",
+  "manifest": "data/dirsplit/training_table_meta.json",
+  "manifest_sha256": "0b89424e75f8002b7e729ffddb38480a39384d0958dcf7080b280f7f54764c33",
+  "source_content_key": "866a1f52136f79d7e6bf3cddf7c3df0eff931d8b5f5ed8769d6a598b22d8add6",
+  "source_volume_files": 188,
+  "rows": 247464,
+  "usable_rows": 232500,
+  "day_blocks": 5524
+ },
+ "provenance": {
+  "training_table": "data/dirsplit/training_table.csv",
+  "training_table_digest": "3eae6fdc353a7c334f5ffaec0b4b311c66b4782f660d24ca6e1dca0b414c630e",
+  "evaluate_module_digest": "e81e8d8b967de7addc3bcb1182338cfa54b8b4fffcb691276b0cd8f7f978d801",
+  "trainer_module_digest": "5f7dddc67fc11c1a1a49811c1da1934e4843617ddaaaff1fe427c10e153c5871",
+  "dataset_module_digest": "ee7d14d67234562faf2cbb386d5e8b80240cdbb2eec201b3e22d3fe44585f123",
+  "features_module_digest": "698902f36501e274d0d24abc52b53d78f6c3b4318cb3d4b51ca986db9e1a10e0",
+  "dataset_meta": "data/dirsplit/training_table_meta.json",
+  "dataset_meta_digest": "0b89424e75f8002b7e729ffddb38480a39384d0958dcf7080b280f7f54764c33",
+  "note": "digests bind this report to the exact table and scoring code it came from; a report whose digests no longer match the tree is stale, not current"
+ },
  "cities": {
   "bergen": {
-   "mae_all": 0.0672,
-   "base_all": 0.0658,
-   "impr_all_pct": -2.0,
+   "mae_all": 0.0819,
+   "base_all": 0.0726,
+   "impr_all_pct": -12.9,
    "n_domain_stations": 13,
-   "mae_domain": 0.0713,
-   "base_domain": 0.0557,
-   "impr_domain_pct": -27.9
+   "mae_domain": 0.0795,
+   "base_domain": 0.0625,
+   "impr_domain_pct": -27.2
   },
   "oslo": {
-   "mae_all": 0.0652,
-   "base_all": 0.0564,
-   "impr_all_pct": -15.5,
+   "mae_all": 0.0608,
+   "base_all": 0.0625,
+   "impr_all_pct": 2.7,
    "n_domain_stations": 12,
-   "mae_domain": 0.0536,
-   "base_domain": 0.0477,
-   "impr_domain_pct": -12.5
+   "mae_domain": 0.0529,
+   "base_domain": 0.0502,
+   "impr_domain_pct": -5.4
   },
   "stavanger": {
-   "mae_all": 0.0544,
-   "base_all": 0.0471,
-   "impr_all_pct": -15.6,
+   "mae_all": 0.049,
+   "base_all": 0.0506,
+   "impr_all_pct": 3.1,
    "n_domain_stations": 6,
-   "mae_domain": 0.0616,
-   "base_domain": 0.0533,
-   "impr_domain_pct": -15.6
+   "mae_domain": 0.0585,
+   "base_domain": 0.0577,
+   "impr_domain_pct": -1.3
   },
   "trondheim": {
-   "mae_all": 0.0752,
-   "base_all": 0.0799,
-   "impr_all_pct": 5.8,
+   "mae_all": 0.0683,
+   "base_all": 0.0682,
+   "impr_all_pct": -0.1,
    "n_domain_stations": 10,
-   "mae_domain": 0.0689,
-   "base_domain": 0.07,
-   "impr_domain_pct": 1.6
+   "mae_domain": 0.0816,
+   "base_domain": 0.074,
+   "impr_domain_pct": -10.2
   }
  },
  "shrinkage": {
-  "lambda": 0.289,
-  "pooled_mae_raw": 0.0641,
-  "pooled_mae_shrunk": 0.0557,
-  "pooled_mae_5050": 0.0565
- }
+  "lambda": 0.264,
+  "pooled_mae_raw": 0.0696,
+  "pooled_mae_shrunk": 0.0604,
+  "pooled_mae_5050": 0.0617
+ },
+ "content_key": "47269497f00db1c8ed438127e7317f01c47b5926ff87128443018f4f30f074a7"
 }

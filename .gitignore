@@ -40,3 +40,8 @@ web/data/scenarios_staging/
 validation/scenario_phase_profile_report_*.json
 validation/*_outcome/
 validation/online_latency_baseline_v1/
+
+# Restored evidence: `gunzip -k` on a compressed pure-archive artifact writes
+# the multi-MB original back into the tracked validation/ tree. Keep the .gz
+# as the committed form so a restore cannot be re-committed by `git add -A`.
+validation/**/raw_*.json

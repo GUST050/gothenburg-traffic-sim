@@ -5,7 +5,10 @@ That number fits the shrinkage coefficient lambda AND scores it on the same
 pooled held-out pairs, so it cannot answer "does this generalize". This module
 answers three questions the training report structurally cannot:
 
-  GATE M   Nested lambda — fit lambda on three cities, score it on the fourth.
+  LEAK     Nested lambda — fit lambda on three cities, score it on the fourth.
+           This audits train_report.json; it is NOT a Gate M outcome. Gate M
+           authority is validation/dirsplit_gate_m_outcome_v5.json (MODEL),
+           measured by dirsplit/evaluate.py on the v2 table.
            Plus a station-level bootstrap CI, because rows within a station are
            correlated and the row count overstates the evidence.
 
@@ -42,7 +45,8 @@ import numpy as np
 CLAMP = (0.1, 0.9)
 NOMINAL_COVERAGE = 0.80
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_OUT = REPO_ROOT / "validation" / "dirsplit_gate_m.json"
+DEFAULT_OUT = (REPO_ROOT / "validation"
+               / "dirsplit_train_report_leakage_diagnostic_v1.json")
 
 
 # ── Pure functions (numpy only — unit-testable without lightgbm/osmnx) ────────
@@ -297,9 +301,9 @@ def run_validation(n_boot: int = 2000) -> dict:
         "note": "lambda is fitted on and scored against the same pooled rows",
     }
 
-    record["gate_m_nested_lambda"] = nested_lambda_scores(by_city)
+    record["nested_lambda"] = nested_lambda_scores(by_city)
     if n_boot:
-        record["gate_m_bootstrap"] = bootstrap_nested_delta(
+        record["nested_lambda_bootstrap"] = bootstrap_nested_delta(
             sorted(station_dp, key=str), station_city, station_dp, station_dy,
             n_boot=n_boot)
 
@@ -376,17 +380,17 @@ def main() -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(record, indent=1) + "\n")
 
-    nested = record["gate_m_nested_lambda"]
+    nested = record["nested_lambda"]
     cov = record["coverage"]
     print()
     print(f"published (in-sample lambda): "
           f"{record['published_replication']['pooled_mae_shrunk']} vs "
           f"{record['published_replication']['pooled_mae_5050']} for 50/50")
-    print(f"GATE M (nested lambda):       {nested['pooled_mae_nested']} vs "
+    print(f"nested lambda (NOT Gate M):   {nested['pooled_mae_nested']} vs "
           f"{nested['pooled_mae_5050']} for 50/50 "
           f"({nested['pooled_impr_pct']:+.2f}%)")
-    if "gate_m_bootstrap" in record:
-        b = record["gate_m_bootstrap"]
+    if "nested_lambda_bootstrap" in record:
+        b = record["nested_lambda_bootstrap"]
         print(f"  delta {b['delta_point']:+.5f}  CI95 {b['delta_ci95']}  "
               f"P(model better) {b['p_model_better']}")
     print(f"COVERAGE: {cov['pooled_coverage_deployed']:.3f} "

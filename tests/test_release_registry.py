@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-import release_registry as rr
+from traffic_sim.ops import releases as rr
 
 
 def golden_validation():

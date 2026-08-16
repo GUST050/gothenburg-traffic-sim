@@ -69,16 +69,32 @@ def write_counts(
     n_intervals: int,
     out_path: Path,
     split_key: str = "edge_shares",
+    anchor_day: str | None = None,
+    anchor_epoch=None,
 ) -> int:
     """15-min edgeData intervals; sim time 0 = window start. Returns n written.
 
-    Direction share per Total edge comes from the estimated split file
-    (dirsplit model or Gaussian fallback) when available, else an even
-    split. "S" sensor edges always take the full count.
+    The release share per Total edge is the registered maximum-entropy 50/50
+    policy plus any applicable local anchor. Explicit q10/q90 ``split_key``
+    values retain the transferred-model stress cases for diagnostics. "S"
+    sensor edges always take the full count.
+
+    ``anchor_day``/``anchor_epoch`` carry sensor 107's published local
+    anchor, exactly as ``demand.intake.build_targets`` does. This is the
+    routeSampler branch's copy of the same measured-target construction, and
+    it must not silently disagree with the PFE branch about what a station
+    measures: the anchor reaching one path and not the other would make the
+    two branches calibrate to different targets from identical inputs.
     """
-    est_shares = load_direction_split(split_key)
+    est_shares = load_direction_split(
+        split_key, anchor_day=anchor_day, anchor_flows=flows,
+        anchor_epoch=anchor_epoch)
     if est_shares:
-        print(f"  Using ESTIMATED direction split ({split_key})")
+        label = ("RELEASE 50/50 direction policy"
+                 if split_key == "edge_shares"
+                 else "DIAGNOSTIC estimated direction stress")
+        print(f"  Using {label} ({split_key})"
+              + (f", anchored for {anchor_day}" if anchor_day else ""))
     else:
         print("  No direction_split.json — falling back to even split")
 
@@ -91,7 +107,19 @@ def write_counts(
             f.write(f'  <interval id="q{qi}" begin="{i * 900}" end="{(i + 1) * 900}">\n')
             for edges in sensor_edges.values():
                 for edge_id in edges:
-                    share = est_shares.get(edge_id, [1.0 / len(edges)] * 96)[slot]
+                    # Split ONLY a two-way total, the same guard
+                    # demand.intake.build_targets carries. A single-direction
+                    # station already measures one carriageway, so its value
+                    # IS that direction's count.
+                    #
+                    # This branch was missing the guard while build_targets
+                    # had it (added 2026-08-06). Since the direction model
+                    # started predicting BOTH carriageways at every station,
+                    # a measured single-direction edge resolves to ~0.5 in
+                    # est_shares, so a measured 50 was written out as 25 —
+                    # silently, and at 100% GEH against the halved target.
+                    share = (est_shares.get(edge_id, [1.0 / len(edges)] * 96)[slot]
+                             if len(edges) > 1 else 1.0)
                     v = flows.get(edge_id, [None])[qi] if qi < len(flows.get(edge_id, [])) else None
                     if v is None:
                         continue

@@ -16,10 +16,8 @@ Three ideas on top of plain LightGBM:
    weighted toward ITS feature vector ("each road trained for itself").
    New sensors in network.geojson are picked up automatically on retrain.
 
-3. QUANTILE REGRESSION (q10/q50/q90) — the split is predicted as an
-   INTERVAL, not a point. Downstream, demand variants are built at the
-   interval bounds so the Monte Carlo scenario spread — and therefore the
-   confidence number on the map — includes direction uncertainty.
+3. QUANTILE REGRESSION (q10/q50/q90) — q50 is the normal trained point
+   estimate; q10/q90 bound uncertainty and can be built as explicit variants.
 
 Validation: leave-city-out as before, but the headline metric is computed
 on the DOMAIN SUBSET — held-out stations whose features resemble our sensor
@@ -37,7 +35,9 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import pickle
+import warnings
 
 import numpy as np
 
@@ -49,9 +49,73 @@ from .features import FEATURE_NAMES
 MODEL_PATH  = DATA_DIR / "model.pkl"
 REPORT_PATH = DATA_DIR / "train_report.json"
 
-INPUT_COLS = FEATURE_NAMES + PROFILE_FEATURES + ["hour_sin", "hour_cos", "is_weekend"]
+USE_PROFILE_FEATURES = False
+INPUT_COLS = FEATURE_NAMES + ["hour_sin", "hour_cos", "is_weekend"]
 QUANTILES   = (0.1, 0.5, 0.9)
 N_STATIC    = len(FEATURE_NAMES)
+TRAIN_PROTOCOL = "dirsplit_train_v2"
+MIN_BANDWIDTH = 1e-6
+MAX_KERNEL_EXPONENT = 700.0
+
+
+def calibrate_shrinkage(predicted, observed) -> tuple[float, dict[str, float]]:
+    """Fit a finite shrinkage coefficient and held-out diagnostics.
+
+    Dataset v2 is much larger than the aggregate table used by the original
+    trainer. The previous BLAS ``@`` reduction emitted overflow/invalid
+    warnings during the first real v2 retrain. Accumulate explicitly in
+    float64, reject non-finite inputs, and refuse a non-finite coefficient.
+    """
+    predicted = np.asarray(predicted, dtype=np.float64)
+    observed = np.asarray(observed, dtype=np.float64)
+    if predicted.shape != observed.shape or predicted.size == 0:
+        raise ValueError("shrinkage needs equally shaped non-empty arrays")
+    if not np.all(np.isfinite(predicted)) or not np.all(np.isfinite(observed)):
+        raise ValueError("shrinkage inputs must be finite")
+    dp = predicted - 0.5
+    dy = observed - 0.5
+    denominator = float(np.sum(dp * dp, dtype=np.float64))
+    if not math.isfinite(denominator):
+        raise ValueError("shrinkage denominator is not finite")
+    if denominator < 1e-9:
+        lam = 1.0
+    else:
+        numerator = float(np.sum(dp * dy, dtype=np.float64))
+        if not math.isfinite(numerator):
+            raise ValueError("shrinkage numerator is not finite")
+        lam = float(np.clip(numerator / denominator, 0.0, 1.0))
+    metrics = {
+        "lambda": round(lam, 3),
+        "pooled_mae_raw": round(float(np.mean(np.abs(dp - dy))), 4),
+        "pooled_mae_shrunk": round(
+            float(np.mean(np.abs(lam * dp - dy))), 4),
+        "pooled_mae_5050": round(float(np.mean(np.abs(dy))), 4),
+    }
+    return lam, metrics
+
+
+def validate_model_package(package: dict, *,
+                           report_path=REPORT_PATH,
+                           table_path=TABLE_PATH) -> dict:
+    """Bind a loaded model to its report and live raw-data provenance."""
+    from .evaluate import content_digest, validate_dataset_provenance
+    if package.get("protocol") != TRAIN_PROTOCOL:
+        raise ValueError("direction model uses an unsupported train protocol")
+    try:
+        report = json.loads(report_path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("direction model has no readable training report") \
+            from error
+    recorded_key = report.pop("content_key", None)
+    if not recorded_key or recorded_key != content_digest(report):
+        raise ValueError("direction training report content key is invalid")
+    if package.get("training_report_content_key") != recorded_key:
+        raise ValueError("direction model and training report do not match")
+    live_dataset = validate_dataset_provenance(table_path)
+    if package.get("training_dataset") != live_dataset:
+        raise ValueError("direction model was not trained on the live dataset")
+    return {"training_report_content_key": recorded_key,
+            "dataset": live_dataset}
 
 
 def load_table():
@@ -60,9 +124,23 @@ def load_table():
     with open(TABLE_PATH) as f:
         rows = list(csv.DictReader(f))
 
+    # v2 retains missing/low-coverage cells as explicit audit rows. They are
+    # not labels. Legacy tables have no ``usable`` column and keep the old
+    # path; malformed shares fail closed here instead of reaching LightGBM.
+    usable = []
+    for row in rows:
+        if row.get("usable", "1") != "1":
+            continue
+        try:
+            share = float(row["share"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if 0.0 < share < 1.0 and np.isfinite(share):
+            usable.append(row)
+
     from collections import defaultdict
     day_shares = defaultdict(list)
-    for r in rows:
+    for r in usable:
         if r["is_weekend"] == "0" and 6 <= int(r["hour"]) <= 20:
             day_shares[(r["station_id"], r["heading"])].append(float(r["share"]))
     oneway = {sid for (sid, _), sh in day_shares.items()
@@ -70,7 +148,7 @@ def load_table():
 
     rc_i = FEATURE_NAMES.index("radial_cos")
     X, y, cities, keys, w = [], [], [], [], []
-    for r in rows:
+    for r in usable:
         if (r["station_id"] in oneway or r["is_weekend"] != "0"
                 or not 6 <= int(r["hour"]) <= 20):
             continue
@@ -82,12 +160,16 @@ def load_table():
             continue
         h = float(r["hour"])
         X.append([float(r[c]) for c in FEATURE_NAMES]
-                 + [float(r[c]) for c in PROFILE_FEATURES]
-                 + [np.sin(2 * np.pi * h / 24), np.cos(2 * np.pi * h / 24), 0.0])
+                 + [np.sin(2 * np.pi * h / 24),
+                    np.cos(2 * np.pi * h / 24), 0.0])
         y.append(float(r["share"]))
         cities.append(r["city"])
         keys.append((r["station_id"], r["heading"]))
-        w.append(float(r["n_obs"]) ** 0.5)
+        # On dataset v2 one row is a real station-date-hour count pair, so
+        # its binomial evidence is total_count. The legacy aggregate has no
+        # such field and retains sqrt(number of contributing observations).
+        evidence = float(r.get("total_count") or r["n_obs"])
+        w.append(max(evidence, 1.0) ** 0.5)
 
     # Station-level weight normalisation: hourly rows within a station are
     # strongly correlated, not independent — give every STATION (not every
@@ -123,8 +205,30 @@ def target_static_features() -> dict[str, np.ndarray]:
 
 def kernel_weights(X_static_z: np.ndarray, centre_z: np.ndarray,
                    bandwidth: float) -> np.ndarray:
+    if not math.isfinite(bandwidth) or bandwidth < MIN_BANDWIDTH:
+        raise ValueError("similarity bandwidth must be finite and positive")
     d = np.sqrt(((X_static_z - centre_z) ** 2).sum(axis=1))
-    return np.exp(-0.5 * (d / bandwidth) ** 2)
+    exponent = np.clip(0.5 * (d / bandwidth) ** 2,
+                       0.0, MAX_KERNEL_EXPONENT)
+    weights = np.exp(-exponent)
+    if not np.all(np.isfinite(weights)) or weights.sum() <= 0:
+        raise ValueError("similarity weights are not finite and usable")
+    return weights
+
+
+def predict_model(model, matrix: np.ndarray) -> np.ndarray:
+    """Predict with the trainer's fixed NumPy column order, without noise."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="X does not have valid feature names, but .* was fitted "
+                    "with feature names",
+            category=UserWarning,
+            module="sklearn.utils.validation")
+        values = np.asarray(model.predict(matrix), dtype=np.float64)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("direction model produced non-finite predictions")
+    return values
 
 
 def make_model(alpha: float | None = None):
@@ -138,6 +242,14 @@ def make_model(alpha: float | None = None):
 
 
 def main() -> None:
+    # A deployable model must be traceable to the exact date-level table and
+    # all raw volume files. Gate M already validates this chain; training now
+    # applies the same fail-closed contract instead of accepting any CSV that
+    # happens to have compatible columns.
+    from .evaluate import (content_digest, provenance_digests,
+                           validate_dataset_provenance)
+    dataset_binding = validate_dataset_provenance(TABLE_PATH)
+    source_binding = provenance_digests(TABLE_PATH)
     X, y, cities, keys, w_obs = load_table()
     Xs = X[:, :N_STATIC]                       # static street features
     mu, sd = Xs.mean(axis=0), Xs.std(axis=0)
@@ -149,8 +261,16 @@ def main() -> None:
     bandwidth = float(np.median(d0))
     print(f"{len(y)} rows, bandwidth={bandwidth:.2f}")
 
-    report: dict = {"n_rows": len(y), "bandwidth": round(bandwidth, 3),
-                    "input_cols": INPUT_COLS, "cities": {}}
+    report: dict = {
+        "protocol": TRAIN_PROTOCOL,
+        "n_rows": len(y),
+        "bandwidth": round(bandwidth, 3),
+        "input_cols": INPUT_COLS,
+        "use_profile_features": USE_PROFILE_FEATURES,
+        "dataset": dataset_binding,
+        "provenance": source_binding,
+        "cities": {},
+    }
 
     # ── Leave-city-out, locally weighted per held-out station ─────────────────
     # Domain subset: station-directions closer than the median distance to the
@@ -173,7 +293,7 @@ def main() -> None:
         w_sim = kernel_weights(Xs_z, tgt_centroid_z, bandwidth)
         mdl = make_model()
         mdl.fit(X[tr], y[tr], sample_weight=(w_obs * w_sim)[tr])
-        pred_all = np.clip(mdl.predict(X[te_all]), 0, 1)
+        pred_all = np.clip(predict_model(mdl, X[te_all]), 0, 1)
         mae_all  = float(np.mean(np.abs(pred_all - y[te_all])))
         base_all = float(np.mean(np.abs(0.5 - y[te_all])))
 
@@ -187,7 +307,7 @@ def main() -> None:
             w_loc = kernel_weights(Xs_z, centre, bandwidth)
             m_loc = make_model()
             m_loc.fit(X[tr], y[tr], sample_weight=(w_obs * w_loc)[tr])
-            p = np.clip(m_loc.predict(X[te_st]), 0, 1)
+            p = np.clip(predict_model(m_loc, X[te_st]), 0, 1)
             pooled_pred.extend(p.tolist())
             pooled_y.extend(y[te_st].tolist())
             maes.append(float(np.mean(np.abs(p - y[te_st]))))
@@ -214,20 +334,12 @@ def main() -> None:
     # predictions overshoot; deployment uses 0.5 + λ·(pred−0.5), which is the
     # MSE-optimal linear correction given the validation evidence. λ≈0 would
     # honestly collapse the model to 50/50.
-    dp = np.array(pooled_pred) - 0.5
-    dy = np.array(pooled_y) - 0.5
-    lam = float(np.clip((dp @ dy) / max(dp @ dp, 1e-12), 0.0, 1.0))
-    mae_raw    = float(np.mean(np.abs(dp - dy)))
-    mae_shrunk = float(np.mean(np.abs(lam * dp - dy)))
-    base_pool  = float(np.mean(np.abs(dy)))
-    report["shrinkage"] = {
-        "lambda": round(lam, 3),
-        "pooled_mae_raw": round(mae_raw, 4),
-        "pooled_mae_shrunk": round(mae_shrunk, 4),
-        "pooled_mae_5050": round(base_pool, 4),
-    }
+    lam, shrinkage_metrics = calibrate_shrinkage(pooled_pred, pooled_y)
+    report["shrinkage"] = shrinkage_metrics
     print(f"\nShrinkage λ = {lam:.3f}   pooled domain-MAE: "
-          f"rå {mae_raw:.4f} → krympt {mae_shrunk:.4f}  (50/50: {base_pool:.4f})")
+          f"rå {shrinkage_metrics['pooled_mae_raw']:.4f} → krympt "
+          f"{shrinkage_metrics['pooled_mae_shrunk']:.4f}  "
+          f"(50/50: {shrinkage_metrics['pooled_mae_5050']:.4f})")
 
     # ── Deploy: per-sensor locally weighted quantile models ────────────────────
     print("\nTraining per-sensor quantile models …")
@@ -245,15 +357,27 @@ def main() -> None:
         print(f"  sensor {sid}: eff. träningsvikt {sw.sum():.0f} "
               f"(av {w_obs.sum():.0f})")
 
-    with open(MODEL_PATH, "wb") as f:
-        pickle.dump({"sensors": sensors_pkg, "input_cols": INPUT_COLS,
-                     "quantiles": [f"q{int(q*100)}" for q in QUANTILES],
-                     "scaler": {"mu": mu.tolist(), "sd": sd.tolist()},
-                     "bandwidth": bandwidth,
-                     "shrinkage_lambda": lam,
-                     "orientation": "toward_centre"}, f)
-    with open(REPORT_PATH, "w") as f:
-        json.dump(report, f, indent=1)
+    report["content_key"] = content_digest(report)
+    package = {
+        "protocol": TRAIN_PROTOCOL,
+        "sensors": sensors_pkg,
+        "input_cols": INPUT_COLS,
+        "use_profile_features": USE_PROFILE_FEATURES,
+        "quantiles": [f"q{int(q*100)}" for q in QUANTILES],
+        "scaler": {"mu": mu.tolist(), "sd": sd.tolist()},
+        "bandwidth": bandwidth,
+        "shrinkage_lambda": lam,
+        "orientation": "toward_centre",
+        "training_report_content_key": report["content_key"],
+        "training_dataset": dataset_binding,
+    }
+    model_tmp = MODEL_PATH.with_suffix(MODEL_PATH.suffix + ".tmp")
+    report_tmp = REPORT_PATH.with_suffix(REPORT_PATH.suffix + ".tmp")
+    with open(model_tmp, "wb") as f:
+        pickle.dump(package, f)
+    report_tmp.write_text(json.dumps(report, indent=1) + "\n")
+    model_tmp.replace(MODEL_PATH)
+    report_tmp.replace(REPORT_PATH)
     print(f"Wrote {MODEL_PATH} + {REPORT_PATH}")
 
 

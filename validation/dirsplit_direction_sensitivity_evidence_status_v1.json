@@ -1,0 +1,33 @@
+{
+  "protocol": "dirsplit_direction_sensitivity_evidence_status_v1",
+  "content_key": "3367de2d999616b8c547c2caeec769d420f172574c4fb83a099aaccedc69b561",
+  "recorded": "2026-08-16",
+  "status": "HISTORICAL_DIAGNOSTIC_ONLY_NONPORTABLE",
+  "release_evidence": false,
+  "historical_artifacts": {
+    "v5": {
+      "path": "validation/dirsplit_direction_sensitivity_outcome_v5.json",
+      "sha256": "0543b917aedcbccaa0cfb3d0a14a0eb0be79c3c0fe8d65ce0b0eb27fed8a9703",
+      "recorded_tool_sha256": "df543a7e992c7540aed5fdf57b363fbf8178539515f54adcc0fec752fa2541a3",
+      "disposition": "superseded measurement implementation; do not use as current Gate S evidence"
+    },
+    "v6": {
+      "path": "validation/dirsplit_direction_sensitivity_outcome_v6.json",
+      "sha256": "1f9c6e8e12534676cdc62fb8b330a491a794115881d0cbb35ee323b765160550",
+      "recorded_tool_sha256": "854577b3b18ebdc49ddc8c23080cf7774e78f877e81b07f0a9d26444170ef292",
+      "disposition": "preserved historical diagnostic; source and run bindings are not reproducible from a clean current checkout"
+    }
+  },
+  "audit_findings": [
+    "Both outcomes embed absolute author-machine paths in execution_provenance.",
+    "The v5 tool predates the repaired one-seed/one-variant and real-field Gate S execution contract.",
+    "The v6 tool digest no longer matches the committed tool after a source-import migration; its 192 run artifacts are machine-local and cannot be independently resolved from a clean checkout.",
+    "The recorded q10/q50/q90 scenario and specification digests show distinct executions, so this correction does not relabel the observations as fabricated.",
+    "Gate S v6 supports only the narrow claim that the deployed demand-side ranking was insensitive across four frozen candidates in the 2025-09-16 06:00-10:00 diagnostic matrix."
+  ],
+  "current_authority": {
+    "product_consequence": "none; q10/q90 remain uncalibrated diagnostic stress cases and neither outcome is release evidence",
+    "reproducibility_claim": "no current independently reproducible Gate S outcome",
+    "future_protocol": "dirsplit_gate_s_execution_provenance_v2 records repository files relative to the checkout root"
+  }
+}

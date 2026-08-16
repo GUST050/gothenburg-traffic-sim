@@ -1,0 +1,64 @@
+{
+  "protocol": "dirsplit_trained_q50_activation_v1",
+  "content_key": "7e952e4681e76ddd91b781327206e94326d2c78bb78b75fe02a6f218603e9869",
+  "recorded": "2026-08-15",
+  "activation_status": "ACTIVE_EXPERIMENTAL",
+  "release_evidence": false,
+  "supersedes_product_policy": {
+    "path": "validation/dirsplit_exit_a_decision_v2.json",
+    "sha256": "d6da6ec22b351c4601f97a6da730eccb453ab5e2e611153f3d86e9b870f8ac8b"
+  },
+  "basis": {
+    "gate_m": {
+      "result": "MODEL",
+      "winner": "similarity_weighted_lgbm_no_profile",
+      "path": "validation/dirsplit_gate_m_outcome_v5.json",
+      "sha256": "38d90a11d19a59d19e31a61e90ff7ecaf5c262458ccb4569b7c843a598729980"
+    },
+    "gate_s": {
+      "status": "HISTORICAL_NOT_REUSED",
+      "reason": "The previous Gate S outcome binds an older q artifact and is not evidence for the regenerated trained split. No new closure-sensitivity claim is made by this activation."
+    }
+  },
+  "training": {
+    "protocol": "dirsplit_train_v2",
+    "table_rows": 247464,
+    "usable_rows": 232500,
+    "product_training_rows": 23472,
+    "product_training_stations": 83,
+    "raw_volume_files": 188,
+    "shrinkage_lambda": 0.264,
+    "pooled_domain_mae": 0.0604,
+    "pooled_domain_mae_5050": 0.0617,
+    "profile_features": false
+  },
+  "product_policy": {
+    "supported_point_model": "trained q50 on weekdays 06:00-20:59",
+    "out_of_support_fallback": "constant 50/50 point with q10/q90 widened to 0.1/0.9",
+    "local_anchor": "apply provenance-bound local directional references during their declared validity period",
+    "single_direction_opposite": "model-hash-bound soft prior plus ceiling-only uncertainty bound; never a hard lower bound",
+    "route_slots": "three central-q50 seed replicas unless --direction-stress-variants explicitly substitutes q10/q90",
+    "claim_boundary": "Gate M supports the point model. Gate S has not been rerun on the regenerated q artifact, so this activation makes no new closure-sensitivity or release-evidence claim."
+  },
+  "sources": {
+    "build_sumo_demand.py": "2378a0d44f98582fa03c0c631dc6faa9c37fdc91358524d6c42b2e2dc46dc764",
+    "demand/intake.py": "b2bd2c0d8d00eb27c2e4e58cff3639c8e84e0b811d62df0f48344381f4e2c26f",
+    "demand/priors.py": "fa190dffc1a9f4b656e5625e1d7e701ed11fa50a82ee5789565846ec0d5481a2",
+    "dirsplit/train.py": "5f7dddc67fc11c1a1a49811c1da1934e4843617ddaaaff1fe427c10e153c5871",
+    "dirsplit/evaluate.py": "e81e8d8b967de7addc3bcb1182338cfa54b8b4fffcb691276b0cd8f7f978d801",
+    "dirsplit/predict.py": "ffc50eb41014c068e98e8eb9ea9347521b7e28599949496197340564a3faa039",
+    "prior_flows.py": "6e70cee39ab70dd6281e0b649655ca7d57eb5aa55f9750319bb4da645b978317",
+    "data_in/sensors.json": "2fe62df67ac1db513fad05682f6c5412324a9b3ebbf88731ad37ca5788508000",
+    "demand/publication.py": "8e40aa2ab278fb38747dd644a28feefca1be9d31799d6332eff3994daeebe5d9",
+    "demand/calibration.py": "e18f5401679f4747f639e068229414818bccbfe8bb46403c1b4ef17405e51825",
+    "traffic_sim/demand/pfe.py": "e9160fcd348177111af89dafa32fa6156d6f13024df8d4c9ea4b303eb8db478b"
+  },
+  "artifacts": {
+    "data/dirsplit/model.pkl": "ec2e43ff7c93609388d71408b7e720dc5d1e1a0743c311beb6cc1d01939f8203",
+    "data/dirsplit/train_report.json": "ac39f9d0c47656e81ee86075739d777c917427f27da5e8254a22e41864ecd05f",
+    "data/dirsplit/gate_m_report.json": "0aec4c859d86f16de662e21f243ce8d77a3cbdbe9c359307c73a011eb227455d",
+    "sumo/direction_split.json": "e253ee61acd62d5e53fcc61514395b3fc380ce2c30d83e686281ef32b7a6e276",
+    "sumo/prior_flows.json": "ec81d9f8472613f6688671ef7f535f118824ad8359bfc21d9560685e4337aeda"
+  },
+  "safety": "Measured counts remain Level 1 and are never negotiated. Learned opposite-direction information yields before the measurement band and can never impose a positive floor."
+}

@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import signal_closure_combine as scc
+from signals import signal_closure_combine as scc
 
 
 def write_vehroute(path: Path, xml: str) -> None:

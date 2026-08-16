@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-import network_audit as na
+from traffic_sim.simulation import network_audit as na
 
 
 class FakeGraph:

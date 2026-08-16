@@ -1,0 +1,224 @@
+{
+ "protocol": "highs_thread_option_order_dependence_v1",
+ "recorded": "2026-08-16",
+ "release_evidence": false,
+ "question": "Is the integer-repair status-4 failure caused by SciPy >= 1.17 rejecting the forwarded HiGHS 'threads' option, as ARCHITECTURE.md and IMPROVEMENT_PLAN research correction 1 state?",
+ "answer": "No, on two counts. (1) The trigger is ORDER, not the option: when threads=1 is the first HiGHS solve in a process it succeeds and so does every later solve; when a default-thread solve runs first, every later threads=1 solve returns status 4 '(HiGHS Status 0: Not Set)' for the life of that process. This matches the documented HiGHS global scheduler, whose thread count is fixed by the first solve; a fork pool inherits it from the parent. (2) The boundary is 1.15, not 1.17.",
+ "version_bisection": {
+  "unaffected": [
+   "1.13.1",
+   "1.14.1"
+  ],
+  "affected": [
+   "1.15.3",
+   "1.16.3",
+   "1.17.1"
+  ],
+  "boundary": "behaviour changes between scipy 1.14.1 and 1.15.3"
+ },
+ "consequence_for_the_pin": "The declared range 'scipy>=1.11,<1.17' ADMITS 1.15.x and 1.16.x, both of which reproduce the failure. A fresh 'pip install -r requirements.txt' today resolves to scipy 1.16.x and hits it. Measured in this session: tests/test_pfe.py passes 128/128 when the threads test runs alone but fails 38 tests when the whole file runs, all with 'joint integer projection was not resolved by the solver' \u2014 the fail-closed path firing correctly on a solver that was refused a thread-count change. RECOMMENDED, not applied here: narrow the bound to <1.15 in requirements.txt, .github/workflows/ci.yml and tests/test_pfe.py::test_solver_compatibility_range_is_pinned_in_ci_and_requirements. Left to A2/the maintainer because it narrows everyone's environment and the repository has an active review loop on exactly this file.",
+ "limitations": [
+  "Two-variable synthetic model, not the production integer-repair problem.",
+  "Single process; no fork pool exercised.",
+  "Linux/CPython 3.11.15 only; the original deadlock was observed on macOS.",
+  "Patch versions only as resolved by pip on this date; not every release tested.",
+  "Does not test whether threads=1 is still needed once the start method or solve ordering changes \u2014 that is work package A3 candidate 0."
+ ],
+ "reproducer": {
+  "path": "tools/reproduce_highs_thread_option.py",
+  "sha256": "7bfeacd60a1b315e711b3f64843300a83f3a582c10c896b6f8ebe7509c55a45d",
+  "command": "python3 tools/reproduce_highs_thread_option.py --json"
+ },
+ "runs": [
+  {
+   "python": "3.11.15",
+   "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+   "scipy": "1.13.1",
+   "orders": {
+    "threads_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ]
+    ],
+    "default_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ]
+    ]
+   },
+   "threads_first_all_ok": true,
+   "default_first_blocks_threads": false,
+   "conclusion": "not reproduced in this environment"
+  },
+  {
+   "python": "3.11.15",
+   "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+   "scipy": "1.14.1",
+   "orders": {
+    "threads_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ]
+    ],
+    "default_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ]
+    ]
+   },
+   "threads_first_all_ok": true,
+   "default_first_blocks_threads": false,
+   "conclusion": "not reproduced in this environment"
+  },
+  {
+   "python": "3.11.15",
+   "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+   "scipy": "1.15.3",
+   "orders": {
+    "threads_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ]
+    ],
+    "default_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      4,
+      "(HiGHS Status 0: Not Set)"
+     ],
+     [
+      4,
+      "(HiGHS Status 0: Not Set)"
+     ]
+    ]
+   },
+   "threads_first_all_ok": true,
+   "default_first_blocks_threads": true,
+   "conclusion": "order-dependent: the first HiGHS solve fixes the process thread count"
+  },
+  {
+   "python": "3.11.15",
+   "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+   "scipy": "1.16.3",
+   "orders": {
+    "threads_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ]
+    ],
+    "default_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      4,
+      "(HiGHS Status 0: Not Set)"
+     ],
+     [
+      4,
+      "(HiGHS Status 0: Not Set)"
+     ]
+    ]
+   },
+   "threads_first_all_ok": true,
+   "default_first_blocks_threads": true,
+   "conclusion": "order-dependent: the first HiGHS solve fixes the process thread count"
+  },
+  {
+   "python": "3.11.15",
+   "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+   "scipy": "1.17.1",
+   "orders": {
+    "threads_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ]
+    ],
+    "default_first": [
+     [
+      0,
+      "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+     ],
+     [
+      4,
+      "(HiGHS Status 0: Not Set)"
+     ],
+     [
+      4,
+      "(HiGHS Status 0: Not Set)"
+     ]
+    ]
+   },
+   "threads_first_all_ok": true,
+   "default_first_blocks_threads": true,
+   "conclusion": "order-dependent: the first HiGHS solve fixes the process thread count"
+  }
+ ]
+}

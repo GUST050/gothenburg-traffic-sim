@@ -23,6 +23,140 @@ class ControlledRoundingError(RuntimeError):
     """Raised when no projection satisfying the selected contract is found."""
 
 
+def exact_condensed_contract_repair(
+    counts: np.ndarray,
+    shapes: Sequence,
+    measured: Mapping[str, float],
+    bounds: Mapping[str, tuple[float, float]],
+    *,
+    groups: Sequence[tuple[list[int], float, float]] | None = None,
+    measurement_tol_mult: float | None = None,
+    preferred: Mapping[str, float] | None = None,
+    reference: np.ndarray | None = None,
+    preserve_total: bool = False,
+    force: bool = False,
+    time_limit_s: float = 20.0,
+) -> tuple[np.ndarray, dict] | None:
+    """Solve the strongest LOSO publication model in exact condensed form.
+
+    This validation-only acceleration is applicable to exact margins with a
+    fixed rounded interval total and without soft preferred margins. It is an
+    algebraic reformulation of ``min sum(abs(z-reference))`` over all
+    nonnegative integer route counts, not a floor/ceil restriction.
+
+    Write ``reference = q + f`` with integer floor ``q``. Every route count is
+    represented uniquely as ``z = q + u - v``: nonnegative integer ``u`` is
+    an upward move, ``v`` is a downward move capped at ``q``, and binary ``y``
+    selects the upward branch. Then its L1 term is exactly
+    ``f + u + v - 2*f*y``. All original edge, group and total constraints are
+    applied to ``q + u - v``. This removes the continuous positive/negative
+    auxiliaries that made the equivalent production formulation time out.
+    HiGHS must still prove optimality; otherwise the caller receives ``None``
+    and retains the production general MILP as its fail-closed fallback.
+
+    ``counts`` and ``force`` match ``pfe.repair_integer_bounds`` so LOSO can
+    install this narrow wrapper without changing the sealed demand source.
+    """
+    del counts, force
+    if (reference is None or not preserve_total
+            or measurement_tol_mult is not None or preferred):
+        return None
+    if isinstance(time_limit_s, bool) or time_limit_s <= 0:
+        raise ValueError("time_limit_s must be positive")
+
+    x = np.asarray(reference, dtype=float)
+    if x.ndim != 1 or len(x) != len(shapes):
+        raise ValueError("integer repair reference differs from shape count")
+    if not np.all(np.isfinite(x)) or np.any(x < -1e-9):
+        raise ValueError("integer repair reference must be finite and nonnegative")
+
+    groups = [group for group in (groups or []) if group[0]]
+    constrained = set(measured) | set(bounds)
+    touch: dict[str, list[int]] = {edge: [] for edge in constrained}
+    for index, shape in enumerate(shapes):
+        for edge in set(shape.edges) & constrained:
+            touch[edge].append(index)
+
+    floor = np.floor(np.maximum(x, 0.0)).astype(int)
+    fraction = x - floor
+    n = len(shapes)
+    n_vars = 3 * n
+    total_i = float(int(round(float(x.sum()))))
+    rows = []
+    lower = []
+    upper = []
+
+    def add_indices(indices: Sequence[int], lo: float, hi: float) -> None:
+        row = lil_matrix((1, n_vars), dtype=float)
+        fixed = 0
+        for index in indices:
+            fixed += int(floor[index])
+            row[0, index] = 1.0
+            row[0, n + index] = -1.0
+        rows.append(row.tocsr())
+        lower.append(float(lo) - fixed)
+        upper.append(float(hi) - fixed)
+
+    for edge, target in sorted(measured.items()):
+        target_i = float(int(round(float(target))))
+        add_indices(touch.get(edge, []), target_i, target_i)
+    for edge, (lo, hi) in sorted(bounds.items()):
+        add_indices(touch.get(edge, []), np.ceil(float(lo) - 0.5),
+                    np.floor(float(hi) + 0.5))
+    for indices, lo, hi in groups:
+        add_indices(indices, np.ceil(float(lo) - 0.5),
+                    np.floor(float(hi) + 0.5))
+    add_indices(range(n), total_i, total_i)
+
+    # u <= total*y, u >= y and v <= q*(1-y) make the branch
+    # representation unique while retaining every nonnegative integer z.
+    for index in range(n):
+        upward_cap = lil_matrix((1, n_vars), dtype=float)
+        upward_cap[0, index] = 1.0
+        upward_cap[0, 2 * n + index] = -total_i
+        rows.append(upward_cap.tocsr())
+        lower.append(-np.inf)
+        upper.append(0.0)
+
+        upward_positive = lil_matrix((1, n_vars), dtype=float)
+        upward_positive[0, index] = 1.0
+        upward_positive[0, 2 * n + index] = -1.0
+        rows.append(upward_positive.tocsr())
+        lower.append(0.0)
+        upper.append(np.inf)
+
+        downward_branch = lil_matrix((1, n_vars), dtype=float)
+        downward_branch[0, n + index] = 1.0
+        downward_branch[0, 2 * n + index] = float(floor[index])
+        rows.append(downward_branch.tocsr())
+        lower.append(-np.inf)
+        upper.append(float(floor[index]))
+
+    result = milp(
+        c=np.r_[np.ones(n), np.ones(n), -2.0 * fraction],
+        integrality=np.ones(n_vars),
+        bounds=Bounds(
+            np.zeros(n_vars),
+            np.r_[np.full(n, total_i), floor.astype(float), np.ones(n)]),
+        constraints=LinearConstraint(
+            vstack(rows, format="csc"), lower, upper),
+        options={"time_limit": float(time_limit_s), "mip_rel_gap": 0.0},
+    )
+    if not result.success or result.x is None:
+        return None
+    upward = np.rint(result.x[:n]).astype(int)
+    downward = np.rint(result.x[n:2 * n]).astype(int)
+    repaired = floor + upward - downward
+    return repaired, {
+        "method": "exact_condensed_contract_l1",
+        "mip_status": int(result.status),
+        "mip_nodes": int(getattr(result, "mip_node_count", 0) or 0),
+        "mip_gap": round(float(getattr(result, "mip_gap", 0.0) or 0.0), 12),
+        "route_l1_from_continuous": round(
+            float(np.abs(repaired.astype(float) - x).sum()), 6),
+    }
+
+
 def _edge_rows(shapes: Sequence, edges: Sequence[str], n_columns: int):
     rows = []
     for edge in edges:

@@ -113,18 +113,38 @@ def file_fingerprints() -> dict[str, str | None]:
         "calibrated_q10": ROOT / "sumo/calibrated_v1.rou.xml",
         "calibrated_q90": ROOT / "sumo/calibrated_v2.rou.xml",
     }
-    source_names = (
-        "run_scenario.py", "closure_metrics.py", "sumo_runtime.py",
-        "build_sumo_demand.py", "demand/calibration.py",
-    )
-    paths.update({f"source:{name}": ROOT / name for name in source_names})
+    # Label -> canonical path, following traffic_sim.demand.source_identity's
+    # _FIXED_SOURCES convention: the LABEL is a stable contract key, so it must
+    # not move when a file does. verify_campaign_inputs() looks frozen
+    # fingerprints up by label and refuses on a miss, so renaming a label would
+    # break every previously frozen campaign contract.
+    source_paths = {
+        "run_scenario.py": "run_scenario.py",
+        # These two named the root shims retired into traffic_sim/ on
+        # 2026-08-15; the labels are kept, the paths follow the real modules.
+        "closure_metrics.py": "traffic_sim/simulation/metrics.py",
+        "sumo_runtime.py": "traffic_sim/simulation/runtime.py",
+        "build_sumo_demand.py": "build_sumo_demand.py",
+        "demand/calibration.py": "demand/calibration.py",
+    }
+    paths.update({f"source:{label}": ROOT / rel
+                  for label, rel in source_paths.items()})
     return {label: sha256_file(path) for label, path in paths.items()}
 
 
 def sumo_version() -> str | None:
     try:
         import sumo
-        home = Path(sumo.__file__).resolve().parent
+        # A repository-local ``sumo/`` directory can resolve as a PEP 420
+        # namespace package when the real Python package is absent. Namespace
+        # packages intentionally have no source file; treating ``None`` as a
+        # path raises TypeError before this fail-closed probe can return. It is
+        # not a usable SUMO installation, so reject it explicitly without
+        # broadening the exception handler around unrelated programming errors.
+        module_file = getattr(sumo, "__file__", None)
+        if not module_file:
+            return None
+        home = Path(module_file).resolve().parent
         result = subprocess.run([str(home / "bin/sumo"), "--version"],
                                 capture_output=True, text=True, timeout=20,
                                 check=False)

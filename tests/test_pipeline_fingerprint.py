@@ -2,7 +2,7 @@
 
 import json
 
-import pipeline_fingerprint as pf
+from traffic_sim.core import fingerprint as pf
 
 
 def test_fingerprint_changes_when_an_artifact_changes(tmp_path):

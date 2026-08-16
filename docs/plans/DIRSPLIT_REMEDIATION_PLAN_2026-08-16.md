@@ -1,12 +1,37 @@
 # Åtgärdsplan: riktningsdelning, osäkerhet och q10/q90
 
+> **RÄTTELSE 2026-08-16, samma dag som dokumentet skrevs.** Den första versionen
+> deklarerade **Gate M = BASELINE**. Det var fel och är återkallat. Dokumentet
+> skrevs mot `340b628`, som saknar `dirsplit/evaluate.py`, dataset v2 och
+> Gate M-utfallen v1–v5. **Aktuell auktoritet är
+> `validation/dirsplit_gate_m_outcome_v5.json` = `MODEL`** (vinnare
+> `similarity_weighted_lgbm_no_profile`, v2-tabellen med 247 464 rader och 97
+> stationer, tre foldtyper).
+>
+> Felet är exakt det som `DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md`
+> redan har återkallat en gång: *"det mätte en annan modell på en annan
+> population."* Min mätning gäller den **superseded** v1-tabellen (1 214
+> aggregerade rader), den **superseded** profilmodellen, och **bara**
+> leave-city-out. På just den cellen ger v5 också oavgjort — mätningarna
+> motsäger alltså inte varandra; min generalisering till ett grindbeslut var
+> ogiltig.
+>
+> Även λ-läckan var redan känd och åtgärdad: `dirsplit/evaluate.py::_fit_shrinkage`
+> anpassar λ **inne i** träningsfolden och dess docstring beskriver `train.py`:s
+> beteende ordagrant. Det som kvarstår som eget bidrag är **täckningssiffran**
+> (§2.3) och orienteringsdefekten (§2.4).
+>
+> Vad som gäller nedan: §2.3, §2.4, §3, Fas E och Fas F1. Vad som är återkallat:
+> varje formulering om att Gate M är avgjord, hela §4:s beslutsmatris, och
+> påståendet att work package C är obligatoriskt.
+
 **Datum:** 2026-08-16
-**Status:** Mätt evidens + åtgärdsplan. Fas A är landad i samma commit som detta
-dokument. Ingen produktkod, ingen modell och ingen policy är ändrad.
+**Status:** Delvis återkallat (se ovan). Fas A är landad. Ingen produktkod,
+ingen modell och ingen policy är ändrad.
 **Förhåller sig till:** `docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md`
-(nedan "augustiplanen"). Detta dokument **ersätter den inte** — det besvarar
-Gate M för den deployade modellen och gör om resten av dess villkorade grenar
-till konkreta faser med tester.
+(nedan "augustiplanen"). Detta dokument **ersätter den inte** och avgör ingen
+grind — det reviderar `train_report.json` och kvantifierar q-intervallets
+täckning.
 **Bakåtkompatibilitet:** Befintliga q10/q50/q90-arkiv, frysta releaseartefakter
 och stängda closure-grindar är historisk evidens och skrivs inte om. Allt nedan
 gäller nya byggen.
@@ -20,11 +45,11 @@ besvarar en av dem med mätning:
 
 | Grind | Fråga | Status efter denna plan |
 |---|---|---|
-| **Gate M** | Slår någon punktmodell 50/50 på held-out? | **BASELINE** — nej, för den deployade modellen. Mätt. |
-| **Gate S** | Ändrar rimlig riktningsvariation closure-beslutet? | **ÖPPEN** — Fas C mäter det. |
-| **Gate P** | Är en produktensemble värd sin arkitektur? | **STÄNGD** tills Gate S öppnar den. |
+| **Gate M** | Slår någon punktmodell 50/50 på held-out? | **ÅTERKALLAT från detta dokument.** Gällande: `MODEL` (v5). |
+| **Gate S** | Ändrar rimlig riktningsvariation closure-beslutet? | `NO` (v6), men nedgraderad till historisk, icke reproducerbar diagnostik. |
+| **Gate P** | Är en produktensemble värd sin arkitektur? | **STÄNGD**. |
 
-Två fynd utöver Gate M, båda nya:
+Två fynd utöver λ-läckan. Det första är nytt; det andra är en kodedefekt:
 
 - **Intervallet är kraftigt under-dispersivt.** `[q10, q90]` täcker **39,3 %**
   av held-out-observationerna där namnet lovar 80 %. Etiketterna får inte
@@ -33,8 +58,11 @@ Två fynd utöver Gate M, båda nya:
   "per-sensor-lokala" modellerna använder 68–91 % av hela träningsmängden.
   Båda undergräver `CLAUDE.md`:s beskrivning av metoden.
 
-Rekommenderad väg: **Fas B → Fas C → beslutsgren**. Bygg ingen ensemble-,
-schema-, API- eller UI-arkitektur innan Gate S har svarat.
+Rekommenderad väg: **Fas E → Fas F1 → Fas B**. Fas E (etiketterna) och Fas F1
+(orienteringsregressionen) är oberoende av varje grind och kan göras nu. Fas C
+körs bara om ni vill ersätta v5 eller publicera ett nytt Exit A-beslut — annars
+förblir work package C i `IMPROVEMENT_PLAN.md` villkorad. Bygg ingen ensemble-,
+schema-, API- eller UI-arkitektur.
 
 ---
 
@@ -43,11 +71,12 @@ schema-, API- eller UI-arkitektur innan Gate S har svarat.
 Allt nedan är reproducerbart:
 
 ```bash
-python3 -m dirsplit.validate --boot 2000 --out validation/dirsplit_gate_m_20260816.json
+python3 -m dirsplit.validate --boot 2000
 ```
 
 Körtid ~12 min på 10 kärnor. Artefakt:
-`validation/dirsplit_gate_m_20260816.json`. Harness: `dirsplit/validate.py`,
+`validation/dirsplit_train_report_leakage_diagnostic_v1.json`. Harness:
+`dirsplit/validate.py`,
 enhetstestad i `tests/test_dirsplit_validate.py` (22 tester).
 
 Harnesset använder `dirsplit.train`:s **egna** funktioner (`load_table`,
@@ -64,7 +93,10 @@ siffror exakt innan det mäter något nytt.
 | Poolad MAE, krympt | 0,0557 | 0,0557 | ✅ |
 | Poolad MAE, 50/50 | 0,0565 | 0,0565 | ✅ |
 
-### 2.2 Gate M — nästlad λ
+### 2.2 Nästlad λ — vad `train_report.json` faktiskt bär
+
+> Detta är en revision av `train_report.json`, **inte** ett Gate M-resultat.
+> Läckan är redan åtgärdad i `dirsplit/evaluate.py::_fit_shrinkage`.
 
 **Läckan som mäts.** `train.py:214–225` anpassar λ som minstakvadrat-lutningen
 genom origo på de poolade held-out-paren, och rapporterar sedan
@@ -169,8 +201,9 @@ Två separata defekter:
   träningsmängden. `CLAUDE.md`:s *"each road trained for itself"* motsvaras
   inte av vikterna.
 
-D1 är en **kandidatförklaring** till Gate M-utfallet och behandlas som sådan i
-Fas F0.
+D1 är en kandidatförklaring till varför den GAMLA profilmodellen presterade
+svagt, och behandlas som sådan i Fas F0. v5:s vinnare är `no_profile`, så
+defekten kan redan vara kringgången där — det är omätt.
 
 ### 2.5 Vad som inte mättes
 
@@ -185,10 +218,10 @@ Fas F0.
   fångat i KI:t.
 - **Täckningen är mätt på norska held-out-stationer**, inte i Göteborg — samma
   population som varje annan siffra i `train_report.json`.
-- **Ingen alternativ modell är testad.** Gate M är besvarad för den *deployade*
-  modellen. Modellturneringen i augustiplanens Fas 1 (dataset v2, enklare
-  kandidater) är en separat fråga som detta gör lägre prioriterad men inte
-  formellt stänger.
+- **Ingen alternativ modell är testad, och det är den avgörande gränsen.**
+  Mätningen gäller den superseded profilmodellen på den superseded v1-tabellen.
+  Modellturneringen har körts separat (`dirsplit/evaluate.py`, dataset v2) och
+  gav `MODEL`. Att generalisera denna mätning till ett grindbeslut var ogiltigt.
 - **Rank-histogram/PIT är inte beräknat**, bara täckningen vid ett nominellt
   värde. Fas E lägger till det.
 
@@ -287,21 +320,26 @@ kvaliteten på osäkerhetsmåttet blir högre.
 
 ---
 
-## 4. Beslut
+## 4. Beslut — ÅTERKALLAT
 
-**Gate M = BASELINE** för den deployade modellen. Evidens:
-`validation/dirsplit_gate_m_20260816.json`.
+Den ursprungliga §4 deklarerade Gate M = BASELINE och byggde en beslutsmatris
+på det. Båda är återkallade; se rättelsen överst.
 
-Augustiplanens utfallsmatris uppdaterad:
+**Gällande läge, inte satt av detta dokument:**
 
-| | Gate S = NEJ | Gate S = JA |
+| Grind | Status | Evidens |
 |---|---|---|
-| **Gate M = BASELINE** ✅ *(mätt)* | **Exit A** — 50/50 + 107:s ankare, ingen ensemble | **Gren B** — residualscenarier runt 0,5 |
-| Gate M = MODELL | *(utesluten av mätningen)* | *(utesluten av mätningen)* |
+| Gate M | `MODEL` | `validation/dirsplit_gate_m_outcome_v5.json` |
+| Gate S | `NO`, men historisk och icke reproducerbar | `validation/dirsplit_direction_sensitivity_outcome_v6.json`, nedgraderad av `dirsplit_direction_sensitivity_evidence_status_v1.json` |
 
-Endast Gate S återstår för att välja mellan Exit A och Gren B. Ingen väg leder
-längre till en villkorad prediktiv riktningsmodell i produkt utan att Fas F0
-först vänder Gate M.
+Den deployade vägen kör alltså tränad q50 inom vardag 06–20 med 50/50 som
+fallback utanför träningsstödet. Ett nytt Gate M-beslut kräver en körning av
+`python3 -m dirsplit.evaluate` under `simplest_defensible_v2`, inte en mätning
+på v1-tabellen.
+
+Work package C i `IMPROVEMENT_PLAN.md` förblir **villkorad**. Den blir
+obligatorisk endast om ni vill återöppna dirsplit, ersätta v5 som aktuellt
+Gate M-resultat, eller publicera ett nytt formellt Exit A-beslut.
 
 ---
 
@@ -315,7 +353,7 @@ Levererat i denna commit:
 |---|---|
 | `dirsplit/validate.py` | Reproducerbart harness: nästlad λ, bootstrap, täckning, orientering |
 | `tests/test_dirsplit_validate.py` | 22 enhetstester av den rena kärnan |
-| `validation/dirsplit_gate_m_20260816.json` | Evidensartefakt |
+| `validation/dirsplit_train_report_leakage_diagnostic_v1.json` | Evidensartefakt (icke-release, ej Gate M) |
 | `Makefile` | `make dirsplit-validate` |
 | `CLAUDE.md`, `README.md` | Rättade siffror (se §5.1) |
 
@@ -339,9 +377,8 @@ som nu mäts är att måttet självt inte generaliserar.
 
 ### Fas B — Sensor 107:s lokala ankare · **NÄSTA**
 
-Oförändrad från augustiplanens Fas 0A, men nu högre prioriterad: efter Gate M
-är 107:s publicerade årsvärde den **enda** riktningsevidens vi har som inte är
-transfer.
+Oförändrad från augustiplanens Fas 0A. 107:s publicerade årsvärde är den enda
+riktningsevidens vi har som inte är transfer, oavsett hur Gate M står.
 
 **Mål.** Bind Göteborgs publicerade 3 400/3 100 (≈ 52/48 för 2025; 2023–24
 omkring 50/50) som ett provenance-bundet, periodsemantiskt ankare.
@@ -446,8 +483,8 @@ Riktningsaxeln är beslutsirrelevant. Avsluta dirsplit-utbyggnaden.
 
 #### D2 · Gate S = `YES` → **Gren B: residualscenarier**
 
-Riktningen påverkar beslutet, men ingen prediktiv signal finns (Gate M).
-Bygg då spridning utan att låtsas om prediktion.
+Riktningen påverkar beslutet. Om den gällande Gate M-modellen dessutom skulle
+falla vid en framtida omkörning, bygg spridning utan att låtsas om prediktion.
 
 1. **Scenarioenhet = en hel dag**, alla berörda sensorer och tider samtidigt —
    inte en oberoende kvantil per cell.
@@ -503,7 +540,8 @@ chans är detta det billigaste experimentet.
 2. Träna om.
 3. Kör `python3 -m dirsplit.validate` igen.
 
-**Beslutsregel, preregistrerad:** Gate M vänder endast om nästlad λ ger en
+**Beslutsregel, preregistrerad:** en omkörning motiverar en ny Gate M-körning
+via `dirsplit/evaluate.py` endast om nästlad λ ger en
 poolad förbättring mot 50/50 **och** bootstrap-KI:t utesluter noll. Ett
 positivt punktestimat med KI över noll räcker inte — det är precis felet som
 gav 0,0008 från början.

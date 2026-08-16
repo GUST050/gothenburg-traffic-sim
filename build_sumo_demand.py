@@ -8,9 +8,11 @@ Run after build_sumo_net.py:
 Method (SUMO's routeSampler workflow):
   1. Sensor counts for the window → 15-min edgeData intervals (counts.xml).
      "Total" sensors measure the SUM of both directions; direction is not
-     recoverable (no directional re-export is coming), so the count is split
-     50/50 over the two directed edges — the max-entropy assumption. Sensor
-     1076 ("S") is a true single-direction count on one edge.
+     recoverable directly, so a provenance-bound model trained on measured
+     directional stations estimates q10/q50/q90 shares. q50 is the normal
+     point estimate; 50/50 is only the missing-model fallback. Sensor 1076
+     ("S") is a true single-direction count on one edge, and its unmeasured
+     opposite receives a soft learned prior plus an uncertainty ceiling.
   2. randomTrips.py + duarouter → a large pool of CANDIDATE routes through
      the full network (diverse origins/destinations, through-traffic favored).
   3. routeSampler.py samples routes from the pool so that simulated 15-min
@@ -315,6 +317,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--pfe-workers", type=int, default=None,
                    help="Maximum PFE worker processes (default: CPU count; "
                         "use 1 for serial solving and publication)")
+    p.add_argument(
+        "--direction-stress-variants", action="store_true",
+        help="Build q10/q90 uncertainty routes in the two auxiliary route "
+             "slots. The default build uses trained q50 plus applicable "
+             "local anchors and provenance-checked opposite-direction "
+             "priors in all three seed slots.")
     p.add_argument("--through-share-target", type=float, default=0.25,
                    help="Enforced calibrated through share (start AND end "
                         "outside the canvas). The share is unidentifiable "
@@ -473,7 +481,7 @@ def parse_args() -> argparse.Namespace:
 # Patch SUMO_DIR/GEO_PATH on demand.intake for these functions.
 from demand.intake import (activity_purpose_shares_for_window, build_targets,
                            classify_day, demand_metadata, has_split_quantiles,
-                           day_pool_blocks, load_direction_split,
+                           day_pool_blocks,
                            load_sensor_edges, multi_day_blocks,
                            observed_sensor_series, real_day_shape,
                            target_series, validate_date_range,
@@ -522,6 +530,60 @@ from demand.calibration import (_agent_path_for, _report_is_publishable,
                                 warn_widened_measurement_band,
                                 warn_purpose_allocation_drift,
                                 warn_unserviceable_measured_edges)
+
+
+def direction_variants(include_stress: bool) -> list[tuple[str, str]]:
+    """Physical route slots and their direction inputs for this build.
+
+    The three slots are an established monthly-runner compatibility contract,
+    not proof of three demand worlds. Normal builds fill them from the trained
+    q50 policy unless an operator explicitly requests q10/q90 uncertainty.
+    """
+    central = [("", "edge_shares"), ("_v1", "edge_shares"),
+               ("_v2", "edge_shares")]
+    if not include_stress:
+        return central
+    if not has_split_quantiles():
+        raise ValueError("--direction-stress-variants requires "
+                         "sumo/direction_split.json with q10/q90 shares")
+    return [("", "edge_shares"), ("_v1", "edge_shares_q10"),
+            ("_v2", "edge_shares_q90")]
+
+
+def direction_prior_variants(include_stress: bool) -> dict[str, str]:
+    """Prior inputs matching :func:`direction_variants`."""
+    if include_stress:
+        return {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
+    return {"": "prior", "_v1": "prior", "_v2": "prior"}
+
+
+def direction_opposite_bounds_by_variant(
+        variants: list[tuple[str, str]], flows: dict[str, list],
+        n_intervals: int, qi_start: int, include_stress: bool,
+        anchor_day: str | None = None,
+) -> dict[str, list]:
+    """Uncertainty ceilings for each trained opposite-carriageway estimate."""
+    return {
+        suffix: opposite_direction_bounds(
+            flows, n_intervals, qi_start, split_key=key,
+            anchor_day=anchor_day)
+        for suffix, key in variants
+    }
+
+
+def direction_structural_inputs(
+        begin: str, end: str, include_stress: bool,
+) -> tuple[dict, dict]:
+    """Structural bounds plus data-trained direction priors.
+
+    Observability bounds are independent of the dirsplit tournament and remain
+    part of every build. ``prior_flows.json`` softly estimates unmeasured
+    opposite carriageways and is accepted only when its model hash matches
+    the live provenance-bound dirsplit model.
+    """
+    bounds = ensure_bounds(STRUCTURAL_REFERENCE_DATE, begin, end)
+    priors = ensure_priors(STRUCTURAL_REFERENCE_DATE)
+    return bounds, priors
 
 
 def main() -> None:
@@ -655,7 +717,6 @@ def main() -> None:
                 # never restore a pool built for the old edge set.
                 "sensor_registry": Path("data_in/sensors.json"),
                 "normal_profile": Path("web/data/normal_profile.json"),
-                "direction_split": SUMO_DIR / "direction_split.json",
                 "population": Path("data_in/deso/population_2023.json"),
                 "deso": Path("data_in/deso/deso_goteborg.geojson"),
                 # An official GeoJSON, if later supplied, wins over the OSM
@@ -673,6 +734,10 @@ def main() -> None:
                 # — a changed field must invalidate the candidate pool.
                 "assignment_priors": SUMO_DIR / "assignment_priors.json",
             }
+            # Candidate geometry does not depend on direction shares. Keeping
+            # the diagnostic transfer file in this cache key made an unused
+            # q-model change invalidate route supply geometry. The calibrated
+            # demand fingerprint still binds the split it actually consumes.
             # Local: build_candidates does heavy module-level OSM/registry work
             # that every importer of this module would otherwise pay for.
             import build_candidates
@@ -788,13 +853,13 @@ def main() -> None:
         print(f"  timing candidate_generation: {elapsed:.1f}s")
 
     # ── Calibrate: one route set per direction-split variant ───────────────────
-    # q50 = the default (calibrated.rou.xml). If the split file carries
-    # quantile bounds, two extra variants are built — run_scenario spreads
-    # its Monte Carlo seeds over them so direction uncertainty reaches the
-    # per-edge confidence numbers.
-    variants = [("", "edge_shares")]
-    if has_split_quantiles():
-        variants += [("_v1", "edge_shares_q10"), ("_v2", "edge_shares_q90")]
+    # The normal path has one data-trained q50 demand case. Three physical
+    # route slots remain
+    # because the established monthly runner uses them for three SUMO seeds;
+    # by default all three are independently published from the same central
+    # targets and are seed replicas, not q10/q50/q90 demand worlds. Explicit
+    # uncertainty builds substitute the trained q10/q90 arms.
+    variants = direction_variants(args.direction_stress_variants)
 
     calib_path = SUMO_DIR / "calibrated.rou.xml"
     variant_fit_reports: dict[str, dict] = {}
@@ -814,7 +879,8 @@ def main() -> None:
         # reference date, even when simulating a --source forecast date.
         bounds_data, priors_data = timed(
             "structural_bounds_priors",
-            lambda: structural_bounds_and_priors(args.begin, args.end))
+            lambda: direction_structural_inputs(
+                args.begin, args.end, args.direction_stress_variants))
         obs_data = timed("observability", ensure_observability)
         corridor    = obs_data.get("corridor_priors", {})
         if corridor:
@@ -835,17 +901,16 @@ def main() -> None:
         if assign_flows:
             print(f"  gravity-assignment prior: {len(assign_flows)} otherwise-"
                   f"unconstrained edges get a weak (w={assign_w}) realistic pull")
-        prior_variant = {"": "prior", "_v1": "prior_low", "_v2": "prior_high"}
+        prior_variant = direction_prior_variants(
+            args.direction_stress_variants)
 
-        # The unmeasured carriageway at every single-direction station, as an
-        # interval the solver must satisfy. Per variant, because the interval
-        # comes from the direction model's own q10/q90 and therefore moves
-        # with the variant being built.
-        opposite_by_variant = {
-            suffix: opposite_direction_bounds(
-                flows, n_intervals, qi_start, split_key=key)
-            for suffix, key in variants
-        }
+        # A measurement of one carriageway is not evidence for its unmeasured
+        # opposite. The release path leaves that opposite unconstrained.
+        # Transferred-model bounds are retained only inside an explicitly
+        # requested direction-stress build.
+        opposite_by_variant = direction_opposite_bounds_by_variant(
+            variants, flows, n_intervals, qi_start,
+            args.direction_stress_variants, anchor_day=args.start_date)
 
         def build_bounds_priors(suffix: str) -> tuple[list[dict], list[dict], list[dict]]:
             return build_interval_constraints(
@@ -1083,7 +1148,9 @@ def main() -> None:
                 variant_inputs = {}
                 for suffix, key in variants:
                     targets = build_targets(flows, sensor_edges, qi_start,
-                                            n_intervals, split_key=key)
+                                            n_intervals, split_key=key,
+                                            anchor_day=args.start_date,
+                                            anchor_epoch=source_epoch)
                     targets_by_variant[key] = targets
                     bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors(suffix)
                     out = calib_path if suffix == "" else SUMO_DIR / f"calibrated{suffix}.rou.xml"
@@ -1141,7 +1208,9 @@ def main() -> None:
                 break
 
             targets = build_targets(flows, sensor_edges, qi_start,
-                                    n_intervals, split_key="edge_shares")
+                                    n_intervals, split_key="edge_shares",
+                                    anchor_day=args.start_date,
+                                    anchor_epoch=source_epoch)
             targets_by_variant["edge_shares"] = targets
             bounds_pq, priors_pq, hard_bounds_pq = build_bounds_priors("")
             report = timed(
@@ -1206,10 +1275,13 @@ def main() -> None:
         generate_candidates()
         for suffix, key in variants:
             targets_by_variant[key] = build_targets(
-                flows, sensor_edges, qi_start, n_intervals, split_key=key)
+                flows, sensor_edges, qi_start, n_intervals, split_key=key,
+                anchor_day=args.start_date, anchor_epoch=source_epoch)
             counts_path = SUMO_DIR / f"counts{suffix}.xml"
             n = write_counts(flows, sensor_edges, qi_start, n_intervals,
-                             counts_path, split_key=key)
+                             counts_path, split_key=key,
+                             anchor_day=args.start_date,
+                             anchor_epoch=source_epoch)
             print(f"Wrote {counts_path}  ({n} edge×interval measurements)")
             print(f"Sampling routes to match counts ({key}) …")
             run_tool("routeSampler.py", [
@@ -1262,11 +1334,14 @@ def main() -> None:
         start_date=args.start_date, days=args.days, source=args.source,
         begin=args.begin, end=args.end, qi_start=qi_start,
         n_intervals=n_intervals, epoch_sim=t0,
-        direction_split="estimated" if load_direction_split() else "even",
+        direction_split=("trained_q50+local_anchor+q10_q90_stress"
+                         if args.direction_stress_variants
+                         else "trained_q50+local_anchor+seed_replicas"),
         n_variants=len(variants), demand_spec=demand_spec.to_dict(),
         build_options={
             "engine": args.engine,
             "seed": args.seed,
+            "direction_stress_variants": args.direction_stress_variants,
             "legacy_random_pool": args.legacy_random_pool,
             "through_fraction": args.through_fraction,
             "gravity_km": args.gravity_km,
@@ -1363,10 +1438,10 @@ def main() -> None:
         "candidate_routes": cand_path,
         "candidate_metadata": cand_path.with_name(
             cand_path.name.replace(".rou.xml", ".meta.json")),
-        "direction_split": SUMO_DIR / "direction_split.json",
         "observability": Path("web/data/observability.json"),
         "bounds": Path("web/data/observability_bounds.json"),
-        "priors": SUMO_DIR / "prior_flows.json",
+        "direction_split": SUMO_DIR / "direction_split.json",
+        "direction_priors": SUMO_DIR / "prior_flows.json",
         "assignment_priors": SUMO_DIR / "assignment_priors.json",
         "calibrated_q50": SUMO_DIR / "calibrated.rou.xml",
         "calibrated_q50_agents": SUMO_DIR / "calibrated.agents.json",

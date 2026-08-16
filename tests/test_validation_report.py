@@ -11,7 +11,8 @@ import validation_report as vr
 def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
                   structure_flags=(), seed_flags=(), with_baseline=True,
                   with_loso=True, with_temporal=True, purpose_incompatible=None,
-                  purpose_mix_relaxed=None):
+                  purpose_mix_relaxed=None,
+                  baseline_build_id="buildid0123456789ab"):
     sumo = tmp_path / "sumo"
     sumo.mkdir()
     web = tmp_path / "web" / "data"
@@ -20,6 +21,7 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
         "date": "2025-09-16", "source": "historical",
         "build_id": "buildid0123456789ab",
         "epoch_sim": "2025-09-16T00:00:00",
+        "n_intervals": 96,
         "build_options": {"through_share_target": 0.25},
         "pfe_fit": {"geh_pct": geh, "infeasible_intervals": infeasible,
                     "vehicles": 21600},
@@ -54,6 +56,7 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
     (sumo / "net.net.xml").write_bytes(network_bytes)
     if with_baseline:
         (web / "scenarios" / "baseline.json").write_text(json.dumps({
+            "scenario": {"build_id": baseline_build_id},
             "flows": {"e": [1]},
             "seed_health": [{"seed": 1000, "loaded": 21600, "inserted": 21600,
                              "running_at_end": 0, "waiting_at_end": 0,
@@ -62,6 +65,20 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
         }))
     if with_loso:
         (web / "loso_report.json").write_text(json.dumps({
+            "comparison_contract": {
+                "protocol": "loso_pfe_meso_v11_observability_gate",
+                "reference_window_start": "2025-09-16T00:00:00",
+                "reference_window_end": "2025-09-17T00:00:00",
+                "window_start": "2025-09-16T00:00:00",
+                "window_end": "2025-09-17T00:00:00",
+                "evaluation_mode": "same_window_loso",
+                "n_intervals": 96,
+                "source": "historical",
+                "candidate_pool_sha256": hashlib.sha256(
+                    candidate_bytes).hexdigest(),
+                "network_sha256": hashlib.sha256(network_bytes).hexdigest(),
+                "through_share_target": 0.25,
+            },
             "window": "2025-09-16",
             "stations": {"134": {"edges": {"e1": {"ratio": 0.78}}}}}))
     if with_temporal:
@@ -73,6 +90,8 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
                 "window_start": "2025-09-17T00:00:00",
                 "window_end": "2025-09-18T00:00:00",
                 "minimum_temporal_coverage": 0.9,
+                "evaluation_mode": "temporal_holdout",
+                "n_intervals": 96,
                 "source": "historical",
                 "candidate_pool_sha256": hashlib.sha256(
                     candidate_bytes).hexdigest(),
@@ -106,6 +125,29 @@ class TestStudyIdentity:
         meta_path.write_text(json.dumps(meta))
         assert vr.assemble()["demand_build_id"] is None
 
+    def test_mismatched_baseline_fails_closed(self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch, baseline_build_id="stale-build")
+
+        report = vr.assemble()
+
+        identity = report["sections"]["scenario_identity"]
+        assert identity["status"] == "warn"
+        assert identity["demand_build_id"] == "buildid0123456789ab"
+        assert identity["baseline_demand_build_id"] == "stale-build"
+        assert report["sections"]["simulation"]["status"] == "missing"
+        assert report["sections"]["sensor_output"]["status"] == "missing"
+        assert "inaktuell baseline" in report["sections"]["simulation"]["reason"]
+        assert report["overall"] == "warn"
+
+    def test_unidentified_baseline_fails_closed(self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch, baseline_build_id=None)
+
+        report = vr.assemble()
+
+        assert report["sections"]["scenario_identity"]["status"] == "warn"
+        assert report["sections"]["simulation"]["status"] == "missing"
+        assert report["overall"] == "warn"
+
 
 class TestAssemble:
     def test_healthy_build_passes_overall(self, tmp_path, monkeypatch):
@@ -122,6 +164,31 @@ class TestAssemble:
         assert r["sections"]["temporal_holdout"]["median_ratio"] == 0.82
         assert r["sections"]["temporal_holdout"]["observed_quarters"] == {
             "134:e1": 96}
+
+    def test_even_station_count_uses_statistical_median(self, tmp_path,
+                                                        monkeypatch):
+        _write_inputs(tmp_path, monkeypatch)
+        loso_path = tmp_path / "web" / "data" / "loso_report.json"
+        temporal_path = tmp_path / "web" / "data" / "temporal_holdout_report.json"
+        for path in (loso_path, temporal_path):
+            payload = json.loads(path.read_text())
+            template = payload["stations"]["134"]
+            payload["stations"] = {
+                "a": {**template, "edges": {"e1": {"ratio": 0.4,
+                    "observed_quarters": 96}}},
+                "b": {**template, "edges": {"e1": {"ratio": 0.6,
+                    "observed_quarters": 96}}},
+                "c": {**template, "edges": {"e1": {"ratio": 0.8,
+                    "observed_quarters": 96}}},
+                "d": {**template, "edges": {"e1": {"ratio": 1.2,
+                    "observed_quarters": 96}}},
+            }
+            path.write_text(json.dumps(payload))
+
+        report = vr.assemble()
+
+        assert report["sections"]["held_out"]["median_ratio"] == 0.7
+        assert report["sections"]["temporal_holdout"]["median_ratio"] == 0.7
 
     def test_structure_flag_warns_overall(self, tmp_path, monkeypatch):
         _write_inputs(tmp_path, monkeypatch,
@@ -189,6 +256,19 @@ class TestAssemble:
 
         assert section["status"] == "missing"
         assert "inaktuellt" in section["reason"]
+
+    def test_stale_spatial_loso_is_not_presented_as_current_evidence(
+            self, tmp_path, monkeypatch):
+        _write_inputs(tmp_path, monkeypatch)
+        report_path = vr.WEB_DATA / "loso_report.json"
+        report = json.loads(report_path.read_text())
+        report["comparison_contract"]["candidate_pool_sha256"] = "stale"
+        report_path.write_text(json.dumps(report))
+
+        section = vr.assemble()["sections"]["held_out"]
+
+        assert section["status"] == "missing"
+        assert "spatial LOSO är inaktuellt" in section["reason"]
 
     def test_pre_e3_baseline_without_health_is_missing(self, tmp_path, monkeypatch):
         _write_inputs(tmp_path, monkeypatch)

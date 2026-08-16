@@ -23,7 +23,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import serve
-import signal_optimize as so
+from signals import signal_optimize as so
 import validation_report
 
 
@@ -1959,7 +1959,7 @@ class TestOptimizeSignals:
         assert body["scenario_id"] == "signal-api-spec"
         assert wait_until(
             lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
-        assert "signal_optimize.py" in captured["cmd"][1]
+        assert "signals/signal_optimize.py" in captured["cmd"][1]
         assert "--scenario-spec" in captured["cmd"]
         assert "--window-start" not in captured["cmd"]
         assert captured["spec"]["demand_variant_mapping"] == {
@@ -1985,7 +1985,7 @@ class TestOptimizeSignals:
         assert body["scenario_id"] == "signal-close-api-spec"
         assert wait_until(
             lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]["status"] == "done")
-        assert "signal_closure_combine.py" in captured["cmd"][1]
+        assert "signals/signal_closure_combine.py" in captured["cmd"][1]
         assert "--scenario-spec" in captured["cmd"]
         assert "--close" not in captured["cmd"]
         assert captured["spec"]["closures"][0]["edge_id"] == "a_b_0"
@@ -2010,7 +2010,7 @@ class TestOptimizeSignals:
 
         def fake_run(cmd, **kw):
             started.set()
-            assert "signal_optimize.py" in cmd[1]
+            assert "signals/signal_optimize.py" in cmd[1]
             serve.OPTIMIZE_OUT.write_text(json.dumps(_fake_signal_optimize_result()))
             return FakeCompletedProcess(returncode=0)
 
@@ -2021,7 +2021,7 @@ class TestOptimizeSignals:
 
     def test_edges_present_dispatches_to_signal_closure_combine(self, base_url, monkeypatch):
         def fake_run(cmd, **kw):
-            assert "signal_closure_combine.py" in cmd[1]
+            assert "signals/signal_closure_combine.py" in cmd[1]
             assert "--close" in cmd and "a_b_0" in cmd
             serve.OPTIMIZE_CLOSURE_OUT.write_text(
                 json.dumps(_fake_signal_closure_combine_result()))

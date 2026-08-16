@@ -15,10 +15,53 @@
       },
       "coordinate_reference_system": "EPSG:3007",
       "coordinates": null,
+      "directional_reference": {
+        "aggregation": "annual_average_daily_two_way",
+        "bearing_to_edge": {
+          "N": "60786979_3575001205_0",
+          "S": "1455801464_18241874_0"
+        },
+        "comparison_periods": [
+          {
+            "approximate_split": "50/50",
+            "raw_counts": null,
+            "year": 2023
+          },
+          {
+            "approximate_split": "50/50",
+            "raw_counts": null,
+            "year": 2024
+          }
+        ],
+        "edge_bearing_deg": {
+          "1455801464_18241874_0": 174.4,
+          "60786979_3575001205_0": 352.1
+        },
+        "note": "Local published evidence for the AGGREGATE direction split at sensor 107. It outranks any transferred model for the same aggregate quantity, but constrains only the declared period mean. It is not 96 quarter-hour measurements; per-slot release shares remain an assumption and must be labelled as such.",
+        "period": {
+          "end": "2025-12-31",
+          "kind": "calendar_year",
+          "start": "2025-01-01",
+          "year": 2025
+        },
+        "raw_counts": {
+          "N": 3400,
+          "S": 3100
+        },
+        "source": "Goteborgs Stad trafikmangder catalogue (Power BI)",
+        "source_detail": "Published D-factor for station 107 Skanegatan",
+        "time_semantics": "period_aggregate_not_per_slot",
+        "total": 6500,
+        "verification": {
+          "date": "2026-08-13",
+          "method": "catalogue D-factor; edge orientation resolved from web/data/network.geojson segment bearings",
+          "status": "verified"
+        }
+      },
       "manual_snap": null,
       "measured_bearing": null,
       "measurement_semantics": "two_way_total",
-      "notes": "Genuinely two-way; split is estimated per time slot.",
+      "notes": "Genuinely two-way. Release uses the 50/50 fallback per slot plus any valid local period anchor; no per-slot direction is measured here.",
       "permitted_bearings": [
         "N",
         "S"
@@ -51,8 +94,8 @@
         "bearing_delta_deg": null,
         "distance_m": null,
         "edge_id": "60790253_60790252_0",
-        "measurement_status": "unmeasured_estimated",
-        "note": "The opposite carriageway is NOT measured. Its flow is estimated by the dirsplit model as an interval and enters the PFE as a level-2 hard bound, never as a level-1 target.",
+        "measurement_status": "unmeasured",
+        "note": "The opposite carriageway is NOT measured. Release demand applies neither a transferred dirsplit bound nor a soft dirsplit prior. It remains unconstrained by direction evidence; q stress may estimate it only in an explicitly diagnostic build.",
         "resolved_by": "node_reverse",
         "verification": {
           "date": "2026-08-06",
@@ -91,8 +134,8 @@
         "bearing_delta_deg": 173.3,
         "distance_m": 82.5,
         "edge_id": "559960490_1305379743_0",
-        "measurement_status": "unmeasured_estimated",
-        "note": "The opposite carriageway is NOT measured. Its flow is estimated by the dirsplit model as an interval and enters the PFE as a level-2 hard bound, never as a level-1 target.",
+        "measurement_status": "unmeasured",
+        "note": "The opposite carriageway is NOT measured. Release demand applies neither a transferred dirsplit bound nor a soft dirsplit prior. It remains unconstrained by direction evidence; q stress may estimate it only in an explicitly diagnostic build.",
         "resolved_by": "parallel_carriageway",
         "verification": {
           "date": "2026-08-06",
@@ -131,8 +174,8 @@
         "bearing_delta_deg": null,
         "distance_m": null,
         "edge_id": "26355153_26842525_0",
-        "measurement_status": "unmeasured_estimated",
-        "note": "The opposite carriageway is NOT measured. Its flow is estimated by the dirsplit model as an interval and enters the PFE as a level-2 hard bound, never as a level-1 target.",
+        "measurement_status": "unmeasured",
+        "note": "The opposite carriageway is NOT measured. Release demand applies neither a transferred dirsplit bound nor a soft dirsplit prior. It remains unconstrained by direction evidence; q stress may estimate it only in an explicitly diagnostic build.",
         "resolved_by": "node_reverse",
         "verification": {
           "date": "2026-08-06",
@@ -171,8 +214,8 @@
         "bearing_delta_deg": null,
         "distance_m": null,
         "edge_id": "96523321_26355153_0",
-        "measurement_status": "unmeasured_estimated",
-        "note": "The opposite carriageway is NOT measured. Its flow is estimated by the dirsplit model as an interval and enters the PFE as a level-2 hard bound, never as a level-1 target.",
+        "measurement_status": "unmeasured",
+        "note": "The opposite carriageway is NOT measured. Release demand applies neither a transferred dirsplit bound nor a soft dirsplit prior. It remains unconstrained by direction evidence; q stress may estimate it only in an explicitly diagnostic build.",
         "resolved_by": "node_reverse",
         "verification": {
           "date": "2026-08-06",
@@ -211,8 +254,8 @@
         "bearing_delta_deg": null,
         "distance_m": null,
         "edge_id": "91615277_26355153_0",
-        "measurement_status": "unmeasured_estimated",
-        "note": "The opposite carriageway is NOT measured. Its flow is estimated by the dirsplit model as an interval and enters the PFE as a level-2 hard bound, never as a level-1 target.",
+        "measurement_status": "unmeasured",
+        "note": "The opposite carriageway is NOT measured. Release demand applies neither a transferred dirsplit bound nor a soft dirsplit prior. It remains unconstrained by direction evidence; q stress may estimate it only in an explicitly diagnostic build.",
         "resolved_by": "node_reverse",
         "verification": {
           "date": "2026-08-06",

@@ -4,11 +4,13 @@ duplicated in full onto both of its directed edges (which would make a
 perfectly-calibrated direction look like it only delivers ~50%, an artifact
 found 2026-07-06 while investigating sensor 107 — see CLAUDE.md)."""
 
+import hashlib
 import json
 import sys
 import subprocess
 import xml.etree.ElementTree as ET
 from collections import Counter
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -100,6 +102,73 @@ class TestB1DateRangeContract:
             sys, "argv", ["build_sumo_demand.py", "--pfe-workers", "0"])
         with pytest.raises(SystemExit):
             bsd.parse_args()
+
+    def test_direction_stress_variants_are_explicit_opt_in(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py"])
+        assert bsd.parse_args().direction_stress_variants is False
+
+        monkeypatch.setattr(
+            sys, "argv", ["build_sumo_demand.py", "--direction-stress-variants"])
+        assert bsd.parse_args().direction_stress_variants is True
+
+    def test_release_slots_all_use_one_central_direction_case(self):
+        assert bsd.direction_variants(False) == [
+            ("", "edge_shares"), ("_v1", "edge_shares"),
+            ("_v2", "edge_shares")]
+        assert bsd.direction_prior_variants(False) == {
+            "": "prior", "_v1": "prior", "_v2": "prior"}
+
+    def test_diagnostic_slots_require_and_use_registered_quantiles(
+            self, monkeypatch):
+        monkeypatch.setattr(bsd, "has_split_quantiles", lambda: False)
+        with pytest.raises(ValueError, match="requires"):
+            bsd.direction_variants(True)
+
+        monkeypatch.setattr(bsd, "has_split_quantiles", lambda: True)
+        assert bsd.direction_variants(True) == [
+            ("", "edge_shares"), ("_v1", "edge_shares_q10"),
+            ("_v2", "edge_shares_q90")]
+        assert bsd.direction_prior_variants(True) == {
+            "": "prior", "_v1": "prior_low", "_v2": "prior_high"}
+
+    def test_central_model_bounds_the_unmeasured_opposite(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            bsd, "opposite_direction_bounds",
+            lambda *_args, **kwargs: calls.append(kwargs["split_key"]) or
+            [{"opposite": (0.0, 20.0)}])
+        variants = bsd.direction_variants(False)
+        assert bsd.direction_opposite_bounds_by_variant(
+            variants, {"measured": [10.0]}, 1, 0, False) == {
+                "": [{"opposite": (0.0, 20.0)}],
+                "_v1": [{"opposite": (0.0, 20.0)}],
+                "_v2": [{"opposite": (0.0, 20.0)}]}
+        assert calls == ["edge_shares"] * 3
+
+    def test_central_model_loads_provenance_checked_direction_priors(
+            self, monkeypatch):
+        monkeypatch.setattr(bsd, "ensure_bounds",
+                            lambda date, begin, end: {"bounds": {}})
+        monkeypatch.setattr(bsd, "ensure_priors",
+                            lambda _date: {"edges": {"opposite": {}}})
+
+        bounds, priors = bsd.direction_structural_inputs(
+            "06:00", "10:00", False)
+
+        assert bounds == {"bounds": {}}
+        assert "opposite" in priors["edges"]
+
+    def test_diagnostic_mode_can_load_transferred_direction_priors(
+            self, monkeypatch):
+        monkeypatch.setattr(bsd, "ensure_bounds",
+                            lambda date, begin, end: {"bounds": {}})
+        monkeypatch.setattr(bsd, "ensure_priors",
+                            lambda date: {"edges": {"opposite": {}}})
+
+        _bounds, priors = bsd.direction_structural_inputs(
+            "06:00", "10:00", True)
+
+        assert "opposite" in priors["edges"]
 
     def test_validate_range_rejects_year_boundary_crossing(self):
         with pytest.raises(ValueError, match="crosses"):
@@ -225,7 +294,8 @@ def write_direction_split(tmp_path, shares: dict[str, list[float]]) -> None:
     }))
 
 
-def test_build_targets_splits_two_way_total_by_direction_share(monkeypatch, tmp_path):
+def test_release_targets_use_trained_point_estimate(
+        monkeypatch, tmp_path):
     monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
     write_direction_split(tmp_path, {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96})
 
@@ -237,6 +307,91 @@ def test_build_targets_splits_two_way_total_by_direction_share(monkeypatch, tmp_
     assert targets[0]["edgeS"] == 40.0
     # the two directions must sum back to the raw measured total, not 2x it
     assert targets[0]["edgeN"] + targets[0]["edgeS"] == 100.0
+
+
+def test_diagnostic_quantile_keeps_registered_model_stress(monkeypatch, tmp_path):
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    (tmp_path / "direction_split.json").write_text(json.dumps({
+        "107": {
+            "edge_shares": {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96},
+            "edge_shares_q10": {"edgeN": [0.3] * 96, "edgeS": [0.7] * 96},
+        },
+    }))
+
+    assert dintake.load_direction_split()["edgeN"] == [0.6] * 96
+    assert dintake.load_direction_split("edge_shares_q10")["edgeN"] == [0.3] * 96
+
+
+def test_weekend_uses_point_fallback_and_broad_uncertainty(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    (tmp_path / "direction_split.json").write_text(json.dumps({
+        "107": {
+            "edge_shares": {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96},
+            "edge_shares_q10": {"edgeN": [0.3] * 96, "edgeS": [0.7] * 96},
+            "edge_shares_q90": {"edgeN": [0.7] * 96, "edgeS": [0.3] * 96},
+        },
+    }))
+    assert dintake.load_direction_split(
+        anchor_day="2025-09-20")["edgeN"] == [0.5] * 96
+    assert dintake.load_direction_split(
+        "edge_shares_q10", anchor_day="2025-09-20")["edgeN"] == [0.1] * 96
+    assert dintake.load_direction_split(
+        "edge_shares_q90", anchor_day="2025-09-20")["edgeN"] == [0.9] * 96
+
+
+def test_diagnostic_quantiles_must_be_complete_for_every_sensor(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    (tmp_path / "direction_split.json").write_text(json.dumps({
+        "107": {
+            "edge_shares": {"edgeN": [0.5] * 96, "edgeS": [0.5] * 96},
+            "edge_shares_q10": {"edgeN": [0.3] * 96, "edgeS": [0.7] * 96},
+            "edge_shares_q90": {"edgeN": [0.7] * 96, "edgeS": [0.3] * 96},
+        },
+        "134": {
+            "edge_shares": {"edgeE": [0.5] * 96, "edgeW": [0.5] * 96},
+            "edge_shares_q10": {"edgeE": [0.4] * 96, "edgeW": [0.6] * 96},
+        },
+    }))
+
+    with pytest.raises(ValueError, match="134.*edge_shares_q90"):
+        dintake.has_split_quantiles()
+
+
+def test_direction_arm_rejects_non_complementary_or_short_series(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    split = tmp_path / "direction_split.json"
+    split.write_text(json.dumps({
+        "107": {"edge_shares": {
+            "edgeN": [0.6] * 96,
+            "edgeS": [0.5] * 96,
+        }},
+    }))
+    with pytest.raises(ValueError, match="does not sum to 1"):
+        dintake.load_direction_split()
+
+    split.write_text(json.dumps({
+        "107": {"edge_shares": {
+            "edgeN": [0.5] * 95,
+            "edgeS": [0.5] * 95,
+        }},
+    }))
+    with pytest.raises(ValueError, match="exactly 96 slots"):
+        dintake.load_direction_split()
+
+
+def test_release_metadata_names_the_trained_direction_policy():
+    meta = bsd.demand_metadata(
+        start_date="2025-09-16", days=1, source="historical",
+        begin="06:00", end="10:00", qi_start=2472, n_intervals=16,
+        epoch_sim=pd.Timestamp("2025-09-16 06:00"),
+        direction_split="trained_q50+local_anchor+seed_replicas",
+        n_variants=3,
+    )
+    assert "data-trained q50" in meta["note"]
+    assert "50/50 is only" in meta["note"]
 
 
 def test_build_targets_single_direction_sensor_takes_full_count(monkeypatch, tmp_path):
@@ -310,7 +465,7 @@ def test_calibrated_agent_summary_reports_real_purpose_counts(tmp_path):
     }
 
 
-def test_write_counts_splits_two_way_total_by_direction_share(monkeypatch, tmp_path):
+def test_write_counts_uses_trained_share(monkeypatch, tmp_path):
     monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
     write_direction_split(tmp_path, {"edgeN": [0.6] * 96, "edgeS": [0.4] * 96})
 
@@ -323,6 +478,103 @@ def test_write_counts_splits_two_way_total_by_direction_share(monkeypatch, tmp_p
     counts = {e.get("id"): float(e.get("count")) for e in root.find("interval")}
     assert counts["edgeN"] == 60.0
     assert counts["edgeS"] == 40.0
+
+
+def _counts(tmp_path, sensor_edges, flows, **kwargs):
+    out_path = tmp_path / "counts.xml"
+    bsd.write_counts(flows, sensor_edges, qi_start=0, n_intervals=1,
+                     out_path=out_path, **kwargs)
+    root = ET.parse(out_path).getroot()
+    return {e.get("id"): float(e.get("count")) for e in root.find("interval")}
+
+
+def test_write_counts_never_splits_a_single_direction_station(monkeypatch,
+                                                              tmp_path):
+    """A directional station's value IS that direction's count.
+
+    build_targets grew this guard on 2026-08-06; write_counts never did.
+    Since the direction model started predicting BOTH carriageways at every
+    station, the measured edge of a single-direction sensor resolves to
+    about 0.5 in the split file, so a measured 50 was written out as ~24 --
+    silently, and at 100% GEH against the halved target. Measured on the
+    real artifacts: sensor 1076's edge carries a modelled share of 0.48.
+    """
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    write_direction_split(tmp_path, {
+        "measured": [0.48] * 96,
+        "opposite": [0.52] * 96,
+    })
+
+    counts = _counts(tmp_path, {"1076": ["measured"]}, {"measured": [50.0]})
+    assert counts["measured"] == 50.0
+
+
+def test_write_counts_applies_the_published_local_anchor(monkeypatch,
+                                                          tmp_path):
+    """The routeSampler branch must not disagree with the PFE branch.
+
+    Both build the same measured Level-1 targets from the same inputs; an
+    anchor reaching one and not the other would calibrate the two branches
+    to different numbers.
+    """
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    registry = tmp_path / "sensors.json"
+    monkeypatch.setattr(dintake, "SENSOR_REGISTRY_PATH", registry)
+    registry.write_text(Path("data_in/sensors.json").read_text())
+
+    n_edge = "60786979_3575001205_0"
+    s_edge = "1455801464_18241874_0"
+    write_direction_split(tmp_path, {n_edge: [0.5] * 96, s_edge: [0.5] * 96})
+    flows = {n_edge: [200.0] * 96, s_edge: [200.0] * 96}
+    sensor_edges = {"107": [n_edge, s_edge]}
+
+    plain = _counts(tmp_path, sensor_edges, flows)
+    assert plain[n_edge] == plain[s_edge] == 100.0
+
+    anchored = _counts(tmp_path, sensor_edges, flows,
+                       anchor_day="2025-09-16")
+    assert anchored[n_edge] > anchored[s_edge]
+    # the measured two-way total survives the split
+    assert anchored[n_edge] + anchored[s_edge] == pytest.approx(200.0)
+    assert anchored[n_edge] / 200.0 == pytest.approx(3400 / 6500, abs=5e-3)
+
+
+def test_write_counts_leaves_a_forecast_year_unanchored(monkeypatch, tmp_path):
+    """107's reference declares calendar 2025; 2027 is outside it."""
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    registry = tmp_path / "sensors.json"
+    monkeypatch.setattr(dintake, "SENSOR_REGISTRY_PATH", registry)
+    registry.write_text(Path("data_in/sensors.json").read_text())
+
+    n_edge = "60786979_3575001205_0"
+    s_edge = "1455801464_18241874_0"
+    write_direction_split(tmp_path, {n_edge: [0.5] * 96, s_edge: [0.5] * 96})
+    flows = {n_edge: [200.0] * 96, s_edge: [200.0] * 96}
+    sensor_edges = {"107": [n_edge, s_edge]}
+
+    assert _counts(tmp_path, sensor_edges, flows, anchor_day="2027-09-14") == \
+        _counts(tmp_path, sensor_edges, flows)
+
+
+def test_both_demand_branches_agree_on_the_anchored_targets(monkeypatch,
+                                                             tmp_path):
+    """PFE and routeSampler must produce the SAME measured targets."""
+    monkeypatch.setattr(dintake, "SUMO_DIR", tmp_path)
+    registry = tmp_path / "sensors.json"
+    monkeypatch.setattr(dintake, "SENSOR_REGISTRY_PATH", registry)
+    registry.write_text(Path("data_in/sensors.json").read_text())
+
+    n_edge = "60786979_3575001205_0"
+    s_edge = "1455801464_18241874_0"
+    write_direction_split(tmp_path, {n_edge: [0.5] * 96, s_edge: [0.5] * 96})
+    flows = {n_edge: [200.0] * 96, s_edge: [200.0] * 96}
+    sensor_edges = {"107": [n_edge, s_edge]}
+
+    counts = _counts(tmp_path, sensor_edges, flows, anchor_day="2025-09-16")
+    targets = dintake.build_targets(flows, sensor_edges, 0, 1,
+                                    anchor_day="2025-09-16")[0]
+    for edge in (n_edge, s_edge):
+        assert counts[edge] == pytest.approx(targets[edge], abs=0.05)
 
 
 def test_clear_stale_scenarios_removes_only_json(monkeypatch, tmp_path):
@@ -756,6 +1008,18 @@ class TestGracefulDegradationOnSubprocessFailure:
         result = bsd.ensure_priors("2025-09-16")
         assert result == {"edges": {}}
 
+    def test_direction_prior_cache_is_bound_to_the_model(self, tmp_path):
+        model = tmp_path / "model.pkl"
+        model.write_bytes(b"trained-model")
+        digest = hashlib.sha256(model.read_bytes()).hexdigest()
+        data = {"schema_version": "dirsplit_prior_v2",
+                "date": "2025-09-16", "model_sha256": digest}
+        assert dpriors.direction_priors_are_current(
+            data, "2025-09-16", model_path=model)
+        model.write_bytes(b"retrained-model")
+        assert not dpriors.direction_priors_are_current(
+            data, "2025-09-16", model_path=model)
+
     def test_run_tool_prints_stderr_tail_before_exiting(self, monkeypatch, tmp_path, capsys):
         def fake_run(*args, **kwargs):
             result = subprocess.CompletedProcess(args, 1, stdout="", stderr="the real error")
@@ -955,7 +1219,7 @@ class TestVariantPublication:
     """All direction variants must publish atomically as one demand build."""
 
     def test_rejected_variant_keeps_every_previous_output(self, monkeypatch, tmp_path):
-        import pfe
+        from traffic_sim.demand import pfe
 
         final_q50 = tmp_path / "calibrated.rou.xml"
         final_q10 = tmp_path / "calibrated_v1.rou.xml"
@@ -990,7 +1254,12 @@ class TestVariantPublication:
                 # and result shapes.
                 if worker is dcal._run_pfe_counts_job:
                     for suffix, quarter in tasks:
-                        yield suffix, quarter, None
+                        # q50's packed integer count now defines the exact
+                        # population invariant used by later stress arms.
+                        yield suffix, quarter, (
+                            np.array([0], dtype=np.int64),
+                            np.array([1], dtype=np.int64),
+                            np.dtype(np.int64).str, 1, True)
                     return
                 for suffix, key, quarter in tasks:
                     yield suffix, key, quarter, np.array([1.0]), pfe.RUNG_CLEAN

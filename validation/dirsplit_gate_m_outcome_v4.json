@@ -1,0 +1,61 @@
+{
+ "protocol": "dirsplit_gate_m_v3",
+ "selection_rule": "simplest_defensible_v2",
+ "gate_m": "BASELINE",
+ "winner": "constant_5050",
+ "recorded": "2026-08-14",
+ "release_evidence": false,
+ "supersedes": "validation/dirsplit_gate_m_outcome_v3.json",
+ "reason": "No candidate won a primary group under every required fold kind without significantly losing one; the simplest incumbent remains constant_5050.",
+ "report": {
+  "path": "data/dirsplit/gate_m_report.json",
+  "content_key": "e2c11f9a955a7659c30c3d3cca10914f2051bfc3cbc19b605d3ec07b132a2380",
+  "runtime_seconds": 3488.12,
+  "command": "python3 -W error::RuntimeWarning -m dirsplit.evaluate --out /tmp/gs-gate-m-v3-dataset-v2.json"
+ },
+ "dataset": {
+  "protocol": "dirsplit_training_table_v2",
+  "rows": 247464,
+  "usable_rows": 232500,
+  "evaluated_rows": 52383,
+  "stations": 97,
+  "day_blocks_in_manifest": 5524,
+  "evaluated_station_date_blocks": 2403,
+  "raw_volume_files": 188,
+  "source_content_key": "866a1f52136f79d7e6bf3cddf7c3df0eff931d8b5f5ed8769d6a598b22d8add6",
+  "required_folds_present": [
+   "blocked_date",
+   "leave_city_out",
+   "leave_station_out"
+  ]
+ },
+ "pooled_all_mae": {
+  "constant_5050": {
+   "blocked_date": 0.0768,
+   "leave_city_out": 0.0768,
+   "leave_station_out": 0.0765
+  },
+  "shrunk_dfactor": {
+   "blocked_date": 0.0779,
+   "leave_city_out": 0.0745,
+   "leave_station_out": 0.0749
+  },
+  "beta_binomial_dfactor": {
+   "blocked_date": 0.0786,
+   "leave_city_out": 0.0748,
+   "leave_station_out": 0.0749
+  },
+  "similarity_weighted_lgbm_no_profile": {
+   "blocked_date": 0.0772,
+   "leave_city_out": 0.0779,
+   "leave_station_out": 0.0760
+  },
+  "similarity_weighted_lgbm": {
+   "blocked_date": 0.0773,
+   "leave_city_out": 0.0779,
+   "leave_station_out": 0.0762
+  }
+ },
+ "interpretation": "The conditional direction models did not demonstrate robust transfer across geography, new stations and future dates. BASELINE is a decided Gate M result, not an inconclusive fallback. It does not by itself close the plan: Gate S still decides whether direction uncertainty changes a closure decision.",
+ "consequence": "If Gate S is NO, take Exit A: 50/50 plus sensor 107's local anchor and no closure scenario expansion. If Gate S is YES, only the residual stress branch centred on the baseline is eligible for a conditional offline prototype."
+}

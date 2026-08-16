@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from statistics import median
 
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import assess_output_fit
@@ -170,6 +171,57 @@ def _simulation_section(baseline: dict | None) -> dict:
     }
 
 
+def _baseline_build_id(baseline: dict | None) -> str | None:
+    """Return the demand identity carried by a published scenario.
+
+    New scenario payloads state the identity in ``scenario.build_id`` while
+    older versioned payloads may only carry it in ``scenario_spec``.  The
+    demand signature is the final backwards-compatible source because it is
+    the content identity used to invalidate stale scenarios.
+    """
+    if not isinstance(baseline, dict):
+        return None
+    scenario = baseline.get("scenario")
+    spec = baseline.get("scenario_spec")
+    candidates = (
+        scenario.get("build_id") if isinstance(scenario, dict) else None,
+        spec.get("demand_build_id") if isinstance(spec, dict) else None,
+        scenario.get("demand_signature") if isinstance(scenario, dict) else None,
+        baseline.get("demand_signature"),
+    )
+    return next((str(value) for value in candidates if value), None)
+
+
+def _scenario_identity_section(meta: dict | None,
+                               baseline: dict | None) -> dict:
+    """Fail closed when scenario evidence belongs to another demand build."""
+    demand_id = (meta or {}).get("build_id")
+    baseline_id = _baseline_build_id(baseline)
+    result = {
+        "demand_build_id": demand_id,
+        "baseline_demand_build_id": baseline_id,
+        "gate": "baseline och demand_meta måste bära samma build-id innan "
+                "simulerings- eller sensor-output-evidens får användas",
+    }
+    if baseline is None:
+        return {"status": "missing", "reason": "baseline.json saknas", **result}
+    if demand_id is None or baseline_id is None:
+        return {
+            "status": "warn",
+            "reason": "build-id saknas i demand_meta eller baseline; "
+                      "scenarioevidensen kan inte bindas till aktiv demand",
+            **result,
+        }
+    if str(demand_id) != baseline_id:
+        return {
+            "status": "warn",
+            "reason": "inaktuell baseline för aktiv demand: "
+                      f"baseline={baseline_id}, demand={demand_id}",
+            **result,
+        }
+    return {"status": "pass", **result}
+
+
 def _sensor_output_section(meta: dict | None,
                            baseline: dict | None) -> dict:
     """Report fit against SUMO edgeData, not only PFE's pre-SUMO targets."""
@@ -229,10 +281,64 @@ def _multi_day_section(meta: dict | None, baseline: dict | None) -> dict:
     }
 
 
-def _held_out_section(loso: dict | None) -> dict:
+def _held_out_identity_reasons(contract: dict,
+                               meta: dict | None,
+                               expected_mode: str) -> list[str]:
+    """Return exact reasons a held-out report is not about the live demand.
+
+    Spatial and temporal LOSO are characterization rather than release gates,
+    but characterization from another pool/window must still fail closed.  A
+    stale ratio is not made current merely by labelling it ``info``.
+    """
+    expected_reference = (meta or {}).get("epoch_sim")
+    expected_through = ((meta or {}).get("build_options") or {}).get(
+        "through_share_target")
+    checks = (
+        ("candidate pool",
+         contract.get("candidate_pool_sha256"),
+         sha256_file(SUMO_DIR / "candidates.rou.xml")),
+        ("network",
+         contract.get("network_sha256"),
+         sha256_file(SUMO_DIR / "net.net.xml")),
+        ("reference window",
+         contract.get("reference_window_start"),
+         expected_reference),
+        ("through-share target",
+         contract.get("through_share_target"),
+         expected_through),
+        ("evaluation mode",
+         contract.get("evaluation_mode"),
+         expected_mode),
+        ("interval count",
+         contract.get("n_intervals"),
+         (meta or {}).get("n_intervals")),
+    )
+    reasons = [
+        f"{label}: report={recorded!r}, current={current!r}"
+        for label, recorded, current in checks
+        if recorded is None or current is None or str(recorded) != str(current)
+    ]
+    if contract.get("source") != (meta or {}).get("source"):
+        reasons.append(
+            f"source: report={contract.get('source')!r}, "
+            f"current={(meta or {}).get('source')!r}")
+    return reasons
+
+
+def _held_out_section(loso: dict | None,
+                      meta: dict | None) -> dict:
     if not loso or not loso.get("stations"):
         return {"status": "missing", "reason": "loso_report.json saknas — "
                 "kör validate_sim.py"}
+    contract = loso.get("comparison_contract") or {}
+    stale_reasons = _held_out_identity_reasons(
+        contract, meta, "same_window_loso")
+    if stale_reasons:
+        return {
+            "status": "missing",
+            "reason": "spatial LOSO är inaktuellt för nuvarande release: "
+                      + "; ".join(stale_reasons),
+        }
     ratios = {}
     for sid, st in sorted(loso["stations"].items()):
         for edge, ed in st.get("edges", {}).items():
@@ -244,9 +350,10 @@ def _held_out_section(loso: dict | None) -> dict:
         # geometry (documented in IMPROVEMENT_PLAN.md: 1076's 0.05 is honest
         # parsimony). Displayed, never blocking.
         "status": "info",
+        "protocol": contract.get("protocol"),
         "window": loso.get("window"),
         "ratios": ratios,
-        "median_ratio": vals[len(vals) // 2] if vals else None,
+        "median_ratio": median(vals) if vals else None,
         "note": "utelämnad-station-återskapande; karakterisering, inte grind "
                 "— extrema veck kan spegla sensorns informationsisolering, "
                 "inte modellfel",
@@ -262,32 +369,8 @@ def _temporal_holdout_section(report: dict | None,
                       "validate_sim.py --holdout-date YYYY-MM-DD",
         }
     contract = report.get("comparison_contract") or {}
-    expected_reference = (meta or {}).get("epoch_sim")
-    expected_through = ((meta or {}).get("build_options") or {}).get(
-        "through_share_target")
-    stale_reasons = []
-    checks = (
-        ("candidate pool",
-         contract.get("candidate_pool_sha256"),
-         sha256_file(SUMO_DIR / "candidates.rou.xml")),
-        ("network",
-         contract.get("network_sha256"),
-         sha256_file(SUMO_DIR / "net.net.xml")),
-        ("reference window",
-         contract.get("reference_window_start"),
-         expected_reference),
-        ("through-share target",
-         contract.get("through_share_target"),
-         expected_through),
-    )
-    for label, recorded, current in checks:
-        if recorded is None or current is None or str(recorded) != str(current):
-            stale_reasons.append(
-                f"{label}: report={recorded!r}, current={current!r}")
-    if contract.get("source") != (meta or {}).get("source"):
-        stale_reasons.append(
-            f"source: report={contract.get('source')!r}, "
-            f"current={(meta or {}).get('source')!r}")
+    stale_reasons = _held_out_identity_reasons(
+        contract, meta, "temporal_holdout")
     if stale_reasons:
         return {
             "status": "missing",
@@ -321,7 +404,7 @@ def _temporal_holdout_section(report: dict | None,
         "minimum_coverage": contract.get("minimum_temporal_coverage"),
         "observed_quarters": observed,
         "ratios": ratios,
-        "median_ratio": values[len(values) // 2] if values else None,
+        "median_ratio": median(values) if values else None,
         "note": "fryst kandidatpool/nät/priorer utvärderade på en annan "
                 "historisk dag; utelämnad stations egna värden används "
                 "endast för jämförelse",
@@ -334,14 +417,24 @@ def assemble() -> dict:
     loso = _load(WEB_DATA / "loso_report.json")
     temporal = _load(WEB_DATA / "temporal_holdout_report.json")
 
+    scenario_identity = _scenario_identity_section(meta, baseline)
+    current_baseline = baseline if scenario_identity["status"] == "pass" else None
+    if baseline is not None and current_baseline is None:
+        stale_reason = "scenarioevidens används inte: " + scenario_identity["reason"]
+        simulation = {"status": "missing", "reason": stale_reason}
+        sensor_output = {"status": "missing", "reason": stale_reason}
+    else:
+        simulation = _simulation_section(current_baseline)
+        sensor_output = _sensor_output_section(meta, current_baseline)
     sections = {
         "counts_fit": _counts_section(meta),
         "structure": _structure_section(meta),
         "purposes": _purpose_section(meta),
-        "simulation": _simulation_section(baseline),
-        "sensor_output": _sensor_output_section(meta, baseline),
-        "multi_day": _multi_day_section(meta, baseline),
-        "held_out": _held_out_section(loso),
+        "scenario_identity": scenario_identity,
+        "simulation": simulation,
+        "sensor_output": sensor_output,
+        "multi_day": _multi_day_section(meta, current_baseline),
+        "held_out": _held_out_section(loso, meta),
         "temporal_holdout": _temporal_holdout_section(temporal, meta),
     }
     gated = [s for s in sections.values() if s["status"] in ("pass", "warn")]

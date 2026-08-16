@@ -5,6 +5,7 @@ shapely>=2.0
 pyproj>=3.5
 lightgbm>=4.0
 scikit-learn>=1.4
+scipy>=1.11,<1.17
 numpy>=1.26
 numba==0.60.0
 matplotlib>=3.8

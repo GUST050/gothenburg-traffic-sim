@@ -1,0 +1,114 @@
+{
+ "protocol": "dirsplit_direction_decision_sensitivity_v2",
+ "gate_s": "NOT_RUN",
+ "release_evidence": false,
+ "recorded": "2026-08-14",
+ "supersedes": "validation/dirsplit_direction_sensitivity_blocker_v2.json",
+ "summary": "Gate S remains NOT_RUN. Two things changed since v2. First, review found the repaired decision rule could still return a FALSE YES by three separate routes, and its seed-variation check was grouped so that it could not detect the very defect it existed to catch; all are fixed. Second, and more consequential: the q10/q90 artifacts do not isolate the direction axis at all, so Gate S is now BLOCKED ON EVIDENCE QUALITY as well as on network egress. Rebuilding them is a prerequisite, not a nicety.",
+ "the_new_blocking_finding": {
+  "id": "S5",
+  "severity": "high",
+  "claim": "The current q10/q50/q90 stress cases change TOTAL DEMAND as well as its direction, so a Gate S difference measured on them cannot be attributed to direction.",
+  "mechanism": "dirsplit/predict.py writes edge_shares_q10 as (e0 -> s10, e1 -> 1 - s90) and edge_shares_q90 as (e0 -> s90, e1 -> 1 - s10). Each outer pair therefore sums to 1 -/+ (s90 - s10) rather than 1.",
+  "measured": {
+   "command": "measure_pair_sum_isolation(Path('sumo'))",
+   "on": "sumo/direction_split.json rebuilt in this session from the tracked data/dirsplit/model.pkl",
+   "max_abs_pair_sum_deviation": 0.297,
+   "tolerance": 0.001,
+   "q50": "within tolerance (sums to exactly 1)",
+   "q10": "outside tolerance",
+   "q90": "outside tolerance"
+  },
+  "why_it_is_fatal_to_the_question": "Gate S asks whether the DIRECTION axis changes a closure decision. If the arms also differ in how much traffic exists, a measured difference has two possible causes and nothing afterwards can separate them. A YES would be unattributable and a NO would be unearned.",
+  "how_it_is_enforced_now": "measure_pair_sum_isolation runs at registration time, its result is recorded inside the frozen registration (and therefore inside the content key), main() prints a loud warning, and decide_gate_s returns INCONCLUSIVE when the registration does not certify isolation. A registration that never measured it counts as NOT isolating.",
+  "prerequisite_for_a_meaningful_run": "Rebuild the q artifacts with a pair-sum-preserving construction, so each station's two directed shares sum to 1.0 in every slot of every stress case. That work belongs to Fas 2 and was NOT performed here."
+ },
+ "decision_rule_defects_found_and_fixed": [
+  {
+   "id": "S6",
+   "severity": "high",
+   "was": "A ranking key that varied across seeds was appended to material_reasons, so it produced gate_s = YES.",
+   "why_wrong": "The deployed ranking key comes from closure_disruption, which is demand-side and congestion-independent, so it CANNOT legitimately vary with the seed. When it does, the matrix has not isolated direction from simulator noise and neither answer is available. Turning a broken measurement into a YES is the worst failure mode this gate has, because YES is what unlocks product work.",
+   "now": "INCONCLUSIVE, with the violations recorded in the artifact.",
+   "pinned_by": "tests/test_direction_decision_sensitivity.py::TestTheSeedAxisIsChecked::test_a_ranking_key_that_moves_across_seeds_is_INCONCLUSIVE_not_YES"
+  },
+  {
+   "id": "S7",
+   "severity": "high",
+   "was": "A candidate disqualified by the no-detour rule in EVERY stress case could still open the gate through its cost spread.",
+   "why_wrong": "rank_closures never ranks a disqualified candidate against a viable one — a schedule that severs someone's destination is refused whatever it costs. A candidate refused in every case has the same fate in every case, so its cost spread cannot change a decision. Crediting direction with moving a number the policy does not read is a false YES.",
+   "now": "Such a candidate is marked decision_relevant: false and cannot be material. If EVERY candidate is disqualified in every case, no viable set was ever formed and the outcome is INCONCLUSIVE rather than NO — there was no decision for direction to change.",
+   "pinned_by": "tests/test_direction_decision_sensitivity.py::TestDisqualifiedCandidatesDoNotOpenTheGate"
+  },
+  {
+   "id": "S8",
+   "severity": "high",
+   "was": "seed_axis_varied grouped observations by stress case alone, pooling all candidates.",
+   "why_wrong": "Two candidates close different edges and legitimately insert different numbers of vehicles. Pooling them lets a candidate-to-candidate difference stand in for a seed difference, so a matrix in which every seed was byte-identical still reported varied: true — defeating the exact check that exists to catch an inert seed axis.",
+   "now": "Grouped by (stress case, candidate), and EVERY group must vary. One group that happens to move cannot vouch for a matrix in which the rest were identical runs.",
+   "pinned_by": "tests/test_direction_decision_sensitivity.py::TestTheSeedAxisIsChecked::test_the_inertness_check_groups_by_case_AND_candidate"
+  },
+  {
+   "id": "S9",
+   "severity": "medium",
+   "was": "A closure window that did not fit the demand build was silently replaced by the whole demand window.",
+   "why_wrong": "That is the one thing a preregistration exists to prevent: a four-hour closure would have run for twenty-four and nothing in the artifact would have said so.",
+   "now": "closure_window raises RegistrationError for a window outside the build, a window only partly overlapping it, and a reversed window. No clamp, no substitution.",
+   "pinned_by": "tests/test_direction_decision_sensitivity.py::TestClosureWindowResolution"
+  },
+  {
+   "id": "S10",
+   "severity": "low",
+   "was": "survives_own_closure returned True when sumolib was unavailable, so the topology filter failed OPEN.",
+   "why_wrong": "An unverifiable filter is not a passed filter. A checkout without SUMO would have frozen a selection containing edges that sever their own downstream pocket.",
+   "now": "load_network raises rather than degrading, the network is read once and reused, and select_candidates refuses to return a short list.",
+   "pinned_by": "tests/test_direction_decision_sensitivity.py::TestTheTopologyFilterFailsClosed"
+  },
+  {
+   "id": "S11",
+   "severity": "low",
+   "was": "The registered date was never checked against the demand build's own date.",
+   "why_wrong": "A registration naming 2025-09-16 while the loaded demand is a 2027 forecast day describes an experiment nobody ran.",
+   "now": "validate_registered_date compares against demand_meta.json's date/start_date BEFORE candidate selection runs, and refuses on mismatch.",
+   "pinned_by": "tests/test_direction_decision_sensitivity.py::TestTheRegisteredDateIsVerified"
+  }
+ ],
+ "still_blocked_here": {
+  "network": {
+   "stage": "build_candidates.py, invoked by build_sumo_demand.py",
+   "cause": "the candidate-route generator fetches OSM POI activity mass from the Overpass API, and SCB DeSO population from geodata.scb.se; this session's policy-enforcing egress proxy denies both",
+   "verified_on": "2026-08-14",
+   "proxy_evidence": "GET $HTTPS_PROXY/__agentproxy/status reports recentRelayFailures kind=connect_rejected, detail='gateway answered 403 to CONNECT (policy denial or upstream failure)' for overpass-api.de:443 and geodata.scb.se:443",
+   "policy_note": "/root/.ccr/README.md states organization policy denials (403/407) must be reported rather than retried, so no workaround was attempted"
+  },
+  "evidence_quality": {
+   "cause": "S5 above: the q10/q90 artifacts do not isolate direction",
+   "consequence": "Even on a machine that HAS the three route files, running Gate S today would produce INCONCLUSIVE by design, because the tool now refuses to decide on confounded stress cases. That refusal is correct: the alternative is an unattributable answer."
+  },
+  "registration": "NOT frozen against the real artifacts. Freezing a registration with a placeholder candidate set would defeat the point of preregistering.",
+  "outcome": "NOT written. No Gate S result is claimed and none was fabricated."
+ },
+ "verified_locally": {
+  "sumo_net": "built from the tracked web/data/graph.graphml: sumo/net.net.xml, 7125 indexed edges",
+  "direction_split": "built from the tracked data/dirsplit/model.pkl: sumo/direction_split.json, 6 sensors, both directions, q10/q50/q90",
+  "spec_validation": "all 36 (case x seed x candidate) ScenarioSpecs built by the tool were accepted by run_scenario.validate_scenario_spec and validate_variant_coverage, and resolved to three DISTINCT route files",
+  "registration_freeze": "completed against a synthetic route set on the real network; the direction-isolation warning fired as designed",
+  "guards": "a mismatched --date and an invalid closure window were both refused with an actionable message"
+ },
+ "exact_reproduction": {
+  "environment": [
+   "pip install eclipse-sumo",
+   "export SUMO_HOME=$(python3 -c 'import sumo,os;print(os.path.dirname(sumo.__file__))')",
+   "export PYTHONPATH=$SUMO_HOME/tools",
+   "export PATH=$SUMO_HOME/bin:$PATH"
+  ],
+  "inputs_that_succeed": ["python3 build_sumo_net.py", "python3 -m dirsplit.predict"],
+  "input_that_is_blocked": "python3 build_sumo_demand.py --begin 06:00 --end 10:00",
+  "prerequisite_before_a_meaningful_gate_s": "rebuild q10/q90 with a pair-sum-preserving construction (Fas 2)",
+  "then": [
+   "python3 tools/measure_direction_decision_sensitivity.py --freeze-only",
+   "python3 tools/measure_direction_decision_sensitivity.py"
+  ]
+ },
+ "gate_matrix": "Gate S is neither NO nor YES. Gate M is separately INCONCLUSIVE (validation/dirsplit_gate_m_outcome_v3.json). Neither axis of the four-quadrant table is decided, so Fas 2, Fas 3 and Fas 4 remain closed."
+}

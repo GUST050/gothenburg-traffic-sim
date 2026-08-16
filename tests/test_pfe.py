@@ -10,15 +10,17 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import scipy
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import pfe
-from pfe import (Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
-                 RUNG_LP_FALLBACK, RUNG_RELAX_TOL4X, calibrate,
-                 build_touch_index, largest_remainder_round, path_size_weights,
-                 solve_calibration_intervals, solve_interval,
-                 solve_interval_entropy, solve_interval_with_relaxation,
-                 solve_interval_with_structure_guard, write_calibration_report)
+from traffic_sim.demand import pfe
+from traffic_sim.demand.pfe import (
+    Candidate, EPS_PARSIMONY, RUNG_CLEAN, RUNG_INFEASIBLE,
+    RUNG_LP_FALLBACK, RUNG_RELAX_TOL4X, calibrate,
+    build_touch_index, largest_remainder_round, path_size_weights,
+    solve_calibration_intervals, solve_interval,
+    solve_interval_entropy, solve_interval_with_relaxation,
+    solve_interval_with_structure_guard, write_calibration_report)
 from traffic_sim.demand.structure_caps import integer_structure_cap
 
 
@@ -718,13 +720,34 @@ class TestRouteIndexGroups:
         assert rung == ref_rung
         assert sol == pytest.approx(ref)
 
+    def test_direction_stress_fixed_total_survives_relaxation(self):
+        # The impossible Level-2 bound is allowed to yield to the measured
+        # count, but the experiment's population control is not: q stress
+        # arms must retain q50's exact total on every ladder rung.
+        cands = [cand("m"), cand("unmeasured")]
+        sol, rung = pfe.solve_interval_with_structure_guard(
+            cands, {"m": 10.0}, {"unmeasured": (0.0, 0.0)}, {},
+            fixed_total=15,
+        )
+
+        assert sol is not None
+        assert rung == pfe.RUNG_NOBND_TOL1
+        assert sol.sum() == pytest.approx(15.0, abs=1e-6)
+
+    @pytest.mark.parametrize("invalid", [True, -1, 2.5, "2"])
+    def test_direction_stress_fixed_total_requires_an_exact_integer(self,
+                                                                    invalid):
+        with pytest.raises(ValueError, match="non-negative integer"):
+            pfe.solve_interval_with_structure_guard(
+                [cand("m")], {"m": 1.0}, {}, {}, fixed_total=invalid)
+
     def test_integer_repair_enforces_a_group_cap_preserving_measured(self):
         # The rounding-stage leak this exists for: a rounded vector that
         # satisfies the measured count but puts too much of it on the
         # capped group must be repaired by shifting whole vehicles to
         # uncapped routes serving the SAME measured edge — never by
         # changing the measured total.
-        from pfe import repair_integer_bounds
+        from traffic_sim.demand.pfe import repair_integer_bounds
         cands = [cand("m", "stub"), cand("m", "onward")]
         counts = np.array([8, 2])   # group route carries 8 of 10
         repaired = repair_integer_bounds(
@@ -735,17 +758,65 @@ class TestRouteIndexGroups:
         assert repaired[0] + repaired[1] == 10
 
     def test_integer_repair_group_infeasible_returns_none(self):
-        from pfe import repair_integer_bounds
+        from traffic_sim.demand.pfe import repair_integer_bounds
         cands = [cand("m", "stub")]          # only ONE route serves m
         counts = np.array([10])
         assert repair_integer_bounds(
             counts, cands, {"m": 10.0}, {}, groups=[([0], 0.0, 3.0)]) is None
 
     def test_integer_repair_no_groups_no_bounds_is_a_noop(self):
-        from pfe import repair_integer_bounds
+        from traffic_sim.demand.pfe import repair_integer_bounds
         cands = [cand("m")]
         counts = np.array([5])
         assert (repair_integer_bounds(counts, cands, {"m": 5.0}, {}) == counts).all()
+
+    def test_integer_repair_disables_nested_highs_threads(self, monkeypatch):
+        """The process-parallel publisher must not fork HiGHS executors.
+
+        This relies on SciPy's pre-1.17 pass-through of HiGHS options.  Both
+        dependency entry points are pinned because 1.17 can return status 4
+        before solving when this otherwise valid backend option is supplied.
+        """
+        real_milp = pfe.milp
+        seen_options = []
+        seen_results = []
+
+        def recording_milp(*args, **kwargs):
+            seen_options.append(dict(kwargs.get("options", {})))
+            result = real_milp(*args, **kwargs)
+            seen_results.append(result)
+            return result
+
+        monkeypatch.setattr(pfe, "milp", recording_milp)
+        repaired = pfe.repair_integer_bounds(
+            np.array([8, 2]),
+            [cand("m", "stub"), cand("m", "onward")],
+            {"m": 10.0}, {}, groups=[([0], 0.0, 3.0)],
+        )
+
+        # Report the solver's own verdict rather than a bare `is not None`.
+        # Under SciPy >= 1.17 the forwarded `threads` option makes the call
+        # return status 4 / "(HiGHS Status 0: Not Set)" before solving, and the
+        # unexplained None that follows sends readers hunting through the
+        # publisher instead of at the environment. Name the cause here.
+        if repaired is None and seen_results:
+            failed = seen_results[0]
+            raise AssertionError(
+                "integer repair got no solution back. The solver reported "
+                f"status={failed.status} message={failed.message!r} for "
+                f"options={seen_options[0]}. SciPy {scipy.__version__} is "
+                "installed; the supported analytical range is "
+                "'scipy>=1.11,<1.17' because 1.17 rejects the forwarded HiGHS "
+                "'threads' backend option before solving. Check the "
+                "environment against requirements.txt before changing pfe.py."
+            )
+        assert repaired is not None, "integer repair returned None without calling milp"
+        assert seen_options == [{"time_limit": 20.0, "threads": 1}]
+
+    def test_solver_compatibility_range_is_pinned_in_ci_and_requirements(self):
+        requirement = "scipy>=1.11,<1.17"
+        assert requirement in Path("requirements.txt").read_text()
+        assert requirement in Path(".github/workflows/ci.yml").read_text()
 
 
 class TestBoundViolationsFromRounding:
@@ -786,7 +857,7 @@ class TestBoundViolationsFromRounding:
         # The continuous solution may legitimately use RUNG_RELAX_TOL4X.
         # Reimposing M=10 exactly at the integer stage would conflict with
         # U<=6, but M=6 lies within the same allowed measurement band.
-        from pfe import repair_integer_bounds
+        from traffic_sim.demand.pfe import repair_integer_bounds
         cands = [cand("M", "U")]
         repaired = repair_integer_bounds(
             np.array([10]), cands, {"M": 10.0}, {"U": (0.0, 6.0)},

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from sensor_registry import load_registry
+from traffic_sim.intake.sensors import load_registry
 
 
 REGISTRY = "data_in/sensors.json"

@@ -93,12 +93,13 @@ dirsplit-train:
 dirsplit-predict:
 	python3 -m dirsplit.predict
 
-# Out-of-sample check of the direction model's published claims: nested
-# shrinkage lambda (train.py fits lambda on the rows it then scores), measured
-# interval coverage, and the per-sensor kernel's position relative to the
-# training cloud. ~12 min; writes an evidence artifact to validation/.
+# Audit of data/dirsplit/train_report.json: nested shrinkage lambda (train.py
+# fits lambda on the rows it then scores), measured interval coverage, and the
+# per-sensor kernel's position relative to the training cloud. ~12 min.
+# NOT a Gate M run — Gate M is `python3 -m dirsplit.evaluate`, and its current
+# authority is validation/dirsplit_gate_m_outcome_v5.json (MODEL).
 dirsplit-validate:
-	python3 -m dirsplit.validate --out validation/dirsplit_gate_m.json
+	python3 -m dirsplit.validate
 
 data:
 	python3 build_data.py $(if $(DATA_DIR),--data_dir "$(DATA_DIR)") $(if $(COORDS),--coords "$(COORDS)")
