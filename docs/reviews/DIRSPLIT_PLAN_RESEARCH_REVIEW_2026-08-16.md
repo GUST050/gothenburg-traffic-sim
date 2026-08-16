@@ -9,14 +9,17 @@ whether it should be done at all, and what is most robust.
 
 **Method.** Findings are labelled `[DOC]` (carried from the plan or repo
 history), `[NEW]` (measured today) and `[LIT]` (external practice, cited).
-Every `[NEW]` number is reproduced by two scripts that run on tracked artifacts
-only: `python3 -m tools.research_direction_split_evidence` (F1–F8, plus a
-regenerated `sumo/direction_split.json`) and
-`python3 -m tools.research_direction_sum_constraint` (F9–F11).
+Every `[NEW]` number is reproduced by three scripts that run on tracked
+artifacts only: `python3 -m tools.research_direction_split_evidence` (F1–F8,
+plus a regenerated `sumo/direction_split.json`),
+`python3 -m tools.research_direction_sum_constraint` (F9–F11) and
+`python3 -m tools.research_direction_solution_space` (F12–F14).
 
-**Revision, same day.** F9–F11 were added after the question "should I let
-entropy choose?" — and they reversed this document's original recommendation.
-The correction is marked in §3.
+**Two revisions, same day.** F9–F11 were added after "should I let entropy
+choose?" and reversed this document's original recommendation — the correction
+is marked in §3. F12–F14 were added after a request to search the whole
+solution space; they did not reverse anything, but they changed what the
+project's priority should be.
 
 ---
 
@@ -41,11 +44,18 @@ Three things follow from measurement, not opinion:
    unvalidated label — it is a measured factor-of-two understatement, and it
    feeds the confidence number on the map today.
 
-And one thing the plan does not consider at all, added after the fact:
-**"letting the solver choose the split" is not an option that exists.** A
+And two things the plan does not consider at all, added after the fact:
+
+**"Letting the solver choose the split" is not an option that exists.** A
 constraint on the two-way sum rescales both carriageways uniformly, so the
 split is decided entirely by the candidate pool — whose implied value at this
 edge swings 35 percentage points on a routing nuisance parameter (F9–F11).
+
+**And the whole project has been optimising the wrong 7 %.** A full search of
+the solution space (F12–F14) ends with one number dominating: a **local
+D-factor is worth +22.7 %, the entire transfer-modelling apparatus +7.0 % on
+top of it.** Two further families — corridor continuity from the neighbouring
+sensor, and profile deconvolution — were tested and falsified on the way.
 
 ---
 
@@ -311,6 +321,61 @@ split."** One solve returns one number. Direction uncertainty has to live
 does, and the only thing wrong with it is that the variants are 2× too narrow
 (F4).
 
+### F12 `[NEW]` Corridor continuity from 1076 — falsified
+
+Sensor 1076 measures **southbound Skånegatan 257 m from 107**, which measures
+the two-way total on the same street. If 1076 were a clean downstream
+cross-section, `1076 / 107_total` would simply *be* the southbound share — a
+measured, 15-minute-resolution, full-year direction split with no model at all.
+It is the most attractive idea in the whole space, and it is wrong:
+
+- implied southbound share **0.677** against a published 0.477 — **20 pp off**;
+- 1076 exceeds 107's **two-way total** in **7.9 %** of quarters, which is
+  impossible for a nested cross-section.
+
+Substantial flow enters between the two stations. Worth recording as a dead end
+precisely because the geometry makes it look so promising.
+
+### F13 `[NEW]` Profile deconvolution — falsified twice, and it explains the legacy 80/20
+
+The `estimate_directions.py` family assumes the total is a sum of two
+counter-phased tides. With five *locally measured* single-direction profiles
+available as bases, that is now directly testable. Fitting
+`107_total = a·Pᵢ + b·mirror(Pⱼ)` over all 20 ordered pairs:
+
+- implied N share ranges **0.878 – 1.034**, median 0.956, at R² 0.93–0.98.
+  **A share above 1.0 is not physical.**
+- the control settles it: the mirrored basis beats an un-mirrored one in
+  **0 of 10** pairs.
+
+Gothenburg's own data rejects the counter-phase premise. The two carriageways
+of a central street are close to *in phase* — which matches this repo's own
+earlier finding that "both directions peak in the morning, just slightly
+unevenly," and explains why the AM/PM Gaussian produced 80/20: it forced a
+counter-phase structure the data does not contain.
+
+### F14 `[NEW]` The decisive decomposition — the anchor is worth 3× the shape
+
+This is the measurement that settles the design. Each held-out station is
+predicted by its **own mean share** — the exact analogue of the city's published
+annual D-factor for 107 — and then by that anchor plus the pooled time-of-day
+shape composed on the logit scale.
+
+| estimator | MAE | vs 50/50 | vs anchor |
+|---|---:|---:|---:|
+| 50/50 flat | 0.0639 | — | −29.4 % |
+| pooled curve, no anchor | 0.0603 | +5.5 % | −22.2 % |
+| **local anchor, flat** | **0.0494** | **+22.7 %** | — |
+| **local anchor + pooled shape** | **0.0459** | **+28.1 %** | **+7.0 %** |
+
+Replicated under leave-station-out: +22.7 % and +7.2 %. The shape's increment
+is statistically real — paired bootstrap 95 % CI [+0.0020, +0.0048], excluding
+zero — but it is the smaller half by a factor of three.
+
+**The single most valuable input is a local D-factor, not a model.** One
+published number is worth more than the entire transfer-modelling apparatus,
+and the apparatus as deployed is worth less than nothing (F3).
+
 ---
 
 ## 3. The three questions
@@ -351,10 +416,39 @@ against their sum, not for abandoning the split.
 
 ### What is best?
 
-**Level from local data × shape from the pooled curve, with an honest
-interval.** Retire the similarity-weighted per-sensor quantile LightGBM stack:
-leave-city-out says it costs accuracy on all three fold designs, and its own
-shrinkage λ says three-quarters of what it asserts is noise.
+**Level from local data × shape from the pooled curve, with an honest interval
+carried across demand variants.** Retire the similarity-weighted per-sensor
+quantile LightGBM stack: leave-city-out says it costs accuracy on all three
+fold designs, and its own shrinkage λ says three-quarters of what it asserts is
+noise.
+
+The full space, with every family actually tested:
+
+| # | Approach | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Per-street ML transfer (deployed) | ✗ worse than a coin flip | −7.4 / −8.7 / −7.5 % on three fold designs (F3) |
+| 2 | 50/50 flat | baseline | 2.31 pp level error at 107 (F5) |
+| 3 | Pooled tidal curve, no anchor | ✓ small win | +5.5 % / +4.9 % (F14) |
+| 4 | **Local anchor, flat** | ✓✓ | **+22.7 %** (F14) |
+| 5 | **Local anchor + pooled shape** | ✓✓✓ **best** | **+28.1 %**, increment significant (F14) |
+| 6 | Sum constraint, "let entropy choose" | ✗ | split = pool ratio; 35 pp swing (F9, F10) |
+| 7 | Sum + two-sided band | ✗ | collapses to `lo_A/(lo_A+lo_B)` (F11) |
+| 8 | Sum + nearby sensor identifies split | ✗ | still 10–15 pp off, needs unknown route-sharing fraction |
+| 9 | Corridor continuity 1076 → 107 | ✗ | 20 pp off; violated in 7.9 % of quarters (F12) |
+| 10 | Profile deconvolution / AM-PM Gaussian | ✗ | implied shares 0.878–1.034; mirror wins 0/10 (F13) |
+
+**And the finding that reframes the project.** The value is overwhelmingly in
+the *local anchor*, not the modelling: one published number buys +22.7 %, the
+whole transfer apparatus buys +7.0 % on top of it. `dirsplit/` has been
+optimising the 7 % while the 23 % sat in a public catalogue.
+
+The highest-leverage remaining action is therefore **not a better model** — it
+is checking whether Göteborgs Stad's public trafikmängder catalogue carries
+directional rows for the other five stations or for nearby streets. CLAUDE.md
+already flags this as an open manual check; F14 is the argument for its
+priority. It is a public catalogue, not a data request, so it does not touch
+the 2026-07-20 "no more external data" decision — but confirm that reading
+before acting on it.
 
 ### What is most robust?
 
@@ -373,6 +467,31 @@ Ranked, at sensor 107:
 | 50/50 | 2.31 pp | none | none stated |
 | deployed dirsplit | 2.50 pp | 0.32× validated | 0.55× honest |
 | sum constraint alone | unbounded (0.230–0.581 observed) | pool artifact | none stated |
+
+### The deliverable
+
+Level = the city's published 0.5231. Shape = the pooled weekday tidal curve.
+Width = the measured residual spread, ±0.0965 carried across demand variants.
+
+| hour | N / S at 107 | 80 % band on N |
+|---|---|---|
+| 00:00 | 50.3 / 49.7 | 0.406 – 0.599 |
+| 06:00 | 58.3 / 41.7 | 0.487 – 0.680 |
+| 08:00 | 56.0 / 44.0 | 0.464 – 0.657 |
+| 12:00 | 52.3 / 47.7 | 0.427 – 0.620 |
+| 15:00 | 48.4 / 51.6 | 0.388 – 0.581 |
+| 17:00 | 51.6 / 48.4 | 0.420 – 0.613 |
+| 23:00 | 49.8 / 50.2 | 0.401 – 0.594 |
+
+Tidal amplitude 0.099, anchored mean 0.5231. Note the band is wider than the
+whole tidal swing — which is the honest state of this quantity, and the reason
+the interval matters more than the point.
+
+Two implementation notes. The curve must be built from the **full weekday**,
+not the 06–20 training window (F7) — the rows are already in the tracked table.
+And for the five single-direction stations there is no local anchor, so their
+*estimated opposite carriageway* gets row 3 of the table above (pooled curve,
++5.5 %) as a level-2 bound, widened per F4.
 
 The current deployment sits third: it is simultaneously **too flat in the
 middle** (0.32× the validated signal) and **too narrow at the edges** (0.55×

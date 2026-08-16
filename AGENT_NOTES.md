@@ -27,14 +27,18 @@ which model may continue. See `AGENTS.md`.
   and since rows are ~8-day means, 47% is an UPPER bound. At sensor 107's
   AM peak the deployed q50 moves 4 vehicles vs 50/50; the validated curve
   moves 37; the honest band is +/-100.`
-- Files changed: `Documentation and two analysis tools only:
+- Files changed: `Documentation and three analysis tools only:
   docs/reviews/DIRSPLIT_PLAN_RESEARCH_REVIEW_2026-08-16.md (new);
-  tools/research_direction_split_evidence.py and
-  tools/research_direction_sum_constraint.py (new, tracked-artifact only);
+  tools/research_direction_split_evidence.py,
+  tools/research_direction_sum_constraint.py and
+  tools/research_direction_solution_space.py (new, tracked-artifact only);
   current TASKS.md and AGENT_NOTES.md blocks. No pipeline, demand, PFE, web
   or test code touched; no model retrained.`
-- Checks: `python3 -m tools.research_direction_split_evidence runs end to end
-  and reproduces every number in the review. Regenerated split file matches
+- Checks: `All three research_direction_* tools run end to end and reproduce
+  every number in the review. 98 tests pass (test_opposite_direction,
+  test_build_sumo_demand, test_pfe_kernel); note test_pfe_kernel requires
+  numba, which was absent from this container and failed before any change
+  here - installing it makes all 6 pass. Regenerated split file matches
   the plan's quoted audit numbers to the digit, confirming both the plan's
   audit and this regeneration. Direction mapping verified from
   network.geojson geometry: 60786979_3575001205_0 bearing 352.1 deg = N =
@@ -62,11 +66,34 @@ which model may continue. See `AGENTS.md`.
   day-level variance - that is the plan's dataset-v2 point and it stands; it
   only makes the 47% coverage figure an upper bound. The measured-sum option
   needs a double-count audit for routes touching both carriageways.`
-- Suggested next action: `Decide between the two recommended designs, then
-  implement Fas 0A with the verified N<->toward-centre mapping recorded
-  alongside the raw 3400/3100 values. Independently of any gate, either widen
-  q10/q90 to the measured 0.193 or relabel them stress_only - they feed the
-  map's confidence number today.`
+- Solution-space search (F12-F14, third pass): ten families tested, six dead.
+  `Corridor continuity FALSIFIED - 1076 measures southbound Skanegatan 257 m
+  from 107, but 1076/107_total = 0.677 against a published 0.477 (20 pp off)
+  and 1076 exceeds 107's two-way TOTAL in 7.9% of quarters, so flow enters
+  between them. Profile deconvolution FALSIFIED TWICE - fitting
+  107_total = a*P_i + b*mirror(P_j) on the five local single-direction
+  profiles gives implied N shares 0.878-1.034 (above 1.0 is not physical) at
+  R2 0.93-0.98, and the mirrored basis beats an un-mirrored one in 0/10
+  pairs. Gothenburg's own data rejects the counter-phase premise, which is
+  why estimate_directions.py produced 80/20. DECISIVE: predicting each
+  held-out station by its OWN mean share - the exact analogue of the city's
+  published annual D-factor for 107 - gives +22.7% over 50/50, and adding the
+  pooled tidal shape on top gives only +7.0% more (leave-city-out; replicated
+  leave-station-out at +22.7% and +7.2%; shape increment significant, paired
+  bootstrap 95% CI [+0.0020,+0.0048]). THE LOCAL ANCHOR IS WORTH ~3x THE
+  ENTIRE TRANSFER APPARATUS. dirsplit/ has been optimising the 7%.`
+- Suggested next action: `Implement the anchored curve: level from the city's
+  published 0.5231, shape from the pooled weekday tidal curve built over the
+  FULL day (not the 06-20 training window), width +/-0.0965 carried across
+  demand variants. Implement Fas 0A with the verified N<->toward-centre
+  mapping recorded alongside the raw 3400/3100 values. Independently of any
+  gate, either widen q10/q90 to the measured 0.193 or relabel them
+  stress_only - they feed the map's confidence number today. HIGHEST LEVERAGE
+  of all, per F14: check whether Goteborgs Stad's public trafikmangder
+  catalogue carries directional rows for the other five stations or nearby
+  streets. That is a public catalogue rather than a data request, so it does
+  not touch the 2026-07-20 decision - but confirm that reading with Gustav
+  before acting on it.`
 - Actor notes: `Research combined a full code audit, an empirical tournament
   on tracked data, and FHWA/Van Zuylen-Willumsen primary sources. No existing
   evidence was edited, no external data downloaded, no policy activated and
