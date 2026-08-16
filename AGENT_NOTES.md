@@ -6,39 +6,38 @@ Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Review findings on 9e9ecfd are closed for solver
-  compatibility, clean-checkout CI and future Gate S provenance without
-  changing a sealed demand source.`
-- Summary: `SciPy >=1.11,<1.17 is now explicit in requirements and CI, keeping
-  the tested fork-safe HiGHS threads=1 contract. Live dirsplit checks no longer
-  error in clean CI when gitignored artifacts are absent. Gate S v5/v6 remain
-  unchanged, with an append-only record of their nonportable historical scope.`
-- Files changed: `Dependency/CI manifests; PFE compatibility regression test;
-  live-artifact test boundaries; Gate S provenance v2 path handling and tests;
-  evidence-status JSON; architecture, improvement plan and current blocks.`
-- Checks: `PFE: 128 passed. Direction-sensitivity + magnitude live suite:
-  114 passed with local artifacts present. Six-module focused run: 443 passed,
-  6 failed; all six failures are the pre-existing frozen speed campaign versus
-  the current 06–10 demand identity, not this change. Evidence content key and
-  v5/v6 hashes verify; git diff --check passes; changed bound demand sources =
-  empty.`
-- Decisions and evidence: `SciPy 1.17's public milp option list does not expose
-  threads and the reviewed 1.17.1 path returned status 4 before solve. Pinning
-  the last compatible range repairs CI without invalidating build
-  4afe9e3…; removing threads would reintroduce observed nested-executor risk.
-  Gate S v6 is narrowed to four frozen candidates and is not a general
-  direction-insensitivity claim.`
-- Blockers or risks: `The loso.py console-only median still uses the upper
-  middle element. Changing it now would drift the source fingerprint bound by
-  current_heldout_registration_v1; fix it with the next registered LOSO rerun.
-  Six clustered stations remain underidentified; new sensors are deferred;
-  4,990 lane counts and 631 speeds remain defaulted.`
-- Suggested next action: `Import reviewed NVDB road structure on high-flow and
-  closure-relevant edges with stable IDs and before/after network, routing,
-  held-out and scenario evidence.`
-- Actor notes: `No release promotion, demand rebuild or frozen-artifact rewrite
-  was performed. The old live closure set remains recoverable at
-  runs/prepublish-baseline-fa259a2892a974c27e8c-20260815T152748Z.`
+- Focus and status: `The canonical plan has been hardened for reproducible
+  solver/evidence execution and a reversible NVDB network import; implementation
+  is READY, not yet evidence-complete.`
+- Summary: `Primary-source research corrected the prior implication that
+  SciPy <1.17 is a permanent solution. The plan now requires Python 3.11.15 plus
+  exact platform locks, a real-model root-cause reproducer, an independently
+  checked SciPy/highspy comparison, separate reference/live/canary CI lanes,
+  portable future Gate S bundles and a staged gold-set-calibrated NVDB patch.`
+- Files changed: `IMPROVEMENT_PLAN.md; TASKS.md; AGENT_NOTES.md in this planning
+  turn. The prior local commit 77fc15e still contains the emergency dependency,
+  CI and Gate S provenance repairs.`
+- Checks: `Primary sources reviewed for SciPy 1.17 milp option forwarding,
+  HiGHS scheduler/thread rules, Python spawn/EOL status, pip/PyPA locks, SLSA
+  provenance structure, Trafikverket NVDB lane semantics and SUMO PlainXML.
+  Current-marker counts are exact, the active/historical implementation order
+  is explicitly superseded, and git diff --check passes.`
+- Decisions and evidence: `Keep scipy>=1.11,<1.17 only as an emergency barrier
+  until A1-A5 pass. Do not guess whether SciPy, HiGHS, the global scheduler or
+  process inheritance caused status 4. Prefer serial public SciPy if it meets a
+  preregistered resource budget; use spawn-isolated highspy only if needed and
+  equally exact. Import speed before direction-sensitive lanes; do not
+  auto-edit topology, direction, connections or TLS in the first NVDB campaign.`
+- Blockers or risks: `A Python-3.11.15 evidence environment and exact platform
+  locks do not yet exist locally. Historical Gate S runs remain machine-local.
+  Six clustered stations still underidentify allocation; NVDB improves
+  documented physical inputs but cannot by itself prove traffic accuracy. The
+  loso.py console-only median remains deferred to the next registered rerun.`
+- Suggested next action: `Execute work packages A1-A2 and B1, then select the
+  solver adapter through A3-A5. Begin NVDB work package D only after that
+  reference environment is stable.`
+- Actor notes: `No solver source, sealed demand source, network, release,
+  demand, frozen evidence or external system was changed. Nothing was pushed.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
