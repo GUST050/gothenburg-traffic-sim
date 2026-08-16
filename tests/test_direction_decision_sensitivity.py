@@ -59,6 +59,31 @@ def registration(candidates=("edgeA", "edgeB"), seeds=(1000, 1001, 1002, 1003),
     return sens.Registration(**payload)
 
 
+def test_provenance_path_is_relative_inside_the_checkout(tmp_path):
+    assert sens.provenance_path(sens.ROOT / "run_scenario.py") == \
+        "run_scenario.py"
+    assert sens.provenance_path(tmp_path / "external.json") == \
+        str((tmp_path / "external.json").resolve())
+
+
+def test_execution_provenance_uses_portable_source_paths(tmp_path):
+    reg = registration(candidates=("edgeA",), seeds=(1000,),
+                       stress_cases=("q50",))
+    run_dir = tmp_path / "cand_q50_1000_edgeA"
+    run_dir.mkdir()
+    (run_dir / "spec.json").write_text("{}")
+    (run_dir / "cand_q50_1000_edgeA.json").write_text("{}")
+
+    payload = sens.execution_provenance(
+        reg, tmp_path, reused_existing=False)
+
+    assert payload["protocol"] == "dirsplit_gate_s_execution_provenance_v2"
+    assert all(not Path(binding["path"]).is_absolute()
+               for binding in payload["sources"].values())
+    assert all(Path(binding["path"]).is_absolute()
+               for binding in payload["execution_artifacts"].values())
+
+
 def policy(hours, *, metres=0.0, affected=100, no_detour=0):
     return {"added_vehicle_hours": float(hours),
             "added_metres_total": float(metres),
@@ -1077,10 +1102,20 @@ class TestTrainedQ50Activation:
         recorded = payload.pop("content_key")
         assert recorded == sens.content_digest(payload)
 
-    def test_it_binds_the_live_sources_and_artifacts(self):
+    def test_it_binds_the_tracked_sources(self):
         payload = self.payload()
-        for path, digest in {**payload["sources"],
-                             **payload["artifacts"]}.items():
+        for path, digest in payload["sources"].items():
+            assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest
+
+    def test_it_binds_the_machine_local_artifacts_when_available(self):
+        artifacts = self.payload()["artifacts"]
+        missing = [Path(path) for path in artifacts if not Path(path).is_file()]
+        if missing:
+            pytest.skip(
+                "activation binds gitignored build artifacts unavailable in "
+                "a clean checkout: " + ", ".join(str(path) for path in missing)
+            )
+        for path, digest in artifacts.items():
             assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest
 
     def test_it_binds_the_positive_gate_and_current_gate_s(self):
@@ -1105,3 +1140,28 @@ class TestTrainedQ50Activation:
         assert outcome["registration_key"] == gate_s["registration_key"]
         assert outcome["release_evidence"] is False
         assert self.payload()["release_evidence"] is False
+
+
+class TestGateSEvidenceStatus:
+    PATH = Path(
+        "validation/dirsplit_direction_sensitivity_evidence_status_v1.json")
+
+    def payload(self):
+        return json.loads(self.PATH.read_text())
+
+    def test_content_key_covers_the_correction(self):
+        payload = self.payload()
+        recorded = payload.pop("content_key")
+        assert recorded == sens.content_digest(payload)
+
+    def test_historical_outcomes_are_bound_without_rewriting_them(self):
+        for binding in self.payload()["historical_artifacts"].values():
+            path = Path(binding["path"])
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == \
+                binding["sha256"]
+
+    def test_correction_cannot_be_read_as_release_evidence(self):
+        payload = self.payload()
+        assert payload["release_evidence"] is False
+        assert payload["current_authority"]["reproducibility_claim"] == \
+            "no current independently reproducible Gate S outcome"

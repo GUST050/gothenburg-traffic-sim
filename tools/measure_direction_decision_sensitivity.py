@@ -78,6 +78,21 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 
+def provenance_path(path: Path) -> str:
+    """Record checkout files relative to the repository, external files absolute.
+
+    Frozen Gate S v5/v6 outcomes embedded the author's ``/Users/...`` root in
+    every source binding.  The digest remained useful, but another checkout
+    could not resolve the path.  Repository-relative paths make future seals
+    portable without pretending that genuinely external artifacts are local.
+    """
+    resolved = Path(path).resolve()
+    try:
+        return resolved.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
 def content_digest(payload: Any) -> str:
     """Stable SHA-256 over a JSON-serialisable payload.
 
@@ -428,7 +443,7 @@ def measure_pair_sum_isolation(
                    "the stress artifacts failed strict split, build-lineage, "
                    "or equal-departure validation; direction is not isolated "
                    f"(worst |sum-1| = {worst_overall:.4f})"),
-        "source": str(path),
+        "source": provenance_path(path),
     }
 
 
@@ -958,20 +973,27 @@ def execution_provenance(registration: Registration, out_dir: Path, *,
                         raise RegistrationError(
                             f"cannot seal Gate S: missing {path}")
                     artifacts[f"{tag}/{kind}"] = {
-                        "path": str(path), "sha256": digest(path)}
+                        "path": provenance_path(path),
+                        "sha256": digest(path),
+                    }
 
     payload = {
-        "protocol": "dirsplit_gate_s_execution_provenance_v1",
+        "protocol": "dirsplit_gate_s_execution_provenance_v2",
+        "path_base": ("repository root for relative paths; absolute paths "
+                      "identify artifacts outside the checkout"),
         "registration_key": registration.content_key,
         "reused_existing": bool(reused_existing),
-        "sources": {name: {"path": str(path), "sha256": digest(path)}
+        "sources": {name: {"path": provenance_path(path),
+                           "sha256": digest(path)}
                     for name, path in sources.items()},
         "execution_artifacts": artifacts,
         "execution_artifact_count": len(artifacts),
     }
     if runtime_source is not None:
         payload["runtime_source"] = {
-            "path": str(runtime_source), "sha256": digest(runtime_source)}
+            "path": provenance_path(runtime_source),
+            "sha256": digest(runtime_source),
+        }
     payload["content_key"] = content_digest(payload)
     return payload
 

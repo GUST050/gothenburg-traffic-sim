@@ -36,3 +36,9 @@ are already gzipped by the populator). Everything else is a flat JSON record:
 a preregistration, an outcome, a manifest, a golden or a gate result. The
 `*_vN` families are versioned campaign seals — retiring a superseded version is
 a decision about evidence, not tidying, and is tracked in `OPEN_ISSUES` §8.
+
+`dirsplit_direction_sensitivity_evidence_status_v1.json` is the append-only
+correction record for Gate S outcomes v5/v6. The frozen outcomes remain
+byte-identical, but their author-machine paths and source drift mean they are
+historical diagnostic observations, not independently reproducible current or
+release evidence. New Gate S provenance uses repository-relative source paths.

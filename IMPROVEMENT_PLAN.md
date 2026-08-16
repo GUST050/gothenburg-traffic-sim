@@ -54,6 +54,19 @@ time shape alone accounts for 0.101%. A separate level/shape product remains
 negative evidence because its station-blocked confidence interval crosses
 zero.
 
+**Gate S reproducibility correction (2026-08-16):** outcomes v5/v6 are
+preserved as historical, non-release diagnostics, but neither is independently
+reproducible from a clean current checkout. Both embedded absolute author-
+machine paths; v5 predates the repaired execution contract, and v6 binds a
+measurement-tool digest that drifted during the package-import migration while
+its 192 run files remain machine-local. The distinct scenario/spec digests show
+that v6 did execute different stress arms, so its narrow observation is not
+retracted: the deployed demand-side ranking was unchanged across the four
+frozen candidates. It is not a general claim that direction cannot affect a
+closure decision. The correction is frozen in
+`validation/dirsplit_direction_sensitivity_evidence_status_v1.json`; future
+provenance records repository sources relative to the checkout root.
+
 **Current baseline/held-out refresh (2026-08-15):** a preregistered matched
 06–10 baseline for demand build `4afe9e3ae2e74a4b872e` passed staging and was
 published atomically. All three seed/variant arms inserted 4,998/4,998

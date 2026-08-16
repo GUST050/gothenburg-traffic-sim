@@ -770,7 +770,12 @@ class TestRouteIndexGroups:
         assert (repair_integer_bounds(counts, cands, {"m": 5.0}, {}) == counts).all()
 
     def test_integer_repair_disables_nested_highs_threads(self, monkeypatch):
-        """The process-parallel publisher must not fork HiGHS executors."""
+        """The process-parallel publisher must not fork HiGHS executors.
+
+        This relies on SciPy's pre-1.17 pass-through of HiGHS options.  Both
+        dependency entry points are pinned because 1.17 can return status 4
+        before solving when this otherwise valid backend option is supplied.
+        """
         real_milp = pfe.milp
         seen_options = []
 
@@ -787,6 +792,11 @@ class TestRouteIndexGroups:
 
         assert repaired is not None
         assert seen_options == [{"time_limit": 20.0, "threads": 1}]
+
+    def test_solver_compatibility_range_is_pinned_in_ci_and_requirements(self):
+        requirement = "scipy>=1.11,<1.17"
+        assert requirement in Path("requirements.txt").read_text()
+        assert requirement in Path(".github/workflows/ci.yml").read_text()
 
 
 class TestBoundViolationsFromRounding:

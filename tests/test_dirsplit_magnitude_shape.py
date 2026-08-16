@@ -121,7 +121,14 @@ def test_station_block_bootstrap_is_deterministic():
 
 @pytest.fixture(scope="module")
 def live_evidence():
-    return magnitude.build_evidence()
+    paths = magnitude.EvidencePaths()
+    missing = [path for path in vars(paths).values() if not path.is_file()]
+    if missing:
+        pytest.skip(
+            "live dirsplit diagnostic needs machine-local build artifacts: "
+            + ", ".join(str(path) for path in missing)
+        )
+    return magnitude.build_evidence(paths)
 
 
 def test_live_evidence_binds_current_date_level_dataset(live_evidence):

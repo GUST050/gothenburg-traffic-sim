@@ -449,6 +449,17 @@ share limit cannot be interpreted differently after integer publication. The
 active build `dbb44172f30778adf8c0` verifies zero under-1-km cap violations and
 no structure flags without changing sensor targets or accepting held counts.
 
+**HiGHS/SciPy publication compatibility (2026-08-16).** Integer publication
+runs independent repairs in fork workers and therefore sets the HiGHS
+`threads=1` backend option to avoid nested executors and macOS post-fork
+deadlock. SciPy 1.17 can reject that forwarded backend option before HiGHS
+solves, returning status 4. The supported analytical environment is therefore
+`scipy>=1.11,<1.17`, pinned in both `requirements.txt` and CI. Do not remove
+the pin or the one-thread repair option independently: a future upgrade needs
+an explicit replacement for per-worker HiGHS thread control plus the full PFE
+publication suite. Unknown solver status remains fail-closed and may never be
+treated as infeasibility or permission to publish a route file.
+
 ### C — Candidate generation (`build_candidates.py`) — GROUNDED (2026-07-05)
 The route-candidate pool (what PFE selects among) is now the standard
 **subarea/cordon** structure (FHWA/state-DOT subarea-analysis practice;

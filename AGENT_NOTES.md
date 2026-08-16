@@ -6,42 +6,39 @@ Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Matched baseline plus current spatial/temporal LOSO are
-  complete on codex/fix-dirsplit-gates-v3; reviewed repository-cleanup fixes
-  are integrated and the isolated sumo_version namespace defect is fixed.`
-- Summary: `Baseline build 4afe9e3ae2e74a4b872e passed staging and replaced
-  the stale live set. Spatial and temporal reports share exact pool, net,
-  reference and through-share identity. validation.json is overall=pass.
-  Cleanup review fixes restore the documented negative-study module, repair
-  moved CLI execution and preserve stable provenance labels.`
-- Files changed: `Fail-closed held-out identity in confidence/report.py;
-  exact condensed LOSO projection in controlled_rounding.py and loso.py;
-  current baseline/LOSO/scenario/validation artifacts and evidence records;
-  reviewed traffic_sim migration fixes in tools, signals, layout tests and
-  documentation.`
-- Checks: `Matched three-arm simulation inserted 14,994/14,994 vehicles with
-  zero unfinished/teleports; raw output fit is 100% GEH<5. Spatial LOSO
-  0.466–1.354 median 0.613; temporal 0.445–1.356 median 0.6225; every station
-  underidentified and every active integer measurement residual zero. The
-  scenario/LOSO/publication, PFE/demand and server/API suites pass 623 tests
-  with 1 skipped. Cleanup integration adds 150 passing targeted layout,
-  signal, fingerprint and SUMO-provenance checks; the namespace regression is
-  pinned directly. JSON/hash verification and git diff --check pass.`
-- Decisions and evidence: `The temporal blocker was a 20/60/180-second solver
-  time limit, not infeasibility. The exact condensed full-domain L1 model
-  solved the captured hard model optimally in 0.494 s and remains validation-
-  only; sealed demand code is unchanged. Cleanup review established that
-  content-sealed files require both path and SHA checks, and volume_priors.py
-  is a retained negative study rather than dead code.`
-- Blockers or risks: `Six clustered stations still cannot support strong
-  citywide accuracy. New sensors are deferred. 4,990 lane counts and 631
-  speeds remain defaults; synthetic signals and OD/assignment priors remain.`
+- Focus and status: `Review findings on 9e9ecfd are closed for solver
+  compatibility, clean-checkout CI and future Gate S provenance without
+  changing a sealed demand source.`
+- Summary: `SciPy >=1.11,<1.17 is now explicit in requirements and CI, keeping
+  the tested fork-safe HiGHS threads=1 contract. Live dirsplit checks no longer
+  error in clean CI when gitignored artifacts are absent. Gate S v5/v6 remain
+  unchanged, with an append-only record of their nonportable historical scope.`
+- Files changed: `Dependency/CI manifests; PFE compatibility regression test;
+  live-artifact test boundaries; Gate S provenance v2 path handling and tests;
+  evidence-status JSON; architecture, improvement plan and current blocks.`
+- Checks: `PFE: 128 passed. Direction-sensitivity + magnitude live suite:
+  114 passed with local artifacts present. Six-module focused run: 443 passed,
+  6 failed; all six failures are the pre-existing frozen speed campaign versus
+  the current 06–10 demand identity, not this change. Evidence content key and
+  v5/v6 hashes verify; git diff --check passes; changed bound demand sources =
+  empty.`
+- Decisions and evidence: `SciPy 1.17's public milp option list does not expose
+  threads and the reviewed 1.17.1 path returned status 4 before solve. Pinning
+  the last compatible range repairs CI without invalidating build
+  4afe9e3…; removing threads would reintroduce observed nested-executor risk.
+  Gate S v6 is narrowed to four frozen candidates and is not a general
+  direction-insensitivity claim.`
+- Blockers or risks: `The loso.py console-only median still uses the upper
+  middle element. Changing it now would drift the source fingerprint bound by
+  current_heldout_registration_v1; fix it with the next registered LOSO rerun.
+  Six clustered stations remain underidentified; new sensors are deferred;
+  4,990 lane counts and 631 speeds remain defaulted.`
 - Suggested next action: `Import reviewed NVDB road structure on high-flow and
   closure-relevant edges with stable IDs and before/after network, routing,
   held-out and scenario evidence.`
-- Actor notes: `The old live closure set is recoverable at
-  runs/prepublish-baseline-fa259a2892a974c27e8c-20260815T152748Z. No release
-  promotion has been performed.`
+- Actor notes: `No release promotion, demand rebuild or frozen-artifact rewrite
+  was performed. The old live closure set remains recoverable at
+  runs/prepublish-baseline-fa259a2892a974c27e8c-20260815T152748Z.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
