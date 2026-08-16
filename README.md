@@ -293,10 +293,12 @@ ARCHITECTURE.md         structural source of truth
 IMPROVEMENT_PLAN.md     canonical improvement and delivery plan
 ```
 
-There are no compatibility shims: every import names its real module. Two root
-files are deliberately thin CLI wrappers rather than shims — `validate_sim.py`
-and `validation_report.py` — because `make validate-temporal` and three
-production modules invoke them by that name.
+The twelve former root shims are gone: every import names its real module.
+Two root files, `validate_sim.py` and `validation_report.py`, still rebind
+`sys.modules` to their implementation — deliberately, because
+`make validate-temporal` runs them as commands *and* three production modules
+import them and use the implementation's attributes. Retiring those two means
+editing a sealed demand source, so it is a separate change.
 
 The campaign runners stay in the root because their **paths** are recorded
 inside frozen `validation/` artifacts and `tools/freeze_*.py`; moving one

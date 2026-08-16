@@ -30,11 +30,11 @@ import threading
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from traffic_sim.simulation.monthly_sumo import SEED_WORKER_BENCHMARK_RECORD
+from traffic_sim.simulation.monthly_sumo import SEED_WORKER_BENCHMARK_RECORD  # noqa: E402
 
 GOLDEN_SPEC = Path("validation/golden_monthly_search_spec_v6.json")
 GOLDEN_POLICY = Path("validation/monthly_search_policy_v1.json")

@@ -24,7 +24,7 @@ signals today" (IMPROVEMENT_PLAN.md Phase D's own stated honesty requirement). T
 becomes "city-configured" only once IMPROVEMENT_PLAN.md D6 imports real plans.
 
 Usage:
-  python3 signal_lab.py [--window-start 07:00] [--window-end 09:00]
+  python3 signals/signal_lab.py [--window-start 07:00] [--window-end 09:00]
       [--seeds 3] [--out PATH]
 
 Requires sumo/demand_meta.json + sumo/calibrated*.rou.xml (run
@@ -49,8 +49,9 @@ from pathlib import Path
 
 import pandas as pd
 
-if __package__ in (None, ""):  # support `python3 signals/<name>.py`
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:   # support `python3 signals/<name>.py`
+    sys.path.insert(0, str(ROOT))
 
 from traffic_sim.simulation import metrics as cm
 import run_scenario as rs

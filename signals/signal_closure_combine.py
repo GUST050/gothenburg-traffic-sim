@@ -42,7 +42,7 @@ number here is against a SYNTHETIC 90s-cycle guess, not Gothenburg's real
 signal plans (IMPROVEMENT_PLAN.md D6, not done).
 
 Usage:
-  python3 signal_closure_combine.py --close EDGE_ID [EDGE_ID ...]
+  python3 signals/signal_closure_combine.py --close EDGE_ID [EDGE_ID ...]
       [--window-start 07:00] [--window-end 09:00] [--seeds 3] [--out PATH]
       [--keep-scratch]
 """
@@ -58,8 +58,9 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
-if __package__ in (None, ""):  # support `python3 signals/<name>.py`
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:   # support `python3 signals/<name>.py`
+    sys.path.insert(0, str(ROOT))
 
 from traffic_sim.simulation import metrics as cm
 import run_scenario as rs

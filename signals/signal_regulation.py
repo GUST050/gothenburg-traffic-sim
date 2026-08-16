@@ -75,7 +75,7 @@ citations above so a future reader can tell law from choice):
     part of the conflict this clearance interval protects against.
 
 Usage:
-  python3 signal_regulation.py [--out PATH]
+  python3 signals/signal_regulation.py [--out PATH]
 
 Reads sumo/net.net.xml (build_sumo_net.py). Writes a content-addressed
 <additional> file (programID="reg" per real TLS) — content-addressed by
@@ -97,8 +97,9 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-if __package__ in (None, ""):  # support `python3 signals/<name>.py`
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:   # support `python3 signals/<name>.py`
+    sys.path.insert(0, str(ROOT))
 
 import run_scenario as rs
 from signals.signal_lab import net_fingerprint
