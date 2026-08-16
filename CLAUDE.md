@@ -441,7 +441,17 @@ Goal arc, in order:
   verified intent; no local speed/travel-time calibration. These are
   FIXED honest boundaries, not pending unlocks — do not re-open them as
   TODOs or recommend sending a data request. `docs/plans/DATA_REQUEST_2026-07.md` is
-  a not-sent record only.)
+  a not-sent record only.
+  SCOPE CLARIFICATION (2026-08-16): this closes NEW REQUESTED
+  behaviour/measurement data — counts, signal controller plans, speed or
+  travel-time observations, verified trip purpose. It does not prohibit
+  already-public documented ROAD STRUCTURE, i.e. the reviewed NVDB import of
+  speed limits, directional lane counts and road class in IMPROVEMENT_PLAN.md
+  Stage 5 / work package D, which needs no request to anyone. That import
+  changes documented physical inputs only; every boundary above stays fixed —
+  signals remain `synthetic`, and NVDB speed limits are legal/free-flow
+  constraints, never a substitute for the speed/travel-time calibration data
+  that is not coming.)
 
 ## Files
 - Pipeline (run in order): `build_data.py` → `build_features.py` → [`build_dataset.py` for future GNN] → `train_agent1.py` → `build_agent1_flows.py`. Or just `make all` (Makefile has the raw-data paths; `make serve` starts the web app).

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import scipy
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from traffic_sim.demand import pfe
@@ -770,11 +771,21 @@ class TestRouteIndexGroups:
         assert (repair_integer_bounds(counts, cands, {"m": 5.0}, {}) == counts).all()
 
     def test_integer_repair_disables_nested_highs_threads(self, monkeypatch):
-        """The process-parallel publisher must not fork HiGHS executors.
+        """Repair must not let a forked worker start its own HiGHS executor.
 
-        This relies on SciPy's pre-1.17 pass-through of HiGHS options.  Both
-        dependency entry points are pinned because 1.17 can return status 4
-        before solving when this otherwise valid backend option is supplied.
+        `demand/calibration.py`'s `collect_counts` fork pool runs this repair
+        one process per (variant, quarter).  A nested task executor inside each
+        forked worker deadlocked a live 48-quarter build past its own 20 s
+        limit, so `threads=1` was added (c379629, 2026-08-15).
+
+        `threads` is NOT in SciPy's public `milp` allow-list: SciPy warns and
+        forwards it to HiGHS, and SciPy 1.17 is reported to return status 4
+        before solving instead — hence the emergency `scipy>=1.11,<1.17`
+        barrier this test's sibling pins.  If THIS test fails, read it as the
+        capability probe it is, not as a broken assertion: the installed SciPy
+        no longer forwards the option the current architecture depends on.
+        The fix is IMPROVEMENT_PLAN.md work package A3 (remove the fork-around-
+        solver arrangement, then the option and the pin), not widening the pin.
         """
         real_milp = pfe.milp
         seen_options = []
@@ -790,13 +801,25 @@ class TestRouteIndexGroups:
             {"m": 10.0}, {}, groups=[([0], 0.0, 3.0)],
         )
 
-        assert repaired is not None
-        assert seen_options == [{"time_limit": 20.0, "threads": 1}]
+        assert repaired is not None, (
+            f"real solve returned no repair on scipy {scipy.__version__}; "
+            "capture the model and status under A2 before changing anything")
+        assert seen_options == [{"time_limit": 20.0, "threads": 1}], (
+            "integer repair must pass exactly time_limit + threads=1 to "
+            f"HiGHS; got {seen_options}")
 
     def test_solver_compatibility_range_is_pinned_in_ci_and_requirements(self):
+        """The pin is an emergency barrier with a documented expiry path.
+
+        It exists because of `threads` forwarding (see the test above), not
+        because SciPy 1.17 is known-bad for this pipeline.  Both entry points
+        must move together, and only through work package A5's promotion gate.
+        """
         requirement = "scipy>=1.11,<1.17"
-        assert requirement in Path("requirements.txt").read_text()
-        assert requirement in Path(".github/workflows/ci.yml").read_text()
+        for path in (Path("requirements.txt"), Path(".github/workflows/ci.yml")):
+            assert requirement in path.read_text(), (
+                f"{path} lost the emergency solver pin {requirement!r}; "
+                "requirements.txt and CI must state the same range")
 
 
 class TestBoundViolationsFromRounding:

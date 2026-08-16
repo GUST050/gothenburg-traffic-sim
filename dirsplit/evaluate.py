@@ -46,6 +46,19 @@ from .features import FEATURE_NAMES
 
 REPORT_PATH = DATA_DIR / "gate_m_report.json"
 GATE_M_PROTOCOL = "dirsplit_gate_m_v3"
+INTERVAL_REPORT_PATH = DATA_DIR / "interval_calibration_report.json"
+INTERVAL_PROTOCOL = "dirsplit_interval_calibration_v1"
+
+#: The published interval and its declared clamp, from `dirsplit/predict.py`.
+INTERVAL_QUANTILES = (0.1, 0.5, 0.9)
+NOMINAL_COVERAGE = 0.8
+CLAMP_LOW, CLAMP_HIGH = 0.1, 0.9
+
+#: Every third training station (sorted) is held back inside the fold to
+#: calibrate the conformal correction. Deterministic, so a rerun of the same
+#: fold calibrates against the same stations.
+CONFORMAL_STATION_STRIDE = 3
+MIN_CALIBRATION_STATIONS = 3
 
 #: Frozen before any fold was scored.
 #:
@@ -761,6 +774,76 @@ class SimilarityWeightedLGBM(Candidate):
                         sample_weight=self._weights(trainable, matrix, centre_z))
         return self
 
+    def fit_interval(self, rows, target_features=None, *,
+                     shrinkage_override=None,
+                     deployment_target_features=None):
+        """Fit the THREE quantile models `dirsplit/predict.py` publishes.
+
+        Same rows, same standardisation, same kernel centre, same weights and
+        same shrinkage as ``fit`` — only the LightGBM objective differs per
+        alpha. Anything else would measure an interval the project does not
+        ship.
+        """
+        trainable, matrix, target = self._prepare_training(rows)
+        self._interval_models = None
+        if len(trainable) < 30:
+            return self
+        assert matrix is not None and target is not None
+        static = matrix[:, :len(FEATURE_NAMES)]
+        if target_features is not None and len(target_features):
+            centre_z = ((np.asarray(target_features, dtype=float).mean(axis=0)
+                         - self._mu) / self._sd)
+        else:
+            centre_z = ((static - self._mu) / self._sd).mean(axis=0)
+        self._shrinkage = (float(shrinkage_override)
+                           if shrinkage_override is not None else
+                           self.prepare_shrinkage(
+                               rows, deployment_target_features))
+        weights = self._weights(trainable, matrix, centre_z)
+        models = {}
+        for alpha in INTERVAL_QUANTILES:
+            model = self._new_model(alpha=alpha)
+            model.fit(matrix, target, sample_weight=weights)
+            models[alpha] = model
+        self._interval_models = models
+        self._model = models[0.5]
+        return self
+
+    def predict_interval(self, rows):
+        """(lower, mid, upper) exactly as `dirsplit/predict.py` publishes them.
+
+        Reproduced step for step from the deployed writer: clamp each raw
+        quantile, enforce q10 <= q50 <= q90, SHIFT all three by the shrinkage
+        correction (the interval keeps its raw width and is only re-centred),
+        clamp again, then open to the clamp limits outside weekday 06-20.
+
+        That last step is why coverage must be reported separately inside and
+        outside support: an unsupported hour is not a model output at all, it
+        is the constant [0.1, 0.9] statement of ignorance, and pooling the two
+        would let 96 trivially-covered night slots hide the trained hours.
+        """
+        n = len(rows)
+        supported = np.array(
+            [in_deployed_training_window(row) for row in rows], dtype=bool)
+        if not getattr(self, "_interval_models", None):
+            return (np.full(n, CLAMP_LOW), np.full(n, 0.5),
+                    np.full(n, CLAMP_HIGH), supported)
+        matrix = self._matrix(rows)
+        raw = {alpha: np.clip(self._predict_model(model, matrix),
+                              CLAMP_LOW, CLAMP_HIGH)
+               for alpha, model in self._interval_models.items()}
+        stacked = [raw[alpha] for alpha in INTERVAL_QUANTILES]
+        lower = np.minimum.reduce(stacked)
+        upper = np.maximum.reduce(stacked)
+        mid = np.clip(raw[0.5], lower, upper)
+        shift = (0.5 + self._shrinkage * (mid - 0.5)) - mid
+        lower, mid, upper = (np.clip(a + shift, CLAMP_LOW, CLAMP_HIGH)
+                             for a in (lower, mid, upper))
+        lower[~supported] = CLAMP_LOW
+        mid[~supported] = 0.5
+        upper[~supported] = CLAMP_HIGH
+        return lower, mid, upper, supported
+
     def predict(self, rows):
         if self._model is None:
             return np.full(len(rows), 0.5, dtype=float)
@@ -1133,6 +1216,255 @@ def score(candidate: Candidate, folds: Sequence[Fold],
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Interval calibration (2026-08-16)
+#
+# Gate M asks whether the POINT estimate beats 50/50. Nothing has ever asked
+# what the published q10/q90 interval actually covers, which is the question
+# that decides whether the split is usable as an uncertainty statement rather
+# than a decoration. This section measures that on the same leakage-free
+# folds, then applies split-conformal (CQR) calibration fit strictly inside
+# each training fold.
+# ──────────────────────────────────────────────────────────────────────────
+@dataclass
+class HeldOutInterval:
+    """Pooled held-out intervals for one policy over a set of folds."""
+
+    lower: np.ndarray
+    mid: np.ndarray
+    upper: np.ndarray
+    actual: np.ndarray
+    supported: np.ndarray
+    stations: tuple[str, ...]
+    corrections: tuple[float, ...] = ()
+
+    @property
+    def covered(self) -> np.ndarray:
+        return (self.actual >= self.lower) & (self.actual <= self.upper)
+
+    @property
+    def width(self) -> np.ndarray:
+        return self.upper - self.lower
+
+
+def station_weighted_quantile(values: np.ndarray,
+                              stations: Sequence[str],
+                              level: float) -> float:
+    """Empirical quantile with every station contributing equal total weight.
+
+    Hourly rows inside one station are correlated, so a plain row quantile is
+    dominated by whichever station happens to contribute most rows — the same
+    reason this module bootstraps station blocks rather than rows. Equal
+    station weight is the convention `train.py` already uses for fitting.
+    """
+    values = np.asarray(values, dtype=float)
+    if not len(values):
+        return float("nan")
+    counts: dict[str, int] = {}
+    for station in stations:
+        counts[station] = counts.get(station, 0) + 1
+    weights = np.array([1.0 / counts[s] for s in stations], dtype=float)
+    order = np.argsort(values, kind="mergesort")
+    values, weights = values[order], weights[order]
+    cumulative = np.cumsum(weights) / weights.sum()
+    index = int(np.searchsorted(cumulative, min(level, 1.0), side="left"))
+    return float(values[min(index, len(values) - 1)])
+
+
+def conformal_correction(model: "SimilarityWeightedLGBM",
+                         calibration_rows: Sequence[Row],
+                         nominal: float = NOMINAL_COVERAGE) -> float | None:
+    """Split-conformal (CQR) widening for the calibration stations.
+
+    The score is the standard CQR residual ``max(lower - y, y - upper)``:
+    negative when the row already falls inside the interval, positive by
+    exactly the amount the interval was too narrow. Its ``nominal`` quantile
+    is how much the interval must open — or, when negative, may close.
+
+    Only SUPPORTED rows contribute. Outside weekday 06-20 the published
+    interval is the constant [0.1, 0.9] ignorance statement, not a model
+    output, so calibrating on it would measure the clamp instead of the model.
+    """
+    rows = [r for r in calibration_rows if in_deployed_training_window(r)]
+    stations = sorted({r.station_id for r in rows})
+    if len(stations) < MIN_CALIBRATION_STATIONS:
+        return None
+    lower, _mid, upper, supported = model.predict_interval(rows)
+    actual = np.array([r.share for r in rows], dtype=float)
+    scores = np.maximum(lower - actual, actual - upper)[supported]
+    kept = [r.station_id for r, keep in zip(rows, supported) if keep]
+    if not len(scores):
+        return None
+    # Finite-sample adjustment at the BLOCK level: n is the number of
+    # independent calibration stations, not the number of correlated rows.
+    level = min(1.0, nominal * (1.0 + 1.0 / len(stations)))
+    return station_weighted_quantile(scores, kept, level)
+
+
+def held_out_intervals(candidate: "SimilarityWeightedLGBM",
+                       folds: Sequence[Fold],
+                       deployment_target_features: np.ndarray | None = None,
+                       *, conformal: bool = False) -> HeldOutInterval:
+    """Pool held-out intervals fold by fold, optionally conformalized.
+
+    Deployment parity is the same as ``held_out_predictions``: one model per
+    held-out station, kernel centred on that station's static features, every
+    fitted quantity estimated on the training side only.
+
+    With ``conformal=True`` the fold's training stations are split
+    deterministically into a fit set and a calibration set, the quantile
+    models are fit on the FIT set alone, and the correction comes from the
+    calibration set. The calibration stations therefore never train the model
+    whose interval they correct, and the held-out station touches neither.
+    """
+    import copy
+
+    lower_all: list[float] = []
+    mid_all: list[float] = []
+    upper_all: list[float] = []
+    actual_all: list[float] = []
+    supported_all: list[bool] = []
+    stations_all: list[str] = []
+    corrections: list[float] = []
+
+    for fold in folds:
+        train_rows = list(fold.train)
+        calibration_rows: list[Row] = []
+        if conformal:
+            train_stations = sorted({r.station_id for r in train_rows})
+            calibration_ids = {
+                station for index, station in enumerate(train_stations)
+                if index % CONFORMAL_STATION_STRIDE == 0}
+            if len(calibration_ids) >= MIN_CALIBRATION_STATIONS:
+                calibration_rows = [r for r in train_rows
+                                    if r.station_id in calibration_ids]
+                train_rows = [r for r in train_rows
+                              if r.station_id not in calibration_ids]
+        fold_shrinkage = copy.deepcopy(candidate).prepare_shrinkage(
+            train_rows, deployment_target_features)
+
+        by_station: dict[str, list[Row]] = {}
+        for row in fold.test:
+            by_station.setdefault(row.station_id, []).append(row)
+        for _station, rows in sorted(by_station.items()):
+            target_features = np.array([r.features for r in rows], dtype=float)
+            fitted = copy.deepcopy(candidate).fit_interval(
+                train_rows, target_features=target_features,
+                shrinkage_override=fold_shrinkage,
+                deployment_target_features=deployment_target_features)
+            lower, mid, upper, supported = fitted.predict_interval(list(rows))
+            if conformal and calibration_rows:
+                correction = conformal_correction(fitted, calibration_rows)
+                if correction is not None:
+                    corrections.append(correction)
+                    inside = supported
+                    lower[inside] = np.clip(lower[inside] - correction,
+                                            CLAMP_LOW, CLAMP_HIGH)
+                    upper[inside] = np.clip(upper[inside] + correction,
+                                            CLAMP_LOW, CLAMP_HIGH)
+            lower_all.extend(lower.tolist())
+            mid_all.extend(mid.tolist())
+            upper_all.extend(upper.tolist())
+            supported_all.extend(supported.tolist())
+            actual_all.extend(r.share for r in rows)
+            stations_all.extend(r.station_id for r in rows)
+
+    return HeldOutInterval(
+        np.array(lower_all, dtype=float), np.array(mid_all, dtype=float),
+        np.array(upper_all, dtype=float), np.array(actual_all, dtype=float),
+        np.array(supported_all, dtype=bool), tuple(stations_all),
+        tuple(corrections))
+
+
+def interval_metrics(held: HeldOutInterval) -> dict[str, Any]:
+    """Coverage and width, reported separately inside and outside support.
+
+    ``station_coverage_min`` matters as much as the pooled number: a policy
+    can average 80% by covering four stations completely and one not at all,
+    which is not what an 80% interval promises for the next street.
+    """
+    def _slice(mask: np.ndarray) -> dict[str, Any]:
+        if not mask.any():
+            return {"n": 0}
+        covered = held.covered[mask]
+        width = held.width[mask]
+        stations = np.array(held.stations)[mask]
+        per_station = [float(covered[stations == s].mean())
+                       for s in sorted(set(stations.tolist()))]
+        return {
+            "n": int(mask.sum()),
+            "stations": len(per_station),
+            "coverage": round(float(covered.mean()), 4),
+            "mean_width": round(float(width.mean()), 4),
+            "median_width": round(float(np.median(width)), 4),
+            "station_coverage_min": round(float(np.min(per_station)), 4),
+            "station_coverage_median": round(float(np.median(per_station)), 4),
+        }
+
+    return {
+        "nominal_coverage": NOMINAL_COVERAGE,
+        "supported": _slice(held.supported),
+        "unsupported": _slice(~held.supported),
+        "all_rows": _slice(np.ones(len(held.actual), dtype=bool)),
+        "conformal_corrections": {
+            "n": len(held.corrections),
+            "median": (round(float(np.median(held.corrections)), 4)
+                       if held.corrections else None),
+            "min": (round(float(np.min(held.corrections)), 4)
+                    if held.corrections else None),
+            "max": (round(float(np.max(held.corrections)), 4)
+                    if held.corrections else None),
+        },
+    }
+
+
+def run_interval_calibration(
+        path: Path = TABLE_PATH, *, fold_kind: str = "leave_station_out",
+        max_folds: int = 0) -> dict[str, Any]:
+    """Measure the published interval, then the conformalized one."""
+    dataset_provenance = validate_dataset_provenance(path)
+    rows, meta = load_rows(path)
+    deployment_targets = deployment_target_matrix()
+    builders: dict[str, Callable[[Sequence[Row]], list[Fold]]] = {
+        "leave_city_out": leave_city_out,
+        "leave_station_out": lambda r: leave_station_out(r, 40),
+        "blocked_date": blocked_date,
+    }
+    if fold_kind not in builders:
+        raise ValueError(f"unknown fold kind {fold_kind!r}")
+    folds = builders[fold_kind](rows)
+    if max_folds:
+        folds = folds[:max_folds]
+    if not folds:
+        raise ValueError(f"fold kind {fold_kind!r} produced no folds")
+
+    candidate = SimilarityWeightedLGBM(use_profile_features=False)
+    published = held_out_intervals(candidate, folds, deployment_targets)
+    calibrated = held_out_intervals(candidate, folds, deployment_targets,
+                                    conformal=True)
+    report = {
+        "protocol": INTERVAL_PROTOCOL,
+        "release_evidence": False,
+        "recorded_fold_kind": fold_kind,
+        "folds_used": len(folds),
+        "folds_available": len(builders[fold_kind](rows)),
+        "candidate": candidate.name,
+        "input": meta,
+        "dataset": dataset_provenance,
+        "provenance": provenance_digests(path),
+        "published_interval": interval_metrics(published),
+        "conformalized_interval": interval_metrics(calibrated),
+        "interpretation": (
+            "Coverage below the nominal level means the published q10/q90 is "
+            "narrower than the data supports and must not be presented as an "
+            "80% interval. Unsupported rows are the constant [0.1, 0.9] "
+            "ignorance statement, not a model output, and are reported "
+            "separately for that reason."),
+    }
+    report["content_key"] = content_digest(report)
+    return report
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Gate M
 # ──────────────────────────────────────────────────────────────────────────
 def _inconclusive_gate_m(reason: str, **extra: Any) -> dict[str, Any]:
@@ -1350,9 +1682,39 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--table", type=Path, default=TABLE_PATH)
-    parser.add_argument("--out", type=Path, default=REPORT_PATH)
+    parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--intervals", action="store_true",
+        help="measure published vs conformalized q10/q90 coverage instead "
+             "of running the Gate M tournament")
+    parser.add_argument("--fold-kind", default="leave_station_out")
+    parser.add_argument(
+        "--max-folds", type=int, default=0,
+        help="interval mode only: stop after N folds for a fast pass; 0 "
+             "runs every fold and is the only form that may be registered")
     args = parser.parse_args(argv)
 
+    if args.intervals:
+        report = run_interval_calibration(
+            args.table, fold_kind=args.fold_kind, max_folds=args.max_folds)
+        out = args.out or INTERVAL_REPORT_PATH
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n")
+        partial = report["folds_used"] < report["folds_available"]
+        print(f"fold kind {report['recorded_fold_kind']}: "
+              f"{report['folds_used']}/{report['folds_available']} folds"
+              + ("  PARTIAL — diagnostic only" if partial else ""))
+        for key in ("published_interval", "conformalized_interval"):
+            block = report[key]["supported"]
+            print(f"{key:24s} supported n={block.get('n', 0)}  "
+                  f"coverage {block.get('coverage')} "
+                  f"(nominal {NOMINAL_COVERAGE})  "
+                  f"width {block.get('mean_width')}  "
+                  f"worst station {block.get('station_coverage_min')}")
+        print(f"Wrote {out}")
+        return 0
+
+    args.out = args.out or REPORT_PATH
     report = run(args.table)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n")

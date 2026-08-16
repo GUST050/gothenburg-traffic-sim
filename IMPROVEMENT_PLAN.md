@@ -10,6 +10,18 @@ Historical Sol/Luna task names and exact-approval wording below describe the
 process used at the time; current collaboration follows the flexible,
 model-independent protocol in `AGENTS.md`.
 
+**TOT-sensorernas dygnssplit återöppnad 2026-08-16 genom explicit
+användarbeslut:** den forskningsgrundade, generaliserbara planen finns i
+[`docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md`](docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md).
+Den prövar 52/48 som ett explicit volymviktat dygnsvillkor vid sensor 107 men
+bevarar källans sanningsenliga semantik: 3 400/3 100 är ett publicerat
+2025-aggregat, inte 365 uppmätta dygnssplitter. En ny Gate D ska maskera
+verkligt dubbelriktade stationer, jämföra period-only, daily-exact och
+daily-band under blockerade datum/stationer/städer och välja den enklaste
+icke-underlägsna profilen. Intradagsformen lärs och regulariseras separat före
+PFE; PFE får inte använda 96 fria riktningar som residualslukare. Ingen
+produktkod, aktiv arkitektur eller fryst Gate M/S-evidens ändras av planen.
+
 **Direction uncertainty supplement (2026-08-13, scope-corrected after review):**
 the researched, decision-gated design for improving `dirsplit` is
 [`docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md`](docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md).
@@ -95,6 +107,42 @@ The protocol is complete as a plan, but its implementation is not yet evidence.
 Each gate below must be passed by generated artifacts before the corresponding
 change can be promoted.
 
+### How the solver constraint was created (it is self-introduced)
+
+The dependency ceiling is a consequence of this repository's own parallel
+architecture, not of an external regression, and the plan must be read that
+way. The chain, in order:
+
+1. **A `fork` pool around the solver.** Per-quarter integer repair runs inside
+   `demand/calibration.py`'s `collect_counts` pool
+   (`mp.get_context("fork").Pool` → `_run_pfe_counts_job` → `_compute_pfe_counts`
+   → `pfe.quarter_publish_counts` → `pfe.repair_integer_bounds`). This is a
+   different pool from the memory-gated route-publishing pool later in the same
+   function, and `traffic_sim/confidence/loso.py` forks a third one; any A3
+   decision applies to every site where a solver can be live inside a forked
+   worker.
+2. **A deadlock in that arrangement.** Each forked worker's HiGHS instance also
+   created its own task executor: severe oversubscription, and unsafe after
+   `fork`. The recorded symptom (`traffic_sim/demand/pfe.py:923`) is a live
+   48-quarter build in which every worker sat in `HighsTaskExecutor` for hours
+   without honouring the 20-second time limit.
+3. **An undocumented option as the fix.** Commit c379629 (2026-08-15) passes
+   `{"time_limit": 20.0, "threads": 1}` to `scipy.optimize.milp`. `threads` is
+   not in SciPy's public allow-list; SciPy warns and forwards it to HiGHS, and
+   the code suppresses exactly that one forwarding warning.
+4. **A version barrier as the fix for the fix.** On SciPy 1.17 the forwarded
+   option is reported to yield status 4 before solving, so `requirements.txt`
+   and CI pin `scipy>=1.11,<1.17`.
+
+Each step was locally reasonable; together they mean the environment is pinned
+because of how the pipeline parallelises, not because SciPy broke. This is why
+A3 below starts with the candidate that removes the cause (no processes around
+the solver, therefore no `threads` option, therefore no ceiling) instead of the
+candidate that best preserves the current architecture. It is also why A2 must
+isolate the real failure before anything is rewritten: the repository records
+step 4 in prose only (`ARCHITECTURE.md`, this plan, `TASKS.md`), with no
+captured model, environment or solver log behind it.
+
 ### Research corrections that govern the design
 
 1. The current `scipy>=1.11,<1.17` range is an **emergency compatibility
@@ -128,9 +176,23 @@ change can be promoted.
    [pip repeatable installs](https://pip.pypa.io/en/latest/topics/repeatable-installs/),
    [pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/),
    [`pylock.toml` specification](https://packaging.python.org/en/latest/specifications/pylock-toml/).
-5. NVDB is authoritative road-structure input, not observed traffic behaviour.
-   Trafikverket publishes separate definitions and quality requirements for
-   speed limits and directional lane counts. Trafikverket's 2026-03-09
+5. NVDB is the **official road-structure source with product-specific and
+   supplier-dependent quality**, not observed traffic behaviour — and official
+   does not mean correct. Trafikverket states that the data suppliers
+   (municipalities, Lantmäteriet, the forestry sector, the Transport Agency)
+   collect, deliver and are responsible for the quality of the data, while
+   Trafikverket stores it, runs the quality controls it can and distributes it
+   to consumers. Provenance therefore does not guarantee correctness, and the
+   import must record per attribute which data product and specification
+   version it came from, which supplier/väghållare is responsible, and any
+   quality attribute the export actually exposes — with `unknown` recorded
+   whenever the metadata does not carry it. `unknown` is a fail-honest value
+   that blocks automatic patching of a high-impact edge, never a placeholder to
+   be filled in with an assumption. Trafikverket publishes separate definitions
+   and quality requirements for speed limits and directional lane counts, and
+   the generic quality page does not itself define a universal per-feature
+   quality class; what exists per product lives in the data product
+   specifications. Trafikverket's 2026-03-09
    validation says speed limit passed both completeness checks, while lane
    count passed missing-feature completeness but failed overcount completeness;
    that supports importing speed first and reviewing lane matches more
@@ -138,6 +200,7 @@ change can be promoted.
    rather than hand-editing `.net.xml`; lane count and speed can also influence
    junction priority. Sources:
    [NVDB products](https://www.nvdb.se/sv/kund/hamta-aktuella-data/),
+   [NVDB data quality and supplier responsibility](https://bransch.trafikverket.se/tjanster/data-kartor-och-geodatatjanster/las-om-vara-data/vagdata/datakvalitet-vagdata/),
    [Antal körfält2 specification](https://bransch.trafikverket.se/TrvSeFiler/Dataproduktspecifikationer/V%C3%A4gdataprodukter/DPS_A-B/1005Antal%20k%C3%B6rf%C3%A4lt2.pdf),
    [NVDB validation 2026-03-09](https://bransch.trafikverket.se/contentassets/024f467dfc6e4d809c15e2f68c3edc47/2026/nvdb_datavalideringar_20260309.pdf),
    [SUMO PlainXML](https://sumo.dlr.de/docs/Networks/PlainXML.html),
@@ -166,20 +229,48 @@ compatibility environment with full solver output and stderr. Record model
 digest, options, process start method, parent/child PID, active worker/thread
 settings, solver result/status and wall time. Repeat in a clean one-process
 program and under the production executor. A root-cause statement is allowed
-only when one controlled difference repeatedly explains the outcome.
+only when one controlled difference repeatedly explains the outcome. The same
+report carries the fork-site inventory — every place a solver can be live
+inside a forked worker — because A3's decision must cover all of them, not
+only the site that failed first.
 
-**A3. Compare implementations; do not predetermine the winner.** Benchmark:
+**A3. Compare implementations; do not predetermine the winner.** Benchmark
+against the reference — the locked, currently working SciPy/HiGHS path inside
+the `fork` pool — in ascending order of complexity, and stop at the first
+candidate that passes A4 and A5:
 
-- reference: the locked currently working SciPy/HiGHS path;
-- candidate S: SciPy's public serial `milp` API with no undocumented
-  `threads` option;
-- candidate H: official `highspy`, `threads=1`, initialized inside one
-  `spawn` worker per independent solver instance.
+- **Candidate 0 — serial SciPy, no processes around the solver.** Public
+  `milp` options only; no `threads`, no warning filter, no pool. HiGHS may use
+  its own default threading because nothing has forked. This deletes the cause
+  rather than the symptom and, with it, the SciPy ceiling. Test it first
+  because it is the least complex thing that can work, and measure — do not
+  assume — what it costs: the repair stage is parallel today, and the largest
+  values logged in `runs/` on this machine are 1,282 s of `timing PFE integer
+  repair` beside 2,873 s of interval solving on one 2,880-interval build at 10
+  workers (`runs/search_40h_3mo.log`), with 3,366 s of solving logged
+  elsewhere. Report the serial budget separately per build class; a single-day
+  build and a multi-day closure envelope can plausibly land on opposite sides
+  of it.
+- **Candidate P — SciPy `milp` in `spawn` workers.** Same public serial API,
+  one fresh process and one fresh solver per independent instance. This is not
+  a one-line start-method change: the 15 `_PFE_PAR_*` module globals in
+  `demand/calibration.py` (shapes, route cost, touch index, structure groups,
+  variant inputs, purpose mixes, per-quarter solutions, staged outputs, day
+  quarters, fixed totals, timings) are inherited implicitly by `fork` today.
+  Under `spawn` each must be rebuilt by an explicit worker initializer from a
+  content-addressed input, passed per task, or placed in shared memory, and the
+  q50→stress-arm fixed totals must be passed explicitly because they are
+  computed between two batches. Measure initialisation cost, per-task
+  serialisation and peak RSS, not solve time alone.
+- **Candidate H — `highspy` in that same `spawn` architecture,** `threads=1`,
+  one instance per worker. Adopt only if P's throughput is insufficient and H
+  passes the identical A4 corpus.
 
 Do not call HiGHS global-scheduler reset functions while any instance is live.
-Do not combine nested process pools and solver parallelism. Serial candidate S
-is preferred if it meets the measured resource budget; candidate H is adopted
-only if it provides necessary throughput without losing the gates below.
+Do not combine nested process pools and solver parallelism. Whichever candidate
+wins, apply the decision to every site that can hold a solver inside a forked
+worker — the repair pool, the publisher pool and the LOSO pool — and record the
+site inventory in A2's report.
 Sources: [HiGHS Python API](https://ergo-code.github.io/HiGHS/stable/interfaces/python/),
 [HiGHS options](https://ergo-code.github.io/HiGHS/dev/options/intro/),
 [HiGHS scheduler reset contract](https://ergo-code.github.io/HiGHS/stable/interfaces/c_api/).
@@ -249,6 +340,21 @@ Missing/unreachable members, a dirty or wrong source tree, environment drift or
 different result fail closed. Historical v5/v6 stay unchanged and
 non-release; the correction record remains their authority boundary.
 
+**This work package stays conditional, deliberately.** It is required before
+any *future* Gate S outcome is promoted, and it is not required to ship the
+current product, because dirsplit work is closed and neither v5 nor v6 is
+release evidence. Making C mandatory now would reopen closed work to satisfy a
+reproducibility standard that no live claim depends on.
+
+**Current dirsplit gate authority, so no document restates a superseded one:**
+Gate M authority is `validation/dirsplit_gate_m_outcome_v5.json` — `MODEL`,
+winner `similarity_weighted_lgbm_no_profile`, recorded 2026-08-15, superseding
+v4 by recorded hash. v4 (`BASELINE`, constant 50/50) remains the immutable Exit
+A record for the pre-reopening decision and must not be quoted as the current
+result. Gate S authority is the correction record: no independently
+reproducible outcome exists, and v6's `NO` is a narrow historical diagnostic.
+Both v4 and v5 carry `release_evidence: false`.
+
 ### Work package D — import NVDB without corrupting the network
 
 Execute this after work packages A1–A2 and B1 are operational, so the import
@@ -257,7 +363,10 @@ and its comparisons run in a stable environment. Do not wait for new sensors.
 1. **Snapshot, never query live during a build.** Freeze the API/export
    response with retrieval time, product/spec version, query/bounding box,
    CRS, licence/source URI, byte size and SHA-256. Preserve raw input and a
-   normalized table separately.
+   normalized table separately. Carry through, per feature, the responsible
+   data supplier/väghållare and every quality attribute the product exposes;
+   where the export carries neither, the normalized row records `unknown`
+   rather than a guess.
 2. **Audit before mutation.** Inventory defaulted values and rank edges by
    measured flow exposure, closure/detour relevance and uncertainty. First
    campaign scope is speed and directional lane count on that reviewed set.
@@ -275,7 +384,11 @@ and its comparisons run in a stable environment. Do not wait for new sensors.
    the held-out and high-impact sets; coverage may be low. Any error returns
    the matcher to development. Unique high-confidence matches are eligible,
    ambiguous/conflicting matches queue for review, and unmatched edges retain
-   their declared fallback. Report precision, coverage, ambiguity and conflict
+   their declared fallback. A match whose supplier or quality metadata is
+   `unknown` is still eligible outside the high-impact set when it is unique
+   and high-confidence, but inside the high-impact set it queues for manual
+   review — missing quality provenance is treated as a reason to look, not a
+   reason to stop importing. Report precision, coverage, ambiguity and conflict
    separately.
 4. **Apply a minimal patch.** Generate reviewed PlainXML/netconvert patches
    against the frozen source network; never hand-edit `.net.xml`. Preserve
@@ -290,7 +403,8 @@ and its comparisons run in a stable environment. Do not wait for new sensors.
    speed/lane values; unchanged candidate and route reachability except for
    reviewed intended effects; no new disconnected/unserviceable routes; and a
    complete per-attribute provenance audit (`NVDB`, OSM, reviewed override or
-   fallback).
+   fallback) that also carries the NVDB product/spec version, responsible data
+   supplier and quality attribute, or `unknown`, for every imported value.
 6. **Compare like with like.** Build fresh demand on the new network. Rerun
    normal health/final-output fit, spatial LOSO, temporal holdout and the frozen
    closure comparison with identical dates, candidates, variants and seeds.
@@ -322,7 +436,7 @@ allowed.
 | Gate S reproducible from clean checkout or explicitly non-release | Portable content-addressed provenance has no author-machine dependency |
 | NVDB patch cannot alter unreviewed topology, IDs, snaps or signal logic | Raw snapshot → normalized source → match audit → minimal patch → staged network is one-way and versioned |
 | Old network and demand remain atomically recoverable | Fresh demand/evidence is bound to each new network identity |
-| Claims limited to what held-out and scenario evidence demonstrates | Every imported/defaulted/manual value has per-attribute provenance |
+| Claims limited to what held-out and scenario evidence demonstrates | Every imported/defaulted/manual value has per-attribute provenance, including NVDB product, supplier and quality class or `unknown` |
 
 **Execution order:** A1–A2 → B1 → A3–A5 → B2–B3 → C → D. Work package C
 may be skipped while dirsplit stays closed, but it must pass before any future
@@ -1555,11 +1669,15 @@ matching. Apply only reviewed speed/lane attributes through a generated
 PlainXML/netconvert patch, publish a new network identity and rebuild demand.
 Keep the old network recoverable and compare held-out, health and closure
 evidence before promotion. Do not calibrate driving speed, lane changing or
-queue discharge from speed limits alone, and do not describe authoritative
-road structure as demonstrated traffic accuracy.
+queue discharge from speed limits alone, and do not describe an official
+road-structure source as demonstrated traffic accuracy: NVDB quality is
+product-specific and supplier-dependent, so an imported value is documented,
+not verified.
 
 **Exit condition:** every network value used by SUMO is traceable to a hashed
-OSM/NVDB snapshot, a reviewed override or a declared fallback; there is zero
+OSM/NVDB snapshot with its product/spec version, responsible supplier and
+quality attribute recorded (or `unknown`), a reviewed override or a declared
+fallback; there is zero
 unreviewed topology, stable-ID, sensor-snap or TLS drift; fresh demand and
 before/after evidence bind the staged network; and rollback is an atomic
 pointer change to the previous immutable release.
@@ -1940,8 +2058,10 @@ range-level manifest. The active seven-day release satisfies this gate.
 2. Execute work package D: bind the raw NVDB snapshot and product semantics,
    calibrate matching against reviewed truth, stage a minimal attribute patch
    and fail closed on ambiguous direction.
-3. Retain per-attribute provenance: source snapshot and feature ID, imported,
-   defaulted or manually reviewed status, match evidence and patch digest.
+3. Retain per-attribute provenance: source snapshot and feature ID, NVDB
+   product/spec version, responsible data supplier and quality attribute (or
+   `unknown`), imported/defaulted/manually reviewed status, match evidence and
+   patch digest.
 4. Repair only reviewed speed/lane issues while preserving stable edge IDs,
    topology, sensor snaps, connections and TLS semantics. Topology differences
    require a separate campaign and contract.

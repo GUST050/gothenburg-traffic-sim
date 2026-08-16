@@ -820,3 +820,105 @@ class TestTheReportCarriesProvenance:
         report.pop("content_key")
         mutated = dict(report, gate_m="BASELINE")
         assert ev.content_digest(mutated) != ev.content_digest(report)
+
+
+# ── the published interval is measured, not assumed ───────────────────────
+class TestIntervalCalibration:
+    """q10/q90 ships as an uncertainty statement but was never validated.
+
+    These pin the measurement itself: that it reproduces the deployed writer,
+    that its conformal correction is fit inside the fold, and that the
+    constant out-of-support clamp can never be pooled into the trained
+    coverage number.
+    """
+
+    def candidate(self):
+        return ev.SimilarityWeightedLGBM(use_profile_features=False)
+
+    def test_outside_support_the_interval_is_the_declared_clamp(self):
+        fitted = self.candidate().fit_interval(spread(jitter=0.05))
+        night = [row(station="oslo-A", city="oslo", hour=3)]
+        lower, mid, upper, supported = fitted.predict_interval(night)
+        assert not supported[0]
+        assert (lower[0], mid[0], upper[0]) == (ev.CLAMP_LOW, 0.5,
+                                                ev.CLAMP_HIGH)
+
+    def test_inside_support_the_interval_is_ordered_and_clamped(self):
+        fitted = self.candidate().fit_interval(spread(jitter=0.05))
+        day = [row(station="oslo-A", city="oslo", hour=8)]
+        lower, mid, upper, supported = fitted.predict_interval(day)
+        assert supported[0]
+        assert ev.CLAMP_LOW <= lower[0] <= mid[0] <= upper[0] <= ev.CLAMP_HIGH
+
+    def test_an_unfitted_model_states_ignorance_rather_than_guessing(self):
+        """Too little data must widen to the clamp, never collapse to a point."""
+        fitted = self.candidate().fit_interval([row(), row()])
+        lower, mid, upper, _ = fitted.predict_interval([row(hour=8)])
+        assert (lower[0], mid[0], upper[0]) == (ev.CLAMP_LOW, 0.5,
+                                                ev.CLAMP_HIGH)
+
+    def test_one_busy_station_cannot_dominate_the_quantile(self):
+        """Equal station weight is the whole point of the block convention."""
+        values = np.array([0.9] * 50 + [0.1, 0.1])
+        stations = ["loud"] * 50 + ["quiet1", "quiet2"]
+        # Row-wise the median is 0.9; station-weighted, "loud" holds a third.
+        assert ev.station_weighted_quantile(values, stations, 0.5) == 0.1
+        assert float(np.median(values)) == 0.9
+
+    def test_conformal_needs_enough_independent_stations(self):
+        fitted = self.candidate().fit_interval(spread(jitter=0.05))
+        two_stations = [row(station="oslo-A", hour=8),
+                        row(station="oslo-B", hour=8)]
+        assert ev.conformal_correction(fitted, two_stations) is None
+
+    def test_a_too_narrow_interval_is_widened(self):
+        """Observations far outside the interval must produce a positive score."""
+        fitted = self.candidate().fit_interval(spread(jitter=0.01))
+        outliers = [row(station=f"S{i}", city="oslo", hour=8, share=0.95)
+                    for i in range(4)]
+        correction = ev.conformal_correction(fitted, outliers)
+        assert correction is not None and correction > 0
+
+    def test_calibration_stations_do_not_train_the_model_they_correct(self):
+        """The leakage property that makes the correction meaningful."""
+        seen: list[set[str]] = []
+        real_fit = ev.SimilarityWeightedLGBM.fit_interval
+
+        def recording_fit(self, rows, *args, **kwargs):
+            seen.append({r.station_id for r in rows})
+            return real_fit(self, rows, *args, **kwargs)
+
+        rows = spread(stations=tuple("ABCDEFGHI"),
+                      cities=("oslo", "bergen"), jitter=0.05)
+        folds = ev.leave_station_out(rows, 1)
+        ev.SimilarityWeightedLGBM.fit_interval = recording_fit
+        try:
+            ev.held_out_intervals(self.candidate(), folds, conformal=True)
+        finally:
+            ev.SimilarityWeightedLGBM.fit_interval = real_fit
+
+        train_stations = {r.station_id for r in folds[0].train}
+        calibration = sorted(train_stations)[::ev.CONFORMAL_STATION_STRIDE]
+        assert calibration, "the fixture must produce calibration stations"
+        for fitted_on in seen:
+            assert not (fitted_on & set(calibration))
+
+    def test_the_clamped_night_cannot_inflate_the_trained_coverage(self):
+        held = ev.HeldOutInterval(
+            lower=np.array([0.45, ev.CLAMP_LOW]),
+            mid=np.array([0.5, 0.5]),
+            upper=np.array([0.55, ev.CLAMP_HIGH]),
+            actual=np.array([0.8, 0.8]),          # missed by day, "covered" by night
+            supported=np.array([True, False]),
+            stations=("A", "A"))
+        metrics = ev.interval_metrics(held)
+        assert metrics["supported"]["coverage"] == 0.0
+        assert metrics["unsupported"]["coverage"] == 1.0
+        assert metrics["all_rows"]["coverage"] == 0.5
+
+    def test_a_partial_run_is_marked_as_diagnostic(self):
+        """A truncated fold set may never look like a complete measurement."""
+        report = ev.run_interval_calibration(
+            fold_kind="leave_station_out", max_folds=1)
+        assert report["release_evidence"] is False
+        assert report["folds_used"] < report["folds_available"]

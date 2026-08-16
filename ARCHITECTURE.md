@@ -458,7 +458,10 @@ solves, returning status 4. The supported analytical environment is therefore
 the pin or the one-thread repair option independently: a future upgrade needs
 an explicit replacement for per-worker HiGHS thread control plus the full PFE
 publication suite. Unknown solver status remains fail-closed and may never be
-treated as infeasibility or permission to publish a route file.
+treated as infeasibility or permission to publish a route file. Note the
+dependency direction: the pin exists because repair is forked, so the exit
+path is IMPROVEMENT_PLAN.md work package A3 — change the process architecture
+around the solver, and the option and the pin become unnecessary together.
 
 ### C — Candidate generation (`build_candidates.py`) — GROUNDED (2026-07-05)
 The route-candidate pool (what PFE selects among) is now the standard
