@@ -37,11 +37,14 @@ which model may continue. See `AGENTS.md`.
   data/dirsplit/coverage_report.json (observability v2 added);
   tests/test_direction_anchor.py, tests/test_direction_decision_sensitivity.py,
   tests/test_dirsplit_v2.py (new); plan/TASKS/AGENT_NOTES/IMPROVEMENT_PLAN docs.`
-- Checks: `141 new tests pass (37 anchor, 33 sensitivity, 71 dirsplit v2 +
-  existing dirsplit). Full suite run before and after the change in parallel
-  worktrees to separate pre-existing environment failures from regressions.
-  The tournament was executed for real on the tracked aggregate; the anchor was
-  measured against the real 2025 flows and the checked-in model.`
+- Checks: `116 new tests pass (38 anchor, 33 sensitivity, 45 dirsplit v2), plus
+  the existing dirsplit tests: 142 passed together. Full suite run twice in
+  parallel worktrees, clean HEAD versus this change: 321 failed / 4,458 passed
+  and 321 failed / 4,564 passed, with the two FAILED lists byte-identical — the
+  failures are this sandbox lacking SUMO, not regressions (spot-checked: the
+  monthly-demand failures are SumoRuntimeError "cannot locate SUMO" on both
+  sides). The tournament was executed for real on the tracked aggregate; the
+  anchor was measured against the real 2025 flows and the checked-in model.`
 - Decisions and evidence: `q10/q90 are re-levelled by the SAME shift as q50, so
   the stress band keeps its width in log-odds instead of collapsing onto the
   anchor or pretending to new spread. Anchor weights come from the measured
