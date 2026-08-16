@@ -20,6 +20,15 @@ interpolation, clamped to [0.1, 0.9].
 Predictions are ESTIMATES and labelled as such, with the coverage status
 (applicability domain) attached per edge. New sensors in network.geojson
 are picked up automatically after a retrain.
+
+What this file does NOT contain: a station's published local D-factor. Where
+the validated registry holds a verified `directional_reference` (today sensor
+107 alone), the profile written here is re-levelled at LOAD time — see
+traffic_sim/intake/direction_anchor.py and demand/intake.py's
+load_anchored_direction_split. Anchoring lives there, not here, so that a split
+produced by the Gaussian fallback (estimate_directions.py) is anchored too, and
+so every consumer sees the same shares. The numbers in this file are therefore
+the model's own estimate, before local evidence is applied.
 """
 
 from __future__ import annotations
