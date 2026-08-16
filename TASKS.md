@@ -8,71 +8,54 @@ See `AGENTS.md` for the flexible actor protocol.
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Validate and plan a reusable daily-anchored, time-varying
-  direction split for two-way TOT sensors, beginning with sensor 107.`
-- Status: `RESEARCHED PLAN COMPLETE — the plan separates the published 2025
-  period aggregate (3 400/3 100) from an optional daily-exact model policy,
-  defines a logit-projected and regularized intraday profile, and requires a
-  new Gate D over masked truly directional stations before activation. No
-  product code, active architecture or frozen evidence has changed.`
-- Suggested next action: `Execute D0-D4 in
-  docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md: freeze the
-  baseline, build the raw day-blocked pseudo-TOT benchmark, preregister the
-  candidate family and run blocked-date, leave-station-out and leave-city-out
-  Gate D before changing demand intake.`
+- Current focus: `Make the repository easier and safer for Codex, Claude and
+  human contributors to navigate, change and verify.`
+- Status: `IMPLEMENTED — concise layered agent instructions, a compact
+  architecture map, stable domain test commands, AI evaluation tasks, large
+  artifact enforcement and an evidence-aware modularization plan are in place.
+  Focused quality checks pass; source-bound trial extractions were reverted.`
+- Suggested next action: `Review the pushed AI-structure change, choose Git LFS
+  or durable external storage for the three pinned legacy artifacts, then
+  resume Gate D from the unchanged daily TOT split plan.`
 - Eligible actors: `Any model or person; no model-specific gate`
-- Safety boundary: `Preserve historical Gate M/S, demand, route, closure and
-  release evidence. The 52/48 source is a 2025 aggregate, not daily or
-  per-quarter measurement. Do not hardcode sensor 107, silently transfer the
-  anchor to 2027, alter single-direction Level-1 targets, let PFE absorb
-  residuals through free split variables, or label uncalibrated q arms as
-  intervals. Missing remains missing and both directions must preserve every
-  measured two-way total exactly.`
-- Updated: `2026-08-16 Codex — user reprioritized the current focus to a
-  generalizable daily TOT split; primary-source research and repository
-  diagnostics were converted into a Gate-D implementation plan.`
+- Safety boundary: `Stable root CLI paths, scientific contracts, frozen
+  evidence and unrelated historical records remain unchanged. Large legacy
+  artifacts are pinned, not silently migrated; no validation gate may be
+  weakened to make CI pass.`
+- Updated: `2026-08-16 Codex — user reprioritized the current focus to
+  AI-friendly repository structure and requested commit/push for Claude.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
 ## ACTIVE_TASK
 
-### DIRSPLIT-TOT-DAILY-1 — Generaliserbar dygnsförankrad TOT-split
+### AI-REPO-STRUCTURE-1 — Layered context and repeatable verification
 
-- Status: `READY FOR EVIDENCE BUILD — researched plan complete; implementation
-  and Gate D have not started.`
-- Objective and scope: `Test whether sensor 107 should use 52.3077/47.6923 as
-  an exact volume-weighted daily policy while allowing a more realistic,
-  data-learned intraday shape, and make the method reusable for future
-  two-directional TOT sensors without sensor-specific code.`
-- Completion outcome: `A provenance-bound pseudo-TOT daily dataset, registered
-  flat/period/daily/band candidates, complete blocked-date/station/city Gate D,
-  a pure whole-day projection contract, explicit missing/DST/future-year
-  behaviour and, only after a passing gate, an integrated auditable policy.`
-- Context or checkpoints: `The active 107 profile is already nearly daily
-  fixed (about 52.22-52.36% over valid 2025 days) but spans only about 1.9
-  percentage points intraday after anchoring. Research supports local and
-  time-specific directional profiles, but does not turn a period aggregate
-  into measured daily truth. Existing Gate M v5 remains authoritative for the
-  current model; new daily-shape evidence gets a separate append-only Gate D.`
-- Primary files: `docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md;
-  future dirsplit daily dataset/evaluator; traffic_sim/intake/sensors.py;
-  demand/intake.py; build_sumo_demand.py; validation Gate D records and focused
-  tests.`
-- Constraints and safety: `Separate source evidence from application policy;
-  preserve per-slot totals and complementary shares; project the whole day
-  before slicing a window; never infer daily truth from the 2025 aggregate;
-  never train amplitude on 107's unknown directions; never give PFE free split
-  authority; preserve all unrelated dirty changes and frozen artifacts.`
-- Acceptance criteria: `Gate D contains blocked date, station and city folds;
-  daily-exact must first prove non-inferior to period-only; a shaped candidate
-  must beat flat daily in every required fold family without a primary-group
-  loss; unsupported or incomplete inputs fall back visibly; another TOT sensor
-  can be added through registry data and policy only.`
-- Useful checks: `Raw-manifest digest; masked paired-direction benchmark;
-  per-slot total/complement property tests; daily weighted equality; amplitude
-  invariance; multi-day/full-day-before-window; DST/missing/zero/future-year;
-  single-direction byte identity; clean-checkout provenance verification; Gate
-  S rerun only if the selected profile materially changes closure inputs.`
+- Status: `IMPLEMENTED AND VERIFIED — focused checks pass, trial changes to
+  source-bound product files were reverted, and publication is in progress.`
+- Objective and scope: `Reduce agent context load, make ownership and commands
+  discoverable, prevent accidental artifact growth and map a safe path for
+  shrinking large entry points without breaking public or evidence contracts.`
+- Completion outcome: `Root and nested AGENTS/CLAUDE guidance, concise
+  architecture and artifact policy, stable Make targets, CI lint/hygiene/
+  contract checks, representative AI evals and evidence-aware refactoring
+  priorities.`
+- Context or checkpoints: `Root AGENTS.md is 100 lines and CLAUDE.md imports it;
+  detailed collaboration and historical Claude material moved under docs.
+  Legacy tracked artifacts over 5 MiB are digest-pinned because Git LFS is not
+  installed and shared storage has not been selected.`
+- Primary files: `AGENTS.md; CLAUDE.md; docs/ai/;
+  docs/architecture/OVERVIEW.md; Makefile; pyproject.toml; CI; domain agent
+  files; tools/check_repo_hygiene.py and its allowlist/test.`
+- Constraints and safety: `Preserve root CLI/import compatibility, frozen
+  evidence and scientific validation behavior. Do not migrate or delete large
+  artifacts without an explicit shared-storage decision.`
+- Acceptance criteria: `Nearest-file instructions describe real invariants;
+  documented commands run; CI detects undefined names and unapproved large
+  files; focused tests have no regressions; another actor can orient from the
+  short docs; source-bound modules stay byte-identical.`
+- Useful checks: `make check; domain Make targets; full pytest comparison;
+  git diff --check; clean status after commit and push.`
 <!-- ACTIVE_TASK_END -->
 
 ## History

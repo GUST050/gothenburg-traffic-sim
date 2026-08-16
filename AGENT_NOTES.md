@@ -6,54 +6,42 @@ Historical detail lives in `docs/history/AGENT_NOTES_history.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `A researched, generalizable plan for daily-anchored,
-  time-varying direction split at TOT sensors is complete; evidence build and
-  implementation are not started.`
-- Summary: `The plan keeps sensor 107's published 3 400/3 100 as a 2025 period
-  fact and represents exact 52.3077/47.6923 per day as a separate optional
-  model policy. It proposes a TOT-semantically matched daily profile on the
-  logit scale, held-out-learned amplitude and a one-offset whole-day projection
-  that preserves every measured total. A new Gate D compares flat, incumbent,
-  daily-exact, daily-band and shaped policies over masked directional stations
-  before product activation.`
-- Files changed: `New
-  docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md plus current
-  references in IMPROVEMENT_PLAN.md, TASKS.md and AGENT_NOTES.md. Pre-existing
-  dirty solver/NVDB and test changes were preserved.`
-- Checks: `Repository direction path and tests inspected; current 107 q50 and
-  2025 totals measured read-only. The anchored profile spans about 51.56-53.46%
-  and produces about 52.22-52.36% daily share on valid 2025 days. Primary
-  sources reviewed: FHWA TMG/HPMS, Trafikverket traffic-variation guidance,
-  KDOT hourly directional factors, SUMO count-to-route documentation,
-  compositional logit modelling, trend filtering, blocked CV and time-series
-  conformal calibration. Marker counts and git diff --check pass. The combined
-  publication suite reports 666 passed, 1 skipped and 13 failed. A detached
-  HEAD comparison reproduces all 12 warm-state failures, so they predate this
-  worktree. The remaining failure is the intended fail-closed Gate M check:
-  dirsplit/evaluate.py changed while data/dirsplit/gate_m_report.json still
-  binds the prior source digest.`
-- Decisions and evidence: `Do not let PFE choose free per-quarter shares.
-  Estimate the shape outside PFE, project it to the declared daily policy and
-  pass complementary totals downstream. Do not hand-pick 35/65 or 40/60;
-  learn and shrink amplitude under blocked date/station/city validation. A
-  daily-exact policy must first show non-inferiority to period-only because the
-  local source does not measure daily split. Gate M v5 remains current for the
-  existing product; Gate D is append-only and answers the new question.`
-- Blockers or risks: `Sensor 107 cannot validate its own intraday shape because
-  only its two-way total is measured. Norwegian paired stations provide the
-  available benchmark but may not transfer to Gothenburg; low applicability or
-  any missing fold gives INCONCLUSIVE. Full-day handling of gaps and DST must be
-  explicit, and a 2025 anchor cannot silently become a 2027 policy. Before
-  merge, the Gate M source/report drift must be resolved through a new
-  provenance-bound report/decision or by separating the source change; frozen
-  evidence must not be rewritten merely to make the test pass.`
-- Suggested next action: `Execute plan D0-D4 only: freeze the baseline, create
-  the provenance-bound day-blocked pseudo-TOT table, preregister candidates and
-  run Gate D. Do not edit demand intake until an outcome selects a policy.`
-- Actor notes: `Planning/research only. No source implementation, sensor data,
-  demand, network, solver, frozen validation artifact or external system was
-  changed; nothing was pushed. The prior solver/NVDB hardening plan remains in
-  IMPROVEMENT_PLAN.md but is reprioritized by the user's latest request.`
+- Focus and status: `AI-friendly repository structure is implemented; final
+  full-suite comparison and GitHub publication are in progress.`
+- Summary: `Concise layered AGENTS.md guidance now follows directory scope;
+  CLAUDE.md imports the shared rules. A compact architecture map, artifact
+  policy, AI eval set, development requirements and stable Make/CI checks make
+  navigation and verification repeatable. Trial extractions from the three
+  largest root modules were rejected after the full suite proved that those
+  files participate in frozen provenance; all three were restored byte-for-byte.`
+- Files changed: `Root and domain AGENTS/CLAUDE files; docs/ai and
+  docs/architecture; README/ARCHITECTURE/docs index; Makefile, pyproject,
+  requirements-dev and CI; repository-hygiene guard/test/allowlist. No product
+  source, frozen evidence or sensor data changed.`
+- Checks: `make check passes: Ruff correctness lint,
+  repository hygiene and 59 package/contract tests. Final Make targets pass:
+  demand 274, dirsplit 154, simulation 144 with 1 skipped, and web 155 (the web
+  target requires localhost permission). An exploratory full suite with trial
+  source extractions reached 3 738 passed, 27 skipped and 114 failed before
+  interruption; the extractions caused additional provenance failures and were
+  therefore fully reverted.`
+- Decisions and evidence: `Root command paths remain stable because tests,
+  docs and evidence depend on them. Large files are blocked at 5 MiB unless
+  exact size and SHA-256 are explicitly allowlisted. The three existing large
+  artifacts are pinned instead of migrated because Git LFS is unavailable and
+  the shared storage destination requires a user/project decision.`
+- Blockers or risks: `The branch baseline already has 12 warm-state failures
+  and one intentional fail-closed Gate M source/report digest mismatch. These
+  must not be hidden by weakening validation. Large source-bound modules cannot
+  be modularized until successor evidence is authorized. The three pinned
+  artifacts still live in Git until shared storage is selected.`
+- Suggested next action: `Have Claude review the pushed branch using the short
+  root context, choose Git LFS versus durable external artifact storage, then
+  resume the unchanged TOT Gate-D plan.`
+- Actor notes: `The TOT split research remains in
+  docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md; it is
+  paused, not superseded. This task changes repository ergonomics and module
+  ownership only, not scientific behavior or frozen evidence.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History

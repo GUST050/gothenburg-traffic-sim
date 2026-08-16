@@ -23,7 +23,7 @@ jobs:
         run: |
           pip install pandas numpy osmnx pyproj shapely geopandas \
                       lightgbm scikit-learn 'scipy>=1.11,<1.17' \
-                      numba==0.60.0 pytest
+                      numba==0.60.0 pytest 'ruff>=0.12,<1'
 
-      - name: Run tests
-        run: python3 -m pytest tests/ -q
+      - name: Run repository checks
+        run: make ci

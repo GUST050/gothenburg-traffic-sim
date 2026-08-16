@@ -1,0 +1,30 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+  "unit: deterministic isolated behavior",
+  "contract: repository, schema, provenance, or compatibility contract",
+  "integration: crosses package, process, filesystem, or HTTP boundaries",
+  "simulation: exercises SUMO-facing or scenario behavior",
+  "e2e: end-to-end product workflow",
+  "slow: deliberately expensive check excluded from quick feedback",
+  "release: evidence or publication gate, not an ordinary diagnostic",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [
+  "data",
+  "data_in",
+  "runs",
+  "sumo",
+  "validation",
+  "web/data",
+]
+
+[tool.ruff.lint]
+# Start with correctness failures that are safe to gate on an established
+# scientific codebase. Broader style rules can be adopted one measured family
+# at a time without creating a formatting-only rewrite.
+select = ["E9", "F63", "F7", "F82"]

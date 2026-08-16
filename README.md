@@ -10,7 +10,9 @@ Chalmers (supervisor: Prof. Miroslaw Staron).
 The repository supports Codex, Claude and other models as interchangeable
 actors. Any capable actor may plan, implement, test or review; there is no fixed
 Sol/Luna routing or mandatory state machine. Start with `AGENTS.md`, then use
-the marked current blocks in `TASKS.md` and `AGENT_NOTES.md` for context.
+`docs/architecture/OVERVIEW.md` for the compact code map and the marked current
+blocks in `TASKS.md` and `AGENT_NOTES.md` for context. Domain directories carry
+local `AGENTS.md` files; adjacent `CLAUDE.md` files import the same rules.
 Historical role labels remain only for traceability.
 
 ## What it does
@@ -73,12 +75,19 @@ the same interface without touching map/render code.
 ```bash
 pip install -r requirements.txt
 
+# Contributors and coding agents: pytest coverage + Ruff
+pip install -r requirements-dev.txt
+
 # Full pipeline (auto-discovers data_in/, falls back to the original delivery)
 make all
 
 # Web app + scenario API → http://localhost:8000
 make serve
 ```
+
+Before handing off a code change, run `make check`. Use the focused targets
+`make test-demand`, `make test-dirsplit`, `make test-simulation` or
+`make test-web` while iterating, and `make test` for a broad final check.
 
 **Close roads from the map:** with `make serve` running, open
 **Vägavstängning**. One workspace handles all road-closing scopes: simulate

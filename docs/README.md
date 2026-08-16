@@ -9,8 +9,12 @@ documents in the repository root.
 | question | file |
 | --- | --- |
 | What is the program's structure? | `ARCHITECTURE.md` (source of truth) |
-| Project context, data, rules | `CLAUDE.md` |
-| How contributors collaborate | `AGENTS.md` |
+| Fast architecture and code map | `docs/architecture/OVERVIEW.md` |
+| Always-loaded repository rules | `AGENTS.md` (`CLAUDE.md` imports it) |
+| Detailed collaboration reference | `docs/ai/COLLABORATION_GUIDE.md` |
+| Coding-agent research and structure evals | `docs/ai/RESEARCH_BASIS.md`, `docs/ai/AI_EVALS.md` |
+| Large/generated artifact policy | `docs/ai/ARTIFACT_POLICY.md` |
+| Historical project context through 2026-08-16 | `docs/history/CLAUDE_PROJECT_CONTEXT_2026-08-16.md` |
 | What to build next | `IMPROVEMENT_PLAN.md` (canonical plan) |
 | Current focus / handoff | `TASKS.md`, `AGENT_NOTES.md` (marked blocks only) |
 | Demand day-library speed design | `SPEED_ARCHITECTURE_PLAN_2026-07.md` |
@@ -75,7 +79,7 @@ decision was made.
 | `LOSO_CONTROLLED_ROUNDING_ROOT_CAUSE_RESEARCH_2026-08-09.md` | root-cause research for the controlled-rounding integer conflicts |
 | `WARMING_SPEED_RESEARCH_2026-08-08.md` | research into what actually limits warming throughput |
 | `DATA_REQUEST_2026-07.md` | NOT SENT. A record only — the no-more-external-data decision (2026-07-20) is permanent |
-| `PROJECT_CONTEXT_OLD_AGENTS.md` | superseded by `CLAUDE.md` and `AGENTS.md` |
+| `PROJECT_CONTEXT_OLD_AGENTS.md` | superseded by `AGENTS.md`, the architecture overview and the preserved Claude context history |
 
 `REPO_STRUCTURE_2026-08-07.md` was executed on 2026-08-15 and deleted, as it
 instructed. Its outcome — the finished `traffic_sim/` migration and the rule

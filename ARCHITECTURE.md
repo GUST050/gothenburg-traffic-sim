@@ -1,5 +1,9 @@
 # Architecture — locked 2026-07-05
 
+For a short code and dependency map, start with
+`docs/architecture/OVERVIEW.md`. This file remains the complete technical
+source of truth.
+
 **Product contract:** the city drops 15-minute count data (any number of
 stations, directional or two-way) into the program and gets back (1) a
 simulation of the measured period, (2) a simulation of any future date, and

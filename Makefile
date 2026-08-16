@@ -5,9 +5,49 @@
 # validated station record to data_in/sensors.json, then `make refresh`.
 # Explicit paths still work: make data DATA_DIR="/path" COORDS="/path.csv"
 
-.PHONY: all refresh data features agent1 forecast test serve sumo-net demand scenario deso benchmark-speed validate-temporal
+.PHONY: all refresh setup-dev data features agent1 forecast test test-fast \
+	test-contract test-demand test-dirsplit test-simulation test-web lint \
+	repo-hygiene check ci serve sumo-net demand scenario deso benchmark-speed \
+	validate-temporal
+
+PYTHON ?= python3
+PYTEST := $(PYTHON) -m pytest
+
+FAST_TESTS := \
+	tests/test_package_layout.py \
+	tests/test_repo_hygiene.py \
+	tests/test_contract.py \
+	tests/test_study_contracts.py
+
+DEMAND_TESTS := \
+	tests/test_pfe.py \
+	tests/test_demand_intake.py \
+	tests/test_demand_provenance.py \
+	tests/test_build_sumo_demand.py \
+	tests/test_day_library.py
+
+DIRSPLIT_TESTS := \
+	tests/test_dirsplit.py \
+	tests/test_dataset.py \
+	tests/test_dirsplit_magnitude_shape.py \
+	tests/test_dirsplit_legacy_pin.py \
+	tests/test_sensor_107_directional_reference.py
+
+SIMULATION_TESTS := \
+	tests/test_sumo_runtime.py \
+	tests/test_scenario.py \
+	tests/test_closure_metrics.py \
+	tests/test_trajectory_contract.py
+
+WEB_TESTS := \
+	tests/test_serve.py \
+	tests/test_serve_publish.py \
+	tests/test_jobs.py
 
 all: data features agent1 forecast test
+
+setup-dev:
+	$(PYTHON) -m pip install -r requirements-dev.txt
 
 # Full re-run after new data: rebuild everything from raw CSVs to scenarios.
 # (fetch_deso.py is NOT listed here — build_candidates.py auto-fetches it on
@@ -106,7 +146,35 @@ forecast:
 	python3 build_agent1_flows.py
 
 test:
-	python3 -m pytest tests/ -q
+	$(PYTEST) tests/ -q
+
+test-fast:
+	$(PYTEST) $(FAST_TESTS) -q
+
+test-contract:
+	$(PYTEST) $(FAST_TESTS) -q -m contract
+
+test-demand:
+	$(PYTEST) $(DEMAND_TESTS) -q
+
+test-dirsplit:
+	$(PYTEST) $(DIRSPLIT_TESTS) -q
+
+test-simulation:
+	$(PYTEST) $(SIMULATION_TESTS) -q
+
+test-web:
+	$(PYTEST) $(WEB_TESTS) -q
+
+lint:
+	$(PYTHON) -m ruff check .
+
+repo-hygiene:
+	$(PYTHON) tools/check_repo_hygiene.py
+
+check: lint repo-hygiene test-fast
+
+ci: lint repo-hygiene test
 
 # Web app + scenario API (click-to-close in the map needs this server)
 serve:
