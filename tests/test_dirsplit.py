@@ -126,6 +126,17 @@ class TestSharedFeatureContract:
         assert len(FEATURE_NAMES) == len(set(FEATURE_NAMES))
 
 
+class TestDirectionStressPublication:
+    def test_every_published_arm_preserves_the_pair_sum(self):
+        from dirsplit.predict import complementary_edge_shares
+
+        for values in ([0.1, 0.3333, 0.9], [0.41] * 96, [0.59] * 96):
+            pair = complementary_edge_shares("toward", "away", values)
+            assert len(pair["toward"]) == len(pair["away"])
+            assert all(a + b == pytest.approx(1.0)
+                       for a, b in zip(pair["toward"], pair["away"]))
+
+
 class TestTargetStaticFeatures:
     """A two-way sensor's two directed edges have opposite-signed radial_cos
     (and other sign-flipping features) — averaging them cancels the model's

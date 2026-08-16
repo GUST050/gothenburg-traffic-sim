@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import signal_meso_screen as sms
+from signals import signal_meso_screen as sms
 
 
 def _write_net(tmp_path, edges):

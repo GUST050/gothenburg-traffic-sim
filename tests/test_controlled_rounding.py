@@ -1,9 +1,11 @@
 """Contract tests for validation-only joint controlled rounding."""
 
 import numpy as np
+import pytest
 
 from traffic_sim.confidence.controlled_rounding import (
     controlled_round_preserving_measured,
+    exact_condensed_contract_repair,
     integer_margin_feasibility,
     legacy_rounding_trace,
     minimal_inconsistent_integer_margins,
@@ -27,6 +29,79 @@ def test_joint_floor_ceil_rounding_preserves_overlapping_margins_and_total():
     assert counts[0] + counts[1] == 1
     assert counts[1] + counts[2] == 1
     assert report["measurement_residuals"] == {"A": 0, "B": 0}
+
+
+def test_exact_contract_repair_preserves_bounds_groups_margins_and_total():
+    shapes = [
+        candidate("A"), candidate("A", "B"), candidate("B"), candidate("X")
+    ]
+    solution = np.asarray([0.6, 0.4, 0.6, 0.4])
+    result = exact_condensed_contract_repair(
+        np.asarray([1, 0, 1, 0]),
+        shapes,
+        {"A": 1.0, "B": 1.0},
+        {"X": (0.0, 0.4)},
+        groups=[([0, 1], 1.0, 1.0)],
+        reference=solution,
+        preserve_total=True,
+        force=True,
+    )
+
+    assert result is not None
+    counts, metadata = result
+    assert metadata["method"] == "exact_condensed_contract_l1"
+    assert counts.sum() == 2
+    assert counts[0] + counts[1] == 1
+    assert counts[1] + counts[2] == 1
+    assert counts[3] == 0
+
+
+def test_exact_contract_repair_is_not_restricted_to_floor_ceil():
+    shapes = [candidate("A"), candidate("X")]
+    result = exact_condensed_contract_repair(
+        np.asarray([0, 2]),
+        shapes,
+        {"A": 2.0},
+        {},
+        reference=np.asarray([0.0, 2.0]),
+        preserve_total=True,
+        force=True,
+    )
+
+    assert result is not None
+    counts, metadata = result
+    assert counts.tolist() == [2, 0]
+    assert metadata["method"] == "exact_condensed_contract_l1"
+
+
+def test_exact_contract_repair_matches_unrestricted_l1_counterexample():
+    # This overlapping-margin case has a feasible floor/ceil vector, but its
+    # unrestricted global optimum assigns two vehicles to two routes. It pins
+    # the reason the validation acceleration must not be a binary restriction.
+    shapes = [
+        candidate("A"), candidate("A", "B"), candidate("B"), candidate("X")
+    ]
+    solution = np.asarray([
+        1.3370136708031677,
+        1.579617321264841,
+        1.005081342668506,
+        1.5020684025950026,
+    ])
+
+    result = exact_condensed_contract_repair(
+        np.asarray([1, 1, 2, 1]),
+        shapes,
+        {"A": 2.0, "B": 3.0},
+        {},
+        reference=solution,
+        preserve_total=True,
+        force=True,
+    )
+
+    assert result is not None
+    counts, metadata = result
+    assert counts.tolist() == [0, 2, 1, 2]
+    assert metadata["route_l1_from_continuous"] == pytest.approx(2.260409, abs=1e-6)
 
 
 def test_general_l1_fallback_moves_more_than_floor_ceil_when_required():

@@ -1,0 +1,40 @@
+{
+ "protocol": "dirsplit_direction_decision_sensitivity_v3",
+ "gate_s": "NOT_RUN",
+ "release_evidence": false,
+ "recorded": "2026-08-14",
+ "supersedes": "validation/dirsplit_direction_sensitivity_blocker_v3.json",
+ "reason": "The currently built q route files fail strict direction-only input validation, so protocol v3 stops before registration and before SUMO.",
+ "source_repairs": {
+  "pair_construction": "dirsplit/predict.py now derives the second edge as the complement of the same q10, q50 or q90 arm; newly generated pairs sum to one by construction.",
+  "split_validation": "Every station and case must contain exactly two finite 96-slot series in [0,1], with every slot sum within 0.001 of one. Missing keys, wrong lengths and NaN fail closed.",
+  "lineage_validation": "demand_meta.json must bind direction_split.json and all three live route files by SHA-256.",
+  "route_population_validation": "q10, q50 and q90 must have identical 15-minute departure profiles; flow/trip inputs and invalid departure times are refused.",
+  "seed_validation": "The executed ScenarioSpec seed_set and seed-health variant must match the preregistered arm. Identical inserted counts are allowed; an identity mismatch is INCONCLUSIVE.",
+  "registration_safety": "Known-invalid inputs are rejected before an append-only registration version is written and before the SUMO matrix starts."
+ },
+ "measured_current_inputs": {
+  "demand_build_id": "fa259a2892a974c27e8c",
+  "split_max_abs_pair_sum_deviation": 0.297,
+  "pair_sum_tolerance": 0.001,
+  "demand_meta_lineage_verified": true,
+  "departure_populations_equal": false,
+  "vehicles_by_case": {
+   "q10": 19845,
+   "q50": 20836,
+   "q90": 21749
+  },
+  "live_sha256": {
+   "direction_split": "460b0c5713879f33526fa7b7395e9ad6fcad5fe48729dfa549fd7ac24490086e",
+   "calibrated_q50": "fada32917d6030e526865f2fe7a0da38118ba527c16dcd4b421a7c941d829ca0",
+   "calibrated_v1_q10": "224d6284bcd9f94a3503995946f9137c7ef3fc335f6f86e415a3891428033618",
+   "calibrated_v2_q90": "16226a47e3b56ae763479ba81c7f8cc1684292224b21fee259ff574749f99b7d"
+  }
+ },
+ "source_sha256": {
+  "dirsplit_predict": "f247004086bcc920a14da087188f32d71b45005316454f499b33b95633485d3a",
+  "gate_s_tool": "b68f6f5c67e3eedd89b800ab9ea8b820459ba7a606c729c678c47910cb9826c9"
+ },
+ "interpretation": "The source defect is fixed, but historical/current built route populations remain confounded. Rebuilding provenance-bound demand inputs is a Fas 0B input repair, not permission to open Fas 2-4 or overwrite prior evidence.",
+ "next_valid_action": "Create a fresh demand build with the corrected split construction, verify equal departure populations, then freeze and run a new protocol-v3 Gate S registration/outcome."
+}

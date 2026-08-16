@@ -1,0 +1,51 @@
+{
+  "protocol": "dirsplit_exit_a_decision_v2",
+  "recorded": "2026-08-15",
+  "decision": "EXIT_A",
+  "content_key": "97991d96d8ab3cf5af16bad6452138c3b009852edb2035984ff8af0bd31512a9",
+  "release_evidence": false,
+  "supersedes": {
+    "path": "validation/dirsplit_exit_a_decision_v1.json",
+    "sha256": "7dd8ce2bef5a4184c807f1b5948c770ed721da51cb76e8e284439333dcfc347c"
+  },
+  "basis": {
+    "gate_m": {
+      "result": "BASELINE",
+      "winner": "constant_5050",
+      "path": "validation/dirsplit_gate_m_outcome_v4.json",
+      "sha256": "3fa1a2264ad0e407eabed68d4fcb5384da75536d78ec62f14e8d948c9a9a5166"
+    },
+    "gate_s": {
+      "result": "NO",
+      "observations": 48,
+      "usable": 48,
+      "path": "validation/dirsplit_direction_sensitivity_outcome_v5.json",
+      "sha256": "0543b917aedcbccaa0cfb3d0a14a0eb0be79c3c0fe8d65ce0b0eb27fed8a9703"
+    }
+  },
+  "product_policy": {
+    "general_direction_split": "constant_5050",
+    "local_anchor": "apply a provenance-bound local directional reference only during its declared validity period; currently sensor 107 in 2025",
+    "single_direction_station_opposite": "unmeasured; no transferred hard bound or soft dirsplit prior in release demand",
+    "route_slots": "three central-demand replicas retained for the established three-seed monthly runner contract",
+    "diagnostic_stress": "q10/q90 are substituted only by --direction-stress-variants and do not become release evidence",
+    "conditional_phases": "closed; do not add direction ensemble, monthly schema, warm-state, API or UI machinery"
+  },
+  "sources": {
+    "build_sumo_demand.py": "55081cd1ba584ec032aaa7454bae905b55569ade3efd37c9431177ff469132c8",
+    "data_in/sensors.json": "2fe62df67ac1db513fad05682f6c5412324a9b3ebbf88731ad37ca5788508000",
+    "demand/intake.py": "e1327cb76d6c945e48aaddab0424a1a4b2fceb9ac310864428145eb20f6f6fc5",
+    "demand/publication.py": "8e40aa2ab278fb38747dd644a28feefca1be9d31799d6332eff3994daeebe5d9",
+    "demand/calibration.py": "e18f5401679f4747f639e068229414818bccbfe8bb46403c1b4ef17405e51825",
+    "traffic_sim/demand/pfe.py": "e9160fcd348177111af89dafa32fa6156d6f13024df8d4c9ea4b303eb8db478b"
+  },
+  "diagnostic_artifacts": {
+    "sumo/direction_split.json": {
+      "sha256": "9739c254d333f7b878bd744e1ed8fa02f768087b650bf650e898ca0e5b72c4b5",
+      "release_dependency": false
+    }
+  },
+  "change_scope": "Contract hardening only: complete complementary q-arm validation, truthful Exit A metadata, and diagnostic-only fingerprinting. Gate M, Gate S and the selected product policy are unchanged.",
+  "interpretation": "BASELINE does not claim that every real road is exactly 50/50, and NO does not claim zero direction uncertainty. Together they show that the transferred point model was not robustly better than the baseline and that the registered plausible direction range did not change the deployed closure decision. The smallest defensible release policy is therefore central 50/50 plus authoritative local evidence.",
+  "safety": "Low observability weakens confidence and claims; it does not ban a road. Topology, survivability and no-detour remain independent hard safety gates."
+}

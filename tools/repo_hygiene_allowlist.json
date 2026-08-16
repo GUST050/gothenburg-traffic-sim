@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "max_tracked_file_bytes": 5242880,
+  "legacy_large_files": {
+    "data/dirsplit/model.pkl": {
+      "bytes": 18057574,
+      "sha256": "ec2e43ff7c93609388d71408b7e720dc5d1e1a0743c311beb6cc1d01939f8203",
+      "reason": "Deployed direction-split model; migrate only with a verified shared artifact fetch path."
+    },
+    "data/dirsplit/training_table.csv": {
+      "bytes": 66590948,
+      "sha256": "3eae6fdc353a7c334f5ffaec0b4b311c66b4782f660d24ca6e1dca0b414c630e",
+      "reason": "Legacy training table; external storage and reproducible fetch are not configured yet."
+    },
+    "validation/annual_warm_plan_2027.json": {
+      "bytes": 11042194,
+      "sha256": "863ca92d699570bec74fd950b6af9d76dbc477f9879e295dd753f7d9804bb5b4",
+      "reason": "Frozen annual-warm evidence; requires an evidence-aware migration."
+    }
+  }
+}

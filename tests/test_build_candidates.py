@@ -425,7 +425,7 @@ class TestActivityDuration:
             assert t_ret > t_out
 
 
-class TestGateWeights:
+class TestFlowWeightedGateWeights:
     """Gate draws must follow expected approach flow (2026-07-17): the
     road-class-only proxy gave the busiest gate 0.37% of draws while
     calibration assigned it ~20% of quarter flow, leaving its main corridor
@@ -1838,7 +1838,7 @@ class TestFindGates:
         assert exits == []
 
 
-class TestGateWeights:
+class TestBasicGateWeights:
     def test_motorway_outweighs_residential(self):
         G = nx.MultiDiGraph()
         G.add_edge(1, 2, key=0, highway="motorway")

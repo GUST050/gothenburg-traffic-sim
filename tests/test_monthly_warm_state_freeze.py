@@ -2,6 +2,7 @@
 
 Process-free: reads tracked artifacts only. No SUMO, no cache, no run root.
 """
+from dataclasses import asdict
 import hashlib
 import importlib.util
 import json
@@ -539,7 +540,7 @@ class TestPairedComparisonLogic:
             kwargs["split_diagnostics"] = _diag(
                 kwargs["warm_point_s"],
                 candidate=dict(candidate) if isinstance(candidate, dict)
-                else dataclasses.asdict(candidate))
+                else asdict(candidate))
         return build_monthly_observation(**kwargs)
 
     def test_equivalent_arms_produce_a_passing_record(self):
@@ -1069,7 +1070,7 @@ class TestPairedCampaignIsExecutable:
             kwargs["split_diagnostics"] = _diag(
                 kwargs["warm_point_s"],
                 candidate=dict(candidate) if isinstance(candidate, dict)
-                else dataclasses.asdict(candidate))
+                else asdict(candidate))
         return build_monthly_observation(**kwargs)
 
     def _run(self, tmp_path, cold, warm):
@@ -2606,9 +2607,9 @@ class TestPublicationIsCampaignAtomic:
                 return tmp_path / "cache" / "warm-state"
 
             def _run_observation(self, schedule, *, variant, seed):
-                return (None, (), observation(self.arm, schedule.schedule_id))
                 if self.arm == "warm":
                     self.provisional_states[0]["schedule_id"] = schedule.schedule_id
+                return (None, (), observation(self.arm, schedule.schedule_id))
 
         root = tmp_path / "root"
         record = harness.run_paired_campaign(

@@ -22,6 +22,7 @@ Writes sumo/prior_flows.json.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pickle
 from pathlib import Path
@@ -32,7 +33,8 @@ import pandas as pd
 from build_data import find_antiparallel_edge
 from dirsplit.features import edge_bearing_from_graph, edge_features, load_city_graph
 from dirsplit.predict import (CLAMP, hourly_to_slots, sensor_profile_features)
-from dirsplit.train import FEATURE_NAMES, MODEL_PATH, PROFILE_FEATURES
+from dirsplit.train import (FEATURE_NAMES, MODEL_PATH, PROFILE_FEATURES,
+                            predict_model, validate_model_package)
 
 GEO_PATH     = Path("web/data/network.geojson")
 FLOWS_PATH   = Path("web/data/flows.json")
@@ -69,7 +71,9 @@ def main() -> None:
 
     with open(MODEL_PATH, "rb") as f:
         pkg = pickle.load(f)
+    validate_model_package(pkg)
     lam = pkg.get("shrinkage_lambda", 1.0)
+    use_profile_features = bool(pkg.get("use_profile_features", True))
 
     with open(GEO_PATH) as f:
         geo = json.load(f)
@@ -131,11 +135,15 @@ def main() -> None:
         feats = feats_meas if meas_is_toward_centre else feats_opp
         prof = sensor_profile_features(profiles, e_meas)
 
-        rows = [[feats[cn] for cn in FEATURE_NAMES]
-                + [prof[cn] for cn in PROFILE_FEATURES]
-                + [np.sin(2 * np.pi * h / 24), np.cos(2 * np.pi * h / 24), 0.0]
-                for h in range(24)]
-        q = {name: np.clip(m.predict(np.array(rows)), *CLAMP)
+        rows = []
+        for h in range(24):
+            values = [feats[cn] for cn in FEATURE_NAMES]
+            if use_profile_features:
+                values += [prof[cn] for cn in PROFILE_FEATURES]
+            values += [np.sin(2 * np.pi * h / 24),
+                       np.cos(2 * np.pi * h / 24), 0.0]
+            rows.append(values)
+        q = {name: np.clip(predict_model(m, np.array(rows)), *CLAMP)
              for name, m in pkg["sensors"][sid].items()}
         q10 = np.minimum.reduce(list(q.values()))
         q90 = np.maximum.reduce(list(q.values()))
@@ -144,6 +152,10 @@ def main() -> None:
         q50s  = 0.5 + lam * (q50 - 0.5)
         shift = q50s - q50
         q10, q50, q90 = (np.clip(a + shift, *CLAMP) for a in (q10, q50, q90))
+        unsupported = np.array([not 6 <= hour <= 20 for hour in range(24)])
+        q10[unsupported] = CLAMP[0]
+        q50[unsupported] = 0.5
+        q90[unsupported] = CLAMP[1]
 
         # q10/q90/q50 above are the CANONICAL (toward-centre) edge's share —
         # re-derive e_meas's own share (unchanged, or complemented+swapped).
@@ -165,8 +177,9 @@ def main() -> None:
             # wider share → SMALLER opposite flow, so q90 share gives the low band
             "prior_low":  opp_series(s90),
             "prior_high": opp_series(s10),
-            "provenance": "level-3 learned prior (dirsplit model, shrinkage "
-                          f"λ={lam:.2f}) applied to the measured twin",
+            "provenance": "level-3 learned prior (provenance-bound no-profile "
+                          f"dirsplit model, shrinkage λ={lam:.2f}) applied "
+                          "to the measured twin",
         }
         # s10/s50/s90 are e_meas's own (already-oriented) share at each of the
         # 96 slots; slot 32 == hour 8 exactly (slots are hourly-interpolated
@@ -175,8 +188,17 @@ def main() -> None:
               f"{1-s50[32]:.2f} ({1-s90[32]:.2f}–{1-s10[32]:.2f})")
 
     OUT_PATH.parent.mkdir(exist_ok=True)
-    with open(OUT_PATH, "w") as f:
-        json.dump({"date": args.date, "n_quarters": 96, "edges": result}, f)
+    payload = {
+        "schema_version": "dirsplit_prior_v2",
+        "date": args.date,
+        "n_quarters": 96,
+        "model_sha256": hashlib.sha256(MODEL_PATH.read_bytes()).hexdigest(),
+        "training_report_content_key": pkg.get("training_report_content_key"),
+        "edges": result,
+    }
+    tmp = OUT_PATH.with_suffix(OUT_PATH.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload) + "\n")
+    tmp.replace(OUT_PATH)
     print(f"Wrote {OUT_PATH}  ({len(result)} opposite-direction priors)")
 
 

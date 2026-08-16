@@ -7,10 +7,12 @@ Usage (after train.py):
 
 Each Total sensor pair is predicted by ITS OWN locally weighted model
 (trained toward that sensor's street characteristics) at three quantiles:
-  q50 — the point estimate used as the default split
-  q10/q90 — the uncertainty interval; build_sumo_demand builds demand
-  VARIANTS at these bounds so the Monte Carlo scenario spread (and the
-  confidence number on the map) includes direction uncertainty.
+  q50 — the provenance-bound trained point estimate used by normal demand
+  q10/q90 — the uncertainty interval used by explicit
+  --direction-stress-variants builds and opposite-direction ceilings.
+
+50/50 remains only a missing-model fallback. Applicable authoritative local
+anchors override the transferred estimate for the aggregate they measure.
 
 Mechanics per pair: predict quantile shares for the FIRST directed edge;
 the second edge gets the complement (1 − q mirrors the quantiles). The pair
@@ -32,7 +34,8 @@ import numpy as np
 
 from .config import COVERAGE_REPORT
 from .features import edge_bearing_from_graph, edge_features, load_city_graph
-from .train import FEATURE_NAMES, MODEL_PATH, PROFILE_FEATURES
+from .train import (FEATURE_NAMES, MODEL_PATH, PROFILE_FEATURES,
+                    predict_model, validate_model_package)
 
 GEO_PATH     = Path("web/data/network.geojson")
 PROFILE_PATH = Path("web/data/normal_profile.json")
@@ -82,10 +85,19 @@ def hourly_to_slots(hourly: np.ndarray) -> list[float]:
     return np.interp(slots, xs, ys).tolist()
 
 
+def complementary_edge_shares(e0: str, e1: str,
+                              values: list[float]) -> dict[str, list[float]]:
+    """Publish one direction arm without changing the pair's total volume."""
+    left = [round(float(value), 3) for value in values]
+    return {e0: left, e1: [round(1.0 - value, 3) for value in left]}
+
+
 def main() -> None:
     with open(MODEL_PATH, "rb") as f:
         pkg = pickle.load(f)
+    validate_model_package(pkg)
     sensors_models = pkg["sensors"]
+    use_profile_features = bool(pkg.get("use_profile_features", True))
 
     with open(GEO_PATH) as f:
         geo = json.load(f)
@@ -159,11 +171,15 @@ def main() -> None:
                              bearing, data)
 
     def predict_hours(model, feats: dict, prof: dict) -> np.ndarray:
-        rows = [[feats[c] for c in FEATURE_NAMES]
-                + [prof[c] for c in PROFILE_FEATURES]
-                + [np.sin(2 * np.pi * h / 24), np.cos(2 * np.pi * h / 24), 0.0]
-                for h in range(24)]
-        return np.clip(model.predict(np.array(rows)), 0.0, 1.0)
+        rows = []
+        for h in range(24):
+            values = [feats[c] for c in FEATURE_NAMES]
+            if use_profile_features:
+                values += [prof[c] for c in PROFILE_FEATURES]
+            values += [np.sin(2 * np.pi * h / 24),
+                       np.cos(2 * np.pi * h / 24), 0.0]
+            rows.append(values)
+        return np.clip(predict_model(model, np.array(rows)), 0.0, 1.0)
 
     result: dict[str, dict] = {}
     print(f"{'Sensor':<8} {'kl 07 (q10–q50–q90)':>22} {'kl 16 (q10–q50–q90)':>22}")
@@ -196,21 +212,34 @@ def main() -> None:
         shift = q50_s - q50
         q10, q50, q90 = (np.clip(a + shift, *CLAMP) for a in (q10, q50, q90))
 
+        # No silent temporal extrapolation: training uses weekdays 06-20.
+        # Outside that support q50 falls back to maximum entropy while the
+        # interval opens to the declared clamp limits, expressing ignorance
+        # instead of pretending the night was trained.
+        unsupported = np.array([not 6 <= hour <= 20 for hour in range(24)])
+        q10[unsupported] = CLAMP[0]
+        q50[unsupported] = 0.5
+        q90[unsupported] = CLAMP[1]
+
         e0, e1 = pair[0]["id"], pair[1]["id"]
         s10, s50, s90 = (hourly_to_slots(a) for a in (q10, q50, q90))
         result[sid] = {
-            "method": "dirsplit-lightgbm per-sensor quantile "
-                      "(similarity-weighted, trained on Norwegian directional counts)",
+            "method": "dirsplit-lightgbm no-profile per-sensor quantile "
+                      "(similarity-weighted, trained on Norwegian "
+                      "directional counts)",
             "coverage_status": {p["id"]: coverage.get(p["id"], "?") for p in pair},
-            "edge_shares":     {e0: [round(x, 3) for x in s50],
-                                e1: [round(1 - x, 3) for x in s50]},
-            "edge_shares_q10": {e0: [round(x, 3) for x in s10],
-                                e1: [round(1 - x, 3) for x in s90]},
-            "edge_shares_q90": {e0: [round(x, 3) for x in s90],
-                                e1: [round(1 - x, 3) for x in s10]},
-            "note": "ESTIMATED interval by a model trained on cities with "
-                    "measured directions — direction is not measured in "
-                    "Gothenburg. q10/q90 feed demand variants for Monte Carlo.",
+            "edge_shares": complementary_edge_shares(e0, e1, s50),
+            # A stress arm moves the measured two-way total BETWEEN the two
+            # carriageways; it must never create or delete traffic.  The old
+            # cross-quantile complements (q10, 1-q90) and (q90, 1-q10)
+            # changed each pair's sum by the interval width, confounding
+            # direction with total volume in every downstream experiment.
+            "edge_shares_q10": complementary_edge_shares(e0, e1, s10),
+            "edge_shares_q90": complementary_edge_shares(e0, e1, s90),
+            "note": "ESTIMATED interval from the provenance-bound model "
+                    "trained on measured directional stations. q50 is the "
+                    "normal point estimate; q10/q90 are explicit uncertainty "
+                    "variants and bound unmeasured opposite directions.",
         }
         print(f"{sid:<8} {q10[7]:.2f}–{q50[7]:.2f}–{q90[7]:.2f}"
               f"{'':>8}{q10[16]:.2f}–{q50[16]:.2f}–{q90[16]:.2f}")

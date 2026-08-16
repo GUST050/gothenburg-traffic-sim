@@ -1,7 +1,7 @@
 # Gothenburg Traffic Simulation Improvement Plan
 
-**Date:** 2026-07-18 (consolidated 2026-07-15; status re-verified against the
-working tree 2026-07-18)
+**Date:** 2026-07-18 (consolidated 2026-07-15; current evidence and next-work
+protocol re-verified 2026-08-16)
 **Status:** Canonical improvement plan — active implementation is in progress.
 **Structural authority:** `ARCHITECTURE.md` remains the source of truth for
 the six-stage pipeline and fixed contracts. This is the only improvement,
@@ -9,6 +9,18 @@ review, performance, simulation, closure, signal and sensor-growth plan.
 Historical Sol/Luna task names and exact-approval wording below describe the
 process used at the time; current collaboration follows the flexible,
 model-independent protocol in `AGENTS.md`.
+
+**TOT-sensorernas dygnssplit återöppnad 2026-08-16 genom explicit
+användarbeslut:** den forskningsgrundade, generaliserbara planen finns i
+[`docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md`](docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md).
+Den prövar 52/48 som ett explicit volymviktat dygnsvillkor vid sensor 107 men
+bevarar källans sanningsenliga semantik: 3 400/3 100 är ett publicerat
+2025-aggregat, inte 365 uppmätta dygnssplitter. En ny Gate D ska maskera
+verkligt dubbelriktade stationer, jämföra period-only, daily-exact och
+daily-band under blockerade datum/stationer/städer och välja den enklaste
+icke-underlägsna profilen. Intradagsformen lärs och regulariseras separat före
+PFE; PFE får inte använda 96 fria riktningar som residualslukare. Ingen
+produktkod, aktiv arkitektur eller fryst Gate M/S-evidens ändras av planen.
 
 **Direction uncertainty supplement (2026-08-13, scope-corrected after review):**
 the researched, decision-gated design for improving `dirsplit` is
@@ -18,6 +30,418 @@ closure-sensitivity study and compares point models. Joint scenarios and any
 demand/monthly/warm/API/UI integration are conditional on three explicit
 evidence gates; 50/50 plus the local anchor is a planned successful exit.
 Existing q-archives and release contracts remain immutable legacy evidence.
+The 2026-08-14 protocol-v3 repair makes Gate S fail before registration when
+q files change total demand, repairs q10/q90 pair sums at the source, holds
+their exact per-quarter totals equal to q50, and binds the live route lineage
+and executed seed/variant. Dataset v2 decides Gate M as `BASELINE` under all
+three required folds. A fresh bound 4,948-vehicle demand set then produced 48
+healthy matched-seed SUMO observations and Gate S=`NO`: hard failures, viable
+set, ranking, winner and every decision-relevant cost were identical across
+q10/q50/q90. The plan therefore completed through Exit A. Product demand uses
+constant 50/50 plus applicable local anchors; inferred opposite-carriageway
+bounds and q stress cases are excluded by default. The three legacy physical
+route slots remain central-demand seed replicas for monthly compatibility;
+`--direction-stress-variants` is diagnostic only. Conditional scenario,
+monthly-schema, warm, API and UI expansion is closed by evidence.
+
+**Direction training reopened 2026-08-15 by explicit user request:** Exit A
+remains immutable historical evidence, but it is no longer the active product
+choice. Trainer v2 now binds the 247,464-row date-level table to 188 raw volume
+files, trains q10/q50/q90 on the supported weekday 06–20 population, and uses
+50/50 only as an out-of-support fallback. Normal demand consumes trained q50;
+the five unmeasured opposite carriageways receive model-hash-bound soft priors
+and ceiling-only uncertainty bounds. No hard lower bound may manufacture
+traffic. The exact-policy rerun decides Gate M=`MODEL`, winner
+`similarity_weighted_lgbm_no_profile`: it wins a primary group in every fold
+kind and loses none. The activation remains `release_evidence=false` because
+q10/q90 are uncalibrated stress cases. A new direction-only build then froze
+registration v4 against exact complementary pairs and equal 4,998-vehicle
+departure profiles. Gate S outcome v6 is `NO`: all 48 matched-seed runs were
+usable, with zero hard failures and identical viable set, ranking, winner and
+decision costs across q10/q50/q90. This is diagnostic evidence for that frozen
+2025-09-16 06-10 matrix, not release evidence. The magnitude diagnostic also
+shows that transferred q50 reallocates 0.104% of all measured mass versus
+50/50; local anchoring raises the active difference to 0.604%, while model
+time shape alone accounts for 0.101%. A separate level/shape product remains
+negative evidence because its station-blocked confidence interval crosses
+zero.
+
+**Gate S reproducibility correction (2026-08-16):** outcomes v5/v6 are
+preserved as historical, non-release diagnostics, but neither is independently
+reproducible from a clean current checkout. Both embedded absolute author-
+machine paths; v5 predates the repaired execution contract, and v6 binds a
+measurement-tool digest that drifted during the package-import migration while
+its 192 run files remain machine-local. The distinct scenario/spec digests show
+that v6 did execute different stress arms, so its narrow observation is not
+retracted: the deployed demand-side ranking was unchanged across the four
+frozen candidates. It is not a general claim that direction cannot affect a
+closure decision. The correction is frozen in
+`validation/dirsplit_direction_sensitivity_evidence_status_v1.json`; future
+provenance records repository sources relative to the checkout root.
+
+**Current baseline/held-out refresh (2026-08-15):** a preregistered matched
+06–10 baseline for demand build `4afe9e3ae2e74a4b872e` passed staging and was
+published atomically. All three seed/variant arms inserted 4,998/4,998
+vehicles, with no unfinished vehicles or teleports; raw final sensor output
+has 100% GEH<5. Spatial and temporal LOSO were then rerun against the same
+candidate pool, network, through-share target and reference window. Spatial
+ratios are 0.466–1.354 (median 0.613); the independent 2025-09-17 window gives
+0.445–1.356 (median 0.6225). All six stations remain underidentified. The
+stable underdelivery is current negative evidence for unmeasured network
+allocation. New sensors are deferred by user decision, so the next active
+physical improvement is a reviewed NVDB import for the 4,990 defaulted lane
+counts and 631 defaulted speeds. More dirsplit work remains closed.
+
+## Safety and Architecture Hardening Protocol (2026-08-16)
+
+This is the researched execution contract for the next work. It upgrades the
+plan on two separate axes:
+
+- **Safety:** no silent solver failure, evidence reuse, topology drift,
+  unsupported accuracy claim or irreversible network replacement.
+- **Architecture:** one reproducible runtime contract, explicit interfaces,
+  portable evidence, staged source-to-network transformation and clean
+  rollback.
+
+The protocol is complete as a plan, but its implementation is not yet evidence.
+Each gate below must be passed by generated artifacts before the corresponding
+change can be promoted.
+
+### How the solver constraint was created (it is self-introduced)
+
+The dependency ceiling is a consequence of this repository's own parallel
+architecture, not of an external regression, and the plan must be read that
+way. The chain, in order:
+
+1. **A `fork` pool around the solver.** Per-quarter integer repair runs inside
+   `demand/calibration.py`'s `collect_counts` pool
+   (`mp.get_context("fork").Pool` → `_run_pfe_counts_job` → `_compute_pfe_counts`
+   → `pfe.quarter_publish_counts` → `pfe.repair_integer_bounds`). This is a
+   different pool from the memory-gated route-publishing pool later in the same
+   function, and `traffic_sim/confidence/loso.py` forks a third one; any A3
+   decision applies to every site where a solver can be live inside a forked
+   worker.
+2. **A deadlock in that arrangement.** Each forked worker's HiGHS instance also
+   created its own task executor: severe oversubscription, and unsafe after
+   `fork`. The recorded symptom (`traffic_sim/demand/pfe.py:923`) is a live
+   48-quarter build in which every worker sat in `HighsTaskExecutor` for hours
+   without honouring the 20-second time limit.
+3. **An undocumented option as the fix.** Commit c379629 (2026-08-15) passes
+   `{"time_limit": 20.0, "threads": 1}` to `scipy.optimize.milp`. `threads` is
+   not in SciPy's public allow-list; SciPy warns and forwards it to HiGHS, and
+   the code suppresses exactly that one forwarding warning.
+4. **A version barrier as the fix for the fix.** On SciPy 1.17 the forwarded
+   option is reported to yield status 4 before solving, so `requirements.txt`
+   and CI pin `scipy>=1.11,<1.17`.
+
+Each step was locally reasonable; together they mean the environment is pinned
+because of how the pipeline parallelises, not because SciPy broke. This is why
+A3 below starts with the candidate that removes the cause (no processes around
+the solver, therefore no `threads` option, therefore no ceiling) instead of the
+candidate that best preserves the current architecture. It is also why A2 must
+isolate the real failure before anything is rewritten: the repository records
+step 4 in prose only (`ARCHITECTURE.md`, this plan, `TASKS.md`), with no
+captured model, environment or solver log behind it.
+
+### Research corrections that govern the design
+
+1. The current `scipy>=1.11,<1.17` range is an **emergency compatibility
+   barrier**, not the permanent environment contract and not proof that SciPy
+   1.17 removed `threads`. SciPy 1.17.1 documents only `disp`, `node_limit`,
+   `presolve`, `time_limit` and `mip_rel_gap` as public `milp` options, while
+   its implementation warns about unknown options and forwards them to HiGHS.
+   Therefore the observed `HiGHS Status 0: Not Set` must be isolated with the
+   real model and complete environment/log capture before assigning a root
+   cause. Sources: [SciPy `milp` API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.milp.html),
+   [SciPy 1.17.1 `_milp.py`](https://github.com/scipy/scipy/blob/v1.17.1/scipy/optimize/_milp.py),
+   [SciPy option-forwarding discussion](https://github.com/scipy/scipy/issues/17250).
+2. HiGHS uses a global scheduler for parallel work and documents that
+   concurrent solver instances must use the same thread count; independent
+   instances should be assigned one per worker. A future parallel design must
+   therefore create a fresh solver inside a fresh worker, not inherit solver
+   or scheduler state across `fork`. Python likewise documents `spawn` as the
+   macOS default because `fork` is unsafe with threaded system libraries.
+   Sources: [HiGHS parallelism](https://ergo-code.github.io/HiGHS/dev/parallel/),
+   [Python multiprocessing](https://docs.python.org/3.11/library/multiprocessing.html).
+3. Python 3.9 reached end of life on 2025-10-31. Evidence-producing local and
+   CI runs must converge on the frozen Python 3.11.15 reference instead of
+   treating the Mac's current 3.9 interpreter as an equivalent environment.
+   Python 3.11 remains in security support through October 2027, so a newer
+   runtime is tested separately rather than mixed into the solver repair.
+   Sources: [PEP 596](https://peps.python.org/pep-0596/),
+   [Python 3.11.15](https://www.python.org/downloads/release/python-31115/).
+4. Version ranges alone are not reproducible installations. pip recommends
+   exact versions plus hashes for repeatability and integrity, and PyPA now
+   defines `pylock.toml` for reproducible environments. Sources:
+   [pip repeatable installs](https://pip.pypa.io/en/latest/topics/repeatable-installs/),
+   [pip secure installs](https://pip.pypa.io/en/stable/topics/secure-installs/),
+   [`pylock.toml` specification](https://packaging.python.org/en/latest/specifications/pylock-toml/).
+5. NVDB is the **official road-structure source with product-specific and
+   supplier-dependent quality**, not observed traffic behaviour — and official
+   does not mean correct. Trafikverket states that the data suppliers
+   (municipalities, Lantmäteriet, the forestry sector, the Transport Agency)
+   collect, deliver and are responsible for the quality of the data, while
+   Trafikverket stores it, runs the quality controls it can and distributes it
+   to consumers. Provenance therefore does not guarantee correctness, and the
+   import must record per attribute which data product and specification
+   version it came from, which supplier/väghållare is responsible, and any
+   quality attribute the export actually exposes — with `unknown` recorded
+   whenever the metadata does not carry it. `unknown` is a fail-honest value
+   that blocks automatic patching of a high-impact edge, never a placeholder to
+   be filled in with an assumption. Trafikverket publishes separate definitions
+   and quality requirements for speed limits and directional lane counts, and
+   the generic quality page does not itself define a universal per-feature
+   quality class; what exists per product lives in the data product
+   specifications. Trafikverket's 2026-03-09
+   validation says speed limit passed both completeness checks, while lane
+   count passed missing-feature completeness but failed overcount completeness;
+   that supports importing speed first and reviewing lane matches more
+   conservatively. SUMO recommends changing editable PlainXML inputs/patches
+   rather than hand-editing `.net.xml`; lane count and speed can also influence
+   junction priority. Sources:
+   [NVDB products](https://www.nvdb.se/sv/kund/hamta-aktuella-data/),
+   [NVDB data quality and supplier responsibility](https://bransch.trafikverket.se/tjanster/data-kartor-och-geodatatjanster/las-om-vara-data/vagdata/datakvalitet-vagdata/),
+   [Antal körfält2 specification](https://bransch.trafikverket.se/TrvSeFiler/Dataproduktspecifikationer/V%C3%A4gdataprodukter/DPS_A-B/1005Antal%20k%C3%B6rf%C3%A4lt2.pdf),
+   [NVDB validation 2026-03-09](https://bransch.trafikverket.se/contentassets/024f467dfc6e4d809c15e2f68c3edc47/2026/nvdb_datavalideringar_20260309.pdf),
+   [SUMO PlainXML](https://sumo.dlr.de/docs/Networks/PlainXML.html),
+   [SUMO netconvert](https://sumo.dlr.de/docs/netconvert.html).
+
+### Work package A — make solver behaviour reproducible before changing it
+
+**A1. Runtime contract.** Make a digest-pinned Linux image with Python 3.11.15
+the canonical future evidence runtime. Keep
+`requirements.txt` as reviewed compatibility intent, but add exact,
+hash-checked lock artifacts for that Linux platform and the supported local
+macOS architecture. CI's reference lane installs only from its lock. macOS is
+a diagnostic/development profile unless an evidence contract explicitly
+allows it; it never silently substitutes for the canonical platform. Every
+demand/evidence artifact records image or OS-build digest, exact Python,
+platform, NumPy, SciPy, the bundled HiGHS or `highspy` version, SUMO version
+and binary digest, and lock digest. Dependency-update automation may propose a
+new image/lock but may not promote it. Open a runtime-migration task at least
+180 days before Python 3.11 support ends; migration must pass the same corpus
+and evidence gates before the reference changes.
+
+**A2. Root-cause reproducer.** Extract one failing real integer-repair problem
+to a content-hashed diagnostic fixture without changing its coefficients.
+Run it under the current reference environment and a Python-3.11/SciPy-1.17
+compatibility environment with full solver output and stderr. Record model
+digest, options, process start method, parent/child PID, active worker/thread
+settings, solver result/status and wall time. Repeat in a clean one-process
+program and under the production executor. A root-cause statement is allowed
+only when one controlled difference repeatedly explains the outcome. The same
+report carries the fork-site inventory — every place a solver can be live
+inside a forked worker — because A3's decision must cover all of them, not
+only the site that failed first.
+
+**A3. Compare implementations; do not predetermine the winner.** Benchmark
+against the reference — the locked, currently working SciPy/HiGHS path inside
+the `fork` pool — in ascending order of complexity, and stop at the first
+candidate that passes A4 and A5:
+
+- **Candidate 0 — serial SciPy, no processes around the solver.** Public
+  `milp` options only; no `threads`, no warning filter, no pool. HiGHS may use
+  its own default threading because nothing has forked. This deletes the cause
+  rather than the symptom and, with it, the SciPy ceiling. Test it first
+  because it is the least complex thing that can work, and measure — do not
+  assume — what it costs: the repair stage is parallel today, and the largest
+  values logged in `runs/` on this machine are 1,282 s of `timing PFE integer
+  repair` beside 2,873 s of interval solving on one 2,880-interval build at 10
+  workers (`runs/search_40h_3mo.log`), with 3,366 s of solving logged
+  elsewhere. Report the serial budget separately per build class; a single-day
+  build and a multi-day closure envelope can plausibly land on opposite sides
+  of it.
+- **Candidate P — SciPy `milp` in `spawn` workers.** Same public serial API,
+  one fresh process and one fresh solver per independent instance. This is not
+  a one-line start-method change: the 15 `_PFE_PAR_*` module globals in
+  `demand/calibration.py` (shapes, route cost, touch index, structure groups,
+  variant inputs, purpose mixes, per-quarter solutions, staged outputs, day
+  quarters, fixed totals, timings) are inherited implicitly by `fork` today.
+  Under `spawn` each must be rebuilt by an explicit worker initializer from a
+  content-addressed input, passed per task, or placed in shared memory, and the
+  q50→stress-arm fixed totals must be passed explicitly because they are
+  computed between two batches. Measure initialisation cost, per-task
+  serialisation and peak RSS, not solve time alone.
+- **Candidate H — `highspy` in that same `spawn` architecture,** `threads=1`,
+  one instance per worker. Adopt only if P's throughput is insufficient and H
+  passes the identical A4 corpus.
+
+Do not call HiGHS global-scheduler reset functions while any instance is live.
+Do not combine nested process pools and solver parallelism. Whichever candidate
+wins, apply the decision to every site that can hold a solver inside a forked
+worker — the repair pool, the publisher pool and the LOSO pool — and record the
+site inventory in A2's report.
+Sources: [HiGHS Python API](https://ergo-code.github.io/HiGHS/stable/interfaces/python/),
+[HiGHS options](https://ergo-code.github.io/HiGHS/dev/options/intro/),
+[HiGHS scheduler reset contract](https://ergo-code.github.io/HiGHS/stable/interfaces/c_api/).
+
+**A4. Exact acceptance corpus.** Capture the current production repair models
+for every supported quarter/variant plus adversarial and randomized small
+models. Independently verify every returned solution instead of trusting the
+status code: finite values, integrality, non-negativity, total, bounds, group
+and sensor margins. Compare feasibility classification and exact primary L1
+objective against the reference/exhaustive optimum. If several optima exist,
+compare objective and constraints first; require a documented deterministic
+tie-break before demanding identical vehicle vectors.
+
+**A5. Promotion gate.** Freeze the resource budget from the reference run
+before evaluating candidates. The selected adapter must have zero false
+feasible/infeasible results, zero unresolved statuses treated as answers,
+zero orphan workers, deterministic results over repeated clean processes and
+wall-time/memory inside that preregistered budget. Timeout, status 4, malformed
+output and post-check failure remain hard failures. A backend or option change
+drifts the sealed demand-source identity and requires a fresh staged demand,
+baseline, held-out validation and publication decision; old evidence is never
+relabelled.
+
+### Work package B — make CI prove both clean code and live evidence
+
+Use three explicit lanes:
+
+1. **Reference CI, required:** Python 3.11 plus exact Linux lock; all unit,
+   synthetic, schema, invariant and solver-corpus tests. It must not need
+   `sumo/` or `runs/`.
+2. **Live-artifact CI, required for evidence/publication:** restore or build a
+   content-addressed fixture bundle and run tests marked `live_artifact`.
+   Missing artifacts fail this lane; they do not skip. A clean-checkout unit
+   run may skip only those marked tests with one registered reason, and CI
+   asserts the expected skip count and reason so new accidental skips fail.
+3. **Compatibility canaries, initially non-blocking:** vary one axis at a time:
+   Python 3.11.15 plus latest supported NumPy/SciPy/HiGHS, and the next Python
+   target plus the locked reference numerical stack. Both run the solver
+   reproducer and corpus. The relevant canary becomes required before widening
+   the numerical lock or changing Python; never diagnose a simultaneous
+   interpreter-and-solver upgrade.
+
+Tracked minimal synthetic fixtures test binding and schema behaviour; real
+machine-local files test live lineage. A test may never silently substitute a
+synthetic file when its name or assertion claims to validate live evidence.
+
+### Work package C — make Gate S independently reproducible
+
+Future evidence uses a content-addressed bundle and a small provenance
+statement modelled on SLSA's separation of output `subject`, build definition,
+resolved dependencies and run details; this is a useful schema pattern, not a
+claim of SLSA certification. Source:
+[SLSA specification v1.0](https://slsa.dev/spec/v1.0/).
+
+The bundle contains or immutably addresses every required item: git commit and
+dirty-state declaration, commands and external parameters, candidate/spec,
+network, demand and route digests, Python/solver/SUMO environment and lock
+digest, tool/source digests, per-arm/seed health and decision outputs, logs and
+the final reducer output. Repository paths are relative. Large run members may
+live in immutable external storage only when the manifest includes a stable
+retrieval URI, byte size and SHA-256; an author-machine path is never a
+dependency.
+
+**Promotion gate:** a verifier in a clean checkout retrieves the bundle,
+checks every digest, reruns the reducer and reproduces the registered outcome.
+Missing/unreachable members, a dirty or wrong source tree, environment drift or
+different result fail closed. Historical v5/v6 stay unchanged and
+non-release; the correction record remains their authority boundary.
+
+**This work package stays conditional, deliberately.** It is required before
+any *future* Gate S outcome is promoted, and it is not required to ship the
+current product, because dirsplit work is closed and neither v5 nor v6 is
+release evidence. Making C mandatory now would reopen closed work to satisfy a
+reproducibility standard that no live claim depends on.
+
+**Current dirsplit gate authority, so no document restates a superseded one:**
+Gate M authority is `validation/dirsplit_gate_m_outcome_v5.json` — `MODEL`,
+winner `similarity_weighted_lgbm_no_profile`, recorded 2026-08-15, superseding
+v4 by recorded hash. v4 (`BASELINE`, constant 50/50) remains the immutable Exit
+A record for the pre-reopening decision and must not be quoted as the current
+result. Gate S authority is the correction record: no independently
+reproducible outcome exists, and v6's `NO` is a narrow historical diagnostic.
+Both v4 and v5 carry `release_evidence: false`.
+
+### Work package D — import NVDB without corrupting the network
+
+Execute this after work packages A1–A2 and B1 are operational, so the import
+and its comparisons run in a stable environment. Do not wait for new sensors.
+
+1. **Snapshot, never query live during a build.** Freeze the API/export
+   response with retrieval time, product/spec version, query/bounding box,
+   CRS, licence/source URI, byte size and SHA-256. Preserve raw input and a
+   normalized table separately. Carry through, per feature, the responsible
+   data supplier/väghållare and every quality attribute the product exposes;
+   where the export carries neither, the normalized row records `unknown`
+   rather than a guess.
+2. **Audit before mutation.** Inventory defaulted values and rank edges by
+   measured flow exposure, closure/detour relevance and uncertainty. First
+   campaign scope is speed and directional lane count on that reviewed set.
+   Functional class is audit/context. Prohibited direction is an alarm for
+   manual topology review, not an automatic topology edit.
+3. **Calibrate the matcher on reviewed truth without test leakage.** Build a
+   hand-reviewed gold set containing every high-impact edge plus a stratified
+   random sample. Freeze its labels, calibration/held-out split and digest
+   before scoring the automatic matcher; use a second review for every
+   high-impact label and disagreement. Match by CRS-normalized geometry
+   overlap, direction/heading and compatible road identity/class; nearest
+   distance alone is insufficient. Choose confidence thresholds and tie rules
+   on the calibration subset, then evaluate once on the untouched held-out
+   subset. Automatic patching requires zero wrong feature/direction matches in
+   the held-out and high-impact sets; coverage may be low. Any error returns
+   the matcher to development. Unique high-confidence matches are eligible,
+   ambiguous/conflicting matches queue for review, and unmatched edges retain
+   their declared fallback. A match whose supplier or quality metadata is
+   `unknown` is still eligible outside the high-impact set when it is unique
+   and high-confidence, but inside the high-impact set it queues for manual
+   review — missing quality provenance is treated as a reason to look, not a
+   reason to stop importing. Report precision, coverage, ambiguity and conflict
+   separately.
+4. **Apply a minimal patch.** Generate reviewed PlainXML/netconvert patches
+   against the frozen source network; never hand-edit `.net.xml`. Preserve
+   ordinary edge IDs and publish a new network ID. Start with speed because it
+   has simpler direction semantics. Apply lane counts only where the NVDB
+   forward/backward interpretation and SUMO edge direction were explicitly
+   resolved. Do not automatically change geometry, edge direction,
+   connections, turn restrictions or signal logic in this campaign.
+5. **Verify independently.** Require: zero unintended edge additions/deletions
+   or ID changes; no unreviewed topology/connection/TLS change; all approved
+   sensor snaps still present and direction-compatible; positive plausible
+   speed/lane values; unchanged candidate and route reachability except for
+   reviewed intended effects; no new disconnected/unserviceable routes; and a
+   complete per-attribute provenance audit (`NVDB`, OSM, reviewed override or
+   fallback) that also carries the NVDB product/spec version, responsible data
+   supplier and quality attribute, or `unknown`, for every imported value.
+6. **Compare like with like.** Build fresh demand on the new network. Rerun
+   normal health/final-output fit, spatial LOSO, temporal holdout and the frozen
+   closure comparison with identical dates, candidates, variants and seeds.
+   Report route, travel-time, queue, winner/ranking and uncertainty deltas.
+   Never reuse old demand on the new network as release evidence.
+7. **Promote or roll back atomically.** The old network remains the active
+   recoverable release. Freeze the comparison rule before reading outcomes:
+   use paired station-block bootstrap on the same spatial/temporal folds; a
+   95% interval wholly above zero for candidate-minus-reference MAE is harmful
+   and rejects the candidate. An interval crossing zero is inconclusive: the
+   physical input may be promoted only if every correctness/health gate passes,
+   but no accuracy claim is allowed. Every decision change needs a reviewed
+   physical explanation; a robust closure-winner change additionally needs an
+   explicit user promotion decision. Sensor-snap drift, topology drift or an
+   unexplained winner change rejects the candidate. Rollback is pointer
+   reversal to the old immutable network, not an attempt to undo files in
+   place.
+
+### Two-axis completion scorecard
+
+The plan may be called complete only when both columns pass; averaging is not
+allowed.
+
+| Safety gate | Architecture gate |
+|---|---|
+| Solver output independently rechecked; every non-solution fails closed | Python 3.11 and exact hashed platform lock identify the evidence runtime |
+| No frozen evidence rewritten or silently reused after identity drift | One explicit solver adapter; no inherited or nested scheduler state |
+| Live evidence required for publication, with zero unexpected skips | Unit, live-artifact and compatibility CI lanes have distinct contracts |
+| Gate S reproducible from clean checkout or explicitly non-release | Portable content-addressed provenance has no author-machine dependency |
+| NVDB patch cannot alter unreviewed topology, IDs, snaps or signal logic | Raw snapshot → normalized source → match audit → minimal patch → staged network is one-way and versioned |
+| Old network and demand remain atomically recoverable | Fresh demand/evidence is bound to each new network identity |
+| Claims limited to what held-out and scenario evidence demonstrates | Every imported/defaulted/manual value has per-attribute provenance, including NVDB product, supplier and quality class or `unknown` |
+
+**Execution order:** A1–A2 → B1 → A3–A5 → B2–B3 → C → D. Work package C
+may be skipped while dirsplit stays closed, but it must pass before any future
+Gate S outcome is promoted. Work package D is the next accuracy/fidelity work;
+new sensors and further dirsplit modelling remain deferred.
 
 ## Known Errors, Inaccuracies and Assumptions in the Simulation Flow
 
@@ -31,17 +455,21 @@ silently forgotten.  Ordered by pipeline stage.
 ### A. Sensor data (the ground truth itself)
 1. **Six stations in two ~400 m clusters** constrain 7 directed edges of
    7 125.  Everything else is prior-driven inference; held-out accuracy is
-   currently a typical factor 1.56 (geometric absolute error; LOSO
-   2026-07-18 median ratio 0.994, range 0.763–2.576).
+   currently shows strong underdelivery (identity-matched spatial LOSO median
+   0.613, range 0.466–1.354; temporal median 0.6225, range 0.445–1.356).
    Only more/better-placed sensors or external counts fundamentally fix
    this — that is the product's own pitch, not a bug, but every downstream
    number inherits it.
-2. **Direction is modelled, not measured**, at the five single-direction
-   stations' opposite carriageways and inside every "Total" sum: the
-   dirsplit model is shrunk λ=0.256 toward 50/50 and validated only
-   region-transfer (Nordic cities) plus two local spot checks (107: 52/48;
-   1076 AM/PM 0.90).  The q10/q50/q90 variants carry this uncertainty into
-   the ensemble — but the *center* of that interval is still a model.
+2. **Direction is only partly measured.** Sensor 107 has a provenance-bound
+   local period D-factor (52/48 in 2025). At the five single-direction
+   stations, the observed carriageway remains Level 1 and the opposite is
+   explicitly unmeasured. The active experimental policy uses the
+   provenance-bound no-profile q50 model only on weekday 06–20 support, with
+   50/50 outside support; learned opposite flow is a soft prior plus a
+   ceiling, never a hard positive floor. Gate M v5 selected the model. q10/q90
+   remain uncalibrated diagnostic stress surfaces, and the current 48-run
+   Gate S v6 found no closure-decision sensitivity in its frozen 2025-09-16
+   06–10 matrix.
 3. **One year (2025), local time**: DST days each miss 4 quarters (kept as
    null); the 2027 forecast is LightGBM point estimates at the 6 sensors
    only, and simulating 2027 assumes 2025 structure (bounds/priors/
@@ -452,9 +880,12 @@ Implementation Order" at the end of this document.
    The bounded browser product samples at most 10 000 real q50 vehicles per
    day; the simulation and confidence calculations still use every vehicle.
    `golden-2025-09-16-7day-v1` is now validated and active.
-9. **Network provenance implemented:** the existing network audit records
-   OSM/defaulted values and SUMO TLS membership. Actual NVDB import remains
-   evidence-bound until a reviewed download is supplied.
+9. **Network provenance implemented; import protocol now specified:** the
+   existing network audit records OSM/defaulted values and SUMO TLS membership.
+   Actual NVDB import follows work package D above: frozen source snapshot,
+   gold-set-calibrated directional matching, minimal PlainXML patch, staged
+   network identity, fresh demand and before/after evidence. A downloaded file
+   alone is not authority to mutate the live network.
 10. **Study/job history implemented:** the start workspace now exposes the
    durable `/api/jobs` records; importing a city signal corridor remains
    evidence-bound and is intentionally not fabricated.
@@ -1074,7 +1505,10 @@ registry and benchmark harness confirmed present):
   release structure in Phase 0/1 must be an EXTENSION of it, never a
   second registry.
 - The assembled per-build validation report (`web/data/validation.json` +
-  the 🛡 panel) exists; Phase 6's study view builds on it.
+  the 🛡 panel) exists; Phase 6's study view builds on it. **Extended
+  2026-08-15:** the report now verifies baseline/demand build equality
+  internally, withholds stale simulation and sensor-output sections and
+  prevents a mixed-build `overall=pass`.
 - A results-preserving speed benchmark harness exists
   (`make benchmark-speed`, semantic hashes).
 - Security hardening is done: mutating endpoints are POST-only with an
@@ -1140,6 +1574,14 @@ normal traffic it compares against.
 sensor-snap manifest, a validated normal scenario, a reproducible validation
 report with final sensor output fit, and no purpose-level claim when purpose
 compatibility fails.
+
+**Current status 2026-08-15:** the active 06–10 diagnostic baseline satisfies
+this technical exit condition and `validation.json` is build-coherent with no
+warnings or missing sections. This does not promote it to a golden release;
+the next normal-baseline accuracy work is the reviewed road-structure import
+in Stage 5, after work packages A1–A5 and B1 establish the reproducible solver
+and evidence runtime that will build and compare it. Stage 4 waits for actual
+new sensor data.
 
 ### Stage 2: Make road-closure simulation a proper incident study
 
@@ -1217,14 +1659,28 @@ registry record, and its contribution is measured rather than assumed.
 
 ### Stage 5: Improve physical network inputs without inventing observations
 
-Use public sources such as NVDB only for documented road structure: speed
-limits, lanes, road class and prohibited directions. Reconcile them against
-the stable edge-ID mapping, record imported/defaulted/manual provenance in
-the network audit, and repair only reviewed mismatches. Do not calibrate
-driving speed, lane changing or queue discharge from speed limits alone.
+Execute work package D in the 2026-08-16 Safety and Architecture Hardening
+Protocol. Use public sources such as NVDB only for documented road structure:
+speed limits, directional lane counts and road class. Treat prohibited
+direction as a topology-review alarm in the first campaign, not an automatic
+edit. Reconcile a frozen source snapshot against stable edge IDs through a
+gold-set-calibrated geometry-and-direction matcher; never accept nearest-only
+matching. Apply only reviewed speed/lane attributes through a generated
+PlainXML/netconvert patch, publish a new network identity and rebuild demand.
+Keep the old network recoverable and compare held-out, health and closure
+evidence before promotion. Do not calibrate driving speed, lane changing or
+queue discharge from speed limits alone, and do not describe an official
+road-structure source as demonstrated traffic accuracy: NVDB quality is
+product-specific and supplier-dependent, so an imported value is documented,
+not verified.
 
-**Exit condition:** every network value used by SUMO is traceable to OSM,
-NVDB, a reviewed override, or a declared fallback.
+**Exit condition:** every network value used by SUMO is traceable to a hashed
+OSM/NVDB snapshot with its product/spec version, responsible supplier and
+quality attribute recorded (or `unknown`), a reviewed override or a declared
+fallback; there is zero
+unreviewed topology, stable-ID, sensor-snap or TLS drift; fresh demand and
+before/after evidence bind the staged network; and rollback is an atomic
+pointer change to the previous immutable release.
 
 ### Stage 6: Upgrade one corridor with city-provided evidence
 
@@ -1596,15 +2052,23 @@ range-level manifest. The active seven-day release satisfies this gate.
 
 ### Network realism work
 
-1. Build a source-to-SUMO network audit sidecar for speed, lane direction,
-   turn lanes, turn restrictions, priority, traffic-signal membership, and
+1. Retain the source-to-SUMO network audit sidecar for speed, lane direction,
+   turn lanes, turn restrictions, priority, traffic-signal membership and
    roundabout membership.
-2. Retain source provenance for each value: imported, defaulted, or manually
-   reviewed.
-3. Repair only reviewed network issues while preserving the stable edge-ID
-   mapping layer.
-4. Use OSM/default speeds as free-flow constraints. Do not tune vehicle
-   behavior, lane changing, or speed factors without held-out speed/travel-time
+2. Execute work package D: bind the raw NVDB snapshot and product semantics,
+   calibrate matching against reviewed truth, stage a minimal attribute patch
+   and fail closed on ambiguous direction.
+3. Retain per-attribute provenance: source snapshot and feature ID, NVDB
+   product/spec version, responsible data supplier and quality attribute (or
+   `unknown`), imported/defaulted/manually reviewed status, match evidence and
+   patch digest.
+4. Repair only reviewed speed/lane issues while preserving stable edge IDs,
+   topology, sensor snaps, connections and TLS semantics. Topology differences
+   require a separate campaign and contract.
+5. Rebuild demand and compare the same held-out and closure studies on the new
+   network before promotion; never mix demand/network identities.
+6. Use OSM/NVDB speeds as legal/free-flow constraints. Do not tune vehicle
+   behaviour, lane changing or speed factors without held-out speed/travel-time
    observations.
 
 ### Confidence work
@@ -3010,6 +3474,11 @@ whether it completed healthily, and what the result is allowed to claim.
   Chrome in both states (matching → normal shield with the build id in
   the provenance line; mismatched → warning state), plus regression tests
   on the report side.
+  **Internal-report correction 2026-08-15:** the earlier implementation only
+  protected the UI. The report assembler itself could still combine current
+  demand fields with an old baseline and emit `overall=pass`. A new
+  `scenario_identity` section now fails that combination closed and regression
+  tests cover mismatch and missing baseline identity.
 
   KNOWN STATE while doing this (2026-07-20): the tracked
   `web/data/validation.json` is deliberately left at its last COHERENT
@@ -3613,6 +4082,26 @@ The original four (kept for the record — what each would have unlocked):
 
 ## Recommended Implementation Order
 
+**Current queue — supersedes the historical code block below:**
+
+```text
+0. A1-A2: Python-3.11 locks + real-model solver diagnosis
+1. B1: required reference CI from the exact Linux lock
+2. A3-A5: compare adapters, prove exactness, select and rebuild if changed
+3. B2-B3: required live-evidence lane + compatibility canary
+4. C: portable Gate S bundle/verifier (conditional before any future Gate S)
+5. D: staged NVDB speed audit/patch, then reviewed directional lanes
+6. Fresh demand + normal/LOSO/temporal/matched-closure comparison
+7. Atomic promote or rollback; report only evidence-supported claims
+```
+
+New sensors, city controller data and further dirsplit modelling are deferred.
+The closed external-data request is not part of this queue. The older order
+below is retained to explain how the already completed foundation was built;
+it is not the current next-action list.
+
+**Historical foundation order (largely completed/superseded):**
+
 ```text
 0. Enforce SensorRegistry active/quality/snap gate            (size M)  — bootstrap-review the six current snaps;
                                                                           record resolved-snap and registry hashes
@@ -3641,15 +4130,11 @@ contract section plus Phase 3's output-fit work and the publication gate;
 items 2-3 → Phase 1; items 4 and 6 → Phase 3; item 5 → Phase 0; item 7 →
 Phase 4; item 8 → Phase 5; item 9 → Phase 6; item 10 → Phases 2 and 7.
 
-The immediate next implementation block is therefore: **make input identity
-real** (approved SensorRegistry snap plus variant identity), then **prove
-final normal SUMO sensor output**, then **complete stale-artifact proof**.
-Only then repair purpose/structure allocation and freeze the resulting normal
-release.  This order prevents a golden release from preserving an unreviewed
-sensor mapping, an incomplete uncertainty set or a PFE-only notion of sensor
-fit.  Send the external-data request package (see above) at the START of this
-block — the city's response time, not implementation time, is the critical
-path for the city-configured signal rung.
+**Supersession note (2026-08-16):** the paragraph formerly here named input
+identity, final-output fit and stale-artifact proof as immediate work and asked
+for an external-data request. Those engineering items are already implemented,
+and the external requests were closed by user decision on 2026-07-20. The
+current queue above is authoritative.
 
 ### Current verified status and concrete entry points
 

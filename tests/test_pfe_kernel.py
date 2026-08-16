@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import pfe
-import pfe_kernel
-from pfe import Candidate
+from traffic_sim.demand import pfe
+from traffic_sim.demand import pfe_kernel
+from traffic_sim.demand.pfe import Candidate
 from tools.verify_pfe_kernel import flow_path_for_metadata
 
 pytestmark = pytest.mark.skipif(os.environ.get("PFE_PURE") == "1",

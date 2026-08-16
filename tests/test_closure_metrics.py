@@ -2,10 +2,11 @@
 
 from pathlib import Path
 
-from closure_metrics import (DisruptionMetrics, build_metrics, compare_metrics,
-                             active_closure_throughput, disqualification_reasons,
-                             is_disqualified, read_closed_edge_throughput,
-                             read_statistics, read_summary_max_queue, read_tripinfo)
+from traffic_sim.simulation.metrics import (
+    DisruptionMetrics, build_metrics, compare_metrics,
+    active_closure_throughput, disqualification_reasons,
+    is_disqualified, read_closed_edge_throughput,
+    read_statistics, read_summary_max_queue, read_tripinfo)
 
 
 def _write_fixture_outputs(tmp_path: Path) -> tuple[Path, Path, Path, Path]:

@@ -1,0 +1,66 @@
+{
+  "protocol": "dirsplit_gate_m_v3",
+  "selection_rule": "simplest_defensible_v2",
+  "gate_m": "MODEL",
+  "winner": "similarity_weighted_lgbm_no_profile",
+  "recorded": "2026-08-15",
+  "release_evidence": false,
+  "supersedes": {
+    "path": "validation/dirsplit_gate_m_outcome_v4.json",
+    "sha256": "3fa1a2264ad0e407eabed68d4fcb5384da75536d78ec62f14e8d948c9a9a5166"
+  },
+  "reason": "The no-profile LightGBM policy uses trained q50 only on weekdays 06-20 and falls back to 50/50 outside training support. It wins a primary group under every required fold kind and significantly loses none against constant_5050.",
+  "report": {
+    "path": "data/dirsplit/gate_m_report.json",
+    "sha256": "0aec4c859d86f16de662e21f243ce8d77a3cbdbe9c359307c73a011eb227455d",
+    "content_key": "0d9f734b91178a6b4d96245f22a5c9507938ba807d1499c2460ef22d09d35d83",
+    "runtime_seconds_approx": 1310,
+    "command": "MPLCONFIGDIR=/tmp/gs-dirsplit-mpl PYTHONDONTWRITEBYTECODE=1 python3 -m dirsplit.evaluate"
+  },
+  "dataset": {
+    "protocol": "dirsplit_training_table_v2",
+    "rows": 247464,
+    "usable_rows": 232500,
+    "evaluated_rows": 52383,
+    "stations": 97,
+    "day_blocks_in_manifest": 5524,
+    "evaluated_station_date_blocks": 2403,
+    "raw_volume_files": 188,
+    "source_content_key": "866a1f52136f79d7e6bf3cddf7c3df0eff931d8b5f5ed8769d6a598b22d8add6",
+    "required_folds_present": [
+      "blocked_date",
+      "leave_city_out",
+      "leave_station_out"
+    ]
+  },
+  "trained_policy": {
+    "model": "similarity_weighted_lgbm_no_profile",
+    "supported_window": "weekday 06:00-20:59",
+    "out_of_support_point": "constant_5050",
+    "out_of_support_interval": [0.1, 0.9],
+    "shrinkage_lambda": 0.264,
+    "profile_features": false
+  },
+  "winner_primary_groups": {
+    "leave_city_out": {
+      "all_improvement_pct": 0.22,
+      "all_ci95": [-0.000429, 0.00009],
+      "weekday_peak_improvement_pct": 1.19,
+      "weekday_peak_ci95": [-0.001849, -0.000038]
+    },
+    "leave_station_out": {
+      "all_improvement_pct": 1.19,
+      "all_ci95": [-0.001185, -0.000633],
+      "weekday_peak_improvement_pct": 4.56,
+      "weekday_peak_ci95": [-0.004397, -0.002883]
+    },
+    "blocked_date": {
+      "all_improvement_pct": 0.34,
+      "all_ci95": [-0.000562, 0.000052],
+      "weekday_peak_improvement_pct": 2.56,
+      "weekday_peak_ci95": [-0.003015, -0.001046]
+    }
+  },
+  "interpretation": "The result supports a small, support-aware trained point model, not unrestricted extrapolation and not a claim that 50/50 is false everywhere. Improvements are strongest at weekday peaks and for new stations; geographic-transfer and blocked-date all-row results are ties rather than significant losses.",
+  "safety": "Measured directions remain Level 1. An unmeasured opposite carriageway receives only a soft prior and a ceiling-only uncertainty bound; no learned hard lower bound may manufacture traffic."
+}

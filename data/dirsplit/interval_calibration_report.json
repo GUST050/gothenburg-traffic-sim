@@ -1,0 +1,124 @@
+{
+ "candidate": "similarity_weighted_lgbm_no_profile",
+ "conformalized_interval": {
+  "all_rows": {
+   "coverage": 0.921,
+   "mean_width": 0.5548,
+   "median_width": 0.8,
+   "n": 20772,
+   "station_coverage_median": 0.91,
+   "station_coverage_min": 0.0,
+   "stations": 40
+  },
+  "conformal_corrections": {
+   "max": 0.0895,
+   "median": 0.0787,
+   "min": 0.0626,
+   "n": 40
+  },
+  "nominal_coverage": 0.8,
+  "supported": {
+   "coverage": 0.8328,
+   "mean_width": 0.2497,
+   "median_width": 0.2281,
+   "n": 9254,
+   "station_coverage_median": 0.8567,
+   "station_coverage_min": 0.4767,
+   "stations": 32
+  },
+  "unsupported": {
+   "coverage": 0.9918,
+   "mean_width": 0.8,
+   "median_width": 0.8,
+   "n": 11518,
+   "station_coverage_median": 1.0,
+   "station_coverage_min": 0.0,
+   "stations": 40
+  }
+ },
+ "content_key": "61ba5a1bbdc44f4397b065ed8c5c1cbda90cebcbf7bbdb6ed629fbe4445e2320",
+ "dataset": {
+  "day_blocks": 5524,
+  "manifest": "data/dirsplit/training_table_meta.json",
+  "manifest_sha256": "0b89424e75f8002b7e729ffddb38480a39384d0958dcf7080b280f7f54764c33",
+  "protocol": "dirsplit_training_table_v2",
+  "rows": 247464,
+  "source_content_key": "866a1f52136f79d7e6bf3cddf7c3df0eff931d8b5f5ed8769d6a598b22d8add6",
+  "source_volume_files": 188,
+  "usable_rows": 232500
+ },
+ "folds_available": 40,
+ "folds_used": 40,
+ "input": {
+  "block_definition": "station x date",
+  "blocks": 2403,
+  "cities": [
+   "bergen",
+   "oslo",
+   "stavanger",
+   "trondheim"
+  ],
+  "deployed_training_window_rows": 23472,
+  "deployed_training_window_stations": 83,
+  "has_day_level_dates": true,
+  "oneway_screen": "observed weekday-daytime mean share outside (0.15, 0.85) (dirsplit/train.py)",
+  "oneway_stations_dropped": 80,
+  "orientation_screen": "radial_cos > 0 (dirsplit/train.py)",
+  "raw_rows": 247464,
+  "rows_kept": 52383,
+  "source": "data/dirsplit/training_table.csv",
+  "stations": 97,
+  "unusable_or_invalid_rows": 137916
+ },
+ "interpretation": "Coverage below the nominal level means the published q10/q90 is narrower than the data supports and must not be presented as an 80% interval. Unsupported rows are the constant [0.1, 0.9] ignorance statement, not a model output, and are reported separately for that reason.",
+ "protocol": "dirsplit_interval_calibration_v1",
+ "provenance": {
+  "dataset_meta": "data/dirsplit/training_table_meta.json",
+  "dataset_meta_digest": "0b89424e75f8002b7e729ffddb38480a39384d0958dcf7080b280f7f54764c33",
+  "dataset_module_digest": "ee7d14d67234562faf2cbb386d5e8b80240cdbb2eec201b3e22d3fe44585f123",
+  "evaluate_module_digest": "a319acba5231fa5e7baf5a90e2c7e9b0af0d6fc68cf22fde73c71bd4c10e2ca6",
+  "features_module_digest": "698902f36501e274d0d24abc52b53d78f6c3b4318cb3d4b51ca986db9e1a10e0",
+  "note": "digests bind this report to the exact table and scoring code it came from; a report whose digests no longer match the tree is stale, not current",
+  "trainer_module_digest": "5f7dddc67fc11c1a1a49811c1da1934e4843617ddaaaff1fe427c10e153c5871",
+  "training_table": "data/dirsplit/training_table.csv",
+  "training_table_digest": "3eae6fdc353a7c334f5ffaec0b4b311c66b4782f660d24ca6e1dca0b414c630e"
+ },
+ "published_interval": {
+  "all_rows": {
+   "coverage": 0.7335,
+   "mean_width": 0.484,
+   "median_width": 0.8,
+   "n": 20772,
+   "station_coverage_median": 0.7346,
+   "station_coverage_min": 0.0,
+   "stations": 40
+  },
+  "conformal_corrections": {
+   "max": null,
+   "median": null,
+   "min": null,
+   "n": 0
+  },
+  "nominal_coverage": 0.8,
+  "supported": {
+   "coverage": 0.412,
+   "mean_width": 0.0908,
+   "median_width": 0.0788,
+   "n": 9254,
+   "station_coverage_median": 0.44,
+   "station_coverage_min": 0.0133,
+   "stations": 32
+  },
+  "unsupported": {
+   "coverage": 0.9918,
+   "mean_width": 0.8,
+   "median_width": 0.8,
+   "n": 11518,
+   "station_coverage_median": 1.0,
+   "station_coverage_min": 0.0,
+   "stations": 40
+  }
+ },
+ "recorded_fold_kind": "leave_station_out",
+ "release_evidence": false
+}

@@ -1,0 +1,87 @@
+{
+  "protocol": "dirsplit_trained_q50_activation_v2",
+  "content_key": "01b6349b26d3dcf1bacb91c715e414763e736baeb668764246c8dfbbde07f38f",
+  "recorded": "2026-08-15",
+  "activation_status": "ACTIVE_EXPERIMENTAL",
+  "release_evidence": false,
+  "supersedes": {
+    "path": "validation/dirsplit_trained_q50_activation_v1.json",
+    "sha256": "adeea485737d64ded3bffec542fc2ecef5298a9a313d961634af96764b3140bb"
+  },
+  "basis": {
+    "gate_m": {
+      "result": "MODEL",
+      "winner": "similarity_weighted_lgbm_no_profile",
+      "path": "validation/dirsplit_gate_m_outcome_v5.json",
+      "sha256": "38d90a11d19a59d19e31a61e90ff7ecaf5c262458ccb4569b7c843a598729980"
+    },
+    "gate_s": {
+      "result": "NO",
+      "path": "validation/dirsplit_direction_sensitivity_outcome_v6.json",
+      "sha256": "1f9c6e8e12534676cdc62fb8b330a491a794115881d0cbb35ee323b765160550",
+      "registration_path": "validation/dirsplit_direction_sensitivity_registration_v4.json",
+      "registration_sha256": "3baa57f94faa1fc6744d0c0a4ffed93a59f75db48e02cf95a594b9453c87ae08",
+      "registration_key": "2692c226a96dd343a34abc9d7e2b35e2f7a0a89ded500cb51ffa224b1e626a1c",
+      "observations": 48,
+      "usable": 48,
+      "hard_failures": 0,
+      "release_evidence": false
+    },
+    "magnitude_shape_diagnostic": {
+      "decision": "NEGATIVE_EVIDENCE",
+      "path": "validation/dirsplit_magnitude_shape_diagnostic_v1.json",
+      "sha256": "3aa342cb12e1027dfb643a60261ffa052723d820bc66cb57b905c3f76adfcfc1",
+      "content_key": "821dc51a7eee5517bafbc7a1d7810abe065ed3f8ca30326fc46dc457dc8663c2"
+    }
+  },
+  "training": {
+    "protocol": "dirsplit_train_v2",
+    "table_rows": 247464,
+    "usable_rows": 232500,
+    "product_training_rows": 23472,
+    "product_training_stations": 83,
+    "raw_volume_files": 188,
+    "shrinkage_lambda": 0.264,
+    "pooled_domain_mae": 0.0604,
+    "pooled_domain_mae_5050": 0.0617,
+    "profile_features": false
+  },
+  "measured_magnitude": {
+    "all_measured_mass": 8477204.0,
+    "raw_transferred_q50_reallocated_pct": 0.104391,
+    "active_q50_with_local_anchor_reallocated_pct": 0.603642,
+    "active_q50_shape_only_reallocated_pct": 0.101367,
+    "q10_stress_reallocated_pct": 2.114156,
+    "q90_stress_reallocated_pct": 4.233881,
+    "level23_note": "Opposite-carriageway values are pre-PFE soft-prior/ceiling quantities and are never realised traffic or a positive floor."
+  },
+  "product_policy": {
+    "supported_point_model": "trained q50 on weekdays 06:00-20:59",
+    "out_of_support_fallback": "constant 50/50 point with q10/q90 widened to 0.1/0.9",
+    "local_anchor": "apply provenance-bound local directional references during their declared validity period",
+    "single_direction_opposite": "model-hash-bound soft prior plus ceiling-only uncertainty bound; never a hard lower bound",
+    "route_slots": "three central-q50 seed replicas unless --direction-stress-variants explicitly substitutes q10/q90",
+    "claim_boundary": "Gate S v6 found no closure-decision sensitivity in its frozen 2025-09-16 06:00-10:00 diagnostic matrix. q10/q90 remain named uncalibrated stress cases and neither Gate S nor this activation is release evidence. No level/shape product is justified."
+  },
+  "sources": {
+    "build_sumo_demand.py": "2378a0d44f98582fa03c0c631dc6faa9c37fdc91358524d6c42b2e2dc46dc764",
+    "demand/intake.py": "b2bd2c0d8d00eb27c2e4e58cff3639c8e84e0b811d62df0f48344381f4e2c26f",
+    "demand/priors.py": "fa190dffc1a9f4b656e5625e1d7e701ed11fa50a82ee5789565846ec0d5481a2",
+    "dirsplit/train.py": "5f7dddc67fc11c1a1a49811c1da1934e4843617ddaaaff1fe427c10e153c5871",
+    "dirsplit/evaluate.py": "e81e8d8b967de7addc3bcb1182338cfa54b8b4fffcb691276b0cd8f7f978d801",
+    "dirsplit/predict.py": "ffc50eb41014c068e98e8eb9ea9347521b7e28599949496197340564a3faa039",
+    "prior_flows.py": "6e70cee39ab70dd6281e0b649655ca7d57eb5aa55f9750319bb4da645b978317",
+    "data_in/sensors.json": "2fe62df67ac1db513fad05682f6c5412324a9b3ebbf88731ad37ca5788508000",
+    "demand/publication.py": "8e40aa2ab278fb38747dd644a28feefca1be9d31799d6332eff3994daeebe5d9",
+    "demand/calibration.py": "e18f5401679f4747f639e068229414818bccbfe8bb46403c1b4ef17405e51825",
+    "traffic_sim/demand/pfe.py": "e9160fcd348177111af89dafa32fa6156d6f13024df8d4c9ea4b303eb8db478b"
+  },
+  "artifacts": {
+    "data/dirsplit/model.pkl": "ec2e43ff7c93609388d71408b7e720dc5d1e1a0743c311beb6cc1d01939f8203",
+    "data/dirsplit/train_report.json": "ac39f9d0c47656e81ee86075739d777c917427f27da5e8254a22e41864ecd05f",
+    "data/dirsplit/gate_m_report.json": "0aec4c859d86f16de662e21f243ce8d77a3cbdbe9c359307c73a011eb227455d",
+    "sumo/direction_split.json": "354b74909e20a555769affd5f8db7eecc41727336d3dd2dc4d7bd2c70d371d6a",
+    "sumo/prior_flows.json": "01cf77e3ea6fd6ffe5c7102f22b01233892a13b90f6c22274a017349d8c83050"
+  },
+  "safety": "Measured counts remain Level 1 and are never negotiated. Learned opposite-direction information yields before the measurement band and can never impose a positive floor."
+}

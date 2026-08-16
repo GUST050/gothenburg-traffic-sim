@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "registration_id": "matched_baseline_current_demand_v1",
+  "registered_at": "2026-08-15T15:27:48Z",
+  "git_commit": "b39679fd9a952676bbb1d120a3c665348cc21299",
+  "purpose": "Rebuild the 2025-09-16 06:00-10:00 baseline against the current direction-training demand identity before refreshing spatial and temporal held-out evidence.",
+  "evidence_class": "diagnostic",
+  "release_evidence": false,
+  "demand": {
+    "build_id": "4afe9e3ae2e74a4b872e",
+    "demand_build_key": "022a772f5057a253",
+    "source": "historical",
+    "start_date": "2025-09-16",
+    "begin": "06:00",
+    "end": "10:00",
+    "n_intervals": 16,
+    "n_variants": 3
+  },
+  "scenario": {
+    "scenario_id": "baseline",
+    "simulation_mode": "meso",
+    "seed_set": [1000, 1001, 1002],
+    "demand_variant_mapping": {
+      "1000": "q10",
+      "1001": "q50",
+      "1002": "q90"
+    },
+    "output_directory": "web/data/scenarios_staging"
+  },
+  "input_sha256": {
+    "sumo/demand_meta.json": "d442fadd39cdb1e9bf785b312014d693d06358864286ced6c4678a673ee1420d",
+    "sumo/net.net.xml": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "sumo/calibrated.rou.xml": "079220f390009bf29cd99b74672d10b14fb02835bc12e7b6794d0cf3c6bf7e1e",
+    "sumo/calibrated_v1.rou.xml": "14072ae1ce2d9660a580b7583029132b9a385ff93bf11735613a778fd99fc8ff",
+    "sumo/calibrated_v2.rou.xml": "1ee470cbe28518f282714be399af9066323b1383286b5b12a0029f8ab0dea039",
+    "data_in/sensors.json": "2fe62df67ac1db513fad05682f6c5412324a9b3ebbf88731ad37ca5788508000",
+    "web/data/network.geojson": "92cbcf3895b3d1428d3713a0e919cf6679f00a8e5d00e7974182345d088a1dbf"
+  },
+  "publication_policy": {
+    "validator": "serve.validate_staged_scenarios",
+    "publish_function": "serve.publish_staged_scenarios",
+    "publish_only_if_validator_passes": true,
+    "q10_q90_semantics": "uncalibrated diagnostic stress cases",
+    "on_failure": "retain the existing live scenario set and record the exact reason"
+  }
+}

@@ -741,6 +741,24 @@ class TestFrozenFingerprintSetIsPinned:
         assert set(benchmark_speed.REQUIRED_FINGERPRINT_LABELS) == set(
             json.loads(CAMPAIGN.read_text())["frozen_fingerprints"])
 
+    def test_every_source_fingerprint_resolves_to_a_real_file(self):
+        """A ``source:`` label whose path is gone silently degrades to None.
+
+        ``file_fingerprints()`` named the root compatibility shims
+        ``closure_metrics.py`` and ``sumo_runtime.py``; when those were
+        retired into ``traffic_sim/`` the digests became None, which drops the
+        input from every report's provenance AND makes
+        ``verify_campaign_inputs`` refuse any campaign that froze the label
+        ("input missing on disk"). The sumo/ artifacts are legitimately absent
+        in a clean checkout, so only tracked source paths are asserted.
+        """
+        unresolved = [label
+                      for label, digest in benchmark_speed.file_fingerprints().items()
+                      if label.startswith("source:") and digest is None]
+        assert not unresolved, (
+            "source fingerprints no longer resolve on disk: "
+            + ", ".join(unresolved))
+
     def test_a_dropped_fingerprint_never_reaches_a_run(self, tmp_path,
                                                        monkeypatch):
         def explode(*args, **kwargs):                       # pragma: no cover
@@ -832,6 +850,19 @@ class TestFailedProvenanceCommandsFailClosed:
 
         monkeypatch.setattr(benchmark_speed.subprocess, "run",
                             lambda *a, **k: Result())
+        assert benchmark_speed.sumo_version() is None
+
+    def test_namespace_sumo_directory_is_not_an_installation(self, monkeypatch):
+        namespace = type(sys)("sumo")
+        namespace.__file__ = None
+        monkeypatch.setitem(sys.modules, "sumo", namespace)
+        monkeypatch.setattr(
+            benchmark_speed.subprocess,
+            "run",
+            lambda *args, **kwargs: pytest.fail(
+                "namespace package must be rejected before subprocess"),
+        )
+
         assert benchmark_speed.sumo_version() is None
 
     def test_a_successful_sumo_version_is_used(self, monkeypatch):
