@@ -18,6 +18,15 @@ closure-sensitivity study and compares point models. Joint scenarios and any
 demand/monthly/warm/API/UI integration are conditional on three explicit
 evidence gates; 50/50 plus the local anchor is a planned successful exit.
 Existing q-archives and release contracts remain immutable legacy evidence.
+**Implementation status (2026-08-16):** the unconditional phases are built —
+Fas 0A (sensor 107's provenance-bound period anchor, applied at load time in
+`demand/intake.py`), Fas 0B (`tools/measure_direction_decision_sensitivity.py`
+plus its frozen registration) and Fas 1 (raw dataset v2, the four-model
+tournament in `dirsplit/benchmark.py`, observability v2 in
+`dirsplit/coverage.py`). Gate S and Gate M are both still **undecided**: they
+need a calibrated demand build with SUMO, and the re-fetched raw Norwegian
+volumes, respectively. No Gren B/D, scenario, monthly, warm-state, API or UI
+code was written.
 
 ## Known Errors, Inaccuracies and Assumptions in the Simulation Flow
 

@@ -18,6 +18,9 @@ _FIXED_SOURCES = {
     "build_data": "build_data.py",
     "sensor_registry": "traffic_sim/intake/sensors.py",
     "sensor_registry_data": "data_in/sensors.json",
+    # The local D-factor anchor re-levels the direction split at load time, so
+    # its bytes change level-1 targets without the split FILE changing at all.
+    "direction_anchor": "traffic_sim/intake/direction_anchor.py",
     "build_candidates": "build_candidates.py",
     "build_sumo_net": "build_sumo_net.py",
     "pfe": "traffic_sim/demand/pfe.py",

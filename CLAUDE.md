@@ -257,6 +257,14 @@ Goal arc, in order:
 - Raw inputs (what build_data.py actually reads): quarterly CSVs in `~/Downloads/Data till Chalmers_20260618/` + `~/Downloads/Mätpunkter_koordinater.csv`. (`clean.csv` was an exploration intermediate and is not part of the pipeline.)
 - `level` / measured directions — VERIFIED 2026-07-03 by Gustav against Göteborgs Stad's trafikmängder catalogue (Power BI). THE DELIVERED "Total" LABEL WAS WRONG for 4 of 5 sensors — it is the catalogue's Total row, which for single-direction stations equals the one measured direction. Source of truth = the validated `data_in/sensors.json` registry (the `SENSOR_MEASURED_DIRECTION` name in `build_data.py` is compatibility-only):
   - 107 Skånegatan: genuinely two-way (N+S+Total). City's own D-factor: N 3400/S 3100 of 6500 (2025) = 52/48; 2023–24 exactly 50/50 — LOCAL VALIDATION of the mild-split finding and the dirsplit model (predicted 0.47–0.52).
+    MACHINE-BOUND 2026-08-16 (`directional_reference` in `data_in/sensors.json`,
+    plan Fas 0A): the raw 3400/3100, their edge mapping (N = 60786979_
+    3575001205_0 at bearing 352°, S = 1455801464_18241874_0 at 174°), the
+    declared period and the source are now a validated registry record with
+    `time_semantics: period_aggregate`. It is a PERIOD AGGREGATE and the
+    registry loader REFUSES any record claiming per-slot semantics — a yearly
+    D-factor must never be serialised as 96 Level-1 measurements. See the
+    direction-split anchoring contract below for what it does to the split.
   - 1074 Valhallagatan V, 1076 Skånegatan S, 133 Läraregatan V, 134 Gibraltargatan SO, 2276 Läraregatan V — single-direction only. Their daily means match the catalogue's ÅMVD ±3%.
   - build_data.py snaps compass-labelled sensors direction-aware (edge bearing must match the letter, else opposite carriageway within 80 m). Only 7 measured directed edges now (107's pair + 5 singles). The opposite direction at single-direction stations is UNMEASURED — never constrain or display it as known.
   - New sensors: check the city catalogue FIRST and add a verified record to `data_in/sensors.json`.
@@ -305,6 +313,28 @@ Goal arc, in order:
   `warn_widened_measurement_band` now reports that unconditionally on every
   build (it used to be nested inside the bound-violation warning, which
   returns early when there are no bound violations).
+- DIRECTION-SPLIT ANCHORING (2026-08-16, `traffic_sim/intake/direction_anchor.py`,
+  applied by `demand/intake.py::load_anchored_direction_split`): where the
+  validated registry holds a verified `directional_reference`, the ESTIMATED
+  per-slot split is re-levelled by ONE constant shift in log-odds until its
+  flow-weighted mean over the declared period reproduces the published share.
+  Properties that make this safe, each pinned by a test: the shape of the
+  time-of-day profile is untouched (a constant shift preserves every log-odds
+  difference and the ordering); the complement direction moves by −δ, which is
+  exactly complement-consistent, so pair sums and mirrored-quantile relations
+  survive; q10/q90 take the SAME δ as q50, so the stress band keeps its width
+  rather than collapsing onto the anchor; per-slot values remain labelled
+  `estimated`, and only their period mean is measurement-backed. Weights are the
+  measured two-way totals per slot from the REFERENCE year (`web/data/flows.json`)
+  no matter which source a build calibrates against — a D-factor describes the
+  real street, not a forecast — with a declared `uniform_fallback_*` weighting
+  when the period has no measurements. Anchoring is applied at LOAD time, not in
+  `dirsplit/predict.py`, so the split file's bytes cannot hide a change in this
+  code; the module is therefore part of the demand source fingerprint and the
+  candidate-cache key. Measured on deployment: 107's transfer-model period mean
+  was 0.4981, the anchor moves it to 0.52308 (δ = +0.100), max per-slot change
+  0.025, and one real Level-1 target (2025-09-16 08:00, two-way total 127) moves
+  from 63.0 to 66.2 vehicles.
 - One ID space across data/model/sim/map. One coordinate system (WGS84). Time = ISO datetime / abstract index — never "row in the 2025 file".
 - `NormalProfile.flowAt/calmAt(edgeId, qi, dayOfWeek)`: dayOfWeek (0=Mon) MUST be derived from the ACTIVE provider's epoch (2025 starts Wednesday, 2027 Friday) — never from qi alone.
 
@@ -419,6 +449,53 @@ Goal arc, in order:
    - Local ground truth check: sensor 1076 (the only direction-measured street) has weekday AM/PM ratio 0.90 in its single direction — nearly symmetric, confirming the mild-split finding for these central mixed-use streets.
    - FINAL METHODOLOGY (2026-07-02, "absolut bäst" pass): (i) mirrored-duplicate rows removed — train on toward-centre direction only (predict.py orients each pair accordingly); (ii) station-level weight normalisation — hourly rows within a station are correlated, every station gets equal total influence; (iii) James-Stein-style SHRINKAGE calibrated on pooled leave-city-out domain predictions: λ=0.256 — only ~26% of predicted deviation from 50/50 is transferable signal; deployment uses 0.5+λ(pred−0.5), intervals re-centred. Pooled domain MAE: shrunk 0.0559 beats 50/50's 0.0564 (and raw 0.0654). By construction the shrunk estimate cannot be worse than 50/50 in expectation. Literature anchor: this is the traffic-engineering D-factor; FHWA/TxDOT typical urban values 0.50–0.59 — our shrunk predictions (0.47–0.52 ±0.1) sit exactly there.
    - Gothenburg's own trafikmängder Power BI (public link on goteborg.se) may hold per-direction city measurements near the clusters — check manually; a local directional measurement would beat all of the above as calibration.
+   - DECISION-GATED REWORK (2026-08-16, plan
+     `docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md`): an
+     end-to-end audit found that the deployed q10/q50/q90 are learned from
+     station-hour MEANS, so they describe spread between aggregated cells, not
+     the day-to-day variation a future day has; that weekend/off-hour
+     predictions have no training support (`is_weekend` is always 0 in
+     training); and that q10/q90's nominal 80% coverage has never been
+     validated. The unconditional response is built:
+     - `dirsplit/dataset.py` now writes a RAW `training_table_v2.csv` (one row
+       per station × local date × hour × heading, with both counts, the hour
+       total, coverage, an explicit missingness reason instead of a silent
+       drop, and a `day_block_id` that keeps simultaneous observations
+       together). The old aggregate is kept as a labelled diagnostic. Profile
+       features are split into `profile_total_*` (both directions, the legacy
+       meaning) and `profile_dir_*` (this heading only, computable at a
+       single-direction station) — never the same column name for two
+       different quantities.
+     - `dirsplit/benchmark.py` runs a four-model tournament (`constant_5050`,
+       `shrunk_dfactor`, `lightgbm_similarity`, the deployed
+       `lightgbm_similarity_shrunk`, and a beta-binomial count model when raw
+       counts exist) over leave-city-out, leave-station-out and blocked-date
+       folds, refitting scaling/bandwidth/shrinkage INSIDE each fold and
+       bootstrapping over independent day blocks. Gate M's rule is frozen in
+       source. MEASURED on the tracked aggregate (`--table legacy --hours
+       supported`, 1 214 rows, 81 groups): `shrunk_dfactor` — hour × day type
+       partially pooled toward 0.5, with NO street features — beats 50/50 by
+       +4.5% leave-city-out (CI [−0.0053, −0.0006]) and +6.4% leave-station-out;
+       the deployed shrunk LightGBM manages +2.1%/+3.7% with CIs spanning zero;
+       the raw LightGBM is WORSE than 50/50 (−6.5%/−3.5%). Gate M nevertheless
+       reports INCONCLUSIVE by its own rule, because the aggregate has no day
+       blocks and no raw counts. Do not quote these as a decided verdict.
+     - `dirsplit/coverage.py` gained observability v2: an evidence profile with
+       seven separate dimensions (measurement level, static domain, temporal
+       support, feature compatibility, effective sample size, calibration
+       support, local cross-check). Weak evidence widens the claim and can make
+       a result `inconclusive`; it NEVER excludes a road — `excludes_road` is
+       False by construction and tested.
+     - `tools/measure_direction_decision_sensitivity.py` + its committed
+       preregistration measure Gate S: the full stress-case × seed cross product
+       with the SAME seed list under every case and the SAME (case, seed) pair
+       for baseline and candidate, reusing the existing `run_condition`/
+       `paired_comparison` runners. It is diagnostic (`release_evidence: false`),
+       append-only, and fails closed to INCONCLUSIVE without a demand build.
+     GATES STILL OPEN: Gate S needs `make demand && make direction-sensitivity`;
+     Gate M needs `make dirsplit-volumes && make dirsplit-dataset && make
+     dirsplit-benchmark`. Nothing in Fas 2–4 (residual scenarios, ensemble
+     manifests, monthly/warm/API/UI integration) may be built until they pass.
    - REMAINING: UK DfT integration for more training breadth.
 
 ## Rules — do / never

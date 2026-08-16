@@ -20,6 +20,19 @@ from build_agent1_flows import HOLIDAY_MAPPING_2027_TO_2025
 GEO_PATH = Path("web/data/network.geojson")
 SUMO_DIR = Path("sumo")
 INTERVAL = pd.Timedelta(minutes=15)
+# Anchor weights are read from the MEASURED year, whatever source is being
+# simulated — the published D-factor describes the real street, not a forecast.
+MEASURED_FLOWS_PATH = Path("web/data/flows.json")
+_ANCHORED_SPLIT_CACHE: dict[tuple, tuple[dict, list[dict]]] = {}
+
+
+def _file_stamp(path: Path) -> tuple:
+    """Identity of an input file for the anchored-split cache key."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return (str(path), None, None)
+    return (str(path), stat.st_mtime_ns, stat.st_size)
 
 def validate_date_range(start_date: str, days: int, source_year: int) -> tuple[pd.Timestamp, pd.Timestamp]:
     """Return [start, end) after requiring the whole calendar range in one year."""
@@ -311,6 +324,68 @@ def load_sensor_edges() -> dict[str, list[str]]:
     return result
 
 
+def load_anchored_direction_split() -> tuple[dict, list[dict]]:
+    """The direction-split artifact after local period anchors are applied.
+
+    A station whose published per-direction volumes are recorded in the
+    validated registry (today: sensor 107 alone) has its ESTIMATED per-slot
+    profile re-levelled so the declared period reproduces that published share.
+    The profile keeps its time-of-day shape and stays an estimate; see
+    traffic_sim/intake/direction_anchor.py.
+
+    Anchoring happens HERE, at load time, rather than in dirsplit/predict.py,
+    so every consumer of the split — level-1 targets, level-2 opposite-
+    carriageway bounds, level-3 priors, the assignment field and the published
+    demand report — sees exactly the same shares, and so a split file produced
+    by the Gaussian fallback (estimate_directions.py) is anchored too.
+
+    Returns ({} , []) when no split file exists; callers then fall back to an
+    even split exactly as before.
+    """
+    path = SUMO_DIR / "direction_split.json"
+    if not path.exists():
+        return {}, []
+    stat = path.stat()
+    registry_path = Path("data_in/sensors.json")
+    flows_path = MEASURED_FLOWS_PATH
+    key = (str(path), stat.st_mtime_ns, stat.st_size,
+           _file_stamp(registry_path), _file_stamp(flows_path))
+    cached = _ANCHORED_SPLIT_CACHE.get(key)
+    if cached is not None:
+        return cached
+    with open(path) as f:
+        data = json.load(f)
+    references = {}
+    if registry_path.is_file():
+        from traffic_sim.intake.sensors import load_registry
+        references = load_registry(registry_path).directional_references()
+    if not references:
+        result = (data, [])
+        _ANCHORED_SPLIT_CACHE[key] = result
+        return result
+    from traffic_sim.intake.direction_anchor import (anchor_split_payload,
+                                                     load_measurements)
+    flows: dict = {}
+    epoch = None
+    interval_minutes = 15
+    if flows_path.is_file():
+        # The anchor is structural evidence about the street, so its weights
+        # always come from the MEASURED reference year — never from the
+        # forecast flows a 2027 build happens to be calibrating against.
+        flows, epoch, interval_minutes = load_measurements(flows_path)
+    anchored, outcomes = anchor_split_payload(
+        data, references, flows=flows, epoch=epoch,
+        interval_minutes=interval_minutes)
+    result = (anchored, [outcome.as_dict() for outcome in outcomes])
+    _ANCHORED_SPLIT_CACHE[key] = result
+    return result
+
+
+def direction_anchor_report() -> list[dict]:
+    """Auditable record of what the local period anchors did on this build."""
+    return load_anchored_direction_split()[1]
+
+
 def load_direction_split(key: str = "edge_shares") -> dict[str, list[float]]:
     """{edge_id: [96 shares]} from the estimated split file, {} if not built.
 
@@ -318,11 +393,7 @@ def load_direction_split(key: str = "edge_shares") -> dict[str, list[float]]:
     "edge_shares_q10"/"edge_shares_q90" (interval bounds from
     dirsplit/predict.py — used to build demand VARIANTS so Monte Carlo
     includes direction uncertainty)."""
-    path = SUMO_DIR / "direction_split.json"
-    if not path.exists():
-        return {}
-    with open(path) as f:
-        data = json.load(f)
+    data, _outcomes = load_anchored_direction_split()
     shares: dict[str, list[float]] = {}
     for d in data.values():
         shares.update(d.get(key) or d["edge_shares"])

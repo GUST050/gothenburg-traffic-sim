@@ -170,5 +170,492 @@
     "major_asym": 0.3249
    }
   }
- ]
+ ],
+ "observability": {
+  "schema_version": "dirsplit_observability_v2",
+  "dimensions": [
+   "measurement_level",
+   "static_domain",
+   "temporal_support",
+   "feature_compatibility",
+   "effective_sample_size",
+   "calibration_support",
+   "local_crosscheck"
+  ],
+  "policy": "Evidence strength widens or narrows a claim. It never excludes a road from simulation or from a closure study; only an unresolvable input is fail-closed.",
+  "edges": [
+   {
+    "edge": "26355153_96523321_0",
+    "sensor": "134",
+    "evidence": "limited",
+    "dimensions": {
+     "measurement_level": {
+      "level": "direction_measured",
+      "detail": "this carriageway is measured; its value is level-1"
+     },
+     "static_domain": {
+      "status": "good",
+      "knn_status": "OK"
+     },
+     "temporal_support": {
+      "trained_hours": [
+       6,
+       20
+      ],
+      "trained_day_types": [
+       "weekday"
+      ],
+      "predicted_hours": [
+       0,
+       23
+      ],
+      "predicted_day_types": [
+       "weekday",
+       "weekend",
+       "holiday"
+      ],
+      "status": "limited",
+      "detail": "weekend and 21:00–05:00 predictions are extrapolation: the deployed training band is weekday 06–20; the raw table is absent, so day-level support is unmeasured"
+     },
+     "feature_compatibility": {
+      "inference_path": "single_direction",
+      "profile_available": true,
+      "status": "limited",
+      "detail": "training profile features are computed from BOTH directions; a single-direction station can only supply its own side, so the same feature name would not mean the same thing — the v2 table keeps the two under separate names"
+     },
+     "effective_sample_size": {
+      "training_station_directions": null,
+      "independent_day_blocks": null,
+      "status": "limited",
+      "detail": "hours within one station-day are strongly correlated; the independent unit is a day block, not a row"
+     },
+     "calibration_support": {
+      "status": "limited",
+      "gate_m": "INCONCLUSIVE",
+      "gate_m_reasons": [
+       "raw directional counts unavailable: the count model was not evaluated",
+       "no independent day blocks: the aggregated table cannot support a blocked-date fold, so future-day transfer is unmeasured"
+      ],
+      "table": "legacy",
+      "interval_calibration": "unmeasured",
+      "detail": "point transfer is benchmarked; the q10/q90 interval's nominal 80% coverage is still unvalidated, so it is a stress band, not a probability statement"
+     },
+     "local_crosscheck": {
+      "available": false,
+      "detail": "no published per-direction volume for this station; the split rests on transfer plus conservation"
+     }
+    },
+    "usage": "central profile with a weaker claim and wider stated uncertainty",
+    "excludes_road": false
+   },
+   {
+    "edge": "26355153_91615277_0",
+    "sensor": "2276",
+    "evidence": "limited",
+    "dimensions": {
+     "measurement_level": {
+      "level": "direction_measured",
+      "detail": "this carriageway is measured; its value is level-1"
+     },
+     "static_domain": {
+      "status": "good",
+      "knn_status": "OK"
+     },
+     "temporal_support": {
+      "trained_hours": [
+       6,
+       20
+      ],
+      "trained_day_types": [
+       "weekday"
+      ],
+      "predicted_hours": [
+       0,
+       23
+      ],
+      "predicted_day_types": [
+       "weekday",
+       "weekend",
+       "holiday"
+      ],
+      "status": "limited",
+      "detail": "weekend and 21:00–05:00 predictions are extrapolation: the deployed training band is weekday 06–20; the raw table is absent, so day-level support is unmeasured"
+     },
+     "feature_compatibility": {
+      "inference_path": "single_direction",
+      "profile_available": true,
+      "status": "limited",
+      "detail": "training profile features are computed from BOTH directions; a single-direction station can only supply its own side, so the same feature name would not mean the same thing — the v2 table keeps the two under separate names"
+     },
+     "effective_sample_size": {
+      "training_station_directions": null,
+      "independent_day_blocks": null,
+      "status": "limited",
+      "detail": "hours within one station-day are strongly correlated; the independent unit is a day block, not a row"
+     },
+     "calibration_support": {
+      "status": "limited",
+      "gate_m": "INCONCLUSIVE",
+      "gate_m_reasons": [
+       "raw directional counts unavailable: the count model was not evaluated",
+       "no independent day blocks: the aggregated table cannot support a blocked-date fold, so future-day transfer is unmeasured"
+      ],
+      "table": "legacy",
+      "interval_calibration": "unmeasured",
+      "detail": "point transfer is benchmarked; the q10/q90 interval's nominal 80% coverage is still unvalidated, so it is a stress band, not a probability statement"
+     },
+     "local_crosscheck": {
+      "available": false,
+      "detail": "no published per-direction volume for this station; the split rests on transfer plus conservation"
+     }
+    },
+    "usage": "central profile with a weaker claim and wider stated uncertainty",
+    "excludes_road": false
+   },
+   {
+    "edge": "26842525_26355153_0",
+    "sensor": "133",
+    "evidence": "limited",
+    "dimensions": {
+     "measurement_level": {
+      "level": "direction_measured",
+      "detail": "this carriageway is measured; its value is level-1"
+     },
+     "static_domain": {
+      "status": "good",
+      "knn_status": "OK"
+     },
+     "temporal_support": {
+      "trained_hours": [
+       6,
+       20
+      ],
+      "trained_day_types": [
+       "weekday"
+      ],
+      "predicted_hours": [
+       0,
+       23
+      ],
+      "predicted_day_types": [
+       "weekday",
+       "weekend",
+       "holiday"
+      ],
+      "status": "limited",
+      "detail": "weekend and 21:00–05:00 predictions are extrapolation: the deployed training band is weekday 06–20; the raw table is absent, so day-level support is unmeasured"
+     },
+     "feature_compatibility": {
+      "inference_path": "single_direction",
+      "profile_available": true,
+      "status": "limited",
+      "detail": "training profile features are computed from BOTH directions; a single-direction station can only supply its own side, so the same feature name would not mean the same thing — the v2 table keeps the two under separate names"
+     },
+     "effective_sample_size": {
+      "training_station_directions": null,
+      "independent_day_blocks": null,
+      "status": "limited",
+      "detail": "hours within one station-day are strongly correlated; the independent unit is a day block, not a row"
+     },
+     "calibration_support": {
+      "status": "limited",
+      "gate_m": "INCONCLUSIVE",
+      "gate_m_reasons": [
+       "raw directional counts unavailable: the count model was not evaluated",
+       "no independent day blocks: the aggregated table cannot support a blocked-date fold, so future-day transfer is unmeasured"
+      ],
+      "table": "legacy",
+      "interval_calibration": "unmeasured",
+      "detail": "point transfer is benchmarked; the q10/q90 interval's nominal 80% coverage is still unvalidated, so it is a stress band, not a probability statement"
+     },
+     "local_crosscheck": {
+      "available": false,
+      "detail": "no published per-direction volume for this station; the split rests on transfer plus conservation"
+     }
+    },
+    "usage": "central profile with a weaker claim and wider stated uncertainty",
+    "excludes_road": false
+   },
+   {
+    "edge": "30420757_30421744_0",
+    "sensor": "1076",
+    "evidence": "limited",
+    "dimensions": {
+     "measurement_level": {
+      "level": "direction_measured",
+      "detail": "this carriageway is measured; its value is level-1"
+     },
+     "static_domain": {
+      "status": "good",
+      "knn_status": "OK"
+     },
+     "temporal_support": {
+      "trained_hours": [
+       6,
+       20
+      ],
+      "trained_day_types": [
+       "weekday"
+      ],
+      "predicted_hours": [
+       0,
+       23
+      ],
+      "predicted_day_types": [
+       "weekday",
+       "weekend",
+       "holiday"
+      ],
+      "status": "limited",
+      "detail": "weekend and 21:00–05:00 predictions are extrapolation: the deployed training band is weekday 06–20; the raw table is absent, so day-level support is unmeasured"
+     },
+     "feature_compatibility": {
+      "inference_path": "single_direction",
+      "profile_available": true,
+      "status": "limited",
+      "detail": "training profile features are computed from BOTH directions; a single-direction station can only supply its own side, so the same feature name would not mean the same thing — the v2 table keeps the two under separate names"
+     },
+     "effective_sample_size": {
+      "training_station_directions": null,
+      "independent_day_blocks": null,
+      "status": "limited",
+      "detail": "hours within one station-day are strongly correlated; the independent unit is a day block, not a row"
+     },
+     "calibration_support": {
+      "status": "limited",
+      "gate_m": "INCONCLUSIVE",
+      "gate_m_reasons": [
+       "raw directional counts unavailable: the count model was not evaluated",
+       "no independent day blocks: the aggregated table cannot support a blocked-date fold, so future-day transfer is unmeasured"
+      ],
+      "table": "legacy",
+      "interval_calibration": "unmeasured",
+      "detail": "point transfer is benchmarked; the q10/q90 interval's nominal 80% coverage is still unvalidated, so it is a stress band, not a probability statement"
+     },
+     "local_crosscheck": {
+      "available": false,
+      "detail": "no published per-direction volume for this station; the split rests on transfer plus conservation"
+     }
+    },
+    "usage": "central profile with a weaker claim and wider stated uncertainty",
+    "excludes_road": false
+   },
+   {
+    "edge": "60786979_3575001205_0",
+    "sensor": "107",
+    "evidence": "limited",
+    "dimensions": {
+     "measurement_level": {
+      "level": "two_way_total_split_estimated",
+      "detail": "the station's total is measured; how it divides between the carriageways is estimated",
+      "period_anchor": {
+       "period": "2025",
+       "source": "Goteborgs Stad trafikmangder catalogue (Power BI)",
+       "time_semantics": "period_aggregate"
+      }
+     },
+     "static_domain": {
+      "status": "good",
+      "knn_status": "OK"
+     },
+     "temporal_support": {
+      "trained_hours": [
+       6,
+       20
+      ],
+      "trained_day_types": [
+       "weekday"
+      ],
+      "predicted_hours": [
+       0,
+       23
+      ],
+      "predicted_day_types": [
+       "weekday",
+       "weekend",
+       "holiday"
+      ],
+      "status": "limited",
+      "detail": "weekend and 21:00–05:00 predictions are extrapolation: the deployed training band is weekday 06–20; the raw table is absent, so day-level support is unmeasured"
+     },
+     "feature_compatibility": {
+      "inference_path": "paired_total",
+      "profile_available": true,
+      "status": "good",
+      "detail": "training profile features are computed from BOTH directions; a single-direction station can only supply its own side, so the same feature name would not mean the same thing — the v2 table keeps the two under separate names"
+     },
+     "effective_sample_size": {
+      "training_station_directions": null,
+      "independent_day_blocks": null,
+      "status": "limited",
+      "detail": "hours within one station-day are strongly correlated; the independent unit is a day block, not a row"
+     },
+     "calibration_support": {
+      "status": "limited",
+      "gate_m": "INCONCLUSIVE",
+      "gate_m_reasons": [
+       "raw directional counts unavailable: the count model was not evaluated",
+       "no independent day blocks: the aggregated table cannot support a blocked-date fold, so future-day transfer is unmeasured"
+      ],
+      "table": "legacy",
+      "interval_calibration": "unmeasured",
+      "detail": "point transfer is benchmarked; the q10/q90 interval's nominal 80% coverage is still unvalidated, so it is a stress band, not a probability statement"
+     },
+     "local_crosscheck": {
+      "available": true,
+      "period": "2025",
+      "shares": {
+       "60786979_3575001205_0": 0.5231,
+       "1455801464_18241874_0": 0.4769
+      },
+      "time_semantics": "period_aggregate",
+      "source": "Goteborgs Stad trafikmangder catalogue (Power BI)",
+      "detail": "period aggregate only: it anchors the period mean and carries no per-slot authority"
+     }
+    },
+    "usage": "central profile with a weaker claim and wider stated uncertainty",
+    "excludes_road": false
+   },
+   {
+    "edge": "60790252_60790253_0",
+    "sensor": "1074",
+    "evidence": "extrapolation",
+    "dimensions": {
+     "measurement_level": {
+      "level": "direction_measured",
+      "detail": "this carriageway is measured; its value is level-1"
+     },
+     "static_domain": {
+      "status": "extrapolation",
+      "knn_status": "EXTRAPOLATION"
+     },
+     "temporal_support": {
+      "trained_hours": [
+       6,
+       20
+      ],
+      "trained_day_types": [
+       "weekday"
+      ],
+      "predicted_hours": [
+       0,
+       23
+      ],
+      "predicted_day_types": [
+       "weekday",
+       "weekend",
+       "holiday"
+      ],
+      "status": "limited",
+      "detail": "weekend and 21:00–05:00 predictions are extrapolation: the deployed training band is weekday 06–20; the raw table is absent, so day-level support is unmeasured"
+     },
+     "feature_compatibility": {
+      "inference_path": "single_direction",
+      "profile_available": true,
+      "status": "limited",
+      "detail": "training profile features are computed from BOTH directions; a single-direction station can only supply its own side, so the same feature name would not mean the same thing — the v2 table keeps the two under separate names"
+     },
+     "effective_sample_size": {
+      "training_station_directions": null,
+      "independent_day_blocks": null,
+      "status": "limited",
+      "detail": "hours within one station-day are strongly correlated; the independent unit is a day block, not a row"
+     },
+     "calibration_support": {
+      "status": "limited",
+      "gate_m": "INCONCLUSIVE",
+      "gate_m_reasons": [
+       "raw directional counts unavailable: the count model was not evaluated",
+       "no independent day blocks: the aggregated table cannot support a blocked-date fold, so future-day transfer is unmeasured"
+      ],
+      "table": "legacy",
+      "interval_calibration": "unmeasured",
+      "detail": "point transfer is benchmarked; the q10/q90 interval's nominal 80% coverage is still unvalidated, so it is a stress band, not a probability statement"
+     },
+     "local_crosscheck": {
+      "available": false,
+      "detail": "no published per-direction volume for this station; the split rests on transfer plus conservation"
+     }
+    },
+    "usage": "conservative fallback; report inconclusive if the choice depends on it",
+    "excludes_road": false
+   },
+   {
+    "edge": "1455801464_18241874_0",
+    "sensor": "107",
+    "evidence": "limited",
+    "dimensions": {
+     "measurement_level": {
+      "level": "two_way_total_split_estimated",
+      "detail": "the station's total is measured; how it divides between the carriageways is estimated",
+      "period_anchor": {
+       "period": "2025",
+       "source": "Goteborgs Stad trafikmangder catalogue (Power BI)",
+       "time_semantics": "period_aggregate"
+      }
+     },
+     "static_domain": {
+      "status": "good",
+      "knn_status": "OK"
+     },
+     "temporal_support": {
+      "trained_hours": [
+       6,
+       20
+      ],
+      "trained_day_types": [
+       "weekday"
+      ],
+      "predicted_hours": [
+       0,
+       23
+      ],
+      "predicted_day_types": [
+       "weekday",
+       "weekend",
+       "holiday"
+      ],
+      "status": "limited",
+      "detail": "weekend and 21:00–05:00 predictions are extrapolation: the deployed training band is weekday 06–20; the raw table is absent, so day-level support is unmeasured"
+     },
+     "feature_compatibility": {
+      "inference_path": "paired_total",
+      "profile_available": true,
+      "status": "good",
+      "detail": "training profile features are computed from BOTH directions; a single-direction station can only supply its own side, so the same feature name would not mean the same thing — the v2 table keeps the two under separate names"
+     },
+     "effective_sample_size": {
+      "training_station_directions": null,
+      "independent_day_blocks": null,
+      "status": "limited",
+      "detail": "hours within one station-day are strongly correlated; the independent unit is a day block, not a row"
+     },
+     "calibration_support": {
+      "status": "limited",
+      "gate_m": "INCONCLUSIVE",
+      "gate_m_reasons": [
+       "raw directional counts unavailable: the count model was not evaluated",
+       "no independent day blocks: the aggregated table cannot support a blocked-date fold, so future-day transfer is unmeasured"
+      ],
+      "table": "legacy",
+      "interval_calibration": "unmeasured",
+      "detail": "point transfer is benchmarked; the q10/q90 interval's nominal 80% coverage is still unvalidated, so it is a stress band, not a probability statement"
+     },
+     "local_crosscheck": {
+      "available": true,
+      "period": "2025",
+      "shares": {
+       "60786979_3575001205_0": 0.5231,
+       "1455801464_18241874_0": 0.4769
+      },
+      "time_semantics": "period_aggregate",
+      "source": "Goteborgs Stad trafikmangder catalogue (Power BI)",
+      "detail": "period aggregate only: it anchors the period mean and carries no per-slot authority"
+     }
+    },
+    "usage": "central profile with a weaker claim and wider stated uncertainty",
+    "excludes_road": false
+   }
+  ]
+ }
 }

@@ -15,10 +15,41 @@
       },
       "coordinate_reference_system": "EPSG:3007",
       "coordinates": null,
+      "directional_reference": {
+        "aggregation": "mean_daily_volume_by_direction",
+        "directions": [
+          {
+            "bearing": "N",
+            "edge_id": "60786979_3575001205_0",
+            "value": 3400
+          },
+          {
+            "bearing": "S",
+            "edge_id": "1455801464_18241874_0",
+            "value": 3100
+          }
+        ],
+        "note": "Goteborgs Stad publishes a per-direction mean daily volume for this station. It is a PERIOD AGGREGATE (a D-factor), not 96 measured quarters: it fixes the direction share averaged over the declared period and says nothing about any single 15-minute slot. The estimated per-slot profile therefore keeps its time-of-day shape and is only re-levelled so the declared period reproduces this share. 2023-2024 were about 50/50 at the same station, so the anchor is one year's aggregate, not a constant of the street.",
+        "period": {
+          "end_exclusive": "2026-01-01",
+          "label": "2025",
+          "start": "2025-01-01"
+        },
+        "source": {
+          "name": "Goteborgs Stad trafikmangder catalogue (Power BI)",
+          "retrieved": "2026-07-03",
+          "verifier": "Gustav"
+        },
+        "status": "verified",
+        "time_semantics": "period_aggregate",
+        "tolerance": 0.002,
+        "unit": "vehicles_per_mean_day",
+        "weighting": "measured_two_way_total_per_slot"
+      },
       "manual_snap": null,
       "measured_bearing": null,
       "measurement_semantics": "two_way_total",
-      "notes": "Genuinely two-way; split is estimated per time slot.",
+      "notes": "Genuinely two-way; split is estimated per time slot. The per-slot split stays ESTIMATED; only its period mean is anchored by directional_reference.",
       "permitted_bearings": [
         "N",
         "S"

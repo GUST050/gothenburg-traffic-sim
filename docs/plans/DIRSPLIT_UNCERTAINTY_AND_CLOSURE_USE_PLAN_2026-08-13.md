@@ -1,8 +1,10 @@
 # Plan för dirsplit, efterfrågeosäkerhet och korrekt användning i vägavstängning
 
-**Datum:** 2026-08-13
+**Datum:** 2026-08-13 (implementationsstatus tillagd 2026-08-16)
 **Status:** Forsknings- och implementationsplan. Ingen ny modell eller policy är
-aktiverad av detta dokument.
+aktiverad av detta dokument. De ovillkorliga faserna 0A/0B/1 är implementerade
+— se "Implementationsstatus 2026-08-16" nedan; Gate S och Gate M är fortfarande
+oavgjorda och ingen villkorad gren är öppnad.
 **Gäller omedelbart:** sensor 107:s lokala ankare, ett avgränsat
 matched-seed-test och `dirsplit/` dataset/modellval.
 **Villkorad senare omfattning:** demand-byggaren, scenarioavtal,
@@ -10,6 +12,49 @@ closure-screening, SUMO-finalister, warm-state, API och webbgränssnitt får bar
 ändras om de explicita beslutsgaterna nedan passerar.
 **Bakåtkompatibilitet:** Befintliga q10/q50/q90-arkiv och frysta
 releaseartefakter är historisk evidens och får inte skrivas om.
+
+## Implementationsstatus 2026-08-16
+
+De ovillkorliga faserna är byggda. Grindarna är **inte** avgjorda, och ingen
+produktintegration har påbörjats.
+
+| Fas | Status | Kod och artefakter |
+|---|---|---|
+| 0A — lokalt 107-ankare | **KLAR** | `data_in/sensors.json` (`directional_reference`), `traffic_sim/intake/sensors.py` (`DirectionalReference`, fail-closed validering), `traffic_sim/intake/direction_anchor.py`, `demand/intake.py::load_anchored_direction_split`, 37 tester i `tests/test_direction_anchor.py` |
+| 0B — matched-seed-känslighet | **BYGGD, EJ KÖRD** | `tools/measure_direction_decision_sensitivity.py`, förregistrering i `validation/direction_decision_sensitivity_registration_v1.json`, 33 tester. Kräver en kalibrerad demand-build + SUMO |
+| 1 — dataset v2 + turnering | **BYGGD, DELVIS KÖRD** | `dirsplit/dataset.py` (v2-tabell med råa antal, datum, `day_block_id`, missingness), `dirsplit/benchmark.py` (fyra modeller, tre foldfamiljer, bootstrap över oberoende block, fryst Gate M-regel), observability v2 i `dirsplit/coverage.py`, 71 tester |
+| 2–4 — Gren B/D, produkt | **EJ PÅBÖRJAD (korrekt)** | Ingen `dirsplit/scenarios.py`, inget `DemandEnsembleManifest`, ingen monthly/warm/API/UI-ändring |
+
+**Mätt i Fas 0A (verkligt utfall, 2026-08-16):** transfermodellens flödesviktade
+periodmedel för 107 var 0,4981 (i praktiken 50/50) mot stadens publicerade
+0,5231. Ankaret ger δ = +0,100 i log-odds, återger 0,52308 exakt, ändrar högst
+0,025 per kvart och lämnar tidsprofilens form orörd. Konkret Level-1-effekt:
+2025-09-16 kl. 08:00 (tvåvägstotal 127) flyttas N-målet 63,0 → 66,2 fordon.
+
+**Mätt i Fas 1 (partiell körning på den spårade aggregerade tabellen,
+`--table legacy --hours supported`, 1 214 rader, 81 oberoende grupper):**
+
+| Modell | leave-city-out | leave-station-out |
+|---|---|---|
+| `constant_5050` | MAE 0,0641 (referens) | MAE 0,0609 (referens) |
+| `shrunk_dfactor` (inga väg-features) | 0,0612 (**+4,5 %**, CI [−0,0053, −0,0006]) | 0,0569 (+6,4 %, CI [−0,0085, +0,0008]) |
+| `lightgbm_similarity` (rå) | 0,0682 (−6,5 %) | 0,0630 (−3,5 %) |
+| `lightgbm_similarity_shrunk` (deployad form) | 0,0628 (+2,1 %, CI [−0,0044, +0,0016]) | 0,0586 (+3,7 %, CI [−0,0075, +0,0037]) |
+
+Den enklaste villkorade modellen — timme×dagtyp krympt mot 0,5, helt utan
+gatufeatures — slår alltså den deployade familjen på samma folds, och den rå
+LightGBM-modellen är sämre än 50/50. Gate M förblir ändå `INCONCLUSIVE` enligt
+den frysta regeln, eftersom den aggregerade tabellen saknar dygnsblock
+(ingen blocked-date-fold) och råa riktningsantal (ingen count-modell).
+
+**Vad som återstår för att avgöra grindarna**
+
+- Gate S: `make demand` för 2025-09-16 historical, sedan
+  `make direction-sensitivity` (60 simuleringsenheter: 4 kandidater + baslinje
+  × 3 stressfall × 4 seeds, 07–09-fönster).
+- Gate M: `make dirsplit-volumes && make dirsplit-dataset && make
+  dirsplit-benchmark` — den råa hämtningen är blockerad i den nuvarande
+  miljön (proxyn nekar `trafikkdata-api.atlas.vegvesen.no`), inte i koden.
 
 ## Beslut i korthet
 

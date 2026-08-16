@@ -21,6 +21,101 @@ APPROVED_SNAP = "approved"
 ACCEPTED_QUALITY = "accepted"
 DEFAULT_MAX_SNAP_DISTANCE_M = 60.0
 
+# A published D-factor describes a whole period, never one interval.  The only
+# accepted semantics is therefore the aggregate one: anything claiming per-slot
+# authority would turn one yearly number into 96 fabricated measurements, which
+# is exactly what the direction plan forbids.
+PERIOD_AGGREGATE = "period_aggregate"
+DIRECTIONAL_REFERENCE_SEMANTICS = frozenset({PERIOD_AGGREGATE})
+DIRECTIONAL_REFERENCE_WEIGHTINGS = frozenset({
+    "measured_two_way_total_per_slot",   # flow-weighted over the period
+    "uniform_per_slot",                  # unweighted mean over the period
+})
+DEFAULT_ANCHOR_TOLERANCE = 0.002
+
+
+@dataclass(frozen=True)
+class DirectionalReferenceDirection:
+    """One published direction of a period-aggregate directional reference."""
+
+    bearing: str
+    edge_id: str
+    value: float
+
+
+@dataclass(frozen=True)
+class DirectionalReference:
+    """A published, period-aggregate direction split for one station.
+
+    This is LOCAL evidence about an aggregate: the share of the two-way total
+    that travelled in each direction, averaged over ``period``.  It outranks a
+    transferred model for that aggregate and carries no per-slot authority at
+    all — see ``traffic_sim/intake/direction_anchor.py`` for how a per-slot
+    estimate is re-levelled without inventing measurements.
+    """
+
+    status: str
+    time_semantics: str
+    aggregation: str
+    unit: str
+    weighting: str
+    tolerance: float
+    period_label: str
+    period_start: str
+    period_end_exclusive: str
+    directions: tuple[DirectionalReferenceDirection, ...]
+    source: Mapping[str, Any]
+    note: str
+
+    @property
+    def verified(self) -> bool:
+        return self.status == VERIFIED
+
+    @property
+    def total(self) -> float:
+        return sum(direction.value for direction in self.directions)
+
+    @property
+    def edge_ids(self) -> tuple[str, ...]:
+        return tuple(direction.edge_id for direction in self.directions)
+
+    @property
+    def reference_edge_id(self) -> str:
+        """The edge whose share the anchor is expressed as (first declared)."""
+        return self.directions[0].edge_id
+
+    def share(self, edge_id: str) -> float:
+        """Published share of the two-way total for one directed edge."""
+        for direction in self.directions:
+            if direction.edge_id == edge_id:
+                return direction.value / self.total
+        raise KeyError(edge_id)
+
+    def covers(self, day: date) -> bool:
+        return (date.fromisoformat(self.period_start) <= day
+                < date.fromisoformat(self.period_end_exclusive))
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "time_semantics": self.time_semantics,
+            "aggregation": self.aggregation,
+            "unit": self.unit,
+            "weighting": self.weighting,
+            "tolerance": self.tolerance,
+            "period": {
+                "label": self.period_label,
+                "start": self.period_start,
+                "end_exclusive": self.period_end_exclusive,
+            },
+            "directions": [
+                {"bearing": d.bearing, "edge_id": d.edge_id, "value": d.value}
+                for d in self.directions
+            ],
+            "source": dict(self.source),
+            "note": self.note,
+        }
+
 
 @dataclass(frozen=True)
 class SensorRecord:
@@ -41,6 +136,7 @@ class SensorRecord:
     quality_status: str
     notes: str
     manual_snap: str | None
+    directional_reference: DirectionalReference | None = None
 
     @property
     def level(self) -> str:
@@ -215,10 +311,20 @@ class SensorRegistry:
                     "quality_status": record.quality_status,
                     "notes": record.notes,
                     "manual_snap": record.manual_snap,
+                    **({"directional_reference":
+                        record.directional_reference.as_dict()}
+                       if record.directional_reference is not None else {}),
                 }
                 for record in self.records.values()
             ],
         }
+
+    def directional_references(self) -> dict[str, DirectionalReference]:
+        """{sensor_id: reference} for every station with verified local evidence."""
+        return {sid: record.directional_reference
+                for sid, record in self.records.items()
+                if record.directional_reference is not None
+                and record.directional_reference.verified}
 
 
 def _coordinates(value: Any, sensor_id: str) -> tuple[float, float] | None:
@@ -233,6 +339,110 @@ def _coordinates(value: Any, sensor_id: str) -> tuple[float, float] | None:
     if not -90 <= lat <= 90 or not -180 <= lon <= 180:
         raise ValueError(f"sensor {sensor_id} coordinates are out of range")
     return lat, lon
+
+
+def _directional_reference(raw: Any, sensor_id: str, known_edges: set[str]
+                           ) -> DirectionalReference | None:
+    """Parse and fail-closed validate one station's published D-factor.
+
+    The validation exists to stop a single provenance mistake from becoming a
+    fabricated measurement.  In particular a reference must name real directed
+    edges of THIS station and must declare aggregate time semantics; a record
+    claiming per-slot authority is rejected outright rather than quietly
+    downgraded, because the whole point of the field is that a yearly number
+    may never be serialised as 96 independent level-1 measurements.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ValueError(f"sensor {sensor_id} directional_reference must be an object")
+    semantics = str(raw.get("time_semantics", ""))
+    if semantics not in DIRECTIONAL_REFERENCE_SEMANTICS:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference time_semantics must be one of "
+            f"{sorted(DIRECTIONAL_REFERENCE_SEMANTICS)}, got {semantics!r}: a published "
+            f"period aggregate is not a per-slot measurement")
+    weighting = str(raw.get("weighting", ""))
+    if weighting not in DIRECTIONAL_REFERENCE_WEIGHTINGS:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference weighting must be one of "
+            f"{sorted(DIRECTIONAL_REFERENCE_WEIGHTINGS)}, got {weighting!r}")
+    period = raw.get("period")
+    if not isinstance(period, Mapping):
+        raise ValueError(f"sensor {sensor_id} directional_reference needs a period")
+    try:
+        start = date.fromisoformat(str(period.get("start")))
+        end_exclusive = date.fromisoformat(str(period.get("end_exclusive")))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference period needs ISO "
+            f"start/end_exclusive dates") from exc
+    if end_exclusive <= start:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference period must end after it starts")
+    raw_directions = raw.get("directions")
+    if not isinstance(raw_directions, list) or len(raw_directions) != 2:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference needs exactly two directions")
+    directions: list[DirectionalReferenceDirection] = []
+    for entry in raw_directions:
+        if not isinstance(entry, Mapping):
+            raise ValueError(
+                f"sensor {sensor_id} directional_reference directions must be objects")
+        edge_id = str(entry.get("edge_id", ""))
+        if edge_id not in known_edges:
+            raise ValueError(
+                f"sensor {sensor_id} directional_reference names edge {edge_id!r}, "
+                f"which is not one of its reviewed directed edges "
+                f"{sorted(known_edges)}")
+        try:
+            value = float(entry.get("value"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"sensor {sensor_id} directional_reference values must be numeric"
+            ) from exc
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(
+                f"sensor {sensor_id} directional_reference values must be finite and "
+                f"non-negative")
+        directions.append(DirectionalReferenceDirection(
+            bearing=str(entry.get("bearing", "")), edge_id=edge_id, value=value))
+    if directions[0].edge_id == directions[1].edge_id:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference repeats edge "
+            f"{directions[0].edge_id}")
+    if sum(direction.value for direction in directions) <= 0:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference total volume must be positive")
+    tolerance = raw.get("tolerance", DEFAULT_ANCHOR_TOLERANCE)
+    try:
+        tolerance = float(tolerance)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference tolerance must be numeric"
+        ) from exc
+    if not math.isfinite(tolerance) or not 0 < tolerance < 0.5:
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference tolerance must lie in (0, 0.5)")
+    source = raw.get("source")
+    if not isinstance(source, Mapping) or not source.get("name"):
+        raise ValueError(
+            f"sensor {sensor_id} directional_reference needs a named source: local "
+            f"evidence without provenance cannot outrank a transferred model")
+    return DirectionalReference(
+        status=str(raw.get("status", "unverified")),
+        time_semantics=semantics,
+        aggregation=str(raw.get("aggregation", "")),
+        unit=str(raw.get("unit", "")),
+        weighting=weighting,
+        tolerance=tolerance,
+        period_label=str(period.get("label", "")),
+        period_start=start.isoformat(),
+        period_end_exclusive=end_exclusive.isoformat(),
+        directions=tuple(directions),
+        source=dict(source),
+        note=str(raw.get("note", "")),
+    )
 
 
 def _record(raw: Mapping[str, Any], coordinates: Mapping[str, tuple[float, float]] | None
@@ -266,6 +476,14 @@ def _record(raw: Mapping[str, Any], coordinates: Mapping[str, tuple[float, float
     else:
         permitted = tuple(str(value) for value in permitted)
     snap_distance = raw.get("snap_distance_m")
+    # A reference may name a reviewed edge of this station or its registered
+    # opposite carriageway — the two directed edges the station physically has.
+    opposite = raw.get("opposite_direction") or {}
+    known_edges = set(approved)
+    if isinstance(opposite, Mapping) and opposite.get("edge_id"):
+        known_edges.add(str(opposite["edge_id"]))
+    reference = _directional_reference(
+        raw.get("directional_reference"), sensor_id, known_edges)
     return SensorRecord(
         sensor_id=sensor_id,
         active_from=(str(raw["active_from"]) if raw.get("active_from") is not None else None),
@@ -284,6 +502,7 @@ def _record(raw: Mapping[str, Any], coordinates: Mapping[str, tuple[float, float
         quality_status=str(raw.get("quality_status", "unknown")),
         notes=str(raw.get("notes", "")),
         manual_snap=(str(raw["manual_snap"]) if raw.get("manual_snap") else None),
+        directional_reference=reference,
     )
 
 

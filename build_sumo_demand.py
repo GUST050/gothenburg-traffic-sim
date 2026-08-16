@@ -472,7 +472,8 @@ def parse_args() -> argparse.Namespace:
 # Date/window intake — moved to demand/intake.py (H1, 2026-07-14).
 # Patch SUMO_DIR/GEO_PATH on demand.intake for these functions.
 from demand.intake import (activity_purpose_shares_for_window, build_targets,
-                           classify_day, demand_metadata, has_split_quantiles,
+                           classify_day, demand_metadata, direction_anchor_report,
+                           has_split_quantiles,
                            day_pool_blocks, load_direction_split,
                            load_sensor_edges, multi_day_blocks,
                            observed_sensor_series, real_day_shape,
@@ -729,6 +730,10 @@ def main() -> None:
                 "candidate_cache": Path("traffic_sim/demand/cache.py"),
                 "sensor_registry_loader": Path(
                     "traffic_sim/intake/sensors.py"),
+                # Applied to direction_split.json at load time, so the split
+                # file's own bytes do not reveal a change in this code.
+                "direction_anchor": Path(
+                    "traffic_sim/intake/direction_anchor.py"),
                 "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
             }
             cache_key = candidate_cache.cache_key(
@@ -1282,6 +1287,11 @@ def main() -> None:
             "through_share_target": args.through_share_target,
         },
     )
+    # What the published local D-factors did to the estimated split, if
+    # anything. Empty when no station has a verified directional_reference.
+    anchor_report = direction_anchor_report()
+    if anchor_report:
+        meta["direction_anchor"] = anchor_report
     meta["timings_s"] = {name: round(seconds, 3)
                          for name, seconds in timings_s.items()}
     if args.engine == "pfe" and report is not None and report.get("timings_s"):

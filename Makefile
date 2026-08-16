@@ -93,6 +93,21 @@ dirsplit-train:
 dirsplit-predict:
 	python3 -m dirsplit.predict
 
+# Gate M: is there a robust conditional direction signal, or is 50/50 the
+# honest central estimate? Needs the v2 raw table (dirsplit-dataset after
+# dirsplit-volumes); `--table legacy` runs the partial tournament on the
+# tracked aggregate, which cannot decide the gate.
+dirsplit-benchmark:
+	python3 -m dirsplit.benchmark
+
+dirsplit-observability:
+	python3 -m dirsplit.coverage --evidence-only
+
+# Gate S: does direction variation change a closure decision when the SUMO
+# seed is held matched? Needs a calibrated demand build for the frozen date.
+direction-sensitivity:
+	python3 -m tools.measure_direction_decision_sensitivity run
+
 data:
 	python3 build_data.py $(if $(DATA_DIR),--data_dir "$(DATA_DIR)") $(if $(COORDS),--coords "$(COORDS)")
 

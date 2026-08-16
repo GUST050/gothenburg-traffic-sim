@@ -7,42 +7,61 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Main. The direction-split plan is scope-corrected and
-  decision-gated; no source implementation or policy activation has begun.`
-- Summary: `The end-to-end audit found that today's q10/q50/q90 are learned
-  from station-hour means, not raw day-level variation; weekend/off-hour
-  predictions lack training support; applicability only covers static
-  features; and global marginal quantiles are not coherent daily scenarios.
-  q50 has only a 0.0008 pooled MAE advantage over 50/50 after shrinkage and is
-  worse in three of four held-out domain cities. Review then established that
-  only sensor 107's split directly creates two Level-1 targets; five opposite
-  directions are surrenderable Level-2/3 evidence. The plan now starts with
-  107's local 52/48 period anchor and a bounded matched-seed sensitivity study.
-  Gates S/M/P prevent speculative scenario/monthly/warm/API/UI work.`
-- Files changed: `Documentation only:
-  docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md;
-  IMPROVEMENT_PLAN.md pointer; current TASKS.md and AGENT_NOTES.md blocks.`
-- Checks: `git diff --check clean; plan has balanced code fences and all Gate
-  S/M/P, Exit A/C, Gren B/D and sensor-107 contract terms are present; current
-  marker counts are exactly one start/end pair. No code tests were required
-  because source behavior is unchanged.`
-- Decisions and evidence: `50/50 winning does not imply zero variance, so exit
-  requires both Gate M=BASELINE and Gate S=NO. The other combinations lead to
-  no ensemble, a residual-only prototype, or a conditional-model prototype as
-  documented. Sensor 107's annual D-factor is a local period anchor, not 96
-  directed measurements. Existing closure v5 evidence remains unchanged.`
-- Blockers or risks: `The raw, citable source/period semantics for 107's
-  3,400/3,100 values must be bound before treating them as product evidence.
-  Gate S must be preregistered before rerunning SUMO. Raw Norwegian day-block
-  availability is measured later in Fas 1. No scenario cap or risk policy is
-  needed unless Gate S/M open that branch.`
-- Suggested next action: `Fas 0A only: add the provenance-bound 107 reference,
-  anchor its period mean, and regression-test that the five directional
-  Level-1 sensors remain unchanged. Then freeze Fas 0B; do not build schemas or
-  product integration.`
-- Actor notes: `Research used primary statistical, scenario-generation,
-  traffic-monitoring and microsimulation sources. No existing evidence was
-  edited, external data downloaded, policy activated or runtime gate weakened.`
+- Focus and status: `Branch claude/direction-split-plan-tt3gy9. The dated
+  direction plan's UNCONDITIONAL phases (0A, 0B, 1) are implemented and tested.
+  Gate S and Gate M are both still undecided, and no conditional branch, schema,
+  monthly, warm-state, API or UI code exists.`
+- Summary: `Fas 0A binds sensor 107's published 2025 D-factor as a
+  provenance-carrying period aggregate and re-levels the ESTIMATED per-slot
+  split at load time, so every consumer (level-1 targets, level-2 bounds,
+  level-3 priors, assignment field, published report) sees one anchored profile.
+  Measured: the transfer model put 107 at a flow-weighted 0.4981 for 2025; the
+  city publishes 0.5231; the anchor applies delta +0.100 in log-odds, reproduces
+  0.52308 exactly, moves any single quarter by at most 0.025 and leaves the
+  time-of-day shape untouched (2025-09-16 08:00, two-way total 127: N target
+  63.0 -> 66.2). Fas 0B adds a bounded matched-seed study that runs the full
+  stress-case x seed cross product through the EXISTING run_condition/
+  paired_comparison runners, with a committed preregistration and a
+  deterministic Gate S rule; it fails closed to INCONCLUSIVE without a demand
+  build. Fas 1 replaces the aggregated training table with a raw
+  station-date-hour-heading table (counts, coverage, explicit missingness,
+  day_block_id) and adds a four-model tournament with blocked folds and a
+  bootstrap over independent groups.`
+- Files changed: `data_in/sensors.json; traffic_sim/intake/sensors.py;
+  traffic_sim/intake/direction_anchor.py (new); demand/intake.py;
+  build_sumo_demand.py; traffic_sim/demand/source_identity.py;
+  dirsplit/dataset.py; dirsplit/benchmark.py (new); dirsplit/coverage.py;
+  tools/measure_direction_decision_sensitivity.py (new); Makefile;
+  validation/direction_decision_sensitivity_registration_v1.json (new);
+  validation/dirsplit_point_benchmark_v1.json (new);
+  data/dirsplit/coverage_report.json (observability v2 added);
+  tests/test_direction_anchor.py, tests/test_direction_decision_sensitivity.py,
+  tests/test_dirsplit_v2.py (new); plan/TASKS/AGENT_NOTES/IMPROVEMENT_PLAN docs.`
+- Checks: `141 new tests pass (37 anchor, 33 sensitivity, 71 dirsplit v2 +
+  existing dirsplit). Full suite run before and after the change in parallel
+  worktrees to separate pre-existing environment failures from regressions.
+  The tournament was executed for real on the tracked aggregate; the anchor was
+  measured against the real 2025 flows and the checked-in model.`
+- Decisions and evidence: `q10/q90 are re-levelled by the SAME shift as q50, so
+  the stress band keeps its width in log-odds instead of collapsing onto the
+  anchor or pretending to new spread. Anchor weights come from the measured
+  reference year regardless of the simulated source, mirroring
+  STRUCTURAL_REFERENCE_DATE. On the aggregate, shrunk_dfactor (hour x day type,
+  no street features) beats 50/50 by +4.5% leave-city-out with a bootstrap CI
+  excluding zero, the deployed shrunk LightGBM manages +2.1% with a CI spanning
+  zero, and the raw LightGBM is WORSE than 50/50 — but Gate M stays
+  INCONCLUSIVE because the aggregate has no day blocks and no raw counts.`
+- Blockers or risks: `Gate S needs a calibrated demand build plus SUMO, neither
+  present in this sandbox. Gate M needs the raw Norwegian volumes; the open API
+  is refused by this environment's proxy, not by the code. Nothing in the
+  sensitivity tool or the benchmark may be promoted to release evidence.`
+- Suggested next action: `Run the two frozen studies on a machine with SUMO and
+  network access: make demand && make direction-sensitivity for Gate S, and
+  make dirsplit-volumes && make dirsplit-dataset && make dirsplit-benchmark for
+  Gate M. Then apply the plan's four-outcome table; only Gate S = YES may open
+  Gren B/D.`
+- Actor notes: `No release gate, calibration gate or frozen evidence was
+  weakened; no q archive was rewritten; no external data was requested.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History

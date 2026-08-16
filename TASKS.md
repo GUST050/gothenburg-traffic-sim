@@ -12,21 +12,25 @@ owners, states and approval formulas are not active workflow rules. See
 - Current focus: `Decision-gated direction split: bind sensor 107's local
   evidence, measure whether direction changes closure decisions, then compare
   central models before authorizing any ensemble/product expansion.`
-- Status: `RESEARCHED PLAN REVISED AFTER SCOPE REVIEW; SOURCE IMPLEMENTATION NOT
-  STARTED. Sensor 107 is the only two-edge station whose split directly creates
-  two Level-1 targets; its documented 2025 52/48 anchor is not yet machine-bound
-  with period semantics. The other five measured directions remain untouched
-  Level 1 while their opposite estimates are surrenderable Level-2/3 inputs.
-  The former nine-step integration is replaced by Gate S (closure sensitivity),
-  Gate M (held-out point signal) and Gate P (offline scenario value). 50/50 plus
-  107 is an explicit successful exit. Monthly, warm-state, schemas, API and UI
-  are forbidden before their gates pass. Previous closure v5 evidence and
-  closed release gates remain unchanged.`
-- Suggested next action: `Implement only Fas 0A from the dated plan: provenance-
-  bind sensor 107's yearly directional reference without fabricating per-slot
-  measurements and pin legacy behavior. Then preregister Fas 0B's small
-  matched-seed sensitivity matrix. Do not create DemandEnsemble, monthly,
-  warm-state, API or UI code.`
+- Status: `UNCONDITIONAL PHASES IMPLEMENTED 2026-08-16; BOTH GATES STILL OPEN.
+  Fas 0A is done and measured: sensor 107 carries a provenance-bound 2025
+  directional_reference (3400/3100), and traffic_sim/intake/direction_anchor.py
+  re-levels the ESTIMATED per-slot split at load time so the declared period
+  reproduces 0.5231 (delta +0.100 log-odds; the transfer model alone gave
+  0.4981). Per-slot values stay estimates; the five single-direction stations'
+  Level-1 targets are unchanged. Fas 0B is built and preregistered but NOT run
+  (needs a calibrated demand build + SUMO), so Gate S is undecided. Fas 1 is
+  built and partially run: on the tracked aggregate the simplest conditional
+  model (shrunk_dfactor) beats the deployed LightGBM family, whose raw form
+  loses to 50/50 — but Gate M is INCONCLUSIVE by its own frozen rule because
+  the aggregate has no day blocks and no raw counts. Gren B/D, schemas,
+  monthly, warm-state, API and UI remain untouched.`
+- Suggested next action: `Decide the two gates with real runs, in either order.
+  Gate S: make demand (2025-09-16 historical), then make direction-sensitivity.
+  Gate M: make dirsplit-volumes (blocked by the proxy in the current sandbox),
+  then make dirsplit-dataset && make dirsplit-benchmark. Only a YES on Gate S
+  may later open Gren B/D; nothing beyond the dated plan's unconditional phases
+  may be built before that.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve frozen q and closure evidence. Do not weaken
   calibration, equivalence, provenance, health, survivability, failure-recall,
@@ -37,8 +41,9 @@ owners, states and approval formulas are not active workflow rules. See
   worker budget, 300 s timeout and closed v5 gates remain unchanged. Do not
   hardcode 107's annual 0.52 as 96 measured quarters or proceed past Gate S/M/P
   without their frozen evidence.`
-- Updated: `2026-08-13 Codex scope correction. Documentation-only; local product
-  code and tests are unchanged.`
+- Updated: `2026-08-16 unconditional implementation of the dated direction plan
+  (Fas 0A/0B/1) with 141 new tests; no gate decided, no conditional branch
+  opened.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -46,7 +51,8 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### DIRSPLIT-UNCERTAINTY-V2 — Decide the smallest justified direction solution
 
-- Status: `READY — conditional plan complete; implementation begins at Fas 0A.`
+- Status: `IN_PROGRESS — Fas 0A complete and measured; Fas 0B and Fas 1 built,
+  their gate-deciding runs pending (SUMO demand build; raw Norwegian volumes).`
 - Objective and scope: `First use local evidence at sensor 107, then establish
   whether plausible direction variation changes closure decisions and whether
   any conditional point model beats 50/50. Build scenarios or product contracts
@@ -60,10 +66,14 @@ owners, states and approval formulas are not active workflow rules. See
   nominal coverage and joint temporal/spatial validity are unmeasured. Current
   q route files contain 19,845/20,836/21,749 vehicles and seed identity is
   entangled with variant identity in several contracts.`
-- Primary files now: `data_in/sensors.json; existing dirsplit dataset/train/
-  predict/coverage modules; focused 107/legacy tests; one bounded sensitivity
-  tool and append-only registration/outcome. Demand/monthly/warm/API/UI are
-  explicitly conditional future scope.`
+- Primary files now: `data_in/sensors.json; traffic_sim/intake/sensors.py;
+  traffic_sim/intake/direction_anchor.py; demand/intake.py;
+  tools/measure_direction_decision_sensitivity.py + validation/
+  direction_decision_sensitivity_registration_v1.json; dirsplit/dataset.py,
+  benchmark.py, coverage.py + validation/dirsplit_point_benchmark_v1.json;
+  tests/test_direction_anchor.py, tests/test_direction_decision_sensitivity.py,
+  tests/test_dirsplit_v2.py. Monthly/warm/API/UI remain conditional future
+  scope and are untouched.`
 - Constraints and safety: `Legacy q archives remain immutable and readable.
   No probabilistic q claims without coverage validation; no arbitrary road ban
   from observability; no field-wise scenario splicing; no policy activation or
