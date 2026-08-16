@@ -1,45 +1,91 @@
 # Plan för dirsplit, efterfrågeosäkerhet och korrekt användning i vägavstängning
 
 **Datum:** 2026-08-13
+**Reviderad:** 2026-08-16 mot mätt evidens — se
+`docs/reviews/DIRSPLIT_PLAN_RESEARCH_REVIEW_2026-08-16.md` och de tre
+reproducerbara verktygen `tools/research_direction_split_evidence.py`,
+`tools/research_direction_sum_constraint.py` och
+`tools/research_direction_solution_space.py`.
 **Status:** Forsknings- och implementationsplan. Ingen ny modell eller policy är
 aktiverad av detta dokument.
-**Gäller omedelbart:** sensor 107:s lokala ankare, ett avgränsat
-matched-seed-test och `dirsplit/` dataset/modellval.
+**Gäller omedelbart:** sensor 107:s lokala ankare, `dirsplit/` dataset/modellval
+och en ovillkorlig intervallrättning.
 **Villkorad senare omfattning:** demand-byggaren, scenarioavtal,
 closure-screening, SUMO-finalister, warm-state, API och webbgränssnitt får bara
 ändras om de explicita beslutsgaterna nedan passerar.
 **Bakåtkompatibilitet:** Befintliga q10/q50/q90-arkiv och frysta
 releaseartefakter är historisk evidens och får inte skrivas om.
 
+## Vad revisionen 2026-08-16 ändrade
+
+Planens revisionsfynd reproducerades exakt (`sumo/direction_split.json`:
+median |q50−0,5| 0,0070, max 0,0340, medianbredd 0,1070). Fem saker mättes
+sedan som planen inte kunde veta, och de ändrar ordningen på arbetet:
+
+1. **Ankaret dominerar modellen med 3:1.** Att predicera en hållen station med
+   dess EGET medelvärde — exakt motsvarigheten till stadens publicerade
+   årsvärde för 107 — ger +22,7 % mot 50/50. Hela transferapparaten ger
+   +7,0 % ovanpå det. Planen behandlar detta som ett modelleringsproblem;
+   det är först ett dataanskaffningsproblem.
+2. **Turneringens vinnare fanns inte i den ursprungliga fyrfältstabellen.** Den
+   är varken 50/50 eller en gatubetingad modell, utan en OBETINGAD
+   tidsvarierande kurva. Tabellen är utökad till sex fält nedan.
+3. **Intervallet är en aktiv defekt, inte en etikettfråga.** Det nominella
+   80 %-intervallet har uppmätt 47,0 % täckning. Det matar kartans
+   confidence-tal idag och får inte vänta på någon grind.
+4. **"Låt entropin välja" finns inte som alternativ.** En summa-constraint
+   skalar båda körriktningarna med samma faktor; splitten bestäms helt av
+   kandidatpoolen, vars implicerade värde svänger 35 procentenheter.
+5. **Två till familjer är falsifierade** — korridorkontinuitet från 1076 och
+   profildekonvolution (den familj `estimate_directions.py` tillhör).
+
+Gate S är fortfarande omätt. Inget här påstår att riktning påverkar ett
+avstängningsbeslut.
+
 ## Beslut i korthet
 
 Programmet ska inte välja mellan "en enda simulering" och "tre kvantiler" som
 om de vore samma sorts lösning. De svarar på olika frågor:
 
-1. Sensor 107:s publicerade lokala 2025-ankare 52/48 ska maskinbindas med rätt
-   tidssemantik och slå transfermodellens aggregerade nivå. Det får inte
-   felaktigt behandlas som 96 uppmätta kvartsvärden.
-2. En central riktningsprofil används för billig, bred screening och för en
-   representativ visualisering.
-3. Innan någon scenarioarkitektur byggs körs ett litet outcome-blind
+1. **Det lokala ankaret är den enskilt viktigaste inputen.** Sensor 107:s
+   publicerade 2025-ankare 52,3/47,7 ska maskinbindas med rätt tidssemantik,
+   med källa, år OCH den verifierade kant/riktningsmappningen. Det får inte
+   behandlas som 96 uppmätta kvartsvärden. Mätt värde: +22,7 % mot 50/50.
+2. **Nästa steg är att leta fler lokala ankare, inte att bygga en bättre
+   modell.** Göteborgs publika trafikmängder-katalog kan bära riktade rader
+   för de övriga fem stationerna eller för närliggande gator. Det är en
+   publik katalog och inte en dataförfrågan, så den berör inte beslutet från
+   2026-07-20 — men bekräfta den tolkningen med Gustav innan den används.
+3. **Centralprofilen är ankare × pooled tidvattenkurva**, sammansatt på
+   logitskalan så att ankaret återges exakt. Kurvan byggs över HELA dygnet,
+   inte träningsfönstret 06–20. Den används för billig bred screening och för
+   en representativ visualisering.
+4. **Intervallrättningen är ovillkorlig.** Det nominella 80 %-intervallet har
+   uppmätt 47,0 % täckning och ärlig bredd 0,193 mot utlagda 0,099. Antingen
+   vidgas det till 0,193 eller så märks det `stress_only`. Detta väntar inte
+   på Gate S, Gate M eller Gate P — det matar kartans confidence-tal idag.
+5. Innan någon scenarioarkitektur byggs körs ett litet outcome-blind
    känslighetstest: ändrar rimlig riktningsvariation viable set, finalistlista
-   eller vinnare när samma SUMO-seeds används?
-4. Om 50/50 vinner modellturneringen **och** känslighetstestet visar att
+   eller vinnare när samma SUMO-seeds används? **Det måste köras på det ärliga
+   bandet ±0,0965, inte på de utlagda q-artefakterna** — de spänner halva
+   bredden och skulle underskatta känsligheten per konstruktion.
+6. Om 50/50 vinner modellturneringen **och** känslighetstestet visar att
    riktningsaxeln är beslutsirrelevant avslutas dirsplit-utbyggnaden. Då används
    50/50 plus sensor 107:s lokala ankare; ingen ny ensemble-, warm-, API- eller
    UI-arkitektur byggs.
-5. Om riktningsvariation påverkar beslutet får nästa minimala gren byggas:
-   enkla residualscenarier runt 50/50 om ingen prediktiv signal finns, eller en
-   villkorad modell om den faktiskt vinner held-out.
-6. SUMO:s egen slump mäts separat med flera **matchade random seeds**. Samma
+7. Om riktningsvariation påverkar beslutet får nästa minimala gren byggas:
+   enkla residualscenarier runt centralprofilen om ingen prediktiv signal
+   finns, eller en villkorad modell om den faktiskt vinner held-out.
+8. SUMO:s egen slump mäts separat med flera **matchade random seeds**. Samma
    seed används för basfallet och varje avstängningsalternativ.
-7. Nuvarande q10/q90 behålls som versionsbundna **stressfall**, inte som
-   sannolikhetsutsagor, tills deras nominella 80-procentiga intervall har
-   validerats utanför träningsdata.
-8. Låg observability ska normalt ge bredare osäkerhet, svagare anspråk och
+9. Låg observability ska normalt ge bredare osäkerhet, svagare anspråk och
    eventuellt ett `inconclusive`-resultat. Den ska inte automatiskt förbjuda en
    väg. Topologi, framkomlighet och no-detour är däremot hårda säkerhetsgrindar
    oavsett datatäckning.
+10. **Riktningsosäkerhet bor MELLAN lösningar, aldrig inuti en.** En PFE-lösning
+    returnerar ett tal; det finns ingen representation av "vi vet inte" inuti
+    den. Osäkerheten hör hemma i demand-varianterna, vilket q-variantarkitekturen
+    redan gör — dess enda fel är bredden.
 
 Detta gör den lilla evidensvägen obligatorisk och den stora produktintegrationen
 villkorad. Målet är inte att få en ensemble till varje pris, utan att bygga den
@@ -81,6 +127,54 @@ komplexa punktmodellen ännu inte har visat en robust fördel över en enkel
 baseline, och att q10/q90 ännu inte har visat den sannolikhetsbetydelse som
 namnen antyder.
 
+### Uppmätt 2026-08-16 — vad som nu är avgjort
+
+Turneringen i avsnitt 3 nedan kördes i förväg på samma spårade tabell, med
+allt anpassat innanför respektive fold:
+
+| modell | LCO alla | LCO domän | leave-station-out | λ |
+|---|---:|---:|---:|---:|
+| 50/50 | 0,0639 | 0,0569 | 0,0639 | — |
+| **pooled timkurva** | **0,0604** | **0,0532** | **0,0608** | 0,93–0,98 |
+| LightGBM, enkel | 0,0686 | 0,0618 | 0,0687 | 0,21–0,41 |
+| LightGBM, similarity-viktad (utlagd) | 0,0670 | 0,0609 | 0,0679 | 0,23–0,44 |
+
+En obetingad timkurva UTAN gatufeatures vinner på varje folddesign; varje
+LightGBM-variant förlorar mot 50/50 på varje folddesign. Shrinkage-λ förklarar
+varför: kurvan behåller nästan hela sin signal, LightGBM en fjärdedel. Den
+utlagda λ=0,289 var aldrig en tuningdetalj — det var valideringen som korrekt
+raderade brus.
+
+Nivå kontra form, och varför ordningen i planen måste vändas:
+
+| estimator | MAE | mot 50/50 | mot ankaret |
+|---|---:|---:|---:|
+| 50/50 | 0,0639 | — | −29,4 % |
+| pooled kurva utan ankare | 0,0603 | +5,5 % | −22,2 % |
+| **lokalt ankare, platt** | **0,0494** | **+22,7 %** | — |
+| **lokalt ankare + pooled form** | **0,0459** | **+28,1 %** | **+7,0 %** |
+
+Replikerat leave-station-out (+22,7 % och +7,2 %). Formens tillskott är
+statistiskt reellt — parad bootstrap 95 % KI [+0,0020, +0,0048] — men det är
+den mindre halvan med faktor tre.
+
+Intervallet, mätt: samma kvantilarkitektur omanpassad leave-city-out ger
+**47,0 % täckning** för ett nominellt 80 %-intervall. Ärlig bredd 0,193 mot
+utlagda 0,099. Eftersom raderna redan är ~8-dagarsmedelvärden är 47 % en ÖVRE
+gräns för endagstäckning.
+
+### Falsifierade familjer — återföreslå dem inte
+
+Fyra ytterligare vägar testades och stängdes. De dokumenteras här så att de
+inte återuppfinns:
+
+| familj | utfall | evidens |
+|---|---|---|
+| Summa-constraint, "låt entropin välja" | falsifierad | `groups` läggs till `bounds_items`, vars korrigering multiplicerar VARJE medlemsrutt med samma faktor. En summa bär ingen information om splitten; utfallet blir exakt `n_A/(n_A+n_B)`. Poolens implicerade split vid 107 spänner 0,230–0,581 (35 pe) enbart på sigma-ratten. |
+| Summa + tvåsidigt level-2-band | falsifierad | Blir poolsoberoende — men landar deterministiskt på `lo_A/(lo_A+lo_B)`, bandets nedre hörn, inte dess mitt. Ett förklätt punktestimat. |
+| Korridorkontinuitet 1076 → 107 | falsifierad | 1076 mäter södergående Skånegatan 257 m från 107. Kvoten ger 0,677 mot publicerade 0,477, och 1076 överstiger 107:s TVÅVÄGSTOTAL i 7,9 % av kvartarna. Flöde tillkommer mellan stationerna. |
+| Profildekonvolution (familjen `estimate_directions.py`) | falsifierad två gånger | Anpassning av `107_total = a·P_i + b·mirror(P_j)` mot de fem lokalt mätta enkelriktade profilerna ger implicerade N-andelar 0,878–1,034 vid R² 0,93–0,98; över 1,0 är inte fysiskt. Kontrollen avgör: den speglade basen slår en ospeglad i **0 av 10** par. Göteborgs egna data förkastar motfas-premissen — vilket är exakt varför den gamla AM/PM-gaussianen gav 80/20. |
+
 ### Den faktiska beslutsytan är liten
 
 Sensor 107 är ensam om att ha två godkända kanter i sensorkartan. Därför är den
@@ -109,9 +203,17 @@ Den omedelbara ändringen ska därför vara liten men korrekt:
 
 - lägg ett provenancebundet `directional_reference` för 107 med år, råa
   riktningstal, källa, kant/riktningsmappning och tidssemantik;
-- använd 52/48 som aggregerad lokal centralankare för 2025-struktur;
+- **skriv in den verifierade riktningsmappningen explicit**: kanten
+  `60786979_3575001205_0` har bäring 352,1° och är NORRGÅENDE och den mot
+  centrum riktade kanten (radial_cos +0,61); `1455801464_18241874_0` är
+  174,4°, södergående. Katalogens N-rad är alltså samma fysiska riktning som
+  "mot centrum". Utan den raden kan 52/48 appliceras baklänges, och ingenting
+  nedströms skulle fånga en 4,6-procentenheters teckenfel;
+- använd 52,3/47,7 som aggregerad lokal centralankare för 2025-struktur;
 - tillåt tidsvariation bara där den stöds av data/modell och normalisera så att
-  ankaret återfås över sin deklarerade period;
+  ankaret återfås över sin deklarerade period. Den mätta sammansättningen är en
+  enda logit-offset (+0,1166) som återger ankaret exakt och bevarar
+  tidvattenamplituden (0,098 mot 0,099);
 - märk 107:s kvartsvärden som estimerade även när deras periodmedel är lokalt
   förankrat;
 - lägg tester som hindrar att ett års-D-factor serialiseras som 96 oberoende
@@ -119,6 +221,13 @@ Den omedelbara ändringen ska därför vara liten men korrekt:
 
 En hårdkodad `0.52` i `build_targets` är inte acceptabel eftersom den skulle
 förlora källa, år, riktning och tidssemantik.
+
+**Uppgraderad prioritet 2026-08-16.** Detta avsnitt hette tidigare "före
+modellprojektet" i betydelsen ordningsföljd. Mätningen visar att det är
+viktigare än så: ankaret bär +22,7 % och hela modellprojektet +7,0 % ovanpå.
+Rubriken gäller alltså inte bara sekvens utan storleksordning — och den
+motiverar punkt 2 i "Beslut i korthet", att leta fler lokala ankare i stadens
+publika katalog innan mer modelleringsarbete görs.
 
 ## Forskningsgrund och följd för designen
 
@@ -234,25 +343,37 @@ Obligatoriska invariants:
 
 ## Målarkitektur
 
+Reviderad 2026-08-16: turneringen flyttad före SUMO-testet, och det ärliga
+bandet — inte de utlagda q-filerna — matar Gate S.
+
 ```text
-              lokalt 107-ankare
+        lokalt 107-ankare  ────────────►  +22,7 %   (dominerande termen)
+         (+ ev. fler ur stadens katalog)
                        │
           ┌────────────┴────────────┐
           ▼                         ▼
- befintliga q-stressfall     råa riktningspar
-          │                         │
-          ▼                         ▼
- matched-seed-test          dataset v2 + modellturnering
-          │                         │
-      Gate S                    Gate M
- beslutskänslighet?       prediktiv signal?
-          └────────────┬────────────┘
+ ovillkorlig intervall-      råa riktningspar
+ rättning (47 % → 0,193)             │
+          │                          ▼
+          │              dataset v2 + modellturnering
+          │                          │
+          │                      Gate M
+          │                 prediktiv signal?
+          │                          │
+          │        centralprofil = ankare × pooled kurva
+          │                          │
+          └────────────┬─────────────┘
                        ▼
-                fyrfältsbeslut
+          matched-seed-test på ±0,0965
+                       │
+                    Gate S
+             beslutskänslighet?
+                       ▼
+                 sexfältsbeslut
        ┌───────────────┴────────────────┐
        ▼                                ▼
- Exit A/C: STOPP                  Gren B/D
- central-only/legacy        minimal offline prototyp
+ Exit A/C/E: STOPP                Gren B/B′/D
+ centralprofil utlagd        minimal offline prototyp
                                          │
                                       Gate P
                                ┌─────────┴─────────┐
@@ -262,7 +383,8 @@ Obligatoriska invariants:
 
 Det finns alltså två normala, lyckade slutlägen: en liten central-only-lösning
 och en validerad ensemblelösning. `STOPP` betyder att onödig kod inte byggs;
-det betyder inte att forskningen misslyckades.
+det betyder inte att forskningen misslyckades. Efter mätningen 2026-08-16 är
+**Exit E det mest sannolika utfallet**, och det är ett bra utfall.
 
 ### Villkorad versionsbunden artefakt
 
@@ -359,18 +481,31 @@ out-of-sample-resultat och komplexitet. Beta-binomial är motiverad av att
 etiketten kommer från två antal och att variationen ofta är större än ren
 binomialvariation, men ska också vinna sin plats genom validering.
 
-Turneringen har fyra förregistrerade utfall:
+Turneringens utfallsrum hade ett hål. Fyrfältstabellen antog att punktmodellen
+antingen är 50/50 eller gatubetingad. **Den uppmätta vinnaren är ingendera** —
+den är en obetingad TIDSVARIERANDE kurva, alltså kandidat 2 utan gatufeatures.
+Som ursprungligen förregistrerad hade det ärliga resultatet tvingats in i
+`BASELINE` och sedan lästs som "riktning saknar signal". Riktning HAR signal;
+den är bara inte gatuspecifik. Utfallsrummet får därför en femte rad:
 
 | Punktmodell | Closure-känslighet | Beslut |
 |---|---|---|
 | 50/50 vinner | ingen materiell påverkan | **Exit A:** avveckla dirsplit som releaseberoende; använd 50/50 plus 107-ankaret. Behåll q-filer endast som legacy/stressdiagnostik. |
 | 50/50 vinner | materiell påverkan | **Gren B:** ingen prediktiv ML-modell; pröva en liten residualensemble centrerad på 50/50. |
+| **Obetingad tidskurva vinner** *(uppmätt utfall)* | ingen materiell påverkan | **Exit E:** lägg ut ankare × pooled kurva som centralprofil, ovillkorlig intervallrättning, och stoppa där. Ingen ensemble, ingen ny arkitektur. Detta är ett fullvärdigt slut. |
+| **Obetingad tidskurva vinner** | materiell påverkan | **Gren B′:** residualensemble centrerad på ankare × kurva i stället för på 50/50. |
 | Villkorad modell vinner | ingen materiell påverkan | **Exit C:** använd vinnande centralprofil om den har annan produktnytta, men bygg ingen closure-ensemble. |
 | Villkorad modell vinner | materiell påverkan | **Gren D:** pröva centralmodell plus residualensemble offline. |
 
 Att 50/50 vinner säger att ett villkorat medelvärde inte har visats bättre. Det
 säger inte att den faktiska riktningsandelen saknar spridning. Därför kräver en
 exit både modellresultatet och closure-känslighetstestet.
+
+**Turneringen är i praktiken redan körd** (se "Uppmätt 2026-08-16" ovan) på den
+spårade aggregerade tabellen. Gate M kan därför avgöras billigt. Vad som
+kvarstår för en fullständig Gate M är dataset v2:s råa dag-nivå — den påverkar
+inte rangordningen mellan kandidaterna, men den behövs innan något intervall
+får kallas kalibrerat.
 
 ### 4. Korrekt valideringsdesign
 
@@ -398,9 +533,26 @@ förregistrerade huvudgrupper. Om skillnaden är oklar används den enklare
 modellen och osäkerheten redovisas. Exakta toleranser och bootstrapmetod fryses
 innan testfoldarna mäts.
 
-### 5. Marginal kalibrering utan falska garantier — endast Gren B/D
+### 5. Marginal kalibrering utan falska garantier
 
-Implementera detta bara om riktningsvariation var beslutskänslig. Kalibrera på
+**Ovillkorlig del (ny 2026-08-16).** Oavsett hur någon grind faller måste den
+utlagda intervallbredden rättas, eftersom `edge_shares_q10/q90` bygger de
+demand-varianter vars Monte Carlo-spridning blir kartans `confidence`-tal
+idag. Uppmätt täckning är 47,0 % mot nominella 80 %; ärlig bredd 0,193 mot
+utlagda 0,099. Två godtagbara åtgärder, båda små:
+
+- vidga till den uppmätta bredden 0,193 och behåll etiketten som EMPIRISK,
+  inte garanterad; eller
+- behåll bredden men märk fältet `calibration_status: stress_only` och sluta
+  presentera det som ett 80 %-intervall någonstans i kedjan.
+
+Det som inte är godtagbart är att lämna ett nominellt 80 %-intervall med 47 %
+täckning inkopplat i confidence-talet i väntan på Gate P. Notera också att
+47 % är en ÖVRE gräns: raderna är redan ~8-dagarsmedelvärden, så
+endagstäckningen är sämre.
+
+**Villkorad del — endast Gren B/D.** Full conformal-/blockkalibrering
+implementeras bara om riktningsvariation var beslutskänslig. Kalibrera på
 held-out residualer, med block per dag/station så
 att tidsberoende inte behandlas som oberoende rader. CQR eller block-conformal
 kan provas i en forskningsarm, men produktartefakten ska ange:
@@ -463,10 +615,21 @@ extremhändelsefrekvens.
 
 ### Före produktändring — avgränsat känslighetstest
 
-Använd befintliga q10/q50/q90-routeartefakter som namngivna stressfall och ett
-litet fryst urval av closure-kandidater. Kör samma seedlista för varje
-stressfall och samma `(stressfall, seed)` för baslinje och kandidat. Detta är en
-diagnostisk korsprodukt, inte ett nytt `ScenarioSpec` och inte release-evidens.
+**METODFEL RÄTTAT 2026-08-16.** Detta avsnitt föreskrev ursprungligen att
+använda de BEFINTLIGA q10/q50/q90-routeartefakterna som stressfall. De spänner
+0,107 — ungefär halva den ärliga bredden 0,193. Ett Gate S-test på dem skulle
+underskatta riktningskänsligheten **per konstruktion** och kunna returnera `NO`
+av fel skäl, vilket sedan skulle stänga scenariointegrationen på ogiltig grund.
+
+Gate S ska därför köras på det ärliga bandet: centralprofilen ±0,0965, alltså
+riktningsandelar runt centralprofilen som faktiskt motsvarar den uppmätta
+osäkerheten. Om de gamla q-filerna används av bekvämlighetsskäl måste de först
+skalas till den bredden, och det måste stå i registreringen.
+
+Använd ett litet fryst urval av closure-kandidater. Kör samma seedlista för
+varje stressfall och samma `(stressfall, seed)` för baslinje och kandidat. Detta
+är en diagnostisk korsprodukt, inte ett nytt `ScenarioSpec` och inte
+release-evidens.
 
 Mät om riktningsaxeln ändrar:
 
@@ -561,14 +724,30 @@ för att välja releasefall.
 
 ## Villkorad implementationsordning
 
+**ORDNINGEN ÄNDRAD 2026-08-16.** Planen lade Fas 0B (matched-seed-SUMO) före
+Fas 1 (turneringen). Det är fel väg runt: Fas 1 är nästan gratis — merparten
+kördes på minuter mot spårade artefakter — medan Fas 0B är den dyra fasen som
+kräver SUMO. Att köra den billiga grinden först hade dessutom avslöjat 47 %-
+täckningen innan någon SUMO-tid spenderades, och det är just den siffran som
+avgör vilket band Fas 0B ska köras på. Ordningen är därför:
+
+**Fas 0A → Fas 1 → Fas 0B → (Fas 2 → Gate P → Fas 3 → Fas 4)**
+
+Fas 0B behåller sitt namn för spårbarhet mot registreringsartefakterna.
+
 ### Fas 0A — lokal rättning och nulägeslåsning, alltid
 
 **Kod och artefakter**
 
 - Lägg sensor 107:s `directional_reference` i det validerade sensorregistret,
-  inklusive år, råa riktningstal, period, källa och kantmappning.
+  inklusive år, råa riktningstal, period, källa och kantmappning — med den
+  verifierade bäringen (`60786979_3575001205_0` = 352,1° = N = mot centrum)
+  utskriven, inte underförstådd.
 - Gör minsta möjliga ändring i befintlig dirsplit/predict- eller intakeväg för
   att ankra periodmedlet utan att fabricera kvartsmätningar.
+- **Rätta intervallbredden** enligt avsnitt 5:s ovillkorliga del — vidga till
+  0,193 eller märk `stress_only`. Detta hör hit därför att det inte beror på
+  någon grind och därför att det påverkar en utlagd produkt.
 - Lägg fokuserade tester för 107:s total, riktning, provenance och periodmedel.
 - Pinna nuvarande q-routefiler, q→seedmapping och closure-ranking i legacytester.
 
@@ -577,10 +756,18 @@ för att välja releasefall.
 **Acceptans**
 
 - 107:s två riktningar summerar varje slot till den uppmätta tvåvägstotalen.
-- Deklarerad period återger 52/48 inom avrundningstolerans.
+- Deklarerad period återger 52,3/47,7 inom avrundningstolerans.
+- Riktningsmappningen är testad så att ett omkastat ankare failar.
 - Kvartsvärden är märkta estimerade, inte Level-1-riktningsmätningar.
 - De fem enkelriktade stationernas Level-1-mål är byte-identiska.
+- Inget nominellt 80 %-intervall är kvar med 47 % täckning i confidence-kedjan.
 - Gamla golden- och resume-artefakter är oförändrade.
+
+**Parallellt, utanför kod (högsta hävstång, se "Beslut i korthet" punkt 2):**
+kontrollera Göteborgs publika trafikmängder-katalog för riktade rader vid de
+övriga fem stationerna eller närliggande gator. Varje nytt lokalt ankare är
+värt ungefär tre gånger vad hela transfermodellen är värd. Bekräfta först med
+Gustav att en publik katalog inte omfattas av 2026-07-20-beslutet.
 
 ### Fas 0B — matched-seed-känslighet, alltid och fristående
 
@@ -624,16 +811,27 @@ Arbetet ska:
 5. mäta temporal/applicability-support och uttryckligen neka tyst helg- och
    off-hours-extrapolation.
 
-**Gate M — finns en robust prediktiv riktningssignal?**
+**Gate M — finns en robust prediktiv riktningssignal, och av vilket slag?**
 
-- `BASELINE`: 50/50 är bäst eller statistiskt oskiljbar från bästa komplexa
-  modell enligt den frysta regeln.
+Tre utfall räckte inte: de skilde inte på "ingen signal" och "signal som inte
+är gatuspecifik". Fyra utfall:
+
+- `BASELINE`: 50/50 är bäst eller statistiskt oskiljbar från allt annat.
+- `UNCONDITIONAL`: en obetingad tidsvarierande kurva vinner, men ingen
+  gatubetingad modell slår den. **Detta är det uppmätta utfallet** — se
+  "Uppmätt 2026-08-16": pooled timkurva 0,0604/0,0532/0,0608 mot 50/50:s
+  0,0639/0,0569/0,0639, medan varje LightGBM-variant förlorar mot 50/50 på
+  varje folddesign.
 - `MODEL`: en villkorad modell vinner robust och utan materiell huvudgruppsskada.
 - `INCONCLUSIVE`: leakage, otillräckliga oberoende block eller instabil ranking.
   Behåll nuvarande releaseväg som legacy och åtgärda endast evidensfelet.
 
-Kombinera Gate S och Gate M enligt fyrfältstabellen i modellavsnittet. Exit A
-och Exit C är fullvärdiga slutresultat och stoppar resten av planen.
+Oavsett utfall gäller att det lokala ankaret läggs ut — det konkurrerar inte
+med kurvan utan multipliceras med den, och det bär den större delen (+22,7 %
+mot +7,0 %).
+
+Kombinera Gate S och Gate M enligt sexfältstabellen i modellavsnittet. Exit A,
+Exit C och Exit E är fullvärdiga slutresultat och stoppar resten av planen.
 
 ### Fas 2 — minimal offline scenario-prototyp, endast Gren B/D
 
@@ -734,6 +932,15 @@ Ovillkorliga append-only-filer:
 - `validation/direction_decision_sensitivity_registration_v1.json`;
 - `validation/direction_decision_sensitivity_outcome_v1.json`;
 - `validation/dirsplit_point_benchmark_v1.json`;
+- `validation/dirsplit_falsified_families_v1.json` — de fyra stängda vägarna
+  (summa-constraint, summa+band, korridorkontinuitet, profildekonvolution) med
+  sina mätvärden, så att negativ evidens överlever och inte återuppfinns.
+
+Reproducerbarhet: de tre verktygen `tools/research_direction_split_evidence.py`,
+`tools/research_direction_sum_constraint.py` och
+`tools/research_direction_solution_space.py` kör enbart mot spårade artefakter
+och återger varje siffra ovan. De är evidenskällan för revisionen 2026-08-16;
+`release_evidence: false`.
 
 Endast Gren B/D:
 
@@ -759,6 +966,21 @@ plattform, SUMO-version, seeds, scenario-ID:n, start/slut, komplett status och
 - Tolka inte "50/50 vinner" som "variansen är noll"; använd både Gate M och
   Gate S för exit.
 - Hårdkoda inte 107 till 0,52 per kvart; bevara års-/periodsemantiken.
+- **Applicera inte ankaret utan den verifierade riktningsmappningen.** N är
+  kanten med bäring 352,1°. Ett omkastat ankare är ett 4,6-procentenheters fel
+  som ingenting nedströms fångar.
+- **Kör inte Gate S på de utlagda q-artefakterna.** De spänner halva den
+  ärliga bredden och skulle ge `NO` av fel skäl.
+- **Föreslå inte "låt entropin/PFE:n välja splitten" igen.** En summa-constraint
+  skalar båda riktningarna uniformt; splitten blir kandidatpoolens
+  sammansättning, som svänger 35 procentenheter på en ruttparameter. Detsamma
+  gäller reparationen med ett tvåsidigt band — den blir ett förklätt
+  punktestimat på bandets nedre hörn.
+- **Återuppfinn inte profildekonvolution eller AM/PM-nedbrytning.** Motfas-
+  premissen är förkastad på Göteborgs egna data (speglad bas vinner 0/10).
+- **Anta inte att 1076 ger 107:s split** för att gatorna är desamma; 1076
+  överstiger 107:s tvåvägstotal i 7,9 % av kvartarna.
+- **Skjut inte upp intervallrättningen bakom en grind.** Den är ovillkorlig.
 - Kör inte global q10/global q90 och kalla dem sannolika gemensamma dagar utan
   joint validation.
 - Exkludera inte vägar enbart för att observability är låg.
@@ -813,17 +1035,26 @@ Planen har flera tillåtna definitioner av done.
 ### Done för alla utfall
 
 1. Sensor 107:s lokala periodankare är maskinläsbart, provenancebundet och
-   används utan falsk kvartsmätningssemantik.
-2. Gate S är förregistrerad och avgjord med samma seeds över q-stressfallen.
-3. Centralprofilen väljs mot enkla baselines på läckagefri held-out i Gate M.
-4. Observability beskriver evidensstyrka utan ett godtyckligt vägförbud.
-5. Legacy q- och closureartefakter är oförändrade.
+   används utan falsk kvartsmätningssemantik — inklusive den verifierade
+   riktningsmappningen, testad så att ett omkastat ankare failar.
+2. Intervallrättningen är gjord: inget nominellt 80 %-intervall med 47 %
+   uppmätt täckning matar längre kartans confidence-tal.
+3. Gate S är förregistrerad och avgjord med samma seeds, **på det ärliga
+   bandet ±0,0965**.
+4. Centralprofilen väljs mot enkla baselines på läckagefri held-out i Gate M,
+   med den obetingade tidskurvan som en förregistrerad kandidat i sin egen rätt.
+5. Observability beskriver evidensstyrka utan ett godtyckligt vägförbud.
+6. De falsifierade familjerna är dokumenterade som negativ evidens så att de
+   inte återföreslås.
+7. Legacy q- och closureartefakter är oförändrade.
 
-### Done för Exit A/C
+### Done för Exit A/C/E
 
 Gatekombinationen är dokumenterad, scenario-/produktintegrationen är uttryckligt
-stängd och den minsta central-only-lösningen är vald. Inga oanvända schema-,
-monthly-, warm-, API- eller UI-moduler har skapats. Detta är ett lyckat slut.
+stängd och den minsta centralprofilen är vald och utlagd. För Exit E betyder det
+konkret: ankare × pooled kurva över hela dygnet, ärligt intervall över
+demand-varianter, LightGBM-stacken avvecklad. Inga oanvända schema-, monthly-,
+warm-, API- eller UI-moduler har skapats. Detta är ett lyckat slut.
 
 ### Done för Gren B/D-prototyp
 

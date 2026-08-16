@@ -12,8 +12,13 @@ owners, states and approval formulas are not active workflow rules. See
 - Current focus: `Decision-gated direction split: bind sensor 107's local
   evidence, measure whether direction changes closure decisions, then compare
   central models before authorizing any ensemble/product expansion.`
-- Status: `RESEARCHED PLAN REVISED AFTER SCOPE REVIEW; SOURCE IMPLEMENTATION NOT
-  STARTED. Sensor 107 is the only two-edge station whose split directly creates
+- Status: `PLAN REVISED 2026-08-16 AGAINST MEASURED EVIDENCE; SOURCE
+  IMPLEMENTATION NOT STARTED. The dated plan now carries the measured
+  tournament, a sixth outcome cell (UNCONDITIONAL time-varying curve, the
+  measured winner), the four falsified families, the corrected Gate S band
+  (+/-0.0965, not the deployed q-artifacts), an unconditional interval fix,
+  and the phase order Fas 0A -> Fas 1 -> Fas 0B.
+  Sensor 107 is the only two-edge station whose split directly creates
   two Level-1 targets; its documented 2025 52/48 anchor is not yet machine-bound
   with period semantics. The other five measured directions remain untouched
   Level 1 while their opposite estimates are surrenderable Level-2/3 inputs.
@@ -22,14 +27,16 @@ owners, states and approval formulas are not active workflow rules. See
   107 is an explicit successful exit. Monthly, warm-state, schemas, API and UI
   are forbidden before their gates pass. Previous closure v5 evidence and
   closed release gates remain unchanged.`
-- Suggested next action: `Implement Fas 0A from the dated plan, now including
-  the verified N<->toward-centre mapping from the 2026-08-16 review
-  (60786979_3575001205_0, bearing 352.1 deg), so the 52/48 anchor cannot be
-  applied backwards. Independently of any gate, resolve the measured 47%
-  coverage of the nominal 80% q10-q90 interval - widen to 0.193 or relabel
-  stress_only - because it feeds the map's confidence today. Prefer running
-  Fas 1's tournament before Fas 0B's SUMO matrix: it is nearly free and it
-  changes what Gate S should be run on. Do not create DemandEnsemble,
+- Suggested next action: `Implement Fas 0A as now written in the dated plan:
+  the provenance-bound 107 reference INCLUDING the verified N<->toward-centre
+  mapping (60786979_3575001205_0, bearing 352.1 deg) tested so a reversed
+  anchor fails, plus the unconditional interval fix (widen to 0.193 or relabel
+  stress_only). Then Fas 1, then Fas 0B - that order is now part of the plan.
+  Highest leverage of all sits outside code: check Goteborgs Stad's public
+  trafikmangder catalogue for directional rows at the other five stations or
+  nearby streets, since one local anchor is worth ~3x the whole transfer
+  model; confirm with Gustav first that a public catalogue is outside the
+  2026-07-20 no-more-external-data decision. Do not create DemandEnsemble,
   monthly, warm-state, API or UI code.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve frozen q and closure evidence. Do not weaken
@@ -41,8 +48,8 @@ owners, states and approval formulas are not active workflow rules. See
   worker budget, 300 s timeout and closed v5 gates remain unchanged. Do not
   hardcode 107's annual 0.52 as 96 measured quarters or proceed past Gate S/M/P
   without their frozen evidence.`
-- Updated: `2026-08-13 Codex scope correction. Documentation-only; local product
-  code and tests are unchanged.`
+- Updated: `2026-08-16 evidence revision of the dated plan. Documentation and
+  three read-only research tools; local product code and tests are unchanged.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -71,8 +78,15 @@ owners, states and approval formulas are not active workflow rules. See
   leave-city-out and leave-station-out (+4.9 to +6.6%) while every LightGBM
   variant is 5-9% worse. Level does not transfer (curve is 2.91 pp off sensor
   107's published D-factor vs 50/50's 2.31 pp); shape does. pfe.py's groups
-  parameter already supports constraining the measured two-way SUM instead of
-  splitting it, but drops at RUNG_NOBND_TOL1 and would need a measured class.`
+  parameter can express a measured two-way SUM, but that route is REJECTED:
+  a group scales every member route by one shared factor, so the split becomes
+  the candidate pool's composition, which swings 0.230-0.581 at 107. Also
+  falsified: sum+two-sided band (collapses to lo_A/(lo_A+lo_B)), corridor
+  continuity from 1076 (20 pp off; 1076 exceeds 107's total in 7.9% of
+  quarters) and profile deconvolution (implied shares 0.878-1.034; mirrored
+  basis wins 0/10). DECISIVE: a local anchor is worth +22.7% over 50/50 while
+  the whole transfer apparatus adds +7.0% on top - the anchor is ~3x the
+  model, so more local D-factors beat more modelling.`
 - Primary files now: `data_in/sensors.json; existing dirsplit dataset/train/
   predict/coverage modules; focused 107/legacy tests; one bounded sensitivity
   tool and append-only registration/outcome. Demand/monthly/warm/API/UI are
@@ -81,8 +95,10 @@ owners, states and approval formulas are not active workflow rules. See
   No probabilistic q claims without coverage validation; no arbitrary road ban
   from observability; no field-wise scenario splicing; no policy activation or
   held-out promotion before preregistered gates pass.`
-- Acceptance criteria: `107 is correctly anchored; Gate S and Gate M are frozen
-  and decided; the four-outcome matrix selects Exit A/C or Gren B/D. Exit is a
+- Acceptance criteria: `107 is correctly anchored INCLUDING its verified
+  direction mapping; the nominal 80% interval no longer ships at 47% coverage;
+  Gate S and Gate M are frozen and decided, Gate S on the honest +/-0.0965
+  band; the six-outcome matrix selects Exit A/C/E or Gren B/B'/D. Exit is a
   valid completion. Gate P and product criteria apply only if a scenario branch
   is actually opened.`
 - Useful checks: `For the current documentation change: marker uniqueness,
