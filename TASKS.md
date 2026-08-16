@@ -22,11 +22,15 @@ owners, states and approval formulas are not active workflow rules. See
   107 is an explicit successful exit. Monthly, warm-state, schemas, API and UI
   are forbidden before their gates pass. Previous closure v5 evidence and
   closed release gates remain unchanged.`
-- Suggested next action: `Implement only Fas 0A from the dated plan: provenance-
-  bind sensor 107's yearly directional reference without fabricating per-slot
-  measurements and pin legacy behavior. Then preregister Fas 0B's small
-  matched-seed sensitivity matrix. Do not create DemandEnsemble, monthly,
-  warm-state, API or UI code.`
+- Suggested next action: `Implement Fas 0A from the dated plan, now including
+  the verified N<->toward-centre mapping from the 2026-08-16 review
+  (60786979_3575001205_0, bearing 352.1 deg), so the 52/48 anchor cannot be
+  applied backwards. Independently of any gate, resolve the measured 47%
+  coverage of the nominal 80% q10-q90 interval - widen to 0.193 or relabel
+  stress_only - because it feeds the map's confidence today. Prefer running
+  Fas 1's tournament before Fas 0B's SUMO matrix: it is nearly free and it
+  changes what Gate S should be run on. Do not create DemandEnsemble,
+  monthly, warm-state, API or UI code.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve frozen q and closure evidence. Do not weaken
   calibration, equivalence, provenance, health, survivability, failure-recall,
@@ -54,12 +58,21 @@ owners, states and approval formulas are not active workflow rules. See
 - Completion outcome: `Either a documented central-only exit with 50/50/local
   anchor and no unused infrastructure, or—only after Gate S/M/P—a minimal,
   validated scenario integration with orthogonal case/seed identity.`
-- Context or checkpoints: `Current artifact: 1,214 aggregated training rows,
-  shrunk pooled domain MAE 0.0557 versus 0.0565 for 50/50, three of four cities
-  worse than baseline, lambda 0.289. Current q10-q90 median width is 0.107 but
-  nominal coverage and joint temporal/spatial validity are unmeasured. Current
-  q route files contain 19,845/20,836/21,749 vehicles and seed identity is
-  entangled with variant identity in several contracts.`
+- Context or checkpoints: `Current artifact: 1,214 aggregated training rows
+  (of 15,346 collected - weekend and off-hour rows are dropped, then predicted
+  anyway with is_weekend=0), shrunk pooled domain MAE 0.0557 versus 0.0565 for
+  50/50, three of four cities worse than baseline, lambda 0.289. Current q
+  route files contain 19,845/20,836/21,749 vehicles and seed identity is
+  entangled with variant identity in several contracts. MEASURED 2026-08-16
+  (docs/reviews/DIRSPLIT_PLAN_RESEARCH_REVIEW_2026-08-16.md): the q10-q90
+  interval's nominal 80% is really 47.0% out-of-sample, honest width 0.193 not
+  0.099, and that 47% is an upper bound because rows are ~8-day means. An
+  unconditional hour-of-day curve with no street features beats 50/50 on
+  leave-city-out and leave-station-out (+4.9 to +6.6%) while every LightGBM
+  variant is 5-9% worse. Level does not transfer (curve is 2.91 pp off sensor
+  107's published D-factor vs 50/50's 2.31 pp); shape does. pfe.py's groups
+  parameter already supports constraining the measured two-way SUM instead of
+  splitting it, but drops at RUNG_NOBND_TOL1 and would need a measured class.`
 - Primary files now: `data_in/sensors.json; existing dirsplit dataset/train/
   predict/coverage modules; focused 107/legacy tests; one bounded sensitivity
   tool and append-only registration/outcome. Demand/monthly/warm/API/UI are

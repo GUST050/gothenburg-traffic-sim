@@ -7,42 +7,59 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
-- Focus and status: `Main. The direction-split plan is scope-corrected and
-  decision-gated; no source implementation or policy activation has begun.`
-- Summary: `The end-to-end audit found that today's q10/q50/q90 are learned
-  from station-hour means, not raw day-level variation; weekend/off-hour
-  predictions lack training support; applicability only covers static
-  features; and global marginal quantiles are not coherent daily scenarios.
-  q50 has only a 0.0008 pooled MAE advantage over 50/50 after shrinkage and is
-  worse in three of four held-out domain cities. Review then established that
-  only sensor 107's split directly creates two Level-1 targets; five opposite
-  directions are surrenderable Level-2/3 evidence. The plan now starts with
-  107's local 52/48 period anchor and a bounded matched-seed sensitivity study.
-  Gates S/M/P prevent speculative scenario/monthly/warm/API/UI work.`
-- Files changed: `Documentation only:
-  docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md;
-  IMPROVEMENT_PLAN.md pointer; current TASKS.md and AGENT_NOTES.md blocks.`
-- Checks: `git diff --check clean; plan has balanced code fences and all Gate
-  S/M/P, Exit A/C, Gren B/D and sensor-107 contract terms are present; current
-  marker counts are exactly one start/end pair. No code tests were required
-  because source behavior is unchanged.`
-- Decisions and evidence: `50/50 winning does not imply zero variance, so exit
-  requires both Gate M=BASELINE and Gate S=NO. The other combinations lead to
-  no ensemble, a residual-only prototype, or a conditional-model prototype as
-  documented. Sensor 107's annual D-factor is a local period anchor, not 96
-  directed measurements. Existing closure v5 evidence remains unchanged.`
-- Blockers or risks: `The raw, citable source/period semantics for 107's
-  3,400/3,100 values must be bound before treating them as product evidence.
-  Gate S must be preregistered before rerunning SUMO. Raw Norwegian day-block
-  availability is measured later in Fas 1. No scenario cap or risk policy is
-  needed unless Gate S/M open that branch.`
-- Suggested next action: `Fas 0A only: add the provenance-bound 107 reference,
-  anchor its period mean, and regression-test that the five directional
-  Level-1 sensors remain unchanged. Then freeze Fas 0B; do not build schemas or
-  product integration.`
-- Actor notes: `Research used primary statistical, scenario-generation,
-  traffic-monitoring and microsimulation sources. No existing evidence was
-  edited, external data downloaded, policy activated or runtime gate weakened.`
+- Focus and status: `Main. The 2026-08-13 direction-split plan has been
+  reviewed against measured evidence. Findings only — no source
+  implementation, no policy activation, no SUMO run.`
+- Summary: `The plan's artifact audit reproduces exactly (regenerated
+  sumo/direction_split.json: median |q50-0.5| 0.0070, max 0.0340, median
+  q10-q90 width 0.1070). Three measured results change what should be built.
+  (1) The tournament winner is neither of the plan's two allowed options: an
+  UNCONDITIONAL hour-of-day curve with no street features beats 50/50 by
+  +5.4/+6.6/+4.9% on leave-city-out (all), leave-city-out (domain) and
+  leave-station-out, while every LightGBM variant is 5-9% WORSE than 50/50 on
+  all three. Shrinkage lambda tells why: curve 0.93-0.98, LightGBM 0.21-0.44.
+  (2) Direction decomposes into LEVEL and SHAPE and only shape transfers -
+  the curve is worse than 50/50 at sensor 107's published annual D-factor
+  (2.91 pp vs 2.31 pp), while carrying the real within-day tide (weekday
+  peak-to-peak 0.099). A single logit offset (+0.1166) composes them: exact
+  52.3/47.7 anchor, amplitude preserved. (3) The nominal 80% interval has
+  47.0% measured out-of-sample coverage; honest width is 0.193, not 0.099 -
+  and since rows are ~8-day means, 47% is an UPPER bound. At sensor 107's
+  AM peak the deployed q50 moves 4 vehicles vs 50/50; the validated curve
+  moves 37; the honest band is +/-100.`
+- Files changed: `Documentation and one analysis tool only:
+  docs/reviews/DIRSPLIT_PLAN_RESEARCH_REVIEW_2026-08-16.md (new);
+  tools/research_direction_split_evidence.py (new, tracked-artifact only);
+  current TASKS.md and AGENT_NOTES.md blocks. No pipeline, demand, PFE, web
+  or test code touched; no model retrained.`
+- Checks: `python3 -m tools.research_direction_split_evidence runs end to end
+  and reproduces every number in the review. Regenerated split file matches
+  the plan's quoted audit numbers to the digit, confirming both the plan's
+  audit and this regeneration. Direction mapping verified from
+  network.geojson geometry: 60786979_3575001205_0 bearing 352.1 deg = N =
+  toward-centre, so the catalogue's N row maps to the toward-centre edge.`
+- Decisions and evidence: `No decision taken - review is advisory. Recommended
+  order: constrain the measured two-way SUM as a level-1 group in pfe.py
+  (already supported by the groups parameter, but it currently drops at
+  RUNG_NOBND_TOL1 and would need its own measured class), else level-local x
+  shape-pooled with the honest interval. Gate S remains unmeasured; note that
+  running it on the DEPLOYED q-artifacts would understate sensitivity by
+  construction, since they span half the honest width.`
+- Blockers or risks: `Gate S still requires SUMO and is untouched. The
+  tournament used the tracked aggregated table, so it cannot measure true
+  day-level variance - that is the plan's dataset-v2 point and it stands; it
+  only makes the 47% coverage figure an upper bound. The measured-sum option
+  needs a double-count audit for routes touching both carriageways.`
+- Suggested next action: `Decide between the two recommended designs, then
+  implement Fas 0A with the verified N<->toward-centre mapping recorded
+  alongside the raw 3400/3100 values. Independently of any gate, either widen
+  q10/q90 to the measured 0.193 or relabel them stress_only - they feed the
+  map's confidence number today.`
+- Actor notes: `Research combined a full code audit, an empirical tournament
+  on tracked data, and FHWA/Van Zuylen-Willumsen primary sources. No existing
+  evidence was edited, no external data downloaded, no policy activated and
+  no runtime gate weakened. sumo/direction_split.json is gitignored and was
+  regenerated only to audit it.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History
