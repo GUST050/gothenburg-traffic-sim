@@ -27,9 +27,10 @@ which model may continue. See `AGENTS.md`.
   and since rows are ~8-day means, 47% is an UPPER bound. At sensor 107's
   AM peak the deployed q50 moves 4 vehicles vs 50/50; the validated curve
   moves 37; the honest band is +/-100.`
-- Files changed: `Documentation and one analysis tool only:
+- Files changed: `Documentation and two analysis tools only:
   docs/reviews/DIRSPLIT_PLAN_RESEARCH_REVIEW_2026-08-16.md (new);
-  tools/research_direction_split_evidence.py (new, tracked-artifact only);
+  tools/research_direction_split_evidence.py and
+  tools/research_direction_sum_constraint.py (new, tracked-artifact only);
   current TASKS.md and AGENT_NOTES.md blocks. No pipeline, demand, PFE, web
   or test code touched; no model retrained.`
 - Checks: `python3 -m tools.research_direction_split_evidence runs end to end
@@ -38,13 +39,24 @@ which model may continue. See `AGENTS.md`.
   audit and this regeneration. Direction mapping verified from
   network.geojson geometry: 60786979_3575001205_0 bearing 352.1 deg = N =
   toward-centre, so the catalogue's N row maps to the toward-centre edge.`
-- Decisions and evidence: `No decision taken - review is advisory. Recommended
-  order: constrain the measured two-way SUM as a level-1 group in pfe.py
-  (already supported by the groups parameter, but it currently drops at
-  RUNG_NOBND_TOL1 and would need its own measured class), else level-local x
-  shape-pooled with the honest interval. Gate S remains unmeasured; note that
-  running it on the DEPLOYED q-artifacts would understate sensitivity by
-  construction, since they span half the honest width.`
+- Decisions and evidence: `No decision taken - review is advisory. RECOMMENDED:
+  level-local x shape-pooled with the honest 0.193 interval. The sum-constraint
+  ("let entropy choose") alternative was measured and REJECTED same-day, which
+  reversed this review's first recommendation. Mechanism: pfe.py appends groups
+  to bounds_items, whose correction multiplies EVERY member route by one shared
+  factor, so a sum constraint carries no information about the split and the
+  seed ratio passes through untouched - verified numerically, "sum only" equals
+  n_A/(n_A+n_B) exactly. A 24k-pair gravity/stochastic-multipath probe of the
+  pool at 107 then gives implied splits from 0.230 (plain shortest path) to
+  0.581, a 35 pp range on the sigma knob alone, against a physical range of
+  0.44-0.60 and a measured 0.523. The obvious repair - sum at level 1 plus a
+  two-sided level-2 band - is a disguised point estimate: the small IPF seed
+  pushes both carriageways to their LOWER bounds, so the answer is
+  lo_A/(lo_A+lo_B) regardless of pool. Within one PFE solve there is no way to
+  represent an unknown split; that belongs across demand variants, which the
+  q-variant architecture already provides. Gate S remains unmeasured; running
+  it on the DEPLOYED q-artifacts would understate sensitivity by construction,
+  since they span half the honest width.`
 - Blockers or risks: `Gate S still requires SUMO and is untouched. The
   tournament used the tracked aggregated table, so it cannot measure true
   day-level variance - that is the plan's dataset-v2 point and it stands; it

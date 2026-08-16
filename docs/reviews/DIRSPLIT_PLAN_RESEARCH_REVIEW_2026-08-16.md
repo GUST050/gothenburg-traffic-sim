@@ -9,9 +9,14 @@ whether it should be done at all, and what is most robust.
 
 **Method.** Findings are labelled `[DOC]` (carried from the plan or repo
 history), `[NEW]` (measured today) and `[LIT]` (external practice, cited).
-Every `[NEW]` number is reproduced by
-`python3 -m tools.research_direction_split_evidence`, which runs only on
-tracked artifacts plus a regenerated `sumo/direction_split.json`.
+Every `[NEW]` number is reproduced by two scripts that run on tracked artifacts
+only: `python3 -m tools.research_direction_split_evidence` (F1–F8, plus a
+regenerated `sumo/direction_split.json`) and
+`python3 -m tools.research_direction_sum_constraint` (F9–F11).
+
+**Revision, same day.** F9–F11 were added after the question "should I let
+entropy choose?" — and they reversed this document's original recommendation.
+The correction is marked in §3.
 
 ---
 
@@ -35,6 +40,12 @@ Three things follow from measurement, not opinion:
 3. The nominal 80 % interval has **47 % actual coverage**. That is not an
    unvalidated label — it is a measured factor-of-two understatement, and it
    feeds the confidence number on the map today.
+
+And one thing the plan does not consider at all, added after the fact:
+**"letting the solver choose the split" is not an option that exists.** A
+constraint on the two-way sum rescales both carriageways uniformly, so the
+split is decided entirely by the candidate pool — whose implied value at this
+edge swings 35 percentage points on a routing nuisance parameter (F9–F11).
 
 ---
 
@@ -200,33 +211,105 @@ systematic — matching F3). The standard practice literature says the
 transferable part is the tide, not the street. The deployed architecture bets
 on the opposite.
 
-### F9 `[NEW]` "Don't split at all" is a real option, and the solver already supports it
+### F9 `[NEW]` "Don't split at all" is expressible — but entropy does not choose
 
-The plan never lists it. But `traffic_sim/demand/pfe.py` already has
-`groups: list[tuple[list[int], float, float]]` — a band constraint on the sum
-over an explicit route-index set, enforced identically to a measured edge in
-both the LP (`solve_interval`) and the entropy IPF, and checked in
-`_check_entropy_solution` (`x[js].sum()` within band).
+The plan never lists it, and `traffic_sim/demand/pfe.py` does already have
+`groups: list[tuple[list[int], float, float]]` — a band on the sum over an
+explicit route-index set, enforced in both the LP and the entropy IPF and
+checked in `_check_entropy_solution`. A two-way total is therefore directly
+expressible as one constraint on the sum of both carriageways.
 
-A two-way total is directly expressible as **one constraint on the sum of both
-carriageways**. Nothing is split; entropy maximisation plus the assignment
-prior choose the direction, and the split becomes an *output* with a defensible
-distribution rather than an *input* with a fabricated point value. That is the
-Van Zuylen & Willumsen (1980) framing this codebase already uses for the OD
-problem, applied one level down.
+**But the phrase "let entropy choose" does not describe what would happen.**
+Groups are appended to `bounds_items`, whose correction is:
 
-Two caveats, both concrete:
+```python
+for j in js:
+    x_list[j] *= factor        # one factor for every member route
+```
 
-- **(a) Wrong rung.** `groups` are dropped at `RUNG_NOBND_TOL1`, the *first*
-  relaxation rung, because they currently encode structure-preservation
-  plausibility. A measured two-way sum placed there would yield before the
-  measurement band widens — inverting the ladder contract in exactly the way
-  CLAUDE.md documents being fixed three times already. It needs its own
-  level-1 class (`measured_groups`), not a reuse of the structural slot.
-- **(b) Double-counted routes.** A route touching both carriageways counts once
-  in a group but twice in the true two-way sum. `drop_uturn_routes` already
-  removes the obvious cases, so the residual is small and auditable — but it
-  must be measured, not assumed.
+A group rescales all its members **uniformly**. It never redistributes between
+them. A constraint on the sum therefore carries no information about the split,
+and the seed's ratio passes through untouched — the standard entropy result
+that constraints tilt the solution only along constrained directions.
+
+Verified numerically by driving `solve_interval_entropy` on a two-carriageway
+toy pool:
+
+| pool | sum constraint only | imposed 52/48 | sum, seed favours A 3:1 |
+|---|---:|---:|---:|
+| 10 on A, 10 on B | 0.500 | 0.520 | 0.750 |
+| 10 on A, 5 on B | 0.667 | 0.520 | 0.857 |
+| 10 on A, 20 on B | 0.333 | 0.520 | 0.600 |
+| 30 on A, 6 on B | 0.833 | 0.520 | 0.938 |
+| 4 on A, 40 on B | **0.091** | 0.520 | 0.231 |
+
+The "sum only" column is exactly `n_A / (n_A + n_B)`. **"Let entropy choose"
+means "let the candidate pool's directional composition choose"** — an
+unvalidated structural prior, not an absence of assumption.
+
+Two further caveats stand regardless: `groups` drop at `RUNG_NOBND_TOL1`, so a
+measured sum placed there would yield before the measurement band widens and
+would need its own level-1 class; and a route touching both carriageways counts
+once in a group but twice in the true sum.
+
+### F10 `[NEW]` That structural prior is not usable at this edge
+
+Gravity-sampled OD pairs routed over the frozen graph with perturbed travel
+times — a simplified stand-in for `assignment_priors.compute_assignment_load`,
+24 000 routed pairs, 95 % CIs about ±0.04:
+
+| routing assumption | implied split at 107 |
+|---|---:|
+| shortest path, no perturbation | **0.230** |
+| stochastic multipath σ = 0.10 | 0.314 |
+| stochastic multipath σ = 0.15 | 0.396 |
+| stochastic multipath σ = 0.20 | 0.471 |
+| stochastic multipath σ = 0.30 | 0.555 |
+| stochastic multipath σ = 0.45 | 0.581 |
+
+**A 35-percentage-point range driven by a routing nuisance parameter alone**,
+against a real physical range of roughly 0.44–0.60 (F2, F3) and a measured
+value of 0.523. Plain shortest-path routing gives 23/77 — the pool at this edge
+is decided by which of two parallel carriageways happens to be marginally
+faster as a through-route, which flips with σ.
+
+`[LIT]` This is the textbook behaviour, not a surprise: the OD-estimation
+literature is consistent that entropy and information-minimising estimators
+leave accuracy "highly dependent upon the quality of the prior information."
+The method is sound; the prior is simply outside its validated domain here. The
+assignment prior was built and validated as a network-wide plausibility bound,
+never as a resolver of a near-50/50 split between two carriageways of one
+street.
+
+**Honest limit:** this probe is not the production prior — no DeSO population
+weighting, no POI activity fields, no paired tours, no SUMO routing costs. The
+real one may be better centred. The *sensitivity* finding is a property of the
+network topology and would very likely survive; the specific values should not
+be quoted as the production prior's output.
+
+### F11 `[NEW]` A two-sided band does not express "unknown" either
+
+The obvious repair — sum at level 1, each carriageway bounded at level 2 — was
+tested and does not do what it looks like:
+
+| band on A | `lo_A/(lo_A+lo_B)` | split, pools 10/10 · 10/20 · 30/6 |
+|---|---:|---|
+| [0.449, 0.642] | 0.556 | 0.556 · 0.556 · 0.556 |
+| [0.400, 0.600] | 0.500 | 0.500 · 0.500 · 0.500 |
+| [0.500, 0.700] | 0.625 | 0.625 · 0.625 · 0.625 |
+
+The good news is that the result becomes **completely independent of pool
+composition**. The bad news is where it lands: with the small IPF seed both
+carriageways are pushed to their *lower* bounds and then rescaled by the group,
+so the answer is a deterministic `lo_A / (lo_A + lo_B)` — the band's lower
+corners, not its centre. A band centred on 0.545 returns 0.556; one centred on
+0.600 returns 0.625.
+
+**Within a single PFE solve there is no way to represent "I don't know the
+split."** One solve returns one number. Direction uncertainty has to live
+*across* solves — which is exactly what the existing q-variant architecture
+does, and the only thing wrong with it is that the variants are 2× too narrow
+(F4).
 
 ---
 
@@ -239,22 +322,32 @@ rather than "invent a per-direction number".** The other five stations must not
 be split — their measured direction already enters level 1 untouched, and
 `demand/intake.py:367` correctly guards this.
 
-Two defensible designs, most robust first:
+**CORRECTION, 2026-08-16 (same day).** An earlier revision of this document
+recommended constraining the sum and letting the solver pick the split, and
+called it the most robust option. **F9–F11 measured that and it is wrong.**
+Entropy does not pick the split; a sum constraint scales both carriageways
+uniformly and hands the decision to the candidate pool, whose implied split at
+this edge ranges over 35 percentage points on a routing nuisance parameter.
+The recommendation below replaces it.
 
-**Option A — constrain the sum (most robust).** Give the PFE the two-way total
-as a single level-1 constraint over both carriageways (F9). Nothing is
-fabricated. The split stops being an assumption and becomes a model output.
-Cost: a new measured-class group in `pfe.py` plus the double-count audit.
+**Recommended — anchored curve.** Level from Gothenburg's own 52.3/47.7, shape
+from the pooled tidal curve, interval widened to the honest 0.193 (F4). Keeps
+today's file format and every downstream consumer; replaces the entire LightGBM
+stack with roughly thirty lines. Every component is separately validated: the
+level is a local measurement, the shape is leave-city-out and
+leave-station-out validated, the width is measured residual spread.
 
-**Option B — anchored curve (smallest change).** Level from Gothenburg's own
-52.3/47.7, shape from the pooled tidal curve, interval widened to the honest
-0.193 (F4). Keeps today's file format and every downstream consumer; replaces
-the entire LightGBM stack with roughly thirty lines.
+The same treatment is the right default for the five single-direction stations'
+*estimated opposite carriageway* — a level-2 bound, which should also be
+widened per F4, since it is currently about twice too tight.
 
-These are not exclusive — B is a good default for the five single-direction
-stations' *estimated opposite carriageway* (a level-2 bound, which should also
-be widened per F4, since it is currently about twice too tight), while A is the
-principled treatment of 107's genuinely-measured total.
+**Not recommended — sum constraint alone.** It is expressible (F9), but it
+replaces a measured, validated estimate with an unvalidated structural one
+(F10), and the natural repair of bounding the split turns into a disguised
+point estimate at the band's lower corners (F11). The one property worth
+keeping from it is that the *measured* quantity at 107 is genuinely the total,
+not two directions — which is an argument for auditing the two level-1 targets
+against their sum, not for abandoning the split.
 
 ### What is best?
 
@@ -265,13 +358,27 @@ shrinkage λ says three-quarters of what it asserts is noise.
 
 ### What is most robust?
 
-**Option A**, because it removes the failure mode rather than estimating around
-it — there is no transferred quantity to be wrong about. Failing that, Option B,
-whose two components are separately validated and whose errors are bounded and
-measurable. The current deployment is the least robust of the three: it is
-simultaneously **too flat in the middle** (0.32× the validated signal) and **too
-narrow at the edges** (0.55× the honest width) — understating what is known and
-what is unknown at the same time.
+**The anchored curve**, because each of its three parts is separately validated
+against held-out data and its errors are bounded and measurable. Robustness
+here does not come from refusing to state a number — F9–F11 show that refusing
+to state one just hands the decision to a less validated mechanism. It comes
+from stating a number whose level, shape and width each have evidence behind
+them.
+
+Ranked, at sensor 107:
+
+| | level error vs published | direction signal | uncertainty width |
+|---|---|---|---|
+| anchored curve | 0 by construction | validated, ~10 pp tide | measured 0.193 |
+| 50/50 | 2.31 pp | none | none stated |
+| deployed dirsplit | 2.50 pp | 0.32× validated | 0.55× honest |
+| sum constraint alone | unbounded (0.230–0.581 observed) | pool artifact | none stated |
+
+The current deployment sits third: it is simultaneously **too flat in the
+middle** (0.32× the validated signal) and **too narrow at the edges** (0.55×
+the honest width) — understating what is known and what is unknown at the same
+time. The sum constraint sits fourth because its error is not merely large but
+unbounded by anything physical.
 
 ---
 
@@ -305,9 +412,12 @@ what is unknown at the same time.
    or relabel it `stress_only` — both are small, and both are correct
    regardless of how any gate resolves.
 
-5. **Add the no-split option to the option space (§"Beslut i korthet").** It
-   currently frames the choice as central-profile vs ensemble. Neither is
-   "don't split" — which F9 shows the solver already supports.
+5. **Record the no-split option as tested and rejected, not as unexplored.**
+   §"Beslut i korthet" frames the choice as central profile vs ensemble, and
+   never mentions letting the solver decide. F9–F11 close that gap with
+   evidence: it is expressible, it is not what "entropy chooses" suggests, and
+   at this edge the mechanism it defers to is unusable. Worth keeping as
+   negative evidence so it is not re-proposed.
 
 6. **Fas 0A should record the verified N↔toward-centre mapping**, not just the
    raw 3400/3100 numbers. F6 supplies it (bearing 352.1°). Without it the
