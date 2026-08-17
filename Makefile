@@ -87,6 +87,12 @@ dirsplit-predict:
 local-direction-evidence:
 	python3 -m tools.measure_local_direction_evidence
 
+# Diagnostic: once sensor 107's published LEVEL is known, does the transferred
+# intraday SHAPE beat a flat anchor? This is the baseline the deployed system
+# actually poses, which Gate M's 50/50 comparison does not.
+anchored-shape-value:
+	python3 -m tools.measure_anchored_shape_value
+
 # Gate M: is there a robust conditional direction signal, or is 50/50 the
 # honest central estimate? `--table legacy` (the tracked aggregate) is what is
 # runnable today and CANNOT decide the gate — the blocked-date fold and the

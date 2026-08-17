@@ -615,6 +615,43 @@ Goal arc, in order:
      "UK DfT integration for more training breadth" idea is dropped: the
      tournament found street features do not transfer, so more street-feature
      breadth is not what the evidence asks for.)
+   - IS THE DEPLOYED COMBINATION THE BEST OF WHAT WAS TESTED? (2026-08-17,
+     `tools/measure_anchored_shape_value.py` →
+     `validation/anchored_shape_value_v1.json`, `release_evidence: false`).
+     Gate M compared the shape model against 50/50, which is NOT the baseline
+     the deployed system poses — the deployed system already knows the level
+     from 107's published D-factor. The matching comparison is flat anchor (B0)
+     vs anchored shape (B1), scored on Norwegian stations acting as TOT sensors:
+     each held-out station's own flow-weighted mean plays the published
+     D-factor, its per-hour shares are the truth, and the shape model never sees
+     that station or city. Taking the LEVEL from the test station is deliberate
+     asymmetry, not leakage — it mirrors exactly what is known at 107. MEASURED,
+     weekday population, reusing Gate M's frozen 5%/bootstrap rule:
+     | fold | B0 flat | B1 anchored shape | B1u shape alone | improvement |
+     |---|---|---|---|---|
+     | leave-city-out (81 stations) | 0.051377 | **0.048292** | 0.063801 | +6.00% material+robust, CI [−0.00534, −0.00070] |
+     | leave-station-out (25 stations) | 0.052230 | **0.048140** | 0.060279 | +7.83% material, NOT robust, CI [−0.00864, +0.00055] |
+     THREE FINDINGS, all of which change how the deployment should be described:
+     * **The combination wins, not either half.** Against the right baseline the
+       shape is worth +6.0%/+7.8%, both above the 5% bar — where against 50/50
+       it managed only +3.95%/+4.70% and never cleared it. Gate M was measuring
+       a different system than the one that ships.
+     * **The anchor is load-bearing, and this is the first test of it.** The raw
+       transferred profile is WORSE than a flat anchor (0.0638 vs 0.0514 LCO).
+       Anchoring cuts its error by ~24%. Before this the anchor rested on a
+       principle — local evidence outranks transfer for the same aggregate —
+       with no held-out number behind it.
+     * **The shape is under-amplified about 4x.** Real held-out stations swing
+       26.3 pp across the day; the anchored transferred profile swings 6.8 pp.
+       It gets the DIRECTION of the intraday movement right and the SIZE badly
+       wrong, which is precisely the amplitude question the daily-split plan
+       raises — and it means headroom, not a settled result.
+     HONEST LIMIT: on leave-station-out — a genuinely new street, which is
+     Gothenburg's case — the improvement is material in size but its CI spans
+     zero at 25 stations, so it is not statistically separable there. And the
+     aggregate still has no day blocks, so future-day transfer of the shape
+     remains unmeasured. This study is a diagnostic: it is not Gate M, not
+     Gate D, and decides neither.
    - LOCAL CORRIDOR EVIDENCE (2026-08-17,
      `tools/measure_local_direction_evidence.py` →
      `validation/local_direction_evidence_v1.json`, `release_evidence: false`).
