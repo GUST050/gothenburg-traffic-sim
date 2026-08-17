@@ -76,6 +76,8 @@ def write_counts(
     (dirsplit model or Gaussian fallback) when available, else an even
     split. "S" sensor edges always take the full count.
     """
+    from demand.intake import scenario_shares
+
     est_shares = load_direction_split(split_key)
     if est_shares:
         print(f"  Using ESTIMATED direction split ({split_key})")
@@ -90,8 +92,11 @@ def write_counts(
             slot = qi % 96
             f.write(f'  <interval id="q{qi}" begin="{i * 900}" end="{(i + 1) * 900}">\n')
             for edges in sensor_edges.values():
+                # The published counts must be the ones the calibration was
+                # given, so the same coherent scenario split is used here.
+                shares = scenario_shares(list(edges), est_shares, slot)
                 for edge_id in edges:
-                    share = est_shares.get(edge_id, [1.0 / len(edges)] * 96)[slot]
+                    share = shares[edge_id]
                     v = flows.get(edge_id, [None])[qi] if qi < len(flows.get(edge_id, [])) else None
                     if v is None:
                         continue

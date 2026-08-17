@@ -409,6 +409,35 @@ def has_split_quantiles() -> bool:
     return any("edge_shares_q10" in d for d in data.values())
 
 
+def scenario_shares(edges: list[str], est_shares: dict[str, list[float]],
+                    slot: int) -> dict[str, float]:
+    """Direction shares for ONE station in ONE slot that sum to exactly 1.
+
+    A two-way station's level-1 target is its MEASURED total; a demand variant
+    may move where that total goes, never how much of it there is. The split
+    artifact stores each edge's own MARGINAL quantile, and two marginals do not
+    sum to one — measured on the deployed profile, the q10 pair sums to
+    0.59-0.91 and the q90 pair to 1.09-1.41, so the q10 route file was
+    calibrating sensor 107 to 82% of its measured day total and the q90 file to
+    118%. That is a volume stress case wearing a direction label, and it
+    violates the rule that measurements outrank every estimate.
+
+    So one edge takes its own quantile and the other takes the complement: a
+    coherent joint scenario instead of a pair of margins (the marginal values
+    remain exactly what the level-2 ceiling and level-3 prior need, and are
+    read from the artifact unchanged). The canonical edge is the lowest ID, a
+    stable choice that makes the two variants genuine opposites — each edge's
+    own low is below its own high, so q10 and q90 land on opposite sides.
+    """
+    even = 1.0 / len(edges)
+    if len(edges) == 1:
+        return {edges[0]: 1.0}
+    canonical = min(edges)
+    share = est_shares.get(canonical, [even] * 96)[slot]
+    return {edge: (share if edge == canonical else 1.0 - share)
+            for edge in edges}
+
+
 def build_targets(
     flows: dict[str, list],
     sensor_edges: dict[str, list[str]],
@@ -423,6 +452,7 @@ def build_targets(
         qi, slot = qi_start + i, (qi_start + i) % 96
         t: dict[str, float] = {}
         for edges in sensor_edges.values():
+            shares = scenario_shares(edges, est_shares, slot)
             for edge_id in edges:
                 # Split ONLY a two-way total. A single-direction station
                 # already measures one carriageway, so its value IS that
@@ -435,8 +465,7 @@ def build_targets(
                 # have been calibrated as 25 -- silently, at 100% GEH against
                 # the halved target. The estimated opposite carriageway is not
                 # a level-1 target at all; it enters as a level-2 bound.
-                share = (est_shares.get(edge_id, [1.0 / len(edges)] * 96)[slot]
-                         if len(edges) > 1 else 1.0)
+                share = shares[edge_id]
                 v = flows.get(edge_id, [None])[qi] if qi < len(flows.get(edge_id, [])) else None
                 if v is not None:
                     t[edge_id] = v * share

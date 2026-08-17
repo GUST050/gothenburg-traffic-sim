@@ -13,6 +13,8 @@ silently, at 100% GEH against the halved target.
 """
 import json
 import sys
+
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -119,3 +121,81 @@ class TestTheRegistryIsWiredUp:
             spec = row.get("opposite_direction")
             assert spec and spec.get("edge_id"), row["sensor_id"]
             assert spec["measurement_status"] == "unmeasured_estimated"
+
+
+class TestVariantsMoveDirectionNotVolume:
+    """A demand variant may move WHERE the measured total goes, never HOW MUCH.
+
+    The split artifact stores each edge's own MARGINAL quantile, and two
+    marginals do not sum to one. Feeding them straight into build_targets made
+    the q10 route file calibrate sensor 107 to 82% of its measured day total
+    and the q90 file to 118% (pair sums measured at 0.59-1.41 on the deployed
+    profile) — a volume stress case wearing a direction label, against the rule
+    that measurements outrank every estimate.
+    """
+
+    def _targets(self, monkeypatch, shares, key="edge_shares"):
+        import demand.intake as intake
+        monkeypatch.setattr(intake, "load_direction_split",
+                            lambda k="edge_shares": shares)
+        return intake.build_targets({"n": [100.0], "s": [100.0]},
+                                    {"107": ["n", "s"]}, 0, 1, split_key=key)
+
+    def test_a_marginal_pair_that_undershoots_still_conserves_the_total(
+            self, monkeypatch):
+        # Each edge's own LOW share: 0.38 + 0.27 = 0.65 of the measured total.
+        targets = self._targets(monkeypatch,
+                                {"n": [0.38] * 96, "s": [0.27] * 96})
+        assert targets[0]["n"] + targets[0]["s"] == pytest.approx(100.0)
+
+    def test_a_marginal_pair_that_overshoots_still_conserves_the_total(
+            self, monkeypatch):
+        targets = self._targets(monkeypatch,
+                                {"n": [0.73] * 96, "s": [0.62] * 96})
+        assert targets[0]["n"] + targets[0]["s"] == pytest.approx(100.0)
+
+    def test_the_two_variants_land_on_opposite_sides(self, monkeypatch):
+        low = self._targets(monkeypatch, {"n": [0.38] * 96, "s": [0.27] * 96})
+        high = self._targets(monkeypatch, {"n": [0.73] * 96, "s": [0.62] * 96})
+        assert low[0]["n"] != pytest.approx(high[0]["n"])
+        assert (low[0]["n"] - 50) * (high[0]["n"] - 50) < 0
+
+    def test_the_canonical_edge_is_stable(self):
+        from demand.intake import scenario_shares
+        shares = {"n": [0.6] * 96, "s": [0.3] * 96}
+        first = scenario_shares(["n", "s"], shares, 0)
+        second = scenario_shares(["s", "n"], shares, 0)
+        assert first == second
+
+    def test_a_single_direction_station_takes_its_whole_count(self):
+        from demand.intake import scenario_shares
+        assert scenario_shares(["m"], {"m": [0.42] * 96}, 0) == {"m": 1.0}
+
+    def test_without_a_model_the_pair_splits_evenly(self):
+        from demand.intake import scenario_shares
+        assert scenario_shares(["n", "s"], {}, 0) == {"n": 0.5, "s": 0.5}
+
+    def test_published_counts_match_the_calibration_targets(self, tmp_path,
+                                                            monkeypatch):
+        """write_counts feeds the same numbers to SUMO that the PFE aimed at."""
+        import xml.etree.ElementTree as ET
+
+        import demand.intake as intake
+        import demand.publication as publication
+        shares = {"n": [0.38] * 96, "s": [0.27] * 96}
+        monkeypatch.setattr(intake, "load_direction_split",
+                            lambda k="edge_shares": shares)
+        monkeypatch.setattr(publication, "load_direction_split",
+                            lambda k="edge_shares": shares)
+        out = tmp_path / "counts.xml"
+        publication.write_counts({"n": [100.0], "s": [100.0]},
+                                 {"107": ["n", "s"]}, 0, 1, out,
+                                 split_key="edge_shares_q10")
+        written = {edge.get("id"): float(edge.get("count"))
+                   for edge in ET.parse(out).getroot().iter("edge")}
+        targets = intake.build_targets({"n": [100.0], "s": [100.0]},
+                                       {"107": ["n", "s"]}, 0, 1,
+                                       split_key="edge_shares_q10")
+        assert sum(written.values()) == pytest.approx(100.0, abs=1.0)
+        for edge, value in written.items():
+            assert value == pytest.approx(targets[0][edge], abs=1.0)

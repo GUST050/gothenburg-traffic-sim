@@ -40,7 +40,7 @@ which model may continue. See `AGENTS.md`.
 - Checks: `The dirsplit set is 179 passing (anchor, sensitivity, dataset v2 and
   tournament, deployed central model, rewritten level-3 priors). Full suite on
   a clean worktree of HEAD versus the final state: 321 failed / 4,458 passed
-  versus 321 failed / 4,592 passed, with IDENTICAL failure lists — no
+  versus 321 failed / 4,599 passed, with IDENTICAL failure lists — no
   regression, and those 321 are this sandbox lacking SUMO. Every affected
   module imports cleanly after the deletions; `dirsplit.predict` and
   `prior_flows` were run for real and produce the deployed split and all five
@@ -80,6 +80,25 @@ which model may continue. See `AGENTS.md`.
   if raw volumes are supplied by hand; a zero-external-data project should take
   the plan's Exit A (50/50 + the 107 anchor) rather than freeze a curve whose
   source was deleted.`
+- Superfluity check on q10/q90 (2026-08-16, requested): `They are TWO objects
+  under one name, and only one of them was broken. As per-edge MARGINAL bounds
+  they are load-bearing: measured on the tracked artifacts, the structural
+  conservation ceiling on an unmeasured carriageway is 450-1057 veh/quarter
+  (5-12x its measured twin) and for 1076's twin there is none at all, while the
+  model ceiling sits at 1.3-2.7x (median 2.1x); and with no constraint the PFE's
+  parsimony objective drives the edge to ZERO, which is a stronger claim than
+  any band. Count-based OD estimation is underdetermined, so the choice is which
+  prior, not whether — and the ladder already surrenders these bounds FIRST,
+  before priors and long before any measured band widens. As DEMAND VARIANTS
+  they were broken: each edge took its own marginal quantile, so the pair summed
+  to 0.587-1.413 and the q10/q90 route files calibrated sensor 107 to 82.1% and
+  117.9% of its measured day total. Fixed in demand/intake.py::scenario_shares
+  by deriving the pair from one canonical edge and giving the other the
+  complement; all three variants now reproduce the measured total exactly while
+  the split moves, and write_counts publishes the same numbers. Deleting the
+  variant axis entirely was NOT done: it touches 210 call sites in 12 production
+  modules and 80 test files including frozen closure evidence, and it would
+  answer Gate S by fiat instead of measuring it.`
 - Suggested next action: `Run the two frozen studies on a machine with SUMO and
   network access: make demand && make direction-sensitivity for Gate S, and
   make dirsplit-volumes && make dirsplit-dataset && make dirsplit-benchmark for

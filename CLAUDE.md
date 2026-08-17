@@ -335,6 +335,47 @@ Goal arc, in order:
   was 0.4981, the anchor moves it to 0.52308 (δ = +0.100), max per-slot change
   0.025, and one real Level-1 target (2025-09-16 08:00, two-way total 127) moves
   from 63.0 to 66.2 vehicles.
+- DIRECTION VARIANTS MOVE DIRECTION, NEVER VOLUME (2026-08-16,
+  `demand/intake.py::scenario_shares`): the split artifact stores each edge's
+  own MARGINAL quantile, and two marginals do not sum to one. Feeding them
+  straight into `build_targets` made the q10 route file calibrate sensor 107 to
+  82.1% of its measured day total and the q90 file to 117.9% (pair sums
+  measured at 0.587-1.413 on the deployed profile; a single AM quarter went as
+  low as 0.587) — a VOLUME stress case wearing a direction label, against the
+  rule that measurements outrank every estimate, and against the plan's own
+  invariant 1. Fixed by deriving the pair from ONE canonical edge (lowest ID,
+  stable) and giving the other the complement, so every variant reproduces the
+  measured two-way total exactly while the split moves: verified 100.0% of the
+  measured day total on all three variants, 08:00 N/S 70.1/56.9 (q50),
+  89.9/37.1 (q10), 53.8/73.2 (q90), always summing to the measured 127. The
+  five single-direction stations' level-1 targets are byte-identical across
+  variants. `demand/publication.py::write_counts` applies the same split, so
+  the counts handed to SUMO are the ones the PFE aimed at. The MARGINAL values
+  are untouched in the artifact, because that is exactly what the level-2
+  ceiling and the level-3 prior need.
+- WHY AN UNMEASURED CARRIAGEWAY IS CONSTRAINED AT ALL (researched 2026-08-16,
+  after the fair question "should we constrain roads we have not measured?").
+  Not constraining is not neutral — it is the strongest claim available:
+  * the PFE's parsimony objective pulls every unconstrained edge to ZERO (this
+    project's own root-caused finding, ARCHITECTURE.md section C.1), so
+    dropping the level-3 prior asserts that the opposite side of a measured
+    two-way street carries no traffic;
+  * conservation alone does not rescue it. Measured on the tracked bounds
+    artifact: the structural ceiling on these edges is 450-1057 veh/quarter
+    (5-12x their measured twin) and for 1076's twin there is NO structural
+    bound at all, while the dirsplit ceiling sits at 1.3-2.7x the measured
+    twin (median 2.1x). The model bound is the only thing keeping the
+    unmeasured side within an order of magnitude of the measured one;
+  * the literature says the same: link-count OD estimation is underdetermined
+    (Cascetta 1984; Marzano/Papola/Simonelli), so without an informative prior
+    the OBJECTIVE decides the value, not the evidence, and Castillo et al.'s
+    observability analysis is what leaves these edges at [0, capacity].
+  The safeguards are what make it honest, and they are already in place: the
+  bound is a CEILING only (the floor was deleted 2026-08-06 after measuring it
+  binding at the floor in 40.1% of edge-quarters, i.e. manufacturing vehicles),
+  and the relaxation ladder surrenders bounds FIRST (`RUNG_NOBND_TOL1`), before
+  purpose quotas, before priors, and long before any measured band is widened.
+  A ceiling can only prevent invention; it can never cause it.
 - One ID space across data/model/sim/map. One coordinate system (WGS84). Time = ISO datetime / abstract index — never "row in the 2025 file".
 - `NormalProfile.flowAt/calmAt(edgeId, qi, dayOfWeek)`: dayOfWeek (0=Mon) MUST be derived from the ACTIVE provider's epoch (2025 starts Wednesday, 2027 Friday) — never from qi alone.
 

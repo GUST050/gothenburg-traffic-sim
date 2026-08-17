@@ -127,6 +127,27 @@ och miljöns egress-policy nekar `trafikkdata-api.atlas.vegvesen.no` (403 på
 CONNECT). Bytet gjordes på den starkaste evidens som går att få här —
 leave-city-out och leave-station-out. Beskriv inte Gate M som avgjord.
 
+**Invariant 1 uppfylld 2026-08-16 (efter en superfluitetsgranskning av q10/q90)**
+
+Granskningen visade att q10/q90 är TVÅ objekt under ett namn. Som per-kant
+MARGINALGRÄNSER bär de vikt: det strukturella (konservering + kapacitet) taket
+på en omätt körbana är 450–1057 fordon/kvart, 5–12× dess mätta tvilling, och
+för 1076:s tvilling saknas det helt, medan modelltaket ligger på 1,3–2,7×
+(median 2,1×). Utan constraint driver PFE:ns parsimony-mål kanten till NOLL —
+ett starkare påstående än något band. Som DEMAND-VARIANTER var de däremot
+trasiga: varje kant tog sin egen marginalkvantil, så paret summerade till
+0,587–1,413 och q10/q90-routefilerna kalibrerade sensor 107 till 82,1 % respektive
+117,9 % av dess uppmätta dagstotal. Fixat i `demand/intake.py::scenario_shares`:
+paret härleds från EN kanonisk kant och den andra får komplementet, så alla tre
+varianter återger den uppmätta totalen exakt medan riktningen flyttas (mätt:
+100,0 % på alla tre; kl. 08:00 N/S 70,1/56,9, 89,9/37,1, 53,8/73,2, alltid summa
+127). `write_counts` publicerar samma siffror. Marginalvärdena i artefakten är
+orörda — det är precis vad Level-2-taket och Level-3-priorn behöver.
+
+Att ta bort variantaxeln helt gjordes INTE: den rör 210 anropsställen i 12
+produktionsmoduler och 80 testfiler inklusive frysta closure-bevis, och skulle
+besvara Gate S genom dekret i stället för mätning.
+
 **Vad som återstår för att avgöra grindarna**
 
 - Gate S: `make demand` för 2025-09-16 historical, sedan
