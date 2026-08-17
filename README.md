@@ -79,6 +79,27 @@ make all
 make serve
 ```
 
+`make serve` needs nothing but Python's standard library — the map, the
+historical/forecast animation and every already-built scenario work on a
+fresh clone before `pip install -r requirements.txt` has ever succeeded.
+Only the endpoints that actually run a simulation (recalibration, closures,
+signal studies) need the packages in `requirements.txt` and SUMO; each one
+reports its own error if they are missing, instead of taking the server
+down with it.
+
+**Om `localhost:8000` säger ERR_CONNECTION_REFUSED:** ingen server lyssnar —
+webbläsaren kan inte säga mer än så, men terminalen kan. Kör `python3
+serve.py` i repo-roten och läs vad som skrivs ut:
+
+- `Serving web/ + scenario-API på http://localhost:8000` → servern lever;
+  ladda om sidan (samma terminalfönster måste stå kvar öppet).
+- `Kan inte lyssna på port 8000` → något annat program har porten. Kör
+  `make serve PORT=8001` och öppna http://localhost:8001 i stället.
+- `Hittar inte web/data/network.geojson` → kartdatan är inte byggd i den
+  här kopian; kör `make data`.
+- En Python-`Traceback` → skicka den vidare; det är den enda felsökningen
+  webbläsaren själv aldrig kan visa.
+
 **Close roads from the map:** with `make serve` running, open
 **Vägavstängning**. One workspace handles all road-closing scopes: simulate
 the active period, optimize a window within the active day, or search a

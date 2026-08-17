@@ -248,6 +248,40 @@ Goal arc, in order:
   LESSON: no admin action whose server-side work outlives a reasonable
   browser request lifetime should ever be tied to a single blocking HTTP
   call — start + poll, always.
+- LOCALHOST REFUSED (2026-08-17): Gustav's browser showed
+  ERR_CONNECTION_REFUSED on localhost:8000 — nothing was listening. His
+  machine could not be inspected from here, so the work was to remove the
+  reproducible ways `make serve` can die before it binds, and to make the
+  remaining ones say why.
+  FOUND AND FIXED, the one real defect: `serve.py` imported
+  `signal_optimize` at module level for a single integer
+  (`SIGNAL_CONDITION_COUNT`), and that import pulls `run_scenario` →
+  **numpy**, `signal_lab` → `suggest_closure_time` → **scipy**, plus
+  pandas. Measured directly: those three were the ONLY third-party packages
+  serve.py needed at import time, and every other import in the file is
+  stdlib or `traffic_sim.*` (also stdlib-only). So a machine where any one
+  of the scientific stack is missing or broken — `numba==0.60.0` refuses
+  newer Pythons, `lightgbm` needs libomp on macOS, a numpy 2.x bump breaks
+  either — could not open the MAP, which needs none of them. The process
+  died on a traceback in a terminal the user may never look at, and the
+  browser can only ever report "refused". The import is now lazy
+  (`optimize_signal_conditions()` + a PEP 562 module `__getattr__`, so the
+  constant still has exactly one owner and cannot drift), and the endpoint
+  that reads it is the one that shells out to signal_optimize.py anyway.
+  Verified with a real import blocker: serve.py imports, binds, and serves
+  index.html, `/api/ping` and network.geojson with numpy/pandas/scipy/numba/
+  lightgbm/sklearn/osmnx/shapely/pyproj/sumolib all made unimportable.
+  Pinned by `TestStaticServingNeedsNoScientificStack`.
+  ALSO, so a refused connection stops being mute: `--port` /
+  `$TRAFFIC_SIM_PORT` / `make serve PORT=8001` for an occupied port; an
+  EADDRINUSE bind failure prints the `lsof` command and the alternate-port
+  invocation instead of a traceback; a missing `web/data/network.geojson`
+  says "kör `make data`". README gained a symptom→cause list for exactly
+  this screen.
+  LESSON: the static app and the simulation stack are separate products
+  sharing one process. A dependency only the simulator needs must never be
+  on the file server's import path — the failure it causes is invisible
+  from the browser, which is where the user is standing.
 
 ## The data
 - Source: Göteborgs Stad (Felicia Gauffin Jatta, Stadsbyggnadsförvaltningen). 15-minute two-way vehicle counts ("Antal passager"), all of 2025.

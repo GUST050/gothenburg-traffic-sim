@@ -130,6 +130,8 @@ forecast:
 test:
 	python3 -m pytest tests/ -q
 
-# Web app + scenario API (click-to-close in the map needs this server)
+# Web app + scenario API (click-to-close in the map needs this server).
+# Another program already on port 8000?  make serve PORT=8001
+PORT ?= 8000
 serve:
-	python3 serve.py
+	python3 serve.py --port $(PORT)
