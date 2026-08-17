@@ -58,6 +58,18 @@ which model may continue. See `AGENTS.md`.
   present in this sandbox. Gate M needs the raw Norwegian volumes; the open API
   is refused by this environment's proxy, not by the code. Nothing in the
   sensitivity tool or the benchmark may be promoted to release evidence.`
+- Deployment change (2026-08-16, user-directed): `dirsplit/predict.py now
+  writes the tournament winner by default — the hour x day-type D-factor pooled
+  toward 0.5, no street features — importing benchmark.ShrunkDFactor so what
+  ships is what was scored. Pairs are oriented from published geometry
+  (verified to reproduce features.py radial_cos to 3 decimals), so the deployed
+  path needs neither an OSM download nor model.pkl. q10/q90 are leave-city-out
+  residual quantiles of the same model: wider and measured rather than narrow
+  and unvalidated, which loosens the level-2 ceiling on unmeasured
+  carriageways (1076 at 07:00: measured 50 admits ~136 instead of ~72) and
+  widens Monte Carlo spread. Gate M is still INCONCLUSIVE under its frozen
+  rule; the switch rests on leave-city-out and leave-station-out only, and
+  --central-model lightgbm is the rollback.`
 - Suggested next action: `Run the two frozen studies on a machine with SUMO and
   network access: make demand && make direction-sensitivity for Gate S, and
   make dirsplit-volumes && make dirsplit-dataset && make dirsplit-benchmark for

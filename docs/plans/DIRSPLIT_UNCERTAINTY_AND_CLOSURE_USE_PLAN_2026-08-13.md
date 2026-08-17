@@ -22,7 +22,7 @@ produktintegration har påbörjats.
 |---|---|---|
 | 0A — lokalt 107-ankare | **KLAR** | `data_in/sensors.json` (`directional_reference`), `traffic_sim/intake/sensors.py` (`DirectionalReference`, fail-closed validering), `traffic_sim/intake/direction_anchor.py`, `demand/intake.py::load_anchored_direction_split`, 37 tester i `tests/test_direction_anchor.py` |
 | 0B — matched-seed-känslighet | **BYGGD, EJ KÖRD** | `tools/measure_direction_decision_sensitivity.py`, förregistrering i `validation/direction_decision_sensitivity_registration_v1.json`, 33 tester. Kräver en kalibrerad demand-build + SUMO |
-| 1 — dataset v2 + turnering | **BYGGD, DELVIS KÖRD** | `dirsplit/dataset.py` (v2-tabell med råa antal, datum, `day_block_id`, missingness), `dirsplit/benchmark.py` (fyra modeller, tre foldfamiljer, bootstrap över oberoende block, fryst Gate M-regel), observability v2 i `dirsplit/coverage.py`, 71 tester |
+| 1 — dataset v2 + turnering | **BYGGD, DELVIS KÖRD; vinnaren deployad** | `dirsplit/dataset.py` (v2-tabell med råa antal, datum, `day_block_id`, missingness), `dirsplit/benchmark.py` (fyra modeller, tre foldfamiljer, bootstrap över oberoende block, fryst Gate M-regel), observability v2 i `dirsplit/coverage.py`, 71 tester |
 | 2–4 — Gren B/D, produkt | **EJ PÅBÖRJAD (korrekt)** | Ingen `dirsplit/scenarios.py`, inget `DemandEnsembleManifest`, ingen monthly/warm/API/UI-ändring |
 
 **Mätt i Fas 0A (verkligt utfall, 2026-08-16):** transfermodellens flödesviktade
@@ -41,11 +41,64 @@ periodmedel för 107 var 0,4981 (i praktiken 50/50) mot stadens publicerade
 | `lightgbm_similarity` (rå) | 0,0682 (−6,5 %) | 0,0630 (−3,5 %) |
 | `lightgbm_similarity_shrunk` (deployad form) | 0,0628 (+2,1 %, CI [−0,0044, +0,0016]) | 0,0586 (+3,7 %, CI [−0,0075, +0,0037]) |
 
+**Kontrollkörning på exakt den population den deployade modellen anpassas till
+(`--hours weekday`, alla vardagstimmar, 1 800 rader, 81 grupper):**
+
+| Modell | leave-city-out | leave-station-out |
+|---|---|---|
+| `constant_5050` | MAE 0,0695 (referens) | MAE 0,0702 (referens) |
+| `shrunk_dfactor` | 0,0668 (**+4,0 %**, CI [−0,0049, −0,0007]) | 0,0669 (+4,7 %, CI [−0,0079, +0,0008]) |
+| `lightgbm_similarity` (rå) | 0,0773 (**−11,1 %**, CI [+0,0013, +0,0141] — signifikant SÄMRE än 50/50) | 0,0680 (+3,1 %) |
+| `lightgbm_similarity_shrunk` (tidigare deployad) | 0,0693 (+0,4 %, CI [−0,0029, +0,0023]) | 0,0678 (+3,4 %) |
+
 Den enklaste villkorade modellen — timme×dagtyp krympt mot 0,5, helt utan
-gatufeatures — slår alltså den deployade familjen på samma folds, och den rå
-LightGBM-modellen är sämre än 50/50. Gate M förblir ändå `INCONCLUSIVE` enligt
-den frysta regeln, eftersom den aggregerade tabellen saknar dygnsblock
-(ingen blocked-date-fold) och råa riktningsantal (ingen count-modell).
+gatufeatures — slår alltså den deployade familjen på samma folds i båda
+konfigurationerna, och den rå LightGBM-modellen är sämre än 50/50 (signifikant
+så på vardagspopulationen). Den tidigare deployade formen är statistiskt
+oskiljbar från 50/50 leave-city-out.
+
+VIKTIG NYANS: `shrunk_dfactor`:s förbättring är 4,0–4,7 %, alltså strax UNDER
+den frysta materialitetströskeln på 5 %. Även med dygnsblock skulle den frysta
+regeln därför mycket väl kunna rapportera `BASELINE` — "50/50 är inte slaget med
+tillräcklig marginal". Bytet av deployad centralmodell ska därför läsas som
+"bästa tillgängliga centralskattning, och strikt bättre än den föregående
+deployade", inte som "Gate M passerade". Gate M förblir `INCONCLUSIVE` enligt
+den frysta regeln, eftersom den aggregerade tabellen saknar dygnsblock (ingen
+blocked-date-fold) och råa riktningsantal (ingen count-modell).
+
+**Deployad centralmodell bytt 2026-08-16 (efter uttrycklig användarbeslut)**
+
+`dirsplit/predict.py --central-model dfactor` är nu default: den split som
+skrivs till `sumo/direction_split.json` kommer från turneringens vinnare —
+timme×dagtyp krympt mot 0,5, utan gatufeatures — i stället för de per-sensor
+similarity-viktade LightGBM-kvantilerna. Den deployade koden **importerar**
+`benchmark.ShrunkDFactor` i stället för att reimplementera den, så det som
+levereras är exakt det som mättes (pinnat av ett test som spionerar på klassen).
+Orienteringen av varje par görs per kant ur publicerad geometri
+(`geometry_orientation` återger `features.py`:s `radial_cos` på tre decimaler
+för samtliga sensorkanter), så deployvägen behöver varken OSM-nedladdning eller
+`model.pkl`.
+
+Deployad kurva: 0,546 kl. 06, 0,530 kl. 07, 0,469 kl. 15, ~0,48–0,49 nattetid —
+maximal avvikelse 4,6 pp från 50/50, i linje med det dokumenterade 5–8 pp-fyndet.
+q10/q90 är nu leave-city-out-RESIDUALKVANTILER från samma modell (uppmätt
+transferfel: bredast 0,40 vid 05–07, smalast 0,09 mitt på dagen), fortfarande
+märkta som OKALIBRERADE stressgränser.
+
+Två avsedda konsekvenser: (i) Level-2-taket på en omätt körbana blir betydligt
+lösare i morgonrusningen (sensor 1076 kl. 07: uppmätta 50 tillåter ~136 på andra
+sidan mot ~72 tidigare) — ett tak kan bara hindra överskott, aldrig skapa
+trafik, så ett bredare uppmätt band är den konservativa riktningen och exakt vad
+planen menar med att osäkra empiriska bounds inte ska bli hårda fysiska
+constraints; (ii) de tre demandvarianterna sprider isär mer, så
+Monte Carlo-konfidensen på kartan sjunker — mätt osäkerhet som blir synlig.
+
+ÄRLIG STATUS: Gate M:s frysta regel rapporterar fortfarande `INCONCLUSIVE`,
+eftersom blocked-date-folden och count-modellen kräver de råa norska volymerna
+och miljöns egress-policy nekar `trafikkdata-api.atlas.vegvesen.no` (403 på
+CONNECT). Bytet gjordes på den starkaste evidens som går att få här —
+leave-city-out och leave-station-out — och är reversibelt med en flagga
+(`--central-model lightgbm`). Beskriv inte Gate M som avgjord.
 
 **Vad som återstår för att avgöra grindarna**
 
@@ -55,6 +108,9 @@ den frysta regeln, eftersom den aggregerade tabellen saknar dygnsblock
 - Gate M: `make dirsplit-volumes && make dirsplit-dataset && make
   dirsplit-benchmark` — den råa hämtningen är blockerad i den nuvarande
   miljön (proxyn nekar `trafikkdata-api.atlas.vegvesen.no`), inte i koden.
+  Den deployade centralmodellen är redan bytt till turneringens vinnare (se
+  ovan); grinden avgör om det bytet står sig även på dygnsblock och
+  count-modellen, och `--central-model lightgbm` är rollback.
 
 ## Beslut i korthet
 

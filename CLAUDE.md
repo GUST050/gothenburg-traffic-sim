@@ -477,9 +477,16 @@ Goal arc, in order:
        partially pooled toward 0.5, with NO street features — beats 50/50 by
        +4.5% leave-city-out (CI [−0.0053, −0.0006]) and +6.4% leave-station-out;
        the deployed shrunk LightGBM manages +2.1%/+3.7% with CIs spanning zero;
-       the raw LightGBM is WORSE than 50/50 (−6.5%/−3.5%). Gate M nevertheless
-       reports INCONCLUSIVE by its own rule, because the aggregate has no day
-       blocks and no raw counts. Do not quote these as a decided verdict.
+       the raw LightGBM is WORSE than 50/50 (−6.5%/−3.5%). Repeated on the exact
+       population the deployed profile fits (`--hours weekday`, 1 800 rows):
+       `shrunk_dfactor` +4.0% LCO (CI [−0.0049, −0.0007]) / +4.7% LSO, the raw
+       LightGBM −11.1% LCO with a CI entirely on the WRONG side of zero, and the
+       previously deployed shrunk form +0.4% LCO — statistically indistinguish-
+       able from 50/50. NOTE the effect size: 4–4.7% sits just BELOW the frozen
+       5% materiality bar, so even with day blocks the rule could well report
+       BASELINE. Gate M reports INCONCLUSIVE either way, because the aggregate
+       has no day blocks and no raw counts. Do not quote these as a decided
+       verdict.
      - `dirsplit/coverage.py` gained observability v2: an evidence profile with
        seven separate dimensions (measurement level, static domain, temporal
        support, feature compatibility, effective sample size, calibration
@@ -492,10 +499,48 @@ Goal arc, in order:
        for baseline and candidate, reusing the existing `run_condition`/
        `paired_comparison` runners. It is diagnostic (`release_evidence: false`),
        append-only, and fails closed to INCONCLUSIVE without a demand build.
-     GATES STILL OPEN: Gate S needs `make demand && make direction-sensitivity`;
-     Gate M needs `make dirsplit-volumes && make dirsplit-dataset && make
-     dirsplit-benchmark`. Nothing in Fas 2–4 (residual scenarios, ensemble
-     manifests, monthly/warm/API/UI integration) may be built until they pass.
+     GATE S STILL OPEN: it needs `make demand && make direction-sensitivity`.
+     Nothing in Fas 2–4 (residual scenarios, ensemble manifests,
+     monthly/warm/API/UI integration) may be built until it passes.
+   - DEPLOYED CENTRAL MODEL CHANGED (2026-08-16, `dirsplit/predict.py
+     --central-model dfactor`, now the default): the split written to
+     `sumo/direction_split.json` is the tournament's winning model — the hour ×
+     day-type D-factor pooled toward 0.5, with NO street features — instead of
+     the per-sensor similarity-weighted LightGBM quantiles. The deployed code
+     imports `benchmark.ShrunkDFactor` rather than reimplementing it, so what
+     ships is literally what was scored (pinned by a test that spies on the
+     class). Each pair is still oriented per edge, from published geometry
+     (`geometry_orientation` reproduces `features.py`'s `radial_cos` to 3
+     decimals on every sensor edge — verified), so the deployed path no longer
+     needs an OSM download or `model.pkl` at all.
+     The deployed curve: toward-centre 0.546 at 06:00, 0.530 at 07:00, 0.469 at
+     15:00, ~0.48–0.49 at night — a maximum deviation of 4.6 pp from 50/50,
+     matching the documented 5–8 pp finding and nothing like the old Gaussian
+     80/20. q10/q90 are now leave-city-out RESIDUAL quantiles of the same model
+     (measured transfer error, widest at the 05–07 peak at ~0.40, narrowest
+     midday at ~0.09) instead of a quantile model whose coverage was never
+     checked. They remain labelled UNCALIBRATED stress bounds.
+     TWO CONSEQUENCES, both intended and both worth knowing:
+     (i) the level-2 ceiling on an unmeasured carriageway is now much looser at
+     the AM peak (sensor 1076, 07:00: a measured 50 admits up to ~136 on the
+     other side, against ~72 under the old narrow band) — a ceiling can only
+     prevent excess, never manufacture traffic, so a wider measured band is the
+     conservative direction, and it is exactly what the plan means by not
+     letting uncertain empirical bounds act as hard physical constraints;
+     (ii) the three demand variants now spread further apart, so Monte Carlo
+     confidence numbers on the map will be lower — that is measured uncertainty
+     becoming visible, not a regression.
+     HONEST STATUS OF THIS DECISION: Gate M's frozen rule still reports
+     `INCONCLUSIVE`, because the blocked-date fold and the count model need the
+     raw Norwegian volumes and this environment's egress policy refuses
+     `trafikkdata-api.atlas.vegvesen.no` (403 on CONNECT — a policy denial, not
+     a code problem). The deployment was made at the user's explicit direction
+     on the strongest evidence obtainable here: leave-city-out and
+     leave-station-out on the tracked aggregate, where `shrunk_dfactor` beats
+     50/50 (+4.5% LCO, bootstrap CI excluding zero) and the deployed LightGBM
+     does not. It is reversible in one flag (`--central-model lightgbm`), and
+     the blocked-date fold remains the open question. Do not describe Gate M as
+     decided.
    - REMAINING: UK DfT integration for more training breadth.
 
 ## Rules — do / never

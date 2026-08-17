@@ -184,9 +184,15 @@ def screen_two_way_stations(observations: Sequence[Observation]
 
 def restrict_to_supported_hours(observations: Sequence[Observation]
                                 ) -> list[Observation]:
-    """Weekday 06–20 only: the band the deployed model was trained on."""
+    """Weekday 06–20 only: the band the LightGBM model was trained on."""
     return [obs for obs in observations
             if not obs.is_weekend and obs.hour in SUPPORTED_HOURS]
+
+
+def restrict_to_weekdays(observations: Sequence[Observation]
+                         ) -> list[Observation]:
+    """Every weekday hour — exactly the population the deployed D-factor fits."""
+    return [obs for obs in observations if not obs.is_weekend]
 
 
 def orient_toward_centre(observations: Sequence[Observation]) -> list[Observation]:
@@ -717,6 +723,8 @@ def tournament(observations: Sequence[Observation], *, profile_kind: str,
     observations, one_way = screen_two_way_stations(observations)
     if hours == "supported":
         observations = restrict_to_supported_hours(observations)
+    elif hours == "weekday":
+        observations = restrict_to_weekdays(observations)
     if not observations:
         raise ValueError("no toward-centre observations to evaluate")
     columns = list(FEATURE_NAMES)
@@ -791,11 +799,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--profile-features",
                         choices=("total", "directional", "none"), default="total",
                         help="Which profile-feature semantics to evaluate.")
-    parser.add_argument("--hours", choices=("all", "supported"), default="all",
+    parser.add_argument("--hours", choices=("all", "weekday", "supported"),
+                        default="all",
                         help="all = every hour the source reports (weekend and "
                              "off-hours support is then measured, not assumed); "
-                             "supported = weekday 06-20, the band the deployed "
-                             "model was trained on.")
+                             "weekday = every weekday hour, the population the "
+                             "deployed D-factor profile fits; supported = "
+                             "weekday 06-20, the band the LightGBM model was "
+                             "trained on.")
     parser.add_argument("--out", type=Path, default=REPORT_PATH)
     args = parser.parse_args(argv)
 

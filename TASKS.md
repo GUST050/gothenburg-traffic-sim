@@ -23,9 +23,14 @@ owners, states and approval formulas are not active workflow rules. See
   built and partially run: on the tracked aggregate the simplest conditional
   model (shrunk_dfactor) beats the deployed LightGBM family, whose raw form
   loses to 50/50 — but Gate M is INCONCLUSIVE by its own frozen rule because
-  the aggregate has no day blocks and no raw counts. Gren B/D, schemas,
-  monthly, warm-state, API and UI remain untouched.`
-- Suggested next action: `Decide the two gates with real runs, in either order.
+  the aggregate has no day blocks and no raw counts. The DEPLOYED central
+  profile was nevertheless switched to that winner at the user's explicit
+  direction (dirsplit/predict.py --central-model dfactor, now the default,
+  rollback with --central-model lightgbm); q10/q90 are now leave-city-out
+  residual quantiles of the same model. Gren B/D, schemas, monthly, warm-state,
+  API and UI remain untouched.`
+- Suggested next action: `Rebuild demand so the new central profile and the 107
+  anchor reach the artifacts (make demand), then decide the two gates.
   Gate S: make demand (2025-09-16 historical), then make direction-sensitivity.
   Gate M: make dirsplit-volumes (blocked by the proxy in the current sandbox),
   then make dirsplit-dataset && make dirsplit-benchmark. Only a YES on Gate S
