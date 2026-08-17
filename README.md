@@ -69,6 +69,14 @@ the same interface without touching map/render code.
 
 ## Running
 
+**Bara titta på kartan?** Den publicerade versionen kräver ingen dator av
+dig alls: <https://gust050.github.io/gothenburg-traffic-sim/>. Karta,
+2025 års historik, 2027-prognosen och de färdigbyggda scenarierna ligger
+där (`.github/workflows/pages.yml` publicerar `web/` vid varje push till
+`main`). Att köra *nya* avstängningar kräver fortfarande en lokal server —
+den knappen döljer sig själv på den publicerade sidan, eftersom det inte
+finns någon simulator bakom den.
+
 ```bash
 pip install -r requirements.txt
 

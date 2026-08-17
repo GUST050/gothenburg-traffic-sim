@@ -1,0 +1,77 @@
+name: publish map
+
+# The web app is static and every artifact it reads is tracked in web/data/,
+# so the map, the 2025 history, the 2027 forecast and the already-built
+# scenarios can be served from GitHub Pages with no server at all. serve.py
+# stays the way to run a NEW simulation: the closure/recalibration UI
+# feature-detects /api/ping and hides itself when there is nothing behind it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: read the repo, write a Pages deployment, and prove the
+# job's identity to the deploy action. Nothing here needs write access to
+# the repository itself.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one midway — a half-replaced
+# site is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Publishing a site that loads but shows "ingen data" is the failure
+      # mode worth catching here: every one of these files is fetched by the
+      # app on load, and a truncated or malformed one only shows up in the
+      # browser. Checked before upload, so a broken build fails the workflow
+      # instead of replacing a working site.
+      - name: Check the published data is present and parseable
+        run: |
+          set -eu
+          for f in web/index.html web/app.js web/data/network.geojson \
+                   web/data/flows.json web/data/flows_forecast.json \
+                   web/data/normal_profile.json web/data/scenarios/index.json; do
+            test -s "$f" || { echo "saknas eller tom: $f"; exit 1; }
+          done
+          python3 - <<'PY'
+          import json, pathlib, sys
+          for name in ("network.geojson", "flows.json", "flows_forecast.json",
+                       "normal_profile.json", "scenarios/index.json"):
+              path = pathlib.Path("web/data") / name
+              try:
+                  json.loads(path.read_text())
+              except json.JSONDecodeError as exc:
+                  sys.exit(f"{path} är inte giltig JSON: {exc}")
+          print("web/data ok")
+          PY
+
+      # enablement turns Pages on through the API on the first run, so the
+      # site does not sit waiting on someone finding the right settings
+      # page. If the token is not allowed to, the step fails with that as
+      # the reason and Settings -> Pages -> Source: GitHub Actions is the
+      # one-time manual equivalent.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
