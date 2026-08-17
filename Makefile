@@ -80,6 +80,13 @@ dirsplit-dataset:
 dirsplit-predict:
 	python3 -m dirsplit.predict
 
+# Diagnostic: do Gothenburg's OWN sensors carry intraday directional signal for
+# a two-way sensor's split, and how large is the location bias that stops a
+# neighbour's profile from being read as that split? Writes a non-release
+# artifact; no gate may be decided from it.
+local-direction-evidence:
+	python3 -m tools.measure_local_direction_evidence
+
 # Gate M: is there a robust conditional direction signal, or is 50/50 the
 # honest central estimate? `--table legacy` (the tracked aggregate) is what is
 # runnable today and CANNOT decide the gate — the blocked-date fold and the

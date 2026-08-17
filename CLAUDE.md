@@ -486,9 +486,9 @@ Goal arc, in order:
      (b) Real two-way city streets are MILDLY asymmetric: typical weekday-daytime deviation from 50/50 is only 5–8 pp (55/45), NOT the 80/20 the old Gaussian estimate produced. The Gaussian AM/PM decomposition over-attributes — both directions peak in the morning, just slightly unevenly.
      (c) Leave-city-out MAE ≈ baseline overall (+8.6% Oslo — most Gothenburg-like, +1.8% Trondheim, worse Bergen/Stavanger): the transferable signal is real but small. The model's value is CALIBRATION (mild, empirically-grounded splits) rather than large error reduction.
      Deployed via dirsplit/predict.py → sumo/direction_split.json (pair-normalised, clamped [0.1,0.9], hourly→96 slots). make demand auto-prefers the model over the Gaussian fallback. Sensor 1074's edges flagged EXTRAPOLATION in coverage (94th pctl) — carried into predictions. estimate_directions.py kept only as fallback when model.pkl is absent.
-   - UPGRADED (same day): similarity-weighted training (Gaussian kernel toward the Gothenburg edges' features, bandwidth=median), PER-SENSOR locally weighted models ("each road trained for itself" — new sensors get their own model on retrain), and QUANTILE regression q10/q50/q90. Domain-matched leave-city-out (stations resembling ours, locally weighted like the deployment): Oslo +11.1%, Trondheim −0.9%, Bergen/Stavanger worse (their streets are ~exactly 50/50 — nothing to predict). The interval IS the honest product: predict.py writes edge_shares(_q10/_q90); build_sumo_demand builds THREE demand variants (q50/q10/q90 — all still 100% GEH<5, the sum constraint is split-invariant); run_scenario spreads Monte Carlo seeds over the variants so direction uncertainty reaches the per-edge confidence.
+   - UPGRADED (same day) — **HISTORICAL: this whole model was RETIRED and DELETED 2026-08-16; see the tournament entry below for what actually ships.** It was: similarity-weighted training (Gaussian kernel toward the Gothenburg edges' features, bandwidth=median), PER-SENSOR locally weighted models ("each road trained for itself" — new sensors get their own model on retrain), and QUANTILE regression q10/q50/q90. DO NOT read "each road trained for itself" as meaning a road's split is derived from that road's OWN measurements — it never was. It meant the Norwegian training rows were re-weighted toward each Gothenburg edge's static street features. No Gothenburg sensor can produce a direction-share curve at all (a Total station delivers only the two-way sum; the five single-direction stations measure one carriageway each), so the intraday SHAPE has always been transferred from Norway and only the LEVEL is local. This wording misled the project owner in 2026-08-17 and is corrected here rather than deleted, because the same misreading is easy to repeat. The figures it quoted (Oslo +11.1%, Trondheim −0.9%) are also superseded: the tracked `train_report.json` for the same domain-matched metric reads Oslo −12.5%, Trondheim +1.6%, Bergen −27.9%, Stavanger −15.6% — i.e. that model was WORSE than 50/50 in three of four held-out cities. The interval mechanics it describes do still hold in outline: predict.py writes edge_shares(_q10/_q90); build_sumo_demand builds THREE demand variants; run_scenario spreads Monte Carlo seeds over the variants — but see the variant pair-sum fix under "DIRECTION VARIANTS MOVE DIRECTION, NEVER VOLUME".
    - Local ground truth check: sensor 1076 (the only direction-measured street) has weekday AM/PM ratio 0.90 in its single direction — nearly symmetric, confirming the mild-split finding for these central mixed-use streets.
-   - FINAL METHODOLOGY (2026-07-02, "absolut bäst" pass): (i) mirrored-duplicate rows removed — train on toward-centre direction only (predict.py orients each pair accordingly); (ii) station-level weight normalisation — hourly rows within a station are correlated, every station gets equal total influence; (iii) James-Stein-style SHRINKAGE calibrated on pooled leave-city-out domain predictions: λ=0.256 — only ~26% of predicted deviation from 50/50 is transferable signal; deployment uses 0.5+λ(pred−0.5), intervals re-centred. Pooled domain MAE: shrunk 0.0559 beats 50/50's 0.0564 (and raw 0.0654). By construction the shrunk estimate cannot be worse than 50/50 in expectation. Literature anchor: this is the traffic-engineering D-factor; FHWA/TxDOT typical urban values 0.50–0.59 — our shrunk predictions (0.47–0.52 ±0.1) sit exactly there.
+   - FINAL METHODOLOGY (2026-07-02, "absolut bäst" pass) — **also HISTORICAL, retired with the model above.** It was: (i) mirrored-duplicate rows removed — train on toward-centre direction only (predict.py orients each pair accordingly); (ii) station-level weight normalisation — hourly rows within a station are correlated, every station gets equal total influence; (iii) James-Stein-style SHRINKAGE calibrated on pooled leave-city-out domain predictions. The λ quoted here for years was 0.256 with pooled domain MAE 0.0559 vs 50/50's 0.0564; the tracked `train_report.json` actually reads **λ=0.289, 0.0557 vs 0.0565** — the file was refitted at some point and this line was never updated, so trust the artifact over any prose. Only points (i) and (ii) survive in spirit: the deployed `ShrunkDFactor` still orients each pair toward the centre (now from published geometry, not an OSM download) and still pools toward 0.5, but it uses hour × day type and NO street features. Literature anchor still stands: this is the traffic-engineering D-factor; FHWA/TxDOT typical urban values 0.50–0.59, and the deployed curve's 0.469–0.546 sits inside that.
    - Gothenburg's own trafikmängder Power BI (public link on goteborg.se) may hold per-direction city measurements near the clusters — check manually; a local directional measurement would beat all of the above as calibration.
    - DECISION-GATED REWORK (2026-08-16, plan
      `docs/plans/DIRSPLIT_UNCERTAINTY_AND_CLOSURE_USE_PLAN_2026-08-13.md`): an
@@ -615,6 +615,48 @@ Goal arc, in order:
      "UK DfT integration for more training breadth" idea is dropped: the
      tournament found street features do not transfer, so more street-feature
      breadth is not what the evidence asks for.)
+   - LOCAL CORRIDOR EVIDENCE (2026-08-17,
+     `tools/measure_local_direction_evidence.py` →
+     `validation/local_direction_evidence_v1.json`, `release_evidence: false`).
+     Origin: the project owner assumed the deployed split already derived its
+     intraday shape from the surrounding sensors. It does not — the shape is
+     transferred from 81 Norwegian stations and only the LEVEL is local — and
+     the assumption was worth measuring rather than dismissing, because the five
+     single-direction stations DO measure a carriageway every 15 minutes and one
+     of them shares a street with the only two-way station. MEASURED on the 2025
+     reference year, weekdays:
+     * **The opportunity is real.** Sensor 1076's measured edge is southbound
+       Skånegatan 239.9 m from 107's southbound edge, bearing delta 3.5° — same
+       corridor, same direction. Its ratio against 107's two-way total moves
+       35.41 pp over the day, and the node the 133/134/2276 triple shares moves
+       26.88 pp, against the transferred Norwegian curve's 7.70 pp. Local data
+       measurably contains more time structure, and it describes the real street.
+     * **The shortcut is dead.** That ratio is NOT a direction share: its
+       flow-weighted daily mean is 0.6946 where the published southbound share
+       is 3100/6500 = 0.4769 — a **21.77 pp location bias**, far outside the
+       reference's 0.002 tolerance. 1076 stands elsewhere (~4 800 veh/day
+       southbound vs 107's ~3 100) with intersections between, so the ratio
+       measures a difference in PLACE, not in DIRECTION. Pinned by
+       `test_the_donor_ratio_is_materially_above_the_published_share`.
+     * **Conservation does not rescue it.** Node 26355153 is only half observed:
+       47.83% of its outflow arrives on legs nobody measures. That slack is
+       exactly the freedom a free network inference would have — and exactly
+       where a solver could hide residual error in the split instead of learning
+       direction. It is the same error-sink risk the TOT plan rejects, now with a
+       measured size.
+     CONSEQUENCE: local corridor evidence is taken in as a SHAPE source, never as
+     a share, with the level still coming from `directional_reference`. The
+     candidate ladder L0–L3 is specified in
+     `docs/plans/TOTAL_SENSOR_DAILY_DIRECTION_SPLIT_PLAN_2026-08-16.md` (section
+     "Lokal korridorevidens"), where L0 — the naive ratio — is PREREGISTERED AS
+     REJECTED with the 21.77 pp as its recorded reason. Donor discovery is
+     data-driven from street name, geometry and registry semantics, so a future
+     TOT sensor gains donors without code changes. NOT DONE and not decidable
+     from this: the measurements are diagnostics without preregistration, and
+     Gate D must freeze the L family and the masked validation design first. One
+     structural argument does favour this route over Gate M's: it needs no
+     external data, while Gate M is reachable only by hand-supplying the deleted
+     Norwegian volumes.
 
 ## Rules — do / never
 - DO route all flow access through `flowAt(edgeId, t)`. NEVER fetch data inside render code.
