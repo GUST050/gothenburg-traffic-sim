@@ -1866,10 +1866,15 @@ evidence does not run downstream of it.
 5. data_in/sensors.json metadata file (A's last hard-coding removed).
 
 ## Parked (validated studies, not on the critical path)
-`dirsplit/` transfer model — now level 3's engine for street/time priors;
-its leave-city-out validation (λ=0.26, matches the city's measured 52/48 at
-107) is the evidence it belongs there. `estimate_directions.py` (Gaussian),
-`build_dataset.py` (GNN prep — revisit only at high sensor density).
+`dirsplit/` transfer model — now level 3's engine for street/time priors. Its
+central profile was re-chosen in 2026-08 by a leakage-free tournament
+(`dirsplit/benchmark.py`): the per-sensor LightGBM quantile models lost to a
+flat 50/50 leave-city-out and were removed together with the Gaussian
+`estimate_directions.py` fallback and the Norwegian acquisition client; the
+deployed model is an hour × day-type D-factor pooled toward 50/50, re-levelled
+at load time by the city's published local D-factor where one exists (sensor
+107's 52/48 for 2025). `build_dataset.py` (GNN prep — revisit only at high
+sensor density).
 
 ## Key references
 - Bell & Shield (1996); Chen et al. (2009); Yang & Sun — **Path Flow

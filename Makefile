@@ -26,14 +26,11 @@ deso:
 sumo-net:
 	python3 build_sumo_net.py
 
-# Direction split: use the TRAINED dirsplit model when it exists,
-# fall back to the Gaussian AM/PM estimate otherwise.
+# Direction split: the deployed hour x day-type D-factor profile (the model
+# that won dirsplit/benchmark.py's leakage-free tournament). It needs only the
+# tracked training table and the published network geometry.
 demand:
-	@if [ -f data/dirsplit/model.pkl ]; then \
-		python3 -m dirsplit.predict; \
-	else \
-		python3 estimate_directions.py; \
-	fi
+	python3 -m dirsplit.predict
 	python3 build_sumo_demand.py --begin 00:00 --end 24:00
 
 # Fast variant: morning window only (quicker sims while iterating)
@@ -70,16 +67,9 @@ benchmark-speed:
 		--write /private/tmp/gs-speed-benchmark.json
 
 # ── Direction-split model (dirsplit/) ─────────────────────────────────────
-# Full fetch takes hours (394 stations, throttled APIs) — run overnight.
-
-dirsplit-stations:
-	python3 -m dirsplit.fetch_norway --stations
-
-dirsplit-volumes:
-	python3 -m dirsplit.fetch_norway --volumes
-
-dirsplit-match:
-	python3 -m dirsplit.match
+# The Norwegian acquisition client was removed 2026-08-16 together with the
+# LightGBM quantile models it fed; the deployed profile is fitted from the
+# tracked training table.
 
 dirsplit-coverage:
 	python3 -m dirsplit.coverage
@@ -87,16 +77,14 @@ dirsplit-coverage:
 dirsplit-dataset:
 	python3 -m dirsplit.dataset
 
-dirsplit-train:
-	python3 -m dirsplit.train
-
 dirsplit-predict:
 	python3 -m dirsplit.predict
 
 # Gate M: is there a robust conditional direction signal, or is 50/50 the
-# honest central estimate? Needs the v2 raw table (dirsplit-dataset after
-# dirsplit-volumes); `--table legacy` runs the partial tournament on the
-# tracked aggregate, which cannot decide the gate.
+# honest central estimate? `--table legacy` (the tracked aggregate) is what is
+# runnable today and CANNOT decide the gate — the blocked-date fold and the
+# count model need raw per-station volumes, which this repository no longer
+# fetches.
 dirsplit-benchmark:
 	python3 -m dirsplit.benchmark
 

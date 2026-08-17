@@ -7,7 +7,8 @@ the LP's parsimony-zero.
 Run after dirsplit dataset + build_data:
   python3 volume_priors.py
 
-Model: LightGBM on the dirsplit training table — target log(1 + veh/h per
+Model: LightGBM on the dirsplit training table (the tracked Norwegian
+aggregate; unrelated to the retired direction-split quantile models) — target log(1 + veh/h per
 direction), inputs = the shared street features + hour. Leave-city-out MAE
 is reported so the prior's uncertainty is known, and the q10/q90 spread sets
 the per-edge weight in the PFE (wide band ⇒ weak pull).

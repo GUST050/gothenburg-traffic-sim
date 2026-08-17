@@ -502,8 +502,8 @@ Goal arc, in order:
      GATE S STILL OPEN: it needs `make demand && make direction-sensitivity`.
      Nothing in Fas 2–4 (residual scenarios, ensemble manifests,
      monthly/warm/API/UI integration) may be built until it passes.
-   - DEPLOYED CENTRAL MODEL CHANGED (2026-08-16, `dirsplit/predict.py
-     --central-model dfactor`, now the default): the split written to
+   - DEPLOYED CENTRAL MODEL CHANGED, LEGACY PATHS REMOVED (2026-08-16): the
+     split written to
      `sumo/direction_split.json` is the tournament's winning model — the hour ×
      day-type D-factor pooled toward 0.5, with NO street features — instead of
      the per-sensor similarity-weighted LightGBM quantiles. The deployed code
@@ -538,10 +538,42 @@ Goal arc, in order:
      on the strongest evidence obtainable here: leave-city-out and
      leave-station-out on the tracked aggregate, where `shrunk_dfactor` beats
      50/50 (+4.5% LCO, bootstrap CI excluding zero) and the deployed LightGBM
-     does not. It is reversible in one flag (`--central-model lightgbm`), and
-     the blocked-date fold remains the open question. Do not describe Gate M as
-     decided.
-   - REMAINING: UK DfT integration for more training breadth.
+     does not. The blocked-date fold remains the open question — do not
+     describe Gate M as decided.
+   - WHAT WAS DELETED WITH IT (2026-08-16, at the user's request: the old way
+     gone, not merely defaulted away, because a dormant second implementation
+     is how two direction estimates drift apart): `dirsplit/train.py`,
+     `data/dirsplit/model.pkl` (the 14 MB LightGBM package),
+     `dirsplit/fetch_norway.py` + `dirsplit/api.py` + `dirsplit/match.py` (the
+     Norwegian acquisition client), `estimate_directions.py` (the Gaussian
+     AM/PM fallback), `data/dirsplit/stations_norway.json`,
+     `data/dirsplit/geocode_cache.json`, and predict.py's `--central-model`
+     rollback flag. `prior_flows.py` (level-3 priors) was rewritten in the same
+     pass: it used to load the LightGBM package and re-run the prediction with
+     its OWN re-orientation and shrinkage arithmetic — a second direction
+     implementation that would have kept serving the retired model after the
+     switch — and now reads `sumo/direction_split.json` through
+     `demand.intake.load_direction_split`, so the local anchor applies there
+     too and the pairing comes from the validated registry rather than a fresh
+     OSM lookup. Verified: it still produces all 5 opposite-direction priors.
+     WHAT WAS KEPT, DELIBERATELY: `data/dirsplit/training_table.csv` (the
+     tracked Norwegian aggregate) is the deployed profile's evidence base — the
+     D-factor curve is refitted from it on every run, so deleting it would make
+     the shipped numbers unreproducible; `train_report.json` and
+     `stations_matched.json` remain as the historical record; `dataset.py` and
+     `benchmark.py` remain because they are the evidence machinery that chose
+     the deployed model and would decide Gate M.
+     CONSEQUENCE TO KNOW: with the acquisition client gone the raw per-station
+     volumes cannot be re-fetched from this repository, so Gate M's
+     blocked-date fold and count model are reachable only if those CSVs are
+     supplied by hand into `data/dirsplit/volumes/`. If the project ever wants
+     NO external data at all, the honest endpoint is the plan's Exit A — 50/50
+     plus sensor 107's local anchor — not a frozen curve whose source was
+     deleted.
+   - REMAINING: nothing in this subsystem needs new external data. (The earlier
+     "UK DfT integration for more training breadth" idea is dropped: the
+     tournament found street features do not transfer, so more street-feature
+     breadth is not what the evidence asks for.)
 
 ## Rules — do / never
 - DO route all flow access through `flowAt(edgeId, t)`. NEVER fetch data inside render code.

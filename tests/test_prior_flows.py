@@ -1,102 +1,108 @@
-"""Unit tests for prior_flows.py's opposite_edge() — resolving the unmeasured
-carriageway/direction a level-3 prior is written for. The rest of the module
-(main()) needs a trained dirsplit model + real network/flow files and is
-exercised only via the live pipeline, matching this project's existing
-pattern for data-heavy orchestration scripts."""
+"""Level-3 priors read the deployed direction split; they never re-derive it.
 
+Until 2026-08-16 prior_flows.py loaded the LightGBM package and re-ran the
+prediction with its own re-orientation and shrinkage arithmetic — a second
+implementation of the direction split that would have kept serving the retired
+model after the central profile changed. It now reads the same artifact the
+demand builder reads, so the published local anchor applies here too and there
+is exactly one direction estimate in the program.
+"""
+import json
 import sys
 from pathlib import Path
 
-import networkx as nx
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from prior_flows import measured_edge_shares, opposite_edge
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import prior_flows
+from prior_flows import opposite_series, single_direction_pairs
 
 
-def node(lat, lon):
-    return {"y": lat, "x": lon}
+class TestPairsComeFromTheValidatedRegistry:
+    def test_every_single_direction_station_is_paired(self):
+        pairs = single_direction_pairs()
+        assert {sensor for sensor, _measured, _opposite in pairs} == {
+            "1074", "1076", "133", "134", "2276"}
+
+    def test_the_two_way_station_has_no_unmeasured_twin(self):
+        assert "107" not in {sensor for sensor, _m, _o in single_direction_pairs()}
+
+    def test_the_reviewed_opposite_edge_is_used_not_a_fresh_lookup(self):
+        """1076's opposite carriageway sits 82.5 m away, outside build_data's
+        80 m snap rule — only the reviewed record knows which edge it is."""
+        pairs = {sensor: (measured, opposite)
+                 for sensor, measured, opposite in single_direction_pairs()}
+        assert pairs["1076"] == ("30420757_30421744_0",
+                                 "559960490_1305379743_0")
+
+    def test_a_station_without_a_registered_opposite_is_skipped(self, tmp_path):
+        registry = tmp_path / "sensors.json"
+        registry.write_text(json.dumps({"schema_version": 1, "sensors": [
+            {"sensor_id": "999", "approved_edge_ids": ["m"]}]}))
+        assert single_direction_pairs(registry) == []
 
 
-class TestOppositeEdgeSameWay:
-    def test_simple_twoway_reverse_edge(self):
-        """A single OSM way with edges in both directions (1->2 and 2->1) —
-        the cheap G.has_edge(v, u) path, no distance search needed."""
-        G = nx.MultiDiGraph()
-        G.add_node(1, **node(57.700, 11.900))
-        G.add_node(2, **node(57.701, 11.900))
-        G.add_edge(1, 2, key=0)
-        G.add_edge(2, 1, key=0)
-        assert opposite_edge(G, "1_2_0", 57.7005, 11.900) == "2_1_0"
+class TestPriorArithmetic:
+    def test_the_opposite_follows_from_the_measured_share(self):
+        measured = np.array([100.0, 100.0])
+        share = np.array([0.5, 0.8])
+        assert opposite_series(measured, share) == [100.0, 25.0]
 
-    def test_picks_lowest_key_when_multiple_reverse_edges(self):
-        G = nx.MultiDiGraph()
-        G.add_node(1, **node(57.700, 11.900))
-        G.add_node(2, **node(57.701, 11.900))
-        G.add_edge(1, 2, key=0)
-        G.add_edge(2, 1, key=0)
-        G.add_edge(2, 1, key=1)
-        assert opposite_edge(G, "1_2_0", 57.7005, 11.900) == "2_1_0"
+    def test_a_missing_quarter_stays_missing(self):
+        values = opposite_series(np.array([np.nan]), np.array([0.5]))
+        assert values == [None]
+
+    def test_a_degenerate_share_cannot_produce_infinity(self):
+        assert opposite_series(np.array([50.0]), np.array([0.0])) == [None]
 
 
-class TestOppositeEdgeDividedCarriageway:
-    def test_falls_back_to_nearby_antiparallel_edge(self):
-        """No direct reverse edge — a separate, nearby, oppositely-bearing
-        edge (the other carriageway of a divided road) must be found."""
-        G = nx.MultiDiGraph()
-        G.add_node(1, **node(57.700, 11.900))
-        G.add_node(2, **node(57.701, 11.900))      # edge 1->2 bears ~north
-        G.add_node(3, **node(57.701, 11.9002))
-        G.add_node(4, **node(57.700, 11.9002))      # edge 3->4 bears ~south
-        G.add_edge(1, 2, key=0)
-        G.add_edge(3, 4, key=0)
-        sensor_lat, sensor_lon = 57.7005, 11.900
-        assert opposite_edge(G, "1_2_0", sensor_lat, sensor_lon) == "3_4_0"
-
-    def test_no_candidate_within_range_returns_none(self):
-        """A one-way street with nothing running the other way nearby."""
-        G = nx.MultiDiGraph()
-        G.add_node(1, **node(57.700, 11.900))
-        G.add_node(2, **node(57.701, 11.900))
-        G.add_edge(1, 2, key=0)
-        assert opposite_edge(G, "1_2_0", 57.7005, 11.900) is None
-
-    def test_far_away_antiparallel_edge_is_ignored(self):
-        """An oppositely-bearing edge that exists but is too far away (not
-        the same physical carriageway) must not be matched."""
-        G = nx.MultiDiGraph()
-        G.add_node(1, **node(57.700, 11.900))
-        G.add_node(2, **node(57.701, 11.900))
-        G.add_node(3, **node(57.701, 12.100))   # ~12 km east — a different street
-        G.add_node(4, **node(57.700, 12.100))
-        G.add_edge(1, 2, key=0)
-        G.add_edge(3, 4, key=0)
-        assert opposite_edge(G, "1_2_0", 57.7005, 11.900) is None
+@pytest.fixture(scope="module")
+def written(tmp_path_factory):
+    out = tmp_path_factory.mktemp("priors") / "prior_flows.json"
+    prior_flows.main(["--out", str(out)])
+    return json.loads(out.read_text())
 
 
-class TestMeasuredEdgeShares:
-    """The dirsplit model only ever predicts on the toward-centre edge of a
-    pair (train.py trains on radial_cos > 0 rows exclusively) — e_meas's own
-    share must be re-derived by orientation, not assumed to equal the raw
-    model output. Found 2026-07-06: for 4 of 5 single-direction Gothenburg
-    sensors, e_meas itself points AWAY from centre."""
+class TestTheWrittenPriors:
+    def test_every_unmeasured_carriageway_gets_a_prior(self, written):
+        assert len(written["edges"]) == 5
 
-    def test_measured_edge_is_toward_centre_passthrough(self):
-        q10, q50, q90 = np.array([0.4]), np.array([0.5]), np.array([0.6])
-        r10, r50, r90 = measured_edge_shares(0.6, -0.6, q10, q50, q90)
-        assert r10 is q10 and r50 is q50 and r90 is q90
+    def test_the_band_is_ordered_low_below_high(self, written):
+        for record in written["edges"].values():
+            pairs = [(low, high) for low, high in
+                     zip(record["prior_low"], record["prior_high"])
+                     if low is not None and high is not None]
+            assert pairs
+            assert all(low <= high for low, high in pairs)
 
-    def test_measured_edge_away_from_centre_complements_and_swaps_band(self):
-        # canonical (toward-centre) edge's predicted share is 0.3-0.4-0.7
-        q10, q50, q90 = np.array([0.3]), np.array([0.4]), np.array([0.7])
-        r10, r50, r90 = measured_edge_shares(-0.6, 0.6, q10, q50, q90)
-        # e_meas's own share is the complement, with q10/q90 swapped
-        assert r10 == pytest.approx(1 - 0.7)
-        assert r50 == pytest.approx(1 - 0.4)
-        assert r90 == pytest.approx(1 - 0.3)
+    def test_the_prior_sits_inside_its_own_band(self, written):
+        for record in written["edges"].values():
+            triples = [(low, mid, high) for low, mid, high in
+                       zip(record["prior_low"], record["prior"],
+                           record["prior_high"])
+                       if None not in (low, mid, high)]
+            assert triples
+            assert all(low <= mid <= high for low, mid, high in triples)
 
-    def test_tie_treated_as_measured_toward_centre(self):
-        q10, q50, q90 = np.array([0.4]), np.array([0.5]), np.array([0.6])
-        r10, r50, r90 = measured_edge_shares(0.0, 0.0, q10, q50, q90)
-        assert r10 is q10 and r50 is q50 and r90 is q90
+    def test_provenance_names_the_deployed_artifact(self, written):
+        for record in written["edges"].values():
+            assert "direction_split.json" in record["provenance"]
+            assert "anchor" in record["provenance"]
+
+    def test_it_carries_one_day_of_quarters(self, written):
+        assert written["n_quarters"] == 96
+        for record in written["edges"].values():
+            assert len(record["prior"]) == 96
+
+
+class TestNoSecondDirectionImplementation:
+    def test_the_module_does_not_load_a_model_package(self):
+        source = Path("prior_flows.py").read_text()
+        assert "pickle" not in source
+        assert "MODEL_PATH" not in source
+
+    def test_it_uses_the_shared_loader(self):
+        source = Path("prior_flows.py").read_text()
+        assert "from demand.intake import load_direction_split" in source

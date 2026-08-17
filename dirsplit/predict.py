@@ -2,33 +2,37 @@
 Predict the direction split for the Gothenburg sensor edges and write
 sumo/direction_split.json — consumed by build_sumo_demand.py.
 
-Usage (after train.py):
+Usage:
   python3 -m dirsplit.predict
 
-Each Total sensor pair is predicted by ITS OWN locally weighted model
-(trained toward that sensor's street characteristics) at three quantiles:
-  q50 — the point estimate used as the default split
-  q10/q90 — the uncertainty interval; build_sumo_demand builds demand
-  VARIANTS at these bounds so the Monte Carlo scenario spread (and the
-  confidence number on the map) includes direction uncertainty.
+The central profile is the hour x day-type D-factor, partially pooled toward
+50/50 and using no street features at all. It is the model that won the
+leakage-free tournament in dirsplit/benchmark.py: on the population it serves
+it beats 50/50 leave-city-out with a bootstrap interval excluding zero, while
+the boosted per-sensor family it replaced (removed 2026-08-16) was
+indistinguishable from 50/50 at best and significantly worse in its raw form.
+The deployed code imports that class rather than reimplementing it, so what
+ships is what was measured.
 
-Mechanics per pair: predict quantile shares for the FIRST directed edge;
-the second edge gets the complement (1 − q mirrors the quantiles). The pair
-therefore always sums to 1 at every quantile. Hourly → 96 slots by linear
-interpolation, clamped to [0.1, 0.9].
+Per pair: the toward-centre edge takes the profile, the other edge the
+complement, so the pair always sums to 1. q10/q90 are leave-city-out RESIDUAL
+quantiles of the same model — measured transfer error, not a calibrated
+interval — and build_sumo_demand builds demand VARIANTS at those bounds so the
+Monte Carlo scenario spread (and the confidence number on the map) includes
+direction uncertainty. Hourly values become 96 slots by linear interpolation,
+clamped to [0.1, 0.9].
 
-Predictions are ESTIMATES and labelled as such, with the coverage status
-(applicability domain) attached per edge. New sensors in network.geojson
-are picked up automatically after a retrain.
+Which side of a pair points toward the centre is computed from the published
+network geometry, so this path needs no OSM download. New sensors in
+network.geojson are picked up automatically.
 
 What this file does NOT contain: a station's published local D-factor. Where
 the validated registry holds a verified `directional_reference` (today sensor
 107 alone), the profile written here is re-levelled at LOAD time — see
 traffic_sim/intake/direction_anchor.py and demand/intake.py's
-load_anchored_direction_split. Anchoring lives there, not here, so that a split
-produced by the Gaussian fallback (estimate_directions.py) is anchored too, and
-so every consumer sees the same shares. The numbers in this file are therefore
-the model's own estimate, before local evidence is applied.
+load_anchored_direction_split. Anchoring lives there, not here, so every
+consumer sees the same shares. The numbers in this file are therefore the
+model's own estimate, before local evidence is applied.
 """
 
 from __future__ import annotations
@@ -36,17 +40,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import pickle
 from pathlib import Path
 
 import numpy as np
 
 from .config import COVERAGE_REPORT, TARGET_CENTRE
 from .geo import bearing_deg, radial_cos
-from .train import FEATURE_NAMES, MODEL_PATH, PROFILE_FEATURES
 
 GEO_PATH     = Path("web/data/network.geojson")
-PROFILE_PATH = Path("web/data/normal_profile.json")
 # The validated registry is the source of truth for which edge is the
 # opposite carriageway of a single-direction station. It is recorded there,
 # verified, rather than re-derived per run: 1076's opposite side sits 82.5 m
@@ -56,34 +57,6 @@ SENSOR_REGISTRY = Path("data_in/sensors.json")
 OUT_PATH     = Path("sumo/direction_split.json")
 
 CLAMP = (0.1, 0.9)
-
-
-def sensor_profile_features(profiles: dict, edge_id: str) -> dict[str, float]:
-    """Same shape statistics as dataset.profile_features, from the September
-    normal profile (96 slots → hourly)."""
-    p = profiles.get(edge_id)
-    if not p or not p.get("weekday"):
-        return {"am_pm_ratio": 1.0, "peak_hour_am": 8.0,
-                "peak_hour_pm": 16.0, "weekend_ratio": 0.3}
-
-    def hourly(arr):
-        return {h: (lambda v: sum(v) / len(v) * 4 if v else 0.0)
-                ([x for x in arr[h * 4:(h + 1) * 4] if x is not None])
-                for h in range(24)}
-
-    wd = hourly(p["weekday"])
-    we = hourly(p.get("weekend") or [None] * 96)
-    am = max(range(5, 13),  key=lambda h: wd[h])
-    pm = max(range(13, 21), key=lambda h: wd[h])
-    am_sum = sum(wd[h] for h in range(6, 10))
-    pm_sum = sum(wd[h] for h in range(15, 19))
-    wd_all, we_all = sum(wd.values()), sum(we.values())
-    return {
-        "am_pm_ratio":   round(am_sum / pm_sum, 4) if pm_sum > 0 else 1.0,
-        "peak_hour_am":  float(am),
-        "peak_hour_pm":  float(pm),
-        "weekend_ratio": round(we_all / wd_all, 4) if wd_all > 0 else 0.3,
-    }
 
 
 def hourly_to_slots(hourly: np.ndarray) -> list[float]:
@@ -166,89 +139,6 @@ def geometry_orientation(props: dict, feat_geometry: list) -> float:
     mid_lon = (start[0] + end[0]) / 2
     to_centre = bearing_deg(mid_lat, mid_lon, *TARGET_CENTRE)
     return radial_cos(travel, to_centre)
-
-
-def predict_lightgbm(sensors: dict[str, list[dict]], *, verbose: bool = True
-                     ) -> dict[str, dict]:
-    """The legacy central profile: per-sensor similarity-weighted quantiles."""
-    from .features import (edge_bearing_from_graph, edge_features,
-                           load_city_graph)
-
-    with open(MODEL_PATH, "rb") as f:
-        pkg = pickle.load(f)
-    sensors_models = pkg["sensors"]
-    with open(PROFILE_PATH) as f:
-        profiles = json.load(f)["profiles"]
-    coverage = _coverage_status()
-    G = load_city_graph("goteborg")
-
-    def edge_feats(props: dict) -> dict:
-        u, v, k = map(int, props["id"].split("_"))
-        data = G.get_edge_data(u, v, k)
-        bearing = edge_bearing_from_graph(G, u, v, k, data)
-        return edge_features("goteborg", props["_mid_lat"], props["_mid_lon"],
-                             bearing, data)
-
-    def predict_hours(model, feats: dict, prof: dict) -> np.ndarray:
-        rows = [[feats[c] for c in FEATURE_NAMES]
-                + [prof[c] for c in PROFILE_FEATURES]
-                + [np.sin(2 * np.pi * h / 24), np.cos(2 * np.pi * h / 24), 0.0]
-                for h in range(24)]
-        return np.clip(model.predict(np.array(rows)), 0.0, 1.0)
-
-    result: dict[str, dict] = {}
-    if verbose:
-        print(f"{'Sensor':<8} {'kl 07 (q10–q50–q90)':>22} "
-              f"{'kl 16 (q10–q50–q90)':>22}")
-    for sid, pair in sorted(sensors.items()):
-        if len(pair) != 2:
-            print(f"{sid:<8} skipped — {len(pair)} edges")
-            continue
-        if sid not in sensors_models:
-            print(f"{sid:<8} skipped — no model (retrain: make dirsplit-train)")
-            continue
-        prof = sensor_profile_features(profiles, pair[0]["id"])
-
-        # The model is trained on toward-centre directions ONLY — orient the
-        # pair so the toward-centre edge is predicted, the other mirrored.
-        f0, f1 = edge_feats(pair[0]), edge_feats(pair[1])
-        if f1["radial_cos"] > f0["radial_cos"]:
-            pair = [pair[1], pair[0]]
-            f0 = f1
-        q = {name: np.clip(predict_hours(m, f0, prof), *CLAMP)
-             for name, m in sensors_models[sid].items()}
-        # quantile crossing guard: enforce q10 ≤ q50 ≤ q90 per hour
-        q10 = np.minimum.reduce([q["q10"], q["q50"], q["q90"]])
-        q90 = np.maximum.reduce([q["q10"], q["q50"], q["q90"]])
-        q50 = np.clip(q["q50"], q10, q90)
-
-        # Shrinkage calibration from leave-city-out validation: the interval
-        # keeps its width but is re-centred on the shrunk point estimate.
-        lam = pkg.get("shrinkage_lambda", 1.0)
-        q50_s = 0.5 + lam * (q50 - 0.5)
-        shift = q50_s - q50
-        q10, q50, q90 = (np.clip(a + shift, *CLAMP) for a in (q10, q50, q90))
-
-        e0, e1 = pair[0]["id"], pair[1]["id"]
-        s10, s50, s90 = (hourly_to_slots(a) for a in (q10, q50, q90))
-        result[sid] = {
-            "method": "dirsplit-lightgbm per-sensor quantile "
-                      "(similarity-weighted, trained on Norwegian directional counts)",
-            "coverage_status": {p["id"]: coverage.get(p["id"], "?") for p in pair},
-            "edge_shares":     {e0: [round(x, 3) for x in s50],
-                                e1: [round(1 - x, 3) for x in s50]},
-            "edge_shares_q10": {e0: [round(x, 3) for x in s10],
-                                e1: [round(1 - x, 3) for x in s90]},
-            "edge_shares_q90": {e0: [round(x, 3) for x in s90],
-                                e1: [round(1 - x, 3) for x in s10]},
-            "note": "ESTIMATED interval by a model trained on cities with "
-                    "measured directions — direction is not measured in "
-                    "Gothenburg. q10/q90 feed demand variants for Monte Carlo.",
-        }
-        if verbose:
-            print(f"{sid:<8} {q10[7]:.2f}–{q50[7]:.2f}–{q90[7]:.2f}"
-                  f"{'':>8}{q10[16]:.2f}–{q50[16]:.2f}–{q90[16]:.2f}")
-    return result
 
 
 def fit_dfactor_profile(table_path: Path | None = None) -> dict:
@@ -397,13 +287,6 @@ def _coverage_status() -> dict[str, str]:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    parser.add_argument(
-        "--central-model", choices=("dfactor", "lightgbm"), default="dfactor",
-        help="dfactor (default): the hour x day-type D-factor that won the "
-             "leakage-free tournament — it beats 50/50 leave-city-out with a "
-             "bootstrap interval excluding zero, while the boosted family does "
-             "not. lightgbm: the previous per-sensor similarity-weighted "
-             "quantile models, kept for comparison and rollback.")
     parser.add_argument("--out", type=Path, default=OUT_PATH)
     args = parser.parse_args(argv)
 
@@ -411,16 +294,13 @@ def main(argv: list[str] | None = None) -> None:
         geo = json.load(f)
     sensors = collect_pairs(geo)
 
-    if args.central_model == "lightgbm":
-        result = predict_lightgbm(sensors)
-    else:
-        result = predict_dfactor(sensors, geo)
+    result = predict_dfactor(sensors, geo)
 
     args.out.parent.mkdir(exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(result, f, indent=1)
     print(f"Wrote {args.out}  ({len(result)} sensors, both directions, "
-          f"central model: {args.central_model})")
+          f"central model: shrunk D-factor)")
 
 
 if __name__ == "__main__":

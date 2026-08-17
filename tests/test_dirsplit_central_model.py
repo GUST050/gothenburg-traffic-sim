@@ -207,31 +207,25 @@ class TestTheLocalAnchorStillLandsOnTop:
         assert after[28] > before[28]          # the level moved up to 52/48
 
 
-class TestRollbackRemains:
-    def test_an_unknown_central_model_is_refused(self, tmp_path):
-        with pytest.raises(SystemExit):
-            predict.main(["--central-model", "whatever",
-                          "--out", str(tmp_path / "split.json")])
+class TestThereIsOnlyOneDeployedPath:
+    """The superseded LightGBM backend was removed, not merely defaulted away —
+    a dormant second implementation is how two direction estimates drift apart."""
 
-    def test_the_previous_model_is_still_reachable(self):
-        # Rollback must survive a rename of the deployed path.
-        assert callable(predict.predict_lightgbm)
+    def test_the_retired_backend_is_gone(self):
+        assert not hasattr(predict, "predict_lightgbm")
+        assert not Path("dirsplit/train.py").exists()
+        assert not Path("data/dirsplit/model.pkl").exists()
 
-    def test_the_default_is_the_measured_winner(self, tmp_path, monkeypatch):
-        recorded = {}
+    def test_the_gaussian_fallback_is_gone(self):
+        assert not Path("estimate_directions.py").exists()
 
-        def fake_dfactor(sensors, geo, verbose=True):
-            recorded["model"] = "dfactor"
-            return {}
+    def test_the_deployed_path_needs_no_model_package(self):
+        source = Path("dirsplit/predict.py").read_text()
+        assert "pickle" not in source
+        assert "load_city_graph" not in source
 
-        def fake_lightgbm(sensors, verbose=True):
-            recorded["model"] = "lightgbm"
-            return {}
-
-        monkeypatch.setattr(predict, "predict_dfactor", fake_dfactor)
-        monkeypatch.setattr(predict, "predict_lightgbm", fake_lightgbm)
-        predict.main(["--out", str(tmp_path / "split.json")])
-        assert recorded["model"] == "dfactor"
-        predict.main(["--central-model", "lightgbm",
-                      "--out", str(tmp_path / "split2.json")])
-        assert recorded["model"] == "lightgbm"
+    def test_running_it_writes_the_dfactor_profile(self, tmp_path):
+        out = tmp_path / "split.json"
+        predict.main(["--out", str(out)])
+        written = json.loads(out.read_text())
+        assert written["107"]["central_model"]["model"] == "shrunk_dfactor"

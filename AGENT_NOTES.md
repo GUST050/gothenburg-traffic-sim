@@ -37,14 +37,15 @@ which model may continue. See `AGENTS.md`.
   data/dirsplit/coverage_report.json (observability v2 added);
   tests/test_direction_anchor.py, tests/test_direction_decision_sensitivity.py,
   tests/test_dirsplit_v2.py (new); plan/TASKS/AGENT_NOTES/IMPROVEMENT_PLAN docs.`
-- Checks: `142 new tests pass (38 anchor, 33 sensitivity, 45 dirsplit v2, 26
-  deployed central model); with the existing dirsplit tests, 168 together. Full
-  suite run on a clean worktree of HEAD and on the final state: 321 failed /
-  4,458 passed versus 321 failed / 4,600 passed, and the two FAILED lists are
-  identical — no new failure, none fixed. Those 321 are this sandbox lacking
-  SUMO (spot-checked: SumoRuntimeError "cannot locate SUMO" on both sides). The
-  tournament was executed for real, in two population configurations; the
-  anchor and the new split were measured against the real 2025 flows.`
+- Checks: `The dirsplit set is 179 passing (anchor, sensitivity, dataset v2 and
+  tournament, deployed central model, rewritten level-3 priors). Full suite on
+  a clean worktree of HEAD versus the final state: 321 failed / 4,458 passed
+  versus 321 failed / 4,592 passed, with IDENTICAL failure lists — no
+  regression, and those 321 are this sandbox lacking SUMO. Every affected
+  module imports cleanly after the deletions; `dirsplit.predict` and
+  `prior_flows` were run for real and produce the deployed split and all five
+  opposite-direction priors. The tournament was executed in two population
+  configurations against the tracked aggregate.`
 - Decisions and evidence: `q10/q90 are re-levelled by the SAME shift as q50, so
   the stress band keeps its width in log-odds instead of collapsing onto the
   anchor or pretending to new spread. Anchor weights come from the measured
@@ -68,8 +69,17 @@ which model may continue. See `AGENTS.md`.
   and unvalidated, which loosens the level-2 ceiling on unmeasured
   carriageways (1076 at 07:00: measured 50 admits ~136 instead of ~72) and
   widens Monte Carlo spread. Gate M is still INCONCLUSIVE under its frozen
-  rule; the switch rests on leave-city-out and leave-station-out only, and
-  --central-model lightgbm is the rollback.`
+  rule; the switch rests on leave-city-out and leave-station-out only.
+  The superseded machinery was then DELETED, not left dormant: train.py,
+  model.pkl, fetch_norway/api/match, estimate_directions.py, the rollback flag
+  and their tests. prior_flows.py was rewritten to read the deployed split
+  through demand.intake instead of re-running the retired model with its own
+  re-orientation and shrinkage. The tracked training table stays: the deployed
+  curve is refitted from it on every run, so deleting it would make the shipped
+  numbers unreproducible. With the fetch client gone, Gate M is reachable only
+  if raw volumes are supplied by hand; a zero-external-data project should take
+  the plan's Exit A (50/50 + the 107 anchor) rather than freeze a curve whose
+  source was deleted.`
 - Suggested next action: `Run the two frozen studies on a machine with SUMO and
   network access: make demand && make direction-sensitivity for Gate S, and
   make dirsplit-volumes && make dirsplit-dataset && make dirsplit-benchmark for

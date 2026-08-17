@@ -93,12 +93,39 @@ planen menar med att osäkra empiriska bounds inte ska bli hårda fysiska
 constraints; (ii) de tre demandvarianterna sprider isär mer, så
 Monte Carlo-konfidensen på kartan sjunker — mätt osäkerhet som blir synlig.
 
+**Legacyvägen borttagen 2026-08-16 (samma användarbeslut).** Det gamla sättet
+är inte bara bortvalt som default utan raderat, eftersom en vilande andra
+implementation är precis hur två riktningsskattningar glider isär:
+`dirsplit/train.py`, `data/dirsplit/model.pkl` (14 MB), den norska
+hämtningsklienten (`fetch_norway.py`, `api.py`, `match.py`),
+`estimate_directions.py` (den gaussiska fallbacken), `stations_norway.json`,
+`geocode_cache.json` och `--central-model`-flaggan. `prior_flows.py` (Level-3)
+skrevs om i samma svep: den laddade tidigare LightGBM-paketet och körde
+prediktionen igen med EGEN omorientering och shrinkage — en andra
+riktningsimplementation som hade fortsatt servera den pensionerade modellen —
+och läser nu `sumo/direction_split.json` via
+`demand.intake.load_direction_split`, så ankaret gäller även där och parningen
+kommer från det validerade registret. Verifierat: fortfarande 5
+motriktningspriors.
+
+BEHÅLLET MED AVSIKT: `data/dirsplit/training_table.csv` är den deployade
+profilens evidensbas — kurvan anpassas från den vid varje körning, så att
+radera den skulle göra de levererade siffrorna oreproducerbara. `train_report.json`
+och `stations_matched.json` behålls som historisk dokumentation, `dataset.py`
+och `benchmark.py` som den evidensmaskin som valde modellen och skulle avgöra
+Gate M.
+
+FÖLJD ATT KÄNNA TILL: utan hämtningsklienten kan råa stationsvolymer inte
+hämtas om från repot, så Gate M:s blocked-date-fold och count-modell nås bara
+om CSV-filerna läggs in för hand i `data/dirsplit/volumes/`. Vill projektet ha
+noll extern data alls är den ärliga slutpunkten planens Exit A — 50/50 plus
+sensor 107:s lokala ankare — inte en fryst kurva vars källa raderats.
+
 ÄRLIG STATUS: Gate M:s frysta regel rapporterar fortfarande `INCONCLUSIVE`,
 eftersom blocked-date-folden och count-modellen kräver de råa norska volymerna
 och miljöns egress-policy nekar `trafikkdata-api.atlas.vegvesen.no` (403 på
 CONNECT). Bytet gjordes på den starkaste evidens som går att få här —
-leave-city-out och leave-station-out — och är reversibelt med en flagga
-(`--central-model lightgbm`). Beskriv inte Gate M som avgjord.
+leave-city-out och leave-station-out. Beskriv inte Gate M som avgjord.
 
 **Vad som återstår för att avgöra grindarna**
 
@@ -110,7 +137,8 @@ leave-city-out och leave-station-out — och är reversibelt med en flagga
   miljön (proxyn nekar `trafikkdata-api.atlas.vegvesen.no`), inte i koden.
   Den deployade centralmodellen är redan bytt till turneringens vinnare (se
   ovan); grinden avgör om det bytet står sig även på dygnsblock och
-  count-modellen, och `--central-model lightgbm` är rollback.
+  count-modellen. Rollback är git-historiken, inte en flagga: legacyvägen är
+  borttagen.
 
 ## Beslut i korthet
 

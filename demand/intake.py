@@ -75,8 +75,9 @@ def demand_metadata(*, start_date: str, days: int, source: str, begin: str,
         "direction_split": direction_split,
         "n_variants": n_variants,
         "note": "Total sensor counts split over the two directed edges using "
-                "the estimated time-of-day split (estimate_directions.py); "
-                "direction is not measured in the delivered data.",
+                "the estimated time-of-day split (dirsplit/predict.py's "
+                "D-factor profile, with any published local period anchor "
+                "applied); direction is not measured in the delivered data.",
     }
     if demand_spec is not None:
         meta["demand_spec"] = dict(demand_spec)
@@ -336,8 +337,7 @@ def load_anchored_direction_split() -> tuple[dict, list[dict]]:
     Anchoring happens HERE, at load time, rather than in dirsplit/predict.py,
     so every consumer of the split — level-1 targets, level-2 opposite-
     carriageway bounds, level-3 priors, the assignment field and the published
-    demand report — sees exactly the same shares, and so a split file produced
-    by the Gaussian fallback (estimate_directions.py) is anchored too.
+    demand report — sees exactly the same shares, whatever produced them.
 
     Returns ({} , []) when no split file exists; callers then fall back to an
     even split exactly as before.

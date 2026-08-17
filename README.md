@@ -190,26 +190,38 @@ prediction is trusted.
 
 **Deployed finding:** real two-way city streets are only *mildly* asymmetric
 — typical weekday deviation from 50/50 is 5–8 percentage points (e.g. 55/45),
-not the 80/20 an earlier, unvalidated Gaussian AM/PM heuristic
-(`estimate_directions.py`, kept only as a fallback when the trained model is
-absent) assumed. Predictions are James-Stein-shrunk toward 50/50 (only
-~26% of the raw predicted deviation is treated as transferable signal,
-calibrated against pooled leave-city-out error) and reported as q10/q50/q90
-— the three build three separate demand variants, and Monte Carlo seeds are
-spread across them so direction uncertainty reaches the displayed confidence.
+not the 80/20 an earlier, unvalidated Gaussian AM/PM heuristic assumed.
+
+A leakage-free tournament (`dirsplit/benchmark.py`: leave-city-out,
+leave-station-out and blocked-date folds, everything refitted inside each fold,
+bootstrapped over independent groups) then measured which model deserves to
+ship. The per-sensor LightGBM quantile models did not: on the population they
+served, their raw form was 11% *worse* than a flat 50/50 leave-city-out, and
+their shrunk deployed form was statistically indistinguishable from it. The
+winner is the simplest candidate — an hour × day-type D-factor pooled toward
+50/50, with no street features at all — which beats 50/50 by 4.0% with a
+bootstrap interval excluding zero. That model, and only that model, is now
+deployed; the boosted family, its trained package and the Norwegian
+acquisition client were removed in 2026-08.
+
+The deployed profile is a toward-centre curve (0.546 at 06:00 → 0.469 at
+15:00, at most 4.6 points from 50/50), oriented per edge from the published
+network geometry, with q10/q90 as *uncalibrated* stress bounds taken from the
+same model's leave-city-out residuals. Where the city publishes a local
+per-direction volume — today sensor 107's 3 400/3 100 for 2025 — that
+period aggregate is bound in the sensor registry and re-levels the estimated
+profile at load time, without ever being treated as 96 measured quarters.
 
 ```bash
-make dirsplit-stations   # station metadata (open API, no key)
-make dirsplit-volumes    # hourly volumes by direction (resumable)
-make dirsplit-match      # OSM matching + heading→bearing resolution
-make dirsplit-dataset    # assemble the shared training table
-make dirsplit-train      # per-sensor locally-weighted LightGBM quantile models
-make dirsplit-predict    # → sumo/direction_split.json (edge_shares_q10/q50/q90)
-make dirsplit-coverage   # are our sensor edges inside the training cloud?
+make dirsplit-dataset      # assemble the training tables (needs raw volumes)
+make dirsplit-predict      # → sumo/direction_split.json (edge_shares_q10/q50/q90)
+make dirsplit-benchmark    # the model tournament (Gate M)
+make dirsplit-coverage     # are our sensor edges inside the training cloud?
+make dirsplit-observability  # evidence profile per sensor edge
 ```
 
-`make demand` automatically prefers the trained model over the Gaussian
-fallback whenever `data/dirsplit/model.pkl` exists.
+`make demand` runs `dirsplit.predict` directly — there is one direction model
+and no fallback path to drift from it.
 
 Scenarios appear under the **Simulering** toggle in the web app: every
 simulated street is coloured by flow (including a genuine, honest zero —

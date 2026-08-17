@@ -813,7 +813,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.table == "v2":
         if not RAW_TABLE.exists():
             print(f"{RAW_TABLE} is missing — run `python3 -m dirsplit.dataset` "
-                  f"after fetching volumes (`make dirsplit-volumes`).")
+                  f"— raw per-station volumes must be supplied in "
+                  f"data/dirsplit/volumes/ first; this repository no longer "
+                  f"fetches them.")
             return 2
         observations = load_v2(RAW_TABLE, profile_kind=args.profile_features)
     else:

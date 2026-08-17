@@ -2,19 +2,33 @@
 Level-3 priors: learned flow estimates for the UNMEASURED opposite directions
 at single-direction stations.
 
-Run after dirsplit training + build_data:
+Run after build_data + dirsplit predict:
   python3 prior_flows.py [--date 2025-09-16]
 
 For each single-direction sensor (1074 V, 1076 S, 133 V, 134 SO, 2276 V) the
-opposite carriageway/direction is unmeasured. The validated dirsplit model
-(trained on Norwegian directional data, leave-city-out validated, shrinkage
-λ applied) predicts the measured direction's share s(t) of the two-way total;
-the prior for the opposite is then
+opposite carriageway is unmeasured. The deployed direction profile gives the
+measured direction's share s(t) of the two-way total; the prior for the
+opposite is then
 
     prior_opp(t) = measured(t) · (1 − s(t)) / s(t)     [q10/q90 band likewise]
 
 This is explicitly a PRIOR (level 3): Agent C pulls toward it softly, inside
 the level-2 bounds, and it can never override a measurement.
+
+ONE direction estimate, read not recomputed
+-------------------------------------------
+Until 2026-08-16 this module loaded the LightGBM package itself and re-ran the
+prediction, complete with its own re-orientation and shrinkage arithmetic. That
+made a second, parallel implementation of the direction split — and after the
+central model changed it would have kept serving the retired one. It now reads
+the SAME artifact the demand builder reads, through the same loader, so the
+published local D-factor anchor (traffic_sim/intake/direction_anchor.py) is
+respected here too and there is exactly one direction estimate in the program.
+
+The pairing comes from the validated sensor registry rather than from a fresh
+OSM lookup, for the same reason it does in demand/priors.py: 1076's opposite
+side sits 82.5 m away, just outside build_data's 80 m snap rule, and the
+reviewed record is the authority on which edge that is.
 
 Writes sumo/prior_flows.json.
 """
@@ -23,161 +37,97 @@ from __future__ import annotations
 
 import argparse
 import json
-import pickle
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from build_data import find_antiparallel_edge
-from dirsplit.features import edge_bearing_from_graph, edge_features, load_city_graph
-from dirsplit.predict import (CLAMP, hourly_to_slots, sensor_profile_features)
-from dirsplit.train import FEATURE_NAMES, MODEL_PATH, PROFILE_FEATURES
+from demand.intake import load_direction_split
 
-GEO_PATH     = Path("web/data/network.geojson")
-FLOWS_PATH   = Path("web/data/flows.json")
-PROFILE_PATH = Path("web/data/normal_profile.json")
-OUT_PATH     = Path("sumo/prior_flows.json")
+GEO_PATH        = Path("web/data/network.geojson")
+FLOWS_PATH      = Path("web/data/flows.json")
+SENSOR_REGISTRY = Path("data_in/sensors.json")
+OUT_PATH        = Path("sumo/prior_flows.json")
 
 
-def opposite_edge(G, e: str, lat: float, lon: float) -> str | None:
-    u, v, k = map(int, e.split("_"))
-    if G.has_edge(v, u):
-        return f"{v}_{u}_{min(G[v][u].keys())}"
-    opp = find_antiparallel_edge(G, u, v, k, lat, lon, max_dist_m=80)
-    return f"{opp[0]}_{opp[1]}_{opp[2]}" if opp else None
+def single_direction_pairs(registry_path: Path = SENSOR_REGISTRY
+                           ) -> list[tuple[str, str, str]]:
+    """[(sensor_id, measured_edge, opposite_edge)] for every one-way-measured
+    station. A two-way station measures its total and has no unmeasured twin."""
+    payload = json.loads(Path(registry_path).read_text())
+    rows = payload if isinstance(payload, list) else payload.get("sensors", [])
+    pairs = []
+    for row in rows:
+        measured = list(row.get("approved_edge_ids") or ())
+        opposite = (row.get("opposite_direction") or {}).get("edge_id")
+        if len(measured) != 1 or not opposite:
+            continue
+        pairs.append((str(row["sensor_id"]), measured[0], str(opposite)))
+    return pairs
 
 
-def measured_edge_shares(
-    rc_meas: float, rc_opp: float,
-    q10: np.ndarray, q50: np.ndarray, q90: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The model (q10/q50/q90) was predicted on whichever edge of the pair
-    points toward the centre (train.py keeps radial_cos > 0 rows only).
-    Re-derive e_meas's OWN share: unchanged if e_meas is that toward-centre
-    edge, else the complement — with the q10/q90 band swapping too, since
-    e_meas's upper bound is the canonical edge's LOWER bound and vice versa."""
-    if rc_meas >= rc_opp:
-        return q10, q50, q90
-    return 1 - q90, 1 - q50, 1 - q10
+def opposite_series(measured: np.ndarray, share: np.ndarray) -> list[float | None]:
+    """measured · (1 − s) / s, with missing quarters staying missing."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        values = measured * (1 - share) / share
+    return [None if not np.isfinite(value) else round(float(value), 1)
+            for value in values]
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--date", default="2025-09-16")
-    args = ap.parse_args()
+    ap.add_argument("--out", type=Path, default=OUT_PATH)
+    args = ap.parse_args(argv)
 
-    with open(MODEL_PATH, "rb") as f:
-        pkg = pickle.load(f)
-    lam = pkg.get("shrinkage_lambda", 1.0)
-
-    with open(GEO_PATH) as f:
-        geo = json.load(f)
     with open(FLOWS_PATH) as f:
         flows = json.load(f)["flows"]
-    with open(PROFILE_PATH) as f:
-        profiles = json.load(f)["profiles"]
-    geo_by_id = {feat["properties"]["id"]: feat for feat in geo["features"]}
+    # Each edge's OWN share at each quantile: the artifact already stores the
+    # per-edge value, so no re-orientation is needed here. For any edge,
+    # edge_shares_q10 is that edge's LOW share and edge_shares_q90 its HIGH one.
+    shares = {key: load_direction_split(key)
+              for key in ("edge_shares", "edge_shares_q10", "edge_shares_q90")}
+    if not shares["edge_shares"]:
+        raise SystemExit("no sumo/direction_split.json — run `make demand` or "
+                         "`python3 -m dirsplit.predict` first")
 
-    G = load_city_graph("goteborg")
     epoch = pd.Timestamp("2025-01-01")
     q0 = int((pd.Timestamp(args.date) - epoch) / pd.Timedelta(minutes=15))
 
     result: dict[str, dict] = {}
-    print(f"{'Sensor':<7} {'mätt kant → motriktning':<58} {'andel kl 08 (q10–q90)'}")
-    for feat in geo["features"]:
-        p = feat["properties"]
-        sid, level = p.get("sensor_id"), p.get("level")
-        if not sid or level in (None, "Total"):
-            continue   # only single-direction stations have an unmeasured twin
-        if sid not in pkg["sensors"]:
-            print(f"{sid:<7} no model — run dirsplit training")
+    print(f"{'Sensor':<7} {'mätt kant → motriktning':<58} "
+          f"{'andel kl 08 (q10–q90)'}")
+    for sensor_id, measured_edge, opposite_edge in single_direction_pairs():
+        profile = shares["edge_shares"].get(measured_edge)
+        if profile is None:
+            print(f"{sensor_id:<7} {measured_edge}: no direction estimate — skipped")
             continue
-
-        c = feat["geometry"]["coordinates"]
-        mid_lat = (c[0][1] + c[-1][1]) / 2
-        mid_lon = (c[0][0] + c[-1][0]) / 2
-        e_meas = p["id"]
-        e_opp = opposite_edge(G, e_meas, mid_lat, mid_lon)
-        if e_opp is None:
-            print(f"{sid:<7} {e_meas}: no opposite edge (one-way street?) — skipped")
-            continue
-
-        # The model is trained on toward-centre directions ONLY (train.py
-        # keeps radial_cos > 0 rows exclusively) — predict.py's Total-sensor
-        # pairs are reoriented before every prediction for exactly this
-        # reason. e_meas is NOT always the toward-centre edge (verified: 4 of
-        # 5 single-direction sensors' measured edge points AWAY from centre,
-        # radial_cos < 0) — feeding it directly, unmirrored, asks the model
-        # to extrapolate on inputs it never saw and mislabels the output as
-        # e_meas's own share. Mirror the same reorientation predict.py uses.
-        u, v, k = map(int, e_meas.split("_"))
-        data = G.get_edge_data(u, v, k)
-        bearing = edge_bearing_from_graph(G, u, v, k, data)
-        feats_meas = edge_features("goteborg", mid_lat, mid_lon, bearing, data)
-
-        ou, ov, ok = map(int, e_opp.split("_"))
-        opp_feat = geo_by_id.get(e_opp)
-        if opp_feat is not None:
-            oc = opp_feat["geometry"]["coordinates"]
-            opp_lat, opp_lon = (oc[0][1] + oc[-1][1]) / 2, (oc[0][0] + oc[-1][0]) / 2
-        else:
-            opp_lat, opp_lon = mid_lat, mid_lon
-        opp_data = G.get_edge_data(ou, ov, ok)
-        opp_bearing = edge_bearing_from_graph(G, ou, ov, ok, opp_data)
-        feats_opp = edge_features("goteborg", opp_lat, opp_lon, opp_bearing, opp_data)
-
-        meas_is_toward_centre = feats_meas["radial_cos"] >= feats_opp["radial_cos"]
-        feats = feats_meas if meas_is_toward_centre else feats_opp
-        prof = sensor_profile_features(profiles, e_meas)
-
-        rows = [[feats[cn] for cn in FEATURE_NAMES]
-                + [prof[cn] for cn in PROFILE_FEATURES]
-                + [np.sin(2 * np.pi * h / 24), np.cos(2 * np.pi * h / 24), 0.0]
-                for h in range(24)]
-        q = {name: np.clip(m.predict(np.array(rows)), *CLAMP)
-             for name, m in pkg["sensors"][sid].items()}
-        q10 = np.minimum.reduce(list(q.values()))
-        q90 = np.maximum.reduce(list(q.values()))
-        q50 = np.clip(q["q50"], q10, q90)
-        # shrinkage toward 50/50, interval re-centred (same rule as predict.py)
-        q50s  = 0.5 + lam * (q50 - 0.5)
-        shift = q50s - q50
-        q10, q50, q90 = (np.clip(a + shift, *CLAMP) for a in (q10, q50, q90))
-
-        # q10/q90/q50 above are the CANONICAL (toward-centre) edge's share —
-        # re-derive e_meas's own share (unchanged, or complemented+swapped).
-        q10, q50, q90 = measured_edge_shares(
-            feats_meas["radial_cos"], feats_opp["radial_cos"], q10, q50, q90)
-        s10, s50, s90 = (np.array(hourly_to_slots(a)) for a in (q10, q50, q90))
-        meas = np.array([v if v is not None else np.nan
-                         for v in flows[e_meas][q0:q0 + 96]], dtype=float)
-
-        def opp_series(share):
-            with np.errstate(divide="ignore", invalid="ignore"):
-                s = meas * (1 - share) / share
-            return [None if not np.isfinite(x) else round(float(x), 1)
-                    for x in s]
-
-        result[e_opp] = {
-            "sensor": sid, "measured_edge": e_meas,
-            "prior":     opp_series(s50),
-            # wider share → SMALLER opposite flow, so q90 share gives the low band
-            "prior_low":  opp_series(s90),
-            "prior_high": opp_series(s10),
-            "provenance": "level-3 learned prior (dirsplit model, shrinkage "
-                          f"λ={lam:.2f}) applied to the measured twin",
+        s50 = np.array(profile, dtype=float)
+        s10 = np.array(shares["edge_shares_q10"].get(measured_edge, profile),
+                       dtype=float)
+        s90 = np.array(shares["edge_shares_q90"].get(measured_edge, profile),
+                       dtype=float)
+        measured = np.array([value if value is not None else np.nan
+                             for value in flows[measured_edge][q0:q0 + 96]],
+                            dtype=float)
+        result[opposite_edge] = {
+            "sensor": sensor_id, "measured_edge": measured_edge,
+            "prior": opposite_series(measured, s50),
+            # A LARGER measured share leaves LESS for the other side, so the
+            # high share produces the low band.
+            "prior_low": opposite_series(measured, s90),
+            "prior_high": opposite_series(measured, s10),
+            "provenance": ("level-3 prior from the deployed direction profile "
+                           "(sumo/direction_split.json, with any published "
+                           "local period anchor applied) on the measured twin"),
         }
-        # s10/s50/s90 are e_meas's own (already-oriented) share at each of the
-        # 96 slots; slot 32 == hour 8 exactly (slots are hourly-interpolated
-        # at hour boundaries), and the opposite edge's share is 1 - e_meas's.
-        print(f"{sid:<7} {e_meas} → {e_opp:<24} "
-              f"{1-s50[32]:.2f} ({1-s90[32]:.2f}–{1-s10[32]:.2f})")
+        print(f"{sensor_id:<7} {measured_edge} → {opposite_edge:<24} "
+              f"{1 - s50[32]:.2f} ({1 - s90[32]:.2f}–{1 - s10[32]:.2f})")
 
-    OUT_PATH.parent.mkdir(exist_ok=True)
-    with open(OUT_PATH, "w") as f:
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    with open(args.out, "w") as f:
         json.dump({"date": args.date, "n_quarters": 96, "edges": result}, f)
-    print(f"Wrote {OUT_PATH}  ({len(result)} opposite-direction priors)")
+    print(f"Wrote {args.out}  ({len(result)} opposite-direction priors)")
 
 
 if __name__ == "__main__":

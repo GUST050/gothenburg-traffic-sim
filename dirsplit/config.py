@@ -15,13 +15,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-TRAFIKKDATA_URL = "https://trafikkdata-api.atlas.vegvesen.no/"
-
 DATA_DIR     = Path("data/dirsplit")
+# Raw hourly volumes are no longer fetched by this repository (the acquisition
+# client was removed 2026-08-16 with the LightGBM model it fed). The tracked
+# aggregate table remains the deployed profile's evidence base; drop raw
+# per-station CSVs here by hand if the v2 table is ever to be rebuilt.
 VOLUMES_DIR  = DATA_DIR / "volumes"
-STATIONS_RAW = DATA_DIR / "stations_norway.json"
 STATIONS_OK  = DATA_DIR / "stations_matched.json"
-GEOCODE_CACHE = DATA_DIR / "geocode_cache.json"
 COVERAGE_REPORT = DATA_DIR / "coverage_report.json"
 
 # Norwegian training cities: centre point + bounding box (south, west, north, east)
@@ -50,14 +50,8 @@ CITIES: dict[str, dict] = {
 }
 
 # Target city (prediction side). Centre = Brunnsparken, consistent with
-# estimate_directions.py.
+# the direction-split subsystem throughout.
 TARGET_CENTRE = (57.7068, 11.9668)
-
-# Volume fetching: prefer recent full years; per station we pick the newest
-# year fully inside its dataTimeSpan. Weeks chosen to mirror the project's
-# "calm September" philosophy + season spread.
-PREFERRED_YEARS = (2025, 2024, 2023, 2022)
-SAMPLE_ISO_WEEKS = (36, 37, 20, 45)   # early Sept ×2, mid May, early Nov
 
 # Feature parameters
 LANDUSE_RADIUS_M = 1000    # half-disc radius for behind/ahead asymmetry
