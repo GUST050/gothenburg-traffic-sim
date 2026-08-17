@@ -11,7 +11,9 @@ build_sumo_demand.py are never actually invoked (they take minutes), which
 lets these tests exercise the actual locking/threading/state-machine logic
 in seconds."""
 
+import errno
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -248,6 +250,182 @@ class TestServerStartup:
         monkeypatch.setattr(serve, "ThreadingHTTPServer", FakeServer)
         serve.main()
         assert seen["address"] == ("127.0.0.1", serve.PORT)
+
+    def test_main_honours_an_explicit_port(self, monkeypatch):
+        seen = {}
+
+        class FakeServer:
+            def __init__(self, address, handler):
+                seen["address"] = address
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+        monkeypatch.setattr(serve, "known_edges", lambda: frozenset())
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", FakeServer)
+        serve.main(["--port", "8123"])
+        assert seen["address"] == ("127.0.0.1", 8123)
+
+    def test_port_can_come_from_the_environment(self, monkeypatch):
+        monkeypatch.setenv("TRAFFIC_SIM_PORT", "8321")
+        assert serve.resolve_port() == 8321
+        # An explicit flag still wins over the environment.
+        assert serve.resolve_port(["--port", "8322"]) == 8322
+
+    def test_a_busy_default_port_steps_to_the_next_free_one(self, monkeypatch):
+        """A user who said nothing about ports wants a server, not a lecture."""
+        tried = []
+
+        def busy_until_8002(address, handler):
+            tried.append(address[1])
+            if address[1] < 8002:
+                raise OSError(errno.EADDRINUSE, "Address already in use")
+            return object()
+
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", busy_until_8002)
+        server, port = serve.bind_server(serve.PORT, port_is_explicit=False)
+        assert port == 8002
+        assert tried == [8000, 8001, 8002]
+
+    def test_an_explicit_port_is_never_silently_moved(self, monkeypatch):
+        """Someone who names a port has a reason — a bookmark, a tunnel.
+        Moving them would swap one dead URL for another."""
+        def always_busy(address, handler):
+            raise OSError(errno.EADDRINUSE, "Address already in use")
+
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", always_busy)
+        with pytest.raises(SystemExit) as excinfo:
+            serve.bind_server(8123, port_is_explicit=True)
+        message = str(excinfo.value)
+        assert "8123" in message
+        assert "lsof" in message
+
+    def test_the_printed_url_is_the_port_actually_bound(
+            self, monkeypatch, capsys):
+        def busy_until_8003(address, handler):
+            if address[1] < 8003:
+                raise OSError(errno.EADDRINUSE, "Address already in use")
+
+            class FakeServer:
+                def serve_forever(self_inner):
+                    raise KeyboardInterrupt
+
+            return FakeServer()
+
+        monkeypatch.setattr(serve, "known_edges", lambda: frozenset())
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", busy_until_8003)
+        serve.main(["--no-open"])
+        out = capsys.readouterr().out
+        assert "http://localhost:8003" in out
+        assert "http://localhost:8000" not in out
+
+    def test_every_port_busy_says_so_instead_of_tracebacking(self, monkeypatch):
+        def always_busy(address, handler):
+            raise OSError(errno.EADDRINUSE, "Address already in use")
+
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", always_busy)
+        with pytest.raises(SystemExit) as excinfo:
+            serve.bind_server(serve.PORT, port_is_explicit=False)
+        assert str(serve.PORT) in str(excinfo.value)
+
+    def test_the_browser_opens_on_the_bound_url_after_the_bind(
+            self, monkeypatch):
+        """Opening before the socket listens is how a launcher lands the
+        user on ERR_CONNECTION_REFUSED it caused itself."""
+        opened = []
+        bound = []
+
+        class FakeServer:
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+        def bind(address, handler):
+            bound.append(address[1])
+            return FakeServer()
+
+        monkeypatch.setattr(serve, "known_edges", lambda: frozenset())
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", bind)
+        monkeypatch.setattr(serve.webbrowser, "open",
+                            lambda url: opened.append((url, list(bound))))
+        serve.main(["--open"])
+        assert wait_until(lambda: opened)
+        url, bound_when_opened = opened[0]
+        assert url == f"http://localhost:{serve.PORT}"
+        assert bound_when_opened == [serve.PORT]
+
+    def test_no_browser_is_opened_when_asked_not_to(self, monkeypatch):
+        opened = []
+
+        class FakeServer:
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+        monkeypatch.setattr(serve, "known_edges", lambda: frozenset())
+        monkeypatch.setattr(serve, "ThreadingHTTPServer",
+                            lambda address, handler: FakeServer())
+        monkeypatch.setattr(serve.webbrowser, "open",
+                            lambda url: opened.append(url))
+        serve.main(["--no-open"])
+        time.sleep(0.1)
+        assert opened == []
+
+    def test_a_non_terminal_run_does_not_open_a_browser(self, monkeypatch):
+        """CI, nohup and `make serve &` must not spawn a browser."""
+        monkeypatch.setattr(serve.sys.stdout, "isatty", lambda: False)
+        assert serve.resolve_options([]).open_browser is False
+        monkeypatch.setattr(serve.sys.stdout, "isatty", lambda: True)
+        assert serve.resolve_options([]).open_browser is True
+        assert serve.resolve_options(["--no-open"]).open_browser is False
+
+    def test_missing_map_data_explains_itself(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(serve, "WEB_DIR", tmp_path / "web")
+        with pytest.raises(SystemExit) as excinfo:
+            serve.main()
+        assert "network.geojson" in str(excinfo.value)
+        assert "make data" in str(excinfo.value)
+
+
+class TestStaticServingNeedsNoScientificStack:
+    """The static map must not depend on numpy/pandas/scipy/numba/SUMO.
+
+    Regression for a real failure mode (2026-08-17): serve.py imported
+    signal_optimize at module level for one integer constant, which pulled
+    run_scenario -> numpy and signal_lab -> suggest_closure_time -> scipy
+    into the import path of the FILE SERVER. On a machine where any one of
+    them is missing or broken (numba==0.60.0 refuses new Python versions;
+    lightgbm needs libomp on macOS), `make serve` died on import and the
+    browser could only report ERR_CONNECTION_REFUSED."""
+
+    HEAVY = ("numpy", "pandas", "scipy", "numba", "lightgbm", "sklearn",
+             "osmnx", "geopandas", "shapely", "pyproj", "matplotlib",
+             "sumolib", "traci", "libsumo")
+
+    def test_importing_serve_pulls_in_no_third_party_package(self):
+        # A subprocess with a real import blocker, because serve (and every
+        # heavy module) is already imported in this interpreter.
+        blocker = (
+            "import sys, importlib.abc\n"
+            f"sys.path.insert(0, {str(Path(__file__).parent.parent)!r})\n"
+            f"BLOCKED = {set(self.HEAVY)!r}\n"
+            "class Blocker(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, name, path=None, target=None):\n"
+            "        if name.split('.')[0] in BLOCKED:\n"
+            "            raise ImportError('blocked: ' + name)\n"
+            "        return None\n"
+            "sys.meta_path.insert(0, Blocker())\n"
+            "import serve\n"
+            "serve.resolve_port([])\n"
+            "print('ok')\n"
+        )
+        res = subprocess.run([sys.executable, "-c", blocker],
+                             capture_output=True, text=True, timeout=120)
+        assert res.returncode == 0, res.stderr
+        assert "ok" in res.stdout
+
+    def test_the_signal_condition_count_still_comes_from_its_owner(self):
+        """Lazy must not mean copied: the constant has one owner (D2)."""
+        assert serve.optimize_signal_conditions() == so.SIGNAL_CONDITION_COUNT
+        assert serve.OPTIMIZE_SIGNAL_CONDITIONS == len(so.SIGNAL_CONDITION_NAMES)
 
 
 class TestClose:
@@ -1939,6 +2117,25 @@ class TestOptimizeSignals:
         status, body = post_json_or_error(f"{base_url}/api/optimize_signals?edges=nope_0")
         assert status == 400
         assert "nope_0" in body["error"]
+
+    def test_a_missing_simulation_dependency_names_itself(
+            self, base_url, monkeypatch):
+        """The static app runs without the scientific stack, so a simulation
+        endpoint is where a missing package first surfaces. It must name the
+        package and stay up, not die or report a bare ImportError."""
+        def missing(*a, **kw):
+            raise ModuleNotFoundError("No module named 'numpy'", name="numpy")
+
+        monkeypatch.setattr(serve, "optimize_signal_conditions", missing)
+        post_json(f"{base_url}/api/optimize_signals")
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/optimize_signals/status")[1]
+            .get("status") == "error")
+        _, state = get_json(f"{base_url}/api/optimize_signals/status")
+        assert "numpy" in state["error"]
+        assert "requirements.txt" in state["error"]
+        # The server is still serving after it.
+        assert get_json(f"{base_url}/api/ping")[1] == {"ok": True}
 
     def test_structured_plain_signal_spec_is_archived_and_forwarded(
             self, base_url, monkeypatch):

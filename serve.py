@@ -3,6 +3,13 @@ Web server for the traffic app: static files + on-demand scenario API.
 
 Run (from repo root):
   python3 serve.py            # or: make serve  →  http://localhost:8000
+                              # a busy 8000 steps to the next free port and
+                              # the real URL is printed and opened for you
+  python3 serve.py --port 8001   # pin a port (used as given, never moved)
+  python3 serve.py --no-open     # do not open a browser
+
+Serving the static app needs ONLY the Python standard library — see the
+lazy signal_optimize import below for why that is a deliberate property.
 
 Endpoints:
   GET /...                    — static files from web/
@@ -134,6 +141,8 @@ drift apart.
 
 from __future__ import annotations
 
+import argparse
+import errno
 import json
 import math
 import os
@@ -145,12 +154,14 @@ import sys
 import threading
 import time
 import urllib.parse
+import webbrowser
+from collections.abc import Sequence
 from datetime import datetime
 from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import NamedTuple
 
-from signal_optimize import SIGNAL_CONDITION_COUNT
 from traffic_sim.core.contracts import (ClosureSearchSpec, DemandBuildSpec,
                                          ScenarioSpec,
                                          write_closure_search_spec,
@@ -196,9 +207,31 @@ OPTIMIZE_CLOSURE_OUT = SUMO_DIR / "signal_closure_combine_web.json"
 OPTIMIZE_WINDOW_START = "07:00"
 OPTIMIZE_WINDOW_END = "09:00"
 OPTIMIZE_SEEDS = 3
-# D2 owns this count; import it so an added/removed experiment condition
-# cannot silently leave the HTTP job timeout stale.
-OPTIMIZE_SIGNAL_CONDITIONS = SIGNAL_CONDITION_COUNT
+# D2 owns this count; read it from signal_optimize so an added/removed
+# experiment condition cannot silently leave the HTTP job timeout stale.
+# LAZY on purpose (2026-08-17): importing signal_optimize at module level
+# dragged run_scenario/signal_lab/suggest_closure_time — and with them numpy,
+# pandas and scipy — into the import path of the STATIC file server, so a
+# machine missing any one of them could not open the map at all (the process
+# died on import and the browser showed ERR_CONNECTION_REFUSED). Nothing else
+# in serve.py needs a third-party package. The count is still read from its
+# owner, just at the moment the signal endpoint actually needs it — which is
+# also the moment the heavy stack has to be installed anyway, because that
+# endpoint shells out to signal_optimize.py.
+@lru_cache(maxsize=1)
+def optimize_signal_conditions() -> int:
+    from signal_optimize import SIGNAL_CONDITION_COUNT
+    return SIGNAL_CONDITION_COUNT
+
+
+def __getattr__(name: str):
+    # Keep serve.OPTIMIZE_SIGNAL_CONDITIONS working as a module attribute
+    # (PEP 562) without paying for the import until it is read.
+    if name == "OPTIMIZE_SIGNAL_CONDITIONS":
+        return optimize_signal_conditions()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 # Monthly closure search (Phase 4 step 6). The policy file is the frozen
 # golden artifact — the API never accepts tolerances from the client, so a
 # browser cannot vary what was frozen against the golden benchmark.
@@ -233,6 +266,10 @@ MONTHLY_PARENT_SCHEDULE_CAP = 100_000
 # generous without risking an unbounded server job.
 MONTHLY_TIMEOUT_S = 4 * 3600
 PORT     = 8000
+# How far past a busy default port to look for a free one. Enough for a
+# handful of forgotten servers, small enough that the printed URL stays
+# recognisably "the traffic app".
+PORT_SEARCH_SPAN = 20
 
 
 def monthly_screening_cli_args(spec: ClosureSearchSpec) -> list[str]:
@@ -1987,7 +2024,7 @@ class Handler(SimpleHTTPRequestHandler):
                 out_path = OPTIMIZE_OUT
                 cmd = [sys.executable, "signal_optimize.py",
                       "--seeds", str(seed_count), "--out", str(out_path)]
-                n_sumo_runs = OPTIMIZE_SIGNAL_CONDITIONS
+                n_sumo_runs = optimize_signal_conditions()
             if spec_path is not None:
                 cmd += ["--scenario-spec", str(spec_path.resolve())]
             else:
@@ -2022,6 +2059,14 @@ class Handler(SimpleHTTPRequestHandler):
         except subprocess.TimeoutExpired:
             self._set_optimize(status="error",
                                error="signaloptimeringen tog för lång tid — avbruten")
+        except ModuleNotFoundError as e:
+            # The static app deliberately runs without the scientific stack,
+            # so this endpoint is where a missing package first shows up.
+            # Name it — the generic handler below would only say ImportError.
+            self._set_optimize(
+                status="error",
+                error=f"simuleringsberoendet {e.name!r} saknas — kör "
+                      "`pip install -r requirements.txt`")
         except Exception as e:
             print(f"optimize_signals: unexpected {type(e).__name__}: {e}")
             self._set_optimize(status="error",
@@ -2331,8 +2376,98 @@ class Handler(SimpleHTTPRequestHandler):
         return self._json(200, state)
 
 
-def main() -> None:
-    known_edges()   # fail fast if data is missing
+class ServeOptions(NamedTuple):
+    port: int
+    port_is_explicit: bool
+    open_browser: bool
+
+
+def resolve_options(argv: Sequence[str] = ()) -> ServeOptions:
+    """CLI/env options, with the port resolution and its explicitness."""
+    parser = argparse.ArgumentParser(
+        description="Serve web/ plus the scenario API on localhost.")
+    parser.add_argument("--port", type=int, default=None,
+                        help=f"TCP port to listen on (default {PORT}, "
+                             f"stepping to the next free one if it is "
+                             f"taken). An explicit --port is used as given "
+                             f"and never moved.")
+    parser.add_argument("--open", dest="open_browser", action="store_true",
+                        default=None,
+                        help="Open the map in the default browser once the "
+                             "server is up (the default when running in a "
+                             "terminal).")
+    parser.add_argument("--no-open", dest="open_browser", action="store_false",
+                        help="Do not open a browser.")
+    args = parser.parse_args(list(argv))
+    open_browser = (sys.stdout.isatty() if args.open_browser is None
+                    else args.open_browser)
+    if args.port is not None:
+        return ServeOptions(args.port, True, open_browser)
+    env_port = os.environ.get("TRAFFIC_SIM_PORT", "").strip()
+    if env_port:
+        try:
+            return ServeOptions(int(env_port), True, open_browser)
+        except ValueError:
+            raise SystemExit(
+                f"TRAFFIC_SIM_PORT={env_port!r} är inget portnummer.")
+    return ServeOptions(PORT, False, open_browser)
+
+
+def resolve_port(argv: Sequence[str] = ()) -> int:
+    """Backwards-compatible accessor for the resolved port."""
+    return resolve_options(argv).port
+
+
+def bind_server(port: int, port_is_explicit: bool
+                ) -> tuple[ThreadingHTTPServer, int]:
+    """Bind loopback, stepping past ports another program already holds.
+
+    A DEFAULT port is a convenience, not a requirement: a busy 8000 walks to
+    8001 and so on, because a user who typed nothing about ports wants a
+    server, not a lecture about port allocation. An EXPLICIT --port is
+    honoured strictly — someone who names a port has a reason (a bookmark, a
+    tunnel, a second instance), and silently moving them elsewhere would send
+    them to a URL that is dead in a different way.
+
+    Either way the printed URL is the one that was actually bound, so the
+    address the user opens is never a guess."""
+    span = 1 if port_is_explicit else PORT_SEARCH_SPAN
+    for candidate in range(port, port + span):
+        try:
+            return ThreadingHTTPServer(("127.0.0.1", candidate), Handler), candidate
+        except OSError as exc:
+            if exc.errno == errno.EACCES:
+                raise SystemExit(
+                    f"Kan inte lyssna på port {candidate}: {exc.strerror}.\n"
+                    f"Portar under 1024 kräver root — välj en högre port, "
+                    f"t.ex. `python3 serve.py --port 8000`.")
+            if exc.errno != errno.EADDRINUSE:
+                raise
+    if port_is_explicit:
+        raise SystemExit(
+            f"Port {port} är upptagen av ett annat program.\n"
+            f"Hitta det med `lsof -nP -iTCP:{port} -sTCP:LISTEN` "
+            f"(macOS/Linux), eller låt servern välja port själv genom att "
+            f"köra `python3 serve.py` utan --port.")
+    raise SystemExit(
+        f"Portarna {port}-{port + span - 1} är alla upptagna.\n"
+        f"Hitta vad som håller dem med "
+        f"`lsof -nP -iTCP:{port}-{port + span - 1} -sTCP:LISTEN` "
+        f"(macOS/Linux), eller välj en ledig port med "
+        f"`python3 serve.py --port <port>`.")
+
+
+def main(argv: Sequence[str] = ()) -> None:
+    options = resolve_options(argv)
+    try:
+        known_edges()   # fail fast if data is missing
+    except FileNotFoundError:
+        # Without this the process dies on a bare traceback and the browser
+        # only says ERR_CONNECTION_REFUSED, which says nothing about why.
+        raise SystemExit(
+            f"Hittar inte {WEB_DIR / 'data' / 'network.geojson'}.\n"
+            "Kartdatan är inte byggd i den här kopian av repot — kör "
+            "`make data` (eller `make all`) först.")
     # E4/P0: a restarted server must not start another writer while a prior
     # process group may still be producing artifacts.  The operator can
     # acknowledge each stranded job through /api/cancel?job_id=... after
@@ -2341,8 +2476,16 @@ def main() -> None:
     # Mutating API endpoints have no authentication, so do not expose them
     # to the LAN by default. Explicit LAN support, if ever needed, should be
     # an intentional opt-in rather than the server's implicit bind address.
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Serving web/ + scenario-API på http://localhost:{PORT}")
+    server, port = bind_server(options.port, options.port_is_explicit)
+    url = f"http://localhost:{port}"
+    if port != options.port:
+        print(f"Port {options.port} var upptagen — startar på {port} "
+              f"i stället.")
+    print(f"Serving web/ + scenario-API på {url}")
+    if options.open_browser:
+        # After the bind, so the browser never races the listening socket.
+        threading.Thread(target=webbrowser.open, args=(url,),
+                         daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -2350,4 +2493,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

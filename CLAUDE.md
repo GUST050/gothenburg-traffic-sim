@@ -248,6 +248,66 @@ Goal arc, in order:
   LESSON: no admin action whose server-side work outlives a reasonable
   browser request lifetime should ever be tied to a single blocking HTTP
   call — start + poll, always.
+- LOCALHOST REFUSED (2026-08-17): Gustav's browser showed
+  ERR_CONNECTION_REFUSED on localhost:8000 — nothing was listening. His
+  machine could not be inspected from here, so the work was to remove the
+  reproducible ways `make serve` can die before it binds, and to make the
+  remaining ones say why.
+  FOUND AND FIXED, the one real defect: `serve.py` imported
+  `signal_optimize` at module level for a single integer
+  (`SIGNAL_CONDITION_COUNT`), and that import pulls `run_scenario` →
+  **numpy**, `signal_lab` → `suggest_closure_time` → **scipy**, plus
+  pandas. Measured directly: those three were the ONLY third-party packages
+  serve.py needed at import time, and every other import in the file is
+  stdlib or `traffic_sim.*` (also stdlib-only). So a machine where any one
+  of the scientific stack is missing or broken — `numba==0.60.0` refuses
+  newer Pythons, `lightgbm` needs libomp on macOS, a numpy 2.x bump breaks
+  either — could not open the MAP, which needs none of them. The process
+  died on a traceback in a terminal the user may never look at, and the
+  browser can only ever report "refused". The import is now lazy
+  (`optimize_signal_conditions()` + a PEP 562 module `__getattr__`, so the
+  constant still has exactly one owner and cannot drift), and the endpoint
+  that reads it is the one that shells out to signal_optimize.py anyway.
+  Verified with a real import blocker: serve.py imports, binds, and serves
+  index.html, `/api/ping` and network.geojson with numpy/pandas/scipy/numba/
+  lightgbm/sklearn/osmnx/shapely/pyproj/sumolib all made unimportable.
+  Pinned by `TestStaticServingNeedsNoScientificStack`.
+  ALSO, so a refused connection stops being mute: `--port` /
+  `$TRAFFIC_SIM_PORT` / `make serve PORT=8001` for an occupied port; an
+  EADDRINUSE bind failure prints the `lsof` command and the alternate-port
+  invocation instead of a traceback; a missing `web/data/network.geojson`
+  says "kör `make data`". README gained a symptom→cause list for exactly
+  this screen.
+  ALSO, THE ACTUAL CAUSE ON GUSTAV'S MACHINE (found the same day, by
+  searching his filesystem rather than the code): there was no checkout at
+  all. `find ~ -name build_sumo_demand.py` returned exactly one hit,
+  `~/.claude/jobs/dc609b35/tmp/prefix/`, a Claude Code job's temporary
+  workspace. `cd gothenburg-traffic-sim` failed because the directory does
+  not exist, so nothing was ever started and the refusal was correct. Worth
+  recording because the code investigation above was still right to happen —
+  it found a real defect — but it could not have been the reason, and no
+  amount of server hardening can make a server exist in a repo that is not
+  on the disk. That is the one variant of this failure that is out of the
+  code's reach, and it is now stated as such in the README's symptom list.
+  ROBUSTNESS ROUND TWO (2026-08-17, at Gustav's request "kan du inte fixa
+  detta robust i koden istället"): everything about starting the server
+  that CAN be made unattended, now is. A busy default port steps to the
+  next free one (`PORT_SEARCH_SPAN = 20`) instead of failing, while an
+  EXPLICIT `--port` is honoured strictly — a person who names a port has a
+  bookmark or a tunnel behind it, and moving them silently just swaps one
+  dead URL for another. The printed URL is always the port actually bound,
+  never the one requested. The browser is opened automatically after the
+  bind (never before it — opening first is how a launcher lands the user on
+  a refusal it caused itself), defaulting off whenever stdout is not a
+  terminal so `make serve &` and CI stay quiet. `start.command` is a
+  double-clickable macOS launcher that `cd`s to its own location, so it
+  cannot be run from the wrong directory, checks for python3 and the map
+  data, and holds the Terminal window open on failure so the message is
+  readable. All pinned by tests in `TestServerStartup`.
+  LESSON: the static app and the simulation stack are separate products
+  sharing one process. A dependency only the simulator needs must never be
+  on the file server's import path — the failure it causes is invisible
+  from the browser, which is where the user is standing.
 
 ## The data
 - Source: Göteborgs Stad (Felicia Gauffin Jatta, Stadsbyggnadsförvaltningen). 15-minute two-way vehicle counts ("Antal passager"), all of 2025.

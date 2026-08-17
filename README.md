@@ -69,6 +69,14 @@ the same interface without touching map/render code.
 
 ## Running
 
+**Bara titta på kartan?** Den publicerade versionen kräver ingen dator av
+dig alls: <https://gust050.github.io/gothenburg-traffic-sim/>. Karta,
+2025 års historik, 2027-prognosen och de färdigbyggda scenarierna ligger
+där (`.github/workflows/pages.yml` publicerar `web/` vid varje push till
+`main`). Att köra *nya* avstängningar kräver fortfarande en lokal server —
+den knappen döljer sig själv på den publicerade sidan, eftersom det inte
+finns någon simulator bakom den.
+
 ```bash
 pip install -r requirements.txt
 
@@ -78,6 +86,50 @@ make all
 # Web app + scenario API → http://localhost:8000
 make serve
 ```
+
+`make serve` needs nothing but Python's standard library — the map, the
+historical/forecast animation and every already-built scenario work on a
+fresh clone before `pip install -r requirements.txt` has ever succeeded.
+Only the endpoints that actually run a simulation (recalibration, closures,
+signal studies) need the packages in `requirements.txt` and SUMO; each one
+reports its own error if they are missing, instead of taking the server
+down with it.
+
+It also picks its own port and opens its own browser: a busy 8000 steps to
+8001, 8002 and so on, and the URL that is printed is the one that was
+actually bound. `--port N` pins a port instead (used as given, never
+moved); `--no-open` skips the browser, which is also the default whenever
+stdout is not a terminal, so `make serve &` and CI stay quiet.
+
+**På macOS:** dubbelklicka `start.command` i Finder. Den byter själv till
+repo-mappen, så den kan inte startas "på fel ställe", och kartan öppnas i
+webbläsaren. Stäng terminalfönstret för att stoppa servern.
+
+### Från noll på en ny dator
+
+Ett kommando som klonar om det behövs, uppdaterar annars, och startar:
+
+```bash
+git clone https://github.com/GUST050/gothenburg-traffic-sim.git \
+  ~/gothenburg-traffic-sim 2>/dev/null; \
+  cd ~/gothenburg-traffic-sim && git pull --ff-only && python3 serve.py
+```
+
+**Om `localhost` säger ERR_CONNECTION_REFUSED:** ingen server lyssnar —
+webbläsaren kan inte säga mer än så, men terminalen kan. Kör `python3
+serve.py` i repo-roten och läs vad som skrivs ut:
+
+- `Serving web/ + scenario-API på http://localhost:PORT` → servern lever;
+  öppna **den** adressen (samma terminalfönster måste stå kvar öppet).
+- `cd: no such file or directory` → repot är inte utcheckat på maskinen;
+  se "Från noll" ovan. Ingen kod kan starta en server från ett repo som
+  inte finns lokalt — det är den enda varianten av det här felet som inte
+  går att bygga bort.
+- `Portarna 8000-8019 är alla upptagna` → välj en ledig med `--port`.
+- `Hittar inte web/data/network.geojson` → kartdatan är inte byggd i den
+  här kopian; kör `make data`.
+- En Python-`Traceback` → skicka den vidare; det är den enda felsökningen
+  webbläsaren själv aldrig kan visa.
 
 **Close roads from the map:** with `make serve` running, open
 **Vägavstängning**. One workspace handles all road-closing scopes: simulate
