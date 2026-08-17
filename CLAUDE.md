@@ -278,6 +278,32 @@ Goal arc, in order:
   invocation instead of a traceback; a missing `web/data/network.geojson`
   says "kör `make data`". README gained a symptom→cause list for exactly
   this screen.
+  ALSO, THE ACTUAL CAUSE ON GUSTAV'S MACHINE (found the same day, by
+  searching his filesystem rather than the code): there was no checkout at
+  all. `find ~ -name build_sumo_demand.py` returned exactly one hit,
+  `~/.claude/jobs/dc609b35/tmp/prefix/`, a Claude Code job's temporary
+  workspace. `cd gothenburg-traffic-sim` failed because the directory does
+  not exist, so nothing was ever started and the refusal was correct. Worth
+  recording because the code investigation above was still right to happen —
+  it found a real defect — but it could not have been the reason, and no
+  amount of server hardening can make a server exist in a repo that is not
+  on the disk. That is the one variant of this failure that is out of the
+  code's reach, and it is now stated as such in the README's symptom list.
+  ROBUSTNESS ROUND TWO (2026-08-17, at Gustav's request "kan du inte fixa
+  detta robust i koden istället"): everything about starting the server
+  that CAN be made unattended, now is. A busy default port steps to the
+  next free one (`PORT_SEARCH_SPAN = 20`) instead of failing, while an
+  EXPLICIT `--port` is honoured strictly — a person who names a port has a
+  bookmark or a tunnel behind it, and moving them silently just swaps one
+  dead URL for another. The printed URL is always the port actually bound,
+  never the one requested. The browser is opened automatically after the
+  bind (never before it — opening first is how a launcher lands the user on
+  a refusal it caused itself), defaulting off whenever stdout is not a
+  terminal so `make serve &` and CI stay quiet. `start.command` is a
+  double-clickable macOS launcher that `cd`s to its own location, so it
+  cannot be run from the wrong directory, checks for python3 and the map
+  data, and holds the Terminal window open on failure so the message is
+  readable. All pinned by tests in `TestServerStartup`.
   LESSON: the static app and the simulation stack are separate products
   sharing one process. A dependency only the simulator needs must never be
   on the file server's import path — the failure it causes is invisible

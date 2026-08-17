@@ -131,7 +131,7 @@ test:
 	python3 -m pytest tests/ -q
 
 # Web app + scenario API (click-to-close in the map needs this server).
-# Another program already on port 8000?  make serve PORT=8001
-PORT ?= 8000
+# A busy port 8000 steps to the next free one on its own; set PORT to pin
+# a specific one instead:  make serve PORT=8001
 serve:
-	python3 serve.py --port $(PORT)
+	python3 serve.py $(if $(PORT),--port $(PORT))
