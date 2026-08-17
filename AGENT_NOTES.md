@@ -99,6 +99,23 @@ which model may continue. See `AGENTS.md`.
   variant axis entirely was NOT done: it touches 210 call sites in 12 production
   modules and 80 test files including frozen closure evidence, and it would
   answer Gate S by fiat instead of measuring it.`
+- Shape-source question CLOSED on evidence (2026-08-17,
+  `tools/measure_donor_shape_transfer.py`): `Standard practice offers two
+  constructions and the project had tried one. FHWA's Traffic Monitoring Guide
+  applies temporal factors from a GROUP of continuous counters to sites with
+  only a bidirectional count — the deployed design. Project-level forecasting
+  guidance instead borrows a NEARBY permanent counter's pattern, and Gothenburg
+  has a candidate 239.9 m from 107 at 3.5 degrees. Measured on Norwegian
+  stations where direction truth exists: only the widest band (11 independent
+  pairs) reaches the frozen minimum of 8, and there the interval spans zero
+  (+14.6%, CI [-0.0178, +0.0087]). The tempting +57.2% in the band matching
+  Gothenburg rests on TWO independent pairs. Two traps had to be removed first,
+  both now pinned by tests: an unoriented population collapses the pooled curve
+  to a flat 0.5 because mirrored headings cancel, and reciprocal donor pairs
+  count one piece of evidence twice. Verdict: the donor route is NOT deployed;
+  the deployed construction stands because its one plausible upgrade cannot be
+  shown better on the data this project owns. The group curve beats a flat
+  anchor in every band, so shape is worth having — only its source is open.`
 - Suggested next action: `Run the two frozen studies on a machine with SUMO and
   network access: make demand && make direction-sensitivity for Gate S, and
   make dirsplit-volumes && make dirsplit-dataset && make dirsplit-benchmark for

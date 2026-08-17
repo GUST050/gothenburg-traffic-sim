@@ -1,0 +1,527 @@
+{
+ "schema_version": "donor_shape_transfer_v1",
+ "measured_at": "2026-08-17",
+ "release_evidence": false,
+ "question": "With the level known locally, is a nearby aligned counter's own shape a better source than the pooled group curve?",
+ "candidates": {
+  "B0": "flat: the target's own flow-weighted anchor in every hour",
+  "B1": "group shape: the deployed pooled curve, re-levelled to that anchor",
+  "L1": "donor shape: the nearest aligned station's own curve, re-levelled"
+ },
+ "geometry_rule": {
+  "max_bearing_delta_deg": 30.0,
+  "min_hours": 12,
+  "gothenburg_reference": {
+   "target": "107 southbound",
+   "donor": "1076 southbound",
+   "distance_m": 239.9,
+   "bearing_delta_deg": 3.5,
+   "band": "within_300m"
+  }
+ },
+ "bands": {
+  "within_300m": {
+   "n_targets": 2,
+   "n_same_road": 2,
+   "median_distance_m": 71.3,
+   "mae_b0_flat_anchor": 0.047328,
+   "mae_b1_group_shape": 0.035924,
+   "mae_l1_donor_shape": 0.015362,
+   "donor_vs_group_pct": 57.237,
+   "donor_vs_group_ci": [
+    -0.02533731,
+    -0.0157858
+   ],
+   "donor_vs_flat_pct": 67.541,
+   "donor_vs_flat_ci": [
+    -0.03756306,
+    -0.02636763
+   ],
+   "material": true,
+   "robust": false,
+   "sufficient_sample": false,
+   "min_independent_pairs": 8,
+   "targets_where_donor_beat_group": 2,
+   "targets_where_donor_lost_to_group": 0,
+   "records": [
+    {
+     "target": "07721V3144565:Bergen",
+     "donor": "90722V3144541:LAGUNEN",
+     "city": "bergen",
+     "distance_m": 71.3,
+     "bearing_delta_deg": 21.7,
+     "same_road": true,
+     "hours": 23,
+     "mae_b0_flat_anchor": 0.051406325705306496,
+     "mae_b1_group_shape": 0.03918057273951987,
+     "mae_l1_donor_shape": 0.01384326645071048
+    },
+    {
+     "target": "21571V2394246:Nyhavna",
+     "donor": "73951V2394243:Nyhavna",
+     "city": "trondheim",
+     "distance_m": 23.8,
+     "bearing_delta_deg": 0.0,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04324886730488299,
+     "mae_b1_group_shape": 0.03266703844719736,
+     "mae_l1_donor_shape": 0.016881240045895037
+    }
+   ]
+  },
+  "within_500m": {
+   "n_targets": 5,
+   "n_same_road": 3,
+   "median_distance_m": 344.7,
+   "mae_b0_flat_anchor": 0.054833,
+   "mae_b1_group_shape": 0.042476,
+   "mae_l1_donor_shape": 0.04384,
+   "donor_vs_group_pct": -3.21,
+   "donor_vs_group_ci": [
+    -0.02018643,
+    0.02862854
+   ],
+   "donor_vs_flat_pct": 20.048,
+   "donor_vs_flat_ci": [
+    -0.03308489,
+    0.01651934
+   ],
+   "material": false,
+   "robust": false,
+   "sufficient_sample": false,
+   "min_independent_pairs": 8,
+   "targets_where_donor_beat_group": 3,
+   "targets_where_donor_lost_to_group": 2,
+   "records": [
+    {
+     "target": "07721V3144565:Bergen",
+     "donor": "90722V3144541:LAGUNEN",
+     "city": "bergen",
+     "distance_m": 71.3,
+     "bearing_delta_deg": 21.7,
+     "same_road": true,
+     "hours": 23,
+     "mae_b0_flat_anchor": 0.051406325705306496,
+     "mae_b1_group_shape": 0.03918057273951987,
+     "mae_l1_donor_shape": 0.01384326645071048
+    },
+    {
+     "target": "16826V3508288:Marienborg",
+     "donor": "36935V72359:Sluppen",
+     "city": "trondheim",
+     "distance_m": 358.6,
+     "bearing_delta_deg": 27.9,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04208572436279606,
+     "mae_b1_group_shape": 0.029933262441635054,
+     "mae_l1_donor_shape": 0.08085962633038672
+    },
+    {
+     "target": "21571V2394246:Nyhavna",
+     "donor": "73951V2394243:Nyhavna",
+     "city": "trondheim",
+     "distance_m": 23.8,
+     "bearing_delta_deg": 0.0,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04324886730488299,
+     "mae_b1_group_shape": 0.03266703844719736,
+     "mae_l1_donor_shape": 0.016881240045895037
+    },
+    {
+     "target": "23323V805716:Fj\u00f8sanger",
+     "donor": "44953V1885943:Sandeidet",
+     "city": "bergen",
+     "distance_m": 344.7,
+     "bearing_delta_deg": 0.1,
+     "same_road": false,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.0390802632110378,
+     "mae_b1_group_shape": 0.02721740322807627,
+     "mae_l1_donor_shape": 0.04291833892907773
+    },
+    {
+     "target": "69607V3508276:Tempe",
+     "donor": "16826V3508288:Marienborg",
+     "city": "trondheim",
+     "distance_m": 424.6,
+     "bearing_delta_deg": 12.5,
+     "same_road": false,
+     "hours": 19,
+     "mae_b0_flat_anchor": 0.09834153689892706,
+     "mae_b1_group_shape": 0.08338192758949703,
+     "mae_l1_donor_shape": 0.06469600959301763
+    }
+   ]
+  },
+  "within_1000m": {
+   "n_targets": 7,
+   "n_same_road": 3,
+   "median_distance_m": 358.6,
+   "mae_b0_flat_anchor": 0.056289,
+   "mae_b1_group_shape": 0.044173,
+   "mae_l1_donor_shape": 0.040513,
+   "donor_vs_group_pct": 8.285,
+   "donor_vs_group_ci": [
+    -0.02189084,
+    0.01717966
+   ],
+   "donor_vs_flat_pct": 28.027,
+   "donor_vs_flat_ci": [
+    -0.03423992,
+    0.00541994
+   ],
+   "material": true,
+   "robust": false,
+   "sufficient_sample": false,
+   "min_independent_pairs": 8,
+   "targets_where_donor_beat_group": 4,
+   "targets_where_donor_lost_to_group": 3,
+   "records": [
+    {
+     "target": "07721V3144565:Bergen",
+     "donor": "90722V3144541:LAGUNEN",
+     "city": "bergen",
+     "distance_m": 71.3,
+     "bearing_delta_deg": 21.7,
+     "same_road": true,
+     "hours": 23,
+     "mae_b0_flat_anchor": 0.051406325705306496,
+     "mae_b1_group_shape": 0.03918057273951987,
+     "mae_l1_donor_shape": 0.01384326645071048
+    },
+    {
+     "target": "14247V2353784:Sentrum",
+     "donor": "14630V805616:Bergen",
+     "city": "bergen",
+     "distance_m": 873.5,
+     "bearing_delta_deg": 7.2,
+     "same_road": false,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04107376616787423,
+     "mae_b1_group_shape": 0.031038084986348666,
+     "mae_l1_donor_shape": 0.034254346098220506
+    },
+    {
+     "target": "16826V3508288:Marienborg",
+     "donor": "36935V72359:Sluppen",
+     "city": "trondheim",
+     "distance_m": 358.6,
+     "bearing_delta_deg": 27.9,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04208572436279606,
+     "mae_b1_group_shape": 0.029933262441635054,
+     "mae_l1_donor_shape": 0.08085962633038672
+    },
+    {
+     "target": "21571V2394246:Nyhavna",
+     "donor": "73951V2394243:Nyhavna",
+     "city": "trondheim",
+     "distance_m": 23.8,
+     "bearing_delta_deg": 0.0,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04324886730488299,
+     "mae_b1_group_shape": 0.03266703844719736,
+     "mae_l1_donor_shape": 0.016881240045895037
+    },
+    {
+     "target": "23323V805716:Fj\u00f8sanger",
+     "donor": "44953V1885943:Sandeidet",
+     "city": "bergen",
+     "distance_m": 344.7,
+     "bearing_delta_deg": 0.1,
+     "same_road": false,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.0390802632110378,
+     "mae_b1_group_shape": 0.02721740322807627,
+     "mae_l1_donor_shape": 0.04291833892907773
+    },
+    {
+     "target": "69607V3508276:Tempe",
+     "donor": "16826V3508288:Marienborg",
+     "city": "trondheim",
+     "distance_m": 424.6,
+     "bearing_delta_deg": 12.5,
+     "same_road": false,
+     "hours": 19,
+     "mae_b0_flat_anchor": 0.09834153689892706,
+     "mae_b1_group_shape": 0.08338192758949703,
+     "mae_l1_donor_shape": 0.06469600959301763
+    },
+    {
+     "target": "78492V2394249:Trondheim",
+     "donor": "94210V2411536:Trondheim",
+     "city": "trondheim",
+     "distance_m": 731.6,
+     "bearing_delta_deg": 16.5,
+     "same_road": false,
+     "hours": 24,
+     "mae_b0_flat_anchor": 0.07878492091029507,
+     "mae_b1_group_shape": 0.06579071473442105,
+     "mae_l1_donor_shape": 0.030137811224631484
+    }
+   ]
+  },
+  "within_1500m": {
+   "n_targets": 11,
+   "n_same_road": 5,
+   "median_distance_m": 731.6,
+   "mae_b0_flat_anchor": 0.046601,
+   "mae_b1_group_shape": 0.038203,
+   "mae_l1_donor_shape": 0.032627,
+   "donor_vs_group_pct": 14.596,
+   "donor_vs_group_ci": [
+    -0.0178318,
+    0.00873282
+   ],
+   "donor_vs_flat_pct": 29.987,
+   "donor_vs_flat_ci": [
+    -0.02735779,
+    0.00089924
+   ],
+   "material": true,
+   "robust": false,
+   "sufficient_sample": true,
+   "min_independent_pairs": 8,
+   "targets_where_donor_beat_group": 7,
+   "targets_where_donor_lost_to_group": 4,
+   "records": [
+    {
+     "target": "06800V805054:Fj\u00f8sanger",
+     "donor": "45610V804781:Bergen",
+     "city": "bergen",
+     "distance_m": 1040.1,
+     "bearing_delta_deg": 16.1,
+     "same_road": false,
+     "hours": 22,
+     "mae_b0_flat_anchor": 0.047254805531860386,
+     "mae_b1_group_shape": 0.03316198120654087,
+     "mae_l1_donor_shape": 0.016833652158229462
+    },
+    {
+     "target": "07721V3144565:Bergen",
+     "donor": "90722V3144541:LAGUNEN",
+     "city": "bergen",
+     "distance_m": 71.3,
+     "bearing_delta_deg": 21.7,
+     "same_road": true,
+     "hours": 23,
+     "mae_b0_flat_anchor": 0.051406325705306496,
+     "mae_b1_group_shape": 0.03918057273951987,
+     "mae_l1_donor_shape": 0.01384326645071048
+    },
+    {
+     "target": "14247V2353784:Sentrum",
+     "donor": "14630V805616:Bergen",
+     "city": "bergen",
+     "distance_m": 873.5,
+     "bearing_delta_deg": 7.2,
+     "same_road": false,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04107376616787423,
+     "mae_b1_group_shape": 0.031038084986348666,
+     "mae_l1_donor_shape": 0.034254346098220506
+    },
+    {
+     "target": "16826V3508288:Marienborg",
+     "donor": "36935V72359:Sluppen",
+     "city": "trondheim",
+     "distance_m": 358.6,
+     "bearing_delta_deg": 27.9,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04208572436279606,
+     "mae_b1_group_shape": 0.029933262441635054,
+     "mae_l1_donor_shape": 0.08085962633038672
+    },
+    {
+     "target": "21571V2394246:Nyhavna",
+     "donor": "73951V2394243:Nyhavna",
+     "city": "trondheim",
+     "distance_m": 23.8,
+     "bearing_delta_deg": 0.0,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04324886730488299,
+     "mae_b1_group_shape": 0.03266703844719736,
+     "mae_l1_donor_shape": 0.016881240045895037
+    },
+    {
+     "target": "23323V805716:Fj\u00f8sanger",
+     "donor": "44953V1885943:Sandeidet",
+     "city": "bergen",
+     "distance_m": 344.7,
+     "bearing_delta_deg": 0.1,
+     "same_road": false,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.0390802632110378,
+     "mae_b1_group_shape": 0.02721740322807627,
+     "mae_l1_donor_shape": 0.04291833892907773
+    },
+    {
+     "target": "24764V625406:Smestad",
+     "donor": "51716V625406:Smestad",
+     "city": "oslo",
+     "distance_m": 1085.2,
+     "bearing_delta_deg": 8.7,
+     "same_road": true,
+     "hours": 24,
+     "mae_b0_flat_anchor": 0.019096351720583923,
+     "mae_b1_group_shape": 0.021776792863864202,
+     "mae_l1_donor_shape": 0.007738988757153905
+    },
+    {
+     "target": "33808V625649:Sentrum",
+     "donor": "52688V625649:Sentrum",
+     "city": "oslo",
+     "distance_m": 1239.4,
+     "bearing_delta_deg": 21.0,
+     "same_road": true,
+     "hours": 24,
+     "mae_b0_flat_anchor": 0.02984837449768828,
+     "mae_b1_group_shape": 0.026405227116194648,
+     "mae_l1_donor_shape": 0.01708326686932556
+    },
+    {
+     "target": "69607V3508276:Tempe",
+     "donor": "16826V3508288:Marienborg",
+     "city": "trondheim",
+     "distance_m": 424.6,
+     "bearing_delta_deg": 12.5,
+     "same_road": false,
+     "hours": 19,
+     "mae_b0_flat_anchor": 0.09834153689892706,
+     "mae_b1_group_shape": 0.08338192758949703,
+     "mae_l1_donor_shape": 0.06469600959301763
+    },
+    {
+     "target": "71258V805748:Bergen sentrum",
+     "donor": "86779V805748:Sandviken",
+     "city": "bergen",
+     "distance_m": 1307.4,
+     "bearing_delta_deg": 14.3,
+     "same_road": false,
+     "hours": 18,
+     "mae_b0_flat_anchor": 0.02239025243642169,
+     "mae_b1_group_shape": 0.029678571197978752,
+     "mae_l1_donor_shape": 0.033647571721370985
+    },
+    {
+     "target": "78492V2394249:Trondheim",
+     "donor": "94210V2411536:Trondheim",
+     "city": "trondheim",
+     "distance_m": 731.6,
+     "bearing_delta_deg": 16.5,
+     "same_road": false,
+     "hours": 24,
+     "mae_b0_flat_anchor": 0.07878492091029507,
+     "mae_b1_group_shape": 0.06579071473442105,
+     "mae_l1_donor_shape": 0.030137811224631484
+    }
+   ]
+  },
+  "same_road_within_1500m": {
+   "n_targets": 5,
+   "n_same_road": 5,
+   "median_distance_m": 358.6,
+   "mae_b0_flat_anchor": 0.037137,
+   "mae_b1_group_shape": 0.029993,
+   "mae_l1_donor_shape": 0.027281,
+   "donor_vs_group_pct": 9.04,
+   "donor_vs_group_ci": [
+    -0.0196064,
+    0.0249407
+   ],
+   "donor_vs_flat_pct": 26.539,
+   "donor_vs_flat_ci": [
+    -0.0281253,
+    0.01543779
+   ],
+   "material": true,
+   "robust": false,
+   "sufficient_sample": false,
+   "min_independent_pairs": 8,
+   "targets_where_donor_beat_group": 4,
+   "targets_where_donor_lost_to_group": 1,
+   "records": [
+    {
+     "target": "07721V3144565:Bergen",
+     "donor": "90722V3144541:LAGUNEN",
+     "city": "bergen",
+     "distance_m": 71.3,
+     "bearing_delta_deg": 21.7,
+     "same_road": true,
+     "hours": 23,
+     "mae_b0_flat_anchor": 0.051406325705306496,
+     "mae_b1_group_shape": 0.03918057273951987,
+     "mae_l1_donor_shape": 0.01384326645071048
+    },
+    {
+     "target": "16826V3508288:Marienborg",
+     "donor": "36935V72359:Sluppen",
+     "city": "trondheim",
+     "distance_m": 358.6,
+     "bearing_delta_deg": 27.9,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04208572436279606,
+     "mae_b1_group_shape": 0.029933262441635054,
+     "mae_l1_donor_shape": 0.08085962633038672
+    },
+    {
+     "target": "21571V2394246:Nyhavna",
+     "donor": "73951V2394243:Nyhavna",
+     "city": "trondheim",
+     "distance_m": 23.8,
+     "bearing_delta_deg": 0.0,
+     "same_road": true,
+     "hours": 20,
+     "mae_b0_flat_anchor": 0.04324886730488299,
+     "mae_b1_group_shape": 0.03266703844719736,
+     "mae_l1_donor_shape": 0.016881240045895037
+    },
+    {
+     "target": "24764V625406:Smestad",
+     "donor": "51716V625406:Smestad",
+     "city": "oslo",
+     "distance_m": 1085.2,
+     "bearing_delta_deg": 8.7,
+     "same_road": true,
+     "hours": 24,
+     "mae_b0_flat_anchor": 0.019096351720583923,
+     "mae_b1_group_shape": 0.021776792863864202,
+     "mae_l1_donor_shape": 0.007738988757153905
+    },
+    {
+     "target": "33808V625649:Sentrum",
+     "donor": "52688V625649:Sentrum",
+     "city": "oslo",
+     "distance_m": 1239.4,
+     "bearing_delta_deg": 21.0,
+     "same_road": true,
+     "hours": 24,
+     "mae_b0_flat_anchor": 0.02984837449768828,
+     "mae_b1_group_shape": 0.026405227116194648,
+     "mae_l1_donor_shape": 0.01708326686932556
+    }
+   ]
+  }
+ },
+ "verdicts": [
+  "within_300m: INSUFFICIENT \u2014 2 independent pair(s), below the frozen minimum of 8; the +57.2% is not decidable",
+  "within_500m: INSUFFICIENT \u2014 5 independent pair(s), below the frozen minimum of 8; the -3.2% is not decidable",
+  "within_1000m: INSUFFICIENT \u2014 7 independent pair(s), below the frozen minimum of 8; the +8.3% is not decidable",
+  "within_1500m: no distinguishable difference",
+  "same_road_within_1500m: INSUFFICIENT \u2014 5 independent pair(s), below the frozen minimum of 8; the +9.0% is not decidable"
+ ],
+ "limitations": [
+  "Diagnostic only, no preregistration: no gate may be decided here.",
+  "Norwegian stations stand in for Gothenburg; whether a Gothenburg street behaves like them is exactly what no local measurement can confirm.",
+  "The anchor is the target's own flow-weighted mean, so every candidate carries the same level and only shape is scored.",
+  "The aggregate has no day blocks, so future-day transfer of either shape source is unmeasured."
+ ]
+}

@@ -93,6 +93,12 @@ local-direction-evidence:
 anchored-shape-value:
 	python3 -m tools.measure_anchored_shape_value
 
+# Diagnostic: should the intraday shape come from the pooled group curve or
+# from the nearest aligned counter on the same corridor? Measured on Norwegian
+# stations, where direction truth exists. Writes a non-release artifact.
+donor-shape-transfer:
+	python3 -m tools.measure_donor_shape_transfer
+
 # Gate M: is there a robust conditional direction signal, or is 50/50 the
 # honest central estimate? `--table legacy` (the tracked aggregate) is what is
 # runnable today and CANNOT decide the gate — the blocked-date fold and the

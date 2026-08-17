@@ -31,8 +31,14 @@ owners, states and approval formulas are not active workflow rules. See
   reads the deployed split instead of re-running its own prediction. q10/q90
   are leave-city-out residual quantiles of the same model. Gren B/D, schemas, monthly, warm-state,
   API and UI remain untouched.`
-- Suggested next action: `Rebuild demand so the new central profile and the 107
-  anchor reach the artifacts (make demand), then decide the two gates.
+- Suggested next action: `The SHAPE-SOURCE question is now closed on evidence:
+  a nearby aligned donor cannot be shown better than the pooled group curve
+  (only the widest band reaches 8 independent pairs, and there the interval
+  spans zero), so the deployed construction stands and the donor route is not
+  deployed. What remains is not more modelling: rebuild demand so the new
+  central profile and the 107 anchor reach the artifacts (make demand), then
+  run Gate S — it decides whether direction changes a closure decision at all,
+  and therefore whether any further split work has product value.
   Gate S: make demand (2025-09-16 historical), then make direction-sensitivity.
   Gate M: supply raw per-station volumes by hand in data/dirsplit/volumes/
   (the acquisition client is gone and the API is blocked here), then

@@ -695,6 +695,44 @@ Goal arc, in order:
      external data, while Gate M is reachable only by hand-supplying the deleted
      Norwegian volumes.
 
+   - WHERE THE SHAPE SHOULD COME FROM — MEASURED AND CLOSED (2026-08-17,
+     `tools/measure_donor_shape_transfer.py` →
+     `validation/donor_shape_transfer_v1.json`, `release_evidence: false`).
+     Standard practice offers two constructions for exactly this problem, and
+     the project had only tried one. FHWA's Traffic Monitoring Guide builds
+     temporal factors from a GROUP of continuous counters and applies them to
+     sites carrying only a short or bidirectional count — that is the deployed
+     design, with 81 Norwegian stations as the group and 107's published
+     D-factor as the level. Project-level forecasting guidance offers the
+     other: take the pattern from a NEARBY permanent counter. Gothenburg has a
+     candidate (1076, 239.9 m from 107's southbound edge, bearing delta 3.5°),
+     and the naive form of it was already dead (21.77 pp location bias). The
+     surviving form — the donor's NORMALISED shape, re-levelled to the local
+     anchor exactly as the loader re-levels the group curve — was measured on
+     Norwegian stations, where direction truth exists:
+     | band | independent pairs | flat | group | donor | donor vs group |
+     |---|---|---|---|---|---|
+     | ≤300 m (107/1076 geometry) | 2 | 0.0473 | 0.0359 | 0.0154 | +57.2% |
+     | ≤500 m | 5 | 0.0548 | 0.0425 | 0.0438 | −3.2% |
+     | ≤1000 m | 7 | 0.0563 | 0.0442 | 0.0405 | +8.3% |
+     | ≤1500 m | 11 | 0.0466 | 0.0382 | 0.0326 | +14.6% |
+     | same road ≤1500 m | 5 | 0.0371 | 0.0300 | 0.0273 | +9.0% |
+     VERDICT: **not decidable, so not deployed.** Only the ≤1500 m band reaches
+     the frozen minimum of 8 independent pairs, and there the interval spans
+     zero. The tempting +57.2% rests on TWO pairs. Two traps had to be removed
+     to see this at all, and both are pinned by tests: fitting the pooled curve
+     on an UNORIENTED population collapses it to a flat 0.5 (mirrored headings
+     cancel exactly), which would have handed the donor a win it never earned;
+     and reciprocal pairs — A donating to B while B donates to A — count one
+     piece of evidence twice and narrow the bootstrap that judges it.
+     WHAT THIS SETTLES: the deployed construction stands, not because it won a
+     contest but because the one plausible upgrade cannot be shown better with
+     the data this project owns. The group curve beats a flat anchor in every
+     band, so SHAPE is worth having; which SOURCE is better is open and needs
+     either more paired stations or a directional measurement in Gothenburg —
+     which the no-more-external-data decision rules out. Do not deploy the
+     donor route on this evidence.
+
 ## Rules — do / never
 - DO route all flow access through `flowAt(edgeId, t)`. NEVER fetch data inside render code.
 - DO render whatever edges are in the GeoJSON. NEVER hardcode the 6 sensors or a fixed marker list.
