@@ -265,6 +265,19 @@ MONTHLY_PARENT_SCHEDULE_CAP = 100_000
 # (the workspace keeps every completed candidate), so the cap can be
 # generous without risking an unbounded server job.
 MONTHLY_TIMEOUT_S = 4 * 3600
+# Concurrent SUMO seed processes for the two interactive run_scenario calls
+# (recalibration baseline and closure). The seeds are independent processes
+# with disjoint output directories and their own --seed, and run_scenario
+# re-sorts results by seed before aggregating, so completion order cannot
+# reach a published number. Verified on this machine 2026-08-17 rather than
+# argued: the same closure and the same baseline built serially and with 3
+# workers produced byte-identical scenario JSON, trajectory JSON and index
+# apart from the `generated_at` wall-clock stamp — closure 21.6 s -> 13.9 s,
+# baseline 11.0 s -> 5.9 s. Three matches the three seeds the interactive
+# paths use; the recorded seed-worker benchmark
+# (validation/a2_parallel_seed_benchmark_v1.json) approves up to 8 with
+# 2.3 GB peak RSS, so this stays well inside proven ground.
+SCENARIO_SEED_WORKERS = 3
 PORT     = 8000
 # How far past a busy default port to look for a free one. Enough for a
 # handful of forgotten servers, small enough that the printed URL stays
@@ -1460,6 +1473,7 @@ class Handler(SimpleHTTPRequestHandler):
                            json.dumps({"edge_id": e, "begin": begin, "end": end})]
             else:
                 cmd = [sys.executable, "run_scenario.py", "--close", *edges]
+            cmd += ["--seed-workers", str(SCENARIO_SEED_WORKERS)]
             res = run_in_new_session(cmd, cwd=str(ROOT), timeout=600)
             if active_job_cancelled("close"):
                 self._set_close(status="cancelled")
@@ -1669,7 +1683,8 @@ class Handler(SimpleHTTPRequestHandler):
                     f.unlink()
             res2 = run_in_new_session(
                 [sys.executable, "run_scenario.py",
-                 "--out-dir", str(SCEN_STAGING_DIR)],
+                 "--out-dir", str(SCEN_STAGING_DIR),
+                 "--seed-workers", str(SCENARIO_SEED_WORKERS)],
                 cwd=str(ROOT), timeout=300 + 60 * (days - 1),
             )
             if active_job_cancelled("recalibrate"):

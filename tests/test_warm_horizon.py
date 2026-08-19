@@ -91,13 +91,18 @@ class TestIdentityFingerprint:
     def test_fingerprint_covers_exactly_the_identity_sources(self):
         import build_sumo_demand as bsd
 
-        source = Path("build_sumo_demand.py").read_text()
-        marker = source.split('if name in {"build_candidates"')[1]
-        named = {part.split('"')[1] for part in marker.split(",")[:8]
-                 if '"' in part}
-        named.add("build_candidates")
-        assert named <= set(wh.IDENTITY_SOURCE_FILES)
-        assert set(wh.IDENTITY_SOURCE_FILES) <= set(bsd.SOURCE_FILES)
+        # This used to scrape build_sumo_demand.py for the literal allow-list
+        # `if name in {"build_candidates", ...}`. That list stopped being a
+        # literal when the identity became the glob-complete inventory, so
+        # the scrape raised IndexError and the property went untested. Ask
+        # the builder for its inventory instead, which cannot go stale.
+        identity = bsd.demand_day_source_hashes()
+        assert set(wh.IDENTITY_SOURCE_FILES) <= set(identity), (
+            "the resume check names a source the day identity does not hash")
+        for name, path in wh.IDENTITY_SOURCE_FILES.items():
+            assert Path(path).resolve() == Path(bsd.SOURCE_FILES[name]).resolve(), (
+                f"{name} resolves to different files here and in the builder, "
+                "so a resumed run would compare the wrong bytes")
 
     def test_fingerprint_changes_when_a_source_changes(self, tmp_path,
                                                        monkeypatch):
@@ -351,11 +356,30 @@ class TestPruneStaleEntries:
                             lambda root=tmp_path: [
                                 {"path": dead, "bytes": 2048,
                                  "date": "2027-05-06", "superseded": ["pfe"]}])
-        wh.prune(delete=False)
+        wh.prune(delete=False, root=tmp_path)
         assert dead.is_dir()
         assert "--prune --yes" in capsys.readouterr().out
-        wh.prune(delete=True)
+        wh.prune(delete=True, root=tmp_path)
         assert not dead.exists()
+
+    def test_pruning_a_date_s_last_generation_removes_the_empty_date(
+            self, tmp_path, capsys):
+        current = wh.source_fingerprint()
+        dead = self._entry(tmp_path, "2027-05-07", {**current, "pfe": "2" * 64})
+        kept = self._entry(tmp_path, "2027-05-08", dict(current))
+
+        wh.prune(delete=True, root=tmp_path)
+
+        assert not dead.parent.exists(), (
+            "a date with no generation left must not look like coverage")
+        assert kept.is_dir() and kept.parent.is_dir()
+        assert "no generation" in capsys.readouterr().out
+
+    def test_empty_dates_are_only_removed_when_deleting(self, tmp_path):
+        (tmp_path / "2027-05-09").mkdir()
+        wh.prune(delete=False, root=tmp_path)
+        assert (tmp_path / "2027-05-09").is_dir(), (
+            "a report must leave the tree exactly as it found it")
 
 
 class TestArchiveDiscard:

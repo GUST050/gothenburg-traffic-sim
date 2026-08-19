@@ -58,6 +58,7 @@ import pandas as pd
 from demand.day_library import DEFAULT_ROOT as LIBRARY_ROOT
 from demand.intake import pool_key_for
 from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.demand.source_identity import demand_source_paths
 from traffic_sim.simulation.monthly_demand import (
     recover_live_demand_release,
     restore_live_demand_release,
@@ -68,15 +69,16 @@ from traffic_sim.simulation.workspace import WorkspaceLock
 # The exact files a stored day's identity is hashed over (build_sumo_demand's
 # DayIdentity.source_hashes). A resumed run may skip an item only while these
 # are unchanged — otherwise the entries it recorded can no longer be hit.
-IDENTITY_SOURCE_FILES = {
-    "build_candidates": Path("build_candidates.py"),
-    "build_sumo_demand": Path("build_sumo_demand.py"),
-    "pfe": Path("traffic_sim/demand/pfe.py"),
-    "pfe_kernel": Path("traffic_sim/demand/pfe_kernel.py"),
-    "demand/calibration.py": Path("demand/calibration.py"),
-    "demand/structure.py": Path("demand/structure.py"),
-    "demand/locations.py": Path("demand/locations.py"),
-}
+#
+# Taken from the canonical inventory rather than listed here. A hand-kept
+# subset (seven files, until 2026-08-17) reads as a harmless optimisation and
+# is not one: a change to any of the other twenty-two — demand/intake.py, say,
+# which the direction-split work edited — leaves every stored day unreachable
+# while resume still believes its fingerprint matches, so the run SKIPS dates
+# whose entries no build can ever hit and reports a horizon warm that is not.
+# The same narrow list also made --prune keep those dead entries forever.
+# Whatever the builder hashes, this hashes.
+IDENTITY_SOURCE_FILES = demand_source_paths(Path(__file__).resolve().parent)
 
 FLOWS_PATH = {"historical": Path("web/data/flows.json"),
               "forecast": Path("web/data/flows_forecast.json")}
@@ -378,12 +380,32 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def prune(delete: bool) -> None:
-    entries = stale_entries()
+def drop_empty_dates(root: Path = LIBRARY_ROOT) -> int:
+    """Remove date directories left with no generation, and count them.
+
+    A date directory holds nothing but its generations, so an empty one
+    cannot be a stored day — but hundreds of them read like coverage that is
+    not there, both to a person listing the tree and to anything counting
+    directories. Pruning a date's last generation is what creates them.
+    """
+    emptied = 0
+    for date_directory in sorted(Path(root).glob("*")):
+        if date_directory.is_dir() and not any(date_directory.iterdir()):
+            date_directory.rmdir()
+            emptied += 1
+    return emptied
+
+
+def prune(delete: bool, root: Path = LIBRARY_ROOT) -> None:
+    entries = stale_entries(root)
     total = sum(entry["bytes"] for entry in entries) / 1e9
     if not entries:
         print("demand day library: nothing stale — every stored day is "
               "still reachable by the current code")
+        if delete:
+            emptied = drop_empty_dates(root)
+            if emptied:
+                print(f"  removed {emptied} date(s) left with no generation")
         return
     print(f"demand day library: {len(entries)} stored day(s), {total:.1f} GB, "
           f"superseded by code changes")
@@ -397,7 +419,10 @@ def prune(delete: bool) -> None:
         return
     for entry in entries:
         shutil.rmtree(entry["path"], ignore_errors=True)
-    print(f"deleted {len(entries)} stale day(s), freeing {total:.1f} GB")
+    emptied = drop_empty_dates(root)
+    print(f"deleted {len(entries)} stale day(s), freeing {total:.1f} GB"
+          + (f" (and {emptied} date(s) left with no generation)"
+             if emptied else ""))
 
 
 def main() -> None:
