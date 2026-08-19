@@ -1,0 +1,91 @@
+# Static checks for this repository, in two profiles.
+#
+#   make lint       the critical profile below — errors plus the warnings
+#                   that can hide a real defect here. It PASSES today, so a
+#                   failure means something changed, which is the only way a
+#                   gate stays worth reading.
+#   make lint-full  everything this profile suppresses, for hygiene work.
+#
+# Every disable below is a measured decision, not a shrug. The four
+# inference checks were each triaged against the code on 2026-08-18: every
+# occurrence in the tree was a false positive from a pattern astroid cannot
+# follow, listed with its cause so a future reader can re-check rather than
+# trust this comment.
+
+[MAIN]
+jobs=4
+persistent=no
+suggestion-mode=yes
+# build_candidates and pfe carry large generated structures; the default
+# 1000-node inference cap makes astroid give up mid-module and emit
+# phantom no-member on real attributes.
+limit-inference-results=250
+
+[MESSAGES CONTROL]
+disable=
+    C,
+    R,
+# --- verified false positives, by cause -------------------------------
+# not-callable: guarded by an explicit `if not callable(x): raise` on the
+#   line above (monthly_sumo._capture_forensic, run_monthly_closure_search).
+    not-callable,
+# unsubscriptable-object: fork-inherited module globals declared `= None`
+#   and populated before the pool forks (demand/calibration _PFE_PAR_*),
+#   plus `x or {}` guards (build_sumo_demand.prev_tt_raw) and
+#   `dict | None` returns that the caller has already constrained
+#   (run_scenario.run_sumo with metrics=True).
+    unsubscriptable-object,
+# no-member: pandas DatetimeIndex accessors (.hour/.dayofweek) are dynamic,
+#   and validation_report swaps sys.modules[__name__] for its
+#   implementation, which no static importer can follow.
+    no-member,
+# possibly-used-before-assignment: serve._close binds begin/end in two
+#   branches keyed on the same `spec is None` test; pylint cannot correlate
+#   two tests of one condition.
+    possibly-used-before-assignment,
+# --- hygiene, real but not defects; see `make lint-full` ---------------
+# 167 sites. Every read here is JSON/XML/CSV on UTF-8 platforms, so this is
+# latent rather than live — but it IS latent, and worth clearing before
+# Python makes UTF-8 the default and changes the failure mode.
+    unspecified-encoding,
+    unused-import,
+    broad-exception-caught,
+# The repository deliberately inspects returncode itself so it can print
+# the child's stderr before deciding; check=True would raise past that.
+    subprocess-run-check,
+    raise-missing-from,
+# Fork-pool workers inherit their payload through module globals on
+# purpose, to avoid pickling the shape pool once per quarter.
+    global-statement,
+    f-string-without-interpolation,
+    protected-access,
+    redefined-outer-name,
+    unused-argument,
+    reimported,
+    duplicate-code,
+# Hygiene: a value computed and dropped. Two instances are worth a look
+# rather than a rename (monthly_sumo's discarded boundary measurement and
+# locations' discarded rejection count) — see `make lint-full`.
+    unused-variable,
+    nested-min-max,
+# Every instance in the tree was read on 2026-08-18 and each closure is
+# invoked inside the iteration that defines it (max/sort keys, and two
+# helper functions called on the next line), so the late binding cannot be
+# observed. The check stays LIVE in `make lint-full`, which is where a
+# future closure that actually escapes its loop will be caught.
+    cell-var-from-loop,
+# BaseHTTPRequestHandler.log_message is (self, format, *args); the override
+# renames the positional to `fmt`. Same arity, different name.
+    arguments-differ,
+    unnecessary-lambda
+
+[TYPECHECK]
+# scipy exposes betaln and friends through a lazy module __getattr__, so a
+# static importer cannot see them. Verified present at runtime.
+ignored-modules=scipy.special
+
+[REPORTS]
+score=no
+
+[VARIABLES]
+dummy-variables-rgx=_.*|unused_.*

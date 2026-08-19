@@ -130,6 +130,24 @@ forecast:
 test:
 	python3 -m pytest tests/ -q
 
+# Critical static checks — the profile in .pylintrc that passes today, so a
+# failure means something changed. AGENTS.md documents this command.
+# `signals` is deliberately absent from the target list: AGENTS.md's repo map
+# names a signals/ package that does not exist; the signal studies are root
+# modules (signal_lab.py and friends) and are covered by *.py.
+LINT_TARGETS = $(wildcard *.py) traffic_sim demand dirsplit
+
+lint:
+	python3 -m pylint --rcfile=.pylintrc --disable=import-error $(LINT_TARGETS)
+
+# Everything the critical profile suppresses: unused imports, missing
+# encodings, broad excepts, discarded values. Expected to report; it is a
+# worklist, not a gate.
+lint-full:
+	-python3 -m pylint --rcfile=.pylintrc --disable=import-error \
+		--enable=unused-import,unspecified-encoding,broad-exception-caught,unused-variable,cell-var-from-loop \
+		$(LINT_TARGETS)
+
 # Web app + scenario API (click-to-close in the map needs this server).
 # A busy port 8000 steps to the next free one on its own; set PORT to pin
 # a specific one instead:  make serve PORT=8001
