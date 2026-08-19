@@ -43,6 +43,7 @@ _PFE_PAR_SOLVE_S = None
 _PFE_PAR_COUNTS = None
 _PFE_PAR_COUNTS_S = None
 _PFE_PAR_DAY_QUARTERS = None
+_PFE_PAR_FIXED_TOTALS = None
 
 
 def apply_activity_purpose_margin(
@@ -111,6 +112,11 @@ def _run_pfe_interval_job(job: dict):
         raise RuntimeError("PFE interval worker was not initialized")
     suffix, key, quarter = job
     data = _PFE_PAR_VARIANT_INPUTS[suffix]
+    fixed_total = None
+    if _PFE_PAR_FIXED_TOTALS and suffix in _PFE_PAR_FIXED_TOTALS:
+        fixed_total = _PFE_PAR_FIXED_TOTALS[suffix][quarter]
+        if fixed_total is None:
+            return suffix, key, quarter, None, pfe.RUNG_INFEASIBLE
     sol, rung = pfe.solve_interval_with_structure_guard(
         _PFE_PAR_SHAPES,
         data["targets"][quarter],
@@ -120,6 +126,7 @@ def _run_pfe_interval_job(job: dict):
         structure_groups=_PFE_PAR_STRUCTURE_GROUPS,
         purpose_mix=_PFE_PAR_PURPOSE_MIXES[suffix][quarter],
         touch_index=_PFE_PAR_TOUCH_INDEX,
+        fixed_total=fixed_total,
     )
     return suffix, key, quarter, sol, rung
 
@@ -134,28 +141,23 @@ def _variant_quarter_purpose_mix(suffix: str, quarter: int):
     return mixes[quarter] if quarter < len(mixes) else Counter()
 
 
-def _run_pfe_counts_job(job: tuple[str, int]):
-    """ProcessPool worker for one quarter's integer repair (stage A1).
-
-    The repair/purpose-reconciliation MILPs are per-quarter pure functions
-    (pfe.quarter_publish_counts), so they parallelize exactly like the
-    interval solves. The sequential remainder of publishing — endpoint draw
-    ordinals, vehicle numbering, XML order — stays in the writer.
-
-    Counts are returned SPARSE (nonzero indices + their values). A dense
-    vector per (variant, quarter) would be hundreds of megabytes on a
-    multi-day build for a vector that is almost entirely zero; taking the
-    values through a nonzero mask reproduces the original array exactly,
-    dtype included.
-    """
+def _compute_pfe_counts(suffix: str, quarter: int):
+    """Compute one quarter's exact publication counts in any process."""
     from traffic_sim.demand import pfe
     import numpy as np
 
-    suffix, quarter = job
+    # Same guard as the interval and publish workers. Without it a call
+    # sequenced before the globals are populated fails as "NoneType is not
+    # subscriptable" from inside a pool worker, which says nothing about the
+    # actual mistake. Found by pylint's unsubscriptable-object, 2026-08-18.
+    if (_PFE_PAR_SHAPES is None or _PFE_PAR_VARIANT_INPUTS is None
+            or _PFE_PAR_SOLUTIONS is None or _PFE_PAR_RUNGS is None
+            or _PFE_PAR_PURPOSE_MIXES is None):
+        raise RuntimeError("PFE counts worker was not initialized")
     data = _PFE_PAR_VARIANT_INPUTS[suffix]
     sol = _PFE_PAR_SOLUTIONS[suffix][quarter]
     if sol is None:
-        return suffix, quarter, None
+        return None
     purpose_mix = _variant_quarter_purpose_mix(suffix, quarter)
     bounds_pq = data["hard_bounds_pq"]
     counts, margin_enforced = pfe.quarter_publish_counts(
@@ -167,8 +169,14 @@ def _run_pfe_counts_job(job: tuple[str, int]):
          for _name, members, cap_share in (_PFE_PAR_STRUCTURE_GROUPS or [])],
     )
     idx = np.nonzero(counts)[0]
-    return suffix, quarter, (idx.astype(np.int64), counts[idx],
-                             counts.dtype.str, len(counts), margin_enforced)
+    return (idx.astype(np.int64), counts[idx], counts.dtype.str, len(counts),
+            margin_enforced)
+
+
+def _run_pfe_counts_job(job: tuple[str, int]):
+    """ProcessPool worker for one quarter's sparse integer repair result."""
+    suffix, quarter = job
+    return suffix, quarter, _compute_pfe_counts(suffix, quarter)
 
 
 def _publish_worker_budget(variant_count: int) -> int:
@@ -269,6 +277,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     global _PFE_PAR_SOLUTIONS, _PFE_PAR_RUNGS, _PFE_PAR_STAGED_OUTPUTS
     global _PFE_PAR_PREPARE_S, _PFE_PAR_SOLVE_S
     global _PFE_PAR_COUNTS, _PFE_PAR_COUNTS_S, _PFE_PAR_DAY_QUARTERS
+    global _PFE_PAR_FIXED_TOTALS
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
@@ -317,45 +326,77 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             for i in range(nq):
                 tasks.append((suffix, key, i))
 
-        n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
-        print(f"  PFE final variants: solving {len(tasks)} independent "
-              f"variant×quarter intervals in one pool ({n_workers} workers)")
-        solve_started = time.perf_counter()
-        with mp.get_context("fork").Pool(processes=n_workers) as pool:
-            for suffix, _key, quarter, sol, rung in pool.imap_unordered(
-                _run_pfe_interval_job, tasks
-            ):
-                solutions[suffix][quarter] = sol
-                rungs[suffix][quarter] = rung
-        solve_s = time.perf_counter() - solve_started
-        print(f"  timing PFE interval solving: {solve_s:.1f}s")
-
         _PFE_PAR_SOLUTIONS = solutions
         _PFE_PAR_RUNGS = rungs
         _PFE_PAR_STAGED_OUTPUTS = staged_outputs
         _PFE_PAR_PREPARE_S = prepare_s
-        _PFE_PAR_SOLVE_S = solve_s
+        n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
 
-        # Stage A1: the integer repair + purpose reconciliation MILPs are the
-        # bulk of publishing and are per-quarter pure (pfe.quarter_publish_
-        # counts). Solve them in the same flat (variant x quarter) shape as
-        # the interval solves — one non-nested pool, results reassembled in
-        # deterministic order — so the writer that follows only has to do the
-        # genuinely sequential work. Results are IDENTICAL either way: the
-        # writer computes any quarter left unfilled inline exactly as before.
-        counts_started = time.perf_counter()
-        with mp.get_context("fork").Pool(processes=n_workers) as pool:
-            for suffix, quarter, packed in pool.imap_unordered(
-                _run_pfe_counts_job,
-                [(suffix, quarter) for suffix, _key, quarter in tasks]
-            ):
-                if packed is None:
-                    continue
-                idx, vals, dtype, length, margin_enforced = packed
-                dense = np.zeros(length, dtype=np.dtype(dtype))
-                dense[idx] = vals
-                counts_by_variant[suffix][quarter] = (dense, margin_enforced)
-        counts_s = time.perf_counter() - counts_started
+        def solve_batch(batch):
+            if not batch:
+                return 0.0
+            started = time.perf_counter()
+            workers = min(n_workers, len(batch))
+            with mp.get_context("fork").Pool(processes=workers) as pool:
+                for suffix, _key, quarter, sol, rung in pool.imap_unordered(
+                    _run_pfe_interval_job, batch
+                ):
+                    solutions[suffix][quarter] = sol
+                    rungs[suffix][quarter] = rung
+            return time.perf_counter() - started
+
+        def collect_counts(batch):
+            if not batch:
+                return 0.0
+            started = time.perf_counter()
+            workers = min(n_workers, len(batch))
+            with mp.get_context("fork").Pool(processes=workers) as pool:
+                results = pool.imap_unordered(
+                    _run_pfe_counts_job,
+                    [(suffix, quarter) for suffix, _key, quarter in batch],
+                )
+                for suffix, quarter, packed in results:
+                    if packed is None and solutions[suffix][quarter] is not None:
+                        packed = _compute_pfe_counts(suffix, quarter)
+                    if packed is None:
+                        continue
+                    idx, vals, dtype, length, margin_enforced = packed
+                    dense = np.zeros(length, dtype=np.dtype(dtype))
+                    dense[idx] = vals
+                    counts_by_variant[suffix][quarter] = (
+                        dense, margin_enforced)
+            return time.perf_counter() - started
+
+        # Solve/publish q50 first. Its exact integer population is then a hard
+        # equality for q10/q90, so stress arms vary direction allocation only.
+        q50_suffixes = [suffix for suffix, key in variants
+                        if key in {"edge_shares", "q50"}]
+        if len(variants) > 1 and len(q50_suffixes) != 1:
+            raise ValueError(
+                "multi-variant PFE requires exactly one q50/edge_shares arm")
+        q50_suffix = q50_suffixes[0] if q50_suffixes else variants[0][0]
+        q50_tasks = [task for task in tasks if task[0] == q50_suffix]
+        stress_tasks = [task for task in tasks if task[0] != q50_suffix]
+
+        print(f"  PFE final variants: solving {len(tasks)} "
+              f"variant×quarter intervals ({n_workers} workers; q50 totals "
+              "frozen before direction stress arms)")
+        solve_s = solve_batch(q50_tasks)
+        counts_s = collect_counts(q50_tasks)
+        if stress_tasks:
+            fixed = [
+                None if entry is None else int(entry[0].sum())
+                for entry in counts_by_variant[q50_suffix]
+            ]
+            _PFE_PAR_FIXED_TOTALS = {
+                suffix: fixed for suffix, _key in variants
+                if suffix != q50_suffix
+            }
+            solve_s += solve_batch(stress_tasks)
+            counts_s += collect_counts(stress_tasks)
+
+        _PFE_PAR_SOLVE_S = solve_s
+        print(f"  timing PFE interval solving: {solve_s:.1f}s")
         print(f"  timing PFE integer repair: {counts_s:.1f}s")
         _PFE_PAR_COUNTS = counts_by_variant
         _PFE_PAR_COUNTS_S = counts_s
@@ -434,6 +475,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         _PFE_PAR_VARIANT_INPUTS = None
         _PFE_PAR_PURPOSE_MIXES = None
         _PFE_PAR_DAY_QUARTERS = None
+        _PFE_PAR_FIXED_TOTALS = None
 
 
 def warn_unserviceable_measured_edges(report: dict, label: str) -> None:

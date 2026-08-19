@@ -718,6 +718,22 @@ class TestRouteIndexGroups:
         assert rung == ref_rung
         assert sol == pytest.approx(ref)
 
+    def test_direction_stress_keeps_fixed_population(self):
+        cands = [cand("measured"), cand("unmeasured")]
+        sol, rung = pfe.solve_interval_with_structure_guard(
+            cands, {"measured": 10.0}, {}, {}, fixed_total=25)
+
+        assert sol is not None
+        assert rung == RUNG_CLEAN
+        assert sol.sum() == pytest.approx(25.0, abs=1e-6)
+        assert served(sol, cands, "measured") == pytest.approx(10.0, rel=0.06)
+
+    @pytest.mark.parametrize("value", [True, -1, 1.5])
+    def test_direction_stress_rejects_invalid_fixed_population(self, value):
+        with pytest.raises(ValueError, match="non-negative integer"):
+            pfe.solve_interval_with_structure_guard(
+                [cand("m")], {"m": 1.0}, {}, {}, fixed_total=value)
+
     def test_integer_repair_enforces_a_group_cap_preserving_measured(self):
         # The rounding-stage leak this exists for: a rounded vector that
         # satisfies the measured count but puts too much of it on the

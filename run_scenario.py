@@ -134,6 +134,48 @@ def variant_path(variants: list[Path], variant: str) -> Path:
     return variants[index]
 
 
+def demand_variant_entries(meta: dict) -> list[dict[str, str]]:
+    """Return the validated semantic variant contract, with legacy fallback."""
+    contract = meta.get("demand_variant_contract")
+    n_variants = int(meta.get("n_variants", 1))
+    if contract is None:
+        if n_variants == 1:
+            return [{"name": "q50", "target_key": "edge_shares",
+                     "route_file": "calibrated.rou.xml"}]
+        if n_variants == 3:
+            return [
+                {"name": "q50", "target_key": "edge_shares",
+                 "route_file": "calibrated.rou.xml"},
+                {"name": "q10", "target_key": "edge_shares_q10",
+                 "route_file": "calibrated_v1.rou.xml"},
+                {"name": "q90", "target_key": "edge_shares_q90",
+                 "route_file": "calibrated_v2.rou.xml"},
+            ]
+        raise ValueError(f"unsupported demand metadata n_variants={n_variants}")
+    if not isinstance(contract, dict) or contract.get("schema_version") != 1:
+        raise ValueError("invalid demand_variant_contract schema")
+    entries = contract.get("variants")
+    if not isinstance(entries, list) or len(entries) != n_variants:
+        raise ValueError("demand_variant_contract does not match n_variants")
+    expected = [
+        {"name": "q50", "target_key": "edge_shares",
+         "route_file": "calibrated.rou.xml"},
+    ]
+    if n_variants == 3:
+        expected += [
+            {"name": "q10", "target_key": "edge_shares_q10",
+             "route_file": "calibrated_v1.rou.xml"},
+            {"name": "q90", "target_key": "edge_shares_q90",
+             "route_file": "calibrated_v2.rou.xml"},
+        ]
+    expected_mode = "direction_stress" if n_variants == 3 else "q50_only"
+    if n_variants not in (1, 3) or entries != expected \
+            or contract.get("mode") != expected_mode:
+        raise ValueError(
+            "demand_variant_contract must be exactly q50 or q50/q10/q90")
+    return [dict(entry) for entry in entries]
+
+
 def seed_variant_plan(variants: list[Path], *, spec: ScenarioSpec | None = None,
                       seeds: int = 3) -> list[tuple[int, Path]]:
     """Return the exact seed-to-demand-variant plan for a study.
@@ -1679,14 +1721,9 @@ def demand_variants(meta: dict) -> list[Path]:
     files let a new q50-only demand build silently reuse stale q10/q90 files
     left by an older calibration.
     """
-    paths = [SUMO_DIR / "calibrated.rou.xml"]
-    n_variants = int(meta.get("n_variants", 1))
-    if n_variants == 1:
-        return paths
-    if n_variants != 3:
-        raise ValueError(f"unsupported demand metadata n_variants={n_variants}")
-    for suffix in ("_v1", "_v2"):
-        p = SUMO_DIR / f"calibrated{suffix}.rou.xml"
+    paths = []
+    for entry in demand_variant_entries(meta):
+        p = SUMO_DIR / entry["route_file"]
         if not p.exists():
             raise FileNotFoundError(
                 f"demand metadata requires {p.name}, but it is missing")
@@ -2734,13 +2771,13 @@ def main() -> None:
         variant_by_seed = dict(spec.demand_variant_mapping)
     else:
         seed_values = [1000 + s for s in range(args.seeds)]
-        # Keep the same canonical seed/variant identity used by monthly search
-        # and the annual warm bank. A state is seed-specific; swapping q10 and
-        # q50 here made otherwise exact annual artifacts unusable by the
-        # interactive time-window path.
-        default_variants = ("q10", "q50", "q90")
+        # Ordinary builds expose only q50. Explicit stress builds expose the
+        # semantic contract in metadata, so filenames or stale sibling files
+        # can never turn a normal seed into q10/q90 accidentally.
+        default_variants = tuple(
+            entry["name"] for entry in demand_variant_entries(meta))
         variant_by_seed = {
-            seed: default_variants[i % min(len(variants), len(default_variants))]
+            seed: default_variants[i % len(default_variants)]
             for i, seed in enumerate(seed_values)
         }
     seed_count = len(seed_values)

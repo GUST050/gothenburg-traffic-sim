@@ -40,6 +40,7 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -315,6 +316,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--pfe-workers", type=int, default=None,
                    help="Maximum PFE worker processes (default: CPU count; "
                         "use 1 for serial solving and publication)")
+    p.add_argument(
+        "--direction-stress-variants", action="store_true",
+        help="Explicitly build the q10/q90 direction-allocation stress arms "
+             "beside q50. Ordinary interactive recalibration is q50-only; "
+             "closure-envelope studies opt in to all three arms.")
     p.add_argument("--through-share-target", type=float, default=0.25,
                    help="Enforced calibrated through share (start AND end "
                         "outside the canvas). The share is unidentifiable "
@@ -525,12 +531,87 @@ from demand.calibration import (_agent_path_for, _report_is_publishable,
                                 warn_unserviceable_measured_edges)
 
 
+def median_variant(variants: Sequence[tuple[str, str]]
+                   ) -> tuple[str, str] | None:
+    """The q50 arm of a variant contract, by the key the solver keys on.
+
+    Named once because three places depend on picking the same arm: the
+    solver freezes this arm's integer population before the stress arms run,
+    the day library stores it a second time under a q50-only identity, and a
+    q50-only build must compute that identical identity. A local copy of the
+    rule in any of them is a silent way for the map to stop finding the day
+    a search already paid for.
+    """
+    for entry in variants:
+        if entry[1] in {"edge_shares", "q50"}:
+            return entry
+    return None
+
+
+def direction_variants(include_stress: bool) -> list[tuple[str, str]]:
+    """Return the exact route-slot/target contract for one demand build.
+
+    q10/q90 describe uncertainty in direction allocation. They are not extra
+    ordinary demand cases and must never appear merely because a split file
+    happens to contain quantiles.
+    """
+    central = [("", "edge_shares")]
+    if not include_stress:
+        return central
+    if not has_split_quantiles():
+        raise ValueError(
+            "--direction-stress-variants requires a complete q10/q90 "
+            "direction-split contract")
+    return central + [
+        ("_v1", "edge_shares_q10"),
+        ("_v2", "edge_shares_q90"),
+    ]
+
+
+def direction_variant_manifest(
+        variants: list[tuple[str, str]],
+) -> dict:
+    """Build an additive, semantic manifest instead of relying on filenames."""
+    labels = {
+        "edge_shares": "q50",
+        "edge_shares_q10": "q10",
+        "edge_shares_q90": "q90",
+    }
+    entries = []
+    for suffix, target_key in variants:
+        try:
+            label = labels[target_key]
+        except KeyError as exc:
+            raise ValueError(f"unknown direction target key: {target_key}") from exc
+        entries.append({
+            "name": label,
+            "target_key": target_key,
+            "route_file": f"calibrated{suffix}.rou.xml",
+        })
+    names = [entry["name"] for entry in entries]
+    if names not in (["q50"], ["q50", "q10", "q90"]):
+        raise ValueError(
+            "direction variants must be exactly q50 or q50/q10/q90")
+    return {
+        "schema_version": 1,
+        "mode": "direction_stress" if len(entries) == 3 else "q50_only",
+        "variants": entries,
+    }
+
+
 def main() -> None:
     args = parse_args()
     demand_spec: DemandBuildSpec = args.demand_contract
     if demand_spec.structural_reference_date != STRUCTURAL_REFERENCE_DATE:
         sys.exit("demand spec structural_reference_date does not match "
                  f"the pipeline reference {STRUCTURAL_REFERENCE_DATE}")
+    if demand_spec.purpose == "closure_envelope" \
+            and not args.direction_stress_variants:
+        sys.exit("closure-envelope demand requires "
+                 "--direction-stress-variants")
+    if args.direction_stress_variants and args.engine != "pfe":
+        sys.exit("--direction-stress-variants requires --engine pfe so q10/q90 "
+                 "can keep q50's exact per-quarter population")
     # Keep the path stable, but do not overwrite the previous contract until
     # calibration has succeeded.  A failed build must leave the old demand and
     # its provenance coherent for the live scenario set.
@@ -793,13 +874,11 @@ def main() -> None:
         print(f"  timing candidate_generation: {elapsed:.1f}s")
 
     # ── Calibrate: one route set per direction-split variant ───────────────────
-    # q50 = the default (calibrated.rou.xml). If the split file carries
-    # quantile bounds, two extra variants are built — run_scenario spreads
-    # its Monte Carlo seeds over them so direction uncertainty reaches the
-    # per-edge confidence numbers.
-    variants = [("", "edge_shares")]
-    if has_split_quantiles():
-        variants += [("_v1", "edge_shares_q10"), ("_v2", "edge_shares_q90")]
+    # Ordinary recalibration publishes one q50 case. Direction uncertainty is
+    # an explicit diagnostic/study axis, never an implicit consequence of a
+    # split artifact containing quantiles.
+    variants = direction_variants(args.direction_stress_variants)
+    variant_manifest = direction_variant_manifest(variants)
 
     calib_path = SUMO_DIR / "calibrated.rou.xml"
     variant_fit_reports: dict[str, dict] = {}
@@ -888,8 +967,16 @@ def main() -> None:
         assembled_day_dirs: list[Path] = []
 
         def day_identity(day: pd.Timestamp, day_index: int,
-                         variant_inputs: dict) -> DayIdentity:
-            """Everything this day's calibration is a function of."""
+                         variant_inputs: dict,
+                         day_variants: list | None = None) -> DayIdentity:
+            """Everything this day's calibration is a function of.
+
+            ``day_variants`` names the arms the identity is for, defaulting to
+            the ones this build publishes. Passing a subset yields the exact
+            identity a build of only those arms would have produced, which is
+            what lets a three-variant day also answer a q50-only request.
+            """
+            chosen = variants if day_variants is None else day_variants
             span = slice(day_index * 96, (day_index + 1) * 96)
             constraints = {
                 suffix: {
@@ -898,7 +985,7 @@ def main() -> None:
                     "hard_bounds": variant_inputs[suffix]["hard_bounds_pq"][span],
                     "priors": variant_inputs[suffix]["priors_pq"][span],
                 }
-                for suffix, _key in variants
+                for suffix, _key in chosen
             }
             return DayIdentity(
                 date=day.strftime("%Y-%m-%d"),
@@ -913,7 +1000,7 @@ def main() -> None:
                     "candidate_metadata": sha256_file(
                         cand_path.with_name("candidates.meta.json")),
                     "edge_geometry": sha256_file(GEO_PATH),
-                    "variants": [key for _suffix, key in variants],
+                    "variants": [key for _suffix, key in chosen],
                     "picker_runtime": runtime_package_identity((
                         "numba", "numpy", "scipy")),
                 },
@@ -1000,6 +1087,64 @@ def main() -> None:
                     _agent_path_for(staged_path).unlink(missing_ok=True)
             return reports
 
+        def _store_q50_subset(library, day_index, day_variants, variant_inputs,
+                              scratch_dir, day_reports):
+            """Also store the median arm under a q50-only build's identity.
+
+            A closure search calibrates three direction arms; the map asks for
+            q50 alone. Those are different identities, so a warmed search day
+            could not answer a "byt dag" click and the SAME calendar day was
+            paid for twice — once at ~350 s for the search, again at ~150 s
+            for the map.
+
+            The bytes are shareable because the median arm does not depend on
+            the stress arms: it is solved first, its integer population is
+            then FROZEN as their constraint, and every arm is published from
+            its own solution through the same writer. That is the argument;
+            the evidence is a byte comparison of both builds of one real date,
+            recorded in validation/q50_subset_identity_v1.json. Storing the
+            bytes under a second identity would be a silent approximation
+            without it.
+
+            The provenance record is recomputed for the single arm rather than
+            copied: validate_assembled_provenance binds vehicle counts PER
+            VARIANT, so a record naming three arms cannot stand in for one.
+            Costs ~3.5 MB per stored day on top of the ~13 MB the full entry
+            already uses.
+            """
+            if len(day_variants) <= 1:
+                return
+            median = median_variant(day_variants)
+            if median is None:
+                return
+            suffix, _key = median
+            day = range_start + pd.Timedelta(days=day_index)
+            subset_identity = day_identity(day, day_index, variant_inputs,
+                                           [median])
+            if library.get(subset_identity) is not None:
+                return
+            route = scratch_dir / f"calibrated{suffix}.rou.xml"
+            agents = _agent_path_for(route)
+            record = scratch_dir / f"subset-{DAY_PROVENANCE_NAME}"
+            record.write_text(json.dumps(validate_calibrated_provenance(
+                cand_path,
+                cand_path.with_name(
+                    cand_path.name.replace(".rou.xml", ".meta.json")),
+                [(route, agents)]), separators=(",", ":")))
+            # Stored under the names a q50-only build writes, which is what a
+            # q50-only window will look for when it assembles.
+            library.put(subset_identity, {
+                "calibrated.rou.xml": route,
+                "calibrated.agents.json": agents,
+                "fit.json": scratch_dir / f"fit{suffix}.json",
+                DAY_PROVENANCE_NAME: record,
+            }, fit={
+                "geh_pct": day_reports[suffix]["geh_pct"],
+                "vehicles": day_reports[suffix]["vehicles"],
+            })
+            print(f"  day {subset_identity.date}: also stored as a q50-only "
+                  f"day {subset_identity.key[:12]}")
+
         def _calibrate_one_day(library, identity, day_index, variants,
                                variant_inputs, options):
             """Calibrate and publish ONE day, day-local, into the library."""
@@ -1063,6 +1208,8 @@ def main() -> None:
                     "geh_pct": day_reports[""]["geh_pct"],
                     "vehicles": day_reports[""]["vehicles"],
                 })
+                _store_q50_subset(library, day_index, variants,
+                                  variant_inputs, scratch_dir, day_reports)
 
         # ── Congestion-feedback loop (primary "" / q50 variant only) ──────────
         # PFE picks route USE COUNTS to match sensor totals, but the candidate
@@ -1272,6 +1419,7 @@ def main() -> None:
         build_options={
             "engine": args.engine,
             "seed": args.seed,
+            "direction_stress_variants": args.direction_stress_variants,
             "legacy_random_pool": args.legacy_random_pool,
             "through_fraction": args.through_fraction,
             "gravity_km": args.gravity_km,
@@ -1287,6 +1435,7 @@ def main() -> None:
             "through_share_target": args.through_share_target,
         },
     )
+    meta["demand_variant_contract"] = variant_manifest
     # What the published local D-factors did to the estimated split, if
     # anything. Empty when no station has a verified directional_reference.
     anchor_report = direction_anchor_report()
@@ -1479,7 +1628,7 @@ def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
     manifest. Optional direction variants are included only when present.
     """
     sumo_dir = Path(sumo_dir)
-    candidates = [
+    base = [
         sumo_dir / "demand_meta.json",
         sumo_dir / "demand_build_spec.json",
         # The calibrated structure and purpose audit is relative to this exact
@@ -1489,11 +1638,24 @@ def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
         sumo_dir / "candidates.meta.json",
         sumo_dir / "calibrated.rou.xml",
         sumo_dir / "calibrated.agents.json",
+    ]
+    auxiliaries = [
         sumo_dir / "calibrated_v1.rou.xml",
         sumo_dir / "calibrated_v1.agents.json",
         sumo_dir / "calibrated_v2.rou.xml",
         sumo_dir / "calibrated_v2.agents.json",
     ]
+    # A q50-only build may deliberately leave old auxiliary files beside the
+    # live route during publish-after-validate. Never archive those stale
+    # siblings as products of the new run. Without metadata, retain the
+    # historical helper behaviour used by diagnostics and older fixtures.
+    include_auxiliaries = True
+    try:
+        metadata = json.loads((sumo_dir / "demand_meta.json").read_text())
+        include_auxiliaries = int(metadata.get("n_variants", 1)) == 3
+    except (OSError, ValueError, TypeError):
+        pass
+    candidates = base + (auxiliaries if include_auxiliaries else [])
     return [path for path in candidates if path.is_file()]
 
 

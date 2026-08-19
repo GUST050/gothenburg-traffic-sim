@@ -134,6 +134,44 @@ class TestDemandVariants:
             tmp_path / "calibrated.rou.xml"
         ]
 
+    def test_q50_manifest_is_the_authoritative_normal_contract(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        (tmp_path / "calibrated.rou.xml").write_text("<routes/>")
+        meta = {
+            "n_variants": 1,
+            "demand_variant_contract": {
+                "schema_version": 1,
+                "mode": "q50_only",
+                "variants": [{
+                    "name": "q50", "target_key": "edge_shares",
+                    "route_file": "calibrated.rou.xml",
+                }],
+            },
+        }
+        assert run_scenario.demand_variant_entries(meta)[0]["name"] == "q50"
+        assert run_scenario.demand_variants(meta) == [
+            tmp_path / "calibrated.rou.xml"]
+
+    def test_manifest_rejects_implicit_or_reordered_stress_arms(self):
+        meta = {
+            "n_variants": 3,
+            "demand_variant_contract": {
+                "schema_version": 1,
+                "mode": "direction_stress",
+                "variants": [
+                    {"name": "q10", "target_key": "edge_shares_q10",
+                     "route_file": "calibrated_v1.rou.xml"},
+                    {"name": "q50", "target_key": "edge_shares",
+                     "route_file": "calibrated.rou.xml"},
+                    {"name": "q90", "target_key": "edge_shares_q90",
+                     "route_file": "calibrated_v2.rou.xml"},
+                ],
+            },
+        }
+        with pytest.raises(ValueError, match="exactly q50"):
+            run_scenario.demand_variant_entries(meta)
+
     def test_quantile_metadata_requires_every_declared_route_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
         (tmp_path / "calibrated.rou.xml").write_text("<routes/>")

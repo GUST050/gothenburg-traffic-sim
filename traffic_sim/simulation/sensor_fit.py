@@ -169,6 +169,8 @@ def _daily_output_fit_errors(audit: dict, output_fit: dict, *,
                 f"sensor-output-fit har fel kvartgränser för dag {day_index + 1}")
 
         def window_pairs(rows: Any, label: str) -> tuple[list[tuple[float, float]], list[str]]:
+            # pylint: disable=cell-var-from-loop  # invoked inside this same iteration, so the late binding
+            # cannot be observed; the closure never escapes the loop.
             if not isinstance(rows, list):
                 return [], [f"{label} saknar serier"]
             sliced = []

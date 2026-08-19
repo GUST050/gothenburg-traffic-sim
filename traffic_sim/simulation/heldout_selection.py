@@ -145,7 +145,7 @@ def resolve_demand_archive(build_key: str, root: Path = Path("runs"),
             f"({detail}). The key does not determine the demand inputs, so no "
             f"exposure computed from it would be reproducible.")
 
-    (digests, members), = groups.items()
+    (digests, members), = groups.items()  # pylint: disable=unbalanced-dict-unpacking  # len==1 asserted above
     members.sort(key=lambda item: item[0].name)      # documented tie-break
     directory, meta = members[0]
     input_digests = dict(zip(REQUIRED_FILES, digests))

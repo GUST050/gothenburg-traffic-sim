@@ -77,6 +77,20 @@ class TestB1DateRangeContract:
         assert "candidates.rou.xml" in products
         assert "candidates.meta.json" in products
 
+    def test_q50_run_does_not_archive_stale_stress_routes(self, tmp_path):
+        (tmp_path / "demand_meta.json").write_text('{"n_variants": 1}')
+        for name in (
+            "calibrated.rou.xml", "calibrated_v1.rou.xml",
+            "calibrated_v2.rou.xml",
+        ):
+            (tmp_path / name).write_text(name)
+
+        products = {path.name for path in bsd.demand_run_products(tmp_path)}
+
+        assert "calibrated.rou.xml" in products
+        assert "calibrated_v1.rou.xml" not in products
+        assert "calibrated_v2.rou.xml" not in products
+
     def test_date_is_a_backward_compatible_single_day_alias(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py", "--date", "2025-09-17"])
         args = bsd.parse_args()
@@ -100,6 +114,45 @@ class TestB1DateRangeContract:
             sys, "argv", ["build_sumo_demand.py", "--pfe-workers", "0"])
         with pytest.raises(SystemExit):
             bsd.parse_args()
+
+    def test_direction_stress_variants_are_explicit_opt_in(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py"])
+        assert bsd.parse_args().direction_stress_variants is False
+
+        monkeypatch.setattr(
+            sys, "argv",
+            ["build_sumo_demand.py", "--direction-stress-variants"])
+        assert bsd.parse_args().direction_stress_variants is True
+
+    def test_normal_build_has_one_q50_variant(self):
+        variants = bsd.direction_variants(False)
+        assert variants == [("", "edge_shares")]
+        assert bsd.direction_variant_manifest(variants) == {
+            "schema_version": 1,
+            "mode": "q50_only",
+            "variants": [{
+                "name": "q50",
+                "target_key": "edge_shares",
+                "route_file": "calibrated.rou.xml",
+            }],
+        }
+
+    def test_stress_build_requires_complete_quantiles(self, monkeypatch):
+        monkeypatch.setattr(bsd, "has_split_quantiles", lambda: False)
+        with pytest.raises(ValueError, match="complete q10/q90"):
+            bsd.direction_variants(True)
+
+        monkeypatch.setattr(bsd, "has_split_quantiles", lambda: True)
+        variants = bsd.direction_variants(True)
+        assert variants == [
+            ("", "edge_shares"),
+            ("_v1", "edge_shares_q10"),
+            ("_v2", "edge_shares_q90"),
+        ]
+        manifest = bsd.direction_variant_manifest(variants)
+        assert manifest["mode"] == "direction_stress"
+        assert [entry["name"] for entry in manifest["variants"]] == [
+            "q50", "q10", "q90"]
 
     def test_validate_range_rejects_year_boundary_crossing(self):
         with pytest.raises(ValueError, match="crosses"):
@@ -990,7 +1043,10 @@ class TestVariantPublication:
                 # and result shapes.
                 if worker is dcal._run_pfe_counts_job:
                     for suffix, quarter in tasks:
-                        yield suffix, quarter, None
+                        yield suffix, quarter, (
+                            np.array([0], dtype=np.int64),
+                            np.array([1], dtype=np.int64),
+                            np.dtype(np.int64).str, 1, True)
                     return
                 for suffix, key, quarter in tasks:
                     yield suffix, key, quarter, np.array([1.0]), pfe.RUNG_CLEAN

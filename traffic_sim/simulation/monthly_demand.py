@@ -601,6 +601,7 @@ def build_demand_archive(required: DemandBuildSpec) -> None:
                     "--demand-spec",
                     str(spec_path),
                     "--keep-scenarios",
+                    "--direction-stress-variants",
                 ],
                 check=False,
                 cwd=_PROJECT_ROOT,
