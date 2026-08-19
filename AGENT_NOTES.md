@@ -123,6 +123,27 @@ which model may continue. See `AGENTS.md`.
   Gren B/D.`
 - Actor notes: `No release gate, calibration gate or frozen evidence was
   weakened; no q archive was rewritten; no external data was requested.`
+- Runtime repair (2026-08-17, user-directed; supersedes earlier "monthly/API
+  untouched" wording for this narrow seam): `Updated latest main dae20aa.
+  Ordinary recalibration now builds exactly one q50 route and records a
+  semantic variant manifest. Only --direction-stress-variants builds
+  q50/q10/q90; monthly closure-envelope generation passes that flag. PFE
+  freezes q50's exact integer total first and enforces it for q10/q90 on every
+  relaxation rung. run_scenario maps all ordinary seeds to q50 and ignores
+  stale auxiliary files. No gate was decided and no frozen artifact changed.`
+- Repair checks (2026-08-17): `541 focused demand/PFE/scenario/monthly/signal
+  tests pass; server tests pass 140/140 with loopback access; git diff --check
+  passes; localhost:8000 returns HTTP 200 and /api/ping returns {"ok": true}.
+  Current main has no make check target. make test was attempted and stopped
+  after 493 passes/11 failures caused by frozen benchmark/source drift and the
+  pre-existing live-demand mismatch; no focused runtime-contract test failed.`
+- End-to-end result (2026-08-17): `Local API recalibration for forecast
+  2027-07-14 completed and published build 4672988fd88a7d8422f5 (demand key
+  69788d01d62bd600). Metadata is mode=q50_only, n_variants=1, PFE GEH=100%,
+  zero infeasible intervals, 18,031 vehicles. Baseline seeds 1000/1001/1002
+  all map to q50; each loaded and inserted 18,031 vehicles with zero waiting,
+  teleports or collisions. The superseded closure scenario files were removed
+  by normal demand-scoped publication. Local server remains on port 8000.`
 <!-- CURRENT_HANDOFF_END -->
 
 ## History

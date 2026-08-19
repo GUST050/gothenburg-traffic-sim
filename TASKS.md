@@ -55,9 +55,13 @@ owners, states and approval formulas are not active workflow rules. See
   worker budget, 300 s timeout and closed v5 gates remain unchanged. Do not
   hardcode 107's annual 0.52 as 96 measured quarters or proceed past Gate S/M/P
   without their frozen evidence.`
-- Updated: `2026-08-16 unconditional implementation of the dated direction plan
-  (Fas 0A/0B/1) with 141 new tests; no gate decided, no conditional branch
-  opened.`
+- Runtime repair: `2026-08-17 supersedes the earlier statement that the
+  variant runtime remained untouched. Ordinary recalibration is now explicitly
+  q50-only. q10/q90 are opt-in closure-envelope stress arms and retain q50's
+  exact integer population in every quarter. This reliability repair decides
+  neither Gate S nor Gate M and rewrites no frozen evidence.`
+- Updated: `2026-08-17 robust variant-contract repair on latest main; no gate
+  decided and no frozen evidence rewritten.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
