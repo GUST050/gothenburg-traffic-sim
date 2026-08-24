@@ -29,8 +29,11 @@ owners, states and approval formulas are not active workflow rules. See
   ui-monthly-euc9qp was stopped at 476/1,776 and its workspace remains
   resumable. Current server wiring already runs three interactive seeds in
   parallel (measured baseline 11.0 -> 5.9 s and closure 21.6 -> 13.9 s,
-  byte-identical apart from generated_at), but a new closure still misses the
-  <=10 s goal. Exact structured closure caching, result-neutral daily timing,
+  byte-identical apart from generated_at). A clean 10-trial active-demand run
+  now pins first-new closure p95 at 10.496 s: all outputs and 30 seed-health
+  records match, but the <=10 s goal is still missed by 0.496 s. Exact-repeat
+  structured cache p95 is 0.329 s over 10/10 verified hits with zero SUMO work,
+  safely inside its <=2 s goal. Exact structured closure caching, result-neutral daily timing,
   opt-in routing controls and an active-slot guard are implemented. The
   qualified entered/timeLoss-only edgeData output is now the production
   default, with an isolated full-field rollback flag. Deterministic disruption
@@ -41,10 +44,9 @@ owners, states and approval formulas are not active workflow rules. See
   live-shaped reusable-Python-worker single draws preserved exact evidence but
   measured 1.027x and 0.998x; they are insufficient to accept or reject the
   pool. The replacement harness requires at least four counterbalanced paired
-  trials and the generic pool remains inactive. A single isolated
-  production-shaped closure completed in 10.690 s with exact semantic and
-  trajectory digests and clean health, but one run is not p95 evidence and
-  remains above the <=10 s goal. Targets remain
+  trials and the generic pool remains inactive. The new closure profile has
+  median SUMO 6.636 s, disruption 1.184 s and trajectory publication 1.131 s;
+  these measured phases, not another generic pool, define the next work. Targets remain
   exact-repeat p95 <=2 s, async ack p95 <=1 s, new validated closure p95 <=10
   s, and >=2.0x monthly verified-unit throughput without semantic or evidence
   changes. These targets now explicitly cover 50 physical stations and the
@@ -65,9 +67,10 @@ owners, states and approval formulas are not active workflow rules. See
   2.7→2.5 s, max one departure/s). It is not active: ten paired concurrent
   baseline trials measured median 1.805→1.846 s (+2.30%), and closure-shaped
   equivalence/performance is unmeasured.`
-- Suggested next action: `Measure exact-repeat and first-new closure p95 on the
-  adopted active release, then address only the largest measured remaining
-  phase. Do not launch the remaining 104,684 annual warm units or activate
+- Suggested next action: `Keep the passing exact-repeat cache unchanged and
+  reduce at least 0.5 s from the first-new path, starting with a bounded paired
+  experiment on its measured SUMO/trajectory/disruption phases. Also measure
+  the still-open async acknowledgement p95. Do not launch the remaining 104,684 annual warm units or activate
   rejected generic/driver pools without a separate explicit decision.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve user-owned uncommitted source/generated artifacts
@@ -79,7 +82,8 @@ owners, states and approval formulas are not active workflow rules. See
   applicable frozen evidence. Do not hardcode 107's annual 0.5231 as 96
   measured quarters or present q10/q90 as calibrated probabilities.`
 - Updated: `2026-08-24 after matched-size schema-v2 qualification, adoption,
-  soak, active-day rebuild and one bounded q50 warm-state pilot.`
+  soak, active-day rebuild, one bounded q50 warm-state pilot and clean-tree
+  exact-repeat/first-new closure p95 measurement.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->

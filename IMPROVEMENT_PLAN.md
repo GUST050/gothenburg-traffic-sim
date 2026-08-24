@@ -182,10 +182,13 @@ model-independent protocol in `AGENTS.md`.
 3. Execute the road-closure and monthly-simulation speed goal in
    [`docs/plans/ROAD_CLOSURE_SIMULATION_SPEED_PLAN_2026-08-21.md`](docs/plans/ROAD_CLOSURE_SIMULATION_SPEED_PLAN_2026-08-21.md).
    The named monthly run is paused, so S0 measurement and the remaining
-   implementation phases may proceed under the plan's resource guard. Leave
-   keep the generic Python-worker pool inactive and spend the next measurement
-   budget on a repeated p95 check of the adopted interactive path, then bounded
-   outer-unit/inner-seed allocation now that per-key single-flight is present.
+   implementation phases may proceed under the plan's resource guard. The
+   adopted active release now has real measurements: exact structured repeats
+   pass at 0.329 s p95 over 10/10 verified hits, while ten first-new closures
+   give 10.496 s p95 with identical evidence and clean health, missing the
+   target by 0.496 s. Keep the generic Python-worker pool inactive and spend
+   the next bounded experiment on the measured SUMO/trajectory/disruption
+   budget, then outer-unit/inner-seed allocation now that per-key single-flight is present.
    Revisit the pool only with the schema-v2 multi-trial harness; do not infer a
    decision from either historical single draw.
    Preserve the full-edgeData rollback and the 50-station calibrated

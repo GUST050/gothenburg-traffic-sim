@@ -2,54 +2,32 @@
   "kind": "exact_close_cache_benchmark",
   "measured": {
     "completed_trials": 10,
-    "errors": [
-      "trial 1: response was not an exact cache hit",
-      "trial 1: cache status contract failed",
-      "trial 2: response was not an exact cache hit",
-      "trial 2: cache status contract failed",
-      "trial 3: response was not an exact cache hit",
-      "trial 3: cache status contract failed",
-      "trial 4: response was not an exact cache hit",
-      "trial 4: cache status contract failed",
-      "trial 5: response was not an exact cache hit",
-      "trial 5: cache status contract failed",
-      "trial 6: response was not an exact cache hit",
-      "trial 6: cache status contract failed",
-      "trial 7: response was not an exact cache hit",
-      "trial 7: cache status contract failed",
-      "trial 8: response was not an exact cache hit",
-      "trial 8: cache status contract failed",
-      "trial 9: response was not an exact cache hit",
-      "trial 9: cache status contract failed",
-      "trial 10: response was not an exact cache hit",
-      "trial 10: cache status contract failed",
-      "cache-hit responses were not semantically identical"
-    ],
+    "errors": [],
     "latencies_seconds": [
-      0.353643,
-      0.001573,
-      0.001226,
-      0.000938,
-      0.000995,
-      0.000919,
-      0.001019,
-      0.00094,
-      0.000798,
-      0.000963
+      0.328128,
+      0.307274,
+      0.310894,
+      0.311277,
+      0.326087,
+      0.31018,
+      0.313701,
+      0.311746,
+      0.309991,
+      0.330244
     ],
-    "max_seconds": 0.353643,
-    "p50_seconds": 0.000979,
-    "p95_seconds": 0.195212,
-    "response_digest": "3da4458bdad8e01543f0f46fe535c7f3f3dae3506fff60239d745747d05e4142"
+    "max_seconds": 0.330244,
+    "p50_seconds": 0.311512,
+    "p95_seconds": 0.329292,
+    "response_digest": "d2717e4f71af763ae246a81ea59a72020f444243692ed09652afdef674c395ce"
   },
   "provenance": {
     "fixture": "web/data/scenarios/close_26842525_26355153_0.json",
     "fixture_hashes": {
-      "scenario_sha256": "52fb10506164d153f5560982849ddfec2671ec38fa069c8325a0563cd28c2d7f",
-      "trajectory_sha256": "ed7565445378089e89a5a349ba390172e7b2490239bab75239f930b63d28a62b"
+      "scenario_sha256": "f1374526ac75c662fac36acfa9a62b18dfc0282b4e8550da3ab5f7d641d7db58",
+      "trajectory_sha256": "9681671b7470ca87428674cdc90e71b1b642eba1e9cc437b8a386eeafbf3a375"
     },
-    "git_commit": "eca95678d5b14a55e11dc8ac9002063b841cb5aa",
-    "git_dirty": true,
+    "git_commit": "bf678b4ed43e5c3c4623e87e87269b19f61449fb",
+    "git_dirty": false,
     "platform": "macOS-15.6.1-arm64-arm-64bit",
     "python": "3.9.6",
     "scenario_spec": {
@@ -89,7 +67,7 @@
   "schema_version": 1,
   "verdict": {
     "p95_seconds_maximum": 2.0,
-    "status": "fail",
+    "status": "pass",
     "zero_sumo_calls_evidence": "every POST returned cached=true; status returned cache_hit=true without started_at; scenario and trajectory bytes were unchanged"
   }
 }

@@ -115,7 +115,14 @@ which model may continue. See `AGENTS.md`.
   production-shaped closure completed in 10.690 s versus 11.549 s with the
   full-field rollback. Scenario and trajectory digests were equal, all three
   seeds loaded/inserted 21,408 vehicles with zero teleports, and health was
-  verified clean. This is a diagnostic run, not p95 evidence.`
+  verified clean. The current catalog release then ran ten clean first-new
+  closure trials at commit eeef654: p50 10.461 s, p95 10.496 s, range
+  10.409–10.508 s, zero semantic/reference mismatches and all 30 seed records
+  clean. It misses the <=10 s gate by 0.496 s. Median phases were SUMO 6.636 s,
+  disruption 1.184 s and trajectory publication 1.131 s. A separate clean-tree
+  structured-cache run at bf678b4 passed 10/10 exact hits with p50 0.312 s,
+  p95 0.329 s and max 0.330 s; every response/status proved a cache hit and
+  scenario/trajectory hashes stayed unchanged.`
 - Passage-reconciliation evidence: `Five counterbalanced three-seed baseline
   trials measured current median 1.9908 s versus candidate 2.0536 s (candidate
   3.15% slower); this is not a p95 claim. Learning plus exact verification cost
@@ -152,7 +159,8 @@ which model may continue. See `AGENTS.md`.
   is UNDECIDED and Gate M is INCONCLUSIVE.`
 - Known code risk: `The repaired exact cache is conservative and hashes the
   live routes, trajectory sidecars, network inputs, runtime and relevant source
-  tree twice on a hit; its <=2 s p95 target still needs measurement. The
+  tree twice on a hit; the measured 0.329 s p95 clears its <=2 s target, so
+  further cache optimization is not currently justified. The
   baseline writer race is repaired with per-key cross-process single-flight,
   but nested daily-worker plus seed-worker execution remains refused until a
   complete equivalence, resource and cancellation benchmark passes.
@@ -173,6 +181,7 @@ which model may continue. See `AGENTS.md`.
   traffic_sim/storage/singleflight.py,
   traffic_sim/simulation/monthly_search.py, web/app.js, related tests,
   tools/benchmark_daily_worker_pool.py,
+  tools/benchmark_exact_close_cache.py,
   tools/soak_route_catalog.py,
   tools/prune_candidate_cache.py,
   tools/verify_closure_cost_ordering_golden.py,
@@ -188,6 +197,7 @@ which model may continue. See `AGENTS.md`.
   docs/plans/LARGE_SIMULATION_FUNCTION_STRUCTURE_2026-08-23.md,
   docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md,
   tests/test_sensor_scale_contract.py, tests/test_closure_disruption.py,
+  tests/test_benchmark_exact_close_cache.py,
   tests/test_annual_warm_store.py, tests/test_annual_warm_readiness.py,
   tests/test_singleflight.py,
   tools/standard_driver_pool.py, tests/test_standard_driver_pool.py,
@@ -209,7 +219,9 @@ which model may continue. See `AGENTS.md`.
   active-day build/baseline and one q50 warm unit all completed successfully.
   The catalog/demand/PFE/day-library focused suites pass 647 tests with one
   skip; the HTTP server suite passes 151 tests; make lint, focused tool pylint,
-  node --check and git diff --check pass. The annual store/readiness rerun
+  node --check and git diff --check pass. The cache/phase benchmark contract
+  suite passes 165 tests; the new exact-cache tool's focused pylint passes.
+  The annual store/readiness rerun
   passes 17/17; successful packing now removes both chosen and losing
   compression temporaries, and the pilot's one stale 248-byte staging file was
   removed. Live ping/status smoke checks pass. The current robustness regression group passes 918 tests with one
