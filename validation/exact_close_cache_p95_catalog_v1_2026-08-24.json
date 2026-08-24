@@ -1,0 +1,95 @@
+{
+  "kind": "exact_close_cache_benchmark",
+  "measured": {
+    "completed_trials": 10,
+    "errors": [
+      "trial 1: response was not an exact cache hit",
+      "trial 1: cache status contract failed",
+      "trial 2: response was not an exact cache hit",
+      "trial 2: cache status contract failed",
+      "trial 3: response was not an exact cache hit",
+      "trial 3: cache status contract failed",
+      "trial 4: response was not an exact cache hit",
+      "trial 4: cache status contract failed",
+      "trial 5: response was not an exact cache hit",
+      "trial 5: cache status contract failed",
+      "trial 6: response was not an exact cache hit",
+      "trial 6: cache status contract failed",
+      "trial 7: response was not an exact cache hit",
+      "trial 7: cache status contract failed",
+      "trial 8: response was not an exact cache hit",
+      "trial 8: cache status contract failed",
+      "trial 9: response was not an exact cache hit",
+      "trial 9: cache status contract failed",
+      "trial 10: response was not an exact cache hit",
+      "trial 10: cache status contract failed",
+      "cache-hit responses were not semantically identical"
+    ],
+    "latencies_seconds": [
+      0.353643,
+      0.001573,
+      0.001226,
+      0.000938,
+      0.000995,
+      0.000919,
+      0.001019,
+      0.00094,
+      0.000798,
+      0.000963
+    ],
+    "max_seconds": 0.353643,
+    "p50_seconds": 0.000979,
+    "p95_seconds": 0.195212,
+    "response_digest": "3da4458bdad8e01543f0f46fe535c7f3f3dae3506fff60239d745747d05e4142"
+  },
+  "provenance": {
+    "fixture": "web/data/scenarios/close_26842525_26355153_0.json",
+    "fixture_hashes": {
+      "scenario_sha256": "52fb10506164d153f5560982849ddfec2671ec38fa069c8325a0563cd28c2d7f",
+      "trajectory_sha256": "ed7565445378089e89a5a349ba390172e7b2490239bab75239f930b63d28a62b"
+    },
+    "git_commit": "eca95678d5b14a55e11dc8ac9002063b841cb5aa",
+    "git_dirty": true,
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python": "3.9.6",
+    "scenario_spec": {
+      "analysis_window": null,
+      "closures": [
+        {
+          "closure_type": "full",
+          "edge_id": "26842525_26355153_0",
+          "end_time": "2027-09-09T00:00:00",
+          "permitted_access_exceptions": [],
+          "start_time": "2027-09-08T00:00:00"
+        }
+      ],
+      "demand_build_id": "ab27c11be5a6a8b52045",
+      "demand_variant_mapping": {
+        "1000": "q50",
+        "1001": "q50",
+        "1002": "q50"
+      },
+      "end_time": "2027-09-09T00:00:00",
+      "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+      "objective_profile": "default",
+      "scenario_id": "close_26842525_26355153_0",
+      "schema_version": 1,
+      "seed_set": [
+        1000,
+        1001,
+        1002
+      ],
+      "signal_plan_id": null,
+      "simulation_mode": "meso",
+      "start_time": "2027-09-08T00:00:00"
+    },
+    "target": "http://127.0.0.1:8000/api/close",
+    "trials": 10
+  },
+  "schema_version": 1,
+  "verdict": {
+    "p95_seconds_maximum": 2.0,
+    "status": "fail",
+    "zero_sumo_calls_evidence": "every POST returned cached=true; status returned cache_hit=true without started_at; scenario and trajectory bytes were unchanged"
+  }
+}

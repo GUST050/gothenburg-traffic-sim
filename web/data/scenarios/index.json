@@ -47,7 +47,7 @@
         {
           "edge_id": "26842525_26355153_0",
           "begin_s": 0,
-          "end_s": 90000
+          "end_s": 86400
         }
       ],
       "closure_integrity": "verified_clean",
