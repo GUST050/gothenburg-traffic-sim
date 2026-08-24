@@ -10,7 +10,8 @@ which model may continue. See `AGENTS.md`.
 - Focus and status: `The canonical pre-picker weekday/weekend route catalog is
   robustness-repaired, matched-size qualified, schema-v2 adopted and soaked.
   Production defaults to the verified catalog with explicit legacy rollback.
-  The active 2027-09-08 day was rebuilt and simulated successfully. Annual
+  The user successfully rebuilt the active 2027-11-11 forecast day through the
+  browser; the current first-new interactive performance is accepted. Annual
   warming remains deliberately inactive after a refreshed preflight and one
   successful bounded q50 unit; 104,684 planned units remain pending. It remains part of the broader
   road-closure and monthly-simulation speed goal. The named monthly search is
@@ -59,13 +60,15 @@ which model may continue. See `AGENTS.md`.
   plus explicit legacy rollback passed soak. Seed/variant order, exact
   widened-rung PFE fallback and mixed-pool tour IDs are regression-tested. See
   docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md.`
-- Current product evidence: `Active forecast demand: 2027-09-08, catalog build
-  ab27c11be5a6a8b52045, q50_only, 20,818 calibrated trips selected by PFE. All 672 directed
+- Current product evidence: `Active forecast demand: 2027-11-11, catalog build
+  b927e6de0b6443fd87e2, q50_only, 21,744 calibrated trips selected by PFE. All 672 directed
   sensor-edge × 15-minute integer targets match exactly: 672/672, maximum and
   summed absolute residual 0. Validation is overall warn
-  because trip-length L1 is now fail-closed until an absolute external-fit
-  threshold is frozen. `candidate_catalog` binds weekday key
-  13020f80f1be36df59e27144aad8d808 and records a verified cache hit. SUMO accepted all 20,818
+  because trip-length L1 is fail-closed until an absolute external-fit
+  threshold is frozen, one quarter exceeds the short-trip structure cap by two
+  vehicles and two quarters required a six-vehicle purpose-mix relaxation.
+  Counts and SUMO health still pass. `candidate_catalog` binds weekday key
+  13020f80f1be36df59e27144aad8d808 and records a verified cache hit. SUMO accepted all 21,744
   vehicles in all three seeds, with zero waiting, unfinished trips, teleports
   or collisions; this is an integrity check, not demand inflation.
   The isolated reconciliation candidate kept all 21,240 vehicles, every route,
@@ -122,7 +125,10 @@ which model may continue. See `AGENTS.md`.
   disruption 1.184 s and trajectory publication 1.131 s. A separate clean-tree
   structured-cache run at bf678b4 passed 10/10 exact hits with p50 0.312 s,
   p95 0.329 s and max 0.330 s; every response/status proved a cache hit and
-  scenario/trajectory hashes stayed unchanged.`
+  scenario/trajectory hashes stayed unchanged. On 2026-08-24 the user observed
+  roughly 30 s end-to-end in the browser and explicitly accepted the current
+  speed; the former 0.496 s miss against the <=10 s benchmark is retained as
+  historical evidence, not remaining product work.`
 - Passage-reconciliation evidence: `Five counterbalanced three-seed baseline
   trials measured current median 1.9908 s versus candidate 2.0536 s (candidate
   3.15% slower); this is not a p95 claim. Learning plus exact verification cost
@@ -304,10 +310,19 @@ which model may continue. See `AGENTS.md`.
   matched-size 30-pair campaign, schema-v2 adoption and soak pass. The former
   annual plan/preflight/pilot remain historical and must be refreshed only
   after adoption. Annual activation remains a future explicit decision.`
-- Suggested next action: `Run the matched-size catalog campaign, qualify,
-  schema-v2 adopt and soak before refreshing warming; then return to repeated
-  road-closure p95 and monthly throughput evidence. Keep rejected pools
-  isolated.`
+- Latest UI truth fix: `web/app.js and web/index.html no longer expose the
+  representative q/seed identity in the normal animation or sensor-audit
+  labels. The current-quarter summary now separates modelled
+  arbete/service/fritid from geographic external/through categories and states
+  that the delivered sensor schema contains passage counts, not trip purpose.
+  ARCHITECTURE.md records the contract. The date-recalibration start path also
+  translates browser network failures into an actionable localhost:8000
+  message; this covers stale tabs left on a stopped fallback port. Focused
+  validation/UI tests pass 24/24, JavaScript syntax and diff checks pass.`
+- Suggested next action: `Keep the accepted interactive closure path unchanged.
+  If further performance work is requested, use the still-open monthly
+  throughput or 50-sensor evidence rather than reopening the retired 0.496 s
+  optimization. Keep annual warming inactive and rejected pools isolated.`
 - Actor notes: `Historical handoff detail follows outside the current markers;
   it is evidence for its date, not current workflow authority.`
 <!-- CURRENT_HANDOFF_END -->

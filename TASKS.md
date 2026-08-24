@@ -9,8 +9,9 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Use the adopted canonical weekday/weekend route catalog and
-  continue reducing first-new road-closure p95; keep full annual warming
+- Current focus: `Keep the adopted canonical weekday/weekend route catalog and
+  current interactive performance stable; do not spend more work shaving the
+  former 0.496 s first-new-closure target miss. Keep full annual warming
   disabled until explicitly launched.`
 - Status: `CATALOG QUALIFIED, ADOPTED AND SOAKED. A new schema-v2 campaign used
   the same 6,000-candidate request in both arms for 30 counterbalanced pairs.
@@ -30,8 +31,10 @@ owners, states and approval formulas are not active workflow rules. See
   resumable. Current server wiring already runs three interactive seeds in
   parallel (measured baseline 11.0 -> 5.9 s and closure 21.6 -> 13.9 s,
   byte-identical apart from generated_at). A clean 10-trial active-demand run
-  now pins first-new closure p95 at 10.496 s: all outputs and 30 seed-health
-  records match, but the <=10 s goal is still missed by 0.496 s. Exact-repeat
+  pins first-new closure p95 at 10.496 s: all outputs and 30 seed-health
+  records match. The user accepted the current interactive performance on
+  2026-08-24 after observing roughly 30 s end-to-end in the UI, so the former
+  <=10 s product target and its 0.496 s miss are no longer open work. Exact-repeat
   structured cache p95 is 0.329 s over 10/10 verified hits with zero SUMO work,
   safely inside its <=2 s goal. Exact structured closure caching, result-neutral daily timing,
   opt-in routing controls and an active-slot guard are implemented. The
@@ -46,9 +49,9 @@ owners, states and approval formulas are not active workflow rules. See
   pool. The replacement harness requires at least four counterbalanced paired
   trials and the generic pool remains inactive. The new closure profile has
   median SUMO 6.636 s, disruption 1.184 s and trajectory publication 1.131 s;
-  these measured phases, not another generic pool, define the next work. Targets remain
-  exact-repeat p95 <=2 s, async ack p95 <=1 s, new validated closure p95 <=10
-  s, and >=2.0x monthly verified-unit throughput without semantic or evidence
+  these measured phases remain useful diagnostics, not a required next optimization.
+  Remaining performance targets are exact-repeat p95 <=2 s, async ack p95 <=1 s
+  and >=2.0x monthly verified-unit throughput without semantic or evidence
   changes. These targets now explicitly cover 50 physical stations and the
   larger calibrated population their evidence may require. Fixed-load 50-row
   validation measured 3.325 ms p95 and is not the closure bottleneck; a
@@ -67,10 +70,11 @@ owners, states and approval formulas are not active workflow rules. See
   2.7→2.5 s, max one departure/s). It is not active: ten paired concurrent
   baseline trials measured median 1.805→1.846 s (+2.30%), and closure-shaped
   equivalence/performance is unmeasured.`
-- Suggested next action: `Keep the passing exact-repeat cache unchanged and
-  reduce at least 0.5 s from the first-new path, starting with a bounded paired
-  experiment on its measured SUMO/trajectory/disruption phases. Also measure
-  the still-open async acknowledgement p95. Do not launch the remaining 104,684 annual warm units or activate
+- Suggested next action: `Keep the accepted interactive closure path and the
+  passing exact-repeat cache unchanged. If performance work resumes, measure
+  the still-open async acknowledgement or monthly verified-unit throughput;
+  do not reopen the retired 0.496 s first-new optimization without a new user
+  requirement. Do not launch the remaining 104,684 annual warm units or activate
   rejected generic/driver pools without a separate explicit decision.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve user-owned uncommitted source/generated artifacts
@@ -83,7 +87,10 @@ owners, states and approval formulas are not active workflow rules. See
   measured quarters or present q10/q90 as calibrated probabilities.`
 - Updated: `2026-08-24 after matched-size schema-v2 qualification, adoption,
   soak, active-day rebuild, one bounded q50 warm-state pilot and clean-tree
-  exact-repeat/first-new closure p95 measurement.`
+  exact-repeat/first-new closure p95 measurement and user acceptance of the
+  current end-to-end UI time. The product UI now hides the
+  internal representative seed/variant and distinguishes modelled trip purpose
+  from geographic flow categories and measured sensor counts.`
 <!-- WORKFLOW_CONTROL_END -->
 
 <!-- ACTIVE_TASK_START -->
@@ -116,12 +123,13 @@ owners, states and approval formulas are not active workflow rules. See
   with measurement and one resource budget; then test output reduction,
   routing, exact result
   reuse, allocation, cost-ordered stopping and targeted warm prefixes in that
-  evidence order. Prove the same <=10 s interactive p95 at 50 physical sensors
-  when simulation load is fixed, then prove calibrated population tiers because
+  evidence order. The current interactive path is accepted; retain semantic
+  equivalence at 50 physical sensors when simulation load is fixed, then prove calibrated population tiers because
   new observations can require more vehicles. Keep high-risk custom
   SUMO/libsumo work profile-gated.`
-- Completion outcome: `Exact repeat p95 <=2 s with zero SUMO calls; async ack
-  p95 <=1 s; new validated closure p95 <=10 s; monthly verified-unit throughput
+- Completion outcome: `Current first-new interactive closure performance is
+  accepted and no additional 0.496 s reduction is required. Exact repeat p95
+  <=2 s with zero SUMO calls; async ack p95 <=1 s; monthly verified-unit throughput
   >=2.0x the frozen baseline with a <=24 h stretch target on the named
   1,776-schedule/2,224-unit fixture. Every adopted arm preserves required
   semantics, evidence, health, restart and provenance fields.`

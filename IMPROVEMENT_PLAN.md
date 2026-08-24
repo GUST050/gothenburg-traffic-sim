@@ -15,12 +15,14 @@ model-independent protocol in `AGENTS.md`.
 
 ## Current verified status — 2026-08-24
 
-- The active published demand is forecast date 2027-09-08, build
-  `273c987cf579ed1308e3`, one full day and 21,240 vehicles. It is an ordinary
+- The active published demand is forecast date 2027-11-11, build
+  `b927e6de0b6443fd87e2`, one full day and 21,744 vehicles. It is an ordinary
   `q50_only` build: seeds 1000/1001/1002 all use the same central demand arm.
   All 672 directed sensor-edge × 15-minute integer targets match exactly. The
-  current validation is `overall: warn` because trip-length external-fit is
-  fail-closed pending an absolute threshold; the raw-source-to-map audit still
+  current validation is `overall: warn`: trip-length external-fit is fail-closed
+  pending an absolute threshold, one quarter exceeds the short-trip structure
+  cap by two vehicles and two quarters required a six-vehicle purpose-mix
+  relaxation. Count fit and SUMO health pass; the raw-source-to-map audit still
   passes on all seven directed sensor edges.
 - The active immutable reference is
   `runs/releases/golden-2025-09-16-7day-v1`. Older three-variant releases are
@@ -52,7 +54,9 @@ model-independent protocol in `AGENTS.md`.
   11.0 -> 5.9 s and closure 21.6 -> 13.9 s with byte-identical scenario,
   trajectory and index output apart from `generated_at`. This current wiring
   supersedes the 2026-07-23 historical decision below that left the default
-  serial; it does not yet meet the frozen <=10 s new-closure goal.
+  serial. The frozen campaign later measured 10.496 s p95; on 2026-08-24 the
+  user accepted the current interactive speed and retired the remaining 0.496 s
+  optimization requirement.
 - The externally launched monthly search `ui-monthly-euc9qp` was explicitly
   stopped on 2026-08-21 after 476/1,776 schedules. Its workspace and completed
   evidence remain intact and resumable; the manifest progress pointer records
@@ -111,9 +115,9 @@ model-independent protocol in `AGENTS.md`.
 - A separate raw-SUMO 15-minute passage test is implemented for baselines. It
   recomputes the ensemble, representative seed and every individual seed from
   detailed edgeData and cannot be applied to closures to calibrate away their
-  effect. The active forecast result is 81/672 exact in the ensemble, with a
-  maximum absolute residual of 16.333333; individual seeds are 114/672,
-  119/672 and 120/672. Therefore departure-quarter calibration is exact but
+  effect. The active 2027-11-11 forecast result is 75/672 exact in the ensemble,
+  with a maximum absolute residual of 18.333333; individual seeds are 115/672,
+  109/672 and 114/672. Therefore departure-quarter calibration is exact but
   simulated crossing-time calibration is not. A bounded, order-preserving
   reconciliation prototype then reached 672/672 in all three seeds without
   changing population or routes, but it was correctly rejected: the median
@@ -185,10 +189,10 @@ model-independent protocol in `AGENTS.md`.
    implementation phases may proceed under the plan's resource guard. The
    adopted active release now has real measurements: exact structured repeats
    pass at 0.329 s p95 over 10/10 verified hits, while ten first-new closures
-   give 10.496 s p95 with identical evidence and clean health, missing the
-   target by 0.496 s. Keep the generic Python-worker pool inactive and spend
-   the next bounded experiment on the measured SUMO/trajectory/disruption
-   budget, then outer-unit/inner-seed allocation now that per-key single-flight is present.
+   give 10.496 s p95 with identical evidence and clean health. The user accepted
+   the current interactive speed on 2026-08-24; do not spend more work on the
+   former 0.496 s target miss. Keep the generic Python-worker pool inactive;
+   remaining performance work belongs to monthly throughput or scale evidence.
    Revisit the pool only with the schema-v2 multi-trial harness; do not infer a
    decision from either historical single draw.
    Preserve the full-edgeData rollback and the 50-station calibrated
@@ -200,7 +204,7 @@ model-independent protocol in `AGENTS.md`.
 6. Keep citywide, OD, queue, signal and closure claims bounded by the six
    clustered stations and the evidence limitations in the error register.
 
-### Active road-closure speed goal
+### Active simulation performance goal
 
 The linked speed plan is the canonical current implementation sequence for this
 goal. It separates exact-repeat latency, first-new-closure latency and exhaustive
@@ -208,10 +212,11 @@ monthly throughput; records which optimizations are already adopted or already
 failed; ranks routing, exact caching, resource scheduling, cost-ordered search,
 targeted warm prefixes, worker reuse, trajectory output, custom SUMO state and
 libsumo by local applicability; and gives Sol phase files, measurements,
-acceptance thresholds, stop gates and rollback rules. Its headline targets are
-cached p95 <=2 s, async acknowledgement p95 <=1 s, new validated closure p95
-<=10 s and at least 2.0x monthly verified-unit throughput, all with unchanged
-semantic/evidence output. The first implementation slice is now present in
+acceptance thresholds, stop gates and rollback rules. The user has accepted the
+current first-new interactive latency, so the remaining headline targets are
+cached p95 <=2 s, async acknowledgement p95 <=1 s and at least 2.0x monthly
+verified-unit throughput, all with unchanged semantic/evidence output. The
+first implementation slice is now present in
 `serve.py`: structured ScenarioSpec requests use an exact, provenance-bound
   sidecar cache and re-validate the published scenario and trajectory before a
   cache hit skips SUMO. Sol review expanded the key to direct route/agent,

@@ -1,5 +1,12 @@
 # Road-closure and simulation speed goal — 2026-08-21
 
+> **Current supersession (2026-08-24):** the frozen first-new campaign measured
+> 10.496 s p95, and the user accepted the current interactive experience after
+> observing roughly 30 s end-to-end in the browser. The 0.496 s miss against
+> the original <=10 s target is historical evidence, not remaining work. Exact
+> repeat, acknowledgement, monthly-throughput and semantic gates remain as
+> documented unless separately superseded.
+
 ## Decision and scope
 
 This is the implementation plan for making road-closure work materially faster.

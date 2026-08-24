@@ -1,16 +1,16 @@
 {
  "schema_version": 1,
- "generated_at": "2026-08-24T14:05:39Z",
- "demand_window": "2027-09-08",
+ "generated_at": "2026-08-24T14:48:14Z",
+ "demand_window": "2027-11-11",
  "demand_source": "forecast",
- "demand_build_id": "ab27c11be5a6a8b52045",
+ "demand_build_id": "b927e6de0b6443fd87e2",
  "overall": "warn",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 20818,
+   "vehicles": 21744,
    "integer_sensor_constraints": 672,
    "integer_sensor_exact": 672,
    "integer_sensor_exact_pct": 100.0,
@@ -20,57 +20,59 @@
   },
   "structure": {
    "status": "warn",
-   "flags": [],
-   "dest_within_200m_pct": 3.7,
+   "flags": [
+    "trips_under_1km_cap: 1 quarter(s) exceed the exact integer 2.00x pool-share/floor-2 cap; maximum excess 2 vehicle(s)"
+   ],
+   "dest_within_200m_pct": 3.6,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0041,
-    0.8041,
-    0.1918
+    0.0049,
+    0.796,
+    0.1991
    ],
-   "trip_length_l1_vs_rvu": 0.2612,
+   "trip_length_l1_vs_rvu": 0.2759,
    "trip_length_l1_maximum": null,
    "trip_length_l1_gate_defined": false,
    "trip_length_l1_gate_passed": false,
-   "onward_after_sensor_median_m": 2839.4,
-   "onward_under_200m_pct": 1.7,
+   "onward_after_sensor_median_m": 2783.6,
+   "onward_under_200m_pct": 1.9,
    "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen; trip-length L1 m\u00e5ste dessutom ha och klara en fryst absolut gr\u00e4ns mot den deklarerade externa m\u00e5lf\u00f6rdelningen",
-   "reason": "trip-length L1 publiceras men saknar fryst acceptansgr\u00e4ns"
+   "reason": "trip-length L1 publiceras men saknar fryst acceptansgr\u00e4ns; trips_under_1km_cap: 1 quarter(s) exceed the exact integer 2.00x pool-share/floor-2 cap; maximum excess 2 vehicle(s)"
   },
   "purposes": {
    "status": "warn",
    "purpose_counts": {
-    "arbete": 7585,
+    "arbete": 7836,
     "external": 1393,
-    "fritid": 2248,
-    "service": 4266,
-    "through": 5326
+    "fritid": 2585,
+    "service": 4487,
+    "through": 5443
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 7585,
-     "mean_km": 2.87,
-     "median_km": 2.74
+     "n": 7836,
+     "mean_km": 2.9,
+     "median_km": 2.77
     },
     "external": {
      "n": 1393,
-     "mean_km": 4.12,
-     "median_km": 4.35
+     "mean_km": 4.29,
+     "median_km": 4.52
     },
     "fritid": {
-     "n": 2248,
-     "mean_km": 3.14,
-     "median_km": 2.89
+     "n": 2585,
+     "mean_km": 3.23,
+     "median_km": 3.02
     },
     "service": {
-     "n": 4266,
-     "mean_km": 3.09,
-     "median_km": 3.06
+     "n": 4487,
+     "mean_km": 3.12,
+     "median_km": 3.08
     },
     "through": {
-     "n": 5326,
-     "mean_km": 5.22,
-     "median_km": 5.2
+     "n": 5443,
+     "mean_km": 5.33,
+     "median_km": 5.47
     }
    },
    "ordering_violated": false,
@@ -81,10 +83,10 @@
     "edge_shares": 0
    },
    "purpose_mix_relaxed_quarters_by_variant": {
-    "edge_shares": 13
+    "edge_shares": 2
    },
    "purpose_mix_reallocation_vehicles_by_variant": {
-    "edge_shares": 313
+    "edge_shares": 6
    },
    "purpose_claims_allowed": true,
    "purpose_mix_matches_generated_prior": false,
@@ -96,22 +98,22 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 20818,
-     "loaded": 20818,
+     "inserted": 21744,
+     "loaded": 21744,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 20818,
-     "loaded": 20818,
+     "inserted": 21744,
+     "loaded": 21744,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 20818,
-     "loaded": 20818,
+     "inserted": 21744,
+     "loaded": 21744,
      "unfinished": 0,
      "teleports": 0
     }
@@ -125,10 +127,10 @@
    "aggregation_minutes": 60,
    "edge_quarters": 168,
    "geh_lt_5_pct": 100.0,
-   "mean_abs_error": 3.846947,
-   "max_abs_error": 22.333333,
+   "mean_abs_error": 3.926929,
+   "max_abs_error": 17.0,
    "station_edge_quarters": 144,
-   "station_max_abs_error": 22.333334,
+   "station_max_abs_error": 27.666666,
    "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
   },
   "sensor_output_exact": {
@@ -137,12 +139,12 @@
    "aggregation_minutes": 15,
    "target_rule": "int(round(target))",
    "constraints": 672,
-   "exact": 74,
-   "exact_pct": 11.011905,
-   "max_abs_error": 21.666666667,
-   "sum_abs_error": 1885.666666667,
-   "mismatch_count": 598,
-   "representative_exact": 108,
+   "exact": 75,
+   "exact_pct": 11.160714,
+   "max_abs_error": 18.333333333,
+   "sum_abs_error": 2026.333333333,
+   "mismatch_count": 597,
+   "representative_exact": 115,
    "representative_constraints": 672,
    "per_seed": [
     {
@@ -150,10 +152,10 @@
      "variant": "edge_shares",
      "available": true,
      "constraints": 672,
-     "exact": 108,
-     "exact_pct": 16.071429,
-     "max_abs_error": 23.0,
-     "sum_abs_error": 1920.0,
+     "exact": 115,
+     "exact_pct": 17.113095,
+     "max_abs_error": 18.0,
+     "sum_abs_error": 2051.0,
      "target_rule": "int(round(target))"
     },
     {
@@ -161,10 +163,10 @@
      "variant": "edge_shares",
      "available": true,
      "constraints": 672,
-     "exact": 105,
-     "exact_pct": 15.625,
-     "max_abs_error": 21.0,
-     "sum_abs_error": 1913.0,
+     "exact": 109,
+     "exact_pct": 16.220238,
+     "max_abs_error": 18.0,
+     "sum_abs_error": 2059.0,
      "target_rule": "int(round(target))"
     },
     {
@@ -172,15 +174,15 @@
      "variant": "edge_shares",
      "available": true,
      "constraints": 672,
-     "exact": 120,
-     "exact_pct": 17.857143,
-     "max_abs_error": 22.0,
-     "sum_abs_error": 1926.0,
+     "exact": 114,
+     "exact_pct": 16.964286,
+     "max_abs_error": 19.0,
+     "sum_abs_error": 2057.0,
      "target_rule": "int(round(target))"
     }
    ],
    "gate": "r\u00e5 SUMO-passage m\u00e5ste matcha varje riktad sensor \u00d7 15-minuters heltalsm\u00e5l exakt; testet \u00e4ndrar inga fordon",
-   "reason": "exakt sensor-output-fit ensemble matchar bara 74/672; exakt sensor-output-fit representativ k\u00f6rning matchar bara 108/672; exakt sensor-output-fit seed 1000 matchar bara 108/672; exakt sensor-output-fit seed 1001 matchar bara 105/672; exakt sensor-output-fit seed 1002 matchar bara 120/672"
+   "reason": "exakt sensor-output-fit ensemble matchar bara 75/672; exakt sensor-output-fit representativ k\u00f6rning matchar bara 115/672; exakt sensor-output-fit seed 1000 matchar bara 115/672; exakt sensor-output-fit seed 1001 matchar bara 109/672; exakt sensor-output-fit seed 1002 matchar bara 114/672"
   },
   "multi_day": {
    "status": "pass",
@@ -204,7 +206,7 @@
   },
   "temporal_holdout": {
    "status": "missing",
-   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26', current='0196779c3c92d72b9e72412d1fe76ff21ea37175e0d66de001e7bf2943d00b80'; reference window: report='2025-09-16T00:00:00', current='2027-09-08T00:00:00'; source: report='historical', current='forecast'"
+   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26', current='0196779c3c92d72b9e72412d1fe76ff21ea37175e0d66de001e7bf2943d00b80'; reference window: report='2025-09-16T00:00:00', current='2027-11-11T00:00:00'; source: report='historical', current='forecast'"
   }
  }
 }

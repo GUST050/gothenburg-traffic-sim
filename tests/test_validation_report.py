@@ -15,6 +15,45 @@ def test_web_panel_exposes_the_exact_sumo_passage_test():
     assert "accepterade" in source
 
 
+def test_web_hides_internal_seed_and_describes_demand_truthfully():
+    root = Path(__file__).parent.parent
+    source = (root / "web" / "app.js").read_text()
+    html = (root / "web" / "index.html").read_text()
+
+    assert "representativ körning (frö" not in source
+    assert "visad körning ${variant}" not in source
+    assert "AUDIT_VARIANT_LABEL" not in source
+    assert "🚗 Fordonsanimation" in source
+    assert "modellerat reseärende:" in source
+    assert "geografiskt flöde:" in source
+    assert "Sensorindatan anger antal passager" in source
+    assert "inte reseärende" in source
+    assert "Modellerade reseärenden & längder" in source
+    assert "Mål visad" not in html
+    assert "SUMO visad" not in html
+    assert "Mål, enskild" in html
+    assert "SUMO, enskild" in html
+
+
+def test_ui_demand_copy_matches_the_sensor_input_schema():
+    root = Path(__file__).parent.parent
+    input_readme = (root / "data_in" / "README.md").read_text()
+    source = (root / "web" / "app.js").read_text()
+
+    for field in ("Mätplats", "Datum", "Kvart", "Antal passager"):
+        assert field in input_readme
+    assert "antal passager per mätplats, datum" in source
+    assert "15-minutersintervall" in source
+
+
+def test_recalibration_fetch_error_names_the_live_localhost_address():
+    source = (Path(__file__).parent.parent / "web" / "app.js").read_text()
+
+    assert "failed to fetch|load failed|networkerror" in source
+    assert "ingen kontakt med API-servern" in source
+    assert "Öppna http://localhost:8000/ och ladda om sidan" in source
+
+
 def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
                   integer_constraints=672, integer_exact=672,
                   integer_max_abs_error=0.0,

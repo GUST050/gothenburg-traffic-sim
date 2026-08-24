@@ -677,9 +677,9 @@
       <select id="scen-select"></select>
       <span class="hint" id="sim-day-hint" title="Byt med knappen till höger — kräver ny kalibrering, ~6 min"></span>
       <span id="sim-agent-hint" hidden></span>
-      <!-- F1 honesty label: road COLOURS are the mean of 3 Monte Carlo
-           seeds, but the animated cars are ONE representative run — say so
-           instead of letting the animation imply it equals the mean. -->
+      <!-- Road colours are an ensemble mean while the animated cars come
+           from one simulation. The UI explains this without exposing the
+           internal seed/variant identifiers. -->
       <span class="hint" id="traj-provenance" hidden></span>
       <span class="hint" id="closure-impact" hidden></span>
       <div class="v-divider"></div>
@@ -813,7 +813,8 @@
             <thead>
               <tr>
                 <th>Sensor</th><th>Mot</th><th id="sensor-audit-source-label">Underlag</th>
-                <th>Mål visad</th><th>SUMO visad</th><th>Mål medel</th><th>SUMO medel</th>
+                <th>Mål, enskild</th><th>SUMO, enskild</th>
+                <th>Mål, medel</th><th>SUMO, medel</th>
               </tr>
             </thead>
             <tbody id="sensor-audit-body"></tbody>
@@ -910,6 +911,6 @@
   <script src="render.js?v=15"></script>
   <script src="controls.js?v=12"></script>
   <script src="clock.js?v=11"></script>
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

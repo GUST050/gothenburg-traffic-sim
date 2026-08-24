@@ -421,6 +421,15 @@ runtime, `tools/` contains bounded experiments, `tests/` contains contract and
 regression tests, and generated artifacts stay under `web/data/`, `sumo/`,
 `runs/` or `cache/` rather than in source packages.
 
+The browser keeps measured input and model inference distinct. Sensor
+deliveries contain station, date, 15-minute interval and passage count; they do
+not contain observed trip purpose. The `arbete`/`service`/`fritid` values in
+`agent_demand` are therefore labelled as modelled trip purposes, while
+`external` and `through` are shown separately as geographic route categories.
+Internal representative seed and demand-variant identifiers remain in scenario
+artifacts and validation evidence but are not exposed in the normal vehicle or
+sensor-audit labels.
+
 ### A — Intake (`build_data.py`) — built
 Validate 15-min CSVs; join coordinates + **measured-direction metadata**
 (`data_in/sensors.json` — the delivered "Total" label is proven unreliable);
