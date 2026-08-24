@@ -17,6 +17,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -648,7 +649,31 @@ class IndependentDailyRunner:
         self._backend_digest: str | None = None
         self._unit_backend_digests: dict[str, str] = {}
         self._memory_evidence: dict[str, CandidateEvidence] = {}
+        # Diagnostic only: never enters cache identity or CandidateEvidence.
+        # These counters make S0 able to distinguish filesystem verification,
+        # worker execution and publication without changing evidence bytes.
+        self._timing = {
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "cache_corrupt": 0,
+            "cache_verify_seconds": 0.0,
+            "cache_write_seconds": 0.0,
+            "worker_seconds": 0.0,
+            "units_simulated": 0,
+        }
         self._prepared_parent_ids: tuple[str, ...] | None = None
+
+    def timing_snapshot(self) -> dict[str, Any]:
+        """Return result-neutral S0 telemetry accumulated by this runner."""
+        return {
+            key: (round(value, 6) if isinstance(value, float) else value)
+            for key, value in self._timing.items()
+        }
+
+    def _record_corrupt_cache_miss(self) -> None:
+        """One corrupt lookup is both a miss and a diagnostic corruption."""
+        self._timing["cache_corrupt"] += 1
+        self._timing["cache_misses"] += 1
 
     def cleanup(self) -> None:
         cleanup = getattr(self.daily_runner, "cleanup", None)
@@ -848,11 +873,16 @@ class IndependentDailyRunner:
         return self.cache_root / key[:2] / f"{key}.json"
 
     def _load_cached(self, unit: DailyClosureUnit) -> CandidateEvidence | None:
+        started = time.perf_counter()
         remembered = self._memory_evidence.get(unit.unit_id)
         if remembered is not None:
+            self._timing["cache_hits"] += 1
+            self._timing["cache_verify_seconds"] += time.perf_counter() - started
             return remembered
         path = self._cache_path(unit)
         if not path.is_file():
+            self._timing["cache_misses"] += 1
+            self._timing["cache_verify_seconds"] += time.perf_counter() - started
             return None
         try:
             payload = json.loads(
@@ -860,6 +890,7 @@ class IndependentDailyRunner:
                 object_pairs_hook=_reject_duplicate_keys,
             )
             if not isinstance(payload, Mapping):
+                self._record_corrupt_cache_miss()
                 return None
             body = {key: value for key, value in payload.items()
                     if key != "content_key"}
@@ -873,12 +904,14 @@ class IndependentDailyRunner:
                 != self._unit_backend_digests.get(unit.unit_id)
                 or payload.get("content_key") != _canonical_digest(body)
             ):
+                self._record_corrupt_cache_miss()
                 return None
             stored = _evidence_from_dict(payload["evidence"])
             if stored.candidate_id != unit.unit_id or any(
                 item.candidate_id != unit.unit_id
                 for item in stored.observations
             ):
+                self._record_corrupt_cache_miss()
                 return None
             rebound = CandidateEvidence(
                 candidate_id=unit.schedule.schedule_id,
@@ -895,12 +928,16 @@ class IndependentDailyRunner:
                 disruption=stored.disruption,
             )
             self._memory_evidence[unit.unit_id] = rebound
+            self._timing["cache_hits"] += 1
             return rebound
         except (
             OSError, UnicodeError, AttributeError, ValueError, TypeError,
             KeyError, json.JSONDecodeError,
         ):
+            self._record_corrupt_cache_miss()
             return None
+        finally:
+            self._timing["cache_verify_seconds"] += time.perf_counter() - started
 
     def _save_cached(
         self,
@@ -939,7 +976,9 @@ class IndependentDailyRunner:
             "evidence": _evidence_to_dict(normalized),
         }
         payload["content_key"] = _canonical_digest(payload)
+        started = time.perf_counter()
         _atomic_json(self._cache_path(unit), payload)
+        self._timing["cache_write_seconds"] += time.perf_counter() - started
         self._memory_evidence[unit.unit_id] = evidence
 
     @staticmethod
@@ -1034,18 +1073,23 @@ class IndependentDailyRunner:
                 ))
 
         batch = getattr(self.daily_runner, "run_candidate_batch", None)
-        if pending and callable(batch):
-            updated_by_schedule = batch(pending)
-        else:
-            updated_by_schedule = {
-                daily_schedule.schedule_id: self.daily_runner.run_candidate(
-                    daily_schedule,
-                    target_repetitions=targets,
-                    existing=cached,
-                    stage=pending_stage,
-                )
-                for daily_schedule, targets, cached, pending_stage in pending
-            }
+        updated_by_schedule = {}
+        if pending:
+            started = time.perf_counter()
+            if callable(batch):
+                updated_by_schedule = batch(pending)
+            else:
+                updated_by_schedule = {
+                    daily_schedule.schedule_id: self.daily_runner.run_candidate(
+                        daily_schedule,
+                        target_repetitions=targets,
+                        existing=cached,
+                        stage=pending_stage,
+                    )
+                    for daily_schedule, targets, cached, pending_stage in pending
+                }
+            self._timing["worker_seconds"] += time.perf_counter() - started
+            self._timing["units_simulated"] += len(pending)
         for unit in units:
             updated = cached_by_schedule.get(unit.schedule.schedule_id)
             if updated is None:

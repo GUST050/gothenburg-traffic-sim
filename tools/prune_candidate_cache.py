@@ -131,7 +131,17 @@ def entry_pool_digest(entry: Path) -> str | None:
 
 
 def directory_bytes(path: Path) -> int:
-    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+    total = 0
+    for item in path.rglob("*"):
+        try:
+            if item.is_file():
+                total += item.stat().st_size
+        except OSError:
+            # A concurrent/manual cleanup may remove a derived artifact after
+            # rglob observed it. The final workspace lock still protects the
+            # destructive phase; reporting must tolerate this read race.
+            continue
+    return total
 
 
 def parse_args() -> argparse.Namespace:
@@ -161,12 +171,17 @@ def main() -> int:
     protected_digests = pools_named_by_live_days(args.library_root)
     cutoff = min(reference, time.time() - args.keep_recent_hours * 3600.0)
 
-    stale: list[tuple[Path, int]] = []
+    stale: list[tuple[Path, int, float]] = []
     kept = kept_by_digest = 0
     for entry in sorted(cache_root.iterdir()):
-        if not entry.is_dir():
+        try:
+            is_directory = entry.is_dir()
+            entry_mtime = entry.stat().st_mtime
+        except OSError:
             continue
-        if entry.stat().st_mtime >= cutoff:
+        if not is_directory:
+            continue
+        if entry_mtime >= cutoff:
             kept += 1
             continue
         digest = entry_pool_digest(entry)
@@ -174,9 +189,9 @@ def main() -> int:
             kept += 1
             kept_by_digest += 1
             continue
-        stale.append((entry, directory_bytes(entry)))
+        stale.append((entry, directory_bytes(entry), entry_mtime))
 
-    total_gb = sum(size for _entry, size in stale) / 1e9
+    total_gb = sum(size for _entry, size, _mtime in stale) / 1e9
     print(f"candidate pool cache: {cache_root}")
     print(f"  pool-key inputs last changed {time.strftime('%Y-%m-%d %H:%M', time.localtime(reference))}"
           f" ({owner})")
@@ -186,8 +201,8 @@ def main() -> int:
         print("  nothing unreachable — every stored pool can still be named")
         return 0
     print(f"  unreachable entries: {len(stale)}, {total_gb:.1f} GB")
-    for entry, size in stale[:10]:
-        stamp = time.strftime('%Y-%m-%d %H:%M', time.localtime(entry.stat().st_mtime))
+    for entry, size, entry_mtime in stale[:10]:
+        stamp = time.strftime('%Y-%m-%d %H:%M', time.localtime(entry_mtime))
         print(f"    {entry.name}  {size / 1e6:8.1f} MB  stored {stamp}")
     if len(stale) > 10:
         print(f"    … and {len(stale) - 10} more")
@@ -201,14 +216,19 @@ def main() -> int:
     # while entries disappear underneath it.
     with demand_build_lock():
         removed = 0
-        for entry, _size in stale:
+        for entry, _size, _mtime in stale:
             shutil.rmtree(entry, ignore_errors=True)
             removed += 1
-        for leftover in cache_root.glob(".*.lock"):
-            if leftover.stat().st_mtime < cutoff:
-                leftover.unlink(missing_ok=True)
+        # Single-flight locks belong to the monthly baseline cache, not this
+        # candidate-pool root. They are intentionally retained: unlinking a
+        # flock pathname while waiters have the old inode open can split one
+        # lock into two independent locks and break serialization.
         for leftover in cache_root.glob(".*.tmp"):
-            if leftover.stat().st_mtime < cutoff:
+            try:
+                old = leftover.stat().st_mtime < cutoff
+            except OSError:
+                continue
+            if old:
                 shutil.rmtree(leftover, ignore_errors=True)
     print(f"deleted {removed} unreachable pool(s), freeing {total_gb:.1f} GB")
     return 0

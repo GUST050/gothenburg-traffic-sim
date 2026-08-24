@@ -169,6 +169,8 @@ def base_url(tmp_path, monkeypatch):
     monkeypatch.setattr(serve, "MONTHLY_SEARCH_ROOT", tmp_path / "closure-search")
     monkeypatch.setattr(serve, "CLOSURE_SEARCH_SPEC_DIR",
                         tmp_path / "closure_search_specs")
+    monkeypatch.setattr(serve, "SCENARIO_CACHE_DIR",
+                        tmp_path / "scenario-cache")
 
     def fake_known_edges():
         return frozenset({"a_b_0", "b_a_0"})
@@ -185,6 +187,7 @@ def base_url(tmp_path, monkeypatch):
     serve._recal_state.update(status="idle")
     serve._close_state.clear()
     serve._close_state.update(status="idle")
+    serve._close_preparing_spec = None
     serve._suggest_state.clear()
     serve._suggest_state.update(status="idle")
     serve._optimize_state.clear()
@@ -236,6 +239,12 @@ class TestPing:
 
 
 class TestServerStartup:
+    def test_invalid_monthly_timeout_uses_safe_default(self, monkeypatch, capsys):
+        monkeypatch.setenv("TRAFFIC_SIM_TEST_TIMEOUT_S", "24h")
+        assert serve._positive_env_seconds(
+            "TRAFFIC_SIM_TEST_TIMEOUT_S", 3600) == 3600.0
+        assert "ignoring invalid TRAFFIC_SIM_TEST_TIMEOUT_S" in capsys.readouterr().err
+
     def test_main_binds_to_loopback_by_default(self, monkeypatch):
         seen = {}
 
@@ -568,6 +577,358 @@ class TestClose:
         assert captured["spec"]["scenario_id"] == "close-api-spec"
         assert captured["spec"]["closures"][0]["edge_id"] == "a_b_0"
 
+    def test_exact_structured_close_cache_skips_second_sumo_run(
+            self, base_url, monkeypatch):
+        spec = {
+            "scenario_id": "close-cache-spec",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        }
+        canonical = serve.ScenarioSpec.from_dict(spec).to_dict()
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            name = "close-cache-spec"
+            trajectory = f"{name}_traj.json"
+            (serve.SCEN_DIR / trajectory).write_text("{}")
+            (serve.SCEN_DIR / f"{name}.json").write_text(json.dumps({
+                "scenario_spec": canonical,
+                "trajectories": trajectory,
+                "scenario": {"closure_integrity": "verified_clean"},
+            }))
+            (serve.SCEN_DIR / "index.json").write_text(json.dumps({
+                "scenarios": [{
+                    "name": name,
+                    "file": f"{name}.json",
+                    "closed_edges": ["a_b_0"],
+                    "closure_integrity": "verified_clean",
+                    "scenario_spec": canonical,
+                }],
+            }))
+            return FakeCompletedProcess(returncode=0,
+                                        stdout=f"Scenario '{name}' (...)")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        first_status, first = post_json(
+            f"{base_url}/api/close", payload={"scenario_spec": spec})
+        assert first_status == 202 and first["status"] == "started"
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "done")
+        second_status, second = post_json(
+            f"{base_url}/api/close", payload={"scenario_spec": spec})
+        assert second_status == 202
+        assert second == {"status": "done", "cached": True,
+                          "edges": ["a_b_0"], "scenario_id": "close-cache-spec"}
+        assert len(calls) == 1
+        _, cached_state = get_json(f"{base_url}/api/close/status")
+        assert cached_state["cached"] is True
+        assert cached_state["cache_hit"] is True
+        assert "started_at" not in cached_state
+
+        # The sidecar schema is part of the reader contract, not merely
+        # descriptive metadata. An old/unknown record must be treated as a
+        # miss even if all of its other fields happen to resemble v2.
+        sidecar = next(serve.SCENARIO_CACHE_DIR.glob("*.json"))
+        old_record = json.loads(sidecar.read_text())
+        old_record["schema_version"] = 1
+        sidecar.write_text(json.dumps(old_record))
+        assert serve._read_exact_cached_scenario(
+            serve.ScenarioSpec.from_dict(spec)) is None
+        old_record["schema_version"] = 2
+        sidecar.write_text(json.dumps(old_record))
+
+        # Cache reads obey the same workspace slot as simulations. A result
+        # must not be served while recalibration/monthly publication could be
+        # replacing its inputs.
+        serve._sim_lock.acquire()
+        try:
+            assert post_json_or_error(
+                f"{base_url}/api/close",
+                payload={"scenario_spec": spec})[0] == 409
+        finally:
+            serve._sim_lock.release()
+
+        # A syntactically valid but malformed published payload is a cache
+        # miss, never an AttributeError escaping through the HTTP handler.
+        (serve.SCEN_DIR / "close-cache-spec.json").write_text(json.dumps({
+            "scenario_spec": canonical,
+            "trajectories": "close-cache-spec_traj.json",
+            "scenario": None,
+        }))
+        third_status, third = post_json(
+            f"{base_url}/api/close", payload={"scenario_spec": spec})
+        assert third_status == 202 and third["status"] == "started"
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "done")
+        assert len(calls) == 2
+
+    def test_identical_structured_misses_share_one_in_flight_job(
+            self, base_url, monkeypatch):
+        spec = {
+            "scenario_id": "close-single-flight",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        }
+        canonical = serve.ScenarioSpec.from_dict(spec).to_dict()
+        started = threading.Event()
+        release = threading.Event()
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            started.set()
+            assert release.wait(timeout=3)
+            name = "close-single-flight"
+            trajectory = f"{name}_traj.json"
+            (serve.SCEN_DIR / trajectory).write_text("{}")
+            (serve.SCEN_DIR / f"{name}.json").write_text(json.dumps({
+                "scenario_spec": canonical,
+                "trajectories": trajectory,
+                "scenario": {"closure_integrity": "verified_clean"},
+            }))
+            (serve.SCEN_DIR / "index.json").write_text(json.dumps({
+                "scenarios": [{
+                    "name": name,
+                    "file": f"{name}.json",
+                    "closed_edges": ["a_b_0"],
+                    "closure_integrity": "verified_clean",
+                    "scenario_spec": canonical,
+                }],
+            }))
+            return FakeCompletedProcess(returncode=0,
+                                        stdout=f"Scenario '{name}' (...)")
+
+        monkeypatch.setattr(serve, "run_in_new_session", fake_run)
+        assert post_json(
+            f"{base_url}/api/close", payload={"scenario_spec": spec})[0] == 202
+        assert started.wait(timeout=2)
+        second_status, second = post_json(
+            f"{base_url}/api/close", payload={"scenario_spec": spec})
+        assert second_status == 202
+        assert second["status"] == "running"
+        assert second["coalesced"] is True
+        assert len(calls) == 1
+        try:
+            other = json.loads(json.dumps(spec))
+            other["scenario_id"] = "close-other"
+            other["closures"][0]["edge_id"] = "b_a_0"
+            conflict_status, _ = post_json_or_error(
+                f"{base_url}/api/close", payload={"scenario_spec": other})
+            assert conflict_status == 409
+            _, state = get_json(f"{base_url}/api/close/status")
+            assert serve.ScenarioSpec.from_dict(
+                state["scenario_spec"]).to_dict() == canonical
+        finally:
+            release.set()
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"] == "done")
+        assert len(calls) == 1
+
+    def test_cache_verification_is_not_reported_as_a_new_simulation(
+            self, base_url, monkeypatch):
+        spec = {
+            "scenario_id": "close-cache-check",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        }
+        canonical = serve.ScenarioSpec.from_dict(spec).to_dict()
+        entered = threading.Event()
+        release = threading.Event()
+        responses = []
+
+        def slow_cache(_spec, _identity=None):
+            entered.set()
+            assert release.wait(timeout=3)
+            return {
+                "name": "close-cache-check",
+                "file": "close-cache-check.json",
+                "closure_integrity": "verified_clean",
+                "scenario_spec": canonical,
+                "cache_hit": True,
+            }
+
+        monkeypatch.setattr(serve, "_read_exact_cached_scenario", slow_cache)
+        request = threading.Thread(
+            target=lambda: responses.append(post_json(
+                f"{base_url}/api/close", payload={"scenario_spec": spec})),
+            daemon=True,
+        )
+        request.start()
+        assert entered.wait(timeout=2)
+        try:
+            _, checking = get_json(f"{base_url}/api/close/status")
+            assert checking["status"] == "checking_cache"
+            assert "started_at" not in checking
+            status, coalesced = post_json(
+                f"{base_url}/api/close", payload={"scenario_spec": spec})
+            assert status == 202
+            assert coalesced["status"] == "checking_cache"
+            assert coalesced["coalesced"] is True
+        finally:
+            release.set()
+        request.join(timeout=3)
+        assert responses == [(202, {
+            "status": "done", "cached": True, "edges": ["a_b_0"],
+            "scenario_id": "close-cache-check",
+        })]
+        _, done = get_json(f"{base_url}/api/close/status")
+        assert done["status"] == "done" and "started_at" not in done
+
+    def test_unexpected_cache_identity_error_fails_open_without_leaking_slot(
+            self, base_url, monkeypatch):
+        spec = {
+            "scenario_id": "close-cache-keyerror",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        }
+        monkeypatch.setattr(
+            serve, "_scenario_cache_identity",
+            lambda _spec: (_ for _ in ()).throw(KeyError("unexpected")),
+        )
+        monkeypatch.setattr(
+            serve, "run_in_new_session",
+            lambda _cmd, **_kw: FakeCompletedProcess(returncode=1, stderr="boom"),
+        )
+
+        status, response = post_json(
+            f"{base_url}/api/close", payload={"scenario_spec": spec})
+
+        assert status == 202 and response["status"] == "started"
+        assert wait_until(
+            lambda: get_json(f"{base_url}/api/close/status")[1]["status"]
+            == "error")
+        assert not serve._sim_lock.locked()
+        assert serve._close_preparing_spec is None
+
+    def test_cache_entry_cannot_override_lifecycle_fields(
+            self, base_url, monkeypatch):
+        spec = {
+            "scenario_id": "close-cache-reserved-fields",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        }
+        monkeypatch.setattr(serve, "_scenario_cache_identity",
+                            lambda _spec: ("key", {"schema_version": 2}))
+        monkeypatch.setattr(serve, "_read_exact_cached_scenario",
+                            lambda *_args: {
+                                "name": "cached-scenario",
+                                "file": "cached-scenario.json",
+                                "status": "running",
+                                "cached": False,
+                                "edges": ["malicious"],
+                                "begin": "wrong",
+                                "end": "wrong",
+                                "started_at": 1,
+                            })
+
+        assert post_json(
+            f"{base_url}/api/close", payload={"scenario_spec": spec})[0] == 202
+        _, state = get_json(f"{base_url}/api/close/status")
+        assert state["status"] == "done"
+        assert state["cached"] is True
+        assert state["edges"] == ["a_b_0"]
+        assert state["begin"] is None and state["end"] is None
+        assert "started_at" not in state
+        assert not serve._sim_lock.locked()
+
+    def test_cache_identity_binds_actual_route_bytes(self, base_url, monkeypatch,
+                                                     tmp_path):
+        spec = serve.ScenarioSpec.from_dict({
+            "scenario_id": "close-route-identity",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        })
+        route_digest = {"value": "route-v1"}
+
+        def fake_sha(path):
+            path = Path(path)
+            if path.name == "calibrated.rou.xml":
+                return route_digest["value"]
+            return "fixed:" + str(path)
+
+        monkeypatch.setattr(serve, "sha256_file", fake_sha)
+        monkeypatch.setattr(serve, "sumo_home", lambda: tmp_path)
+        monkeypatch.setattr(serve, "sumo_version", lambda _home: "SUMO-v1")
+        first, _ = serve._scenario_cache_identity(spec)
+        route_digest["value"] = "route-v2"
+        second, _ = serve._scenario_cache_identity(spec)
+        assert first != second
+
+    def test_cache_publication_refuses_inputs_changed_during_run(
+            self, base_url, monkeypatch):
+        spec = serve.ScenarioSpec.from_dict({
+            "scenario_id": "close-changing-inputs",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        })
+        name = spec.scenario_id
+        trajectory = f"{name}_traj.json"
+        (serve.SCEN_DIR / trajectory).write_text("{}")
+        (serve.SCEN_DIR / f"{name}.json").write_text(json.dumps({
+            "scenario_spec": spec.to_dict(),
+            "trajectories": trajectory,
+            "scenario": {"closure_integrity": "verified_clean"},
+        }))
+        current = ("new-key", {"schema_version": 2, "state": "new"})
+        monkeypatch.setattr(serve, "_scenario_cache_identity",
+                            lambda _spec: current)
+        serve._record_exact_scenario_cache(
+            spec,
+            {"name": name, "file": f"{name}.json"},
+            ("old-key", {"schema_version": 2, "state": "old"}),
+        )
+        assert not list(serve.SCENARIO_CACHE_DIR.glob("*.json"))
+
     def test_failed_simulation_reports_error_status_and_releases_the_lock(self, base_url, monkeypatch):
         monkeypatch.setattr(serve, "run_in_new_session",
                             lambda cmd, **kw: FakeCompletedProcess(returncode=1, stderr="boom"))
@@ -602,6 +963,57 @@ class TestClose:
 
 
 class TestCancel:
+    def test_cancel_close_during_cache_check_releases_slot_without_child_job(
+            self, base_url, monkeypatch):
+        spec = {
+            "scenario_id": "cancel-cache-check",
+            "demand_build_id": "demand-a",
+            "network_build_id": "network-b",
+            "start_time": "2025-09-16T00:00:00",
+            "end_time": "2025-09-17T00:00:00",
+            "closures": [{
+                "edge_id": "a_b_0",
+                "start_time": "2025-09-16T08:00:00",
+                "end_time": "2025-09-16T10:00:00",
+            }],
+        }
+        entered = threading.Event()
+        release = threading.Event()
+        child_started = []
+        response = []
+
+        def slow_cache(*_args):
+            entered.set()
+            assert release.wait(timeout=3)
+            return None
+
+        monkeypatch.setattr(serve, "_read_exact_cached_scenario", slow_cache)
+        monkeypatch.setattr(
+            serve, "run_in_new_session",
+            lambda *_args, **_kwargs: child_started.append(True),
+        )
+        request = threading.Thread(
+            target=lambda: response.append(post_json(
+                f"{base_url}/api/close", payload={"scenario_spec": spec})),
+            daemon=True,
+        )
+        request.start()
+        assert entered.wait(timeout=2)
+        assert post_json(f"{base_url}/api/cancel?kind=close") == (
+            202, {"status": "cancelling", "kind": "close"})
+        release.set()
+        request.join(timeout=3)
+
+        assert response == [(202, {
+            "status": "cancelled", "edges": ["a_b_0"],
+            "scenario_id": "cancel-cache-check",
+        })]
+        assert child_started == []
+        assert get_json(f"{base_url}/api/close/status")[1]["status"] \
+            == "cancelled"
+        assert not serve._sim_lock.locked()
+        assert serve._close_preparing_spec is None
+
     def test_cancel_close_stops_job_and_never_marks_it_done(self, base_url, monkeypatch):
         release = threading.Event()
 
@@ -891,6 +1303,64 @@ class TestMonthlySearch:
     def test_status_post_is_405(self, base_url):
         assert post_json_or_error(
             f"{base_url}/api/monthly_search/status")[0] == 405
+
+    def test_stale_external_running_workspace_is_reported_paused(
+            self, base_url, monkeypatch):
+        sid = "external-stale-monthly"
+        directory = serve.MONTHLY_SEARCH_ROOT / sid
+        (directory / "input").mkdir(parents=True)
+        (directory / "input" / "closure_search.json").write_text(
+            json.dumps(_closure_search_spec(sid)))
+        (directory / "manifest.json").write_text(json.dumps({
+            "status": "running",
+            "created_at": "2026-08-21T10:00:00Z",
+            "progress": {
+                "phase": "pilot", "completed": 12, "total": 20,
+                "updated_at": "2026-08-21T11:00:00Z",
+            },
+        }))
+        monkeypatch.setattr(serve, "workspace_holder", lambda: None)
+
+        status, state = get_json(f"{base_url}/api/monthly_search/status")
+        assert status == 200
+        assert state["status"] == "paused"
+        assert state["stale"] is True
+        assert state["server_tracked"] is False
+        assert state["search_id"] == sid
+        assert "ingen månadsprocess" in state["note"]
+
+    def test_succeeded_external_workspace_loads_only_verified_result(
+            self, base_url, tmp_path):
+        from traffic_sim.simulation.search_workspace import (
+            create_search_workspace,
+        )
+
+        sid = "external-succeeded-monthly"
+        spec = serve.ClosureSearchSpec.from_dict(_closure_search_spec(sid))
+        workspace = create_search_workspace(
+            spec, root=serve.MONTHLY_SEARCH_ROOT)
+        source = tmp_path / "external-result.json"
+        source.write_text(json.dumps(_monthly_result(sid)))
+        workspace.publish_artifact(
+            source,
+            "result.json",
+            kind="monthly_closure_search_result",
+            provenance={"search_content_key": spec.content_key},
+        )
+        workspace.finish("succeeded")
+
+        status, state = get_json(f"{base_url}/api/monthly_search/status")
+        assert status == 200
+        assert state["status"] == "done"
+        assert state["server_tracked"] is False
+        assert state["search_id"] == sid
+        assert state["result"]["winner_id"] == "closure-1"
+        assert state["result"]["closure_search_spec"] == spec.to_dict()
+
+        # The manifest's terminal label cannot authenticate altered bytes.
+        (workspace.artifacts_dir / "result.json").write_text("{}")
+        _, invalid = get_json(f"{base_url}/api/monthly_search/status")
+        assert invalid["status"] == "idle"
 
     def test_missing_frozen_policy_is_500_and_starts_nothing(
             self, base_url, monkeypatch, tmp_path):

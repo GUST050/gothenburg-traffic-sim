@@ -64,6 +64,56 @@ class TestInvocation:
         rs.run_sumo(1, route, [], 60, Path("/x"), time_to_teleport_s=-1)
         assert seen["time_to_teleport_s"] == -1
 
+    def test_routing_experiment_flags_are_opt_in_and_precise(self, tmp_path):
+        cmd = _invocation(tmp_path, rerouting_threads=2,
+                          routing_algorithm="astar")
+        assert cmd[cmd.index("--device.rerouting.threads") + 1] == "2"
+        assert cmd[cmd.index("--routing-algorithm") + 1] == "astar"
+
+    def test_invalid_routing_experiment_is_refused_before_sumo(self, tmp_path):
+        with pytest.raises(ValueError, match="rerouting_threads"):
+            _invocation(tmp_path, rerouting_threads=0)
+        with pytest.raises(ValueError, match="rerouting_threads"):
+            _invocation(tmp_path, rerouting_threads=1.5)
+        with pytest.raises(ValueError, match="routing_algorithm"):
+            _invocation(tmp_path, routing_algorithm="not-an-algorithm")
+
+    def test_sumo_warnings_can_be_enabled_for_diagnosis(self, tmp_path):
+        assert "--no-warnings" in _invocation(tmp_path)
+        assert "--no-warnings" not in _invocation(
+            tmp_path, suppress_warnings=False)
+
+    def test_routing_experiment_cannot_publish_as_the_production_arm(
+            self, monkeypatch, tmp_path):
+        monkeypatch.setattr(sys, "argv", [
+            "run_scenario.py", "--routing-algorithm", "astar",
+        ])
+        with pytest.raises(SystemExit):
+            rs.parse_args()
+
+        monkeypatch.setattr(sys, "argv", [
+            "run_scenario.py", "--routing-algorithm", "astar",
+            "--out-dir", str(tmp_path / "output"),
+            "--timing-sidecar", str(tmp_path / "timing.json"),
+        ])
+        args = rs.parse_args()
+        assert args.routing_algorithm == "astar"
+
+    def test_non_default_rerouter_radius_is_an_isolated_experiment(
+            self, monkeypatch, tmp_path):
+        monkeypatch.setattr(sys, "argv", [
+            "run_scenario.py", "--rerouter-radius-m", "1000",
+        ])
+        with pytest.raises(SystemExit):
+            rs.parse_args()
+
+        monkeypatch.setattr(sys, "argv", [
+            "run_scenario.py", "--rerouter-radius-m", "1000",
+            "--out-dir", str(tmp_path / "output"),
+            "--timing-sidecar", str(tmp_path / "timing.json"),
+        ])
+        assert rs.parse_args().rerouter_radius_m == 1000
+
 
 class TestClosurePathWiring:
     def test_run_scenario_defaults_the_cli_to_the_closure_policy(self):

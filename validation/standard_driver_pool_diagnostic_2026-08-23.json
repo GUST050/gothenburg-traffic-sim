@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "kind": "day_specific_standard_driver_pool_diagnostic",
+  "date": "2026-08-23",
+  "status": "verified_exact_not_adopted",
+  "decision": "keep_isolated",
+  "reason": "The exact pool passed correctness and dispersion, but a 10-trial paired baseline did not prove the required zero latency regression. Closure-shaped adoption evidence has not been run.",
+  "input": {
+    "demand_date": "2027-09-08",
+    "demand_build_id": "273c987cf579ed1308e3",
+    "demand_build_key": "ab9711a80586fffb",
+    "demand_variant": "edge_shares",
+    "vehicles": 21240,
+    "directed_sensor_edges": 7,
+    "intervals": 96,
+    "constraints_per_arm": 672,
+    "arms": [1000, 1001, 1002],
+    "pool_key": "2da66ad700126dbd86b46a23516788bf",
+    "profile_key": "4c0c081f46e1839688f837c7104e1461"
+  },
+  "structure": {
+    "picker_contract": "The existing date-specific demand picker still chooses the vehicles and routes. The standard pool is a deterministic post-picker layer keyed by date, demand build, route bytes, network, sensor targets and arm set.",
+    "fixed_driver_attribute": "vehicle speedFactor",
+    "profile_distribution": "normc-compatible truncated normal: mean 1.0, deviation 0.1, minimum 0.2, maximum 2.0",
+    "common_random_numbers": "Each arm's explicit per-vehicle factors are reused between its baseline and closure; XML load order cannot remap factors.",
+    "departure_method": "First match the original slots to robust passage windows; if that is impossible, use EDF feasibility and project each position toward the original global slot under the dispersion gate.",
+    "active_production": false,
+    "source_files_changed": false,
+    "warming_invalidated": false
+  },
+  "correctness": {
+    "iterations": 2,
+    "exact_constraints_per_arm": {
+      "1000": 672,
+      "1001": 672,
+      "1002": 672
+    },
+    "vehicles_added": 0,
+    "vehicles_removed": 0,
+    "routes_changed": 0,
+    "loaded_inserted_per_arm": 21240,
+    "unfinished_per_arm": 0,
+    "teleports_per_arm": 0,
+    "distinct_profile_arms": true,
+    "profile_summaries": {
+      "1000": {"vehicles": 21240, "mean": 1.000453, "deviation": 0.100146, "minimum": 0.599557, "maximum": 1.366135},
+      "1001": {"vehicles": 21240, "mean": 1.000011, "deviation": 0.101085, "minimum": 0.606326, "maximum": 1.398956},
+      "1002": {"vehicles": 21240, "mean": 1.000368, "deviation": 0.099986, "minimum": 0.531355, "maximum": 1.398157}
+    },
+    "departure_spacing": {
+      "source": {"minimum_gap_s": 2.0, "median_gap_s": 2.7, "maximum_departures_per_second": 1, "gaps_at_minimum": 0},
+      "candidate": {"minimum_gap_s": 2.0, "median_gap_s": 2.5, "maximum_departures_per_second": 1, "gaps_at_minimum": 0}
+    },
+    "departure_adjustment": {
+      "shifted_vehicles": 21183,
+      "minimum_shift_s": -966.6,
+      "maximum_shift_s": 826.0,
+      "median_absolute_shift_s": 254.4
+    }
+  },
+  "paired_baseline_timing": {
+    "scope": "10 counterbalanced trials; three arms run concurrently; mesoscopic SUMO; sensor-only edgeData; no trajectories; no closure",
+    "source_wall_s": [2.208390666, 1.8627895, 1.788810125, 1.797947333, 1.846184, 1.828997541, 1.811964209, 1.782491667, 1.791968167, 1.789086042],
+    "pool_wall_s": [1.881083875, 1.847441959, 2.064694209, 1.825903542, 1.79949875, 1.823390833, 1.965641125, 1.841350167, 1.845440875, 1.849998791],
+    "source_median_s": 1.804955771,
+    "pool_median_s": 1.846441417,
+    "pool_over_source_median_ratio": 1.022984301,
+    "source_nearest_rank_p95_s": 2.208390666,
+    "pool_nearest_rank_p95_s": 2.064694209,
+    "p95_interpretation": "Not adoption evidence: with only ten observations, nearest-rank p95 is the maximum and the source maximum was its cold first trial.",
+    "gate": "failed_to_prove_zero_regression"
+  },
+  "remaining_gates": [
+    "A production-shaped paired baseline and representative closure benchmark with trajectories and exact semantic/health comparison.",
+    "A storage/materialization design that does not multiply closure filtering work or annual warm-cache size by three.",
+    "A declared bound on route-to-time reassignment in addition to the already-passing departure-spacing gate."
+  ],
+  "official_references": [
+    "https://sumo.dlr.de/docs/Definition_of_Vehicles%2C_Vehicle_Types%2C_and_Routes.html",
+    "https://sumo.dlr.de/docs/Simulation/Randomness.html",
+    "https://sumo.dlr.de/docs/Simulation/Output/Lane-_or_Edge-based_Traffic_Measures.html",
+    "https://sumo.dlr.de/docs/Simulation/Output/TripInfo.html"
+  ]
+}

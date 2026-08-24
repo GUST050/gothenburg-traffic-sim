@@ -100,6 +100,24 @@ def test_unreadable_key_inputs_refuse_to_prune(tmp_path, monkeypatch, capsys):
     assert "refusing to guess" in capsys.readouterr().out
 
 
+def test_entry_vanishing_during_scan_is_ignored(tmp_path, monkeypatch):
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    vanished = _entry(cache_root, "f" * 24, "digest", age_days=30)
+    monkeypatch.setattr(prune, "newest_key_input_mtime",
+                        lambda root: (time.time() - 86400, "pfe.py"))
+    monkeypatch.setattr(prune, "pools_named_by_live_days", lambda root: set())
+    original_stat = type(vanished).stat
+
+    def racing_stat(path, *args, **kwargs):
+        if path == vanished:
+            raise FileNotFoundError(path)
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(vanished), "stat", racing_stat)
+    assert _run(monkeypatch, cache_root, tmp_path / "days") == 0
+
+
 def test_live_day_digests_come_from_the_builder_inventory(tmp_path):
     import build_sumo_demand
 

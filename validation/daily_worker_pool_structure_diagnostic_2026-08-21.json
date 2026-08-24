@@ -1,0 +1,146 @@
+{
+  "arm_order": [
+    "fresh_interpreter",
+    "reusable_spawn_pool"
+  ],
+  "baseline_prewarm": {
+    "fresh_cache": {
+      "evidence_digests": [
+        "0109133e0349234898a211d326ac33eff5887292620a0ad466941c37bf717b7c"
+      ],
+      "sumo_child_peak_rss_bytes": 217792512,
+      "task_wall_s": [
+        30.939893
+      ],
+      "wall_s": 31.013828,
+      "worker_peak_rss_bytes": 976601088,
+      "worker_pids": [
+        34540
+      ]
+    },
+    "pool_cache": {
+      "evidence_digests": [
+        "0109133e0349234898a211d326ac33eff5887292620a0ad466941c37bf717b7c"
+      ],
+      "sumo_child_peak_rss_bytes": 218595328,
+      "task_wall_s": [
+        30.975893
+      ],
+      "wall_s": 31.051824,
+      "worker_peak_rss_bytes": 988315648,
+      "worker_pids": [
+        34568
+      ]
+    },
+    "timed_comparison_excludes_prewarm": true
+  },
+  "comparison": {
+    "continue_to_counterbalanced_campaign": false,
+    "exact_evidence_equal": true,
+    "production_adoption_authorized": false,
+    "speedup": 0.998292
+  },
+  "configuration": {
+    "baseline_prewarmed": true,
+    "chunksize": 1,
+    "fresh_sumo_per_task": true,
+    "fresh_workers": 3,
+    "minimum_continuation_speedup": 1.1,
+    "per_task_timeout_s": 900.0,
+    "pool_workers": 3,
+    "recycle_after": 25,
+    "units": 6
+  },
+  "created_at": "2026-08-21T20:25:58Z",
+  "diagnostic_only": true,
+  "environment": {
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "pool_start_method": "spawn",
+    "python": "3.9.6"
+  },
+  "fresh_interpreter": {
+    "evidence_digests": [
+      "0109133e0349234898a211d326ac33eff5887292620a0ad466941c37bf717b7c",
+      "ce43d3094b389553f9e189b3345ff4c76c7325504b68df658b0543ef4580bd3d",
+      "9470c58785733037da18f6744c10ba52a7b38d90773331a1a4c6e8cfb9305ab5",
+      "99e830ec77d14e49b54845228959fb05bab8496714320f6609a88a3d04a5c60c",
+      "d2b97d422422e56cac612566e42a7184956ad16d2666e4f0260fd65de8b73e85",
+      "81eb2c446f034b42f4852906151f68663cd42becde83c4f7136699430bb1961a"
+    ],
+    "sumo_child_peak_rss_bytes": 235159552,
+    "task_wall_s": [
+      27.326746,
+      27.098603,
+      27.460626,
+      33.76045,
+      27.54508,
+      30.677027
+    ],
+    "wall_s": 61.039938,
+    "worker_peak_rss_bytes": 1000128512,
+    "worker_pids": [
+      34587,
+      34588,
+      34589,
+      34618,
+      34621,
+      34623
+    ]
+  },
+  "frozen_inputs": {
+    "archive_paths": [
+      "/Users/gt/Documents/gs-project/runs/demand-20260819-203712-9cf030aa-d1e7"
+    ],
+    "release_sha256": "a80a5f70100267afffa2c89f461564dbffc5f50131cac49e744539afdbeac6eb",
+    "schedule_ids": [
+      "closure-e226e47eb8e66236b790",
+      "closure-598cbefecf3ce3a369ad",
+      "closure-9218978b7622440c40fb",
+      "closure-727832038504caa9ed9b",
+      "closure-06d48670dc3edcf065fb",
+      "closure-eff012429f4dcf8008bc"
+    ],
+    "search_content_key": "4fd492522e5fa6bbb839",
+    "spec_sha256": "0b2ab506f50b8837c714cd1556c95b9126a3ed7f638382d880cc03d1b1a0c0f3",
+    "units_ledger_sha256": "caa5fd305ff54c5a9e305148a48bdef63f9e077ef542208877c001e327931b43",
+    "variant": "q50",
+    "warm_execution": false,
+    "work_date": "2027-07-15",
+    "workspace_manifest_sha256": "52b31d0dc9eea98cc8389a43f667ba7d79cc933e2cb3b0372bbfa6c756da8618"
+  },
+  "order_bias": "pool runs second and therefore receives the favourable filesystem cache condition; a pass requires a counterbalanced campaign",
+  "reusable_spawn_pool": {
+    "evidence_digests": [
+      "0109133e0349234898a211d326ac33eff5887292620a0ad466941c37bf717b7c",
+      "ce43d3094b389553f9e189b3345ff4c76c7325504b68df658b0543ef4580bd3d",
+      "9470c58785733037da18f6744c10ba52a7b38d90773331a1a4c6e8cfb9305ab5",
+      "99e830ec77d14e49b54845228959fb05bab8496714320f6609a88a3d04a5c60c",
+      "d2b97d422422e56cac612566e42a7184956ad16d2666e4f0260fd65de8b73e85",
+      "81eb2c446f034b42f4852906151f68663cd42becde83c4f7136699430bb1961a"
+    ],
+    "sumo_child_peak_rss_bytes": 235700224,
+    "task_wall_s": [
+      28.144824,
+      28.218952,
+      28.285959,
+      32.94237,
+      26.872797,
+      29.93288
+    ],
+    "wall_s": 61.144384,
+    "worker_peak_rss_bytes": 1019150336,
+    "worker_pids": [
+      34657,
+      34658,
+      34659
+    ]
+  },
+  "schema": "daily_worker_pool_diagnostic_v1",
+  "source_fingerprints": {
+    "harness": "0378eda2a55231997d0d185f3c2a9fd9ecf0ad56ec57e3a8b14c6bf4300ae09a",
+    "monthly_sumo": "0f63d4a355c4d566e90e354259a002b3a1a02b87ef766be8e6ed0689c0d88a70",
+    "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "run_scenario": "c959a01cea1ef5aef68ed7e9e699aa10ca45edaaaee942d275713adc1fae5542",
+    "worker": "3f8b21ee2791f1a6b77b66f5c9cae804aad37fa813e4be37245c6b2cc644c2bb"
+  }
+}

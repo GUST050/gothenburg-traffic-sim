@@ -7,6 +7,303 @@ which model may continue. See `AGENTS.md`.
 <!-- CURRENT_HANDOFF_START -->
 ## CURRENT_HANDOFF
 
+- Focus and status: `The canonical pre-picker weekday/weekend route catalog is
+  robustness-repaired, matched-size qualified, schema-v2 adopted and soaked.
+  Production defaults to the verified catalog with explicit legacy rollback.
+  The active 2027-09-08 day was rebuilt and simulated successfully. Annual
+  warming remains deliberately inactive after a refreshed preflight and one
+  successful bounded q50 unit; 104,684 planned units remain pending. It remains part of the broader
+  road-closure and monthly-simulation speed goal. The named monthly search is
+  stopped at 476/1,776 with its workspace preserved as resumable.`
+- Summary: `The canonical speed plan separates exact repeats, first-new
+  interactive closures and exhaustive monthly throughput. Implemented slices
+  now include the provenance-bound exact cache, result-neutral independent-day
+  cache/worker timing, isolated benchmark-only routing controls, and a monthly
+  active-slot guard. Sol review repaired under-keying, cache/status races,
+  malformed-artifact handling, diagnostic failure isolation and the external
+  monthly running/stale/succeeded/cancel UI lifecycle. Paired adoption
+  benchmarks and high-risk phases remain open. The qualified
+  entered/timeLoss-only edgeData arm is now the production default with an
+  isolated full-field rollback. Disruption is a pure module with a retained
+  oracle and exact grouped/SciPy-sparse implementations. Per-key file locking
+  serializes matched-baseline producers across processes. Fresh-interpreter
+  versus spawn-pool diagnostics are single draws and do not close the generic
+  reusable-Python-worker line; the pool remains inactive pending the new
+  counterbalanced multi-trial gate.
+  A larger concurrency test exposed the matched-baseline race that the new
+  single-flight regression now covers. The product capacity contract now explicitly targets
+  50 physical sensors, including any vehicle growth their joint calibration
+  evidence requires, without relaxing simulation evidence. The robustness
+  pass additionally makes cache preparation exception-safe/cancellable,
+  bounds browser polling and per-key lock waits, fixes corrupt-cache telemetry
+  and prune races, makes warning/rerouter diagnostics explicit and prevents
+  reserved cached fields from taking over server lifecycle state. A new
+  baseline-only exact sensor-passage audit now recomputes raw 15-minute
+  ensemble, representative and per-seed results and exposes every mismatch in
+  the scenario artifact and validation UI without mutating demand. A bounded
+  order-preserving departure reconciler was implemented and proven capable of
+  672/672 exact output in every seed, but its new dispersion gate rejects the
+  real candidate before publication because it creates artificial departure
+  convoys. A second isolated `standard_driver_pool.py` experiment now separates
+  the date-specific picker from deterministic driver-profile arms. It reached
+  672/672 in all three arms without bunching, but did not prove zero latency
+  regression and remains unconnected to production.
+  The bounded catalog stores canonical routed weekday/weekend supply,
+  passes explicit daily purpose margins to PFE, retains DayLibrary for finished
+  days and leaves warm-state identity bound to exact daily routes. The
+  historical unequal-size trials measured 66.402→19.437 s, but this ratio is
+  not adoption evidence. The corrected 30-pair harness requested 6,000
+  candidates in both arms and measured 55.246→24.715 s median (2.235x), with
+  every gate and day class passing. Schema-v2 qualification/adoption binds
+  report hashes, keys, selected sizes and stored bytes; seven catalog fixtures
+  plus explicit legacy rollback passed soak. Seed/variant order, exact
+  widened-rung PFE fallback and mixed-pool tour IDs are regression-tested. See
+  docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md.`
+- Current product evidence: `Active forecast demand: 2027-09-08, catalog build
+  ab27c11be5a6a8b52045, q50_only, 20,818 calibrated trips selected by PFE. All 672 directed
+  sensor-edge × 15-minute integer targets match exactly: 672/672, maximum and
+  summed absolute residual 0. Validation is overall warn
+  because trip-length L1 is now fail-closed until an absolute external-fit
+  threshold is frozen. `candidate_catalog` binds weekday key
+  13020f80f1be36df59e27144aad8d808 and records a verified cache hit. SUMO accepted all 20,818
+  vehicles in all three seeds, with zero waiting, unfinished trips, teleports
+  or collisions; this is an integrity check, not demand inflation.
+  The isolated reconciliation candidate kept all 21,240 vehicles, every route,
+  three distinct seed speed profiles and clean health while reaching 672/672
+  per seed. It is rejected evidence, not a release: median departure gap fell
+  2.7→0.1 s, 15,545 gaps hit 0.1 s and peak loading rose 1→10 departures/s.
+  The replacement standard-pool diagnostic also kept all vehicles/routes and
+  reached 672/672 per arm with distinct explicit speedFactor profiles. It kept
+  minimum spacing 2.0 s, changed median spacing only 2.7→2.5 s and stayed at
+  one departure/s, but reassigned 21,183 latent departure times (median
+  absolute shift 254.4 s, range -966.6..826.0 s). It is isolated evidence,
+  not an active release.
+  Active immutable release: golden-2025-09-16-7day-v1. The map-to-sensor audit
+  passes on all seven directed sensor edges.`
+- Live operation: `External monthly search ui-monthly-euc9qp is stopped for
+  forecast 2027-07-15..2027-07-30 on edge 96527131_26842526_0. Its manifest
+  records interrupted_by_user at 476/1,776, with completed artifacts and
+  scratch preserved for resume. It is not a completed or promoted result. The
+  local server was restarted after catalog adoption and the warm pilot;
+  `/api/ping` returns ok and closure/recalibration are idle.`
+- Performance evidence: `Current serve.py passes three seed workers: commit
+  46e7048 measured baseline 11.0 -> 5.9 s and closure 21.6 -> 13.9 s with
+  identical output apart from generated_at. Frozen v6 measured closure p95
+  10.4234 s. Persistent external SUMO v2 was equivalent but slower (11.3904 s
+  vs 11.0998 s) and is closed. The monthly eight-worker benchmark measured
+  1.69x and 2.11 GiB RSS. Cost-order v5 saved 18 calls but failed strict
+  equivalence; annual multi-snapshot state creation measured 20.8x but ordinary
+  SUMO omits the required exact meso tripinfo accumulator. The frozen July 15
+  daily-unit cold-execution comparison measured fresh interpreters at 54.445 s and one
+  reusable spawn worker at 53.027 s (1.027x), with exact evidence equality;
+  this misses the 1.10x continuation gate even with second-arm cache bias. With
+  equal prewarmed caches, six units/three workers measured 61.040 s fresh versus
+  61.144 s pooled (0.998x), again with exact evidence. The cold empty-cache arm
+  failed reproducibly on duplicate matched-baseline publication. A separate
+  300-iteration process-free scale diagnostic measured final sensor-fit
+  validation at 3.325 ms p95 for 50 rows (0.423 ms at six), showing sensor
+  validation is not the 13.9 s closure bottleneck. A one-seed diagnostic with
+  minimal edgeData completed 21,408 vehicles in 1.882 s and 42,816 in 2.958 s,
+  but an 85,632 load inserted only 56,655 and took 66.118 s. Default versus
+  entered/timeLoss edgeData measured 49.86 versus 10.16 MB and 2.283 versus
+  1.897 s with equal flow and recovery values. The paired production-shaped
+  follow-up covered 40 scenario runs / 120 seed executions with trajectories:
+  zero semantic, health or integrity mismatches; baseline mean wall fell
+  6.561 -> 5.484 s and closure 15.198 -> 14.120 s. Candidate closure p95 is
+  14.142 s, so it qualified for production default but still missed 10 s. After
+  adoption and grouped/sparse disruption, one isolated three-seed
+  production-shaped closure completed in 10.690 s versus 11.549 s with the
+  full-field rollback. Scenario and trajectory digests were equal, all three
+  seeds loaded/inserted 21,408 vehicles with zero teleports, and health was
+  verified clean. This is a diagnostic run, not p95 evidence.`
+- Passage-reconciliation evidence: `Five counterbalanced three-seed baseline
+  trials measured current median 1.9908 s versus candidate 2.0536 s (candidate
+  3.15% slower); this is not a p95 claim. Learning plus exact verification cost
+  12.43 s offline. The candidate retained stochastic variation on 1,234
+  non-sensor edges / 22,663 edge-quarters, so rejection is specifically about
+  departure structure and speed, not collapsed seed identity. See
+  validation/departure_reconciliation_diagnostic_2026-08-23.json.`
+- Standard-driver-pool evidence: `The pool is keyed by picker date/build,
+  route bytes, network, target bytes and arms, and writes only under an
+  isolated output root. The active 2027-09-08 build converged in two offline
+  three-arm SUMO iterations with 672/672 per arm, 21,240 loaded/inserted and
+  zero unfinished/teleports. Ten counterbalanced concurrent-three-arm baseline
+  trials measured current median 1.80496 s versus pool 1.84644 s (+2.30%).
+  Nearest-rank p95 favored the pool only because n=10 makes p95 the maximum and
+  the current arm's maximum was its cold first trial. This fails to prove the
+  required no-regression condition; closure-shaped equivalence and timing are
+  still missing. See
+  validation/standard_driver_pool_diagnostic_2026-08-23.json.`
+- Structural research evidence: `The former scenario_publication phase mixed
+  deterministic disruption analysis with payload and file I/O. A
+  process-free trace on the active 21,408-vehicle q50 release and paired
+  closure edge measured graph/cost loading at 0.2274 s and three disruption
+  calls at 4.0654-4.1757 s. The closure affected 3,773 vehicles and 340 unique
+  OD pairs; the implementation issued 1,360 Python Dijkstra calls. This is a
+  separately optimizable analysis stage, not JSON I/O. Phase schema v2 now
+  measures disruption_analysis, payload_construction and artifact_publication
+  separately. Exact grouped/SciPy-sparse routing reduced the same process-free
+  disruption case from 4.1364 s to 1.051 s while matching the retained per-OD
+  oracle. The simple structure and remaining evidence plan are in
+  docs/plans/LARGE_SIMULATION_FUNCTION_STRUCTURE_2026-08-23.md.`
+- Direction status: `The deployed centre is shrunk_dfactor with sensor 107's
+  2025 aggregate anchor. Ordinary seeds all use q50. q10/q90 are opt-in stress
+  arms with fixed q50 population, not calibrated probability intervals. Gate S
+  is UNDECIDED and Gate M is INCONCLUSIVE.`
+- Known code risk: `The repaired exact cache is conservative and hashes the
+  live routes, trajectory sidecars, network inputs, runtime and relevant source
+  tree twice on a hit; its <=2 s p95 target still needs measurement. The
+  baseline writer race is repaired with per-key cross-process single-flight,
+  but nested daily-worker plus seed-worker execution remains refused until a
+  complete equivalence, resource and cancellation benchmark passes.
+  A standard Python worker pool is not activated; its measured 2.7% benefit
+  disappeared in the second single draw and does not yet justify the
+  cancellation/reaping/recycling surface. Neither draw establishes rejection;
+  the replacement harness requires four or more counterbalanced paired trials.
+  Sparse routing uses SciPy when
+  available and falls back to exact grouped Python routing; neither path
+  changes the scientific oracle.`
+- Files changed by this task: `serve.py, run_scenario.py,
+  run_monthly_closure_search.py, tools/benchmark_speed.py,
+  traffic_sim/simulation/independent_daily.py,
+  traffic_sim/confidence/report.py,
+  traffic_sim/simulation/disruption.py,
+  traffic_sim/simulation/execution.py,
+  traffic_sim/simulation/annual_warm_store.py,
+  traffic_sim/storage/singleflight.py,
+  traffic_sim/simulation/monthly_search.py, web/app.js, related tests,
+  tools/benchmark_daily_worker_pool.py,
+  tools/soak_route_catalog.py,
+  tools/prune_candidate_cache.py,
+  tools/verify_closure_cost_ordering_golden.py,
+  validation/closure_cost_ordering_golden_v6.json,
+  validation/closure_cost_ordering_golden_v7.json,
+  validation/daily_worker_pool_diagnostic_2026-08-21.json,
+  validation/daily_worker_pool_structure_diagnostic_2026-08-21.json,
+  validation/daily_worker_pool_cold_start_failure_2026-08-21.json,
+  validation/vehicle_load_and_edgedata_diagnostic_2026-08-22.json,
+  validation/edgedata_attributes_paired_adoption_2026-08-22.json,
+  docs/plans/DAILY_SIMULATION_CONCURRENCY_STRUCTURE_2026-08-21.md,
+  docs/plans/FIFTY_SENSOR_PERFORMANCE_CONTRACT_2026-08-22.md,
+  docs/plans/LARGE_SIMULATION_FUNCTION_STRUCTURE_2026-08-23.md,
+  docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md,
+  tests/test_sensor_scale_contract.py, tests/test_closure_disruption.py,
+  tests/test_annual_warm_store.py, tests/test_annual_warm_readiness.py,
+  tests/test_singleflight.py,
+  tools/standard_driver_pool.py, tests/test_standard_driver_pool.py,
+  traffic_sim/demand/route_catalog.py, tests/test_route_catalog.py,
+  validation/standard_driver_pool_diagnostic_2026-08-23.json,
+  validation/sensor_validation_scale_50_2026-08-22.json,
+  ARCHITECTURE.md, IMPROVEMENT_PLAN.md, TASKS.md, AGENT_NOTES.md and
+  docs/plans/ROAD_CLOSURE_SIMULATION_SPEED_PLAN_2026-08-21.md. The stopped
+  workspace manifest under runs/closure-search is preserved and resumable.`
+- Generated product state: `The same active forecast date (2027-09-08) was
+  rebuilt through implicit schema-v2 catalog adoption. web/data/od_matrix.*,
+  the three-seed baseline/index/trajectory and validation.json now bind build
+  ab27c11be5a6a8b52045. The one-unit warming pilot restored this live release
+  after packing and restore-verifying its isolated artifact. The new demand run and the preceding diagnostic
+  historical run remain archived under runs/. Unrelated dirty source changes
+  were preserved.`
+- Checks: `Catalog invariance, a fresh catalog build, 30 matched paired trials,
+  schema-v2 qualification/adoption, seven-case soak plus legacy rollback, the
+  active-day build/baseline and one q50 warm unit all completed successfully.
+  The catalog/demand/PFE/day-library focused suites pass 647 tests with one
+  skip; the HTTP server suite passes 151 tests; make lint, focused tool pylint,
+  node --check and git diff --check pass. The annual store/readiness rerun
+  passes 17/17; successful packing now removes both chosen and losing
+  compression temporaries, and the pilot's one stale 248-byte staging file was
+  removed. Live ping/status smoke checks pass. The current robustness regression group passes 918 tests with one
+  skip after repairing its synthetic active-slot fixture and binding immutable
+  closure-cost golden v6. The close/cancel HTTP set passes 22 tests, the
+  low-risk cache/browser/benchmark group passes 201 tests with two skips, and
+  the scenario/warm group passes 279 tests with one skip. The exact-passage
+  scenario/validation/publication group passes 160 tests with one skip; the
+  adjacent demand/PFE/prior group passes 258 tests. The final combined
+  server/scenario/demand/cache/benchmark regression passes 1,170 tests with
+  one skip and one existing LibreSSL warning; closure-cost golden v7 passes
+  all four reproduction checks. make lint,
+  node --check and git diff --check pass. Sol's earlier focused review checks
+  passed (53 tests plus JavaScript syntax).
+  The complete HTTP server suite passes 147 tests; the integrated
+  closure/monthly/benchmark review set passes 209 tests; the broader speed set
+  passes 141 tests. The scenario/monthly/benchmark group passes 300 tests with
+  one skip after repairing its synthetic live-identity fixture. make lint,
+  node --check and git diff --check pass. The pool/monthly/SUMO regression set
+  passes 444 tests; the live-shaped two-unit SUMO diagnostic preserved exact
+  evidence and measured 1.027x. The completed repository-wide run on
+  2026-08-23 reports 4,979 passed, 27 skipped and 153 failed in 13m47s. The
+  observed failures are confined to historical annual/held-out/warm-state
+  freeze reproduction and retirement tests whose frozen source/content keys
+  predate the current source tree; two isolated examples reproduce as a stale
+  expected-error regex and a held-out selection content-key mismatch. They are
+  retained fail-closed evidence debt, not repaired by rewriting history or
+  weakening drift checks. The named monthly workspace lock is free and its
+  stopped-by-user pointer remains resumable.`
+- Superseded intermediate checks: `Before the single-flight repair, the focused
+  concurrency/monthly/SUMO set passed 290 tests with 1 strict expected failure
+  for the then-unfixed baseline
+  single-flight contract; adjacent monthly/search/speed tests pass 292; the
+  HTTP suite passes 147 when run with loopback binding; make lint and git diff
+  --check pass. The equal-cache six-unit diagnostic preserved exact evidence
+  and measured 0.998x; the bound cold-start report reproduced the baseline
+  race. The 50-sensor correctness/failure-recall contract adds 3 passing
+  tests; its vehicle-load/output evidence guards bring that file to 5 passing
+  tests. The combined sensor/edgeData/scenario/benchmark/envelope suite passes 356
+  tests with 1 skip. The diagnostic JSON parses, make lint and git diff --check
+  pass.`
+- Current implementation checks: `The disruption and deterministic oracle set
+  passes 53 tests. The scenario/timing/benchmark/disruption set passes 188 tests
+  with one skip. The single-flight set passes 6 tests, including three spawned
+  processes with exactly one active producer. The broader relevant simulation
+  set passes 332 tests with one skip. The final expanded
+  scenario/benchmark/monthly/scale set passes 484 tests with one skip, and the
+  HTTP server suite passes 147 tests. make lint, node --check and git diff
+  --check pass. The isolated
+  production-shaped default and full rollback produced equal semantic and
+  trajectory digests and clean seed health. The standard-pool plus passage
+  unit set passes 17 tests. The real isolated pool passed all 672 raw SUMO
+  constraints in each of three arms with clean health; its ten-trial baseline
+  timing is recorded as non-adoption evidence.`
+- Catalog-plan review checks: `In the named local environment
+  MPLCONFIGDIR=/tmp/gs-mpl with PYTHONDONTWRITEBYTECODE=1, the focused
+  candidate, PFE, DayLibrary, warm-state, provenance, intake, singleflight,
+  qualification, catalog and annual-warm suites pass 590 tests with one
+  LibreSSL warning in 418.42 s.
+  Targeted pylint passes after making the soak tool importable both as a CLI
+  and package module. The invariance report passes; the prior 30-pair verdict
+  and post-adoption soak are retained only as historical unequal-size evidence.
+  The repaired non-server suite passes 647 tests (one skipped), the full server
+  integration suite passes 151 tests, and the focused contract slice passes;
+  make lint and diff checks pass. The
+  active catalog day also ran through three SUMO seeds with 20,818/20,818
+  loaded/inserted and zero waiting, unfinished, teleports or collisions.`
+- Blockers or risks: `S0 telemetry and monthly throughput evidence are still
+  open; do not claim the p95 or 2.0x targets from instrumentation. The frozen
+  scenario benchmark campaign preflight refuses because live demand has moved
+  from its 2025 historical/q10-q90 fixture to the current 2027 forecast/q50
+  build; a new campaign identity is required before SUMO evidence. A real
+  calibrated 50-station PFE fixture, vehicle-load ladder and the 6-versus-50
+  identical-load SUMO comparison do not yet exist; synthetic 50-sensor exact
+  projection and output-validation tests do pass. Minimal edgeData is now the
+  production default with a full-field rollback. A frozen multi-trial p95 for
+  the new code, the remaining monthly resource matrix and calibrated 50-station
+  vehicle tiers are still missing. Gate S/M remain undecided/inconclusive and
+  outside the speed goal. Catalog performance adoption is open until a fresh
+  matched-size 30-pair campaign, schema-v2 adoption and soak pass. The former
+  annual plan/preflight/pilot remain historical and must be refreshed only
+  after adoption. Annual activation remains a future explicit decision.`
+- Suggested next action: `Run the matched-size catalog campaign, qualify,
+  schema-v2 adopt and soak before refreshing warming; then return to repeated
+  road-closure p95 and monthly throughput evidence. Keep rejected pools
+  isolated.`
+- Actor notes: `Historical handoff detail follows outside the current markers;
+  it is evidence for its date, not current workflow authority.`
+<!-- CURRENT_HANDOFF_END -->
+
+## Historical handoff — 2026-08-17
+
+<!-- HISTORICAL_HANDOFF_2026_08_17_START -->
+
 - Focus and status: `Branch claude/direction-split-plan-tt3gy9. The dated
   direction plan's UNCONDITIONAL phases (0A, 0B, 1) are implemented and tested.
   Gate S and Gate M are both still undecided, and no conditional branch, schema,
@@ -144,7 +441,7 @@ which model may continue. See `AGENTS.md`.
   all map to q50; each loaded and inserted 18,031 vehicles with zero waiting,
   teleports or collisions. The superseded closure scenario files were removed
   by normal demand-scoped publication. Local server remains on port 8000.`
-<!-- CURRENT_HANDOFF_END -->
+<!-- HISTORICAL_HANDOFF_2026_08_17_END -->
 
 ## History
 

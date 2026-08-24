@@ -1,0 +1,91 @@
+{
+  "schema": "vehicle_load_and_edgedata_diagnostic_v1",
+  "created_on": "2026-08-22",
+  "diagnostic_only": true,
+  "adoption_authority": false,
+  "environment": {
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python": "3.9.6",
+    "sumo": "Eclipse SUMO 1.27.1 Darwin arm64"
+  },
+  "fixed_inputs": {
+    "begin_s": 0,
+    "end_s": 90000,
+    "edge_interval_s": 900,
+    "mesoscopic": true,
+    "seed": 1000,
+    "trajectory_output": false,
+    "closure": false
+  },
+  "source_fingerprints": {
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "routes_sha256": "011f0d0601bda2b61381fc4f69d0394b6d34c1175e2dd333a07dad1a8da14c12",
+    "run_scenario_sha256": "c959a01cea1ef5aef68ed7e9e699aa10ca45edaaaee942d275713adc1fae5542",
+    "envelope_sha256": "d322323d8be0c20e73f10f5f9829ccf1c44382ae81a88bacc7b1cb02dd9ccd79"
+  },
+  "edge_output_comparison": {
+    "default_attributes": {
+      "wall_s": [2.335851, 2.230617],
+      "mean_wall_s": 2.283234,
+      "bytes": 49859204
+    },
+    "entered_and_time_loss_only": {
+      "wall_s": [1.874268, 1.91999],
+      "mean_wall_s": 1.897129,
+      "bytes": 10157001
+    },
+    "comparison": {
+      "mean_speedup": 1.20352,
+      "wall_reduction_pct": 16.911,
+      "byte_reduction_pct": 79.629,
+      "flow_keys_equal": true,
+      "flow_arrays_equal": true,
+      "recovery_buckets_equal": true,
+      "production_adoption_authorized": false
+    }
+  },
+  "vehicle_scale_comparison_with_minimal_edge_output": [
+    {
+      "scale": 1,
+      "loaded": 21408,
+      "inserted": 21408,
+      "waiting": 0,
+      "wall_s": [1.873031, 1.89074],
+      "mean_wall_s": 1.881886,
+      "edge_output_bytes": 10157132
+    },
+    {
+      "scale": 2,
+      "loaded": 42816,
+      "inserted": 42816,
+      "waiting": 0,
+      "wall_s": [2.886548, 3.030209],
+      "mean_wall_s": 2.958379,
+      "edge_output_bytes": 10263357
+    },
+    {
+      "scale": 4,
+      "loaded": 85632,
+      "inserted": 56655,
+      "waiting": 28977,
+      "wall_s": [66.183816, 66.051908],
+      "mean_wall_s": 66.117862,
+      "edge_output_bytes": 11376238,
+      "valid_complete_population": false
+    }
+  ],
+  "reading": {
+    "two_x_load_wall_multiplier": 1.572,
+    "four_x_load_wall_multiplier": 35.133,
+    "four_x_load_is_not_valid_evidence": true,
+    "reason": "the 4x arm left 28,977 of 85,632 vehicles waiting at the end",
+    "next_load_points": [
+      21408,
+      32000,
+      42816,
+      50000,
+      60000
+    ],
+    "warning": "--scale is a runtime stress diagnostic, not a calibrated 50-sensor demand build or release claim"
+  }
+}

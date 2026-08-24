@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from traffic_sim.simulation.monthly_search import PROGRESS_PHASES
+from traffic_sim.simulation.monthly_search import _runner_timing_snapshot
 from traffic_sim.simulation.search_workspace import (
     create_search_workspace,
     load_search_workspace,
@@ -113,6 +114,20 @@ class TestProgressDetail:
         with pytest.raises(ValueError, match="detail must be an object"):
             workspace.update_progress("pilot", detail=["not", "an", "object"])
 
+    def test_optional_timing_cannot_fail_the_search(self):
+        class RaisingRunner:
+            @staticmethod
+            def timing_snapshot():
+                raise RuntimeError("diagnostic unavailable")
+
+        class NonJsonRunner:
+            @staticmethod
+            def timing_snapshot():
+                return {"bad": {1, 2}}
+
+        assert _runner_timing_snapshot(RaisingRunner()) == {}
+        assert _runner_timing_snapshot(NonJsonRunner()) == {}
+
 
 class TestTheUiRendersTheDetail:
     def test_the_bundle_renders_every_detail_counter(self):
@@ -132,3 +147,32 @@ class TestTheUiRendersTheDetail:
         assert "state.status === 'paused'" in source
         assert "restoreMonthlySearchSpec(state.closure_search_spec)" in source
         assert "starta samma sökning igen" in source
+
+    def test_an_observed_external_search_cannot_offer_server_cancel(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        assert "let monthlyJobServerTracked = true" in source
+        assert "monthlyJobServerTracked = state.server_tracked !== false" in source
+        assert "monthlyJobRunning && !monthlyJobServerTracked" in source
+        assert "btnMonthlyCancel.hidden = unownedMonthlyJob" in source
+        assert "if (!monthlyJobServerTracked) return" in source
+
+    def test_an_observed_external_result_is_restored_without_a_running_job(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        assert "const completedExternal = states.find" in source
+        assert "state.server_tracked === false && state.result" in source
+        completed = source[source.index("if (completedExternal) {"):]
+        completed = completed[:completed.index("const paused =")]
+        assert "monthlyJobRunning = false" in completed
+        assert "restoreMonthlySearchSpec(state.closure_search_spec)" in completed
+        assert "state.closure_search_spec?.directed_edges" in completed
+        assert "renderMonthlyResults(state.result)" in completed
+
+    def test_polling_has_bounded_failures_and_exponential_backoff(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        poller = source[source.index(
+            "async function runRoadClosureOperation("):]
+        poller = poller[:poller.index("async function activateClosedScenario(")]
+        assert "maxConsecutivePollFailures = 5" in poller
+        assert "2 ** consecutivePollFailures" in poller
+        assert "consecutivePollFailures = 0" in poller
+        assert "servern svarar inte" in poller

@@ -1,0 +1,37 @@
+{
+  "approved_state_workers": 8,
+  "content_key": "0b06fc713b741494692b4b1c559b315060b0c98efd8083d19588074440bc885f",
+  "disk_gate_passed": true,
+  "keep_demand_archives": false,
+  "localhost_ipv4_tcp_bind": true,
+  "measured_free_bytes": 157541814272,
+  "minimum_free_bytes": 59877867520,
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "pending_units": 104685,
+  "plan_content_key": "79a5c49cf25402c09bd6db07f440610b8f76b6109deabedfac2e8dfbd31bbbae",
+  "recorded_date": "2026-08-24",
+  "reference_edge": "10017905051_124601298_0",
+  "schema": "annual_warm_preflight_v1",
+  "state_workers": 1,
+  "status": "pass",
+  "sumo_home": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo",
+  "sumo_version": "Eclipse SUMO sumo 1.27.1\n Build features: Darwin-23.6.0 arm64 AppleClang 15.0.0.15000309 Release FMI Proj GUI FMT Intl SWIG Parquet Eigen GDAL GL2PS JuPedSim\n Copyright (C) 2001-2026 German Aerospace Center (DLR) and others; https://sumo.dlr.de\n\nEclipse SUMO sumo 1.27.1 is part of SUMO.\nThis program and the accompanying materials\nare made available under the terms of the Eclipse Public License v2.0\nwhich accompanies this distribution, and is available at\nhttp://www.eclipse.org/legal/epl-v20.html\nThis program may also be made available under the following Secondary\nLicenses when the conditions for such availability set forth in the Eclipse\nPublic License 2.0 are satisfied: GNU General Public License, version 2\nor later which is available at\nhttps://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html\nSPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later",
+  "traci": {
+    "api_complete": true,
+    "origin": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo/tools/traci/__init__.py",
+    "required_api": [
+      "init",
+      "close",
+      "simulationStep"
+    ],
+    "required_namespaces": {
+      "simulation": [
+        "getTime",
+        "saveState"
+      ],
+      "vehicle": [
+        "getIDList"
+      ]
+    }
+  }
+}

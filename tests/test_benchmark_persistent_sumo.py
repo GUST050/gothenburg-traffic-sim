@@ -309,14 +309,34 @@ class TestEnvironmentIdentity:
         assert isinstance(c["expected_sumo_version"], str) and c["expected_sumo_version"]
         assert isinstance(c["expected_platform"], str) and c["expected_platform"]
 
-    def test_sumo_drift_aborts(self, monkeypatch):
+    def test_sumo_drift_aborts(self, monkeypatch, tmp_path):
         c = h.load_contract(CONTRACT)
+        # This historical experiment is intentionally fingerprint-bound to
+        # the tree that executed it.  Current source/demand bytes may have
+        # moved on; isolate the SUMO-version condition this test names rather
+        # than letting an earlier fingerprint refusal mask it.
+        monkeypatch.setattr(
+            h, "file_fingerprints", lambda: dict(c["frozen_fingerprints"])
+        )
+        (tmp_path / "demand_meta.json").write_text(json.dumps({
+            "build_id": c["demand_identity"]["build_id"],
+            "demand_build_key": c["demand_identity"]["demand_build_key"],
+        }))
+        monkeypatch.setattr(h, "SUMO_DIR", tmp_path)
         monkeypatch.setattr(h, "sumo_version", lambda: "Eclipse SUMO sumo 9.9.9")
         with pytest.raises(h.ExperimentAborted, match="SUMO version drift"):
             h.verify_environment(c)
 
-    def test_platform_drift_aborts(self, monkeypatch):
+    def test_platform_drift_aborts(self, monkeypatch, tmp_path):
         c = h.load_contract(CONTRACT)
+        monkeypatch.setattr(
+            h, "file_fingerprints", lambda: dict(c["frozen_fingerprints"])
+        )
+        (tmp_path / "demand_meta.json").write_text(json.dumps({
+            "build_id": c["demand_identity"]["build_id"],
+            "demand_build_key": c["demand_identity"]["demand_build_key"],
+        }))
+        monkeypatch.setattr(h, "SUMO_DIR", tmp_path)
         monkeypatch.setattr(h, "sumo_version",
                             lambda: c["expected_sumo_version"])
         monkeypatch.setattr(h.platform, "platform", lambda: "OtherOS-1.0")
@@ -876,12 +896,21 @@ class TestFilesystemSafety:
 # ── Freeze integrity (criteria 11, 13) ───────────────────────────────────────
 class TestFreezeIntegrity:
 
-    def test_binds_live_harness_and_run_scenario(self):
+    def test_historical_fingerprints_are_well_formed_and_drift_refuses(self):
         c = json.loads(CONTRACT.read_text())
-        assert c["frozen_fingerprints"]["harness:benchmark_persistent_sumo.py"] \
-            == h.sha256_file(h.HARNESS)
-        assert c["frozen_fingerprints"]["source:run_scenario.py"] \
-            == h.sha256_file(h.ROOT / "run_scenario.py")
+        for label in (
+            "harness:benchmark_persistent_sumo.py",
+            "source:run_scenario.py",
+        ):
+            frozen = c["frozen_fingerprints"][label]
+            assert len(frozen) == 64
+            assert set(frozen) <= set("0123456789abcdef")
+        # A completed experiment's frozen contract is historical evidence,
+        # not a manifest that should be rewritten after every source change.
+        # When the live tree differs, the executable gate must refuse it.
+        if h.file_fingerprints() != c["frozen_fingerprints"]:
+            with pytest.raises(h.ExperimentAborted, match="fingerprints drifted"):
+                h.verify_environment(c)
         assert c["outcomes_present_at_freeze"] is False
         assert c["gates"]["authorizes"] == h.ADOPTION_AUTHORIZES_NOTHING
 

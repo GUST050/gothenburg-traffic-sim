@@ -1,0 +1,51 @@
+{
+  "schema": "sensor_validation_scale_diagnostic_v1",
+  "created_on": "2026-08-22",
+  "diagnostic_only": true,
+  "environment": {
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python": "3.9.6"
+  },
+  "fixture": {
+    "aggregation_quarters": 4,
+    "iterations_per_size": 300,
+    "n_intervals": 96,
+    "raw_value": 100.0,
+    "target_value": 100.0
+  },
+  "measurements": [
+    {
+      "max_ms": 0.444,
+      "p50_ms": 0.399,
+      "p95_ms": 0.423,
+      "sensor_rows": 6
+    },
+    {
+      "max_ms": 3.826,
+      "p50_ms": 3.273,
+      "p95_ms": 3.325,
+      "sensor_rows": 50
+    },
+    {
+      "max_ms": 16.401,
+      "p50_ms": 6.434,
+      "p95_ms": 7.105,
+      "sensor_rows": 100
+    }
+  ],
+  "reading": {
+    "fifty_sensor_p95_increment_ms": 2.902,
+    "measures": "traffic_sim.simulation.sensor_fit.assess_output_fit only",
+    "not_measured": [
+      "candidate generation",
+      "PFE calibration",
+      "SUMO execution",
+      "scenario publication"
+    ],
+    "release_or_adoption_authority": false
+  },
+  "source_fingerprints": {
+    "sensor_fit_sha256": "b0185e2e809fa7eb8b188976d25bfec8fd931fff882923cc2b86e06ae8fc0177",
+    "scale_contract_test_sha256": "e1b0720fe5f67def4e6fcc6d1b6779f10197d69f73c6dff515a45049a2064368"
+  }
+}

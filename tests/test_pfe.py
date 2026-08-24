@@ -276,6 +276,9 @@ class TestCalibrateGEH:
 
         assert report["geh_total"] == 1
         assert report["geh_ok"] == 1
+        assert report["integer_sensor_constraints"] == 3
+        assert report["integer_sensor_exact"] == 3
+        assert report["integer_sensor_max_abs_error"] == 0.0
 
     def test_activity_margin_survives_candidate_filtering(self, tmp_path):
         """An independently supplied activity margin must override only the
@@ -311,6 +314,25 @@ class TestCalibrateGEH:
         assert Counter(agent["purpose"] for agent in agents) == Counter({
             "through": 20, "arbete": 10, "fritid": 40,
         })
+
+    def test_explicit_purpose_mix_is_validated_and_used(self, tmp_path):
+        cand_path = tmp_path / "candidates.rou.xml"
+        cand_path.write_text(
+            '<routes><vehicle id="t0" depart="0"><route edges="M"/></vehicle>'
+            '<vehicle id="t1" depart="0"><route edges="M"/></vehicle></routes>')
+        (tmp_path / "candidates.meta.json").write_text(json.dumps({
+            "candidates": {
+                "t0": {"purpose": "arbete"},
+                "t1": {"purpose": "fritid"},
+            }
+        }))
+        report = calibrate(
+            cand_path, tmp_path / "calibrated.rou.xml", [{"M": 2.0}], [{}], [{}],
+            purpose_mixes_per_q=[{"arbete": 2.0}])
+        assert report["purpose_allocation_summary"]["quarters_with_relaxed_mix"] == 0
+        with pytest.raises(ValueError, match="one mapping per target quarter"):
+            calibrate(cand_path, tmp_path / "bad.rou.xml", [{"M": 2.0}],
+                      [{}], [{}], purpose_mixes_per_q=[])
 
     def test_through_target_preserves_total_and_external_margin(self):
         source = Counter({
@@ -811,31 +833,26 @@ class TestBoundViolationsFromRounding:
         assert repaired is not None
         assert repaired.tolist() == [6]
 
-    def test_writer_obeys_relaxed_measurement_band_at_integer_stage(self, tmp_path):
-        # Integration guard for the live failure class: the continuous value
-        # is valid under the solver's q4 tolerance and the post-rounding MILP
-        # must preserve the bound instead of rejecting publication.
+    def test_writer_never_publishes_a_relaxed_sensor_margin(self, tmp_path):
+        # A widened continuous solution may guide the fallback ladder, but a
+        # route file is a whole-vehicle product and must meet M exactly.  This
+        # one cannot retain U<=6 at the same time, so the orchestration must
+        # retry its recorded no-bounds rung; the writer itself fails closed.
         shapes = [Candidate(depart=0.0, edges=["M", "U"])]
         out = tmp_path / "out.rou.xml"
-        report = write_calibration_report(
-            shapes, out, [{"M": 10.0}], [np.array([6.0])],
-            [{"U": (0.0, 6.0)}], [RUNG_RELAX_TOL4X],
-            enforce_integer_bounds=True)
+        out.write_text("previous valid route")
 
-        assert out.exists()
-        assert report["achieved"]["M"] == [6.0]
-        assert report["achieved"]["U"] == [6.0]
-        assert report["bound_violations"] == []
+        with pytest.raises(RuntimeError, match="every exact sensor margin"):
+            write_calibration_report(
+                shapes, out, [{"M": 10.0}], [np.array([6.0])],
+                [{"U": (0.0, 6.0)}], [RUNG_RELAX_TOL4X],
+                enforce_integer_bounds=True)
 
-    def test_optional_structure_repair_uses_the_solver_measurement_band(
+        assert out.read_text() == "previous valid route"
+
+    def test_optional_structure_repair_preserves_exact_sensor_margin(
             self, tmp_path, monkeypatch):
-        """A relaxed interval must not regain an exact-count constraint.
-
-        The live q79 build was count-valid on the tol4 rung, but its optional
-        short-trip repair called the integer solver without that rung.  The
-        repair therefore reimposed exact rounded sensor totals, immediately
-        reported infeasible, and retained 24 short trips against a cap of 2.
-        """
+        """An optional cap may not spend the exact publication margin."""
         shapes = [Candidate(depart=0.0, edges=["M", "SHORT"]),
                   Candidate(depart=0.0, edges=["M", "LONG"])]
         calls = []
@@ -844,9 +861,8 @@ class TestBoundViolationsFromRounding:
                                      groups=None, measurement_tol_mult=None,
                                      **_projection_options):
             calls.append(measurement_tol_mult)
-            if measurement_tol_mult != 4.0:
-                return None
-            return np.array([2, 8])
+            return (np.array([2, 8])
+                    if measurement_tol_mult is None else None)
 
         monkeypatch.setattr(pfe, "repair_integer_bounds",
                             repair_with_relaxed_band)
@@ -857,7 +873,7 @@ class TestBoundViolationsFromRounding:
             enforce_integer_bounds=True,
             structure_groups=[([0], 0.2)])
 
-        assert calls == [None, None, 4.0]
+        assert calls and all(call is None for call in calls)
         route_counts = Counter(
             vehicle.find("route").get("edges")
             for vehicle in ET.parse(out).getroot().iter("vehicle"))
@@ -1022,15 +1038,26 @@ class TestJointIntegerPublicationScaling:
         assert served(counts, shapes, "B") == 2
         assert served(counts, shapes, "NEW") == 1
 
-    def test_inconsistent_exact_margins_use_only_declared_rung_band(self):
-        # One route cannot equal both targets.  The clean rung's declared
-        # ±max(1 vehicle, 5%) band makes the joint integer system feasible;
-        # publication must stay inside it instead of reviving greedy order.
-        shapes = [cand("IN", "OUT")]
-        counts = self.publish(shapes, [3.5], {"IN": 4.0, "OUT": 3.0})
+    def test_fifty_sensor_integer_projection_has_no_fixed_station_cap(self):
+        edges = [f"S{index:02d}" for index in range(50)]
+        shapes = [cand(edge) for edge in edges]
+        targets = {edge: float(index + 1)
+                   for index, edge in enumerate(edges)}
 
-        assert abs(served(counts, shapes, "IN") - 4) <= 1
-        assert abs(served(counts, shapes, "OUT") - 3) <= 1
+        counts = self.publish(
+            shapes, [targets[edge] + 0.2 for edge in edges], targets)
+
+        assert pfe.exact_sensor_margins(counts, shapes, targets)
+        assert [served(counts, shapes, edge) for edge in edges] == list(
+            range(1, 51))
+
+    def test_inconsistent_exact_margins_fail_before_publication(self):
+        # One route cannot equal both rounded targets. A tolerance-band vector
+        # is useful to the continuous solver, but the production integer
+        # contract is exact and must fail before a route file is emitted.
+        shapes = [cand("IN", "OUT")]
+        with pytest.raises(RuntimeError, match="every exact sensor margin"):
+            self.publish(shapes, [3.5], {"IN": 4.0, "OUT": 3.0})
 
     def test_solver_timeout_cannot_open_a_wider_band(self, monkeypatch):
         class TimedOut:
@@ -1738,6 +1765,19 @@ class TestPrecomputedQuarterCounts:
         assert pre_agents == inline_agents
         assert pre_report == inline_report
         assert inline_report["vehicles"] > 0
+
+    def test_nonexact_precomputed_counts_are_rejected_before_write(self, tmp_path):
+        shapes = [Candidate(depart=0.0, edges=["M"])]
+        out = tmp_path / "precomputed.rou.xml"
+        out.write_text("previous valid route")
+
+        with pytest.raises(RuntimeError, match="precomputed.*exact sensor"):
+            write_calibration_report(
+                shapes, out, [{"M": 10.0}], [np.array([10.0])], [{}],
+                [RUNG_CLEAN], enforce_integer_bounds=True,
+                precomputed_counts=[(np.array([9]), False)])
+
+        assert out.read_text() == "previous valid route"
 
     def test_sparse_transport_round_trip_is_exact(self, tmp_path):
         # The orchestration ships only the nonzero entries between processes

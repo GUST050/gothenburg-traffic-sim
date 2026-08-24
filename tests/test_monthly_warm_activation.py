@@ -55,6 +55,31 @@ def test_parallel_warm_connections_are_refused_before_any_run(monkeypatch):
         command.main()
 
 
+def test_nested_daily_and_seed_parallelism_remains_closed(monkeypatch):
+    args = _arguments(
+        monkeypatch,
+        "--cold-execution",
+        "--daily-workers", "2",
+        "--seed-workers", "2",
+        "--max-active-sumo-slots", "8",
+    )
+    monkeypatch.setattr(command, "parse_args", lambda: args)
+    with pytest.raises(SystemExit, match="cannot yet be combined"):
+        command.main()
+
+
+def test_operator_slot_budget_can_lower_the_approved_worker_ceiling(monkeypatch):
+    args = _arguments(
+        monkeypatch,
+        "--daily-workers", "3",
+        "--seed-workers", "1",
+        "--max-active-sumo-slots", "2",
+    )
+    monkeypatch.setattr(command, "parse_args", lambda: args)
+    with pytest.raises(SystemExit, match="exceeds the declared"):
+        command.main()
+
+
 def test_resolver_requires_a_controller_when_warming_is_enabled():
     from tests.test_monthly_demand import _spec
 

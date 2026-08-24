@@ -1,5 +1,7 @@
 import json
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -127,6 +129,69 @@ def test_archive_identity_and_envelope_are_validated(
     assert provenance["source_digest"] != (
         provenance["simulation_source_digest"]
     )
+
+
+def test_identical_concurrent_baselines_are_single_flight(
+        tmp_path, patched_runtime, monkeypatch):
+    """Only one SUMO baseline may run for one cache key.
+
+    The production outer-worker shape can submit several closure units for the
+    same date, variant and seed at once.  Those units share a matched-baseline
+    key.  This test states the required structure: one worker computes and
+    publishes the baseline while every waiter verifies and reads that result.
+    The per-key lock is cross-process; this focused thread test also proves
+    that waiters recheck and verify the completed artifact instead of running
+    duplicate SUMO work.
+    """
+    runner = ArchivedDemandSumoRunner(
+        _spec(),
+        archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    metrics = monthly_sumo.closure_metrics.DisruptionMetrics(
+        total_time_loss_s=10.0,
+        trip_count=1,
+        unfinished_trips=0,
+        unfinished_waiting_trips=0,
+        teleport_total=0,
+        teleport_reasons={},
+        loaded=1,
+        inserted=1,
+        running_at_end=0,
+        waiting_at_end=0,
+    )
+    buckets = (monthly_sumo.RecoveryBucket(0, 900, 10.0),)
+    calls = 0
+    calls_lock = threading.Lock()
+    simultaneous_start = threading.Barrier(2)
+
+    def simulate_closure(**_kwargs):
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        # Make the unprotected implementation's duplicate work deterministic
+        # without constraining the future lock implementation.
+        time.sleep(0.1)
+        return metrics, None, None, None
+
+    monkeypatch.setattr(
+        monthly_sumo.legacy, "simulate_closure", simulate_closure
+    )
+    monkeypatch.setattr(
+        monthly_sumo, "read_edgedata_time_loss", lambda _path: buckets
+    )
+
+    def run(_index):
+        simultaneous_start.wait(timeout=5.0)
+        return runner._run_baseline("q50", 1001)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(run, range(2)))
+
+    assert calls == 1
+    assert results == [(metrics, buckets), (metrics, buckets)]
 
 
 def test_cold_run_stops_at_schedule_envelope_not_archive_tail(

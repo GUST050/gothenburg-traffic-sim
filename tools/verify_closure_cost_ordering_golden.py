@@ -70,6 +70,7 @@ CONTRACT_FIELDS = (
 SOURCE_PATHS = (
     "tools/verify_closure_cost_ordering_golden.py",
     "run_scenario.py",
+    "traffic_sim/simulation/disruption.py",
     "traffic_sim/simulation/deterministic_disruption.py",
     "traffic_sim/simulation/cost_ordered_search.py",
     "traffic_sim/simulation/closure_ranking.py",

@@ -667,6 +667,7 @@
           counts_fit: 'Sensorräkningar', structure: 'Strukturrealism',
           purposes: 'Ärenden & längder', simulation: 'Simuleringshälsa',
           sensor_output: 'SUMO sensorutdata', multi_day: 'Flerdagskontinuitet',
+          sensor_output_exact: 'Exakt SUMO-passagetest',
           held_out: 'Utelämnad-station (LOSO)',
         };
         const V_MARK = { pass: ['✓', 'v-pass'], warn: ['⚠', 'v-warn'],
@@ -693,7 +694,7 @@
             }
             case 'simulation':
               return (s.seeds || []).map(x =>
-                `frö ${x.seed}: ${x.inserted}/${x.loaded} insatta, `
+                `frö ${x.seed}: ${x.inserted}/${x.loaded} accepterade, `
                 + `${x.unfinished} ofullbordade, ${x.teleports} teleport`).join(' · ')
                 + (s.flags?.length ? ` · FLAGGOR: ${s.flags.join('; ')}` : '');
             case 'sensor_output':
@@ -701,6 +702,11 @@
                 + `${s.aggregation_minutes === 60 ? 'sensor-timmar' : 'intervall'} · `
                 + `GEH<5 ${s.geh_lt_5_pct ?? '–'}% · `
                 + (s.reason || 'rå SUMO edgeData och stationsaggregering');
+            case 'sensor_output_exact':
+              return `${s.exact ?? '–'}/${s.constraints ?? '–'} exakta riktade `
+                + `sensor×kvartar · maxfel ${s.max_abs_error ?? '–'} · `
+                + `${s.mismatch_count ?? '–'} avvikelser · `
+                + (s.reason || 'alla råa 15-minuterspassager matchar exakt');
             case 'multi_day':
               return s.not_applicable ? 'inte tillämpligt för en dag' :
                 `${s.days ?? '–'} dagar · `
@@ -1170,6 +1176,10 @@
         const monthlyColSecondary = document.getElementById('monthly-col-secondary');
         const btnMonthlyResultsClose = document.getElementById('monthly-results-close');
         let monthlyJobRunning = false;
+        // A restarted server can observe a CLI search through its durable
+        // workspace without owning that process.  Preserve that distinction:
+        // /api/cancel can signal only jobs started by this server instance.
+        let monthlyJobServerTracked = true;
 
         // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — no picking mode:
         // acts on the currently loaded scenario and sends its full
@@ -1209,6 +1219,10 @@
             monthlyPickCount.textContent =
               `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
             btnMonthlyRun.disabled = monthlyJobRunning || selected.size === 0;
+            const unownedMonthlyJob =
+              monthlyJobRunning && !monthlyJobServerTracked;
+            btnMonthlyCancel.hidden = unownedMonthlyJob;
+            btnMonthlyCancel.disabled = unownedMonthlyJob;
           }
           Render.setPending([...selected]);
         }
@@ -1598,8 +1612,12 @@
               throw new Error(data.error || `HTTP ${response.status}`);
             }
           }
+          let consecutivePollFailures = 0;
+          const maxConsecutivePollFailures = 5;
           for (;;) {
-            await new Promise(r => setTimeout(r, operation.pollMs));
+            const backoff = Math.min(4, 2 ** consecutivePollFailures);
+            await new Promise(r => setTimeout(
+              r, operation.pollMs * backoff));
             let status;
             try {
               const response = await fetch(operation.statusUrl, {
@@ -1608,9 +1626,17 @@
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               status = await response.json();
             } catch (e) {
-              continue;   // transient network hiccup — keep polling
+              consecutivePollFailures += 1;
+              if (consecutivePollFailures >= maxConsecutivePollFailures) {
+                throw new Error(
+                  'servern svarar inte; jobbet kan fortfarande köras — ' +
+                  'kontrollera servern och försök sedan återansluta');
+              }
+              continue;
             }
-            if (status.status === 'running' || status.status === 'cancelling') {
+            consecutivePollFailures = 0;
+            if (status.status === 'checking_cache' ||
+                status.status === 'running' || status.status === 'cancelling') {
               onProgress?.(status);
               continue;
             }
@@ -2122,6 +2148,13 @@
         }
 
         function updateMonthlyProgress(status) {
+          if (status.server_tracked === false) {
+            monthlyJobServerTracked = false;
+          }
+          const unownedMonthlyJob =
+            monthlyJobRunning && !monthlyJobServerTracked;
+          btnMonthlyCancel.hidden = unownedMonthlyJob;
+          btnMonthlyCancel.disabled = unownedMonthlyJob;
           const progress = status.progress || {};
           const label = MONTHLY_PHASE_LABELS[progress.phase] || 'Söker';
           const counts = progress.total
@@ -2539,6 +2572,7 @@
                 + 'sökning igen. Fortsätta?')) return;
           }
           lastMonthlySpec = spec;
+          monthlyJobServerTracked = true;
           monthlyJobRunning = true;
           refreshCloseUI();
           btnMonthlyRun.disabled = true;
@@ -2572,6 +2606,7 @@
 
         btnMonthlyCancel.addEventListener('click', async () => {
           if (!monthlyJobRunning) return setClosureTool(null);
+          if (!monthlyJobServerTracked) return;
           btnMonthlyCancel.disabled = true;
           btnMonthlyCancel.textContent = 'Avbryter…';
           try {
@@ -2603,8 +2638,30 @@
                   return [kind, await response.json()];
                 }));
             const active = states.find(([, state]) =>
+              state.status === 'checking_cache' ||
               state.status === 'running' || state.status === 'cancelling');
             if (!active) {
+              const completedExternal = states.find(([kind, state]) =>
+                kind === 'monthly' && state.status === 'done' &&
+                state.server_tracked === false && state.result);
+              if (completedExternal) {
+                const [, state] = completedExternal;
+                await openWorkspace('closure');
+                setClosureTool('monthly');
+                monthlyJobRunning = false;
+                monthlyJobServerTracked = false;
+                restoreMonthlySearchSpec(state.closure_search_spec);
+                selected.clear();
+                for (const edge of state.edges ||
+                     state.closure_search_spec?.directed_edges || []) {
+                  selected.add(edge);
+                }
+                lastMonthlySpec = state.closure_search_spec || lastMonthlySpec;
+                monthlyProgress.hidden = true;
+                renderMonthlyResults(state.result);
+                refreshCloseUI();
+                return;
+              }
               const paused = states.find(([kind, state]) =>
                 kind === 'monthly' && state.status === 'paused');
               if (!paused) return;
@@ -2634,13 +2691,18 @@
             closureJobRunning = kind === 'simulate';
             suggestJobRunning = kind === 'suggest';
             monthlyJobRunning = kind === 'monthly';
+            if (kind === 'monthly') {
+              monthlyJobServerTracked = state.server_tracked !== false;
+            }
             refreshCloseUI();
 
             const onProgress = current => {
               if (kind === 'simulate') {
-                btnRun.textContent = current.status === 'cancelling'
-                  ? 'Avbryter…'
-                  : `Simulerar… (${current.elapsed_s || 0}s)`;
+                btnRun.textContent = current.status === 'checking_cache'
+                  ? 'Kontrollerar cache…'
+                  : current.status === 'cancelling'
+                    ? 'Avbryter…'
+                    : `Simulerar… (${current.elapsed_s || 0}s)`;
               } else if (kind === 'suggest') {
                 btnSuggestRun.textContent = current.status === 'cancelling'
                   ? 'Avbryter…'

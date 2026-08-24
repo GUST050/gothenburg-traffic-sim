@@ -11,6 +11,7 @@ LOSO folds, both delegating to pfe.solve_interval_with_structure_guard
 from __future__ import annotations
 
 from collections import Counter
+import json
 import multiprocessing as mp
 import os
 import resource
@@ -75,6 +76,65 @@ def apply_activity_purpose_margin(
         raise ValueError(str(exc).replace("category shares", "activity purpose shares")) from exc
 
 
+def purpose_mixes_for_candidates(
+    cand_path: Path,
+    quarters: int,
+    *,
+    departure_offset_s: float = 0.0,
+    activity_shares_by_quarter: list[dict[str, float]] | None = None,
+    through_share_target: float | None = None,
+) -> list[dict[str, float]]:
+    """Materialize the final purpose margin used by the flat PFE pool.
+
+    Catalog candidates have a stable departure support set, so the daily
+    behavioural margin must be an explicit input rather than an accidental
+    consequence of whichever date built the routes first.
+    """
+    shapes, _route_cost = pfe.prepare_calibration(cand_path)
+    source = pfe._purpose_targets_per_quarter(
+        shapes, quarters, departure_offset_s)
+    mixed = apply_activity_purpose_margin(source, activity_shares_by_quarter)
+    return [dict(mix) for mix in pfe.apply_through_share_target(
+        mixed, through_share_target)]
+
+
+def catalog_daily_purpose_mixes(
+    cand_path: Path,
+    quarters: int,
+    *,
+    activity_shares_by_quarter: list[dict[str, float]],
+    through_share_target: float | None = None,
+) -> list[dict[str, float]]:
+    """Daily margin independent of the catalog's neutral departure clock."""
+    if len(activity_shares_by_quarter) != quarters:
+        raise ValueError("catalog daily purpose shares must match target quarters")
+    shapes, _route_cost = pfe.prepare_calibration(cand_path)
+    source = Counter()
+    for shape in shapes:
+        for candidate in shape.source_candidates or [shape]:
+            if candidate.intent.get("support_only"):
+                continue
+            source[pfe._purpose(candidate)] += 1
+    if not source:
+        raise ValueError("catalog contains no behavioural purpose support")
+    requested = {
+        str(purpose)
+        for shares in activity_shares_by_quarter
+        for purpose, share in shares.items()
+        if float(share) > 0
+    }
+    missing = sorted(requested - set(source))
+    if missing:
+        raise ValueError(
+            "catalog lacks route support for daily purposes: "
+            + ", ".join(missing))
+    repeated = [source.copy() for _quarter in range(quarters)]
+    mixed = apply_activity_purpose_margin(
+        repeated, activity_shares_by_quarter)
+    return [dict(mix) for mix in pfe.apply_through_share_target(
+        mixed, through_share_target)]
+
+
 def _agent_path_for(route_path: Path) -> Path:
     """Return the provenance sidecar emitted beside one route XML file."""
     return route_path.with_name(route_path.name.replace(".rou.xml", ".agents.json"))
@@ -87,9 +147,14 @@ def _staged_route_path(route_path: Path) -> Path:
 
 def _report_is_publishable(report: dict) -> bool:
     """Demand variants are one contract: publish none unless all are valid."""
+    constraints = int(report.get("integer_sensor_constraints", 0) or 0)
+    exact = int(report.get("integer_sensor_exact", -1) or 0)
     return (
         report.get("infeasible_intervals", 0) == 0
         and float(report.get("geh_pct") or 0.0) >= 100.0
+        and constraints > 0
+        and exact == constraints
+        and float(report.get("integer_sensor_max_abs_error") or 0.0) == 0.0
         and not report.get("bound_violations")
         and not report.get("unserviceable_edges")
     )
@@ -160,17 +225,50 @@ def _compute_pfe_counts(suffix: str, quarter: int):
         return None
     purpose_mix = _variant_quarter_purpose_mix(suffix, quarter)
     bounds_pq = data["hard_bounds_pq"]
-    counts, margin_enforced = pfe.quarter_publish_counts(
-        _PFE_PAR_SHAPES, sol, data["targets"][quarter],
-        bounds_pq[quarter] if bounds_pq is not None else None,
-        _PFE_PAR_RUNGS[suffix][quarter],
-        purpose_mix, bool(purpose_mix), True,
-        [(members, cap_share)
-         for _name, members, cap_share in (_PFE_PAR_STRUCTURE_GROUPS or [])],
-    )
+    published_rung = _PFE_PAR_RUNGS[suffix][quarter]
+    def publish(rung: int):
+        return pfe.quarter_publish_counts(
+            _PFE_PAR_SHAPES, sol, data["targets"][quarter],
+            bounds_pq[quarter] if bounds_pq is not None else None,
+            rung,
+            purpose_mix, bool(purpose_mix), True,
+            [(members, cap_share)
+             for _name, members, cap_share in (_PFE_PAR_STRUCTURE_GROUPS or [])],
+        )
+
+    try:
+        counts, margin_enforced = publish(published_rung)
+    except RuntimeError as exc:
+        # Integer exactness is stronger than the continuous tolerance band.
+        # If retained Level-2 bounds are the only obstacle, follow the
+        # documented counts-first ladder and record the no-bounds rung. Do
+        # not catch unrelated solver, support or publication failures.
+        if ("final integer projection cannot satisfy every exact sensor margin"
+                not in str(exc)
+                or not pfe._rung_keeps_structural_bounds(published_rung)):
+            raise
+        published_rung = pfe.RUNG_NOBND_TOL1
+        counts, margin_enforced = publish(published_rung)
+    if not pfe.exact_sensor_margins(
+            counts, _PFE_PAR_SHAPES, data["targets"][quarter]):
+        # A widened continuous rung may return successfully inside its 2x/4x
+        # band.  Publication is stricter: retry without Level-2 bounds at the
+        # exact 1x rung, or fail closed.  Never let a tolerant solution reach
+        # the route writer merely because no exception was raised.
+        if not pfe._rung_keeps_structural_bounds(published_rung):
+            raise RuntimeError(
+                "final integer projection cannot satisfy every exact sensor "
+                "margin after the no-bounds fallback")
+        published_rung = pfe.RUNG_NOBND_TOL1
+        counts, margin_enforced = publish(published_rung)
+        if not pfe.exact_sensor_margins(
+                counts, _PFE_PAR_SHAPES, data["targets"][quarter]):
+            raise RuntimeError(
+                "final integer projection cannot satisfy every exact sensor "
+                "margin after the no-bounds fallback")
     idx = np.nonzero(counts)[0]
     return (idx.astype(np.int64), counts[idx], counts.dtype.str, len(counts),
-            margin_enforced)
+            margin_enforced, published_rung)
 
 
 def _run_pfe_counts_job(job: tuple[str, int]):
@@ -257,6 +355,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
                                    activity_purpose_shares_by_quarter:
                                    list[dict[str, float]] | None = None,
                                    through_share_target: float | None = None,
+                                   purpose_mixes_per_q:
+                                   list[dict[str, float]] | None = None,
                                    day_quarters: int | None = None) -> dict[str, dict]:
     """Solve all final direction variants through one flat worker pool.
 
@@ -293,17 +393,25 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     _PFE_PAR_VARIANT_INPUTS = variant_inputs
     _PFE_PAR_PURPOSE_MIXES = {}
     for suffix, _key in variants:
-        source_mixes = pfe._purpose_targets_per_quarter(
-            shapes, len(variant_inputs[suffix]["targets"]),
-            purpose_departure_offset_s)
-        # Through-share target LAST: the activity margin restores
-        # P(purpose | hour) among activity classes, then the target sets
-        # the through level while preserving that relative activity mix
-        # (see pfe.apply_through_share_target for the validation record).
-        _PFE_PAR_PURPOSE_MIXES[suffix] = pfe.apply_through_share_target(
-            apply_activity_purpose_margin(
-                source_mixes, activity_purpose_shares_by_quarter),
-            through_share_target)
+        if purpose_mixes_per_q is not None:
+            if len(purpose_mixes_per_q) != len(variant_inputs[suffix]["targets"]):
+                raise ValueError(
+                    "purpose_mixes_per_q must have one mapping per target quarter")
+            _PFE_PAR_PURPOSE_MIXES[suffix] = [
+                Counter({str(p): float(v) for p, v in mix.items() if float(v)})
+                for mix in purpose_mixes_per_q
+            ]
+        else:
+            source_mixes = pfe._purpose_targets_per_quarter(
+                shapes, len(variant_inputs[suffix]["targets"]),
+                purpose_departure_offset_s)
+            # Through-share target LAST: the activity margin restores
+            # P(purpose | hour) among activity classes, then the target sets
+            # the through level while preserving that relative activity mix.
+            _PFE_PAR_PURPOSE_MIXES[suffix] = pfe.apply_through_share_target(
+                apply_activity_purpose_margin(
+                    source_mixes, activity_purpose_shares_by_quarter),
+                through_share_target)
     staged_outputs = {
         suffix: _staged_route_path(Path(variant_inputs[suffix]["out_path"]))
         for suffix, _key in variants
@@ -360,9 +468,11 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
                         packed = _compute_pfe_counts(suffix, quarter)
                     if packed is None:
                         continue
-                    idx, vals, dtype, length, margin_enforced = packed
+                    (idx, vals, dtype, length, margin_enforced,
+                     published_rung) = packed
                     dense = np.zeros(length, dtype=np.dtype(dtype))
                     dense[idx] = vals
+                    rungs[suffix][quarter] = published_rung
                     counts_by_variant[suffix][quarter] = (
                         dense, margin_enforced)
             return time.perf_counter() - started
@@ -436,9 +546,22 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             if not _report_is_publishable(reports[suffix])
         ]
         if rejected:
+            diagnostics = {
+                key: {
+                    field: reports[suffix].get(field)
+                    for field in (
+                        "infeasible_intervals", "geh_pct",
+                        "integer_sensor_constraints", "integer_sensor_exact",
+                        "integer_sensor_max_abs_error", "bound_violations",
+                        "unserviceable_edges",
+                    )
+                }
+                for suffix, key in variants if key in rejected
+            }
             raise RuntimeError(
                 "PFE publication gate rejected variant(s) "
-                f"{', '.join(rejected)}; no route variants were published")
+                f"{', '.join(rejected)}; no route variants were published; "
+                f"diagnostics={json.dumps(diagnostics, sort_keys=True)}")
         # The direction variants form one demand contract. Publishing q50
         # immediately and failing q10/q90 later left a hybrid set whose
         # metadata and scenario ensemble described different builds. Stage

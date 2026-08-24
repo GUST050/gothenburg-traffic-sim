@@ -228,6 +228,12 @@ class TestMergeDayReports:
             "vehicles": vehicles,
             "infeasible_intervals": 0,
             "geh_ok": geh_ok, "geh_total": geh_total,
+            "integer_sensor_constraints": quarters,
+            "integer_sensor_exact": quarters,
+            "integer_sensor_exact_pct": 100.0,
+            "integer_sensor_max_abs_error": 0.0,
+            "integer_sensor_sum_abs_error": 0.0,
+            "integer_sensor_target_rule": "int(round(target))",
             "achieved": achieved or {"E": [1.0] * quarters},
             "unserviceable_edges": [],
             "bound_violations": [],
@@ -257,6 +263,10 @@ class TestMergeDayReports:
         assert merged["vehicles"] == 16
         assert merged["geh_ok"] == 7 and merged["geh_total"] == 8
         assert merged["geh_pct"] == 87.5
+        assert merged["integer_sensor_constraints"] == 8
+        assert merged["integer_sensor_exact"] == 8
+        assert merged["integer_sensor_exact_pct"] == 100.0
+        assert merged["integer_sensor_max_abs_error"] == 0.0
         assert merged["achieved"]["E"] == [1.0] * 8
         assert [entry["quarter"] for entry in merged["purpose_allocation"]] == list(range(8))
         assert merged["relaxation_summary"] == {"clean": 8}

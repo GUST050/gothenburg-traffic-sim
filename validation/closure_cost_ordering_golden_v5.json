@@ -1,0 +1,269 @@
+{
+  "cases": [
+    {
+      "candidate_id": "closure-e4529a731a00f5747edd",
+      "current_cost": {
+        "added_metres_total": 51589.8,
+        "added_vehicle_hours": 1.0304,
+        "candidate_id": "closure-e4529a731a00f5747edd",
+        "vehicles_affected": 672,
+        "vehicles_no_detour": 0
+      },
+      "current_only_fields": [
+        "capacity_model",
+        "congestion_model",
+        "lane_count_used",
+        "vehicles_denied_departure",
+        "vehicles_severed_destination"
+      ],
+      "provider_runner_field_identical": true,
+      "recorded_contract_fields_identical": true,
+      "recorded_cost": {
+        "added_metres_total": 51589.8,
+        "added_vehicle_hours": 1.0304,
+        "candidate_id": "closure-e4529a731a00f5747edd",
+        "vehicles_affected": 672,
+        "vehicles_no_detour": 0
+      }
+    },
+    {
+      "candidate_id": "closure-1ee5aac1c7a05ca3a5df",
+      "current_cost": {
+        "added_metres_total": 54290.6,
+        "added_vehicle_hours": 1.0837,
+        "candidate_id": "closure-1ee5aac1c7a05ca3a5df",
+        "vehicles_affected": 724,
+        "vehicles_no_detour": 0
+      },
+      "current_only_fields": [
+        "capacity_model",
+        "congestion_model",
+        "lane_count_used",
+        "vehicles_denied_departure",
+        "vehicles_severed_destination"
+      ],
+      "provider_runner_field_identical": true,
+      "recorded_contract_fields_identical": true,
+      "recorded_cost": {
+        "added_metres_total": 54290.6,
+        "added_vehicle_hours": 1.0837,
+        "candidate_id": "closure-1ee5aac1c7a05ca3a5df",
+        "vehicles_affected": 724,
+        "vehicles_no_detour": 0
+      }
+    },
+    {
+      "candidate_id": "closure-d9af6f11562e20e708e5",
+      "current_cost": {
+        "added_metres_total": 56446.6,
+        "added_vehicle_hours": 1.1249,
+        "candidate_id": "closure-d9af6f11562e20e708e5",
+        "vehicles_affected": 770,
+        "vehicles_no_detour": 0
+      },
+      "current_only_fields": [
+        "capacity_model",
+        "congestion_model",
+        "lane_count_used",
+        "vehicles_denied_departure",
+        "vehicles_severed_destination"
+      ],
+      "provider_runner_field_identical": true,
+      "recorded_contract_fields_identical": true,
+      "recorded_cost": {
+        "added_metres_total": 56446.6,
+        "added_vehicle_hours": 1.1249,
+        "candidate_id": "closure-d9af6f11562e20e708e5",
+        "vehicles_affected": 770,
+        "vehicles_no_detour": 0
+      }
+    }
+  ],
+  "claim_boundary": {
+    "activates_policy_v3": false,
+    "opens_global_best": false,
+    "permits_ui_claim": false,
+    "reason": "real golden development replay; no new SUMO execution and no held-out observation"
+  },
+  "cost_ordered_comparison": {
+    "cache_hits": 0,
+    "comparison_note": "status and selected_ids are the gate; per-candidate statistics differ by construction because unverified candidates have none",
+    "cost_ordered_selected_ids": [
+      "closure-d9af6f11562e20e708e5"
+    ],
+    "cost_ordered_status": "ready",
+    "deterministically_disqualified": 0,
+    "equivalent": true,
+    "evidence_class": "diagnostic_replay_of_preserved_pilot",
+    "exhaustive_selected_ids": [
+      "closure-d9af6f11562e20e708e5"
+    ],
+    "exhaustive_status": "ready",
+    "ordered_candidates": 3,
+    "release_evidence": false,
+    "schema": "cost_ordered_closure_search_v1",
+    "selected_ids_match": true,
+    "status_matches": true,
+    "stop_proof": {
+      "argument": "every candidate that survived the deterministic no-detour gate was verified, so the finalist set is the exhaustive one",
+      "cutoff_added_vehicle_hours": null,
+      "examined": 3,
+      "first_unexamined_added_vehicle_hours": null,
+      "first_unexamined_candidate_id": null,
+      "minimum_finalists": 2,
+      "practical_equivalence_vehicle_hours": 0.0,
+      "schema": "cost_ordered_closure_search_v1",
+      "selection_band_added_vehicle_hours": null,
+      "stop_reason": "search_space_exhausted",
+      "total_ordered": 3,
+      "unexamined": 0
+    },
+    "sumo_verifications_saved": 0,
+    "verified_candidates": 3
+  },
+  "evidence_class": "diagnostic_development_benchmark",
+  "gates": {
+    "policy_v3_activation": {
+      "reason": "this preserved benchmark has only one health-viable finalist and is diagnostic, not the pre-registered discriminating benchmark or held-out evidence",
+      "status": "closed"
+    },
+    "pr_d_real_golden_provider_runner": {
+      "field_identical": true,
+      "recorded_cost_contract_identical": true,
+      "sorting_order_identical": true,
+      "status": "passed"
+    },
+    "pr_e_named_real_benchmark": {
+      "pilot_status_identical": true,
+      "selected_ids_identical": true,
+      "status": "passed",
+      "sumo_verifications_saved": 0
+    }
+  },
+  "heldout_evidence": false,
+  "inputs": {
+    "archive_manifest": {
+      "bytes": 1306,
+      "path": "runs/releases/golden-2025-09-16-v1/normal/manifest.json",
+      "sha256": "7bb4b63254785eb4ff09f8f942839eea150fe726c3f234a47821703e2c738fe7"
+    },
+    "benchmark_plan": {
+      "bytes": 2611,
+      "path": "validation/monthly_search_v2_benchmark_plan_v1.json",
+      "sha256": "9b38bd1fe744a496d67b3d923a0743b92e59e0605508879ccbe0b5a4b6912482"
+    },
+    "candidate_ledger": {
+      "bytes": 2025,
+      "path": "runs/closure-objective-v2-benchmark-v1/search/golden-monthly-search-2025-09-16-v6/artifacts/candidate-ledger.json",
+      "sha256": "a4cf4411187ed83c69d4b78a964fd16bb9c24d87aaab0e091d0812209d37b630"
+    },
+    "demand_meta": {
+      "bytes": 137516,
+      "path": "runs/releases/golden-2025-09-16-v1/normal/demand_meta.json",
+      "sha256": "7496115dafd026ae9f15b0ea8380b1be1a0e5a16b59afe6ff6a5db9d15c7a710"
+    },
+    "network": {
+      "bytes": 16052555,
+      "path": "sumo/net.net.xml",
+      "sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+    },
+    "pilot_evidence": [
+      {
+        "bytes": 2314,
+        "path": "runs/closure-objective-v2-benchmark-v1/search/golden-monthly-search-2025-09-16-v6/artifacts/pilot/closure-e4529a731a00f5747edd-r000.json",
+        "sha256": "152472ad9cc62d9de8a5da107644dba12fca232430202c92d2fd9969e033c268"
+      },
+      {
+        "bytes": 2727,
+        "path": "runs/closure-objective-v2-benchmark-v1/search/golden-monthly-search-2025-09-16-v6/artifacts/pilot/closure-1ee5aac1c7a05ca3a5df-r000.json",
+        "sha256": "d89e485cbd2809ede422d78f16e130c603b205dff107ec57cb5fa44ed71741aa"
+      },
+      {
+        "bytes": 2708,
+        "path": "runs/closure-objective-v2-benchmark-v1/search/golden-monthly-search-2025-09-16-v6/artifacts/pilot/closure-d9af6f11562e20e708e5-r000.json",
+        "sha256": "7db84090b4e369ba666d283025abecf5f4e9b174ab523cf5594beed87eaad380"
+      }
+    ],
+    "routes": {
+      "q10": {
+        "bytes": 29130233,
+        "path": "runs/releases/golden-2025-09-16-v1/normal/calibrated_v1.rou.xml",
+        "sha256": "30472d6a3aadde5ba31893e2be1277f3f5abaa962f08870cfbffdcb3afcb12a0"
+      },
+      "q50": {
+        "bytes": 29970295,
+        "path": "runs/releases/golden-2025-09-16-v1/normal/calibrated.rou.xml",
+        "sha256": "0a0cdad78d06245be71d716bf23ea7dee804496c96e36919d7c5027c0979039b"
+      },
+      "q90": {
+        "bytes": 31007215,
+        "path": "runs/releases/golden-2025-09-16-v1/normal/calibrated_v2.rou.xml",
+        "sha256": "2a4124f5795f6b425a01dda45581c5f844a1c5b830a1b0f5357affff476b4239"
+      }
+    },
+    "workspace_manifest": {
+      "bytes": 7251,
+      "path": "runs/closure-objective-v2-benchmark-v1/search/golden-monthly-search-2025-09-16-v6/manifest.json",
+      "sha256": "63e5cc67528044fa737422d5881df76136f304343b00187f93338f8f51321302"
+    }
+  },
+  "kind": "closure_cost_ordering_golden_verification",
+  "measured_at": "2026-08-11",
+  "ordering": {
+    "current": [
+      "closure-e4529a731a00f5747edd",
+      "closure-1ee5aac1c7a05ca3a5df",
+      "closure-d9af6f11562e20e708e5"
+    ],
+    "identical": true,
+    "recorded": [
+      "closure-e4529a731a00f5747edd",
+      "closure-1ee5aac1c7a05ca3a5df",
+      "closure-d9af6f11562e20e708e5"
+    ]
+  },
+  "release_evidence": false,
+  "schema": "closure_cost_ordering_golden_v1",
+  "sources": {
+    "run_scenario.py": {
+      "bytes": 156327,
+      "path": "run_scenario.py",
+      "sha256": "9c35ad3e44aa575e313b5407a309af941463166604d8c9f67a671d114d6dadf7"
+    },
+    "tools/verify_closure_cost_ordering_golden.py": {
+      "bytes": 15787,
+      "path": "tools/verify_closure_cost_ordering_golden.py",
+      "sha256": "3e4a6aa035c945c2b7fc4b344f04b6ea239b173d214616bcf74a155b12dd5f25"
+    },
+    "traffic_sim/simulation/closure_ranking.py": {
+      "bytes": 5321,
+      "path": "traffic_sim/simulation/closure_ranking.py",
+      "sha256": "f47b4193bd62a6bfc8c2d15a0532af0314e25d481186dc2af17feed933ee389d"
+    },
+    "traffic_sim/simulation/cost_ordered_search.py": {
+      "bytes": 29008,
+      "path": "traffic_sim/simulation/cost_ordered_search.py",
+      "sha256": "5110756ee952a5bd019987b2ecc49ffd49bdb4478522799edac29567cc2edb92"
+    },
+    "traffic_sim/simulation/deterministic_disruption.py": {
+      "bytes": 27341,
+      "path": "traffic_sim/simulation/deterministic_disruption.py",
+      "sha256": "35dff0eaff3341175667971c2f868c7102a987cec88ba41ce76cbff0fa864fde"
+    },
+    "traffic_sim/simulation/disruption.py": {
+      "bytes": 12635,
+      "path": "traffic_sim/simulation/disruption.py",
+      "sha256": "ec65e4635b22dea265e46b74f7f81a7debe253fabed7521a50f6582a4eb498f0"
+    },
+    "traffic_sim/simulation/monthly_sumo.py": {
+      "bytes": 105279,
+      "path": "traffic_sim/simulation/monthly_sumo.py",
+      "sha256": "4873d49731a0b249f55d9671de92d8ad9975d21a283a095dcf4c83dd1f47315a"
+    },
+    "traffic_sim/simulation/pilot_selection.py": {
+      "bytes": 15809,
+      "path": "traffic_sim/simulation/pilot_selection.py",
+      "sha256": "9f7f0d282b4513e40140bc5d4f6a7dc0c6b034bf1bbf89d9b4013cadf712f2a1"
+    }
+  }
+}

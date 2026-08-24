@@ -7,6 +7,8 @@ edge-then-its-reverse pattern verified in sumo/candidates.rou.xml (see
 git history) — these tests pin that behaviour so it can't silently regress."""
 
 import json
+import os
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -2581,6 +2583,19 @@ class TestCalendarDateSeeding:
         assert first != second
         assert first == self._block(day_index=0, date=None)
 
+    def test_catalog_mode_ignores_calendar_date_for_departure_bytes(self):
+        profile = np.full(24, 1 / 24)
+        templates = self._templates()
+        first, _, _, _ = bc.generate_day_block(
+            self._structure(), profile, 0, "d_", 42, 0, len(templates),
+            .5, .3, 2.6, False, 1, template_trips=templates,
+            date="2027-03-09", pool_key="weekday", catalog_mode=True)
+        second, _, _, _ = bc.generate_day_block(
+            self._structure(), profile, 0, "d_", 42, 0, len(templates),
+            .5, .3, 2.6, False, 1, template_trips=templates,
+            date="2027-03-10", pool_key="weekday", catalog_mode=True)
+        assert first == second
+
     def test_geometry_template_is_canonical_per_day_type(self, monkeypatch):
         seeds = []
 
@@ -2645,3 +2660,13 @@ class TestCalendarDateSeeding:
         assert (bc.day_block_seed(42, "2027-03-09", 0)
                 != bc.day_type_template_seed(42, "weekday"))
         assert bc.day_block_seed(42, None, 3) == 45
+
+
+def test_build_candidates_help_is_renderable():
+    env = dict(os.environ, MPLCONFIGDIR="/tmp/gs-mpl",
+               PYTHONDONTWRITEBYTECODE="1")
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).parents[1] / "build_candidates.py"),
+         "--help"], capture_output=True, text=True, env=env, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert "--route-diversity" in result.stdout

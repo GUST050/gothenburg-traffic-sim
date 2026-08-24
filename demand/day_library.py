@@ -351,6 +351,8 @@ def merge_day_reports(
     merged_maps: dict[str, Counter] = {name: Counter() for name in summary_maps}
     relaxation: Counter = Counter()
     vehicles = infeasible = geh_ok = geh_total = 0
+    integer_constraints = integer_exact = 0
+    integer_sum_abs_error = integer_max_abs_error = 0.0
     coverage_by_day: list[Any] = []
 
     for day_index, report in enumerate(day_reports):
@@ -359,6 +361,15 @@ def merge_day_reports(
         infeasible += int(report.get("infeasible_intervals", 0))
         geh_ok += int(report.get("geh_ok", 0))
         geh_total += int(report.get("geh_total", 0))
+        integer_constraints += int(
+            report.get("integer_sensor_constraints", 0) or 0)
+        integer_exact += int(report.get("integer_sensor_exact", 0) or 0)
+        integer_sum_abs_error += float(
+            report.get("integer_sensor_sum_abs_error", 0.0) or 0.0)
+        integer_max_abs_error = max(
+            integer_max_abs_error,
+            float(report.get("integer_sensor_max_abs_error", 0.0) or 0.0),
+        )
         unserviceable.update(report.get("unserviceable_edges", ()))
         relaxation.update(report.get("relaxation_summary", {}))
         for edge, values in (report.get("achieved") or {}).items():
@@ -407,6 +418,13 @@ def merge_day_reports(
         "geh_ok": geh_ok,
         "geh_total": geh_total,
         "geh_pct": round(100 * geh_ok / max(1, geh_total), 1),
+        "integer_sensor_constraints": integer_constraints,
+        "integer_sensor_exact": integer_exact,
+        "integer_sensor_exact_pct": round(
+            100 * integer_exact / max(1, integer_constraints), 6),
+        "integer_sensor_max_abs_error": round(integer_max_abs_error, 9),
+        "integer_sensor_sum_abs_error": round(integer_sum_abs_error, 9),
+        "integer_sensor_target_rule": "int(round(target))",
         "achieved": achieved,
         "unserviceable_edges": sorted(unserviceable),
         "bound_violations": violations,

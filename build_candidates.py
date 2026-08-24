@@ -3502,6 +3502,15 @@ def day_type_template_seed(base_seed: int, pool_key: str) -> int:
     return _derived_seed(base_seed, f"pool:{pool_key}")
 
 
+def canonical_template_digest(templates: list[tuple]) -> str:
+    """Semantic digest before daily resampling, departures and routing."""
+    import hashlib
+    payload = [list(record[:6]) for record in templates]
+    canonical = json.dumps(payload, sort_keys=False, separators=(",", ":"),
+                           ensure_ascii=True).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def generate_day_block(
     structure: CandidateStructure, profile: np.ndarray, offset_s: float,
     id_prefix: str, seed: int, day_index: int, n_total: int,
@@ -3510,6 +3519,7 @@ def generate_day_block(
     gravity_alpha: float = 0.0, date: str | None = None,
     pool_key: str | None = None,
     template_profile: np.ndarray | None = None,
+    catalog_mode: bool = False,
 ) -> tuple[list[tuple], list[float], dict[str, int], list[tuple]]:
     """Generate one calendar-day candidate block.
 
@@ -3525,7 +3535,8 @@ def generate_day_block(
     into geometry merely because that date happened to be the first block of
     its type in a warming window.
     """
-    rng = np.random.default_rng(day_block_seed(seed, date, day_index))
+    rng = np.random.default_rng(day_block_seed(
+        seed, None if catalog_mode else date, day_index))
     raw_lengths: list[float] = []
     if template_trips is None:
         geometry_profile = np.asarray(
@@ -3564,7 +3575,7 @@ def generate_day_block(
     active_purpose_tours = any(
         _tour_kind(str(record[4])) in {"ii", "ei"}
         for record in canonical_templates if len(record) >= 6)
-    if active_purpose_tours:
+    if active_purpose_tours and not catalog_mode:
         # Sensor-conditioned acceptance is not purpose-neutral: a longer
         # leisure route, for example, can have a different probability of
         # finding a natural measured crossing than a work route.  Retaining
@@ -3576,6 +3587,19 @@ def generate_day_block(
         # the behavioural purpose distribution an exact finite-pool contract.
         day_templates = _resample_reused_template_tours(
             canonical_templates, profile, is_weekend, rng)
+        lengths = _template_tour_lengths_km(day_templates, structure)
+    elif active_purpose_tours and catalog_mode:
+        # Catalog mode freezes the one canonical, purpose-rebalanced support
+        # set.  Daily departure profiles are applied later by calibration;
+        # resampling here would make geometry depend on the first date built.
+        canonical_profile = np.asarray(
+            template_profile if template_profile is not None else profile,
+            dtype=float)
+        day_templates = _resample_reused_template_tours(
+            canonical_templates, canonical_profile, is_weekend,
+            np.random.default_rng(day_type_template_seed(
+                seed, pool_key if pool_key is not None
+                else ("weekend" if is_weekend else "weekday"))))
         lengths = _template_tour_lengths_km(day_templates, structure)
     else:
         # Legacy/minimal callers without a recognised activity-tour shape
@@ -3768,6 +3792,16 @@ def main() -> None:
                          "each gives its own profile, offset and ID prefix. "
                          "Omit it to retain the one-day CLI unchanged.")
     ap.add_argument("--n-total", type=int, default=12000)
+    ap.add_argument("--catalog-mode", action="store_true",
+                    help="Freeze one structural route support set for the "
+                         "weekday/weekend catalog. This is an opt-in build "
+                         "mode: it must not be combined with a day-block or "
+                         "real-day shape, and departure dates are not part of "
+                         "the catalog geometry.")
+    ap.add_argument("--catalog-pool-key", choices=["weekday", "weekend"],
+                    default=None,
+                    help="Day type label used with --catalog-mode (defaults "
+                         "from --is-weekend).")
     ap.add_argument("--assignment-priors", default=str(
         SUMO_DIR / "assignment_priors.json"),
         help="Gravity/Dial assignment-prior artifact; its per-edge "
@@ -3796,8 +3830,8 @@ def main() -> None:
                         "natively via duarouter instead of a re-implemented "
                         "networkx shortest-path loop. SUMO's X-times-optimal "
                         "figure is a WORST-CASE bound, not the outcome: "
-                        "measured at X=2.0, 0.0% of routes exceed +50% and "
-                        "the median is +3.5% over the fastest path that "
+                        "measured at X=2.0, 0.0%% of routes exceed +50%% and "
+                        "the median is +3.5%% over the fastest path that "
                         "still crosses the trip's own sensor. Directness is "
                         "near-independent of X; diversity is not. See the "
                         "DEFAULT_ROUTE_DIVERSITY sweep table before changing "
@@ -3815,7 +3849,7 @@ def main() -> None:
                         "theoretical worst case, so it can only catch what "
                         "the generator was already licensed to produce. "
                         "Measured: it dropped 13 of 12,000 candidates "
-                        "(0.1%). They answer different questions — how far "
+                        "(0.1%%). They answer different questions — how far "
                         "the search may EXPLORE versus how far a result may "
                         "SHIP — and a backstop above the jitter bound is "
                         "meant to be nearly inert, which is the point")
@@ -3840,14 +3874,14 @@ def main() -> None:
                         "so it cannot see a small absurdity inside a long one "
                         "(measured: a 101-edge route at a globally fine 1.099x "
                         "contained a 3.3x roundabout manoeuvre). Near-inert by "
-                        "design: drops ~0.1% of the real pool")
+                        "design: drops ~0.1%% of the real pool")
     ap.add_argument("--atomic-tours", action="store_true",
                     help="drop a paired tour's surviving leg when the route "
                         "filters removed its partner, so every tour in the "
                         "pool is complete. OFF by default: the pool is a "
                         "coverage support set the PFE reweights freely and "
                         "never reads the pairing from, and dropping costs "
-                        "13.9% of the pool — enough to breach the 75% supply "
+                        "13.9%% of the pool — enough to breach the 75%% supply "
                         "floor. The default instead MARKS each orphaned leg "
                         "(tour_partner_dropped) and reports the directional "
                         "imbalance. Use this for work that does consume tour "
@@ -3855,6 +3889,10 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out-suffix", default="",
                     help="internal use by calibrate_theta.py")
+    ap.add_argument("--out-dir", type=Path, default=SUMO_DIR,
+                    help="Directory for generated candidate artifacts "
+                         "(default: sumo). Network and structural inputs "
+                         "remain read from their normal repository paths.")
     ap.add_argument("--weight-file", default=None,
                     help="a SUMO meandata XML (e.g. a BPR estimate from a "
                         "prior iteration's own achieved flow) giving MEASURED "
@@ -3872,6 +3910,14 @@ def main() -> None:
                         "duarouter so trips are routed against the "
                         "congestion of the period they actually depart in.")
     args = ap.parse_args()
+    output_dir = Path(args.out_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.catalog_mode:
+        if args.day_blocks_file or args.real_day_shape_file:
+            ap.error("--catalog-mode cannot be combined with "
+                     "--day-blocks-file or --real-day-shape-file")
+        if args.catalog_pool_key is not None:
+            args.is_weekend = args.catalog_pool_key == "weekend"
     G = ox.load_graphml(GRAPH_PATH)
     try:
         sumo_edge_ids, routing_costs = load_sumo_routing_data(NET_PATH)
@@ -3957,6 +4003,7 @@ def main() -> None:
         sys.exit("POI access mapping produced no activity mass for: "
                  + ", ".join(empty_activity))
     multi_day_trips = None
+    canonical_templates_for_report: list[tuple] | None = None
     n_day_blocks = 1
     structure = CandidateStructure(
         G=routing_G, edges=edges, hmass=hmass, amass=amass, entries=entries,
@@ -3994,7 +4041,8 @@ def main() -> None:
                 bool(block_spec.get("is_weekend", False)), args.min_per_sensor,
                 templates.get(pool_key), gravity_alpha=args.gravity_alpha,
                 date=block_spec.get("date"), pool_key=pool_key,
-                template_profile=template_profile)
+                template_profile=template_profile,
+                catalog_mode=args.catalog_mode)
             templates.setdefault(pool_key, template)
             multi_day_trips.extend(block)
             tour_lengths_km.extend(lengths)
@@ -4012,14 +4060,31 @@ def main() -> None:
             structure, shape_hourly, 0.0, "", args.seed, 0, args.n_total,
             args.through_fraction, args.cross_fraction, args.gravity_km,
             args.is_weekend, args.min_per_sensor,
-            gravity_alpha=args.gravity_alpha, date=args.date,
+            gravity_alpha=args.gravity_alpha,
+            date=None if args.catalog_mode else args.date,
+            pool_key=(args.catalog_pool_key or
+                      ("weekend" if args.is_weekend else "weekday")),
             template_profile=pool_departure_shape(
-                daily_shape(args.is_weekend), args.pool_departure_floor))
+                daily_shape(args.is_weekend), args.pool_departure_floor),
+            catalog_mode=args.catalog_mode)
+        canonical_templates_for_report = _template
         trips = [
             (depart, from_edge, to_edge, via_edge, purpose, tour_id, leg)
             for _trip_id, depart, from_edge, to_edge, via_edge,
             purpose, tour_id, leg in block
         ]
+
+    if args.catalog_mode:
+        if canonical_templates_for_report is None:
+            sys.exit("catalog mode did not produce canonical templates")
+        (output_dir / "canonical_template_report.json").write_text(json.dumps({
+            "schema_version": 1,
+            "pool_key": (args.catalog_pool_key or
+                         ("weekend" if args.is_weekend else "weekday")),
+            "templates": len(canonical_templates_for_report),
+            "semantic_sha256": canonical_template_digest(
+                canonical_templates_for_report),
+        }, indent=1, sort_keys=True))
 
     n_through     = int(args.n_total * args.through_fraction)
     n_tours_total = (args.n_total - n_through) // 2
@@ -4033,7 +4098,7 @@ def main() -> None:
     trips.sort(key=lambda t: t[0])
     if multi_day_trips is not None:
         multi_day_trips.sort(key=lambda t: t[1])
-    trips_path = SUMO_DIR / f"tours{args.out_suffix}.trips.xml"
+    trips_path = output_dir / f"tours{args.out_suffix}.trips.xml"
     candidate_meta: dict[str, dict] = {}
     location_pools = build_location_pool_document(home_field, activity_fields)
     # BASELINE RULE (Gustav, 2026-08-05): the calibrated population contains
@@ -4055,7 +4120,7 @@ def main() -> None:
                        for category, field in activity_fields.items()},
         "location_pools": len(location_pools),
     }
-    with open(SUMO_DIR / f"endpoint_location_report{args.out_suffix}.json", "w") as f:
+    with open(output_dir / f"endpoint_location_report{args.out_suffix}.json", "w") as f:
         json.dump(location_report, f, indent=1, sort_keys=True)
     with open(trips_path, "w") as f:
         f.write("<routes>\n")
@@ -4159,7 +4224,7 @@ def main() -> None:
                   else [t[3] for t in multi_day_trips])
     fit["dest_sensor_proximity"] = destination_sensor_proximity(
         dest_edges, edge_latlon, measured)
-    with open(SUMO_DIR / f"trip_length_fit{args.out_suffix}.json", "w") as f:
+    with open(output_dir / f"trip_length_fit{args.out_suffix}.json", "w") as f:
         json.dump(fit, f, indent=1)
     print(f"  trip-length fit vs availability-corrected RVU target "
           f"{fit['target_shares']}: generated {fit['shares']}  "
@@ -4175,8 +4240,8 @@ def main() -> None:
         return
 
     home = sumo_home()
-    out = SUMO_DIR / f"candidates{args.out_suffix}.rou.xml"
-    meta_out = SUMO_DIR / f"candidates{args.out_suffix}.meta.json"
+    out = output_dir / f"candidates{args.out_suffix}.rou.xml"
+    meta_out = output_dir / f"candidates{args.out_suffix}.meta.json"
     with open(meta_out, "w") as f:
         json.dump({"schema_version": 2, "location_pools": location_pools,
                    "candidates": candidate_meta}, f,
@@ -4275,8 +4340,8 @@ def main() -> None:
     fallback_ids = set(candidate_meta) - primary_ids - exact_support_ids
     recovered_ids: list[str] = []
     if fallback_ids:
-        fallback_trips = SUMO_DIR / f"tours{args.out_suffix}.fallback.trips.xml"
-        fallback_out = SUMO_DIR / f"candidates{args.out_suffix}.fallback.rou.xml"
+        fallback_trips = output_dir / f"tours{args.out_suffix}.fallback.trips.xml"
+        fallback_out = output_dir / f"candidates{args.out_suffix}.fallback.rou.xml"
         try:
             write_trip_subset(trips_path, fallback_trips, fallback_ids)
             fallback_cmd = list(router_prefix)
@@ -4363,7 +4428,7 @@ def main() -> None:
               f"({len(missing_route_support) / max(1, len(graph_edge_ids)):.1%})"
               " — zero baseline flow, closures there are no-ops")
     coverage_report_path = (
-        SUMO_DIR / f"sensor_coverage_report{args.out_suffix}.json")
+        output_dir / f"sensor_coverage_report{args.out_suffix}.json")
     cross_report = report_sensor_cross_hits(
         out, measured, coverage_report_path)
     unanchored_candidates = unanchored_candidate_ids(out, measured)

@@ -837,6 +837,16 @@ def parse_args() -> argparse.Namespace:
             "units. Ignored by continuous searches."
         ),
     )
+    parser.add_argument(
+        "--max-active-sumo-slots",
+        type=int,
+        default=8,
+        help=(
+            "One declared outer/inner SUMO process budget. The product of "
+            "--daily-workers and --seed-workers may not exceed this value "
+            "(default 8; evidence budget, not a speed claim)."
+        ),
+    )
     execution = parser.add_mutually_exclusive_group()
     execution.add_argument(
         "--warm-execution",
@@ -888,6 +898,26 @@ def main() -> None:
         raise SystemExit("--seed-workers must be at least 1")
     if args.daily_workers < 1:
         raise SystemExit("--daily-workers must be at least 1")
+    if args.warm_execution and args.seed_workers != 1:
+        raise SystemExit(
+            "warm execution currently requires --seed-workers 1 because the "
+            "production TraCI controller owns one active connection; use "
+            "--cold-execution for parallel seed workers")
+    max_active_slots = args.max_active_sumo_slots
+    if max_active_slots < 1:
+        raise SystemExit("--max-active-sumo-slots must be at least 1")
+    if args.daily_workers * args.seed_workers > max_active_slots:
+        raise SystemExit(
+            "daily-workers * seed-workers exceeds the declared "
+            "--max-active-sumo-slots process budget"
+        )
+    if args.seed_workers > 1 and args.daily_workers > 1:
+        raise SystemExit(
+            "parallel seed workers and parallel daily workers cannot yet be "
+            "combined: isolated daily children currently own fresh SUMO "
+            "processes and shared baseline-cache publication has not passed "
+            "the nested-concurrency equivalence gate"
+        )
     if args.daily_unit_budget is not None and args.daily_unit_budget < 1:
         raise SystemExit("--daily-unit-budget must be positive")
     if (
@@ -903,11 +933,6 @@ def main() -> None:
         )
     if args.daily_unit_total_cap < 1:
         raise SystemExit("--daily-unit-total-cap must be positive")
-    if args.warm_execution and args.seed_workers != 1:
-        raise SystemExit(
-            "warm execution currently requires --seed-workers 1 because the "
-            "production TraCI controller owns one active connection; use "
-            "--cold-execution for parallel seed workers")
     approved = approved_seed_workers()
     if args.seed_workers > approved and os.environ.get(
             "MONTHLY_SEED_WORKER_BENCHMARK") == "1":
@@ -931,11 +956,6 @@ def main() -> None:
         raise SystemExit(
             f"--daily-workers {args.daily_workers} exceeds the {approved} "
             "approved isolated SUMO worker count"
-        )
-    if args.seed_workers > 1 and args.daily_workers > 1:
-        raise SystemExit(
-            "parallel seed workers and parallel daily workers cannot be "
-            "combined; that would multiply the approved SUMO process ceiling"
         )
     # Read the inputs and SIZE the search before anything expensive exists.
     # The exact preflight is read-only calendar arithmetic: it needs no demand

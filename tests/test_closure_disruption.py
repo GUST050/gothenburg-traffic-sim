@@ -37,6 +37,18 @@ def _run(path, closed, closures=()):
         path, set(closed), list(closures), TIME, LEN, adj=ADJ)
 
 
+def test_empty_closure_returns_before_building_adjacency(tmp_path, monkeypatch):
+    path = _routes(tmp_path, [("v", 0.0, ["A", "B"])])
+    monkeypatch.setattr(
+        run_scenario, "build_edge_graph",
+        lambda *_args, **_kwargs: pytest.fail("adjacency should not be built"))
+
+    assert run_scenario.closure_disruption(
+        path, set(), [], TIME, LEN) is None
+    assert run_scenario.closure_disruption_across_variants(
+        [path], set(), [], TIME, LEN) is None
+
+
 class TestWindowedMultiEdgeClosure:
     def test_a_later_closed_edge_inside_the_window_still_counts(self, tmp_path):
         """The vehicle passes B at t=10 (outside the window) and C at t=20
@@ -89,6 +101,68 @@ class TestGuards:
     def test_no_closed_edges_yields_no_report(self, tmp_path):
         path = _routes(tmp_path, [("v", 0.0, ["A", "B"])])
         assert _run(path, []) is None
+
+
+class TestGroupedRoutingEquivalence:
+    """The grouped implementation must remain identical to its old oracle."""
+
+    @pytest.mark.parametrize(
+        "closed,closures",
+        [
+            (["C"], []),
+            (["C", "P"], []),
+            (["A"], []),
+            (["B", "C"], [{"begin_s": 15.0, "end_s": 30.0}]),
+            (["B", "C"], [{"begin_s": 500.0, "end_s": 600.0}]),
+        ],
+    )
+    def test_grouped_matches_the_retained_per_od_oracle(
+            self, tmp_path, closed, closures):
+        path = _routes(tmp_path, [
+            ("first", 0.0, ["A", "B", "C", "D"]),
+            ("same-od", 5.0, ["A", "B", "C", "D"]),
+            ("bypass", 0.0, ["A", "P", "D"]),
+            ("denied", 0.0, ["C", "D"]),
+            ("short", 0.0, ["B", "C"]),
+        ])
+        grouped = run_scenario.closure_disruption(
+            path, set(closed), closures, TIME, LEN, adj=ADJ)
+        reference = run_scenario.reference_closure_disruption(
+            path, set(closed), closures, TIME, LEN, adj=ADJ)
+        assert grouped == reference
+
+    def test_common_origins_share_traversals(self, monkeypatch):
+        calls = 0
+        original = run_scenario.disruption_analysis._shortest_path_costs
+
+        def counted(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(
+            run_scenario.disruption_analysis, "_shortest_path_costs", counted)
+        pairs = [("A", "C"), ("A", "D"), ("B", "D")]
+        result = run_scenario.disruption_analysis.grouped_path_costs(
+            pairs, ADJ, TIME, frozenset())
+
+        assert calls == 2
+        assert set(result) == set(pairs)
+
+    @pytest.mark.parametrize("banned", [frozenset(), frozenset({"C"})])
+    def test_sparse_batch_matches_grouped_python(self, banned):
+        pairs = [("A", "C"), ("A", "D"), ("B", "D"), ("D", "D")]
+        sparse = run_scenario.disruption_analysis.SparsePathBatch(
+            pairs, ADJ).path_costs(TIME, banned)
+        grouped = run_scenario.disruption_analysis.grouped_path_costs(
+            pairs, ADJ, TIME, banned)
+
+        assert sparse.keys() == grouped.keys()
+        for pair in pairs:
+            if grouped[pair] is None:
+                assert sparse[pair] is None
+            else:
+                assert sparse[pair] == pytest.approx(grouped[pair], abs=1e-9)
 
 
 class TestDeniedDeparture:

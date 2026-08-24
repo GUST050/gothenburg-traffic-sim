@@ -1250,6 +1250,34 @@ def _pilot_evidence_for(
     )
 
 
+def _runner_timing_snapshot(runner: "CandidateRunner") -> dict[str, Any]:
+    """Read optional result-neutral S0 telemetry from a backend.
+
+    Timing is diagnostic.  A broken optional hook or a value that cannot be
+    persisted as strict JSON must not turn an otherwise valid search into a
+    failed one.
+    """
+    snapshot = getattr(runner, "timing_snapshot", None)
+    if not callable(snapshot):
+        snapshot = getattr(getattr(runner, "daily_runner", None),
+                           "timing_snapshot", None)
+    if not callable(snapshot):
+        return {}
+    try:
+        raw = snapshot()
+        if not isinstance(raw, Mapping):
+            return {}
+        # Match SearchWorkspace's strict serialization boundary here so the
+        # optional diagnostic cannot make update_progress fail later.
+        serializable = json.loads(json.dumps(
+            {str(key): value for key, value in raw.items()},
+            allow_nan=False,
+        ))
+    except Exception:  # diagnostic hooks are explicitly fail-open
+        return {}
+    return serializable if isinstance(serializable, dict) else {}
+
+
 def _exhaustive_pilot(
     workspace: SearchWorkspace,
     policy: "MonthlySearchPolicy",
@@ -1271,10 +1299,13 @@ def _exhaustive_pilot(
         # benchmark, so retain bounded progress writes instead.
         progress_stride = max(1, len(shortlist_ids) // 100)
         if not compact_pilot or index % progress_stride == 0:
+            detail = _runner_timing_snapshot(runner)
+            detail["candidate_index"] = index
             workspace.update_progress(
                 phase,
                 completed=index,
                 total=len(shortlist_ids),
+                detail=detail,
             )
         pilot_evidence.append(_pilot_evidence_for(
             workspace, runner, schedules[candidate_id],
@@ -1795,7 +1826,10 @@ def run_monthly_search(
                 decision_round += 1
 
         phase = "publish"
-        workspace.update_progress(phase)
+        workspace.update_progress(
+            phase,
+            detail=_runner_timing_snapshot(runner),
+        )
         result = _final_result(
             spec,
             policy,

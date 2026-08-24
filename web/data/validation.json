@@ -1,69 +1,76 @@
 {
  "schema_version": 1,
- "generated_at": "2026-08-18T21:52:22Z",
- "demand_window": "2027-05-18",
+ "generated_at": "2026-08-24T13:23:17Z",
+ "demand_window": "2027-09-08",
  "demand_source": "forecast",
- "demand_build_id": "889dc87ffa7d0fb78843",
+ "demand_build_id": "ab27c11be5a6a8b52045",
  "overall": "warn",
  "sections": {
   "counts_fit": {
    "status": "pass",
    "geh_pct": 100.0,
    "infeasible_intervals": 0,
-   "vehicles": 22517,
-   "gate": "GEH<5 p\u00e5 \u226599% av sensorintervall, 0 ol\u00f6sliga kvartar"
+   "vehicles": 20818,
+   "integer_sensor_constraints": 672,
+   "integer_sensor_exact": 672,
+   "integer_sensor_exact_pct": 100.0,
+   "integer_sensor_max_abs_error": 0.0,
+   "integer_sensor_target_rule": "int(round(target))",
+   "gate": "exakt heltalsmatchning p\u00e5 varje riktad sensor \u00d7 15 minuter, GEH<5 p\u00e5 \u226599% av sensorintervall och 0 ol\u00f6sliga kvartar"
   },
   "structure": {
    "status": "warn",
-   "flags": [
-    "trips_under_1km_cap: 1 quarter(s) exceed the exact integer 2.00x pool-share/floor-2 cap; maximum excess 16 vehicle(s)"
-   ],
-   "dest_within_200m_pct": 4.5,
+   "flags": [],
+   "dest_within_200m_pct": 3.7,
    "dest_baseline_pct": 1.9,
    "trip_length_shares": [
-    0.0085,
-    0.8221,
-    0.1694
+    0.0041,
+    0.8041,
+    0.1918
    ],
-   "trip_length_l1_vs_rvu": 0.2164,
-   "onward_after_sensor_median_m": 2791.2,
+   "trip_length_l1_vs_rvu": 0.2612,
+   "trip_length_l1_maximum": null,
+   "trip_length_l1_gate_defined": false,
+   "trip_length_l1_gate_passed": false,
+   "onward_after_sensor_median_m": 2839.4,
    "onward_under_200m_pct": 1.7,
-   "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen (destinationer n\u00e4ra sensor, l\u00e4ngdintervall, \u00e4rendel\u00e4ngder)"
+   "gate": "kalibrerad struktur f\u00e5r inte driva >2.5x fr\u00e5n poolen; trip-length L1 m\u00e5ste dessutom ha och klara en fryst absolut gr\u00e4ns mot den deklarerade externa m\u00e5lf\u00f6rdelningen",
+   "reason": "trip-length L1 publiceras men saknar fryst acceptansgr\u00e4ns"
   },
   "purposes": {
-   "status": "pass",
+   "status": "warn",
    "purpose_counts": {
-    "arbete": 8222,
-    "external": 1451,
-    "fritid": 2547,
-    "service": 4625,
-    "through": 5672
+    "arbete": 7585,
+    "external": 1393,
+    "fritid": 2248,
+    "service": 4266,
+    "through": 5326
    },
    "purpose_length_km": {
     "arbete": {
-     "n": 8222,
-     "mean_km": 2.75,
-     "median_km": 2.48
+     "n": 7585,
+     "mean_km": 2.87,
+     "median_km": 2.74
     },
     "external": {
-     "n": 1451,
-     "mean_km": 3.83,
-     "median_km": 3.87
+     "n": 1393,
+     "mean_km": 4.12,
+     "median_km": 4.35
     },
     "fritid": {
-     "n": 2547,
-     "mean_km": 3.1,
-     "median_km": 3.02
+     "n": 2248,
+     "mean_km": 3.14,
+     "median_km": 2.89
     },
     "service": {
-     "n": 4625,
-     "mean_km": 2.96,
-     "median_km": 2.87
+     "n": 4266,
+     "mean_km": 3.09,
+     "median_km": 3.06
     },
     "through": {
-     "n": 5672,
-     "mean_km": 5.16,
-     "median_km": 4.99
+     "n": 5326,
+     "mean_km": 5.22,
+     "median_km": 5.2
     }
    },
    "ordering_violated": false,
@@ -74,13 +81,13 @@
     "edge_shares": 0
    },
    "purpose_mix_relaxed_quarters_by_variant": {
-    "edge_shares": 0
+    "edge_shares": 13
    },
    "purpose_mix_reallocation_vehicles_by_variant": {
-    "edge_shares": 0
+    "edge_shares": 313
    },
    "purpose_claims_allowed": true,
-   "purpose_mix_matches_generated_prior": true,
+   "purpose_mix_matches_generated_prior": false,
    "gate": "fritid ska ha l\u00e4ngst medianresa (Trafikanalys RVU Tabell 3); exakt \u00e4rende\u00d7tid-mix per kvart n\u00e4r den \u00e4r f\u00f6renlig med sensorerna; varje tilldelad rutt m\u00e5ste ha kompatibel proveniens"
   },
   "simulation": {
@@ -89,27 +96,27 @@
    "seeds": [
     {
      "seed": 1000,
-     "inserted": 22517,
-     "loaded": 22517,
+     "inserted": 20818,
+     "loaded": 20818,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1001,
-     "inserted": 22517,
-     "loaded": 22517,
+     "inserted": 20818,
+     "loaded": 20818,
      "unfinished": 0,
      "teleports": 0
     },
     {
      "seed": 1002,
-     "inserted": 22517,
-     "loaded": 22517,
+     "inserted": 20818,
+     "loaded": 20818,
      "unfinished": 0,
      "teleports": 0
     }
    ],
-   "gate": "alla fordon insatta, <2% ofullbordade, teleporteringar under tr\u00f6skel, per fr\u00f6"
+   "gate": "SUMO accepterar hela den redan kalibrerade ruttfilen, <2% ofullbordade och teleporteringar under tr\u00f6skel, per fr\u00f6"
   },
   "sensor_output": {
    "status": "pass",
@@ -118,11 +125,62 @@
    "aggregation_minutes": 60,
    "edge_quarters": 168,
    "geh_lt_5_pct": 100.0,
-   "mean_abs_error": 3.449434,
-   "max_abs_error": 20.0,
+   "mean_abs_error": 3.846947,
+   "max_abs_error": 22.333333,
    "station_edge_quarters": 144,
-   "station_max_abs_error": 23.999999,
+   "station_max_abs_error": 22.333334,
    "gate": "r\u00e5 SUMO edgeData m\u00e5ste t\u00e4cka varje fryst sensor-target och ha GEH<5"
+  },
+  "sensor_output_exact": {
+   "status": "warn",
+   "contract": "raw_edgedata_15min_exact_integer_targets_v1",
+   "aggregation_minutes": 15,
+   "target_rule": "int(round(target))",
+   "constraints": 672,
+   "exact": 74,
+   "exact_pct": 11.011905,
+   "max_abs_error": 21.666666667,
+   "sum_abs_error": 1885.666666667,
+   "mismatch_count": 598,
+   "representative_exact": 108,
+   "representative_constraints": 672,
+   "per_seed": [
+    {
+     "seed": 1000,
+     "variant": "edge_shares",
+     "available": true,
+     "constraints": 672,
+     "exact": 108,
+     "exact_pct": 16.071429,
+     "max_abs_error": 23.0,
+     "sum_abs_error": 1920.0,
+     "target_rule": "int(round(target))"
+    },
+    {
+     "seed": 1001,
+     "variant": "edge_shares",
+     "available": true,
+     "constraints": 672,
+     "exact": 105,
+     "exact_pct": 15.625,
+     "max_abs_error": 21.0,
+     "sum_abs_error": 1913.0,
+     "target_rule": "int(round(target))"
+    },
+    {
+     "seed": 1002,
+     "variant": "edge_shares",
+     "available": true,
+     "constraints": 672,
+     "exact": 120,
+     "exact_pct": 17.857143,
+     "max_abs_error": 22.0,
+     "sum_abs_error": 1926.0,
+     "target_rule": "int(round(target))"
+    }
+   ],
+   "gate": "r\u00e5 SUMO-passage m\u00e5ste matcha varje riktad sensor \u00d7 15-minuters heltalsm\u00e5l exakt; testet \u00e4ndrar inga fordon",
+   "reason": "exakt sensor-output-fit ensemble matchar bara 74/672; exakt sensor-output-fit representativ k\u00f6rning matchar bara 108/672; exakt sensor-output-fit seed 1000 matchar bara 108/672; exakt sensor-output-fit seed 1001 matchar bara 105/672; exakt sensor-output-fit seed 1002 matchar bara 120/672"
   },
   "multi_day": {
    "status": "pass",
@@ -146,7 +204,7 @@
   },
   "temporal_holdout": {
    "status": "missing",
-   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26', current='39a0d73708d79837f055267ba5da72df9bedf8b40379702ee6a46ef2ad69c649'; reference window: report='2025-09-16T00:00:00', current='2027-05-18T00:00:00'; source: report='historical', current='forecast'"
+   "reason": "temporal holdout \u00e4r inaktuellt f\u00f6r nuvarande release: candidate pool: report='dbfaf49ab04a157095cf0a24edc7132b2f8c679ad2a5b94d521dba5ccf393f26', current='0196779c3c92d72b9e72412d1fe76ff21ea37175e0d66de001e7bf2943d00b80'; reference window: report='2025-09-16T00:00:00', current='2027-09-08T00:00:00'; source: report='historical', current='forecast'"
   }
  }
 }

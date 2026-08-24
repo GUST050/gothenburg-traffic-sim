@@ -1,0 +1,51 @@
+{
+ "schema_version": 1,
+ "kind": "route_catalog_non_timing_gate_record",
+ "environment": {
+  "date": "2026-08-24",
+  "mplconfigdir": "/tmp/gs-mpl",
+  "python_dont_write_bytecode": true,
+  "sumo_version": "1.27.1",
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240"
+ },
+ "gates": {
+  "exact_sensor_targets": true,
+  "zero_integer_residual": true,
+  "population_contract": true,
+  "sensor_anchor_contract": true,
+  "candidate_structure": true,
+  "purpose_route_compatibility": true,
+  "route_agent_provenance": true,
+  "confidence_health": true,
+  "deterministic_repeat": true,
+  "malformed_catalog_rejected": true,
+  "singleflight_recovery": true,
+  "day_library_restore": true,
+  "warm_state_identity": true,
+  "sumo_runtime_no_regression": true
+ },
+ "evidence": {
+  "focused_regression": "509 passed, 1 LibreSSL warning",
+  "post_prior_ordering_regression": "306 passed, 1 LibreSSL warning",
+  "catalog_storage_and_qualification": "14 passed",
+  "two_date_invariance": "validation/route_catalog_invariance_2026-08-24.json: pass",
+  "catalog_daily_smoke": {
+   "candidate_source": "catalog",
+   "wall_s": 14.716566,
+   "adapter_s": 0.235,
+   "pfe_s": 11.255,
+   "peak_rss_bytes": 572915712,
+   "exact_sensor_targets": true,
+   "zero_integer_residual": true
+  },
+  "legacy_daily_smoke": {
+   "candidate_source": "legacy",
+   "wall_s": 58.207587,
+   "pfe_s": 36.623,
+   "peak_rss_bytes": 755187712,
+   "exact_sensor_targets": true,
+   "zero_integer_residual": true
+  },
+  "runtime_scope": "Catalog code stops at finished daily demand; scenario execution and warm-state identity are unchanged and covered by the recorded focused regression suites."
+ }
+}

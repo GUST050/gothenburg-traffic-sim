@@ -13,10 +13,10 @@ def _stored():
     return json.loads((ROOT / OUTPUT).read_text(encoding="utf-8"))
 
 
-def test_readiness_manifest_is_superseded_by_the_new_calendar_source():
+def test_readiness_manifest_is_superseded_by_current_sources():
     assert _stored()["status"] == "ready_for_full_population"
     with pytest.raises(
-        ValueError, match="does not pass for the current plan"
+            ValueError, match="tracked annual plan differs from current sources"
     ):
         build_readiness_manifest()
 

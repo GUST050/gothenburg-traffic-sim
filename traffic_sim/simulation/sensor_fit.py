@@ -17,6 +17,9 @@ from typing import Any
 # for readable reporting and a future explicitly-approved tolerance change.
 MIN_GEH_LT_5_PCT = 99.0
 MAX_GEH_EXCLUSIVE = 5.0
+EXACT_ABS_TOLERANCE = 1e-9
+EXACT_TARGET_RULE = "int(round(target))"
+EXACT_OUTPUT_CONTRACT = "raw_edgedata_15min_exact_integer_targets_v1"
 
 
 def _finite(value: Any) -> float | None:
@@ -53,6 +56,212 @@ def summarize_pairs(pairs: list[tuple[float, float]]) -> dict:
             "max_abs_error": round(max(errors), 6),
         })
     return result
+
+
+def summarize_exact_pairs(pairs: list[tuple[float, float]]) -> dict:
+    """Summarize exact raw-SUMO equality to realizable integer targets."""
+    residuals = [simulated - int(round(target))
+                 for simulated, target in pairs]
+    exact = sum(abs(value) <= EXACT_ABS_TOLERANCE for value in residuals)
+    constraints = len(residuals)
+    return {
+        "available": bool(constraints),
+        "constraints": constraints,
+        "exact": exact,
+        "exact_pct": round(100.0 * exact / max(1, constraints), 6),
+        "max_abs_error": round(
+            max((abs(value) for value in residuals), default=0.0), 9),
+        "sum_abs_error": round(sum(abs(value) for value in residuals), 9),
+        "target_rule": EXACT_TARGET_RULE,
+    }
+
+
+def _exact_pairs_from_rows(
+    rows: Any,
+    *,
+    target_key: str,
+    raw_key: str,
+    n_intervals: int,
+    label: str,
+) -> tuple[list[tuple[float, float]], list[dict], list[str]]:
+    """Return every directed edge-quarter pair plus explicit mismatches."""
+    pairs: list[tuple[float, float]] = []
+    mismatches: list[dict] = []
+    errors: list[str] = []
+    if not isinstance(rows, list) or not rows:
+        return pairs, mismatches, [f"{label} saknar serier"]
+    for row_index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            errors.append(f"{label} rad {row_index} är ogiltig")
+            continue
+        targets, raw = row.get(target_key), row.get(raw_key)
+        if not isinstance(targets, list) or not isinstance(raw, list):
+            errors.append(f"{label} rad {row_index} saknar rå- eller targetserie")
+            continue
+        if len(targets) != n_intervals or len(raw) != n_intervals:
+            errors.append(f"{label} rad {row_index} har fel tidsseriebredd")
+            continue
+        for quarter, target in enumerate(targets):
+            if target is None:
+                continue
+            goal = _finite(target)
+            simulated = _finite(raw[quarter])
+            if goal is None or simulated is None:
+                errors.append(
+                    f"{label} rad {row_index} har ogiltigt värde i kvart "
+                    f"{quarter}")
+                continue
+            pairs.append((simulated, goal))
+            integer_target = int(round(goal))
+            residual = simulated - integer_target
+            if abs(residual) > EXACT_ABS_TOLERANCE:
+                mismatches.append({
+                    "sensor_id": row.get("sensor_id"),
+                    "edge_id": row.get("edge_id"),
+                    "quarter": quarter,
+                    "target": integer_target,
+                    "simulated": round(simulated, 9),
+                    "residual": round(residual, 9),
+                })
+    if not pairs and not errors:
+        errors.append(f"{label} saknar mätbara target-intervall")
+    return pairs, mismatches, errors
+
+
+def _exact_evidence(rows: Any, *, n_intervals: int) -> tuple[dict, list[str]]:
+    """Recompute exact ensemble, representative, and every seed summary."""
+    errors: list[str] = []
+    ensemble_pairs, ensemble_mismatches, row_errors = _exact_pairs_from_rows(
+        rows, target_key="target_mean", raw_key="simulated_mean_raw",
+        n_intervals=n_intervals, label="exakt riktad ensemble-fit")
+    errors.extend(row_errors)
+    representative_pairs, representative_mismatches, row_errors = (
+        _exact_pairs_from_rows(
+            rows, target_key="target_representative",
+            raw_key="simulated_representative_raw",
+            n_intervals=n_intervals, label="exakt representativ sensor-fit"))
+    errors.extend(row_errors)
+
+    seed_rows: dict[tuple[int, str], list[dict]] = {}
+    if isinstance(rows, list):
+        for row_index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            runs = row.get("seed_runs")
+            if not isinstance(runs, list):
+                errors.append(
+                    f"exakt sensor-fit rad {row_index} saknar seed-serier")
+                continue
+            for run in runs:
+                if not isinstance(run, dict) or not isinstance(run.get("seed"), int):
+                    errors.append(
+                        f"exakt sensor-fit rad {row_index} har ogiltig seed-serie")
+                    continue
+                key = (run["seed"], str(run.get("variant") or ""))
+                seed_rows.setdefault(key, []).append({
+                    "sensor_id": row.get("sensor_id"),
+                    "edge_id": row.get("edge_id"),
+                    "target": run.get("target"),
+                    "raw": run.get("simulated_raw"),
+                })
+
+    per_seed = []
+    seed_mismatches = []
+    for (seed, variant), grouped_rows in sorted(seed_rows.items()):
+        pairs, mismatches, row_errors = _exact_pairs_from_rows(
+            grouped_rows, target_key="target", raw_key="raw",
+            n_intervals=n_intervals, label=f"exakt sensor-fit seed {seed}")
+        errors.extend(row_errors)
+        for mismatch in mismatches:
+            mismatch["seed"] = seed
+            mismatch["variant"] = variant
+        seed_mismatches.extend(mismatches)
+        per_seed.append({
+            "seed": seed,
+            "variant": variant,
+            **summarize_exact_pairs(pairs),
+        })
+
+    return ({
+        "ensemble": summarize_exact_pairs(ensemble_pairs),
+        "representative": summarize_exact_pairs(representative_pairs),
+        "per_seed": per_seed,
+        "ensemble_mismatches": ensemble_mismatches,
+        "seed_mismatches": seed_mismatches,
+    }, errors)
+
+
+def build_exact_output_fit(rows: Any, *, n_intervals: int,
+                           uses_raw_ensemble_mean: bool) -> dict:
+    """Build the non-mutating exact 15-minute baseline diagnostic."""
+    evidence, errors = _exact_evidence(rows, n_intervals=n_intervals)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return {
+        "schema_version": 1,
+        "contract": EXACT_OUTPUT_CONTRACT,
+        "target_rule": EXACT_TARGET_RULE,
+        "aggregation_quarters": 1,
+        "aggregation_minutes": 15,
+        "uses_raw_ensemble_mean": uses_raw_ensemble_mean,
+        **evidence,
+    }
+
+
+def _exact_summary_errors(declared: Any, actual: dict, *, label: str) -> list[str]:
+    if not isinstance(declared, dict):
+        return [f"{label} saknar deklarerad exact-sammanfattning"]
+    errors = []
+    for key in ("available", "constraints", "exact", "exact_pct",
+                "max_abs_error", "sum_abs_error", "target_rule"):
+        if declared.get(key) != actual.get(key):
+            errors.append(f"{label} har inkonsekvent {key}")
+    return errors
+
+
+def assess_exact_output_fit(audit: Any, *, n_intervals: int) -> dict:
+    """Validate declared exact evidence by recomputing every raw series."""
+    if not isinstance(audit, dict):
+        return {"errors": ["exakt sensor-output-fit saknar audit"]}
+    declared = audit.get("exact_output_fit")
+    if not isinstance(declared, dict):
+        return {"errors": ["baseline saknar exakt 15-minuters sensor-test"]}
+    errors = []
+    if declared.get("contract") != EXACT_OUTPUT_CONTRACT:
+        errors.append("exakt sensor-output-fit har fel kontrakt")
+    if declared.get("target_rule") != EXACT_TARGET_RULE:
+        errors.append("exakt sensor-output-fit har fel heltalsregel")
+    if declared.get("aggregation_quarters") != 1:
+        errors.append("exakt sensor-output-fit måste använda 15 minuter")
+    if declared.get("uses_raw_ensemble_mean") is not True:
+        errors.append("exakt sensor-output-fit måste använda rå SUMO-output")
+    evidence, row_errors = _exact_evidence(
+        audit.get("directions"), n_intervals=n_intervals)
+    errors.extend(row_errors)
+    errors.extend(_exact_summary_errors(
+        declared.get("ensemble"), evidence["ensemble"], label="exakt ensemble"))
+    errors.extend(_exact_summary_errors(
+        declared.get("representative"), evidence["representative"],
+        label="exakt representativ körning"))
+    declared_seeds = declared.get("per_seed")
+    if not isinstance(declared_seeds, list) or declared_seeds != evidence["per_seed"]:
+        errors.append("exakt sensor-output-fit har inkonsekventa seed-resultat")
+    for key in ("ensemble_mismatches", "seed_mismatches"):
+        if declared.get(key) != evidence[key]:
+            errors.append(f"exakt sensor-output-fit har inkonsekvent {key}")
+    summaries = [
+        ("ensemble", evidence["ensemble"]),
+        ("representativ körning", evidence["representative"]),
+        *[(f"seed {row['seed']}", row) for row in evidence["per_seed"]],
+    ]
+    for label, summary in summaries:
+        if not summary.get("available"):
+            errors.append(f"exakt sensor-output-fit {label} saknar värden")
+        elif summary.get("exact") != summary.get("constraints"):
+            errors.append(
+                f"exakt sensor-output-fit {label} matchar bara "
+                f"{summary.get('exact')}/{summary.get('constraints')}")
+    return {"errors": errors, **evidence}
 
 
 def _pairs_from_rows(rows: Any, *, target_key: str, raw_key: str,

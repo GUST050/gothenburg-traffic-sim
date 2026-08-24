@@ -43,7 +43,7 @@ def _profile(**overrides):
                                 "demand_meta": "c" * 64},
         "phase_schema": list(rs.PHASE_NAMES),
         "phases": {name: 1.0 for name in rs.PHASE_NAMES},
-        "total": 10.0,
+        "total": float(len(rs.PHASE_NAMES) + 2),
         "unattributed": 2.0,
         "sumo_seconds_by_seed": {"1000": 3.0, "1001": 3.1, "1002": 2.9},
         "seed_job_seconds_by_seed": {"1000": 3.4, "1001": 3.5, "1002": 3.2},
@@ -104,7 +104,7 @@ class TestPhaseAccounting:
         timer = rs.PhaseTimer(enabled=True)
         with pytest.raises(RuntimeError, match="must not overlap"):
             with timer.phase("aggregation_validation"):
-                with timer.phase("scenario_publication"):
+                with timer.phase("artifact_publication"):
                     pass
 
     def test_an_unknown_phase_is_refused(self):
@@ -402,10 +402,10 @@ class TestManualEnterExitAsMainUsesIt:
 
     def test_manual_enter_exit_is_inert_when_disabled(self):
         timer = rs.PhaseTimer(enabled=False)
-        span = timer.phase("scenario_publication")
+        span = timer.phase("artifact_publication")
         span.__enter__()
         span.__exit__(None, None, None)
-        assert timer.timings()["phases"]["scenario_publication"] == 0.0
+        assert timer.timings()["phases"]["artifact_publication"] == 0.0
 
     def test_every_frozen_phase_is_opened_by_main(self):
         source = Path("run_scenario.py").read_text()

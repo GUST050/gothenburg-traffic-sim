@@ -24,6 +24,36 @@ from demand import structure as dstructure
 from demand import calibration as dcal
 from traffic_sim.core.fingerprint import fingerprint_files
 from traffic_sim.demand import cache as candidate_cache
+from traffic_sim.demand import pfe
+
+
+class TestExactSensorPublicationGate:
+    @staticmethod
+    def _report(**overrides):
+        report = {
+            "infeasible_intervals": 0,
+            "geh_pct": 100.0,
+            "integer_sensor_constraints": 672,
+            "integer_sensor_exact": 672,
+            "integer_sensor_max_abs_error": 0.0,
+            "bound_violations": [],
+            "unserviceable_edges": [],
+        }
+        report.update(overrides)
+        return report
+
+    def test_every_integer_sensor_target_is_required(self):
+        assert dcal._report_is_publishable(self._report()) is True
+        assert dcal._report_is_publishable(self._report(
+            integer_sensor_exact=671,
+            integer_sensor_max_abs_error=1.0,
+        )) is False
+
+    def test_missing_exactness_evidence_fails_closed(self):
+        report = self._report()
+        del report["integer_sensor_constraints"]
+        del report["integer_sensor_exact"]
+        assert dcal._report_is_publishable(report) is False
 
 
 class TestPurposeMarginAfterRouteFiltering:
@@ -60,6 +90,49 @@ class TestPurposeMarginAfterRouteFiltering:
         assert shares[0]["arbete"] == pytest.approx(0.491)
         assert shares[1]["arbete"] == pytest.approx(0.222)
 
+    def test_catalog_daily_margin_ignores_neutral_departure_clock(self, tmp_path):
+        shares = [{"arbete": 0.25, "fritid": 0.75}]
+        mixes = []
+        for label, departures in (("early", (0, 10)), ("late", (80000, 81000))):
+            route = tmp_path / f"{label}.rou.xml"
+            route.write_text(
+                "<routes>"
+                f'<vehicle id="w" depart="{departures[0]}"><route edges="M"/></vehicle>'
+                f'<vehicle id="f" depart="{departures[1]}"><route edges="M"/></vehicle>'
+                "</routes>")
+            (tmp_path / f"{label}.meta.json").write_text(json.dumps({
+                "candidates": {
+                    "w": {"purpose": "arbete"},
+                    "f": {"purpose": "fritid"},
+                }
+            }))
+            mixes.append(dcal.catalog_daily_purpose_mixes(
+                route, 1, activity_shares_by_quarter=shares))
+        assert mixes[0] == mixes[1]
+        assert set(mixes[0][0]) == {"arbete", "fritid"}
+
+    def test_explicit_legacy_margin_equals_existing_inference(self, tmp_path):
+        route = tmp_path / "candidates.rou.xml"
+        route.write_text(
+            '<routes><vehicle id="w" depart="0"><route edges="M"/></vehicle>'
+            '<vehicle id="f" depart="0"><route edges="M"/></vehicle></routes>')
+        (tmp_path / "candidates.meta.json").write_text(json.dumps({
+            "candidates": {
+                "w": {"purpose": "arbete"},
+                "f": {"purpose": "fritid"},
+            }
+        }))
+        shares = [{"arbete": 0.25, "fritid": 0.75}]
+        shapes, _cost = pfe.prepare_calibration(route)
+        inferred = pfe.apply_through_share_target(
+            dcal.apply_activity_purpose_margin(
+                pfe._purpose_targets_per_quarter(shapes, 1, 0.0), shares),
+            0.25)
+        explicit = dcal.purpose_mixes_for_candidates(
+            route, 1, activity_shares_by_quarter=shares,
+            through_share_target=0.25)
+        assert explicit == [dict(mix) for mix in inferred]
+
 
 class TestB1DateRangeContract:
     def test_run_products_ignore_stale_closure_routes(self, tmp_path):
@@ -91,6 +164,18 @@ class TestB1DateRangeContract:
         assert "calibrated_v1.rou.xml" not in products
         assert "calibrated_v2.rou.xml" not in products
 
+    def test_malformed_metadata_fails_open_to_conservative_product_set(
+            self, tmp_path):
+        (tmp_path / "demand_meta.json").write_text("[]")
+        for name in ("calibrated.rou.xml", "calibrated_v1.rou.xml"):
+            (tmp_path / name).write_text(name)
+
+        products = {path.name for path in bsd.demand_run_products(tmp_path)}
+
+        assert products == {
+            "demand_meta.json", "calibrated.rou.xml", "calibrated_v1.rou.xml"
+        }
+
     def test_date_is_a_backward_compatible_single_day_alias(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py", "--date", "2025-09-17"])
         args = bsd.parse_args()
@@ -114,6 +199,53 @@ class TestB1DateRangeContract:
             sys, "argv", ["build_sumo_demand.py", "--pfe-workers", "0"])
         with pytest.raises(SystemExit):
             bsd.parse_args()
+
+    def test_catalog_source_is_explicit_pfe_only(self, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv", ["build_sumo_demand.py", "--candidate-source", "catalog"])
+        args = bsd.parse_args()
+        assert args.candidate_source == "catalog"
+
+        monkeypatch.setattr(
+            sys, "argv", ["build_sumo_demand.py", "--candidate-source", "catalog",
+                           "--engine", "routesampler"])
+        with pytest.raises(SystemExit):
+            bsd.parse_args()
+
+    def test_candidate_benchmark_size_must_be_positive(self, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv", ["build_sumo_demand.py", "--candidate-n-total", "0"])
+        with pytest.raises(SystemExit):
+            bsd.parse_args()
+
+
+    def test_widened_pfe_counts_retry_exact_no_bounds_before_publication(
+            self, monkeypatch):
+        shapes = [pfe.Candidate(0.0, ["M"]), pfe.Candidate(0.0, ["X"])]
+        monkeypatch.setattr(dcal, "_PFE_PAR_SHAPES", shapes)
+        monkeypatch.setattr(dcal, "_PFE_PAR_VARIANT_INPUTS", {
+            "": {"targets": [{"M": 10.0}], "hard_bounds_pq": [{}]},
+        })
+        monkeypatch.setattr(
+            dcal, "_PFE_PAR_SOLUTIONS", {"": [np.array([6.0, 0.0])]})
+        monkeypatch.setattr(
+            dcal, "_PFE_PAR_RUNGS", {"": [pfe.RUNG_RELAX_TOL4X]})
+        monkeypatch.setattr(dcal, "_PFE_PAR_PURPOSE_MIXES", {"": [Counter()]})
+        monkeypatch.setattr(dcal, "_PFE_PAR_STRUCTURE_GROUPS", [])
+        called = []
+
+        def fake_publish(
+                _shapes, _sol, _targets, _bounds, rung, *_args, **_kwargs):
+            called.append(rung)
+            return (np.array([10, 0]) if rung == pfe.RUNG_NOBND_TOL1
+                    else np.array([6, 0])), False
+
+        monkeypatch.setattr(pfe, "quarter_publish_counts", fake_publish)
+
+        packed = dcal._compute_pfe_counts("", 0)
+
+        assert called == [pfe.RUNG_RELAX_TOL4X, pfe.RUNG_NOBND_TOL1]
+        assert packed[-1] == pfe.RUNG_NOBND_TOL1
 
     def test_direction_stress_variants_are_explicit_opt_in(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["build_sumo_demand.py"])
@@ -1046,7 +1178,7 @@ class TestVariantPublication:
                         yield suffix, quarter, (
                             np.array([0], dtype=np.int64),
                             np.array([1], dtype=np.int64),
-                            np.dtype(np.int64).str, 1, True)
+                            np.dtype(np.int64).str, 1, True, pfe.RUNG_CLEAN)
                     return
                 for suffix, key, quarter in tasks:
                     yield suffix, key, quarter, np.array([1.0]), pfe.RUNG_CLEAN

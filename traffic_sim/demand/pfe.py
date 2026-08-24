@@ -1398,7 +1398,7 @@ def solve_interval_with_structure_guard(
             shapes, targets, bounds, priors, route_cost=route_cost,
             required_groups=purpose_groups,
             invariant_groups=invariant_groups, touch_index=touch_index)
-        if purpose_sol is not None:
+        if purpose_sol is not None and purpose_rung <= rung:
             sol, rung = purpose_sol, purpose_rung
         else:
             # Counts are observed; the purpose mix is a generated behavioural
@@ -2046,7 +2046,7 @@ def solve_calibration_intervals(
                 shapes, targets_per_q[i], bounds_per_q[i], priors_per_q[i],
                 route_cost=route_cost, required_groups=purpose_groups,
                 touch_index=touch_index)
-            if purpose_sol is not None:
+            if purpose_sol is not None and purpose_rung <= rung:
                 sol, rung = purpose_sol, purpose_rung
         solutions.append(sol)
         rungs.append(rung)
@@ -2159,6 +2159,16 @@ def _rung_keeps_priors(rung: int | None) -> bool:
     return rung != RUNG_NOPRIOR_TOL1
 
 
+def exact_sensor_margins(counts: np.ndarray, shapes: list[Candidate],
+                         targets: Mapping[str, float]) -> bool:
+    """Whether integer route counts meet every rounded sensor target exactly."""
+    return all(
+        int(sum(int(counts[index]) for index, shape in enumerate(shapes)
+                if edge in shape.edges)) == int(round(target))
+        for edge, target in targets.items()
+    )
+
+
 def quarter_publish_counts(
     shapes: list[Candidate],
     sol: np.ndarray,
@@ -2262,7 +2272,11 @@ def quarter_publish_counts(
         # numerical tolerance) could spend sensor error merely to save small
         # route-level deviations.
         tolerances = [None]
-        if measurement_tol_mult is not None:
+        # Purpose and optional structure groups are lower-priority model
+        # constraints. Drop them and let the caller retry before a wider
+        # measurement rung is considered; otherwise a feasible exact sensor
+        # vector can be replaced merely to preserve a purpose mix.
+        if measurement_tol_mult is not None and not active_groups:
             tolerances.append(measurement_tol_mult)
         for active_tolerance in tolerances:
             if active_tolerance is None and stability_targets:
@@ -2339,8 +2353,22 @@ def quarter_publish_counts(
         if int(counts[members].sum()) > integer_structure_cap(q_total, cap_share)
     ]
     if initial_structure_groups:
-        structured = project_from_continuous(
-            purpose_groups + initial_structure_groups)
+        # These caps are optional and run only after the hard projection has
+        # produced exact integer sensor totals. They may improve structure
+        # only inside those exact margins; using the continuous rung's wider
+        # band here let a low-flow holiday trade 1–2 sensor vehicles for a
+        # cosmetic cap and then fail the mandatory publication gate.
+        structured = repair_integer_bounds(
+            counts, shapes, projection_targets, repair_bounds,
+            groups=purpose_groups + initial_structure_groups,
+            measurement_tol_mult=None, preferred=stability_targets,
+            reference=sol, preserve_total=True, force=True)
+        if structured is None:
+            structured = repair_integer_bounds(
+                counts, shapes, projection_targets, repair_bounds,
+                groups=purpose_groups + initial_structure_groups,
+                measurement_tol_mult=None, preferred=stability_targets,
+                reference=sol, preserve_total=False, force=True)
         if structured is not None:
             counts = structured
     # structure_groups (2026-07-12, structure preservation): each
@@ -2403,18 +2431,10 @@ def quarter_publish_counts(
                 current, shapes, projection_targets, repair_bounds,
                 groups=active_purpose_groups + list(activated.values()),
                 preferred=stability_targets,
-                # The continuous interval may legitimately have used
-                # a wider measurement rung. Re-imposing the exact
-                # rounded target here makes a feasible structure
-                # repair look impossible (observed in forecast q79:
-                # 24 short trips stayed published although a
-                # rung-consistent repair reduces them to 2).
-                measurement_tol_mult=(
-                    _rung_measurement_tol_mult(rung)
-                    if rung in RUNG_NAMES
-                    and rung != RUNG_INFEASIBLE
-                    else None
-                ))
+                # Optional caps never outrank the already exact integer
+                # sensor publication contract. If they conflict, retain the
+                # previous exact vector and report the remaining cap instead.
+                measurement_tol_mult=None)
             if repaired_structure is None:
                 # Deterministic exact-preserving fallback. The MILP
                 # can fail on a large active set even when the pool
@@ -2508,7 +2528,7 @@ def quarter_publish_counts(
             counts, shapes, projection_targets, repair_bounds,
             groups=purpose_groups,
             preferred=stability_targets,
-            measurement_tol_mult=_rung_measurement_tol_mult(rung))
+            measurement_tol_mult=None)
         if repaired is None:
             hard_repair_ok = False
         else:
@@ -2526,7 +2546,7 @@ def quarter_publish_counts(
         repaired = repair_integer_bounds(
             counts, shapes, projection_targets, repair_bounds,
             preferred=stability_targets,
-            measurement_tol_mult=_rung_measurement_tol_mult(rung))
+            measurement_tol_mult=None)
         hard_repair_ok = repaired is not None
         if repaired is not None:
             counts = repaired
@@ -2534,7 +2554,7 @@ def quarter_publish_counts(
                 counts, shapes, projection_targets, repair_bounds,
                 groups=exact_purpose_groups,
                 preferred=stability_targets,
-                measurement_tol_mult=_rung_measurement_tol_mult(rung))
+                measurement_tol_mult=None)
             if purpose_repaired is not None:
                 counts = purpose_repaired
             else:
@@ -2566,7 +2586,7 @@ def quarter_publish_counts(
             counts, shapes, projection_targets, repair_bounds,
             groups=final_purpose_groups,
             preferred=stability_targets,
-            measurement_tol_mult=_rung_measurement_tol_mult(rung))
+            measurement_tol_mult=None)
         if purpose_repaired is not None:
             if stability_error(purpose_repaired) <= stability_error(counts):
                 counts = purpose_repaired
@@ -2576,6 +2596,37 @@ def quarter_publish_counts(
             # optional structure group. Reapply the same best-effort
             # guard while retaining the now-exact purpose groups.
             counts = apply_structure_repairs(counts, purpose_groups)
+
+    if not exact_sensor_margins(counts, shapes, projection_targets):
+        # Final invariant at the producer boundary. Lower-priority purpose and
+        # structure repairs above must never leak a widened continuous sensor
+        # band into the integer route file. Try to retain the exact purpose
+        # groups first, then drop only that modelled margin; hard bounds stay.
+        final_groups = purpose_groups if purpose_margin_enforced else []
+        exact = repair_integer_bounds(
+            counts, shapes, projection_targets, repair_bounds,
+            groups=final_groups, preferred=stability_targets,
+            measurement_tol_mult=None, reference=sol,
+            preserve_total=True, force=True)
+        if exact is None:
+            exact = repair_integer_bounds(
+                counts, shapes, projection_targets, repair_bounds,
+                groups=final_groups, preferred=stability_targets,
+                measurement_tol_mult=None, reference=sol,
+                preserve_total=False, force=True)
+        if exact is None and final_groups:
+            purpose_margin_enforced = False
+            purpose_groups = []
+            exact = repair_integer_bounds(
+                counts, shapes, projection_targets, repair_bounds,
+                preferred=stability_targets, measurement_tol_mult=None,
+                reference=sol, preserve_total=False, force=True)
+        if exact is None or not exact_sensor_margins(
+                exact, shapes, projection_targets):
+            raise RuntimeError(
+                "final integer projection cannot satisfy every exact sensor "
+                "margin with the retained hard bounds")
+        counts = exact
     return counts, purpose_margin_enforced
 
 
@@ -2704,6 +2755,16 @@ def write_calibration_report(
                 structure_groups,
                 stability_edges,
             )
+        for i, sol in enumerate(solutions):
+            if sol is None:
+                continue
+            entry = effective_precomputed[i]
+            if (entry is None
+                    or not exact_sensor_margins(
+                        entry[0], shapes, targets_per_q[i])):
+                raise RuntimeError(
+                    "precomputed integer counts do not satisfy every exact "
+                    "sensor margin; no route file was published")
     with open(write_path, "w") as f:
         f.write("<routes>\n")
         for i in range(nq):
@@ -2944,9 +3005,41 @@ def write_calibration_report(
         {edge for targets in targets_per_q for edge in targets},
         observability_groups or {},
     )
+    # A forecast/directional split may produce fractional targets, while a
+    # route file can contain only whole vehicles.  The production contract is
+    # therefore exact equality to the solver's declared integer target
+    # ``int(round(target))`` for every directed sensor edge and quarter.  GEH
+    # remains useful as a conventional display metric, but cannot substitute
+    # for this stronger counts-first publication evidence.
+    integer_sensor_constraints = 0
+    integer_sensor_exact = 0
+    integer_sensor_sum_abs_error = 0.0
+    integer_sensor_max_abs_error = 0.0
+    for quarter, targets in enumerate(targets_per_q):
+        for edge, target in targets.items():
+            expected = int(round(float(target)))
+            values = achieved.get(edge, ())
+            actual = float(values[quarter]) if quarter < len(values) else 0.0
+            residual = abs(actual - expected)
+            integer_sensor_constraints += 1
+            integer_sensor_exact += residual <= 1e-9
+            integer_sensor_sum_abs_error += residual
+            integer_sensor_max_abs_error = max(
+                integer_sensor_max_abs_error, residual)
+
     report = {"vehicles": vid, "infeasible_intervals": infeasible,
               "geh_ok": geh_ok, "geh_total": geh_all,
               "geh_pct": round(100 * geh_ok / max(1, geh_all), 1),
+              "integer_sensor_constraints": integer_sensor_constraints,
+              "integer_sensor_exact": integer_sensor_exact,
+              "integer_sensor_exact_pct": round(
+                  100 * integer_sensor_exact
+                  / max(1, integer_sensor_constraints), 6),
+              "integer_sensor_max_abs_error": round(
+                  integer_sensor_max_abs_error, 9),
+              "integer_sensor_sum_abs_error": round(
+                  integer_sensor_sum_abs_error, 9),
+              "integer_sensor_target_rule": "int(round(target))",
               "achieved": achieved,
               "unserviceable_edges": unserviceable_edges,
               "bound_violations": bound_violations,
@@ -2998,6 +3091,7 @@ def calibrate(
     purpose_departure_offset_s: float = 0.0,
     activity_purpose_shares_by_quarter: list[dict[str, float]] | None = None,
     through_share_target: float | None = None,
+    purpose_mixes_per_q: list[dict[str, float]] | None = None,
     required_anchor_edges: Iterable[str] | None = None,
 ) -> dict:
     """Solve all intervals; write a .rou.xml; return a fit report.
@@ -3016,12 +3110,32 @@ def calibrate(
     solver as backstop, in the rare case IPF's iteration budget doesn't
     converge for some edge-case constraint combination."""
     shapes, route_cost = prepare_calibration(candidates_path)
-    source_purpose_mixes = _purpose_targets_per_quarter(
-        shapes, len(targets_per_q), purpose_departure_offset_s)
-    purpose_mixes = apply_through_share_target(
-        apply_category_margin(
-            source_purpose_mixes, activity_purpose_shares_by_quarter),
-        through_share_target)
+    if purpose_mixes_per_q is not None:
+        if len(purpose_mixes_per_q) != len(targets_per_q):
+            raise ValueError(
+                "purpose_mixes_per_q must have one mapping per target quarter")
+        purpose_mixes = []
+        for quarter, mix in enumerate(purpose_mixes_per_q):
+            if not isinstance(mix, dict):
+                raise ValueError(
+                    f"purpose_mixes_per_q[{quarter}] must be a mapping")
+            normalized = Counter()
+            for purpose, value in mix.items():
+                value = float(value)
+                if not np.isfinite(value) or value < 0:
+                    raise ValueError(
+                        f"purpose_mixes_per_q[{quarter}] contains invalid "
+                        f"count for {purpose!r}")
+                if value:
+                    normalized[str(purpose)] = value
+            purpose_mixes.append(normalized)
+    else:
+        source_purpose_mixes = _purpose_targets_per_quarter(
+            shapes, len(targets_per_q), purpose_departure_offset_s)
+        purpose_mixes = apply_through_share_target(
+            apply_category_margin(
+                source_purpose_mixes, activity_purpose_shares_by_quarter),
+            through_share_target)
     solutions, rungs = solve_calibration_intervals(
         shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q,
         purpose_mixes)
