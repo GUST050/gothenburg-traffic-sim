@@ -337,6 +337,10 @@ def _write_pfe_variant_report_job(job: tuple[str, str]):
             _PFE_PAR_COUNTS[suffix] if _PFE_PAR_COUNTS is not None else None),
         required_anchor_edges=data.get("required_anchor_edges"),
     )
+    report["pfe_shape_variables"] = len(_PFE_PAR_SHAPES)
+    report["pfe_source_candidates"] = sum(
+        len(getattr(candidate, "source_candidates", ()) or (candidate,))
+        for candidate in _PFE_PAR_SHAPES)
     publish_s = time.perf_counter() - started
     report["timings_s"] = {
         "prepare_shared": round(_PFE_PAR_PREPARE_S, 3),

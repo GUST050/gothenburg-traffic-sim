@@ -266,12 +266,20 @@ The two-date invariance and current seven-edge sensor-coverage gates passed on
 2026-08-24. The first unequal 12,000/6,000-candidate campaign is retained only
 as diagnostic history. Its schema-v2 replacement ran 30 counterbalanced pairs
 with 6,000 candidates in both arms and passed every declared gate: median wall
-time 55.246→24.715 s (2.235x), catalog adapter p95 0.678 s, no slower day class,
-no PFE regression and peak RSS below 8 GiB. A schema-v2
+time 55.246→24.715 s (2.235x ratio of arm medians; 2.220x median paired
+speedup), catalog adapter p95 0.678 s, no slower day class,
+paired vehicle-population deviation at most 0.761% and peak RSS below 8 GiB.
+PFE time is an end-to-end product measure, not an isolated solver comparison:
+the old campaign did not record the distinct route×purpose variable count, so
+it cannot prove equal PFE workload. New campaigns record that count explicitly.
+Suite/negative-path contracts are bound once per campaign, while seven
+build-specific contracts are measured independently in each arm. A schema-v3
 `sumo/route_catalog_adoption.json` makes catalog the normal default only after
-it cross-binds hashes of the qualification and build reports, exact catalog
-keys and selected sizes, and verifies the immutable entries. Missing, stale,
-schema-v1, corrupt or unbound records fail safely to legacy; a source/input
+it opens and hashes the named qualification and build reports, follows and
+hashes their trials and suite-evidence links, cross-checks exact catalog keys
+and selected sizes through the chain, and verifies the immutable entries.
+Missing, stale, legacy-schema, corrupt, path-escaping or unbound records fail
+safely to legacy; a source/input
 mismatch discovered after argument parsing stops before an unqualified catalog
 is built. `tools/build_route_catalog.py` owns isolated materialization and the bounded
 sensor-support sizing ladder; `tools/verify_route_catalog_invariance.py` owns
@@ -283,7 +291,7 @@ the supplied build and stored catalog bytes.
 An explicit `--candidate-source legacy` always remains the rollback path.
 The old unmatched campaign measured 66.402 s versus 19.437 s and is useful for
 diagnosis only. The matched campaign is bound in
-`validation/route_catalog_qualification_v2_2026-08-24.json`; seven catalog
+`validation/route_catalog_qualification_v3_2026-08-24.json`; seven catalog
 fixtures plus explicit legacy rollback passed the versioned soak report, so
 the catalog is now the production default.
 Catalog reuse is still bypassed explicitly

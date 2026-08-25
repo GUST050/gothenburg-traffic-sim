@@ -3139,8 +3139,17 @@ def calibrate(
     solutions, rungs = solve_calibration_intervals(
         shapes, route_cost, targets_per_q, bounds_per_q, priors_per_q,
         purpose_mixes)
-    return write_calibration_report(shapes, out_path, targets_per_q, solutions,
-                                    integer_bounds_per_q if integer_bounds_per_q is not None else bounds_per_q,
-                                    rungs, enforce_integer_bounds,
-                                    purpose_mixes_per_q=purpose_mixes,
-                                    required_anchor_edges=required_anchor_edges)
+    report = write_calibration_report(
+        shapes, out_path, targets_per_q, solutions,
+        integer_bounds_per_q if integer_bounds_per_q is not None else bounds_per_q,
+        rungs, enforce_integer_bounds,
+        purpose_mixes_per_q=purpose_mixes,
+        required_anchor_edges=required_anchor_edges)
+    # Keep the benchmark workload visible.  Candidate count alone does not
+    # describe PFE work because calibration deduplicates to one variable per
+    # route geometry and provenance purpose.
+    report["pfe_shape_variables"] = len(shapes)
+    report["pfe_source_candidates"] = sum(
+        len(getattr(candidate, "source_candidates", ()) or (candidate,))
+        for candidate in shapes)
+    return report

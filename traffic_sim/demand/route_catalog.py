@@ -30,6 +30,7 @@ SCHEMA_VERSION = 1
 DEFAULT_ROOT = Path("sumo") / "route_catalog"
 DEFAULT_INITIAL_N_TOTAL = 6000
 ADOPTION_PATH = Path("sumo") / "route_catalog_adoption.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS = ("catalog.rou.xml", "catalog.meta.json", "catalog.validation.json",
            "catalog.template.json")
 _DATE_CONFIG_KEYS = {"date", "start_date", "real_day_shape", "day_blocks"}
@@ -84,16 +85,19 @@ def adopted_catalog_config(
         payload = json.loads(Path(path).read_text())
     except (OSError, UnicodeError, json.JSONDecodeError):
         return None
+
+    def valid_sha256(value: object) -> bool:
+        return (isinstance(value, str) and len(value) == 64
+                and all(char in "0123456789abcdef" for char in value))
+
     keys = payload.get("catalog_keys") if isinstance(payload, dict) else None
     sizes = (payload.get("catalog_selected_n_total")
              if isinstance(payload, dict) else None)
     if (not isinstance(payload, dict)
-            or payload.get("schema_version") != 2
+            or payload.get("schema_version") != 3
             or payload.get("status") != "adopt"
-            or not isinstance(payload.get("qualification_sha256"), str)
-            or len(payload["qualification_sha256"]) != 64
-            or not isinstance(payload.get("catalog_build_sha256"), str)
-            or len(payload["catalog_build_sha256"]) != 64
+            or not valid_sha256(payload.get("qualification_sha256"))
+            or not valid_sha256(payload.get("catalog_build_sha256"))
             or not isinstance(keys, dict)
             or set(keys) != {"weekday", "weekend"}
             or not isinstance(sizes, dict)
@@ -105,6 +109,88 @@ def adopted_catalog_config(
                    or any(char not in "0123456789abcdef" for char in key)
                    for key in keys.values())):
         return None
+    evidence = payload.get("evidence")
+    if not isinstance(evidence, dict):
+        return None
+    loaded = {}
+    for label in ("qualification", "catalog_build"):
+        record = evidence.get(label)
+        relative = record.get("path") if isinstance(record, dict) else None
+        expected = record.get("sha256") if isinstance(record, dict) else None
+        if (not isinstance(relative, str) or not relative
+                or Path(relative).is_absolute()
+                or not valid_sha256(expected)):
+            return None
+        evidence_path = (PROJECT_ROOT / relative).resolve()
+        try:
+            evidence_path.relative_to(PROJECT_ROOT.resolve())
+            if sha256_file(evidence_path) != expected:
+                return None
+            loaded[label] = json.loads(evidence_path.read_text())
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+            return None
+    if (evidence["qualification"]["sha256"]
+            != payload["qualification_sha256"]
+            or evidence["catalog_build"]["sha256"]
+            != payload["catalog_build_sha256"]):
+        return None
+    qualification = loaded["qualification"]
+    build = loaded["catalog_build"]
+    gates = qualification.get("gates") if isinstance(qualification, dict) else None
+    binding = (qualification.get("evidence_binding")
+               if isinstance(qualification, dict) else None)
+    results = build.get("results") if isinstance(build, dict) else None
+    if (not isinstance(qualification, dict)
+            or qualification.get("verdict") != "adopt"
+            or not isinstance(gates, dict) or not gates
+            or not all(value is True for value in gates.values())
+            or not isinstance(binding, dict)
+            or binding.get("catalog_build_sha256")
+               != payload["catalog_build_sha256"]
+            or binding.get("catalog_keys") != keys
+            or binding.get("catalog_selected_n_total") != sizes
+            or not isinstance(results, dict)
+            or set(results) != {"weekday", "weekend"}):
+        return None
+    linked_payloads = {}
+    for linked_path_key, linked_hash_key in (
+            ("trials_path", "trials_sha256"),
+            ("suite_gates_path", "suite_gates_sha256")):
+        relative = binding.get(linked_path_key)
+        expected = binding.get(linked_hash_key)
+        if (not isinstance(relative, str) or not relative
+                or Path(relative).is_absolute()
+                or not valid_sha256(expected)):
+            return None
+        linked = (PROJECT_ROOT / relative).resolve()
+        try:
+            linked.relative_to(PROJECT_ROOT.resolve())
+            if sha256_file(linked) != expected:
+                return None
+            linked_payloads[linked_path_key] = json.loads(linked.read_text())
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+            return None
+    suite_payload = linked_payloads["suite_gates_path"]
+    suite_records = (suite_payload.get("gates")
+                     if isinstance(suite_payload, dict) else None)
+    qualified_suite = qualification.get("suite_hard_gates")
+    if (not isinstance(suite_payload, dict)
+            or suite_payload.get("schema_version") != 2
+            or not isinstance(suite_records, dict)
+            or not isinstance(qualified_suite, dict)
+            or set(suite_records) != set(qualified_suite)
+            or any(not isinstance(value, bool)
+                   for value in qualified_suite.values())
+            or any(not isinstance(suite_records[gate], dict)
+                   or (suite_records[gate].get("status") == "pass")
+                      != qualified_suite[gate]
+                   for gate in qualified_suite)):
+        return None
+    for pool, record in results.items():
+        if (not isinstance(record, dict)
+                or record.get("key") != keys[pool]
+                or record.get("n_total") != sizes[pool]):
+            return None
     for pool, key in keys.items():
         if not catalog_entry_matches(
                 root, pool=pool, key=key, n_total=sizes[pool]):

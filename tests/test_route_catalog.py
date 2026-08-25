@@ -83,24 +83,59 @@ def test_adoption_default_is_fail_safe_and_explicit(tmp_path, monkeypatch):
     config.write_text("not json")
     assert route_catalog.configured_candidate_source(config) == "legacy"
     monkeypatch.setattr(route_catalog, "catalog_entry_matches", lambda *a, **k: True)
-    config.write_text(json.dumps({
-        "schema_version": 2, "status": "adopt",
-        "qualification_sha256": "a" * 64,
-        "catalog_build_sha256": "d" * 64,
-        "catalog_keys": {
-            "weekday": "b" * 32,
-            "weekend": "c" * 32,
+    monkeypatch.setattr(route_catalog, "PROJECT_ROOT", tmp_path)
+    validation = tmp_path / "validation"
+    validation.mkdir()
+    keys = {"weekday": "b" * 32, "weekend": "c" * 32}
+    sizes = {"weekday": 6000, "weekend": 6000}
+    build = validation / "build.json"
+    build.write_text(json.dumps({"results": {
+        pool: {"key": keys[pool], "n_total": sizes[pool]} for pool in keys
+    }}))
+    trials = validation / "trials.json"
+    trials.write_text(json.dumps({"trials": []}))
+    suite = validation / "suite.json"
+    suite_gates = {"purpose_route_compatibility": True}
+    suite.write_text(json.dumps({
+        "schema_version": 2,
+        "gates": {
+            gate: {"status": "pass", "tests": ["tests/test_pfe.py"]}
+            for gate in suite_gates
         },
-        "catalog_selected_n_total": {"weekday": 6000, "weekend": 6000},
+    }))
+    qualification = validation / "qualification.json"
+    qualification.write_text(json.dumps({
+        "verdict": "adopt", "gates": {"hard_correctness": True},
+        "suite_hard_gates": suite_gates,
+        "evidence_binding": {
+            "catalog_build_sha256": route_catalog.sha256_file(build),
+            "catalog_keys": keys,
+            "catalog_selected_n_total": sizes,
+            "trials_path": "validation/trials.json",
+            "trials_sha256": route_catalog.sha256_file(trials),
+            "suite_gates_path": "validation/suite.json",
+            "suite_gates_sha256": route_catalog.sha256_file(suite),
+        },
+    }))
+    config.write_text(json.dumps({
+        "schema_version": 3, "status": "adopt",
+        "qualification_sha256": route_catalog.sha256_file(qualification),
+        "catalog_build_sha256": route_catalog.sha256_file(build),
+        "evidence": {
+            "qualification": {
+                "path": "validation/qualification.json",
+                "sha256": route_catalog.sha256_file(qualification),
+            },
+            "catalog_build": {
+                "path": "validation/build.json",
+                "sha256": route_catalog.sha256_file(build),
+            },
+        },
+        "catalog_keys": keys,
+        "catalog_selected_n_total": sizes,
     }))
     assert route_catalog.configured_candidate_source(config) == "catalog"
-    config.write_text(json.dumps({
-        "schema_version": 2, "status": "adopt",
-        "qualification_sha256": "a" * 64,
-        "catalog_build_sha256": "d" * 64,
-        "catalog_keys": {"weekday": "z" * 32, "weekend": "c" * 32},
-        "catalog_selected_n_total": {"weekday": 6000, "weekend": 6000},
-    }))
+    suite.write_text("{}")
     assert route_catalog.configured_candidate_source(config) == "legacy"
 
 

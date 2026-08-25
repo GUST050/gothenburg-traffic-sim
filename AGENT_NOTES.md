@@ -8,7 +8,7 @@ which model may continue. See `AGENTS.md`.
 ## CURRENT_HANDOFF
 
 - Focus and status: `The canonical pre-picker weekday/weekend route catalog is
-  robustness-repaired, matched-size qualified, schema-v2 adopted and soaked.
+  robustness-repaired, matched-size qualified, schema-v3 adopted and soaked.
   Production defaults to the verified catalog with explicit legacy rollback.
   The user successfully rebuilt the active 2027-11-11 forecast day through the
   browser; the current first-new interactive performance is accepted. Annual
@@ -54,9 +54,12 @@ which model may continue. See `AGENTS.md`.
   days and leaves warm-state identity bound to exact daily routes. The
   historical unequal-size trials measured 66.402→19.437 s, but this ratio is
   not adoption evidence. The corrected 30-pair harness requested 6,000
-  candidates in both arms and measured 55.246→24.715 s median (2.235x), with
-  every gate and day class passing. Schema-v2 qualification/adoption binds
-  report hashes, keys, selected sizes and stored bytes; seven catalog fixtures
+  candidates in both arms and measured 55.246→24.715 s median (2.235x ratio
+  of arm medians; 2.220x median paired speedup), with
+  every gate and day class passing. Schema-v3 adoption now reads and hashes
+  the named qualification/build/trials/suite files, cross-checks keys and
+  sizes through the chain, and verifies stored bytes. Suite contracts are
+  recorded once rather than copied into every trial arm; seven catalog fixtures
   plus explicit legacy rollback passed soak. Seed/variant order, exact
   widened-rung PFE fallback and mixed-pool tour IDs are regression-tested. See
   docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md.`
@@ -295,6 +298,17 @@ which model may continue. See `AGENTS.md`.
   make lint and diff checks pass. The
   active catalog day also ran through three SUMO seeds with 20,818/20,818
   loaded/inserted and zero waiting, unfinished, teleports or collisions.`
+- Catalog evidence robustness review: `The five reported findings were
+  reproduced against the current tree. The named v2 qualification/build files
+  did exist and matched their old adoption hashes, but runtime did not read
+  them; schema-v3 now verifies the complete on-disk chain and remains active
+  locally. Per-arm gates are measured per build, seven suite contracts are
+  bound once, paired population drift is gated at 1%, and future campaigns
+  record PFE route×purpose workload. Candidate-cache pruning no longer treats
+  both mutually exclusive flow files as global invalidators, and classification
+  plus deletion share one workspace lock. The focused evidence suite passes
+  136 tests; the broader demand/PFE/catalog regression passes 351 tests with
+  one LibreSSL warning; make lint and git diff --check pass.`
 - Blockers or risks: `S0 telemetry and monthly throughput evidence are still
   open; do not claim the p95 or 2.0x targets from instrumentation. The frozen
   scenario benchmark campaign preflight refuses because live demand has moved
@@ -306,8 +320,9 @@ which model may continue. See `AGENTS.md`.
   production default with a full-field rollback. A frozen multi-trial p95 for
   the new code, the remaining monthly resource matrix and calibrated 50-station
   vehicle tiers are still missing. Gate S/M remain undecided/inconclusive and
-  outside the speed goal. Catalog performance adoption is open until a fresh
-  matched-size 30-pair campaign, schema-v2 adoption and soak pass. The former
+  outside the speed goal. Catalog adoption is complete; its retained v2 trial
+  rows predate PFE workload-count telemetry, so they support product latency
+  and output-equivalence claims but not an isolated equal-work solver speedup. The former
   annual plan/preflight/pilot remain historical and must be refreshed only
   after adoption. Annual activation remains a future explicit decision.`
 - Latest UI truth fix: `web/app.js and web/index.html no longer expose the

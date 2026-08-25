@@ -48,10 +48,9 @@ from demand.day_library import DEFAULT_ROOT as LIBRARY_ROOT  # noqa: E402
 from traffic_sim.demand.build_lock import demand_build_lock  # noqa: E402
 from traffic_sim.demand.cache import DEFAULT_ROOT as CACHE_ROOT  # noqa: E402
 
-# Exactly what build_sumo_demand.generate_candidates hashes into a pool key,
-# minus the two per-date artifacts written inside a build (real_day_shape,
-# candidate_day_blocks) and the SUMO binary. Kept as one list so a reader can
-# compare it against that call site directly.
+# Shared files that every pool key hashes, minus per-date artifacts, the SUMO
+# binary and the one selected source-flow file.  Source-flow alternatives are
+# intentionally not a shared timestamp cutoff; see KEY_INPUTS below.
 KEY_SOURCES = (
     "build_candidates.py",
     "build_sumo_demand.py",
@@ -67,8 +66,11 @@ KEY_INPUTS = (
     "sumo/net.net.xml",
     "web/data/graph.graphml",
     "web/data/network.geojson",
-    "web/data/flows.json",
-    "web/data/flows_forecast.json",
+    # The key contains exactly one source_flows file selected by the build.
+    # Neither alternative is a global invalidator: touching observations must
+    # not make forecast-keyed entries look unreachable, or vice versa.  Cache
+    # manifests currently contain output hashes only, so source-specific age
+    # classification is deliberately omitted rather than guessed broadly.
     "web/data/normal_profile.json",
     "data_in/sensors.json",
     "data_in/deso/population_2023.json",
@@ -156,13 +158,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
-    cache_root = Path(args.cache_root)
-    if not cache_root.is_dir():
-        print(f"no candidate cache at {cache_root} — nothing to prune")
-        return 0
-
+def _inspect_and_maybe_prune(args: argparse.Namespace, cache_root: Path) -> int:
+    """Classify and delete under the same workspace lock."""
     reference, owner = newest_key_input_mtime(ROOT)
     if reference == 0.0:
         print("none of the pool-key inputs could be read — refusing to guess "
@@ -193,12 +190,12 @@ def main() -> int:
 
     total_gb = sum(size for _entry, size, _mtime in stale) / 1e9
     print(f"candidate pool cache: {cache_root}")
-    print(f"  pool-key inputs last changed {time.strftime('%Y-%m-%d %H:%M', time.localtime(reference))}"
+    print(f"  shared pool-key inputs last changed {time.strftime('%Y-%m-%d %H:%M', time.localtime(reference))}"
           f" ({owner})")
     print(f"  reachable-looking entries kept: {kept}"
           f" ({kept_by_digest} protected by a live day-library entry)")
     if not stale:
-        print("  nothing unreachable — every stored pool can still be named")
+        print("  nothing classified unreachable in this conservative snapshot")
         return 0
     print(f"  unreachable entries: {len(stale)}, {total_gb:.1f} GB")
     for entry, size, entry_mtime in stale[:10]:
@@ -211,27 +208,38 @@ def main() -> int:
               "on demand; only time is lost)")
         return 0
 
-    # The lock the demand builders take before touching shared pool files.
-    # Holding it here means no build can be between "restore" and "store"
-    # while entries disappear underneath it.
-    with demand_build_lock():
-        removed = 0
-        for entry, _size, _mtime in stale:
-            shutil.rmtree(entry, ignore_errors=True)
-            removed += 1
-        # Single-flight locks belong to the monthly baseline cache, not this
-        # candidate-pool root. They are intentionally retained: unlinking a
-        # flock pathname while waiters have the old inode open can split one
-        # lock into two independent locks and break serialization.
-        for leftover in cache_root.glob(".*.tmp"):
-            try:
-                old = leftover.stat().st_mtime < cutoff
-            except OSError:
-                continue
-            if old:
-                shutil.rmtree(leftover, ignore_errors=True)
+    removed = 0
+    for entry, _size, _mtime in stale:
+        shutil.rmtree(entry, ignore_errors=True)
+        removed += 1
+    # Single-flight locks belong to the monthly baseline cache, not this
+    # candidate-pool root. They are intentionally retained: unlinking a
+    # flock pathname while waiters have the old inode open can split one
+    # lock into two independent locks and break serialization.
+    for leftover in cache_root.glob(".*.tmp"):
+        try:
+            old = leftover.stat().st_mtime < cutoff
+        except OSError:
+            continue
+        if old:
+            shutil.rmtree(leftover, ignore_errors=True)
     print(f"deleted {removed} unreachable pool(s), freeing {total_gb:.1f} GB")
     return 0
+
+
+def main() -> int:
+    args = parse_args()
+    cache_root = Path(args.cache_root)
+    if not cache_root.is_dir():
+        print(f"no candidate cache at {cache_root} — nothing to prune")
+        return 0
+
+    # Classification is part of the decision, so it must observe the same
+    # workspace snapshot as deletion.  Report-only runs use the lock too: the
+    # printed list then describes a coherent build boundary rather than a
+    # best-effort pre-lock scan.
+    with demand_build_lock():
+        return _inspect_and_maybe_prune(args, cache_root)
 
 
 if __name__ == "__main__":

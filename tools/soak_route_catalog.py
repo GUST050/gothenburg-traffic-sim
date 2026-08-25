@@ -15,7 +15,7 @@ from tools.benchmark_route_catalog import load_suite_gate_record, run_arm
 
 from traffic_sim.demand import route_catalog
 from traffic_sim.demand.build_lock import demand_build_lock
-from traffic_sim.demand.catalog_qualification import REQUIRED_HARD_GATES
+from traffic_sim.demand.catalog_qualification import SUITE_HARD_GATES
 from traffic_sim.simulation.monthly_demand import (
     LIVE_DEMAND_RELEASE_PRODUCTS,
     restore_live_demand_release,
@@ -59,8 +59,8 @@ def main() -> int:
         suite = load_suite_gate_record(args.suite_gates)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
-    if any(suite.get(gate) is not True for gate in REQUIRED_HARD_GATES):
-        parser.error("--suite-gates must mark every hard gate true")
+    if any(suite.get(gate) is not True for gate in SUITE_HARD_GATES):
+        parser.error("--suite-gates must mark every suite-level gate true")
     plan = {
         "schema_version": 1,
         "kind": "route_catalog_post_adoption_soak",
@@ -95,14 +95,14 @@ def main() -> int:
                         "result": run_arm(
                             arm="catalog", fixture=fixture,
                             scratch=Path(raw), catalog_root=args.catalog_root,
-                            suite=suite, timeout_s=args.timeout_s,
+                            timeout_s=args.timeout_s,
                             n_total=args.n_total),
                     })
             with tempfile.TemporaryDirectory(
                     prefix="catalog-soak-rollback-") as raw:
                 plan["rollback"] = run_arm(
                     arm="legacy", fixture=SOAK_FIXTURES[0], scratch=Path(raw),
-                    catalog_root=args.catalog_root, suite=suite,
+                    catalog_root=args.catalog_root,
                     timeout_s=args.timeout_s, n_total=args.n_total)
         finally:
             restore_live_demand_release(snapshot)

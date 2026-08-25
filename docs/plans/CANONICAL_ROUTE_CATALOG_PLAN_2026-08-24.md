@@ -573,7 +573,8 @@ The initial evidence package reported all six criteria as passed on 2026-08-24.
 A same-day robustness review found that its performance campaign compared a
 12,000-candidate legacy arm with a 6,000-candidate catalog arm and that the
 adoption record did not cross-bind reports, keys and stored bytes. Those first
-claims are superseded by the versioned matched-size schema-v2 campaign below.
+claims are superseded by the matched-size campaign and its schema-v3
+evidence-chain repair below.
 Production now uses the verified catalog. Warming remains bound to exact
 finished daily demand and the full annual population remains inactive.
 
@@ -582,10 +583,11 @@ finished daily demand and the full annual population remains inactive.
 - Both benchmark arms now receive the same explicit `--candidate-n-total`.
   Qualification rejects unequal requests, sizing drift, catalog keys or
   catalog sizes that differ from the supplied build report.
-- Qualification records SHA-256 bindings for the trial and build reports.
+- Qualification records SHA-256 bindings for trial, build and suite evidence.
   Adoption cross-checks those bindings and verifies both immutable catalog
-  entries before it can write schema v2. Runtime verifies the record and stored
-  bytes again; schema-v1/stale records select legacy, and a current-source key
+  entries before it can write schema v3. Runtime opens and hashes every named
+  evidence file, cross-checks keys/sizes through the chain and verifies stored
+  bytes again; stale/legacy-schema records select legacy, and a current-source key
   mismatch stops before implicit catalog use.
 - Three-variant runs again bind seeds 1000/1001/1002 to q10/q50/q90, matching
   the annual warm plan and monthly decision contract.
@@ -609,16 +611,21 @@ The current release evidence is:
 - `validation/route_catalog_trials_v2_2026-08-24.json`: 30 counterbalanced
   weekday, weekend, holiday and mixed-day pairs with the same 6,000-candidate
   request in both arms.
-- `validation/route_catalog_qualification_v2_2026-08-24.json`: verdict
-  `adopt`; median wall time 55.246→24.715 s (2.235x, 30.531 s saved), catalog
-  p95 79.286 s versus legacy 150.383 s, PFE p95 73.691 versus 120.564 s,
-  adapter p95 0.678 s, maximum RSS 0.794 GiB and build amortization 0.922 days.
-  Every hard gate and every day class passed.
+- `validation/route_catalog_qualification_v3_2026-08-24.json`: verdict
+  `adopt`; median wall time 55.246→24.715 s (2.235x ratio of arm medians),
+  median paired speedup 2.220x and paired saving 29.815 s, catalog
+  p95 79.286 s versus legacy 150.383 s,
+  adapter p95 0.678 s, maximum RSS 0.794 GiB and build amortization 0.944 days.
+  Every hard gate and every day class passed, and paired vehicle population
+  differed by at most 0.761%. The retained v2 trial rows predate the new
+  distinct route×purpose workload counter; their PFE timings are reported but
+  are not claimed as an isolated equal-work solver speedup.
 - `validation/route_catalog_soak_v2_2026-08-24.json`: seven catalog builds plus
   explicit legacy rollback passed every hard gate. Catalog runs took
   16.86–62.35 s; the mixed two-day case was the maximum.
-- The schema-v2 adoption record binds qualification SHA-256
-  `45c30575…21b5da1`, build SHA-256 `13360c92…204115a`, weekday key
+- The schema-v3 adoption record names and hashes the qualification/build files
+  and follows their bound trials/suite evidence. It binds build SHA-256
+  `13360c92…204115a`, weekday key
   `13020f80f1be36df59e27144aad8d808`, weekend key
   `b0426c8b73dd1201a0ea386bada9c45f` and exact size 6,000 for each.
 - The active ordinary day was rebuilt through the default catalog path as

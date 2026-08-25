@@ -146,9 +146,13 @@ model-independent protocol in `AGENTS.md`.
    The two-date invariance proof remains valid. The original unequal
    12,000/6,000-candidate campaign remains diagnostic only. Its schema-v2
    replacement used 6,000 candidates in both arms across 30 counterbalanced
-   pairs and passed every gate: median 55.246→24.715 s (2.235x), adapter p95
-   0.678 s, faster medians for every day class, no PFE regression and maximum
-   RSS 0.794 GiB. Seven catalog soak fixtures plus explicit legacy rollback
+   pairs and passed every gate: median 55.246→24.715 s (2.235x ratio of arm
+   medians; 2.220x median paired speedup), adapter p95
+   0.678 s, faster medians for every day class, maximum paired vehicle-count
+   deviation 0.761% and maximum RSS 0.794 GiB. The old trials did not record
+   distinct route×purpose variables, so their PFE timing is not claimed as a
+   matched-work solver speedup; new campaigns record that workload. Seven
+   catalog soak fixtures plus explicit legacy rollback
    passed. The route catalog owns bounded
    plausible route supply; PFE remains
    responsible for each date's exact sensor totals, purpose margins, vehicle
@@ -156,7 +160,10 @@ model-independent protocol in `AGENTS.md`.
    day. The `--candidate-source catalog` path has content-addressed
    weekday/weekend artifacts, bounded single-flight publication and sizing,
    explicit PFE purpose-mix inputs, isolated two-date verification, a 30-pair
-   qualification contract and verdict-gated schema-v2 adoption. The corrected
+   qualification contract and verdict-gated schema-v3 adoption. Runtime now
+   reads and hashes the named qualification/build/trials/suite files and
+   cross-checks identities through the chain. Suite-only contracts are counted
+   once, not copied into every arm. The corrected
    harness passes the same explicit candidate request to both arms and rejects
    key, size or report mismatches. The historical unequal-size 66.402→19.437 s
    ratio must not be used as a production claim. Catalog is the current default;

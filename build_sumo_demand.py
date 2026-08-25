@@ -1685,6 +1685,8 @@ def main() -> None:
                 "integer_sensor_sum_abs_error"),
             "integer_sensor_target_rule": report.get(
                 "integer_sensor_target_rule"),
+            "pfe_shape_variables": report.get("pfe_shape_variables"),
+            "pfe_source_candidates": report.get("pfe_source_candidates"),
         }
     if variant_fit_reports:
         meta["pfe_fit_variants"] = variant_fit_reports

@@ -8,7 +8,9 @@ from tools.adopt_route_catalog import adoption_payload
 from tools.qualify_route_catalog import _validate_trial_binding
 from tools import soak_route_catalog
 from traffic_sim.demand.catalog_qualification import (
+    PER_TRIAL_HARD_GATES,
     REQUIRED_HARD_GATES,
+    SUITE_HARD_GATES,
     nearest_rank_p95,
     qualify_catalog_trials,
     semantic_route_digest,
@@ -16,7 +18,11 @@ from traffic_sim.demand.catalog_qualification import (
 
 
 def _gates():
-    return {gate: True for gate in REQUIRED_HARD_GATES}
+    return {gate: True for gate in PER_TRIAL_HARD_GATES}
+
+
+def _suite_gates():
+    return {gate: True for gate in SUITE_HARD_GATES}
 
 
 def _trials(catalog_wall=7.0, catalog_pfe=4.1):
@@ -29,12 +35,14 @@ def _trials(catalog_wall=7.0, catalog_pfe=4.1):
             "day_class": classes[index % len(classes)],
             "legacy": {
                 "wall_s": 10.0, "adapter_s": 0.0, "pfe_s": 4.0,
-                "peak_rss_bytes": 2_000_000_000, "hard_gates": _gates(),
+                "peak_rss_bytes": 2_000_000_000, "vehicles": 10_000,
+                "pfe_shape_variables": 5000, "hard_gates": _gates(),
             },
             "catalog": {
                 "wall_s": catalog_wall, "adapter_s": 1.0,
                 "pfe_s": catalog_pfe,
-                "peak_rss_bytes": 2_100_000_000, "hard_gates": _gates(),
+                "peak_rss_bytes": 2_100_000_000, "vehicles": 10_050,
+                "pfe_shape_variables": 3000, "hard_gates": _gates(),
             },
         })
     return trials
@@ -45,18 +53,42 @@ def test_nearest_rank_p95_uses_declared_rule():
 
 
 def test_qualification_adopts_only_when_every_gate_passes():
-    report = qualify_catalog_trials(_trials(), catalog_build_s=8.0)
+    report = qualify_catalog_trials(
+        _trials(), catalog_build_s=8.0, suite_gates=_suite_gates())
     assert report["verdict"] == "adopt"
     assert all(report["gates"].values())
 
-    slower = qualify_catalog_trials(_trials(catalog_wall=8.0), catalog_build_s=8.0)
+    slower = qualify_catalog_trials(
+        _trials(catalog_wall=8.0), catalog_build_s=8.0,
+        suite_gates=_suite_gates())
     assert slower["verdict"] == "reject"
     assert not slower["gates"]["cold_median_improves_25pct"]
 
 
 def test_qualification_is_inconclusive_without_30_counterbalanced_trials():
-    report = qualify_catalog_trials(_trials()[:5], catalog_build_s=8.0)
+    report = qualify_catalog_trials(
+        _trials()[:5], catalog_build_s=8.0,
+        suite_gates=_suite_gates())
     assert report["verdict"] == "inconclusive"
+
+
+def test_suite_gates_are_evaluated_once_not_copied_into_trials():
+    suite = _suite_gates()
+    suite["warm_state_identity"] = False
+    report = qualify_catalog_trials(
+        _trials(), catalog_build_s=8.0, suite_gates=suite)
+    assert report["verdict"] == "reject"
+    assert report["suite_hard_failures"] == ["warm_state_identity"]
+    assert report["trial_hard_failures"] == []
+
+
+def test_qualification_rejects_material_population_drift():
+    trials = _trials()
+    trials[0]["catalog"]["vehicles"] = 10_101
+    report = qualify_catalog_trials(
+        trials, catalog_build_s=8.0, suite_gates=_suite_gates())
+    assert report["verdict"] == "reject"
+    assert not report["gates"]["paired_vehicle_population_delta_le_1pct"]
 
 
 def test_semantic_digest_ignores_vehicle_id_and_departure(tmp_path):
@@ -77,7 +109,6 @@ def test_semantic_digest_ignores_vehicle_id_and_departure(tmp_path):
 
 
 def test_benchmark_gates_require_runtime_metadata_and_suite_evidence():
-    suite = _gates()
     meta = {
         "pfe_fit": {
             "vehicles": 10, "integer_sensor_constraints": 4,
@@ -90,23 +121,36 @@ def test_benchmark_gates_require_runtime_metadata_and_suite_evidence():
             "onward_after_last_sensor": {"n_routes_without_sensor": 0},
         },
     }
-    gates = evaluate_hard_gates(meta, {"overall": "warn"}, suite)
+    gates = evaluate_hard_gates(meta, {"overall": "warn"})
     assert all(gates.values())
-    suite["exact_sensor_targets"] = False
-    assert not evaluate_hard_gates(meta, {"overall": "warn"}, suite)[
+    meta["pfe_fit"]["integer_sensor_exact"] = 3
+    assert not evaluate_hard_gates(meta, {"overall": "warn"})[
         "exact_sensor_targets"]
+    meta["pfe_fit"]["integer_sensor_exact"] = 4
     meta["agent_demand"]["n_agents"] = 9
-    assert not evaluate_hard_gates(meta, {"overall": "warn"}, _gates())[
+    assert not evaluate_hard_gates(meta, {"overall": "warn"})[
         "population_contract"]
 
 
 def test_suite_gate_record_is_complete_and_boolean(tmp_path):
     path = tmp_path / "gates.json"
-    path.write_text(json.dumps({"gates": _gates()}))
-    assert load_suite_gate_record(path) == _gates()
-    broken = _gates()
+    records = {
+        gate: {"status": "pass", "tests": ["tests/test_pfe.py"]}
+        for gate in SUITE_HARD_GATES
+    }
+    path.write_text(json.dumps({
+        "schema_version": 2,
+        "kind": "route_catalog_suite_gate_evidence",
+        "gates": records,
+    }))
+    assert load_suite_gate_record(path) == _suite_gates()
+    broken = dict(records)
     broken.pop("warm_state_identity")
-    path.write_text(json.dumps({"gates": broken}))
+    path.write_text(json.dumps({
+        "schema_version": 2,
+        "kind": "route_catalog_suite_gate_evidence",
+        "gates": broken,
+    }))
     try:
         load_suite_gate_record(path)
     except ValueError as exc:
@@ -154,6 +198,10 @@ def test_adoption_cross_binds_qualification_build_and_catalog(monkeypatch):
             "catalog_build_sha256": "c" * 64,
             "catalog_keys": keys,
             "catalog_selected_n_total": sizes,
+            "trials_path": "validation/trials.json",
+            "trials_sha256": "e" * 64,
+            "suite_gates_path": "validation/suite.json",
+            "suite_gates_sha256": "f" * 64,
         },
     }
     monkeypatch.setattr(
@@ -162,9 +210,11 @@ def test_adoption_cross_binds_qualification_build_and_catalog(monkeypatch):
 
     payload = adoption_payload(
         qualification, build, qualification_sha256="d" * 64,
-        catalog_build_sha256="c" * 64, catalog_root="catalog")
+        catalog_build_sha256="c" * 64,
+        qualification_path="validation/qualification.json",
+        catalog_build_path="validation/build.json", catalog_root="catalog")
 
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert payload["catalog_keys"] == keys
     broken = dict(qualification)
     broken["evidence_binding"] = dict(
@@ -172,7 +222,9 @@ def test_adoption_cross_binds_qualification_build_and_catalog(monkeypatch):
     try:
         adoption_payload(
             broken, build, qualification_sha256="d" * 64,
-            catalog_build_sha256="c" * 64, catalog_root="catalog")
+            catalog_build_sha256="c" * 64,
+            qualification_path="validation/qualification.json",
+            catalog_build_path="validation/build.json", catalog_root="catalog")
     except ValueError as exc:
         assert "not bound" in str(exc)
     else:

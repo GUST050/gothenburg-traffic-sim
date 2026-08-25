@@ -17,6 +17,8 @@ from traffic_sim.demand import route_catalog
 def adoption_payload(qualification: object, build: object, *,
                      qualification_sha256: str | None,
                      catalog_build_sha256: str | None,
+                     qualification_path: str,
+                     catalog_build_path: str,
                      catalog_root: Path) -> dict:
     """Cross-bind passing evidence, build report and stored catalog bytes."""
     if (not isinstance(qualification, dict)
@@ -29,6 +31,18 @@ def adoption_payload(qualification: object, build: object, *,
     if (not isinstance(binding, dict)
             or binding.get("catalog_build_sha256") != catalog_build_sha256):
         raise ValueError("qualification is not bound to this catalog build")
+    for path_key, digest_key in (
+            ("trials_path", "trials_sha256"),
+            ("suite_gates_path", "suite_gates_sha256")):
+        linked_path = binding.get(path_key)
+        linked_digest = binding.get(digest_key)
+        if (not isinstance(linked_path, str) or not linked_path
+                or Path(linked_path).is_absolute()
+                or not isinstance(linked_digest, str)
+                or len(linked_digest) != 64
+                or any(char not in "0123456789abcdef"
+                       for char in linked_digest)):
+            raise ValueError(f"qualification has invalid {path_key} binding")
     results = build.get("results") if isinstance(build, dict) else None
     if not isinstance(results, dict) or set(results) != {"weekday", "weekend"}:
         raise ValueError("catalog build report must contain weekday and weekend")
@@ -55,11 +69,25 @@ def adoption_payload(qualification: object, build: object, *,
             or not isinstance(catalog_build_sha256, str)
             or len(catalog_build_sha256) != 64):
         raise ValueError("evidence files must have valid SHA-256 digests")
+    if (not qualification_path or Path(qualification_path).is_absolute()
+            or not catalog_build_path
+            or Path(catalog_build_path).is_absolute()):
+        raise ValueError("evidence paths must be project-relative")
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "status": "adopt",
         "qualification_sha256": qualification_sha256,
         "catalog_build_sha256": catalog_build_sha256,
+        "evidence": {
+            "qualification": {
+                "path": qualification_path,
+                "sha256": qualification_sha256,
+            },
+            "catalog_build": {
+                "path": catalog_build_path,
+                "sha256": catalog_build_sha256,
+            },
+        },
         "catalog_keys": catalog_keys,
         "catalog_selected_n_total": catalog_sizes,
         "rollback": "python3 build_sumo_demand.py --candidate-source legacy ...",
@@ -81,12 +109,32 @@ def main() -> int:
     catalog_root = Path(build.get("catalog_root", route_catalog.DEFAULT_ROOT)) \
         if isinstance(build, dict) else route_catalog.DEFAULT_ROOT
     try:
+        project_root = Path(__file__).resolve().parents[1]
+        qualification_path = str(args.qualification.resolve().relative_to(
+            project_root))
+        catalog_build_path = str(args.catalog_build.resolve().relative_to(
+            project_root))
+        binding = qualification.get("evidence_binding")
+        for path_key, digest_key in (
+                ("trials_path", "trials_sha256"),
+                ("suite_gates_path", "suite_gates_sha256")):
+            relative = binding.get(path_key) if isinstance(binding, dict) else None
+            expected = binding.get(digest_key) if isinstance(binding, dict) else None
+            linked = (project_root / relative).resolve() if isinstance(
+                relative, str) else None
+            if (linked is None or Path(relative).is_absolute()
+                    or not linked.is_relative_to(project_root)
+                    or sha256_file(linked) != expected):
+                raise ValueError(
+                    f"qualification linked evidence does not match {path_key}")
         payload = adoption_payload(
             qualification, build,
             qualification_sha256=sha256_file(args.qualification),
             catalog_build_sha256=sha256_file(args.catalog_build),
+            qualification_path=qualification_path,
+            catalog_build_path=catalog_build_path,
             catalog_root=catalog_root)
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         parser.error(str(exc))
     if not args.execute:
         print(json.dumps(payload, indent=1, sort_keys=True))

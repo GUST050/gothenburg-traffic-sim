@@ -16,7 +16,11 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from traffic_sim.demand.build_lock import child_environment, demand_build_lock
-from traffic_sim.demand.catalog_qualification import REQUIRED_HARD_GATES
+from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.demand.catalog_qualification import (
+    PER_TRIAL_HARD_GATES,
+    SUITE_HARD_GATES,
+)
 from traffic_sim.simulation.monthly_demand import (
     LIVE_DEMAND_RELEASE_PRODUCTS,
     restore_live_demand_release,
@@ -33,17 +37,41 @@ FIXTURES = (
 
 
 def load_suite_gate_record(path: Path) -> dict[str, bool]:
-    """Load the reviewed non-timing gates from a machine-readable record."""
+    """Load once-per-campaign suite evidence, failing closed on prose-only claims."""
     payload = json.loads(Path(path).read_text())
     raw = payload.get("gates") if isinstance(payload, dict) else None
-    if not isinstance(raw, dict):
+    if (not isinstance(payload, dict)
+            or payload.get("schema_version") != 2
+            or payload.get("kind") != "route_catalog_suite_gate_evidence"
+            or not isinstance(raw, dict)):
         raise ValueError("suite-gate record must contain a gates object")
-    missing = sorted(set(REQUIRED_HARD_GATES) - set(raw))
-    if missing or any(not isinstance(raw.get(gate), bool)
-                      for gate in REQUIRED_HARD_GATES):
+    missing = sorted(set(SUITE_HARD_GATES) - set(raw))
+    extra = sorted(set(raw) - set(SUITE_HARD_GATES))
+    if missing or extra:
         raise ValueError(
-            "suite-gate record is incomplete: " + ", ".join(missing))
-    return {gate: raw[gate] for gate in REQUIRED_HARD_GATES}
+            "suite-gate record does not match the suite contract; missing="
+            + ",".join(missing) + " extra=" + ",".join(extra))
+    result = {}
+    project_root = Path(__file__).resolve().parents[1]
+    for gate in SUITE_HARD_GATES:
+        record = raw.get(gate)
+        tests = record.get("tests") if isinstance(record, dict) else None
+        if (not isinstance(record, dict)
+                or record.get("status") not in {"pass", "fail"}
+                or not isinstance(tests, list) or not tests
+                or any(not isinstance(test, str) or not test for test in tests)):
+            raise ValueError(
+                f"suite gate {gate} needs status and non-empty test evidence")
+        for test in tests:
+            evidence_path = Path(test.split("::", 1)[0])
+            resolved = (project_root / evidence_path).resolve()
+            if (evidence_path.is_absolute()
+                    or not resolved.is_relative_to(project_root)
+                    or not resolved.is_file()):
+                raise ValueError(
+                    f"suite gate {gate} names missing evidence: {test}")
+        result[gate] = record["status"] == "pass"
+    return result
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,41 +112,41 @@ def _rss_bytes() -> int:
     return int(value if sys.platform == "darwin" else value * 1024)
 
 
-def evaluate_hard_gates(meta: dict, validation: dict,
-                        suite: dict) -> dict[str, bool]:
-    gates = {gate: suite.get(gate) is True for gate in REQUIRED_HARD_GATES}
+def evaluate_hard_gates(meta: dict, validation: dict) -> dict[str, bool]:
+    """Measure build-specific contracts; suite contracts are recorded once."""
+    gates = {gate: False for gate in PER_TRIAL_HARD_GATES}
     fit = meta.get("pfe_fit") or {}
     provenance = meta.get("candidate_provenance") or {}
     agent_demand = meta.get("agent_demand") or {}
     structure = meta.get("calibrated_structure") or {}
     vehicles = fit.get("vehicles")
-    gates["exact_sensor_targets"] = gates["exact_sensor_targets"] and (
+    gates["exact_sensor_targets"] = (
         int(fit.get("integer_sensor_constraints") or 0) > 0
         and fit.get("integer_sensor_exact") == fit.get("integer_sensor_constraints"))
-    gates["zero_integer_residual"] = gates["zero_integer_residual"] and (
+    gates["zero_integer_residual"] = (
         float(fit.get("integer_sensor_max_abs_error") or 0.0) == 0.0
         and float(fit.get("integer_sensor_sum_abs_error") or 0.0) == 0.0)
-    gates["population_contract"] = gates["population_contract"] and (
+    gates["population_contract"] = (
         isinstance(vehicles, int) and vehicles > 0
         and provenance.get("vehicles") == vehicles
         and agent_demand.get("n_agents") == vehicles
         and agent_demand.get("n_behavioural_agents") == vehicles)
-    gates["sensor_anchor_contract"] = gates["sensor_anchor_contract"] and (
+    gates["sensor_anchor_contract"] = (
         (structure.get("onward_after_last_sensor") or {}).get(
             "n_routes_without_sensor") == 0)
-    gates["candidate_structure"] = gates["candidate_structure"] and (
+    gates["candidate_structure"] = (
         isinstance(structure, dict) and bool(structure)
         and validation.get("overall") != "fail")
-    gates["route_agent_provenance"] = gates["route_agent_provenance"] and (
+    gates["route_agent_provenance"] = (
         provenance.get("status") == "pass"
         and provenance.get("vehicles") == vehicles)
-    gates["confidence_health"] = gates["confidence_health"] and (
+    gates["confidence_health"] = (
         validation.get("overall") != "fail")
     return gates
 
 
 def run_arm(*, arm: str, fixture: dict, scratch: Path,
-            catalog_root: Path, suite: dict, timeout_s: float,
+            catalog_root: Path, timeout_s: float,
             n_total: int) -> dict:
     candidate_cache = scratch / "candidate-cache"
     day_library = scratch / "day-library"
@@ -156,7 +184,7 @@ def run_arm(*, arm: str, fixture: dict, scratch: Path,
                      + float(timings.get("catalog_adapter", 0.0)),
         "pfe_s": float(timings.get("pfe_variants_and_rounding", 0.0)),
         "peak_rss_bytes": _rss_bytes(),
-        "hard_gates": evaluate_hard_gates(meta, validation, suite),
+        "hard_gates": evaluate_hard_gates(meta, validation),
         "build_id": meta.get("build_id"),
         "candidate_source": arm,
         "candidate_n_total": (meta.get("build_options") or {}).get(
@@ -167,6 +195,10 @@ def run_arm(*, arm: str, fixture: dict, scratch: Path,
             ((meta.get("candidate_catalog") or {}).get(
                 "selected_n_total") or {})),
         "vehicles": (meta.get("pfe_fit") or {}).get("vehicles"),
+        "pfe_shape_variables": (meta.get("pfe_fit") or {}).get(
+            "pfe_shape_variables"),
+        "pfe_source_candidates": (meta.get("pfe_fit") or {}).get(
+            "pfe_source_candidates"),
         "validation_overall": validation.get("overall"),
     }
 
@@ -175,11 +207,16 @@ def main() -> int:
     args = parse_args()
     suite = load_suite_gate_record(args.suite_gates)
     campaign = {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "route_catalog_paired_trials",
         "requested_pairs": args.trials,
         "fixtures": list(FIXTURES),
         "candidate_n_total": args.n_total,
+        "suite_gate_evidence": {
+            "path": str(args.suite_gates),
+            "sha256": sha256_file(args.suite_gates),
+            "gates": suite,
+        },
         "execute": bool(args.execute),
         "trials": [],
     }
@@ -192,10 +229,13 @@ def main() -> int:
                 f"refusing to overwrite existing campaign: {args.out}; use --resume")
         existing = json.loads(args.out.read_text())
         if (not isinstance(existing, dict)
+                or existing.get("schema_version") != campaign["schema_version"]
                 or existing.get("kind") != campaign["kind"]
                 or existing.get("requested_pairs") != args.trials
                 or existing.get("fixtures") != campaign["fixtures"]
                 or existing.get("candidate_n_total") != args.n_total
+                or existing.get("suite_gate_evidence")
+                   != campaign["suite_gate_evidence"]
                 or not isinstance(existing.get("trials"), list)
                 or len(existing["trials"]) > args.trials):
             raise ValueError("existing campaign does not match this invocation")
@@ -226,7 +266,7 @@ def main() -> int:
                             prefix=f"catalog-benchmark-{index}-{arm}-") as raw:
                         record[arm] = run_arm(
                             arm=arm, fixture=fixture, scratch=Path(raw),
-                            catalog_root=args.catalog_root, suite=suite,
+                            catalog_root=args.catalog_root,
                             timeout_s=args.timeout_s, n_total=args.n_total)
                 campaign["trials"].append(record)
                 _atomic_json(args.out, campaign)

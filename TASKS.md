@@ -13,10 +13,11 @@ owners, states and approval formulas are not active workflow rules. See
   current interactive performance stable; do not spend more work shaving the
   former 0.496 s first-new-closure target miss. Keep full annual warming
   disabled until explicitly launched.`
-- Status: `CATALOG QUALIFIED, ADOPTED AND SOAKED. A new schema-v2 campaign used
+- Status: `CATALOG QUALIFIED, ADOPTED AND SOAKED. A matched-size campaign used
   the same 6,000-candidate request in both arms for 30 counterbalanced pairs.
-  Median cold demand preparation fell 55.246→24.715 s (2.235x), every day
-  class was faster, PFE p95 improved, adapter p95 was 0.678 s and all hard
+  Median cold demand preparation fell 55.246→24.715 s (2.235x ratio of arm
+  medians; 2.220x median paired speedup), every day
+  class was faster, adapter p95 was 0.678 s and all hard
   correctness/resource gates passed. Seven catalog fixtures plus an explicit
   legacy rollback passed soak. The active 2027-09-08 release uses the verified
   weekday key, has 20,818 vehicles and matches all 672 integer sensor targets
@@ -85,7 +86,8 @@ owners, states and approval formulas are not active workflow rules. See
   for low observability, or activate policy/UI/global-best claims without the
   applicable frozen evidence. Do not hardcode 107's annual 0.5231 as 96
   measured quarters or present q10/q90 as calibrated probabilities.`
-- Updated: `2026-08-24 after matched-size schema-v2 qualification, adoption,
+- Updated: `2026-08-24 after schema-v3 provenance repair of the matched-size
+  qualification/adoption chain, atomic candidate-cache pruning,
   soak, active-day rebuild, one bounded q50 warm-state pilot and clean-tree
   exact-repeat/first-new closure p95 measurement and user acceptance of the
   current end-to-end UI time. The product UI now hides the
@@ -98,7 +100,7 @@ owners, states and approval formulas are not active workflow rules. See
 
 ### PERF-CLOSURE-2026-08-21 — Faster exact closures and monthly simulation
 
-- Status: `IN_PROGRESS — the canonical route catalog is schema-v2 qualified,
+- Status: `IN_PROGRESS — the canonical route catalog is provenance-bound,
   adopted and soaked; production demand preparation now defaults to catalog
   with an explicit tested legacy rollback. Full annual warming remains
   inactive after one successful bounded q50 pilot. Repository and primary-source research is complete;
@@ -152,7 +154,8 @@ owners, states and approval formulas are not active workflow rules. See
   full-field rollback, with equal scenario/trajectory digests and clean health;
   this is diagnostic evidence, not a p95 result. The fair catalog campaign ran
   30 matched 6,000-candidate pairs and measured 55.246→24.715 s median
-  (2.235x); seven catalog soak fixtures and legacy rollback passed. The active
+  (2.235x ratio of arm medians; 2.220x median paired speedup); seven catalog
+  soak fixtures and legacy rollback passed. The active
   catalog-built day matches 672/672 integer sensor targets, and its bounded
   annual q50 warm pilot succeeded 1/1 with no full-year launch.`
 - Primary files: `docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md;
@@ -166,6 +169,10 @@ owners, states and approval formulas are not active workflow rules. See
   traffic_sim/storage/singleflight.py;
   traffic_sim/simulation/independent_daily.py;
   traffic_sim/simulation/independent_daily_worker.py;
+  traffic_sim/demand/route_catalog.py;
+  traffic_sim/demand/catalog_qualification.py;
+  tools/benchmark_route_catalog.py; tools/qualify_route_catalog.py;
+  tools/adopt_route_catalog.py; tools/prune_candidate_cache.py;
   traffic_sim/simulation/monthly_sumo.py; run_monthly_closure_search.py;
   tools/cost_ordered_benchmark_suite.py; related tests and new frozen validation
   contracts/outcomes; tests/test_closure_disruption.py;
@@ -181,7 +188,7 @@ owners, states and approval formulas are not active workflow rules. See
 - Acceptance criteria: `For the catalog sub-plan, preserve every hard demand,
   structure, provenance, 50-station and warming identity gate; catalog
   restore/materialization p95 <=5 s; paired cold-day median at least 25% faster;
-  PFE p95 regression <=5%; one-time catalog build amortized within three cold
+  paired vehicle-population deviation <=1%; one-time catalog build amortized within three cold
   days. Also meet the per-product thresholds in the speed plan on
   frozen inputs; identical scenario/trajectory semantic digests and per-seed
   flow/health/integrity evidence; identical monthly legal candidates,

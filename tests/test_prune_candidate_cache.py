@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from contextlib import contextmanager
 
 import pytest
 
@@ -127,6 +128,41 @@ def test_live_day_digests_come_from_the_builder_inventory(tmp_path):
     _day(library_root, "2027-05-26", "k2", {"pfe": "superseded"}, "pool-dead")
 
     assert prune.pools_named_by_live_days(library_root) == {"pool-live"}
+
+
+def test_classification_and_deletion_share_the_workspace_lock(
+        tmp_path, monkeypatch):
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    _entry(cache_root, "g" * 24, "digest", age_days=30)
+    held = {"value": False}
+
+    @contextmanager
+    def lock():
+        held["value"] = True
+        try:
+            yield
+        finally:
+            held["value"] = False
+
+    def newest(_root):
+        assert held["value"]
+        return time.time() - 86400, "build_candidates.py"
+
+    def protected(_root):
+        assert held["value"]
+        return set()
+
+    monkeypatch.setattr(prune, "demand_build_lock", lock)
+    monkeypatch.setattr(prune, "newest_key_input_mtime", newest)
+    monkeypatch.setattr(prune, "pools_named_by_live_days", protected)
+    assert _run(monkeypatch, cache_root, tmp_path / "days", ("--yes",)) == 0
+    assert not held["value"]
+
+
+def test_alternative_flow_files_are_not_global_prune_invalidators():
+    assert "web/data/flows.json" not in prune.KEY_INPUTS
+    assert "web/data/flows_forecast.json" not in prune.KEY_INPUTS
 
 
 @pytest.mark.parametrize("name", prune.KEY_SOURCES)

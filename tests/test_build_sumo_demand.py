@@ -1295,6 +1295,8 @@ class TestParallelIntegerRepairIdentity:
             assert agents == legacy[suffix][1]
             assert report == legacy[suffix][2]
             assert report["vehicles"] > 0
+            assert report["pfe_shape_variables"] == 3
+            assert report["pfe_source_candidates"] == 3
 
 
 def _legacy_counts_job(job):

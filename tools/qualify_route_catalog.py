@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.demand.catalog_qualification import qualify_catalog_trials
+from tools.benchmark_route_catalog import load_suite_gate_record
 
 
 def _build_contract(build: object) -> tuple[dict[str, str], dict[str, int]]:
@@ -78,12 +79,15 @@ def main() -> int:
                         help="JSON array, or object containing a trials array")
     parser.add_argument("--catalog-build", type=Path, required=True,
                         help="Report written by build_route_catalog.py")
+    parser.add_argument("--suite-gates", type=Path, required=True,
+                        help="Focused once-per-campaign suite evidence")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     try:
         trial_payload = json.loads(args.trials.read_text())
         build = json.loads(args.catalog_build.read_text())
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        suite_gates = load_suite_gate_record(args.suite_gates)
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         parser.error(f"cannot read qualification input: {exc}")
     trials = (trial_payload.get("trials")
               if isinstance(trial_payload, dict) else trial_payload)
@@ -98,12 +102,15 @@ def main() -> int:
             trials, catalog_keys, catalog_sizes)
     except ValueError as exc:
         parser.error(str(exc))
-    report = qualify_catalog_trials(trials, catalog_build_s=float(build_s))
+    report = qualify_catalog_trials(
+        trials, catalog_build_s=float(build_s), suite_gates=suite_gates)
     report["evidence_binding"] = {
         "trials_path": str(args.trials),
         "trials_sha256": sha256_file(args.trials),
         "catalog_build_path": str(args.catalog_build),
         "catalog_build_sha256": sha256_file(args.catalog_build),
+        "suite_gates_path": str(args.suite_gates),
+        "suite_gates_sha256": sha256_file(args.suite_gates),
         "catalog_keys": catalog_keys,
         "catalog_selected_n_total": catalog_sizes,
         "candidate_n_total": candidate_n_total,
