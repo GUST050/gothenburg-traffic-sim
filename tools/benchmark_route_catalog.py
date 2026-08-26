@@ -134,14 +134,34 @@ def evaluate_hard_gates(meta: dict, validation: dict) -> dict[str, bool]:
     gates["sensor_anchor_contract"] = (
         (structure.get("onward_after_last_sensor") or {}).get(
             "n_routes_without_sensor") == 0)
+    # A validation report's vocabulary is "pass", "warn" and "missing", and
+    # `overall` is derived from those — the string "fail" is never produced
+    # anywhere in traffic_sim/confidence/report.py. Comparing against it made
+    # confidence_health unconditionally true and reduced candidate_structure
+    # to "the metadata exists": two of the seven per-trial hard gates could
+    # not fail whatever the build did. Bind each to a section that can
+    # actually report a problem instead. (Found 2026-08-26.)
+    sections = validation.get("sections")
+    sections = sections if isinstance(sections, dict) else {}
+
+    def section_status(name: str) -> str:
+        record = sections.get(name)
+        return (str(record.get("status")) if isinstance(record, dict)
+                else "missing")
+
     gates["candidate_structure"] = (
         isinstance(structure, dict) and bool(structure)
-        and validation.get("overall") != "fail")
+        and section_status("structure") != "missing")
     gates["route_agent_provenance"] = (
         provenance.get("status") == "pass"
         and provenance.get("vehicles") == vehicles)
+    # The confidence stage must have actually described THIS build. A report
+    # missing its count-fit, structure or simulation section is not evidence
+    # about the arm that produced it, however green the rest looks.
     gates["confidence_health"] = (
-        validation.get("overall") != "fail")
+        str(validation.get("overall")) in {"pass", "warn"}
+        and all(section_status(name) != "missing"
+                for name in ("counts_fit", "structure", "simulation")))
     return gates
 
 

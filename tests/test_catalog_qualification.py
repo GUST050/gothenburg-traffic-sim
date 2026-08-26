@@ -121,15 +121,86 @@ def test_benchmark_gates_require_runtime_metadata_and_suite_evidence():
             "onward_after_last_sensor": {"n_routes_without_sensor": 0},
         },
     }
-    gates = evaluate_hard_gates(meta, {"overall": "warn"})
+    healthy = {
+        "overall": "warn",
+        "sections": {
+            "counts_fit": {"status": "pass"},
+            "structure": {"status": "warn"},
+            "simulation": {"status": "pass"},
+        },
+    }
+    gates = evaluate_hard_gates(meta, healthy)
     assert all(gates.values())
     meta["pfe_fit"]["integer_sensor_exact"] = 3
-    assert not evaluate_hard_gates(meta, {"overall": "warn"})[
-        "exact_sensor_targets"]
+    assert not evaluate_hard_gates(meta, healthy)["exact_sensor_targets"]
     meta["pfe_fit"]["integer_sensor_exact"] = 4
     meta["agent_demand"]["n_agents"] = 9
-    assert not evaluate_hard_gates(meta, {"overall": "warn"})[
-        "population_contract"]
+    assert not evaluate_hard_gates(meta, healthy)["population_contract"]
+    meta["agent_demand"]["n_agents"] = 10
+
+
+def test_every_per_trial_hard_gate_can_actually_fail():
+    """A gate that cannot fail is not a gate.
+
+    Found 2026-08-26: `confidence_health` was `overall != "fail"`, and a
+    validation report never emits "fail" for anything — so it was
+    unconditionally true, and `candidate_structure` collapsed to "the
+    metadata exists". Both sat in the adopted qualification as hard gates.
+    This pins falsifiability itself, which is the property that was missing.
+    """
+    def healthy_inputs():
+        meta = {
+            "pfe_fit": {
+                "vehicles": 10, "integer_sensor_constraints": 4,
+                "integer_sensor_exact": 4,
+                "integer_sensor_max_abs_error": 0.0,
+                "integer_sensor_sum_abs_error": 0.0,
+            },
+            "candidate_provenance": {"status": "pass", "vehicles": 10},
+            "agent_demand": {"n_agents": 10, "n_behavioural_agents": 10},
+            "calibrated_structure": {
+                "onward_after_last_sensor": {"n_routes_without_sensor": 0},
+            },
+        }
+        validation = {
+            "overall": "warn",
+            "sections": {
+                "counts_fit": {"status": "pass"},
+                "structure": {"status": "warn"},
+                "simulation": {"status": "pass"},
+            },
+        }
+        return meta, validation
+
+    # One targeted break per gate, each the failure the gate names.
+    breaks = {
+        "exact_sensor_targets":
+            lambda m, v: m["pfe_fit"].update(integer_sensor_exact=3),
+        "zero_integer_residual":
+            lambda m, v: m["pfe_fit"].update(integer_sensor_max_abs_error=1.0),
+        "population_contract":
+            lambda m, v: m["agent_demand"].update(n_agents=9),
+        "sensor_anchor_contract":
+            lambda m, v: m["calibrated_structure"][
+                "onward_after_last_sensor"].update(n_routes_without_sensor=3),
+        "candidate_structure":
+            lambda m, v: v["sections"].update(structure={"status": "missing"}),
+        "route_agent_provenance":
+            lambda m, v: m["candidate_provenance"].update(status="fail"),
+        "confidence_health":
+            lambda m, v: v["sections"].update(
+                simulation={"status": "missing"}),
+    }
+    assert set(breaks) == set(PER_TRIAL_HARD_GATES)
+
+    baseline_meta, baseline_validation = healthy_inputs()
+    assert all(evaluate_hard_gates(baseline_meta, baseline_validation).values())
+
+    for gate, break_it in breaks.items():
+        meta, validation = healthy_inputs()
+        break_it(meta, validation)
+        assert not evaluate_hard_gates(meta, validation)[gate], (
+            f"{gate} did not fail when its own contract was broken")
 
 
 def test_suite_gate_record_is_complete_and_boolean(tmp_path):
