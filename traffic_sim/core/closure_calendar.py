@@ -156,7 +156,10 @@ def _iter_closure_schedules(
 
     first_work_date = permitted_start
     while first_work_date <= permitted_end:
-        for day_count in range(1, spec.max_consecutive_start_days + 1):
+        for day_count in range(
+            spec.min_consecutive_start_days,
+            spec.max_consecutive_start_days + 1,
+        ):
             if spec.work_allocation_policy in {
                 "exact_balanced_daily_v1", "exact_equal_daily_v1"
             }:

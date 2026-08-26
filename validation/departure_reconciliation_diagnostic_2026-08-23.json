@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "kind": "departure_reconciliation_adoption_diagnostic",
+  "created_at": "2026-08-23",
+  "production_adopted": false,
+  "decision": "rejected",
+  "decision_reason": [
+    "The candidate made raw SUMO sensor passages exact but collapsed the departure stream into artificial convoys.",
+    "The five-trial paired median was 3.15% slower for the candidate, so the user's no-slowdown condition was not established."
+  ],
+  "inputs": {
+    "date": "2027-09-08",
+    "demand_build_id": "273c987cf579ed1308e3",
+    "demand_build_key": "ab9711a80586fffb",
+    "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "source_route_sha256": "0d8508993b29608b39c43d6e82d7cafb14883deaed45b9eba58b3af67a62cdf2",
+    "candidate_route_sha256": "077a2e5fb9ac9980c881e2640172d909b32e9e9c21081469d0fc5143065306d2",
+    "seeds": [1000, 1001, 1002],
+    "vehicles": 21240,
+    "directed_sensor_edges": 7,
+    "intervals": 96,
+    "constraints_per_seed": 672
+  },
+  "method": {
+    "contract": "sumo_entered_15min_monotone_departure_v1",
+    "changed_fields": ["vehicle.depart", "agent.departure_s"],
+    "routes_changed": 0,
+    "vehicles_added": 0,
+    "vehicles_removed": 0,
+    "guard_s": 60,
+    "vehicle_xml_order_preserved": true,
+    "reason_order_is_preserved": "SUMO samples default speedFactor values while loading vehicles; reordering changes the driver attached to an id and made early prototypes oscillate.",
+    "learning_wall_s": 7.421,
+    "verification_wall_s": 5.009,
+    "offline_only": true
+  },
+  "exactness": {
+    "status": "pass",
+    "seed_1000_exact": 672,
+    "seed_1001_exact": 672,
+    "seed_1002_exact": 672,
+    "maximum_absolute_error": 0,
+    "summed_absolute_error": 0,
+    "loaded_per_seed": 21240,
+    "inserted_per_seed": 21240,
+    "teleports_per_seed": 0,
+    "unfinished_per_seed": 0
+  },
+  "stochasticity": {
+    "distinct_seed_speed_profiles": 3,
+    "non_sensor_edges_with_seed_variation": 1234,
+    "non_sensor_edge_quarters_with_seed_variation": 22663,
+    "status": "preserved"
+  },
+  "departure_dispersion": {
+    "status": "fail",
+    "source": {
+      "minimum_gap_s": 2.0,
+      "median_gap_s": 2.7,
+      "gaps_at_minimum": 0,
+      "maximum_departures_per_second": 1
+    },
+    "candidate": {
+      "minimum_gap_s": 0.1,
+      "median_gap_s": 0.1,
+      "gaps_at_minimum": 15545,
+      "maximum_departures_per_second": 10
+    }
+  },
+  "paired_runtime": {
+    "status": "not_qualified",
+    "trials": 5,
+    "counterbalanced": true,
+    "three_seeds_parallel": true,
+    "current_wall_s": [2.187047542, 1.990798917, 1.97259175, 2.011497416, 1.975449166],
+    "candidate_wall_s": [2.053580916, 2.060541209, 2.053834833, 2.027789875, 2.02375225],
+    "current_median_s": 1.990798917,
+    "candidate_median_s": 2.053580916,
+    "candidate_median_change_pct": 3.15,
+    "note": "This measures the SUMO/health arm without trajectory publication. Five trials do not establish p95."
+  },
+  "safety_gate": {
+    "implemented_in": "tools/departure_reconciliation.py",
+    "real_active_input_rejected": true,
+    "rejection": "departure dispersion gate failed: median gap collapsed",
+    "source_route_and_agent_bytes_unchanged_after_rejection": true,
+    "behavior": "Fails before publication if median spacing collapses, per-second departure bursts grow beyond the relative bound, exact output fails, health fails, routes or population change, evidence is incomplete, seed driver profiles collapse, or XML order changes."
+  },
+  "official_sources": [
+    "https://sumo.dlr.de/docs/Definition_of_Vehicles%2C_Vehicle_Types%2C_and_Routes.html",
+    "https://sumo.dlr.de/docs/Simulation/Output/Lane-_or_Edge-based_Traffic_Measures.html",
+    "https://sumo.dlr.de/docs/Simulation/Output/TripInfo.html",
+    "https://sumo.dlr.de/docs/Simulation/Randomness.html",
+    "https://sumo.dlr.de/docs/Simulation/Meso.html",
+    "https://sumo.dlr.de/docs/Simulation/Calibrator.html"
+  ]
+}

@@ -1,0 +1,4 @@
+# Development tooling, kept out of requirements.txt so a production install
+# does not pull a linter. Install with:
+#     pip3 install --user -r requirements-dev.txt
+pylint>=3.3,<4

@@ -320,6 +320,7 @@ class ClosureSearchSpec:
     required_work_minutes: int
     max_consecutive_start_days: int
     permitted_daily_band: DailyTimeBand
+    min_consecutive_start_days: int = 1
     source: str = "forecast"
     timezone: str = "Europe/Stockholm"
     dst_policy: str = "exclude_transition_dates"
@@ -384,6 +385,14 @@ class ClosureSearchSpec:
             raise ValueError(
                 "closure_search.max_consecutive_start_days must be from 1 "
                 f"through {_INDEPENDENT_MAX_WORKDAYS}")
+        minimum_days = _strict_int(
+            self.min_consecutive_start_days,
+            "closure_search.min_consecutive_start_days",
+        )
+        if not 1 <= minimum_days <= maximum_days:
+            raise ValueError(
+                "closure_search.min_consecutive_start_days must be from 1 "
+                "through max_consecutive_start_days")
         resolution = _strict_int(
             self.resolution_minutes, "closure_search.resolution_minutes")
         if resolution != 15:
@@ -540,6 +549,9 @@ class ClosureSearchSpec:
             payload["work_allocation_policy"] = self.work_allocation_policy
         if self.period_comparison_policy != "none_v1":
             payload["period_comparison_policy"] = self.period_comparison_policy
+        if self.min_consecutive_start_days != 1:
+            payload["min_consecutive_start_days"] = (
+                self.min_consecutive_start_days)
         return payload
 
     @property
@@ -563,6 +575,8 @@ class ClosureSearchSpec:
             max_consecutive_start_days=raw.get("max_consecutive_start_days"),
             permitted_daily_band=DailyTimeBand.from_dict(
                 raw.get("permitted_daily_band", {})),
+            min_consecutive_start_days=raw.get(
+                "min_consecutive_start_days", 1),
             allowed_weekdays=raw.get(
                 "allowed_weekdays", (0, 1, 2, 3, 4, 5, 6)),
             blackout_dates=raw.get("blackout_dates", ()),

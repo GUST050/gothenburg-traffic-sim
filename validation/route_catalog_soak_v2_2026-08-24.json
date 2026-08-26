@@ -1,0 +1,357 @@
+{
+ "candidate_n_total": 6000,
+ "catalog_runs": [
+  {
+   "fixture": {
+    "date": "2027-09-08",
+    "days": 1,
+    "name": "weekday-a"
+   },
+   "result": {
+    "adapter_s": 0.246,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 565575680,
+    "pfe_s": 13.535,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 17.315993
+   }
+  },
+  {
+   "fixture": {
+    "date": "2027-09-09",
+    "days": 1,
+    "name": "weekday-b"
+   },
+   "result": {
+    "adapter_s": 0.26,
+    "build_id": "a9396c88088494ec4ecd",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 681066496,
+    "pfe_s": 13.729,
+    "validation_overall": "warn",
+    "vehicles": 21732,
+    "wall_s": 17.543127
+   }
+  },
+  {
+   "fixture": {
+    "date": "2027-09-10",
+    "days": 1,
+    "name": "weekday-c"
+   },
+   "result": {
+    "adapter_s": 0.278,
+    "build_id": "2584712d60c10b180110",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 695500800,
+    "pfe_s": 14.298,
+    "validation_overall": "warn",
+    "vehicles": 22536,
+    "wall_s": 18.097018
+   }
+  },
+  {
+   "fixture": {
+    "date": "2027-09-11",
+    "days": 1,
+    "name": "weekend-a"
+   },
+   "result": {
+    "adapter_s": 0.27,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 695500800,
+    "pfe_s": 13.218,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 16.86022
+   }
+  },
+  {
+   "fixture": {
+    "date": "2027-09-18",
+    "days": 1,
+    "name": "weekend-b"
+   },
+   "result": {
+    "adapter_s": 0.255,
+    "build_id": "43f155422ddd784f1018",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 695500800,
+    "pfe_s": 14.152,
+    "validation_overall": "warn",
+    "vehicles": 19042,
+    "wall_s": 17.911095
+   }
+  },
+  {
+   "fixture": {
+    "date": "2027-05-13",
+    "days": 1,
+    "name": "holiday"
+   },
+   "result": {
+    "adapter_s": 0.28200000000000003,
+    "build_id": "a1f17ae60026e7e85774",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 695500800,
+    "pfe_s": 14.719,
+    "validation_overall": "warn",
+    "vehicles": 22145,
+    "wall_s": 18.573363
+   }
+  },
+  {
+   "fixture": {
+    "date": "2027-09-12",
+    "days": 2,
+    "name": "mixed"
+   },
+   "result": {
+    "adapter_s": 0.6579999999999999,
+    "build_id": "500d5ed7fb4917efccde",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808",
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000,
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 774307840,
+    "pfe_s": 56.91,
+    "validation_overall": "warn",
+    "vehicles": 37263,
+    "wall_s": 62.346353
+   }
+  }
+ ],
+ "execute": true,
+ "fixtures": [
+  {
+   "date": "2027-09-08",
+   "days": 1,
+   "name": "weekday-a"
+  },
+  {
+   "date": "2027-09-09",
+   "days": 1,
+   "name": "weekday-b"
+  },
+  {
+   "date": "2027-09-10",
+   "days": 1,
+   "name": "weekday-c"
+  },
+  {
+   "date": "2027-09-11",
+   "days": 1,
+   "name": "weekend-a"
+  },
+  {
+   "date": "2027-09-18",
+   "days": 1,
+   "name": "weekend-b"
+  },
+  {
+   "date": "2027-05-13",
+   "days": 1,
+   "name": "holiday"
+  },
+  {
+   "date": "2027-09-12",
+   "days": 2,
+   "name": "mixed"
+  }
+ ],
+ "kind": "route_catalog_post_adoption_soak",
+ "rollback": {
+  "adapter_s": 0.0,
+  "build_id": "d83354bba06815baa50e",
+  "candidate_n_total": 6000,
+  "candidate_source": "legacy",
+  "catalog_keys": {},
+  "catalog_selected_n_total": {},
+  "hard_gates": {
+   "candidate_structure": true,
+   "confidence_health": true,
+   "day_library_restore": true,
+   "deterministic_repeat": true,
+   "exact_sensor_targets": true,
+   "malformed_catalog_rejected": true,
+   "population_contract": true,
+   "purpose_route_compatibility": true,
+   "route_agent_provenance": true,
+   "sensor_anchor_contract": true,
+   "singleflight_recovery": true,
+   "sumo_runtime_no_regression": true,
+   "warm_state_identity": true,
+   "zero_integer_residual": true
+  },
+  "peak_rss_bytes": 774307840,
+  "pfe_s": 33.704,
+  "validation_overall": "warn",
+  "vehicles": 20803,
+  "wall_s": 51.61772
+ },
+ "schema_version": 1,
+ "status": "pass"
+}

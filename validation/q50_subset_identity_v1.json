@@ -1,0 +1,56 @@
+{
+  "record": "q50_subset_identity_v1",
+  "created": "2026-08-17",
+  "plan": "SPEED_ARCHITECTURE_PLAN_2026-07.md L1 (day library) — cross-consumer reuse",
+  "question": "A closure search calibrates three direction arms; the map asks for q50 alone, so the two are different day identities and the same calendar day was calibrated twice. May a three-variant day answer a q50-only request — that is, is the median arm the SAME artifact whether or not the stress arms were built alongside it? If not, sharing the bytes would be a silent approximation.",
+  "argument": "q50 is solved first and its integer population is then frozen as a hard equality for q10/q90, so the stress arms are downstream of it; each arm is published from its own solution through the same writer, whose per-day draw streams are day-local (stage B). Nothing in the q50 path reads a stress arm. This record exists because that argument, however sound, is not evidence.",
+  "case": {
+    "date": "2027-05-26",
+    "day_type": "weekday",
+    "pool_composition": ["weekday"],
+    "source": "forecast",
+    "days": 1,
+    "why": "a clean date with no stored generation, so both builds start cold from the same candidate pool"
+  },
+  "method": "Build 2027-05-26 twice on identical inputs — once q50-only, once with --direction-stress-variants — and compare the day-library entry the second build stores under the q50-only identity against the entry the first build stored. Artifacts are gzipped with a wall-clock header, so the comparison is of DECOMPRESSED bytes. Then delete both, rebuild three-variant only, and ask for the date as the map does, to check the hit is real and publishes the same demand.",
+  "result": "PASS",
+  "subset_key_equals_genuine_key": true,
+  "identity_recorded_equals_genuine_identity": true,
+  "artifacts_identical": {
+    "calibrated.rou.xml": true,
+    "calibrated.agents.json": true,
+    "provenance.json": true,
+    "fit.json": "every field identical except timings_s"
+  },
+  "fit_timings_note": "fit.json carries four wall-clock durations under timings_s (prepare_shared, interval_solving_shared, integer_repair_shared, route_publish). They differ between ANY two runs, including two q50-only runs, so they are not evidence of a different result. Every substantive field — vehicles, geh_ok/geh_total/geh_pct, achieved, unserviceable_edges, bound_violations, relaxed_bound_violations, inactive_sensor_integer_stability, inactive_sensor_observability, sensor_anchor_contract, purpose_allocation, purpose_allocation_summary, relaxation_summary — is identical.",
+  "day_library_key": "0a0720c9cd66c6def776fb760168a39e",
+  "digests": {
+    "note": "sha256 of the DECOMPRESSED artifact, produced by the q50-only build and reproduced exactly by the three-variant build's subset entry",
+    "calibrated.rou.xml": "d95568a3c7aeac18aaff362bca515f4a958e791ae6c78852b650fcd846df7c4e",
+    "calibrated.agents.json": "03ce635f18acec155d4e34911996d6ccaa6223ec2660041848875fe2bd3a1cde",
+    "provenance.json": "fd25e7ee0aaa92365eef06afd69e572d101718e0d2eb9b63f1d0f96e4999a4e2"
+  },
+  "end_to_end": {
+    "method": "library emptied for the date, three-variant build run, then the same q50-only request the web recalibration makes",
+    "subset_stored_by": "three-variant build",
+    "q50_request": "library hit 0a0720c9cd66, 1/1 day reused, 0 calibrated",
+    "published_demand_matches_genuine_q50_build": true,
+    "cold_q50_only_s": 58.6,
+    "cold_three_variant_s": 56.2,
+    "warm_q50_from_subset_s": 4.5
+  },
+  "scope_and_limits": [
+    "pool_composition stays part of the identity: a date calibrated inside a window that also contains a weekend is a different (equally correct) result and is NOT shared with a single-day request. Only the variant axis is bridged.",
+    "The subset is written when a day is CALIBRATED. A three-variant day that is itself served from the library does not backfill one, so days stored before this change keep needing their own q50 build.",
+    "Direction is one-way by construction: a q50-only day cannot answer a three-variant request, which needs arms it never solved.",
+    "Cost: about 3.5 MB per stored day on top of the roughly 13 MB the three-variant entry already occupies."
+  ],
+  "provenance": {
+    "git_commit": "dae20aa93dd94e5570a2d42ebe68d7dd72583759",
+    "git_dirty": true,
+    "platform": "macOS-15.6.1-arm64",
+    "python": "3.9.6",
+    "cpu_count": 10,
+    "dirty_note": "the working tree carried in-progress direction-split edits to build_sumo_demand.py, demand/calibration.py, traffic_sim/demand/pfe.py and run_scenario.py. Both halves of the comparison ran against the SAME tree, which is what an identity claim needs; the record is not a claim about any committed revision."
+  }
+}

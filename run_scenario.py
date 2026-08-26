@@ -51,7 +51,9 @@ import pandas as pd
 
 from traffic_sim.simulation import metrics as cm
 from traffic_sim.simulation import closure_teleport as ct
+from traffic_sim.simulation import disruption as disruption_analysis
 from traffic_sim.simulation.sensor_fit import (assess_output_fit,
+                                               build_exact_output_fit,
                                                summarize_pairs,
                                                summarize_rows)
 from traffic_sim.simulation.runtime import sumo_home
@@ -59,6 +61,8 @@ from traffic_sim.simulation.metadata import load_metadata
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.core.contracts import ScenarioSpec, load_scenario_spec
 from traffic_sim.simulation.multiday import parse_summary
+from traffic_sim.simulation.execution import SeedRunPlan
+from traffic_sim.simulation.finalist_decision import DEMAND_VARIANTS
 from traffic_sim.simulation.trajectory_contract import (
     MULTIDAY_MAX_VEHICLES_PER_DAY,
     SAMPLING_METHOD as TRAJECTORY_SAMPLING_METHOD,
@@ -134,6 +138,48 @@ def variant_path(variants: list[Path], variant: str) -> Path:
     return variants[index]
 
 
+def demand_variant_entries(meta: dict) -> list[dict[str, str]]:
+    """Return the validated semantic variant contract, with legacy fallback."""
+    contract = meta.get("demand_variant_contract")
+    n_variants = int(meta.get("n_variants", 1))
+    if contract is None:
+        if n_variants == 1:
+            return [{"name": "q50", "target_key": "edge_shares",
+                     "route_file": "calibrated.rou.xml"}]
+        if n_variants == 3:
+            return [
+                {"name": "q50", "target_key": "edge_shares",
+                 "route_file": "calibrated.rou.xml"},
+                {"name": "q10", "target_key": "edge_shares_q10",
+                 "route_file": "calibrated_v1.rou.xml"},
+                {"name": "q90", "target_key": "edge_shares_q90",
+                 "route_file": "calibrated_v2.rou.xml"},
+            ]
+        raise ValueError(f"unsupported demand metadata n_variants={n_variants}")
+    if not isinstance(contract, dict) or contract.get("schema_version") != 1:
+        raise ValueError("invalid demand_variant_contract schema")
+    entries = contract.get("variants")
+    if not isinstance(entries, list) or len(entries) != n_variants:
+        raise ValueError("demand_variant_contract does not match n_variants")
+    expected = [
+        {"name": "q50", "target_key": "edge_shares",
+         "route_file": "calibrated.rou.xml"},
+    ]
+    if n_variants == 3:
+        expected += [
+            {"name": "q10", "target_key": "edge_shares_q10",
+             "route_file": "calibrated_v1.rou.xml"},
+            {"name": "q90", "target_key": "edge_shares_q90",
+             "route_file": "calibrated_v2.rou.xml"},
+        ]
+    expected_mode = "direction_stress" if n_variants == 3 else "q50_only"
+    if n_variants not in (1, 3) or entries != expected \
+            or contract.get("mode") != expected_mode:
+        raise ValueError(
+            "demand_variant_contract must be exactly q50 or q50/q10/q90")
+    return [dict(entry) for entry in entries]
+
+
 def seed_variant_plan(variants: list[Path], *, spec: ScenarioSpec | None = None,
                       seeds: int = 3) -> list[tuple[int, Path]]:
     """Return the exact seed-to-demand-variant plan for a study.
@@ -151,8 +197,20 @@ def seed_variant_plan(variants: list[Path], *, spec: ScenarioSpec | None = None,
         raise ValueError("seeds must be a positive integer")
     if not variants:
         raise ValueError("at least one demand variant is required")
-    return [(1000 + index, variants[index % len(variants)])
+    ordered = ([variants[1], variants[0], variants[2]]
+               if len(variants) == 3 else variants)
+    return [(1000 + index, ordered[index % len(ordered)])
             for index in range(seeds)]
+
+
+def default_seed_variant_mapping(meta: dict, seeds: list[int]) -> dict[int, str]:
+    """Map legacy seeds using the frozen q10/q50/q90 study order."""
+    available = {entry["name"] for entry in demand_variant_entries(meta)}
+    ordered = tuple(name for name in DEMAND_VARIANTS if name in available)
+    if not ordered:
+        raise ValueError("demand metadata exposes no supported variants")
+    return {seed: ordered[index % len(ordered)]
+            for index, seed in enumerate(seeds)}
 
 
 def validate_scenario_spec(spec: ScenarioSpec, *, meta: dict,
@@ -318,24 +376,8 @@ _FREE_FLOW_EDGE_TIME: tuple[dict, dict] | None = None
 def _cheapest(adj: dict, cost: dict, src: str, dst: str,
               banned: frozenset) -> float | None:
     """Least-cost edge path src->dst avoiding `banned`, or None if severed."""
-    if src == dst:
-        return 0.0
-    seen = {src: 0.0}
-    queue = [(0.0, src)]
-    while queue:
-        spent, edge = heapq.heappop(queue)
-        if edge == dst:
-            return spent
-        if spent > seen.get(edge, float("inf")):
-            continue
-        for nxt in adj.get(edge, ()):
-            if nxt in banned or nxt not in cost:
-                continue
-            through = spent + cost[nxt]
-            if through < seen.get(nxt, float("inf")):
-                seen[nxt] = through
-                heapq.heappush(queue, (through, nxt))
-    return None
+    return disruption_analysis.shortest_path_cost(
+        adj, cost, src, dst, banned)
 
 
 def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
@@ -362,102 +404,27 @@ def closure_disruption(route_path: Path, closed_edges: set[str], closures: list,
     a heavily used edge, because a dense grid gives most drivers a free
     parallel street; the cost lands on a tail, which only the total captures.
     """
-    if not closed_edges or not route_path.exists():
+    if not closed_edges or not Path(route_path).exists():
         return None
     if adj is None:
         adj = build_edge_graph(set())
-    closed = frozenset(closed_edges)
-    windows = [(float(c["begin_s"]), float(c["end_s"])) for c in closures
-               if c.get("begin_s") is not None and c.get("end_s") is not None]
-    cache: dict = {}
-    affected = severed = considered = 0
-    # `severed` above stays the published total for backward compatibility.
-    # The two counters below SPLIT it, because the halves are different facts
-    # and Stage 4 of the closure-integrity plan needs only one of them:
-    #   denied  — the vehicle's own first edge is shut, so it never starts.
-    #             Every street with departures on it has some. It is access the
-    #             closure removes (metrics.access_impact_reasons, C1), not a
-    #             statement about the network's topology.
-    #   severed_destination — the destination is unreachable BY CAR once the
-    #             edge is gone. That is a topology fact about the edge itself,
-    #             and it is what "the edge must survive its own closure" means.
-    # Conflating them is what made every busy edge look structurally fatal.
-    denied = severed_destination = 0
-    added_s: list[float] = []
-    added_m: list[float] = []
-    for veh in ET.parse(route_path).getroot().iter("vehicle"):
-        route = veh.find("route")
-        if route is None or not route.get("edges"):
-            continue
-        considered += 1
-        edges = route.get("edges").split()
-        clock = float(veh.get("depart", "0"))
-        struck = False
-        for edge in edges:
-            if edge in closed:
-                if not windows or any(lo <= clock < hi for lo, hi in windows):
-                    struck = True
-                    break
-                # This closed edge is OPEN at the time this vehicle reaches it,
-                # so the vehicle drives it and continues — a LATER closed edge
-                # may still fall inside a window. Stopping at the first closed
-                # edge silently missed exactly the realistic case: a worksite
-                # closing a stretch for one shift.
-            clock += edge_time.get(edge, 0.0)
-        if not struck:
-            continue
-        affected += 1
-        # A vehicle whose OWN FIRST edge is shut cannot start at all: there is
-        # no partial trip to price, and _cheapest() would happily route from a
-        # closed origin because it only bans an edge when stepping ONTO it.
-        # Left unhandled this scored a denied departure as a free detour
-        # (added_vehicle_hours 0.0, vehicles_no_detour 0), so a closure that
-        # denied 85 departures could rank BEST -- exactly the trap the SUMO
-        # integrity gate used to catch before denied departures were
-        # reclassified as impact rather than failure (metrics.
-        # access_impact_reasons, 2026-08-06). The protection belongs here, in
-        # the ranking, not in a check on simulator artifacts.
-        if edges[0] in closed:
-            severed += 1
-            denied += 1
-            continue
-        key = (edges[0], edges[-1])
-        if key not in cache:
-            cache[key] = (
-                _cheapest(adj, edge_time, edges[0], edges[-1], frozenset()),
-                _cheapest(adj, edge_len, edges[0], edges[-1], frozenset()),
-                _cheapest(adj, edge_time, edges[0], edges[-1], closed),
-                _cheapest(adj, edge_len, edges[0], edges[-1], closed))
-        base_s, base_m, det_s, det_m = cache[key]
-        if base_s is None:
-            continue                      # unreachable even without the closure
-        if det_s is None:
-            severed += 1                  # destination now unreachable by car
-            severed_destination += 1
-            continue
-        added_s.append(max(det_s - base_s, 0.0))
-        added_m.append(max((det_m or 0.0) - (base_m or 0.0), 0.0))
-    median = lambda xs: round(sorted(xs)[len(xs) // 2], 1) if xs else 0.0
-    return {
-        "vehicles_affected": affected,
-        "vehicles_considered": considered,
-        "vehicles_no_detour": severed,
-        # Additive split of vehicles_no_detour. The total keeps its exact
-        # meaning and every existing consumer (closure_ranking's disqualifier,
-        # published scenario JSON, frozen campaign artifacts) is untouched;
-        # these two only make the halves separately readable.
-        "vehicles_denied_departure": denied,
-        "vehicles_severed_destination": severed_destination,
-        # 4dp, not 2: this is the primary ranking key, and 2dp quantised
-        # anything under 18 vehicle-seconds to zero, making distinct
-        # candidates compare equal for no reason.
-        "added_vehicle_hours": round(sum(added_s) / 3600.0, 4),
-        "added_metres_total": round(sum(added_m), 1),
-        "added_seconds_median": median(added_s),
-        "added_metres_median": median(added_m),
-        "basis": "calibrated baseline routes; cheapest legal path with vs "
-                 "without the closure, free-flow cost",
-    }
+    return disruption_analysis.closure_disruption(
+        route_path, closed_edges, closures, edge_time, edge_len,
+        adjacency=adj)
+
+
+def reference_closure_disruption(
+        route_path: Path, closed_edges: set[str], closures: list,
+        edge_time: dict, edge_len: dict,
+        adj: dict | None = None) -> dict | None:
+    """Former per-OD implementation retained as a test oracle."""
+    if not closed_edges or not Path(route_path).exists():
+        return None
+    if adj is None:
+        adj = build_edge_graph(set())
+    return disruption_analysis.reference_closure_disruption(
+        route_path, closed_edges, closures, edge_time, edge_len,
+        adjacency=adj)
 
 
 def closure_disruption_across_variants(
@@ -475,13 +442,16 @@ def closure_disruption_across_variants(
     is judged on its least favourable directional outcome on each axis; the
     per-variant records are kept alongside so the spread stays inspectable.
     """
+    paths = [Path(path) for path in variant_paths]
+    if not closed_edges or not any(path.exists() for path in paths):
+        return None
     # The caller may pass a prebuilt UNBANNED graph — a campaign evaluates
     # dozens of schedules against the same network and should not rebuild it
     # each time.
     if adj is None:
         adj = build_edge_graph(set())
     per_variant = {}
-    for path in variant_paths:
+    for path in paths:
         report = closure_disruption(
             Path(path), closed_edges, closures, edge_time, edge_len, adj=adj)
         if report is not None:
@@ -589,6 +559,51 @@ def index_for_current_demand(index: dict, signature: str) -> dict:
     return {"demand_signature": signature, "scenarios": scenarios}
 
 
+def publish_scenario_artifacts(
+        payload: dict, *, name: str, label: str, close_edges: list[str],
+        closures: list[dict], teleport_policy_s: int | None,
+        spec: ScenarioSpec, signature: str, meta: dict,
+        window_label: str) -> tuple[Path, Path]:
+    """Atomically publish validated scenario bytes and their manifest entry.
+
+    This function owns shared final artifacts but never launches SUMO or makes
+    scientific decisions. The caller must finish every evidence gate first.
+    """
+    out_path = OUT_DIR / f"{name}.json"
+    atomic_write_json(out_path, payload, separators=(",", ":"))
+    print(f"Wrote {out_path}  ({len(payload.get('flows', {}))} edges)")
+
+    index_path = OUT_DIR / "index.json"
+    with open(index_path) if index_path.exists() else contextlib.nullcontext() as handle:
+        index = json.load(handle) if handle is not None else {"scenarios": []}
+    index = index_for_current_demand(index, signature)
+    index["scenarios"] = [
+        scenario for scenario in index["scenarios"]
+        if scenario["name"] != name
+    ]
+    source_tag = " · Prognos" if meta.get("source") == "forecast" else ""
+    index["scenarios"].append({
+        "name": name,
+        "label": label,
+        "file": f"{name}.json",
+        "closed_edges": close_edges,
+        "closures": closures,
+        "closure_integrity": payload.get("scenario", {}).get(
+            "closure_integrity"),
+        **({"teleport_policy": ct.policy_record(teleport_policy_s)}
+           if close_edges else {}),
+        "scenario_spec": spec.to_dict(),
+        "demand_signature": signature,
+        "build_id": meta.get("build_id"),
+        "demand_build_key": meta.get("demand_build_key"),
+        "window": f"{window_label}{source_tag}",
+    })
+    index["scenarios"].sort(key=lambda scenario: scenario["name"])
+    atomic_write_json(index_path, index, indent=2)
+    print(f"Updated {index_path}  ({len(index['scenarios'])} scenarios)")
+    return out_path, index_path
+
+
 # ── Optional phase timing (LUNA-PERF-03) ──────────────────────────────────────
 # Where the seconds-level budget actually goes cannot be guessed from a single
 # wall time: the same 13.8 s run may be dominated by SUMO, by aggregation or by
@@ -596,7 +611,7 @@ def index_for_current_demand(index: dict, signature: str) -> dict:
 # gets worse. These phases are wall-clock, non-overlapping and opt-in: with no
 # --timing-sidecar the timer is inert and every output, error and side effect
 # is byte-for-byte what it was before.
-PHASE_SCHEMA_VERSION = 1
+PHASE_SCHEMA_VERSION = 2
 # The demand variants a scenario may legitimately map a seed to, and the
 # inputs whose digests must appear in every profile. Both are checked so a
 # sidecar cannot claim an identity it does not have.
@@ -609,7 +624,9 @@ PHASE_NAMES = (
     "sumo_execution",
     "aggregation_validation",
     "trajectory_publication",
-    "scenario_publication",
+    "disruption_analysis",
+    "payload_construction",
+    "artifact_publication",
     "cleanup",
 )
 
@@ -853,6 +870,32 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed-workers", type=int, default=1,
                    help="Concurrent independent SUMO seed processes "
                         "(default 1; benchmark before increasing).")
+    p.add_argument("--rerouting-threads", type=int, default=None,
+                   help="Experimental SUMO rerouting thread count; opt-in "
+                        "only for paired equivalence benchmarks.")
+    p.add_argument("--routing-algorithm", choices=("dijkstra", "astar", "CH",
+                                                     "CHWrapper"),
+                   default=None,
+                   help="Experimental SUMO routing algorithm; opt-in only "
+                        "for paired equivalence benchmarks.")
+    p.add_argument("--minimal-edgedata", action="store_true",
+                   help="Compatibility flag for the adopted production "
+                        "entered/timeLoss edgeData field set.")
+    p.add_argument("--full-edgedata", action="store_true",
+                   help="Isolated rollback/benchmark arm that writes SUMO's "
+                        "full edgeData attribute set.")
+    p.add_argument(
+        "--sumo-warnings", action="store_true",
+        help=("Keep SUMO warnings enabled for diagnosis. The production "
+              "default suppresses them to avoid log and latency noise."),
+    )
+    p.add_argument(
+        "--rerouter-radius-m", type=float, default=REROUTER_RADIUS_M,
+        metavar="METRES",
+        help=("Experimental closure-rerouter neighbourhood radius "
+              f"(default {REROUTER_RADIUS_M:g} m). A non-default value "
+              "requires isolated benchmark output."),
+    )
     p.add_argument("--micro", action="store_true",
                    help="Use microscopic simulation (default: mesoscopic — "
                         "~20x faster, adequate for 15-min edge flows)")
@@ -891,6 +934,25 @@ def parse_args() -> argparse.Namespace:
         p.error("--seeds must be >= 1")
     if args.seed_workers < 1:
         p.error("--seed-workers must be >= 1")
+    if args.rerouting_threads is not None and args.rerouting_threads < 1:
+        p.error("--rerouting-threads must be >= 1")
+    if args.rerouter_radius_m <= 0:
+        p.error("--rerouter-radius-m must be positive")
+    if args.minimal_edgedata and args.full_edgedata:
+        p.error("--minimal-edgedata and --full-edgedata are mutually exclusive")
+    if (args.rerouting_threads is not None or args.routing_algorithm is not None
+            or args.full_edgedata
+            or args.rerouter_radius_m != REROUTER_RADIUS_M):
+        # These controls deliberately stay outside ScenarioSpec until a
+        # paired semantic benchmark adopts one.  Letting such a run publish
+        # to the live default directory would make an experimental result
+        # indistinguishable from the production execution arm.
+        if args.out_dir is None or args.timing_sidecar is None:
+            p.error("experimental execution options require both --out-dir and "
+                    "--timing-sidecar")
+        if Path(args.out_dir).resolve() == OUT_DIR.resolve():
+            p.error("experimental execution options cannot publish to the live "
+                    "scenario directory")
     if args.trajectories and args.no_trajectories:
         p.error("--trajectories and --no-trajectories are mutually exclusive")
     try:
@@ -1003,11 +1065,18 @@ def atomic_write_json(path: Path, obj, **dump_kwargs) -> None:
     2026-07-10). Write to a same-directory temp file, then os.replace(),
     which POSIX guarantees is atomic — readers see either the fully old or
     fully new file, never a partial one."""
+    # ``json.dump`` feeds TextIOWrapper one encoder fragment at a time.  A
+    # one-day trajectory contains millions of small list/dict fragments, so
+    # that turns a ~14 MB artifact into millions of Python ``write`` calls.
+    # Encode once and write once instead. ``json.dumps`` and ``json.dump`` use
+    # the same encoder and keyword arguments, preserving the exact JSON bytes
+    # while keeping the same atomic same-directory replace contract.
+    encoded = json.dumps(obj, **dump_kwargs)
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.",
                                     suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
-            json.dump(obj, f, **dump_kwargs)
+            f.write(encoded)
         os.replace(tmp_name, path)
     except BaseException:
         os.unlink(tmp_name)
@@ -1219,6 +1288,16 @@ def _raw_mean_series(results: list[dict], edge_id: str,
     return values
 
 
+def _raw_seed_series(result: dict, edge_id: str,
+                     n_intervals: int) -> list[float]:
+    """Return one seed's unrounded raw edgeData counts at fixed width."""
+    series = result.get("flows", {}).get(edge_id)
+    if series is None:
+        return [0.0] * n_intervals
+    return [float(series[qi]) if qi < len(series) else 0.0
+            for qi in range(n_intervals)]
+
+
 def build_sensor_audit(meta: dict, results: list[dict],
                        flows_out: dict[str, list[int]], n_intervals: int,
                        *, calibration_comparison: bool,
@@ -1267,10 +1346,29 @@ def build_sensor_audit(meta: dict, results: list[dict],
         ]
         representative_counts = (_flow_series(representative["flows"], edge_id, n_intervals)
                                  if representative else [0] * n_intervals)
+        representative_counts_raw = (
+            _raw_seed_series(representative, edge_id, n_intervals)
+            if representative else [0.0] * n_intervals)
         mean_counts = _flow_series(flows_out, edge_id, n_intervals)
         source_values = _series_or_missing(observations, edge_id, n_intervals)
         raw_counts = ((raw_mean_flows or {}).get(edge_id)
                       or [float(value) for value in mean_counts])
+        seed_runs = []
+        if calibration_comparison:
+            for result in results:
+                key = (result.get("target_key")
+                       or target_key_for_route_path(result["route_path"]))
+                target_series = target_variants.get(key or "", {})
+                seed_runs.append({
+                    "seed": int(result["seed"]),
+                    "variant": key,
+                    "target": [
+                        _series_value(target_series, edge_id, qi)
+                        for qi in range(n_intervals)
+                    ],
+                    "simulated_raw": _raw_seed_series(
+                        result, edge_id, n_intervals),
+                })
         for qi, target in enumerate(mean_targets):
             if target is not None:
                 ensemble_pairs.append((raw_counts[qi], target))
@@ -1285,6 +1383,8 @@ def build_sensor_audit(meta: dict, results: list[dict],
             "simulated_mean": mean_counts,
             "simulated_mean_raw": raw_counts,
             "simulated_representative": representative_counts,
+            "simulated_representative_raw": representative_counts_raw,
+            **({"seed_runs": seed_runs} if calibration_comparison else {}),
         })
         station = station_rows.setdefault(info["sensor_id"], {
             "sensor_id": info["sensor_id"],
@@ -1361,6 +1461,11 @@ def build_sensor_audit(meta: dict, results: list[dict],
                     n_intervals=96,
                     aggregation_quarters=output_fit_aggregation),
             })
+    exact_output_fit = None
+    if calibration_comparison and target_variants and results:
+        exact_output_fit = build_exact_output_fit(
+            directions, n_intervals=n_intervals,
+            uses_raw_ensemble_mean=raw_mean_flows is not None)
     return {
         "schema_version": 1,
         "source": meta.get("source", "historical"),
@@ -1380,6 +1485,8 @@ def build_sensor_audit(meta: dict, results: list[dict],
             "station_ensemble": output_station_ensemble,
             **({"per_day": daily_output_fit} if daily_output_fit else {}),
         },
+        **({"exact_output_fit": exact_output_fit}
+           if exact_output_fit is not None else {}),
         "stations": sorted(stations_public,
                             key=lambda item: item["sensor_id"]),
         "directions": directions,
@@ -1387,7 +1494,8 @@ def build_sensor_audit(meta: dict, results: list[dict],
 
 
 def write_edgedata_additional(path: Path, edgedata_file: Path,
-                              duration_s: int, begin_s: int = 0) -> None:
+                              duration_s: int, begin_s: int = 0,
+                              minimal_attributes: bool = True) -> None:
     """duration_s/begin_s are absolute sim-time (same clock as --begin/--end),
     matching every other windowed-experiment convention in this project —
     begin_s=0 (default) preserves every existing caller's whole-run
@@ -1396,8 +1504,11 @@ def write_edgedata_additional(path: Path, edgedata_file: Path,
     the edgeData interval doesn't also count activity before the window."""
     with open(path, "w") as f:
         f.write("<additional>\n")
+        attributes = (' writeAttributes="entered timeLoss"'
+                      if minimal_attributes else "")
         f.write(f'  <edgeData id="ed" file="{edgedata_file.name}" period="900" '
-                f'begin="{begin_s}" end="{duration_s}" excludeEmpty="true"/>\n')
+                f'begin="{begin_s}" end="{duration_s}" excludeEmpty="true"'
+                f'{attributes}/>\n')
         f.write("</additional>\n")
 
 
@@ -1679,14 +1790,9 @@ def demand_variants(meta: dict) -> list[Path]:
     files let a new q50-only demand build silently reuse stale q10/q90 files
     left by an older calibration.
     """
-    paths = [SUMO_DIR / "calibrated.rou.xml"]
-    n_variants = int(meta.get("n_variants", 1))
-    if n_variants == 1:
-        return paths
-    if n_variants != 3:
-        raise ValueError(f"unsupported demand metadata n_variants={n_variants}")
-    for suffix in ("_v1", "_v2"):
-        p = SUMO_DIR / f"calibrated{suffix}.rou.xml"
+    paths = []
+    for entry in demand_variant_entries(meta):
+        p = SUMO_DIR / entry["route_file"]
         if not p.exists():
             raise FileNotFoundError(
                 f"demand metadata requires {p.name}, but it is missing")
@@ -1712,6 +1818,9 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
              output_precision: int | None = None,
              keep_after_arrival_s: int | None = None,
              time_to_teleport_s: int | None = None,
+             rerouting_threads: int | None = None,
+             routing_algorithm: str | None = None,
+             suppress_warnings: bool = True,
              work_dir: Path | None = None) -> tuple[list[str], dict, Path]:
     """Build the exact SUMO argv, metric paths and cwd — and run nothing.
 
@@ -1729,6 +1838,14 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
     # work_dir therefore isolates every generated XML while all input paths
     # remain absolute. The default keeps direct diagnostic callers working.
     run_cwd = Path(work_dir or SUMO_DIR)
+    if rerouting_threads is not None and (
+            isinstance(rerouting_threads, bool)
+            or not isinstance(rerouting_threads, int)
+            or rerouting_threads < 1):
+        raise ValueError("rerouting_threads must be a positive integer")
+    if routing_algorithm is not None and routing_algorithm not in {
+            "dijkstra", "astar", "CH", "CHWrapper"}:
+        raise ValueError("unsupported routing_algorithm")
     # Mesoscopic by default: our product is 15-min edge flows, which does not
     # need microscopic car-following — meso is ~20x faster (whole-day seed:
     # minutes → seconds), which is what makes interactive closures possible.
@@ -1799,10 +1916,14 @@ def build_sumo_invocation(seed: int, route_path: Path, add_paths: list[Path],
         # review (NEW_CHANGES_REVIEW_2026-07-11.md section 1).
         "--end", str(duration_s + flush_s),
         "--no-step-log", "true",
-        "--no-warnings", "true",
+        *(["--no-warnings", "true"] if suppress_warnings else []),
         # Vehicles whose destination IS the closed edge have no valid route —
         # drop them instead of aborting (standard for closure studies).
         "--ignore-route-errors", "true",
+        *(["--device.rerouting.threads", str(rerouting_threads)]
+          if rerouting_threads is not None else []),
+        *(["--routing-algorithm", routing_algorithm]
+          if routing_algorithm is not None else []),
         # Closure runs opt in to an explicit teleport policy (Stage 3 of
         # docs/plans/CLOSURE_INTEGRITY_PLAN_2026-08-05.md). None emits
         # nothing at all, so every non-closure caller's argv — and therefore
@@ -1939,6 +2060,9 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
              output_precision: int | None = None,
              keep_after_arrival_s: int | None = None,
              time_to_teleport_s: int | None = None,
+             rerouting_threads: int | None = None,
+             routing_algorithm: str | None = None,
+             suppress_warnings: bool = True,
              work_dir: Path | None = None) -> dict[str, Path] | None:
     # Delegates construction to the shared pure builder; this function
     # remains the only place that EXECUTES.
@@ -1955,6 +2079,9 @@ def run_sumo(seed: int, route_path: Path, add_paths: list[Path],
         output_precision=output_precision,
         keep_after_arrival_s=keep_after_arrival_s,
         time_to_teleport_s=time_to_teleport_s,
+        rerouting_threads=rerouting_threads,
+        routing_algorithm=routing_algorithm,
+        suppress_warnings=suppress_warnings,
         work_dir=work_dir)
     run_cwd.mkdir(parents=True, exist_ok=True)
     try:
@@ -2303,7 +2430,8 @@ def publish_trajectories_from_vehroute(
 
 def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
                         duration_s: int, home: Path,
-                        web_edges: set[str], micro: bool = False) -> str | None:
+                        web_edges: set[str], micro: bool = False,
+                        suppress_warnings: bool = True) -> str | None:
     """Legacy standalone SUMO run with vehroute exit-times.
 
     The main scenario path no longer calls this function: it captures the
@@ -2341,7 +2469,8 @@ def export_trajectories(name: str, route_path: Path, closure_add: list[Path],
         # not silently animate a subset as if it were everyone.
         "--statistic-output", f"stats_traj_{name}.xml",
         "--begin", "0", "--end", str(duration_s + 3600),
-        "--no-step-log", "true", "--no-warnings", "true",
+        "--no-step-log", "true",
+        *(["--no-warnings", "true"] if suppress_warnings else []),
         "--ignore-route-errors", "true", "--seed", "1000",
     ]
     try:
@@ -2555,7 +2684,7 @@ def prepare_closure_variants(prep_jobs: list[dict]) -> tuple[list[Path], int, in
     return filtered, truncated, dropped
 
 
-def run_seed_job(job: dict) -> dict:
+def run_seed_job(job: SeedRunPlan | dict) -> dict:
     """Run and parse one independent SUMO seed.
 
     All paths in job are seed-specific. The function is intentionally free of
@@ -2570,40 +2699,45 @@ def run_seed_job(job: dict) -> dict:
     no clock is read and no timing field is returned, so the default path is
     exactly as before.
     """
-    timing = bool(job.get("timing"))
+    plan = (job if isinstance(job, SeedRunPlan)
+            else SeedRunPlan.from_mapping(job))
+    timing = plan.timing
     job_started = time.perf_counter() if timing else None
     sumo_started = time.perf_counter() if timing else None
     run_sumo(
-        job["seed"], job["route_path"], job["add_paths"], job["duration_s"],
-        job["home"], micro=job["micro"], stats_path=job["stats_file"],
-        vehroute_output=job.get("vehroute_output"),
-        vehroute_write_unfinished=job.get("vehroute_write_unfinished", False),
-        summary_output=job.get("summary_file"),
+        plan.seed, plan.route_path, list(plan.add_paths), plan.duration_s,
+        plan.home, micro=plan.micro, stats_path=plan.stats_file,
+        vehroute_output=plan.vehroute_output,
+        vehroute_write_unfinished=plan.vehroute_write_unfinished,
+        summary_output=plan.summary_file,
         # None on a baseline run: the policy belongs to the closure, and a
         # baseline that silently stopped teleporting would lose the congestion
         # signal its own health gate is built on.
-        time_to_teleport_s=job.get("time_to_teleport_s"),
-        work_dir=job["work_dir"])
+        time_to_teleport_s=plan.time_to_teleport_s,
+        rerouting_threads=plan.rerouting_threads,
+        routing_algorithm=plan.routing_algorithm,
+        suppress_warnings=plan.suppress_warnings,
+        work_dir=plan.work_dir)
     sumo_seconds = (time.perf_counter() - sumo_started) if timing else None
     flows = parse_edgedata(
-        job["edge_file"], job["n_intervals"],
-        measured_empty_edges=job.get("closure_edges", ()))
-    health = parse_seed_health(job["stats_file"], job["seed"],
-                               job["route_path"].name)
+        plan.edge_file, plan.n_intervals,
+        measured_empty_edges=plan.closure_edges)
+    health = parse_seed_health(plan.stats_file, plan.seed,
+                               plan.route_path.name)
     daily = None
-    if job.get("summary_file") is not None:
+    if plan.summary_file is not None:
         daily = parse_summary(
-            job["summary_file"],
-            day_boundaries_s=job["day_boundaries_s"],
-            days=job["days"],
+            plan.summary_file,
+            day_boundaries_s=list(plan.day_boundaries_s),
+            days=plan.days,
         )
         if health is not None:
             health["multi_day"] = daily
     result = {
-        "seed": job["seed"],
-        "route_path": job["route_path"],
-        "demand_variant": job.get("demand_variant"),
-        "target_key": target_key_for_variant(job.get("demand_variant")),
+        "seed": plan.seed,
+        "route_path": plan.route_path,
+        "demand_variant": plan.demand_variant,
+        "target_key": target_key_for_variant(plan.demand_variant),
         "flows": flows,
         "health": health,
         "multi_day": daily,
@@ -2734,15 +2868,10 @@ def main() -> None:
         variant_by_seed = dict(spec.demand_variant_mapping)
     else:
         seed_values = [1000 + s for s in range(args.seeds)]
-        # Keep the same canonical seed/variant identity used by monthly search
-        # and the annual warm bank. A state is seed-specific; swapping q10 and
-        # q50 here made otherwise exact annual artifacts unusable by the
-        # interactive time-window path.
-        default_variants = ("q10", "q50", "q90")
-        variant_by_seed = {
-            seed: default_variants[i % min(len(variants), len(default_variants))]
-            for i, seed in enumerate(seed_values)
-        }
+        # Ordinary builds expose only q50. Explicit stress builds expose the
+        # semantic contract in metadata, so filenames or stale sibling files
+        # can never turn a normal seed into q10/q90 accidentally.
+        variant_by_seed = default_seed_variant_mapping(meta, seed_values)
     seed_count = len(seed_values)
     try:
         validate_variant_coverage(meta, variant_by_seed,
@@ -2785,9 +2914,9 @@ def main() -> None:
     closure_preparation.__enter__()
     if close_edges:
         print(f"  teleport policy: {ct.policy_label(teleport_policy_s)}")
-        rerouter_edges = edges_near(close_edges, REROUTER_RADIUS_M)
+        rerouter_edges = edges_near(close_edges, args.rerouter_radius_m)
         print(f"  rerouter on {len(rerouter_edges)} edges within "
-              f"{REROUTER_RADIUS_M} m of the closure")
+              f"{args.rerouter_radius_m:g} m of the closure")
         cpath = scratch_dir / f"closure_{name}.add.xml"
         write_closure_additional(cpath, closures, rerouter_edges)
         closure_add = [cpath]
@@ -2864,28 +2993,34 @@ def main() -> None:
         if seed == trajectory_seed and trajectory_enabled:
             trajectory_stats_file = stats_file
             trajectory_route_path = route_path
-        write_edgedata_additional(add_path, ed_file, duration_s)
-        jobs.append({
-            "seed": seed,
-            "route_path": route_path,
-            "demand_variant": demand_variant,
-            "add_paths": [add_path] + closure_add,
-            "duration_s": duration_s,
-            "home": home,
-            "micro": args.micro,
-            "stats_file": stats_file,
-            "summary_file": summary_file,
-            "days": days,
-            "day_boundaries_s": day_boundaries_s,
-            "edge_file": ed_file,
-            "closure_edges": close_edges,
-            "n_intervals": n_intervals,
-            "vehroute_output": trajectory_vr_file,
-            "vehroute_write_unfinished": (seed == trajectory_seed and trajectory_enabled),
-            "work_dir": seed_dir,
-            "timing": timer.enabled,
-            "time_to_teleport_s": teleport_policy_s,
-        })
+        write_edgedata_additional(
+            add_path, ed_file, duration_s,
+            minimal_attributes=not args.full_edgedata)
+        jobs.append(SeedRunPlan(
+            seed=seed,
+            route_path=route_path,
+            demand_variant=demand_variant,
+            add_paths=tuple([add_path] + closure_add),
+            duration_s=duration_s,
+            home=home,
+            micro=args.micro,
+            stats_file=stats_file,
+            summary_file=summary_file,
+            days=days,
+            day_boundaries_s=tuple(day_boundaries_s),
+            edge_file=ed_file,
+            closure_edges=tuple(close_edges),
+            n_intervals=n_intervals,
+            vehroute_output=trajectory_vr_file,
+            vehroute_write_unfinished=(
+                seed == trajectory_seed and trajectory_enabled),
+            work_dir=seed_dir,
+            timing=timer.enabled,
+            suppress_warnings=not args.sumo_warnings,
+            time_to_teleport_s=teleport_policy_s,
+            rerouting_threads=args.rerouting_threads,
+            routing_algorithm=args.routing_algorithm,
+        ))
 
     job_preparation.__exit__(None, None, None)
 
@@ -3028,8 +3163,15 @@ def main() -> None:
 
     trajectory_publication.__exit__(None, None, None)
 
-    scenario_publication = timer.phase("scenario_publication")
-    scenario_publication.__enter__()
+    disruption_phase = timer.phase("disruption_analysis")
+    disruption_phase.__enter__()
+    disruption = closure_disruption_across_variants(
+        demand_variants(meta), set(close_edges), closures,
+        *free_flow_edge_cost())
+    disruption_phase.__exit__(None, None, None)
+
+    payload_construction = timer.phase("payload_construction")
+    payload_construction.__enter__()
     payload = build_scenario_payload(
         meta=meta, n_intervals=n_intervals,
         generated_at=pd.Timestamp.now().isoformat(timespec="seconds"),
@@ -3042,44 +3184,27 @@ def main() -> None:
         seed_values=seed_values, sig=sig, seed_health=seed_health,
         health_flags=health_flags, multi_day_validation=multi_day_validation,
         sensor_audit=sensor_audit, flows_out=flows_out, conf_out=conf_out,
-        disruption=closure_disruption_across_variants(
-            demand_variants(meta), set(close_edges), closures,
-            *free_flow_edge_cost()),
+        disruption=disruption,
         teleport_policy=(ct.policy_record(teleport_policy_s)
                          if close_edges else None))
-    out_path = OUT_DIR / f"{name}.json"
-    atomic_write_json(out_path, payload, separators=(",", ":"))
-    _LAST_SCENARIO_OUTPUT = out_path
-    print(f"Wrote {out_path}  ({len(flows_out)} edges)")
+    payload_construction.__exit__(None, None, None)
 
-    # ── Manifest ───────────────────────────────────────────────────────────────
-    index_path = OUT_DIR / "index.json"
-    index = json.load(open(index_path)) if index_path.exists() else {"scenarios": []}
-    index = index_for_current_demand(index, sig)
-    index["scenarios"] = [s for s in index["scenarios"] if s["name"] != name]
-    src_tag = " · Prognos" if meta.get("source") == "forecast" else ""
-    index["scenarios"].append({
-        "name": name, "label": label, "file": f"{name}.json",
-        "closed_edges": close_edges,
-        "closures": closures,
-        "closure_integrity": closure_integrity,
-        # serve.py gates publication on `closure_integrity == "verified_clean"`
-        # reading THIS entry, not the payload — so the policy that produced the
-        # verdict has to be here too. Under the Stage 3 policy a clean verdict
-        # is far easier to obtain, which is exactly why the reader must be able
-        # to see how it was obtained without opening the scenario file.
-        **({"teleport_policy": ct.policy_record(teleport_policy_s)}
-           if close_edges else {}),
-        "scenario_spec": spec.to_dict(),
-        "demand_signature": sig,
-        "build_id": meta.get("build_id"),
-        "demand_build_key": meta.get("demand_build_key"),
-        "window": f"{window_label}{src_tag}",
-    })
-    index["scenarios"].sort(key=lambda s: s["name"])
-    atomic_write_json(index_path, index, indent=2)
-    print(f"Updated {index_path}  ({len(index['scenarios'])} scenarios)")
-    scenario_publication.__exit__(None, None, None)
+    artifact_publication = timer.phase("artifact_publication")
+    artifact_publication.__enter__()
+    out_path, _index_path = publish_scenario_artifacts(
+        payload,
+        name=name,
+        label=label,
+        close_edges=close_edges,
+        closures=closures,
+        teleport_policy_s=teleport_policy_s,
+        spec=spec,
+        signature=sig,
+        meta=meta,
+        window_label=window_label,
+    )
+    _LAST_SCENARIO_OUTPUT = out_path
+    artifact_publication.__exit__(None, None, None)
 
     with timer.phase("cleanup"):
         try:

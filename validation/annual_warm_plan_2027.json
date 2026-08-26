@@ -314056,7 +314056,7 @@
       "work_date": "2027-12-31"
     }
   ],
-  "content_key": "38d91d22c305a0c32c9d57b622f59c37d31c20362b8bc32836742ac90e52bdf0",
+  "content_key": "b1bca0976170258216a50426a02e3097aa65970db996df43d5b8083e5c205543",
   "coverage": {
     "calendar_days": 365,
     "checkpoint_requests": 34895,
@@ -318511,14 +318511,14 @@
       "sha256": "08678640184dde0a8ff7a4be0e9ee73438207156e955867903ace7d141d5e771"
     },
     "calendar_source": {
-      "bytes": 14108,
+      "bytes": 16094,
       "path": "traffic_sim/core/closure_calendar.py",
-      "sha256": "2058faa6bb4492ae020ad0cdedfc35290fc28fd7af3eaf6ccb31f90ed20a1106"
+      "sha256": "48bcc59312ecbf188aefb0b04f30bc4231390ab4bb7b717aee86f62304cf1b9d"
     },
     "contracts_source": {
-      "bytes": 47599,
+      "bytes": 50151,
       "path": "traffic_sim/core/contracts.py",
-      "sha256": "89e526f533b51941c4494f7540292abe22704f07f39c5f56d604145ba4026249"
+      "sha256": "d7a7aa6bddf1288aaf28cb014b2d636e68ce719b67a8909b24534c5086a437c6"
     },
     "demand_build_lock_source": {
       "bytes": 1560,
@@ -318526,9 +318526,9 @@
       "sha256": "82bf7dfaf0d2ef52684d008ed42bc1e9d46171b3efab4e79376ad18bec27ee14"
     },
     "demand_builder_source": {
-      "bytes": 80584,
+      "bytes": 98123,
       "path": "build_sumo_demand.py",
-      "sha256": "e2f9a34b73dbc4355181a48a023fac08e37251e1f2668f23b892a2cf647bdd08"
+      "sha256": "26928ddfc03cd1d4d5b7c16d3d6fde237606b7255739e7e97e0fda68929167de"
     },
     "demand_source:assignment_priors": {
       "bytes": 31310,
@@ -318536,9 +318536,9 @@
       "sha256": "2d5e7201120bfcb0beaf0fe5e36ade8d57664230bc56825a1a5add3aef5ad92d"
     },
     "demand_source:build_candidates": {
-      "bytes": 226213,
+      "bytes": 229825,
       "path": "build_candidates.py",
-      "sha256": "19876d2ff6455e5e1193d86f40a6ac6f807c1b58ead5a021e1af62088d959241"
+      "sha256": "5975d6ca8072f0fdddbb64d45c19849e322793f96d64fd5d5d6a493d84aa74ae"
     },
     "demand_source:build_data": {
       "bytes": 35336,
@@ -318546,9 +318546,9 @@
       "sha256": "b3f395cebffd309d3e4130cf7cf8fd200323918b372e90af9f6bfa206fdfe8f7"
     },
     "demand_source:build_sumo_demand": {
-      "bytes": 80584,
+      "bytes": 98123,
       "path": "build_sumo_demand.py",
-      "sha256": "e2f9a34b73dbc4355181a48a023fac08e37251e1f2668f23b892a2cf647bdd08"
+      "sha256": "26928ddfc03cd1d4d5b7c16d3d6fde237606b7255739e7e97e0fda68929167de"
     },
     "demand_source:build_sumo_net": {
       "bytes": 12151,
@@ -318571,14 +318571,14 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     "demand_source:demand/calibration.py": {
-      "bytes": 29193,
+      "bytes": 35761,
       "path": "demand/calibration.py",
-      "sha256": "996966dc74f692afd8a45272354b63a9ce88d2034cc7929c9a181ba9473d8229"
+      "sha256": "0453ba7458dc96d0513da04707bae454224d84f11bf9daa4c9418ecfb4cfa06a"
     },
     "demand_source:demand/day_library.py": {
-      "bytes": 17546,
+      "bytes": 18504,
       "path": "demand/day_library.py",
-      "sha256": "cb10de8e52ba4823aba4696a640c417970275022f3a0304c5f8be75ddf0fd925"
+      "sha256": "208b5683b01359acc119904bb0afcabc7966a15f6a1bb28b8b86cf4d084a6d83"
     },
     "demand_source:demand/feedback.py": {
       "bytes": 9302,
@@ -318586,9 +318586,9 @@
       "sha256": "4e558de35352d9c6970d8b169299ddd0d33e9c38dbd6ccc3ecd587a6feede0fe"
     },
     "demand_source:demand/intake.py": {
-      "bytes": 19102,
+      "bytes": 23796,
       "path": "demand/intake.py",
-      "sha256": "265b820a236660f32c5a9384433401cf363dd2f8e9b0948fba9007242f007862"
+      "sha256": "2bd7034b25c603c48477be10ed6575b595d5c523dc43b37378ed3f3aa0095479"
     },
     "demand_source:demand/locations.py": {
       "bytes": 31452,
@@ -318601,9 +318601,9 @@
       "sha256": "17c82d9e823158b10b9181501031caceb4ceb26f74fbbc9b981d8d9b9598e542"
     },
     "demand_source:demand/publication.py": {
-      "bytes": 8852,
+      "bytes": 9083,
       "path": "demand/publication.py",
-      "sha256": "1603c1846c3fdc708d586a436b418e1b305e9c4744ca8c5e4ce9f7f63833faf7"
+      "sha256": "c9ab04738308b5cbd2de2f4e22d23a4ab6330d32dd930449f31af56f6db829da"
     },
     "demand_source:demand/structure.py": {
       "bytes": 38725,
@@ -318611,9 +318611,14 @@
       "sha256": "591e7dd21c65f08dd0fb73aa0c55256d1d2c1ca6dd686b03869ad76b3547ea38"
     },
     "demand_source:demand_source_identity": {
-      "bytes": 2210,
+      "bytes": 2434,
       "path": "traffic_sim/demand/source_identity.py",
-      "sha256": "18dc67d847d7abb0a679ef492fd169bbf41e954dc736e3348e638c1bac786e4c"
+      "sha256": "47e4d83ebc5c7d84975328293edec784fa2f14c035548d7fece2670c08aee405"
+    },
+    "demand_source:direction_anchor": {
+      "bytes": 15034,
+      "path": "traffic_sim/intake/direction_anchor.py",
+      "sha256": "2015a304a9ca435208ca9c624ef135a9c24e9a0a8078cd41512ce9e1a8416f33"
     },
     "demand_source:observability": {
       "bytes": 16599,
@@ -318621,9 +318626,9 @@
       "sha256": "dd1cb62ad6252df7f09e795c7a57bad3e715a5d76f9f6d7751fac47b7fc22465"
     },
     "demand_source:pfe": {
-      "bytes": 147677,
+      "bytes": 158675,
       "path": "traffic_sim/demand/pfe.py",
-      "sha256": "2bd8d183dada7162978af27c983a36a7cb3077dd2b91d8293a6390c725156bd6"
+      "sha256": "1ab30b8fd1701f7a9ae5416e7295e456a8b378b527c4a459193ce662823716bd"
     },
     "demand_source:pfe_kernel": {
       "bytes": 6216,
@@ -318636,19 +318641,19 @@
       "sha256": "71baf5b88a9466c9834bedc89b96fca1f1cc3ac5aab85796dbe1c730a7c2dfd9"
     },
     "demand_source:prior_flows": {
-      "bytes": 8026,
+      "bytes": 6042,
       "path": "prior_flows.py",
-      "sha256": "f934a3986c5d72495cf7b4e4df1594c02aad2f6977b6b329fc7a48661336cf94"
+      "sha256": "359257cc5250a0318f41492864bc404bcebded80a158e17139eefd059c809f01"
     },
     "demand_source:sensor_registry": {
-      "bytes": 13976,
+      "bytes": 23584,
       "path": "traffic_sim/intake/sensors.py",
-      "sha256": "ffb9f83c5ba9bbbc0abea954aca55001d2b3e703924c39542f953f66c50f2a7a"
+      "sha256": "3746cf937300dee8af9f8047fa0b512d31c34dd30a4a344b6f6dc35df5d8a4a7"
     },
     "demand_source:sensor_registry_data": {
-      "bytes": 7940,
+      "bytes": 9453,
       "path": "data_in/sensors.json",
-      "sha256": "956d3d0a648c99430fd47c8ea7f4d798c4b1f1b7c9f1ffb028eb26a391354995"
+      "sha256": "41db5d452cb104405d8bd6ac6b78e2c7748dcfe641a9266c7229a4fc7edf1f20"
     },
     "demand_source:traffic_sim/demand/__init__.py": {
       "bytes": 44,
@@ -318659,6 +318664,16 @@
       "bytes": 1560,
       "path": "traffic_sim/demand/build_lock.py",
       "sha256": "82bf7dfaf0d2ef52684d008ed42bc1e9d46171b3efab4e79376ad18bec27ee14"
+    },
+    "demand_source:traffic_sim/demand/catalog_qualification.py": {
+      "bytes": 7238,
+      "path": "traffic_sim/demand/catalog_qualification.py",
+      "sha256": "595095104feb48362ab4f5196377476263d9c39477cee8b050a81a8ed07ebbde"
+    },
+    "demand_source:traffic_sim/demand/route_catalog.py": {
+      "bytes": 20672,
+      "path": "traffic_sim/demand/route_catalog.py",
+      "sha256": "b5e5de186c31f7adf09a2c13eab1d1f34d73bf90cbd4d5e73aeb05e2a055cec9"
     },
     "demand_source:traffic_sim/demand/route_support.py": {
       "bytes": 2045,
@@ -318676,9 +318691,9 @@
       "sha256": "d322323d8be0c20e73f10f5f9829ccf1c44382ae81a88bacc7b1cb02dd9ccd79"
     },
     "forecast": {
-      "bytes": 703896,
+      "bytes": 703869,
       "path": "web/data/flows_forecast.json",
-      "sha256": "296065141735bea302f72bd9406e11ff84cb165613f61b3f6dfe46606561d791"
+      "sha256": "ef1ffa6b39d7703e85751833f865d2d371482ead8057ee9b360e9cff090ebce5"
     },
     "metrics_source": {
       "bytes": 12336,
@@ -318686,14 +318701,14 @@
       "sha256": "7f8eac6f834de7f5c22b4b47bfa6a36a4e3596b7fa3f40dbd2e7a256de11a71d"
     },
     "monthly_demand_source": {
-      "bytes": 42166,
+      "bytes": 44728,
       "path": "traffic_sim/simulation/monthly_demand.py",
-      "sha256": "1f9dd12de29fe172f9f6102ea76da07bc1ba8223c229304f21e52539632861e3"
+      "sha256": "58ee00a338e905538736f29563b0d27e5477ceb7f9d8d3a47859b2ac7d66d0de"
     },
     "monthly_sumo_source": {
-      "bytes": 92353,
+      "bytes": 105279,
       "path": "traffic_sim/simulation/monthly_sumo.py",
-      "sha256": "3ab2a8d71c7d13286ff93012156903f611743c702fe07c4747712133414e4c03"
+      "sha256": "4873d49731a0b249f55d9671de92d8ad9975d21a283a095dcf4c83dd1f47315a"
     },
     "monthly_warm_state_source": {
       "bytes": 79105,
@@ -318721,9 +318736,9 @@
       "sha256": "5402430b6bcf92ef41e916b2d3000f5fdbf3f7680596a289248469e694a68356"
     },
     "scenario_runner_source": {
-      "bytes": 148925,
+      "bytes": 158256,
       "path": "run_scenario.py",
-      "sha256": "a86779ab33f687bfd5c2cd35a3b9b7d53f7cc4df5a9db93d97483471bb7a8e9a"
+      "sha256": "5be0a077a56904bf8a3eb916fa70977101147a956d23ab70349bb03593ac3052"
     },
     "storage_pilot_tool_source": {
       "bytes": 7869,

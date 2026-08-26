@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""Delete candidate-pool cache entries no current build can restore.
+
+``sumo/candidate_cache`` is pure derived data: an entry is keyed on the full
+fingerprint of the generator sources and of every input the pool is a
+function of, and :func:`traffic_sim.demand.cache.restore` re-hashes each
+stored artifact before using it. So a changed line in build_candidates.py
+does not make an old entry WRONG — it makes it unreachable, forever, while
+it keeps costing ~19 MB per day-slot. Warming a year leaves tens of
+gigabytes of pools that no key can ever name again.
+
+Deleting a cache entry can therefore only cost a rebuild, never change a
+result. That is the whole safety argument, and it is why this tool exists
+instead of a hand-written ``rm -rf``: it applies the rule consistently,
+refuses to run while a demand build owns the shared workspace, and prints
+what it would remove before it removes anything.
+
+Which entries are unreachable cannot be answered by enumerating keys — a
+key covers per-date artifacts (the day's measured shape, its pool blocks)
+that only exist inside a build. Two rules are used instead:
+
+  * an entry stored BEFORE the newest change to any file the key is hashed
+    over cannot match a key computed from the files as they are now;
+  * an entry whose stored pool is named by a day-library entry that IS
+    still reachable is kept regardless, matched on the exact sha256 the
+    day recorded — an exact, content-addressed override of the timestamp
+    rule rather than a second guess about it.
+
+    python3 tools/prune_candidate_cache.py            # report only
+    python3 tools/prune_candidate_cache.py --yes      # delete
+
+Run it after a code freeze and BEFORE warming a horizon, never during one.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from demand.day_library import DEFAULT_ROOT as LIBRARY_ROOT  # noqa: E402
+from traffic_sim.demand.build_lock import demand_build_lock  # noqa: E402
+from traffic_sim.demand.cache import DEFAULT_ROOT as CACHE_ROOT  # noqa: E402
+
+# Shared files that every pool key hashes, minus per-date artifacts, the SUMO
+# binary and the one selected source-flow file.  Source-flow alternatives are
+# intentionally not a shared timestamp cutoff; see KEY_INPUTS below.
+KEY_SOURCES = (
+    "build_candidates.py",
+    "build_sumo_demand.py",
+    "build_data.py",
+    "dirsplit/geo.py",
+    "demand/locations.py",
+    "traffic_sim/demand/cache.py",
+    "traffic_sim/intake/sensors.py",
+    "traffic_sim/intake/direction_anchor.py",
+    "traffic_sim/core/fingerprint.py",
+)
+KEY_INPUTS = (
+    "sumo/net.net.xml",
+    "web/data/graph.graphml",
+    "web/data/network.geojson",
+    # The key contains exactly one source_flows file selected by the build.
+    # Neither alternative is a global invalidator: touching observations must
+    # not make forecast-keyed entries look unreachable, or vice versa.  Cache
+    # manifests currently contain output hashes only, so source-specific age
+    # classification is deliberately omitted rather than guessed broadly.
+    "web/data/normal_profile.json",
+    "data_in/sensors.json",
+    "data_in/deso/population_2023.json",
+    "data_in/deso/deso_goteborg.geojson",
+    "data_in/deso/buildings.geojson",
+    "data_in/deso/osm_buildings.geojson",
+    "data_in/deso/osm_pois.geojson",
+    "sumo/direction_split.json",
+    "sumo/assignment_priors.json",
+)
+
+
+def newest_key_input_mtime(root: Path) -> tuple[float, str]:
+    """When the pool-key inputs last changed, and which file changed last."""
+    newest, owner = 0.0, "(none present)"
+    for name in KEY_SOURCES + KEY_INPUTS:
+        path = root / name
+        try:
+            stamp = path.stat().st_mtime
+        except OSError:
+            continue
+        if stamp > newest:
+            newest, owner = stamp, name
+    return newest, owner
+
+
+def pools_named_by_live_days(library_root: Path) -> set[str]:
+    """Pool digests recorded by day-library entries the current code can hit.
+
+    Uses build_sumo_demand's own source inventory as the authority on what
+    "current" means, so this tool cannot drift into a second opinion about
+    which stored days are alive.
+    """
+    import build_sumo_demand
+
+    current = build_sumo_demand.demand_day_source_hashes()
+    live: set[str] = set()
+    for manifest_path in Path(library_root).glob("*/*/manifest.json"):
+        try:
+            identity = json.loads(manifest_path.read_text())["identity"]
+        except (OSError, ValueError, KeyError):
+            continue
+        if identity.get("source_hashes") != current:
+            continue
+        digest = identity.get("inputs", {}).get("candidate_pool")
+        if isinstance(digest, str):
+            live.add(digest)
+    return live
+
+
+def entry_pool_digest(entry: Path) -> str | None:
+    """The sha256 this entry's manifest records for its candidate route file."""
+    try:
+        manifest = json.loads((entry / "manifest.json").read_text())
+    except (OSError, ValueError):
+        return None
+    stored = manifest.get("outputs") or {}
+    record = stored.get("candidates.rou.xml")
+    return record.get("sha256") if isinstance(record, dict) else None
+
+
+def directory_bytes(path: Path) -> int:
+    total = 0
+    for item in path.rglob("*"):
+        try:
+            if item.is_file():
+                total += item.stat().st_size
+        except OSError:
+            # A concurrent/manual cleanup may remove a derived artifact after
+            # rglob observed it. The final workspace lock still protects the
+            # destructive phase; reporting must tolerate this read race.
+            continue
+    return total
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--yes", action="store_true",
+                        help="Actually delete what the report lists.")
+    parser.add_argument("--keep-recent-hours", type=float, default=24.0,
+                        help="Never touch an entry written this recently, so "
+                             "a build in flight cannot lose its pool.")
+    parser.add_argument("--cache-root", type=Path, default=ROOT / CACHE_ROOT)
+    parser.add_argument("--library-root", type=Path, default=ROOT / LIBRARY_ROOT)
+    return parser.parse_args()
+
+
+def _inspect_and_maybe_prune(args: argparse.Namespace, cache_root: Path) -> int:
+    """Classify and delete under the same workspace lock."""
+    reference, owner = newest_key_input_mtime(ROOT)
+    if reference == 0.0:
+        print("none of the pool-key inputs could be read — refusing to guess "
+              "which entries are unreachable")
+        return 1
+    protected_digests = pools_named_by_live_days(args.library_root)
+    cutoff = min(reference, time.time() - args.keep_recent_hours * 3600.0)
+
+    stale: list[tuple[Path, int, float]] = []
+    kept = kept_by_digest = 0
+    for entry in sorted(cache_root.iterdir()):
+        try:
+            is_directory = entry.is_dir()
+            entry_mtime = entry.stat().st_mtime
+        except OSError:
+            continue
+        if not is_directory:
+            continue
+        if entry_mtime >= cutoff:
+            kept += 1
+            continue
+        digest = entry_pool_digest(entry)
+        if digest is not None and digest in protected_digests:
+            kept += 1
+            kept_by_digest += 1
+            continue
+        stale.append((entry, directory_bytes(entry), entry_mtime))
+
+    total_gb = sum(size for _entry, size, _mtime in stale) / 1e9
+    print(f"candidate pool cache: {cache_root}")
+    print(f"  shared pool-key inputs last changed {time.strftime('%Y-%m-%d %H:%M', time.localtime(reference))}"
+          f" ({owner})")
+    print(f"  reachable-looking entries kept: {kept}"
+          f" ({kept_by_digest} protected by a live day-library entry)")
+    if not stale:
+        print("  nothing classified unreachable in this conservative snapshot")
+        return 0
+    print(f"  unreachable entries: {len(stale)}, {total_gb:.1f} GB")
+    for entry, size, entry_mtime in stale[:10]:
+        stamp = time.strftime('%Y-%m-%d %H:%M', time.localtime(entry_mtime))
+        print(f"    {entry.name}  {size / 1e6:8.1f} MB  stored {stamp}")
+    if len(stale) > 10:
+        print(f"    … and {len(stale) - 10} more")
+    if not args.yes:
+        print("  rerun with --yes to delete them (a deleted pool is rebuilt "
+              "on demand; only time is lost)")
+        return 0
+
+    removed = 0
+    for entry, _size, _mtime in stale:
+        shutil.rmtree(entry, ignore_errors=True)
+        removed += 1
+    # Single-flight locks belong to the monthly baseline cache, not this
+    # candidate-pool root. They are intentionally retained: unlinking a
+    # flock pathname while waiters have the old inode open can split one
+    # lock into two independent locks and break serialization.
+    for leftover in cache_root.glob(".*.tmp"):
+        try:
+            old = leftover.stat().st_mtime < cutoff
+        except OSError:
+            continue
+        if old:
+            shutil.rmtree(leftover, ignore_errors=True)
+    print(f"deleted {removed} unreachable pool(s), freeing {total_gb:.1f} GB")
+    return 0
+
+
+def main() -> int:
+    args = parse_args()
+    cache_root = Path(args.cache_root)
+    if not cache_root.is_dir():
+        print(f"no candidate cache at {cache_root} — nothing to prune")
+        return 0
+
+    # Classification is part of the decision, so it must observe the same
+    # workspace snapshot as deletion.  Report-only runs use the lock too: the
+    # printed list then describes a coherent build boundary rather than a
+    # best-effort pre-lock scan.
+    with demand_build_lock():
+        return _inspect_and_maybe_prune(args, cache_root)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

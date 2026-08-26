@@ -62,7 +62,16 @@ HOLIDAY_MAPPING_2027_TO_2025: dict[str, str] = {
     "2027-05-06": "2025-05-29",   # Kristi Himmelsfärdsdag
     "2027-05-16": "2025-06-08",   # Pingstdagen
     "2027-06-06": "2025-06-06",   # Sveriges nationaldag
-    "2027-06-26": "2025-06-20",   # Midsommardagen
+    # Midsommarafton, not Midsommardagen. The 2025 side lists the Friday
+    # EVE (2025-06-20) — as it does for Julafton and Nyarsafton, the
+    # other two eves that carry the Swedish holiday traffic — while this
+    # side used to name the Saturday DAY (2027-06-26). That mapped a
+    # Saturday onto a Friday factor, against this table's own rule and
+    # its own comment, AND left Midsommarafton 2027 (the single largest
+    # traffic anomaly of the Swedish summer) with no factor at all,
+    # forecast as an ordinary Friday. Midsommardagen now has no factor
+    # on either side, which is the symmetric treatment.
+    "2027-06-25": "2025-06-20",   # Midsommarafton  (Fri -> Fri)
     "2027-11-06": "2025-11-01",   # Alla helgons dag
     "2027-12-24": "2025-12-24",   # Julafton
     "2027-12-25": "2025-12-25",   # Juldagen
@@ -210,7 +219,7 @@ def main() -> None:
             ("Nyårsdagen   Jan  1 00:30", "2027-01-01 00:30"),
             ("Nyårsdagen   Jan  1 00:45", "2027-01-01 00:45"),
             ("Nyårsdagen   Jan  1 07:30", "2027-01-01 07:30"),
-            ("Midsommar    Jun 26 14:00", "2027-06-26 14:00"),
+            ("Midsommarafton Jun 25 14:00", "2027-06-25 14:00"),
             ("Nationaldag  Jun  6 17:00", "2027-06-06 17:00"),
             ("Påskdag      Mar 28 12:00", "2027-03-28 12:00"),
             ("Första maj   Maj  1 12:00", "2027-05-01 12:00"),

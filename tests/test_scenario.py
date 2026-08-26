@@ -134,6 +134,56 @@ class TestDemandVariants:
             tmp_path / "calibrated.rou.xml"
         ]
 
+    def test_q50_manifest_is_the_authoritative_normal_contract(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
+        (tmp_path / "calibrated.rou.xml").write_text("<routes/>")
+        meta = {
+            "n_variants": 1,
+            "demand_variant_contract": {
+                "schema_version": 1,
+                "mode": "q50_only",
+                "variants": [{
+                    "name": "q50", "target_key": "edge_shares",
+                    "route_file": "calibrated.rou.xml",
+                }],
+            },
+        }
+        assert run_scenario.demand_variant_entries(meta)[0]["name"] == "q50"
+        assert run_scenario.demand_variants(meta) == [
+            tmp_path / "calibrated.rou.xml"]
+
+    def test_legacy_stress_seeds_keep_frozen_q10_q50_q90_order(self, tmp_path):
+        meta = {"n_variants": 3}
+        assert run_scenario.default_seed_variant_mapping(
+            meta, [1000, 1001, 1002]) == {
+                1000: "q10", 1001: "q50", 1002: "q90",
+            }
+        variants = [tmp_path / name for name in (
+            "calibrated.rou.xml", "calibrated_v1.rou.xml",
+            "calibrated_v2.rou.xml")]
+        assert run_scenario.seed_variant_plan(variants) == [
+            (1000, variants[1]), (1001, variants[0]), (1002, variants[2])]
+
+    def test_manifest_rejects_implicit_or_reordered_stress_arms(self):
+        meta = {
+            "n_variants": 3,
+            "demand_variant_contract": {
+                "schema_version": 1,
+                "mode": "direction_stress",
+                "variants": [
+                    {"name": "q10", "target_key": "edge_shares_q10",
+                     "route_file": "calibrated_v1.rou.xml"},
+                    {"name": "q50", "target_key": "edge_shares",
+                     "route_file": "calibrated.rou.xml"},
+                    {"name": "q90", "target_key": "edge_shares_q90",
+                     "route_file": "calibrated_v2.rou.xml"},
+                ],
+            },
+        }
+        with pytest.raises(ValueError, match="exactly q50"):
+            run_scenario.demand_variant_entries(meta)
+
     def test_quantile_metadata_requires_every_declared_route_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(run_scenario, "SUMO_DIR", tmp_path)
         (tmp_path / "calibrated.rou.xml").write_text("<routes/>")
@@ -300,6 +350,96 @@ class TestSensorAudit:
         row = audit["directions"][0]
         assert row["target_representative"] == [10.0]
         assert row["simulated_representative"] == [10]
+
+
+class TestExactSensorPassageAudit:
+    @staticmethod
+    def _inputs(tmp_path, monkeypatch, seed_values):
+        geo = {"type": "FeatureCollection", "features": [{
+            "type": "Feature",
+            "geometry": {"type": "LineString",
+                         "coordinates": [[0, 0], [0, 1]]},
+            "properties": {"id": "e", "sensor_id": "s", "level": "S"},
+        }]}
+        geo_path = tmp_path / "network.geojson"
+        geo_path.write_text(json.dumps(geo))
+        monkeypatch.setattr(run_scenario, "GEO_PATH", geo_path)
+        meta = {
+            "sensor_targets": {"variants": {
+                "edge_shares": {"e": [10.0, 11.0]},
+            }},
+            "sensor_observations": {"e": [10, 11]},
+        }
+        results = [
+            {"seed": seed, "route_path": Path("calibrated.rou.xml"),
+             "target_key": "edge_shares",
+             "flows": {"e": np.array(values, dtype=float)}}
+            for seed, values in seed_values
+        ]
+        raw_mean = {
+            "e": [sum(values[q] for _seed, values in seed_values)
+                  / len(seed_values) for q in range(2)]
+        }
+        return meta, results, raw_mean
+
+    def test_exact_raw_passages_pass_for_ensemble_and_each_seed(
+            self, tmp_path, monkeypatch):
+        from traffic_sim.simulation.sensor_fit import assess_exact_output_fit
+
+        meta, results, raw_mean = self._inputs(
+            tmp_path, monkeypatch,
+            [(1000, [10, 11]), (1001, [10, 11])])
+        audit = run_scenario.build_sensor_audit(
+            meta, results, {"e": [10, 11]}, 2,
+            raw_mean_flows=raw_mean, calibration_comparison=True)
+
+        exact = audit["exact_output_fit"]
+        assert exact["ensemble"]["exact"] == 2
+        assert exact["ensemble_mismatches"] == []
+        assert all(row["exact"] == 2 for row in exact["per_seed"])
+        assert assess_exact_output_fit(audit, n_intervals=2)["errors"] == []
+
+    def test_ensemble_average_cannot_hide_seed_timing_errors(
+            self, tmp_path, monkeypatch):
+        from traffic_sim.simulation.sensor_fit import assess_exact_output_fit
+
+        meta, results, raw_mean = self._inputs(
+            tmp_path, monkeypatch,
+            [(1000, [10, 12]), (1001, [10, 10])])
+        audit = run_scenario.build_sensor_audit(
+            meta, results, {"e": [10, 11]}, 2,
+            raw_mean_flows=raw_mean, calibration_comparison=True)
+
+        exact = audit["exact_output_fit"]
+        assert exact["ensemble"]["exact"] == 2
+        assert len(exact["seed_mismatches"]) == 2
+        assessment = assess_exact_output_fit(audit, n_intervals=2)
+        assert any("seed 1000" in error for error in assessment["errors"])
+        assert any("seed 1001" in error for error in assessment["errors"])
+
+    def test_declared_exact_summary_is_recomputed_from_raw_rows(
+            self, tmp_path, monkeypatch):
+        from traffic_sim.simulation.sensor_fit import assess_exact_output_fit
+
+        meta, results, raw_mean = self._inputs(
+            tmp_path, monkeypatch, [(1000, [10, 12])])
+        audit = run_scenario.build_sensor_audit(
+            meta, results, {"e": [10, 12]}, 2,
+            raw_mean_flows=raw_mean, calibration_comparison=True)
+        audit["exact_output_fit"]["ensemble"]["exact"] = 2
+
+        assessment = assess_exact_output_fit(audit, n_intervals=2)
+        assert any("inkonsekvent exact" in error
+                   for error in assessment["errors"])
+
+    def test_closure_audit_does_not_claim_baseline_exactness(
+            self, tmp_path, monkeypatch):
+        meta, results, raw_mean = self._inputs(
+            tmp_path, monkeypatch, [(1000, [4, 5])])
+        audit = run_scenario.build_sensor_audit(
+            meta, results, {"e": [4, 5]}, 2,
+            raw_mean_flows=raw_mean, calibration_comparison=False)
+        assert "exact_output_fit" not in audit
 
 
 class TestScenarioSpecIntegration:
@@ -1109,6 +1249,48 @@ class TestScenarioManifestDemandScope:
         with pytest.raises(SystemExit):
             run_scenario.parse_args()
 
+    def test_adopted_minimal_edgedata_is_live_safe_but_rollback_is_isolated(
+            self, monkeypatch, tmp_path):
+        monkeypatch.setattr(sys, "argv", [
+            "run_scenario.py", "--minimal-edgedata",
+        ])
+        assert run_scenario.parse_args().minimal_edgedata is True
+
+        monkeypatch.setattr(sys, "argv", [
+            "run_scenario.py", "--minimal-edgedata",
+            "--out-dir", str(tmp_path / "output"),
+            "--timing-sidecar", str(tmp_path / "timing.json"),
+        ])
+        assert run_scenario.parse_args().minimal_edgedata is True
+
+        monkeypatch.setattr(sys, "argv", [
+            "run_scenario.py", "--full-edgedata",
+            "--out-dir", str(tmp_path / "full-output"),
+            "--timing-sidecar", str(tmp_path / "full-timing.json"),
+        ])
+        assert run_scenario.parse_args().full_edgedata is True
+
+    def test_warning_diagnostics_do_not_require_experimental_output(
+            self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", [
+            "run_scenario.py", "--sumo-warnings",
+        ])
+        assert run_scenario.parse_args().sumo_warnings is True
+
+    def test_minimal_edgedata_writes_only_consumed_attributes(self, tmp_path):
+        additional = tmp_path / "edge.add.xml"
+        run_scenario.write_edgedata_additional(
+            additional, tmp_path / "edge.xml", 86400)
+
+        edge_data = ET.parse(additional).getroot().find("edgeData")
+        assert edge_data.get("writeAttributes") == "entered timeLoss"
+
+        run_scenario.write_edgedata_additional(
+            additional, tmp_path / "edge.xml", 86400,
+            minimal_attributes=False)
+        edge_data = ET.parse(additional).getroot().find("edgeData")
+        assert edge_data.get("writeAttributes") is None
+
     def test_aggregate_flows_includes_edges_with_zero_traffic_in_every_seed(self):
         """Finding #1 from a bug review 2026-07-10, independently verified
         and fixed: excludeEmpty="true" means an edge with genuinely zero
@@ -1914,6 +2096,42 @@ class TestSharedPayloadBuildersMatchLegacyProduction:
     def test_scenario_payload_omits_multi_day_when_absent(self):
         got = run_scenario.build_scenario_payload(**self._kwargs(case="baseline"))
         assert "multi_day_validation" not in got
+
+    def test_publication_writes_validated_payload_and_manifest_only(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(run_scenario, "OUT_DIR", tmp_path)
+        kw = self._kwargs(case="baseline")
+        payload = run_scenario.build_scenario_payload(**kw)
+
+        scenario_path, index_path = run_scenario.publish_scenario_artifacts(
+            payload,
+            name=kw["name"],
+            label=kw["label"],
+            close_edges=kw["close_edges"],
+            closures=kw["closures"],
+            teleport_policy_s=None,
+            spec=kw["spec"],
+            signature=kw["sig"],
+            meta=kw["meta"],
+            window_label=kw["window_label"],
+        )
+
+        assert json.loads(scenario_path.read_text()) == payload
+        index = json.loads(index_path.read_text())
+        assert index["demand_signature"] == kw["sig"]
+        assert index["scenarios"] == [{
+            "name": "baseline",
+            "label": "Baseline",
+            "file": "baseline.json",
+            "closed_edges": [],
+            "closures": [],
+            "closure_integrity": None,
+            "scenario_spec": kw["spec"].to_dict(),
+            "demand_signature": kw["sig"],
+            "build_id": "b1",
+            "demand_build_key": "k1",
+            "window": "00:00–24:00",
+        }]
 
     def _legacy(self, kw):
         return self._legacy_scenario(**kw)

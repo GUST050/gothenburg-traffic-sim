@@ -2103,6 +2103,219 @@ def sensor_pool_support_failures(
     }
 
 
+def measured_incidence_basis_failures(
+    routed_path: Path, measured: set[str] | list[str] | tuple[str, ...],
+) -> list[str]:
+    """Return sensors lacking a route that touches exactly that sensor.
+
+    Exact quarter-hour margins are integer constraints.  A candidate pool
+    can contain hundreds of routes per sensor and still be structurally
+    infeasible when every route through one sensor also crosses another one.
+    One non-negative, single-sensor column per measured edge is a sufficient
+    basis for every non-negative integer target vector.  Check that stronger
+    invariant explicitly instead of discovering its absence after PFE has
+    solved hundreds of quarters.
+    """
+    measured_set = {str(edge) for edge in measured}
+    exclusive: set[str] = set()
+    for vehicle in ET.parse(routed_path).getroot().findall("vehicle"):
+        route = vehicle.find("route")
+        route_edges = ((route.get("edges") or "").split()
+                       if route is not None else [])
+        hits = measured_set.intersection(route_edges)
+        if len(hits) == 1:
+            exclusive.update(hits)
+    return sorted(measured_set - exclusive)
+
+
+def _grounded_pool_edges(
+    location_pools: dict[str, list[dict]], *, home: bool,
+) -> list[tuple[str, str]]:
+    """Return deterministic ``(edge, pool-key)`` grounded endpoint choices."""
+    choices: list[tuple[str, str]] = []
+    for pool_key, locations in location_pools.items():
+        if not isinstance(locations, list) or not locations:
+            continue
+        is_home = str(pool_key).startswith("home:")
+        if is_home != home or ":" not in str(pool_key):
+            continue
+        edge_id = str(pool_key).split(":", 1)[1]
+        choices.append((edge_id, str(pool_key)))
+    return sorted(set(choices))
+
+
+def grounded_sensor_basis_route(
+    target: str,
+    measured: set[str] | list[str] | tuple[str, ...],
+    location_pools: dict[str, list[dict]],
+    net_path: Path = NET_PATH,
+    max_stretch: float = DEFAULT_MAX_STRETCH,
+) -> dict | None:
+    """Find one legal, simple and fully grounded route exclusive to ``target``.
+
+    The origin must be an existing anonymous-home pool and the destination an
+    existing activity/POI pool.  Routing uses SUMO's connection table, with
+    every other measured edge removed.  The result therefore accounts for
+    observed traffic at ``target`` without reviving the retired synthetic
+    unmeasured-background population.
+    """
+    measured_set = {str(edge) for edge in measured}
+    if target not in measured_set:
+        raise ValueError(f"basis target is not measured: {target}")
+    edge_ids, costs = load_sumo_routing_data(net_path)
+    full_graph = load_sumo_connection_graph(net_path, edge_ids, costs)
+    if target not in full_graph:
+        return None
+
+    allowed = set(full_graph) - (measured_set - {target})
+    graph = full_graph.subgraph(allowed).copy()
+    if target not in graph:
+        return None
+    home_choices = [choice for choice in _grounded_pool_edges(
+        location_pools, home=True) if choice[0] in graph and choice[0] != target]
+    activity_choices = [choice for choice in _grounded_pool_edges(
+        location_pools, home=False) if choice[0] in graph and choice[0] != target]
+    if not home_choices or not activity_choices:
+        return None
+
+    prefix_cost = nx.single_source_dijkstra_path_length(
+        graph.reverse(copy=False), target, weight="weight")
+    suffix_cost = nx.single_source_dijkstra_path_length(
+        graph, target, weight="weight")
+    origins = [(edge, pool, prefix_cost[edge] + costs[edge])
+               for edge, pool in home_choices if edge in prefix_cost]
+    destinations = [(edge, pool, suffix_cost[edge])
+                    for edge, pool in activity_choices if edge in suffix_cost]
+    if not origins or not destinations:
+        return None
+
+    # Retain a bounded set closest to a representative five-minute trip,
+    # then apply the more expensive simplicity and direct-stretch checks.
+    # This is deterministic and bounded even for a city-wide endpoint pool.
+    import heapq
+    shortlist: list[tuple[float, str, str, str, str]] = []
+    shortlist_limit = 4096
+    for origin, origin_pool, pre_cost in origins:
+        for destination, destination_pool, post_cost in destinations:
+            score = abs((pre_cost + post_cost) - 300.0)
+            item = (-score, origin, destination, origin_pool, destination_pool)
+            if len(shortlist) < shortlist_limit:
+                heapq.heappush(shortlist, item)
+            elif item > shortlist[0]:
+                heapq.heapreplace(shortlist, item)
+
+    ranked = sorted(
+        [(-neg_score, origin, destination, origin_pool, destination_pool)
+         for neg_score, origin, destination, origin_pool, destination_pool
+         in shortlist])
+    for _score, origin, destination, origin_pool, destination_pool in ranked:
+        prefix = nx.shortest_path(graph, origin, target, weight="weight")
+        suffix = nx.shortest_path(graph, target, destination, weight="weight")
+        route_edges = prefix + suffix[1:]
+        if len(route_edges) < 2 or route_visits_a_node_twice(route_edges):
+            continue
+        if measured_set.intersection(route_edges) != {target}:
+            continue
+        try:
+            direct_cost = costs[origin] + nx.shortest_path_length(
+                full_graph, origin, destination, weight="weight")
+        except nx.NetworkXNoPath:
+            continue
+        route_cost = sum(costs[edge] for edge in route_edges)
+        if route_cost > float(max_stretch) * direct_cost + 1e-9:
+            continue
+        purpose = destination_pool.split(":", 1)[0]
+        return {
+            "route_edges": route_edges,
+            "origin_edge": origin,
+            "destination_edge": destination,
+            "origin_location_pool": origin_pool,
+            "destination_location_pool": destination_pool,
+            "purpose": purpose,
+            "route_cost_s": route_cost,
+            "direct_cost_s": direct_cost,
+        }
+    return None
+
+
+def install_grounded_sensor_basis_routes(
+    routed_path: Path,
+    metadata_path: Path,
+    measured: set[str] | list[str] | tuple[str, ...],
+    net_path: Path = NET_PATH,
+    max_stretch: float = DEFAULT_MAX_STRETCH,
+) -> dict[str, object]:
+    """Install missing single-sensor basis columns or fail before PFE runs."""
+    missing = measured_incidence_basis_failures(routed_path, measured)
+    if not missing:
+        return {"missing_before": [], "installed": [], "missing_after": []}
+    document = json.loads(metadata_path.read_text())
+    candidates = document.get("candidates")
+    location_pools = document.get("location_pools")
+    if not isinstance(candidates, dict) or not isinstance(location_pools, dict):
+        raise ValueError("candidate metadata lacks candidates or location_pools")
+
+    tree = ET.parse(routed_path)
+    root = tree.getroot()
+    installed: list[str] = []
+    unresolved: list[str] = []
+    departure_by_purpose = {"arbete": 8 * 3600.0,
+                            "service": 12 * 3600.0,
+                            "fritid": 18 * 3600.0}
+    for edge in missing:
+        basis = grounded_sensor_basis_route(
+            edge, measured, location_pools, net_path, max_stretch)
+        if basis is None:
+            unresolved.append(edge)
+            continue
+        digest = hashlib.sha256(
+            (edge + "|" + " ".join(basis["route_edges"])).encode()).hexdigest()[:16]
+        vehicle_id = f"sensor_basis_{digest}"
+        if vehicle_id in candidates:
+            raise ValueError(f"duplicate grounded basis id: {vehicle_id}")
+        depart = departure_by_purpose.get(str(basis["purpose"]), 12 * 3600.0)
+        vehicle = ET.Element("vehicle", id=vehicle_id, depart=f"{depart:.1f}")
+        ET.SubElement(vehicle, "route", edges=" ".join(basis["route_edges"]))
+        root.append(vehicle)
+        candidates[vehicle_id] = {
+            "purpose": basis["purpose"],
+            "tour_id": f"sensor-basis-{digest}",
+            "leg": "outbound",
+            "origin_edge": basis["origin_edge"],
+            "destination_edge": basis["destination_edge"],
+            "via_edge": edge,
+            "candidate_depart_s": depart,
+            "origin_location_pool": basis["origin_location_pool"],
+            "destination_location_pool": basis["destination_location_pool"],
+            "coverage_edge": edge,
+            "support_only": True,
+            "support_kind": "grounded_sensor_incidence_basis_v1",
+            "synthetic_endpoint": False,
+            "unavoidable_loop": False,
+        }
+        installed.append(vehicle_id)
+
+    if unresolved:
+        raise ValueError(
+            "no legal grounded single-sensor route exists for: "
+            + ", ".join(unresolved))
+    vehicles = list(root.findall("vehicle"))
+    for vehicle in vehicles:
+        root.remove(vehicle)
+    vehicles.sort(key=lambda vehicle: (
+        float(vehicle.get("depart", "0")), str(vehicle.get("id", ""))))
+    root.extend(vehicles)
+    tree.write(routed_path)
+    metadata_path.write_text(json.dumps(document, separators=(",", ":")))
+    missing_after = measured_incidence_basis_failures(routed_path, measured)
+    if missing_after:
+        raise ValueError(
+            "grounded basis installation did not satisfy: "
+            + ", ".join(missing_after))
+    return {"missing_before": missing, "installed": installed,
+            "missing_after": missing_after}
+
+
 def upstream_downstream_gates(
     G, m_edge: str, entries: list[tuple[str, int]], exits: list[tuple[str, int]],
 ) -> tuple[list[str], list[str]]:
@@ -3502,6 +3715,15 @@ def day_type_template_seed(base_seed: int, pool_key: str) -> int:
     return _derived_seed(base_seed, f"pool:{pool_key}")
 
 
+def canonical_template_digest(templates: list[tuple]) -> str:
+    """Semantic digest before daily resampling, departures and routing."""
+    import hashlib
+    payload = [list(record[:6]) for record in templates]
+    canonical = json.dumps(payload, sort_keys=False, separators=(",", ":"),
+                           ensure_ascii=True).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def generate_day_block(
     structure: CandidateStructure, profile: np.ndarray, offset_s: float,
     id_prefix: str, seed: int, day_index: int, n_total: int,
@@ -3510,6 +3732,7 @@ def generate_day_block(
     gravity_alpha: float = 0.0, date: str | None = None,
     pool_key: str | None = None,
     template_profile: np.ndarray | None = None,
+    catalog_mode: bool = False,
 ) -> tuple[list[tuple], list[float], dict[str, int], list[tuple]]:
     """Generate one calendar-day candidate block.
 
@@ -3525,7 +3748,8 @@ def generate_day_block(
     into geometry merely because that date happened to be the first block of
     its type in a warming window.
     """
-    rng = np.random.default_rng(day_block_seed(seed, date, day_index))
+    rng = np.random.default_rng(day_block_seed(
+        seed, None if catalog_mode else date, day_index))
     raw_lengths: list[float] = []
     if template_trips is None:
         geometry_profile = np.asarray(
@@ -3564,7 +3788,7 @@ def generate_day_block(
     active_purpose_tours = any(
         _tour_kind(str(record[4])) in {"ii", "ei"}
         for record in canonical_templates if len(record) >= 6)
-    if active_purpose_tours:
+    if active_purpose_tours and not catalog_mode:
         # Sensor-conditioned acceptance is not purpose-neutral: a longer
         # leisure route, for example, can have a different probability of
         # finding a natural measured crossing than a work route.  Retaining
@@ -3576,6 +3800,19 @@ def generate_day_block(
         # the behavioural purpose distribution an exact finite-pool contract.
         day_templates = _resample_reused_template_tours(
             canonical_templates, profile, is_weekend, rng)
+        lengths = _template_tour_lengths_km(day_templates, structure)
+    elif active_purpose_tours and catalog_mode:
+        # Catalog mode freezes the one canonical, purpose-rebalanced support
+        # set.  Daily departure profiles are applied later by calibration;
+        # resampling here would make geometry depend on the first date built.
+        canonical_profile = np.asarray(
+            template_profile if template_profile is not None else profile,
+            dtype=float)
+        day_templates = _resample_reused_template_tours(
+            canonical_templates, canonical_profile, is_weekend,
+            np.random.default_rng(day_type_template_seed(
+                seed, pool_key if pool_key is not None
+                else ("weekend" if is_weekend else "weekday"))))
         lengths = _template_tour_lengths_km(day_templates, structure)
     else:
         # Legacy/minimal callers without a recognised activity-tour shape
@@ -3768,6 +4005,16 @@ def main() -> None:
                          "each gives its own profile, offset and ID prefix. "
                          "Omit it to retain the one-day CLI unchanged.")
     ap.add_argument("--n-total", type=int, default=12000)
+    ap.add_argument("--catalog-mode", action="store_true",
+                    help="Freeze one structural route support set for the "
+                         "weekday/weekend catalog. This is an opt-in build "
+                         "mode: it must not be combined with a day-block or "
+                         "real-day shape, and departure dates are not part of "
+                         "the catalog geometry.")
+    ap.add_argument("--catalog-pool-key", choices=["weekday", "weekend"],
+                    default=None,
+                    help="Day type label used with --catalog-mode (defaults "
+                         "from --is-weekend).")
     ap.add_argument("--assignment-priors", default=str(
         SUMO_DIR / "assignment_priors.json"),
         help="Gravity/Dial assignment-prior artifact; its per-edge "
@@ -3796,8 +4043,8 @@ def main() -> None:
                         "natively via duarouter instead of a re-implemented "
                         "networkx shortest-path loop. SUMO's X-times-optimal "
                         "figure is a WORST-CASE bound, not the outcome: "
-                        "measured at X=2.0, 0.0% of routes exceed +50% and "
-                        "the median is +3.5% over the fastest path that "
+                        "measured at X=2.0, 0.0%% of routes exceed +50%% and "
+                        "the median is +3.5%% over the fastest path that "
                         "still crosses the trip's own sensor. Directness is "
                         "near-independent of X; diversity is not. See the "
                         "DEFAULT_ROUTE_DIVERSITY sweep table before changing "
@@ -3815,7 +4062,7 @@ def main() -> None:
                         "theoretical worst case, so it can only catch what "
                         "the generator was already licensed to produce. "
                         "Measured: it dropped 13 of 12,000 candidates "
-                        "(0.1%). They answer different questions — how far "
+                        "(0.1%%). They answer different questions — how far "
                         "the search may EXPLORE versus how far a result may "
                         "SHIP — and a backstop above the jitter bound is "
                         "meant to be nearly inert, which is the point")
@@ -3840,14 +4087,14 @@ def main() -> None:
                         "so it cannot see a small absurdity inside a long one "
                         "(measured: a 101-edge route at a globally fine 1.099x "
                         "contained a 3.3x roundabout manoeuvre). Near-inert by "
-                        "design: drops ~0.1% of the real pool")
+                        "design: drops ~0.1%% of the real pool")
     ap.add_argument("--atomic-tours", action="store_true",
                     help="drop a paired tour's surviving leg when the route "
                         "filters removed its partner, so every tour in the "
                         "pool is complete. OFF by default: the pool is a "
                         "coverage support set the PFE reweights freely and "
                         "never reads the pairing from, and dropping costs "
-                        "13.9% of the pool — enough to breach the 75% supply "
+                        "13.9%% of the pool — enough to breach the 75%% supply "
                         "floor. The default instead MARKS each orphaned leg "
                         "(tour_partner_dropped) and reports the directional "
                         "imbalance. Use this for work that does consume tour "
@@ -3855,6 +4102,10 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out-suffix", default="",
                     help="internal use by calibrate_theta.py")
+    ap.add_argument("--out-dir", type=Path, default=SUMO_DIR,
+                    help="Directory for generated candidate artifacts "
+                         "(default: sumo). Network and structural inputs "
+                         "remain read from their normal repository paths.")
     ap.add_argument("--weight-file", default=None,
                     help="a SUMO meandata XML (e.g. a BPR estimate from a "
                         "prior iteration's own achieved flow) giving MEASURED "
@@ -3872,6 +4123,14 @@ def main() -> None:
                         "duarouter so trips are routed against the "
                         "congestion of the period they actually depart in.")
     args = ap.parse_args()
+    output_dir = Path(args.out_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.catalog_mode:
+        if args.day_blocks_file or args.real_day_shape_file:
+            ap.error("--catalog-mode cannot be combined with "
+                     "--day-blocks-file or --real-day-shape-file")
+        if args.catalog_pool_key is not None:
+            args.is_weekend = args.catalog_pool_key == "weekend"
     G = ox.load_graphml(GRAPH_PATH)
     try:
         sumo_edge_ids, routing_costs = load_sumo_routing_data(NET_PATH)
@@ -3957,6 +4216,7 @@ def main() -> None:
         sys.exit("POI access mapping produced no activity mass for: "
                  + ", ".join(empty_activity))
     multi_day_trips = None
+    canonical_templates_for_report: list[tuple] | None = None
     n_day_blocks = 1
     structure = CandidateStructure(
         G=routing_G, edges=edges, hmass=hmass, amass=amass, entries=entries,
@@ -3994,7 +4254,8 @@ def main() -> None:
                 bool(block_spec.get("is_weekend", False)), args.min_per_sensor,
                 templates.get(pool_key), gravity_alpha=args.gravity_alpha,
                 date=block_spec.get("date"), pool_key=pool_key,
-                template_profile=template_profile)
+                template_profile=template_profile,
+                catalog_mode=args.catalog_mode)
             templates.setdefault(pool_key, template)
             multi_day_trips.extend(block)
             tour_lengths_km.extend(lengths)
@@ -4012,14 +4273,31 @@ def main() -> None:
             structure, shape_hourly, 0.0, "", args.seed, 0, args.n_total,
             args.through_fraction, args.cross_fraction, args.gravity_km,
             args.is_weekend, args.min_per_sensor,
-            gravity_alpha=args.gravity_alpha, date=args.date,
+            gravity_alpha=args.gravity_alpha,
+            date=None if args.catalog_mode else args.date,
+            pool_key=(args.catalog_pool_key or
+                      ("weekend" if args.is_weekend else "weekday")),
             template_profile=pool_departure_shape(
-                daily_shape(args.is_weekend), args.pool_departure_floor))
+                daily_shape(args.is_weekend), args.pool_departure_floor),
+            catalog_mode=args.catalog_mode)
+        canonical_templates_for_report = _template
         trips = [
             (depart, from_edge, to_edge, via_edge, purpose, tour_id, leg)
             for _trip_id, depart, from_edge, to_edge, via_edge,
             purpose, tour_id, leg in block
         ]
+
+    if args.catalog_mode:
+        if canonical_templates_for_report is None:
+            sys.exit("catalog mode did not produce canonical templates")
+        (output_dir / "canonical_template_report.json").write_text(json.dumps({
+            "schema_version": 1,
+            "pool_key": (args.catalog_pool_key or
+                         ("weekend" if args.is_weekend else "weekday")),
+            "templates": len(canonical_templates_for_report),
+            "semantic_sha256": canonical_template_digest(
+                canonical_templates_for_report),
+        }, indent=1, sort_keys=True))
 
     n_through     = int(args.n_total * args.through_fraction)
     n_tours_total = (args.n_total - n_through) // 2
@@ -4033,7 +4311,7 @@ def main() -> None:
     trips.sort(key=lambda t: t[0])
     if multi_day_trips is not None:
         multi_day_trips.sort(key=lambda t: t[1])
-    trips_path = SUMO_DIR / f"tours{args.out_suffix}.trips.xml"
+    trips_path = output_dir / f"tours{args.out_suffix}.trips.xml"
     candidate_meta: dict[str, dict] = {}
     location_pools = build_location_pool_document(home_field, activity_fields)
     # BASELINE RULE (Gustav, 2026-08-05): the calibrated population contains
@@ -4055,7 +4333,7 @@ def main() -> None:
                        for category, field in activity_fields.items()},
         "location_pools": len(location_pools),
     }
-    with open(SUMO_DIR / f"endpoint_location_report{args.out_suffix}.json", "w") as f:
+    with open(output_dir / f"endpoint_location_report{args.out_suffix}.json", "w") as f:
         json.dump(location_report, f, indent=1, sort_keys=True)
     with open(trips_path, "w") as f:
         f.write("<routes>\n")
@@ -4159,7 +4437,7 @@ def main() -> None:
                   else [t[3] for t in multi_day_trips])
     fit["dest_sensor_proximity"] = destination_sensor_proximity(
         dest_edges, edge_latlon, measured)
-    with open(SUMO_DIR / f"trip_length_fit{args.out_suffix}.json", "w") as f:
+    with open(output_dir / f"trip_length_fit{args.out_suffix}.json", "w") as f:
         json.dump(fit, f, indent=1)
     print(f"  trip-length fit vs availability-corrected RVU target "
           f"{fit['target_shares']}: generated {fit['shares']}  "
@@ -4175,8 +4453,8 @@ def main() -> None:
         return
 
     home = sumo_home()
-    out = SUMO_DIR / f"candidates{args.out_suffix}.rou.xml"
-    meta_out = SUMO_DIR / f"candidates{args.out_suffix}.meta.json"
+    out = output_dir / f"candidates{args.out_suffix}.rou.xml"
+    meta_out = output_dir / f"candidates{args.out_suffix}.meta.json"
     with open(meta_out, "w") as f:
         json.dump({"schema_version": 2, "location_pools": location_pools,
                    "candidates": candidate_meta}, f,
@@ -4275,8 +4553,8 @@ def main() -> None:
     fallback_ids = set(candidate_meta) - primary_ids - exact_support_ids
     recovered_ids: list[str] = []
     if fallback_ids:
-        fallback_trips = SUMO_DIR / f"tours{args.out_suffix}.fallback.trips.xml"
-        fallback_out = SUMO_DIR / f"candidates{args.out_suffix}.fallback.rou.xml"
+        fallback_trips = output_dir / f"tours{args.out_suffix}.fallback.trips.xml"
+        fallback_out = output_dir / f"candidates{args.out_suffix}.fallback.rou.xml"
         try:
             write_trip_subset(trips_path, fallback_trips, fallback_ids)
             fallback_cmd = list(router_prefix)
@@ -4333,6 +4611,16 @@ def main() -> None:
     else:
         mark_orphaned_tour_legs(out, meta_out, expected_legs=generated_legs)
     prune_candidate_metadata(meta_out, out)
+    try:
+        basis_report = install_grounded_sensor_basis_routes(
+            out, meta_out, measured, NET_PATH,
+            max_stretch=args.max_stretch)
+    except (ET.ParseError, OSError, ValueError, nx.NetworkXException) as exc:
+        sys.exit(f"candidate sensor-incidence basis failed: {exc}")
+    if basis_report["installed"]:
+        print("  installed "
+              f"{len(basis_report['installed'])} grounded single-sensor "
+              "basis candidate(s)")
     final_count = sum(1 for _ in ET.parse(out).getroot().iter("vehicle"))
     if target_candidate_count:
         final_metadata = json.loads(meta_out.read_text()).get("candidates", {})
@@ -4363,7 +4651,7 @@ def main() -> None:
               f"({len(missing_route_support) / max(1, len(graph_edge_ids)):.1%})"
               " — zero baseline flow, closures there are no-ops")
     coverage_report_path = (
-        SUMO_DIR / f"sensor_coverage_report{args.out_suffix}.json")
+        output_dir / f"sensor_coverage_report{args.out_suffix}.json")
     cross_report = report_sensor_cross_hits(
         out, measured, coverage_report_path)
     unanchored_candidates = unanchored_candidate_ids(out, measured)

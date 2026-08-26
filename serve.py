@@ -20,8 +20,12 @@ Endpoints:
                                 Carlo, ~30–90 s) in a BACKGROUND THREAD and
                                 returns immediately ({"status": "started"}).
                                 One simulation at a time (409 while busy).
-                                New callers POST {"scenario_spec": {...}}.
-  GET /api/close/status       — {"status": "idle"|"running"|"done"|"error", ...};
+                                New callers POST {"scenario_spec": {...}};
+                                exact repeat specs can return a verified
+                                published result from the provenance-bound
+                                sidecar cache without starting SUMO.
+  GET /api/close/status       — {"status": "idle"|"checking_cache"|"running"|
+                                "done"|"error", ...};
                                 on "done" the scenario manifest fields
                                 (file, label, closed_edges, ...) are included
                                 directly. Same async-plus-poll reasoning as
@@ -143,9 +147,11 @@ from __future__ import annotations
 
 import argparse
 import errno
+import hashlib
 import json
 import math
 import os
+import platform
 import re
 import signal
 import statistics
@@ -173,14 +179,16 @@ from traffic_sim.simulation.closure_preflight import (
     UnsupportedPreflightSpec, preflight as closure_preflight)
 from traffic_sim.simulation.independent_daily import (
     INDEPENDENT_DAILY_ENVELOPE_POLICY)
-from traffic_sim.core.fingerprint import sha256_file
+from traffic_sim.core.fingerprint import sha256_file, sumo_version
 from traffic_sim.simulation.sensor_fit import assess_output_fit
 from traffic_sim.simulation.trajectory_contract import (
     MULTIDAY_MAX_ARTIFACT_BYTES,
     validate_multiday_trajectory,
 )
+from traffic_sim.simulation.search_workspace import load_search_workspace
 from traffic_sim.demand.route_support import combined_route_edges
-from traffic_sim.simulation.workspace import WorkspaceLock
+from traffic_sim.simulation.workspace import WorkspaceLock, workspace_holder
+from traffic_sim.simulation.runtime import sumo_home
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
@@ -188,6 +196,11 @@ DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
 ROOT     = Path(__file__).parent
 WEB_DIR  = ROOT / "web"
 SCEN_DIR = WEB_DIR / "data" / "scenarios"
+# Exact interactive closure results are reusable only when the complete
+# request and the inputs/code that produced it are unchanged.  Keep the cache
+# index outside the published scenario directory so this optimisation cannot
+# alter release artifacts or make an old scenario look current by itself.
+SCENARIO_CACHE_DIR = ROOT / "runs" / "scenario-cache"
 # E2 staging area (IMPROVEMENT_PLAN.md, audit P0-2): a recalibration builds its complete
 # new scenario set HERE, validates it, and only then replaces the live set —
 # the standard build-aside/atomic-switch publication pattern (blue-green
@@ -257,14 +270,68 @@ MONTHLY_BOUNDED_EXHAUSTIVE_CAP = 12
 # The first value is a per-invocation page size; the second is the cumulative
 # hard safety ceiling. Both are passed explicitly to the CLI and surfaced by
 # preflight/status so they cannot drift as hidden defaults.
-MONTHLY_RESOURCE_POLICY_VERSION = "monthly_resource_policy_v1"
+MONTHLY_RESOURCE_POLICY_VERSION = "monthly_resource_policy_v2"
 MONTHLY_DAILY_UNIT_BUDGET = 30_000
 MONTHLY_TOTAL_DAILY_UNIT_CAP = 100_000
 MONTHLY_PARENT_SCHEDULE_CAP = 100_000
+# The recorded isolated-worker resource gate approves eight concurrent SUMO
+# processes on this host. Keep the two-dimensional CLI budget explicit: the UI
+# runs one seed per daily unit and up to eight independent daily units.
+MONTHLY_DAILY_WORKERS = 8
+MONTHLY_SEED_WORKERS = 1
+MONTHLY_MAX_ACTIVE_SUMO_SLOTS = 8
 # A monthly search is resumable by design; a timeout here only pauses it
 # (the workspace keeps every completed candidate), so the cap can be
 # generous without risking an unbounded server job.
-MONTHLY_TIMEOUT_S = 4 * 3600
+#
+# RAISED 4h -> 24h (2026-08-19), because 4h was not generous — it was
+# shorter than the work. Measured on a real exhaustive search over
+# 2027-07-15..07-30: 1776 parent schedules resolve to 2224 unique daily
+# units, ALL of which are SUMO-verified (`exhaustive: true`, evidence
+# level `no_proxy_bounded_exhaustive` — no proxy prunes the field). At the
+# 30-60 s per daily unit this machine measures, that is 18-37 hours, and
+# the demand phase alone took ~2 h to build 18 calendar days. A 4 h cap
+# therefore guaranteed a timeout partway through the FIRST attempt and
+# turned a long job into a long job plus five to ten manual restarts.
+#
+# The cap is not a safety mechanism against a runaway search: cancellation
+# is explicit (/api/cancel), progress is durable in the workspace, and a
+# timeout only pauses. It exists so one job cannot hold the simulation
+# slot forever. 24 h keeps that property while letting a real search
+# finish. Override for a longer run without editing code:
+#     TRAFFIC_SIM_MONTHLY_TIMEOUT_S=172800 make serve
+def _positive_env_seconds(name: str, default: float) -> float:
+    """Parse an optional timeout without making a typo kill server startup."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return float(default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = math.nan
+    if not math.isfinite(value) or value <= 0:
+        print(
+            f"warning: ignoring invalid {name}={raw!r}; using {default:g}s",
+            file=sys.stderr)
+        return float(default)
+    return value
+
+
+MONTHLY_TIMEOUT_S = _positive_env_seconds(
+    "TRAFFIC_SIM_MONTHLY_TIMEOUT_S", 24 * 3600)
+# Concurrent SUMO seed processes for the two interactive run_scenario calls
+# (recalibration baseline and closure). The seeds are independent processes
+# with disjoint output directories and their own --seed, and run_scenario
+# re-sorts results by seed before aggregating, so completion order cannot
+# reach a published number. Verified on this machine 2026-08-17 rather than
+# argued: the same closure and the same baseline built serially and with 3
+# workers produced byte-identical scenario JSON, trajectory JSON and index
+# apart from the `generated_at` wall-clock stamp — closure 21.6 s -> 13.9 s,
+# baseline 11.0 s -> 5.9 s. Three matches the three seeds the interactive
+# paths use; the recorded seed-worker benchmark
+# (validation/a2_parallel_seed_benchmark_v1.json) approves up to 8 with
+# 2.3 GB peak RSS, so this stays well inside proven ground.
+SCENARIO_SEED_WORKERS = 3
 PORT     = 8000
 # How far past a busy default port to look for a free one. Enough for a
 # handful of forgotten servers, small enough that the printed URL stays
@@ -272,11 +339,225 @@ PORT     = 8000
 PORT_SEARCH_SPAN = 20
 
 
+def _scenario_cache_identity(spec: ScenarioSpec) -> tuple[str, dict]:
+    """Return a content key and the provenance bound to one exact request.
+
+    This is deliberately narrower than a semantic approximation: a cache hit
+    requires the canonical ScenarioSpec plus the server, runner, network and
+    calibrated-demand bytes to be identical.  Missing inputs are retained as
+    ``null`` in the identity, so a test or a partially installed environment
+    cannot accidentally match a production cache entry.
+    """
+    # Hash the active route bytes rather than trusting demand_meta's embedded
+    # fingerprints: the metadata and routes can be copied or edited
+    # independently.  Hash all three conventional variant paths so adding or
+    # replacing a stress arm also invalidates an older q50-only cache entry.
+    input_paths = {
+        "network": ROOT / "sumo" / "net.net.xml",
+        "network_metadata": SUMO_DIR / "network_metadata.json",
+        "plain_edges": SUMO_DIR / "plain.edg.xml",
+        "network_geojson": WEB_DIR / "data" / "network.geojson",
+        "historical_flows": WEB_DIR / "data" / "flows.json",
+        "forecast_flows": WEB_DIR / "data" / "flows_forecast.json",
+        "demand_meta": SUMO_DIR / "demand_meta.json",
+        "calibrated_q50": SUMO_DIR / "calibrated.rou.xml",
+        "calibrated_q10": SUMO_DIR / "calibrated_v1.rou.xml",
+        "calibrated_q90": SUMO_DIR / "calibrated_v2.rou.xml",
+        "calibrated_q50_agents": SUMO_DIR / "calibrated.agents.json",
+        "calibrated_q10_agents": SUMO_DIR / "calibrated_v1.agents.json",
+        "calibrated_q90_agents": SUMO_DIR / "calibrated_v2.agents.json",
+    }
+    # A scenario imports code from traffic_sim at runtime.  Binding only
+    # run_scenario.py would let a metrics, trajectory, contract, or runtime
+    # change reuse bytes produced by different logic.  The tree is small
+    # enough to hash on an interactive cache lookup and conservative
+    # invalidation is preferable to an unsafe hit.
+    source_paths = [
+        ROOT / "serve.py",
+        ROOT / "run_scenario.py",
+        ROOT / "closure_metrics.py",
+        ROOT / "sumo_runtime.py",
+        *sorted((ROOT / "demand").rglob("*.py")),
+        *sorted((ROOT / "traffic_sim").rglob("*.py")),
+    ]
+    home = sumo_home()
+    provenance = {
+        "schema_version": 2,
+        "scenario_spec": spec.to_dict(),
+        "execution": {
+            "seed_workers": SCENARIO_SEED_WORKERS,
+            "trajectory_policy": "run_scenario_default",
+        },
+        "runtime": {
+            "python": sys.version,
+            "platform": platform.platform(),
+            "sumo_version": sumo_version(home),
+            "sumo_binary_sha256": sha256_file(home / "bin" / "sumo"),
+        },
+        "source_files": {
+            str(path.relative_to(ROOT)): sha256_file(path)
+            for path in source_paths
+        },
+        "input_files": {
+            label: sha256_file(path) for label, path in input_paths.items()
+        },
+    }
+    canonical = json.dumps(provenance, sort_keys=True,
+                           separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest(), provenance
+
+
+def _atomic_cache_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(
+        f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with temporary.open("x", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _scenario_cache_artifact(name: object) -> Path | None:
+    """Resolve one cache artifact name without permitting path traversal."""
+    if not isinstance(name, str) or not name:
+        return None
+    relative = Path(name)
+    if relative.is_absolute() or len(relative.parts) != 1 or relative.name != name:
+        return None
+    return SCEN_DIR / relative
+
+
+def _read_exact_cached_scenario(
+    spec: ScenarioSpec,
+    identity: tuple[str, dict] | None = None,
+) -> dict | None:
+    """Return a verified published manifest entry, or miss closed.
+
+    Sidecars are written only after a successful, integrity-verified run.  We
+    still re-read the live index and both output files on every lookup: a
+    deleted, replaced, or manually edited artifact must never be served from
+    a stale cache pointer.
+    """
+    try:
+        key, provenance = identity or _scenario_cache_identity(spec)
+        sidecar = SCENARIO_CACHE_DIR / f"{key}.json"
+        record = json.loads(sidecar.read_text(encoding="utf-8"))
+        if not isinstance(record, dict):
+            return None
+        # The digest is calculated from the complete current provenance.  A
+        # mismatch therefore fails closed before any published file is read.
+        if record.get("schema_version") != 2 or record.get("cache_key") != key:
+            return None
+        if json.dumps(record.get("provenance"), sort_keys=True,
+                      separators=(",", ":"), ensure_ascii=True) != json.dumps(
+                          provenance, sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=True):
+            return None
+        index = json.loads((SCEN_DIR / "index.json").read_text(encoding="utf-8"))
+        if not isinstance(index, dict):
+            return None
+        match = next((item for item in index.get("scenarios", [])
+                      if isinstance(item, dict)
+                      and item.get("name") == record.get("scenario_name")), None)
+        if match is None or match.get("closure_integrity") != "verified_clean":
+            return None
+        stored_spec = ScenarioSpec.from_dict(match.get("scenario_spec", {}))
+        if stored_spec.to_dict() != spec.to_dict():
+            return None
+        if record.get("scenario_file") != match.get("file"):
+            return None
+        scenario_path = _scenario_cache_artifact(match.get("file"))
+        if scenario_path is None or not scenario_path.is_file():
+            return None
+        payload = json.loads(scenario_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return None
+        payload_spec = ScenarioSpec.from_dict(payload.get("scenario_spec", {}))
+        if payload_spec.to_dict() != spec.to_dict():
+            return None
+        if (payload.get("scenario", {}).get("closure_integrity")
+                != "verified_clean"):
+            return None
+        trajectory_name = payload.get("trajectories")
+        if not isinstance(trajectory_name, str) or not trajectory_name:
+            return None
+        trajectory_path = _scenario_cache_artifact(trajectory_name)
+        if trajectory_path is None or not trajectory_path.is_file():
+            return None
+        if record.get("scenario_sha256") != sha256_file(scenario_path):
+            return None
+        if record.get("trajectory_file") != trajectory_name:
+            return None
+        if record.get("trajectory_sha256") != sha256_file(trajectory_path):
+            return None
+        # Source files are not protected by the workspace lock. Recompute the
+        # identity after reading the artifacts so an edit during verification
+        # cannot produce a mixed-snapshot hit.
+        if _scenario_cache_identity(spec) != (key, provenance):
+            return None
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError,
+            json.JSONDecodeError):
+        return None
+    return {**match, "cache_hit": True}
+
+
+def _record_exact_scenario_cache(
+    spec: ScenarioSpec,
+    match: dict,
+    expected_identity: tuple[str, dict],
+) -> None:
+    """Persist a cache pointer only after the normal publication gate passes."""
+    scenario_file = match.get("file")
+    scenario_path = _scenario_cache_artifact(scenario_file)
+    if scenario_path is None:
+        return
+    try:
+        payload = json.loads(scenario_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return
+        trajectory_name = payload.get("trajectories")
+        trajectory_path = _scenario_cache_artifact(trajectory_name)
+        if trajectory_path is None or not trajectory_path.is_file():
+            return
+        current_identity = _scenario_cache_identity(spec)
+        if current_identity != expected_identity:
+            print("close cache: inputs changed during the simulation; not caching")
+            return
+        key, provenance = current_identity
+        scenario_digest = sha256_file(scenario_path)
+        trajectory_digest = sha256_file(trajectory_path)
+        if scenario_digest is None or trajectory_digest is None:
+            return
+        _atomic_cache_json(SCENARIO_CACHE_DIR / f"{key}.json", {
+            "schema_version": 2,
+            "cache_key": key,
+            "scenario_name": match.get("name"),
+            "scenario_file": scenario_file,
+            "trajectory_file": trajectory_name,
+            "scenario_sha256": scenario_digest,
+            "trajectory_sha256": trajectory_digest,
+            "provenance": provenance,
+        })
+    except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError,
+            json.JSONDecodeError) as exc:
+        # Caching is an optimisation.  A cache write failure must not turn a
+        # verified simulation into an API error or hide its published result.
+        print(f"close cache: could not record exact result: {exc}")
+
+
 def monthly_screening_cli_args(spec: ClosureSearchSpec) -> list[str]:
     """Choose the safe server-side screening path for one search contract."""
     if spec.interday_policy == "independent_daily_reset_v1":
         return [
             "--screening-mode", "independent-exhaustive",
+            "--daily-workers", str(MONTHLY_DAILY_WORKERS),
+            "--seed-workers", str(MONTHLY_SEED_WORKERS),
+            "--max-active-sumo-slots", str(MONTHLY_MAX_ACTIVE_SUMO_SLOTS),
             "--daily-unit-budget", str(MONTHLY_DAILY_UNIT_BUDGET),
             "--daily-unit-total-cap", str(MONTHLY_TOTAL_DAILY_UNIT_CAP),
             "--independent-exhaustive-candidate-cap",
@@ -386,6 +667,10 @@ _recal_lock = threading.Lock()     # guards _recal_state below
 _recal_state: dict = {"status": "idle"}
 _close_lock = threading.Lock()     # guards _close_state below
 _close_state: dict = {"status": "idle"}
+# Exact-key hashing can take a fraction of a second. Keep that internal
+# single-flight state separate from the public simulation status: a cache hit
+# must never briefly claim that a new SUMO run started.
+_close_preparing_spec: dict | None = None
 _suggest_lock = threading.Lock()   # guards _suggest_state below
 _suggest_state: dict = {"status": "idle"}
 _optimize_lock = threading.Lock()  # guards _optimize_state below
@@ -1094,6 +1379,174 @@ def summarize_signal_optimization(result: dict, closure: bool) -> dict:
     }
 
 
+def _manifest_active_elapsed_s(manifest: dict) -> float | None:
+    value = manifest.get("active_elapsed_s")
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        return None
+    return round(float(value), 3)
+
+
+def adopted_monthly_search() -> dict | None:
+    """A running monthly search this server did not start, read from disk.
+
+    The CLI persists its phase to the workspace manifest by atomic replace,
+    and that record outlives the process that watches it. Two real cases were
+    invisible without this: a search launched from the terminal (the right way
+    to run one that outlives a browser session), and a search whose server was
+    restarted mid-run. In both the panel showed an idle button while hours of
+    work were happening, which is the same class of lie as a recalibration
+    that silently finished with nobody watching.
+
+    Reported as ``server_tracked: false`` because this server is NOT running
+    the job and /api/cancel cannot stop it.  A running manifest is considered
+    live only while the process-wide workspace lock identifies the monthly
+    CLI as its owner; an orphaned running manifest is surfaced as stale and
+    resumably paused.  A succeeded result is returned only after the complete
+    workspace ledger and its search identity verify.
+    """
+    root = MONTHLY_SEARCH_ROOT
+    if not root.is_dir():
+        return None
+    candidates = []
+    for directory in root.iterdir():
+        if not directory.is_dir():
+            continue
+        try:
+            with open(directory / "manifest.json") as handle:
+                manifest = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(manifest, dict) or manifest.get("status") not in {
+                "running", "succeeded"}:
+            continue
+        progress = manifest.get("progress")
+        progress = progress if isinstance(progress, dict) else {}
+        stamp = str(progress.get("updated_at") or manifest.get("finished_at")
+                    or manifest.get("created_at") or "")
+        candidates.append((stamp, directory, manifest, progress))
+
+    for _stamp, directory, manifest, progress in sorted(
+            candidates, key=lambda item: item[0], reverse=True):
+        search_id = directory.name
+        # The workspace stores the exact spec it was created from. Handing it
+        # back lets the panel restore the date range and edges the search is
+        # actually running, instead of an empty form beside a live progress
+        # line.
+        spec = None
+        try:
+            candidate = json.loads(
+                (directory / "input" / "closure_search.json").read_text(
+                    encoding="utf-8"))
+            spec = candidate if isinstance(candidate, dict) else None
+        except (OSError, json.JSONDecodeError):
+            spec = None
+
+        started = manifest.get("created_at")
+        wall_elapsed = None
+        if isinstance(started, str):
+            try:
+                wall_elapsed = round(time.time() - datetime.fromisoformat(
+                    started.replace("Z", "+00:00")).timestamp())
+            except ValueError:
+                wall_elapsed = None
+        active_elapsed = _manifest_active_elapsed_s(manifest)
+        elapsed = active_elapsed if active_elapsed is not None else wall_elapsed
+
+        if manifest.get("status") == "succeeded":
+            try:
+                workspace = load_search_workspace(directory, verify=True)
+                records = [
+                    item for item in workspace.manifest.get("artifacts", [])
+                    if isinstance(item, dict)
+                    and item.get("kind") == "monthly_closure_search_result"
+                ]
+                if len(records) != 1:
+                    continue
+                record = records[0]
+                if (
+                    (record.get("provenance") or {}).get("search_content_key")
+                    != workspace.manifest.get("search_content_key")
+                    or spec is None
+                ):
+                    continue
+                result = json.loads(
+                    (directory / str(record["path"])).read_text(
+                        encoding="utf-8"))
+                if not isinstance(result, dict):
+                    continue
+                workspace_spec = ClosureSearchSpec.from_dict(spec)
+                result_spec = ClosureSearchSpec.from_dict(
+                    result.get("closure_search_spec"))
+                if (
+                    result.get("search_id") != search_id
+                    or result_spec.content_key != workspace_spec.content_key
+                ):
+                    continue
+                summary = summarize_monthly_search(result)
+            except (AttributeError, KeyError, OSError, TypeError, ValueError,
+                    json.JSONDecodeError):
+                # A terminal label without a verified, unique result is not a
+                # completed job the browser may display. Try an older usable
+                # workspace rather than inventing success.
+                continue
+            return {
+                "status": "done",
+                "search_id": search_id,
+                "progress": progress,
+                "elapsed_s": elapsed if elapsed is not None and elapsed >= 0 else 0,
+                "active_elapsed_s": active_elapsed,
+                "wall_elapsed_s": wall_elapsed,
+                "server_tracked": False,
+                "started_at_iso": started,
+                "finished_at_iso": manifest.get("finished_at"),
+                "closure_search_spec": spec,
+                "edges": list(spec.get("directed_edges") or []) if spec else [],
+                "result": summary,
+                "note": ("slutförd utanför den här servern — resultatet "
+                         "verifierades mot arbetsytans artefaktregister"),
+            }
+
+        detail = progress.get("detail")
+        detail = detail if isinstance(detail, dict) else {}
+        interruption = detail.get("interruption")
+        holder = workspace_holder()
+        owner = str((holder or {}).get("owner") or "")
+        externally_running = owner.startswith("run_monthly_closure_search ")
+        stale = interruption != "stopped_by_user" and not externally_running
+        adopted_status = (
+            "paused" if interruption == "stopped_by_user" or stale else "running"
+        )
+        if interruption == "stopped_by_user":
+            note = ("pausad av användaren — arbetsytan kan återupptas; "
+                    "servern äger inte den tidigare processen")
+        elif stale:
+            note = ("arbetsytan säger körs men ingen månadsprocess äger "
+                    "simuleringslåset — behandlas som pausad och återupptagbar")
+        else:
+            note = ("körs utanför den här servern — statusen läses ur "
+                    "arbetsytan; Avbryt kan inte stoppa den")
+        return {
+            "status": adopted_status,
+            "search_id": search_id,
+            "progress": progress,
+            "elapsed_s": elapsed if elapsed is not None and elapsed >= 0 else 0,
+            "active_elapsed_s": active_elapsed,
+            "wall_elapsed_s": wall_elapsed,
+            "server_tracked": False,
+            "stale": stale,
+            "started_at_iso": started,
+            "closure_search_spec": spec,
+            "edges": list(spec.get("directed_edges") or []) if spec else [],
+            "note": note,
+        }
+    return None
+
+
 def summarize_monthly_search(result: dict) -> dict:
     """Curated monthly-search result for the UI.
 
@@ -1345,15 +1798,28 @@ class Handler(SimpleHTTPRequestHandler):
         if kind not in states:
             return self._json(400, {"error": "okänd körning att avbryta"})
         lock, state = states[kind]
+        cache_check_only = False
         with lock:
-            if state.get("status") not in {"running", "cancelling"}:
+            status = state.get("status")
+            if status not in {"checking_cache", "running", "cancelling"}:
                 return self._json(409, {"error": "ingen sådan körning pågår"})
+            if status == "checking_cache":
+                if kind != "close":
+                    return self._json(409, {"error": "ingen sådan körning pågår"})
+                # Cache verification happens before a durable child job
+                # exists. Mark the request for cancellation here; _close()
+                # observes it before serving a hit or starting SUMO and owns
+                # release of the simulation/workspace slot.
+                cache_check_only = True
             state["status"] = "cancelling"
+        if cache_check_only:
+            return self._json(202, {"status": "cancelling", "kind": kind})
         if not cancel_active_job(kind):
             return self._json(409, {"error": "körningen avslutades redan"})
         return self._json(202, {"status": "cancelling", "kind": kind})
 
     def _close(self) -> None:
+        global _close_preparing_spec
         # Async (2026-07-10, same reasoning and pattern as /api/recalibrate
         # below — found in a review of an external improvement document
         # that correctly flagged this as the same risk class, not yet
@@ -1411,22 +1877,149 @@ class Handler(SimpleHTTPRequestHandler):
         blocked = simulation_recovery_block()
         if blocked:
             return self._json(503, blocked)
-        if not _sim_lock.acquire(blocking=False):
-            return self._json(409, {"error": _busy_message()})
-        # Lock stays held for the whole job — released by the background
-        # thread, not here (same reasoning as _recalibrate).
+
+        canonical_spec = spec.to_dict() if spec is not None else None
+        # Serialize close admission and the non-blocking slot attempt under the
+        # state lock. This closes the gap between slot acquisition and the
+        # internal preparing marker without presenting cache verification as a
+        # running simulation to status clients.
         with _close_lock:
-            _close_state.clear()
-            _close_state.update(status="running", edges=edges,
-                                begin=begin or None, end=end or None,
-                                scenario_spec=(spec.to_dict() if spec else None),
-                                started_at=time.time())
-        begin_active_job("close", {"edges": edges, "begin": begin or None,
-                           "end": end or None,
-                           "scenario_spec": spec.to_dict() if spec else None})
-        threading.Thread(target=self._run_close,
-                         args=(edges, begin or None, end or None, spec),
-                         daemon=True).start()
+            in_flight = _close_state.get("status") in {
+                "checking_cache", "running", "cancelling"}
+            preparing = _close_preparing_spec is not None
+            same_request = (
+                spec is not None
+                and (
+                    (_close_state.get("status") in {"checking_cache", "running"}
+                     and _close_state.get("scenario_spec") == canonical_spec)
+                    or _close_preparing_spec == canonical_spec
+                )
+            )
+            if in_flight or preparing:
+                if same_request:
+                    return self._json(202, {
+                        "status": _close_state.get("status", "checking_cache"),
+                        "coalesced": True,
+                        "edges": edges, "scenario_id": spec.scenario_id,
+                    })
+                return self._json(409, {"error": _busy_message()})
+            if not _sim_lock.acquire(blocking=False):
+                return self._json(409, {"error": _busy_message()})
+            if spec is not None:
+                _close_preparing_spec = canonical_spec
+                _close_state.clear()
+                _close_state.update(
+                    status="checking_cache", edges=edges,
+                    begin=None, end=None, scenario_spec=canonical_spec)
+
+        # Cache verification owns the same in-process and cross-process slot
+        # as a fresh run. Monthly demand publication and recalibration can
+        # replace the inputs/index, so a lock-free hash pass would not be one
+        # coherent snapshot. A hit releases the slot immediately and never
+        # claims a new simulation start.
+        cache_identity = None
+        slot_transferred = False
+        try:
+            cached = None
+            if spec is not None:
+                try:
+                    # Capture once before the subprocess starts. Publication
+                    # will recompute and refuse the cache entry if inputs
+                    # changed while SUMO was running; cache hits independently
+                    # repeat the check. Every Exception fails open: cache reuse
+                    # is an optimisation and must never leak the acquired slot.
+                    cache_identity = _scenario_cache_identity(spec)
+                except Exception as exc:
+                    print(f"close cache: could not bind run inputs: {exc}")
+                try:
+                    cached = (_read_exact_cached_scenario(spec, cache_identity)
+                              if cache_identity is not None else None)
+                except Exception as exc:
+                    print(f"close cache: lookup failed open: {exc}")
+
+            safe_cached = None
+            if isinstance(cached, dict):
+                # Cache index entries are external data. Never allow one of
+                # their keys to collide with authoritative lifecycle fields.
+                reserved = {
+                    "status", "cached", "edges", "begin", "end",
+                    "scenario_spec", "started_at", "elapsed_s",
+                }
+                safe_cached = {
+                    key: value for key, value in cached.items()
+                    if key not in reserved
+                }
+
+            # Atomically choose exactly one transition out of checking_cache.
+            # A cancellation that arrives before this lock wins over both a
+            # hit and a miss; after this lock the state is terminal or a real
+            # durable job is about to be created, so _cancel uses that path.
+            with _close_lock:
+                if _close_state.get("status") == "cancelling":
+                    transition = "cancelled"
+                    _close_preparing_spec = None
+                    _close_state.clear()
+                    _close_state.update(
+                        status="cancelled", edges=edges,
+                        begin=None, end=None, scenario_spec=canonical_spec,
+                    )
+                elif safe_cached is not None:
+                    transition = "cached"
+                    _close_preparing_spec = None
+                    _close_state.clear()
+                    _close_state.update(**safe_cached)
+                    _close_state.update(
+                        status="done", cached=True, edges=edges,
+                        begin=None, end=None, scenario_spec=canonical_spec,
+                    )
+                else:
+                    transition = "run"
+                    # Establish durable cancellation authority before exposing
+                    # status=running. _cancel cannot slip into a state where it
+                    # sees a run but cancel_active_job cannot see one yet.
+                    begin_active_job(
+                        "close",
+                        {"edges": edges, "begin": begin or None,
+                         "end": end or None,
+                         "scenario_spec": (
+                             spec.to_dict() if spec else None)},
+                    )
+                    _close_preparing_spec = None
+                    _close_state.clear()
+                    _close_state.update(status="running", edges=edges,
+                                        begin=begin or None, end=end or None,
+                                        scenario_spec=canonical_spec,
+                                        started_at=time.time())
+
+            if transition == "cancelled":
+                return self._json(202, {
+                    "status": "cancelled", "edges": edges,
+                    "scenario_id": spec.scenario_id if spec else None,
+                })
+            if transition == "cached":
+                return self._json(202, {
+                    "status": "done", "cached": True, "edges": edges,
+                    "scenario_id": spec.scenario_id,
+                })
+            # A miss keeps the slot for the whole job — released by the
+            # background thread, not here (same reasoning as _recalibrate).
+            threading.Thread(target=self._run_close,
+                             args=(edges, begin or None, end or None, spec,
+                                   cache_identity),
+                             daemon=True).start()
+            slot_transferred = True
+        except Exception as exc:
+            print(f"close: could not start background job: {exc}")
+            self._set_close(status="error",
+                            error="simuleringsjobbet kunde inte startas")
+            finish_active_job("close")
+            return self._json(500, {"error":
+                                    "simuleringsjobbet kunde inte startas"})
+        finally:
+            if not slot_transferred:
+                with _close_lock:
+                    _close_preparing_spec = None
+                _sim_lock.release()
         return self._json(202, {"status": "started", "edges": edges,
                                 "scenario_id": spec.scenario_id if spec else None})
 
@@ -1437,7 +2030,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _run_close(self, edges: list[str], begin: str | None = None,
                    end: str | None = None,
-                   spec: ScenarioSpec | None = None) -> None:
+                   spec: ScenarioSpec | None = None,
+                   cache_identity: tuple[str, dict] | None = None) -> None:
         # Same lock-then-state-then-release ordering as _run_recalibrate,
         # for the same reason: writing state AFTER releasing the lock
         # leaves a race window where a second /api/close can acquire the
@@ -1460,6 +2054,7 @@ class Handler(SimpleHTTPRequestHandler):
                            json.dumps({"edge_id": e, "begin": begin, "end": end})]
             else:
                 cmd = [sys.executable, "run_scenario.py", "--close", *edges]
+            cmd += ["--seed-workers", str(SCENARIO_SEED_WORKERS)]
             res = run_in_new_session(cmd, cwd=str(ROOT), timeout=600)
             if active_job_cancelled("close"):
                 self._set_close(status="cancelled")
@@ -1513,6 +2108,8 @@ class Handler(SimpleHTTPRequestHandler):
                     error=("avstängningen saknar verifierat nollflöde på den "
                            "stängda vägen och visas därför inte"))
                 return
+            if spec is not None and cache_identity is not None:
+                _record_exact_scenario_cache(spec, match, cache_identity)
             self._set_close(status="done", **match)
         except subprocess.TimeoutExpired:
             self._set_close(status="error", error="simuleringen tog >10 min — avbruten")
@@ -1669,7 +2266,8 @@ class Handler(SimpleHTTPRequestHandler):
                     f.unlink()
             res2 = run_in_new_session(
                 [sys.executable, "run_scenario.py",
-                 "--out-dir", str(SCEN_STAGING_DIR)],
+                 "--out-dir", str(SCEN_STAGING_DIR),
+                 "--seed-workers", str(SCENARIO_SEED_WORKERS)],
                 cwd=str(ROOT), timeout=300 + 60 * (days - 1),
             )
             if active_job_cancelled("recalibrate"):
@@ -2141,6 +2739,9 @@ class Handler(SimpleHTTPRequestHandler):
                 MONTHLY_DAILY_UNIT_BUDGET),
             "maximum_total_daily_units": MONTHLY_TOTAL_DAILY_UNIT_CAP,
             "maximum_parent_schedules": MONTHLY_PARENT_SCHEDULE_CAP,
+            "daily_workers": MONTHLY_DAILY_WORKERS,
+            "seed_workers": MONTHLY_SEED_WORKERS,
+            "maximum_active_sumo_slots": MONTHLY_MAX_ACTIVE_SUMO_SLOTS,
         }
         return self._json(200, payload)
 
@@ -2295,6 +2896,10 @@ class Handler(SimpleHTTPRequestHandler):
                     manifest = json.load(f)
             except (OSError, json.JSONDecodeError):
                 manifest = None
+            active_elapsed = (
+                _manifest_active_elapsed_s(manifest)
+                if isinstance(manifest, dict) else None
+            )
             progress = (
                 manifest.get("progress")
                 if isinstance(manifest, dict) else None
@@ -2314,6 +2919,9 @@ class Handler(SimpleHTTPRequestHandler):
                     closure_search_spec=spec.to_dict(),
                     edges=list(spec.directed_edges),
                     resource_policy_version=MONTHLY_RESOURCE_POLICY_VERSION,
+                    active_elapsed_s=active_elapsed,
+                    elapsed_s=(round(active_elapsed)
+                               if active_elapsed is not None else None),
                 )
                 return
             result_path = (MONTHLY_SEARCH_ROOT / spec.search_id
@@ -2335,7 +2943,13 @@ class Handler(SimpleHTTPRequestHandler):
                 summary["edges"] = list(spec.directed_edges)
             if not summary.get("source"):
                 summary["source"] = spec.source
-            self._set_monthly(status="done", result=summary)
+            self._set_monthly(
+                status="done",
+                result=summary,
+                active_elapsed_s=active_elapsed,
+                elapsed_s=(round(active_elapsed)
+                           if active_elapsed is not None else None),
+            )
         except subprocess.TimeoutExpired:
             self._set_monthly(status="error",
                               error="månadssökningen nådde tidsgränsen och "
@@ -2354,7 +2968,9 @@ class Handler(SimpleHTTPRequestHandler):
         with _monthly_lock:
             state = dict(_monthly_state)
         if state.get("status") in {"running", "cancelling"}:
-            state["elapsed_s"] = round(time.time() - state["started_at"])
+            wall_elapsed = round(time.time() - state["started_at"])
+            state["wall_elapsed_s"] = wall_elapsed
+            state["elapsed_s"] = wall_elapsed
             # The CLI child persists a resumable progress pointer in its
             # workspace manifest (atomic replace) — surface it so any tab,
             # including one opened after the job started, sees which stage
@@ -2370,9 +2986,29 @@ class Handler(SimpleHTTPRequestHandler):
                         manifest = json.load(f)
                 except (OSError, json.JSONDecodeError):
                     manifest = None
-                if isinstance(manifest, dict) and \
-                        isinstance(manifest.get("progress"), dict):
-                    state["progress"] = manifest["progress"]
+                if isinstance(manifest, dict):
+                    if isinstance(manifest.get("progress"), dict):
+                        state["progress"] = manifest["progress"]
+                    active_elapsed = _manifest_active_elapsed_s(manifest)
+                    if active_elapsed is not None:
+                        state["active_elapsed_s"] = active_elapsed
+                        # The primary elapsed clock shown by the UI is active
+                        # search time. wall_elapsed_s remains available as
+                        # provenance but may include suspended-laptop time.
+                        state["elapsed_s"] = round(active_elapsed)
+            return self._json(200, state)
+        # Fall back to the workspace ONLY when this server knows nothing.
+        # A terminal state it produced itself (done/error/cancelled/paused)
+        # is real knowledge and must win: a finished search leaves its
+        # workspace readable, and an earlier version of this fallback
+        # reported that leftover as "running" forever, hiding the outcome
+        # the server was holding. "idle" is the one status that means
+        # "no job of mine" — that is where an externally launched search,
+        # or one that outlived a restart, becomes visible.
+        if state.get("status") == "idle":
+            adopted = adopted_monthly_search()
+            if adopted is not None:
+                return self._json(200, adopted)
         return self._json(200, state)
 
 

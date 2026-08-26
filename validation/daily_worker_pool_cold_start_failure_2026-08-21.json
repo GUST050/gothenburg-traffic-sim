@@ -1,0 +1,28 @@
+{
+  "configuration": {
+    "baseline_prewarmed": false,
+    "fresh_workers": 3,
+    "pool_workers": 3,
+    "units": 6,
+    "variant": "q50",
+    "warm_execution": false
+  },
+  "created_at": "2026-08-21T20:22:43Z",
+  "diagnostic_only": true,
+  "failure": {
+    "baseline_cache_race": true,
+    "message": "fresh worker 0 exited 1: Traceback (most recent call last):\n  File \"/Users/gt/Documents/gs-project/tools/benchmark_daily_worker_pool.py\", line 546, in <module>\n    raise SystemExit(main())\n  File \"/Users/gt/Documents/gs-project/tools/benchmark_daily_worker_pool.py\", line 493, in main\n    return _run_hidden_worker(args.worker_request, args.worker_result)\n  File \"/Users/gt/Documents/gs-project/tools/benchmark_daily_worker_pool.py\", line 107, in _run_hidden_worker\n    _write_json(result_path, _execute_timed(_read_object(request_path)))\n  File \"/Users/gt/Documents/gs-project/tools/benchmark_daily_worker_pool.py\", line 94, in _execute_timed\n    result = execute_request(request)\n  File \"/Users/gt/Documents/gs-project/traffic_sim/simulation/independent_daily_worker.py\", line 85, in execute_request\n    evidence = runner.run_candidate(\n  File \"/Users/gt/Documents/gs-project/traffic_sim/simulation/monthly_sumo.py\", line 2194, in run_candidate\n    for variant, seed, observation, run_failures, canonical in stream:\n  File \"/Users/gt/Documents/gs-project/traffic_sim/simulation/monthly_sumo.py\", line 2105, in _observations_for\n    observation, run_failures, canonical = self._run_observation(\n  File \"/Users/gt/Documents/gs-project/traffic_sim/simulation/monthly_sumo.py\", line 1910, in _run_observation\n    baseline, baseline_buckets = self._run_baseline_for_window(\n  File \"/Users/gt/Documents/gs-project/traffic_sim/simulation/monthly_sumo.py\", line 1050, in _run_baseline_for_window\n    return self._run_baseline(\n  File \"/Users/gt/Documents/gs-project/traffic_sim/simulation/monthly_sumo.py\", line 936, in _run_baseline\n    raise FileExistsError(\nFileExistsError: monthly baseline cache raced with another writer: /var/folders/xj/f_b73wz17m7brwncd1n9gnx00000gn/T/daily-pool-diagnostic-o94lh67f/fresh-baselines/c7766ad7b8c7799c7b4661d369dc6e92.json",
+    "type": "RuntimeError"
+  },
+  "input_fingerprints": {
+    "release": "a80a5f70100267afffa2c89f461564dbffc5f50131cac49e744539afdbeac6eb",
+    "workspace_manifest": "52b31d0dc9eea98cc8389a43f667ba7d79cc933e2cb3b0372bbfa6c756da8618"
+  },
+  "schema": "daily_worker_pool_diagnostic_v1",
+  "source_fingerprints": {
+    "harness": "0378eda2a55231997d0d185f3c2a9fd9ecf0ad56ec57e3a8b14c6bf4300ae09a",
+    "monthly_sumo": "0f63d4a355c4d566e90e354259a002b3a1a02b87ef766be8e6ed0689c0d88a70",
+    "worker": "3f8b21ee2791f1a6b77b66f5c9cae804aad37fa813e4be37245c6b2cc644c2bb"
+  },
+  "status": "failed"
+}

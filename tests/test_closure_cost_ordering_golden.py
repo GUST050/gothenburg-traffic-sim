@@ -8,9 +8,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# v1-v3 remain immutable historical evidence.  v4 binds the same observations
-# and comparisons after the final warm/cold execution-window contract wording.
-RECORD = ROOT / "validation" / "closure_cost_ordering_golden_v4.json"
+# v1-v6 remain immutable historical evidence. v7 binds the additive exact
+# baseline sensor-passage audit without changing the closure-cost result.
+RECORD = ROOT / "validation" / "closure_cost_ordering_golden_v7.json"
 
 
 def _read():

@@ -212,7 +212,10 @@ def load_phase_profile(path: Path, *, payload: dict, inputs: dict) -> dict:
 
 
 def run_case(case: str, workers: int, seeds: int, micro: bool,
-             timeout_s: int, root: Path) -> dict:
+             timeout_s: int, root: Path, *, rerouting_threads: int | None = None,
+             routing_algorithm: str | None = None,
+             minimal_edgedata: bool = False,
+             full_edgedata: bool = False) -> dict:
     """Run one frozen case in a private staging directory."""
     closure = case == "closure"
     is_micro = case == "micro" or micro
@@ -225,6 +228,14 @@ def run_case(case: str, workers: int, seeds: int, micro: bool,
     command = [sys.executable, str(SCENARIO), "--seeds", str(seeds),
                "--seed-workers", str(workers), "--out-dir", str(out_dir),
                "--timing-sidecar", str(timing_path)]
+    if rerouting_threads is not None:
+        command += ["--rerouting-threads", str(rerouting_threads)]
+    if routing_algorithm is not None:
+        command += ["--routing-algorithm", routing_algorithm]
+    if minimal_edgedata:
+        command.append("--minimal-edgedata")
+    if full_edgedata:
+        command.append("--full-edgedata")
     if closure:
         command += ["--close", KNOWN_CLOSURE]
     if is_micro:
@@ -261,6 +272,10 @@ def run_case(case: str, workers: int, seeds: int, micro: bool,
         "workers": workers,
         "seeds": seeds,
         "micro": is_micro,
+        "rerouting_threads": rerouting_threads,
+        "routing_algorithm": routing_algorithm,
+        "minimal_edgedata": minimal_edgedata,
+        "full_edgedata": full_edgedata,
         "command": command,
         "returncode": completed.returncode,
         "wall_s": round(elapsed, 3),
@@ -949,6 +964,20 @@ def parse_args() -> argparse.Namespace:
                         help="fresh trials per case/worker pair (default 1; use 3 for adoption)")
     parser.add_argument("--timeout", type=int, default=None,
                         help="per-case timeout in seconds")
+    parser.add_argument("--rerouting-threads", type=int, default=None,
+                        help="opt-in SUMO rerouting threads for an ad-hoc "
+                             "paired benchmark")
+    parser.add_argument("--routing-algorithm",
+                        choices=("dijkstra", "astar", "CH", "CHWrapper"),
+                        default=None,
+                        help="opt-in SUMO routing algorithm for an ad-hoc "
+                             "paired benchmark")
+    parser.add_argument("--minimal-edgedata", action="store_true",
+                        help="compatibility flag for the adopted "
+                             "entered/timeLoss-only edgeData field set")
+    parser.add_argument("--full-edgedata", action="store_true",
+                        help="full-field rollback arm for an ad-hoc paired "
+                             "benchmark")
     parser.add_argument("--campaign", type=Path, default=None,
                         help="run the exact matrix of a frozen phase-profile "
                              "campaign contract instead of the ad-hoc cases")
@@ -972,7 +1001,15 @@ def parse_args() -> argparse.Namespace:
                                               ("--workers", args.workers),
                                               ("--seeds", args.seeds),
                                               ("--trials", args.trials),
-                                              ("--timeout", args.timeout))
+                                              ("--timeout", args.timeout),
+                                              ("--rerouting-threads",
+                                               args.rerouting_threads),
+                                              ("--routing-algorithm",
+                                               args.routing_algorithm),
+                                              ("--minimal-edgedata",
+                                               args.minimal_edgedata or None),
+                                              ("--full-edgedata",
+                                               args.full_edgedata or None))
                      if value is not None]
         if overrides:
             parser.error("a frozen campaign cannot be overridden by "
@@ -990,6 +1027,11 @@ def parse_args() -> argparse.Namespace:
         args.timeout = 1800
     if args.seeds < 1 or args.trials < 1 or any(w < 1 for w in args.workers):
         parser.error("--seeds, --trials and --workers must be >= 1")
+    if args.rerouting_threads is not None and args.rerouting_threads < 1:
+        parser.error("--rerouting-threads must be >= 1")
+    if args.minimal_edgedata and args.full_edgedata:
+        parser.error("--minimal-edgedata and --full-edgedata are mutually "
+                     "exclusive")
     return args
 
 
@@ -1082,8 +1124,21 @@ def main() -> int:
                 for trial in range(args.trials):
                     trial_root = run_root / f"{case}-w{workers}-t{trial + 1}"
                     trial_root.mkdir()
+                    routing_kwargs = {
+                        key: value for key, value in (
+                            ("rerouting_threads", args.rerouting_threads),
+                            ("routing_algorithm", args.routing_algorithm),
+                            ("minimal_edgedata",
+                             args.minimal_edgedata if args.minimal_edgedata
+                             else None),
+                            ("full_edgedata",
+                             args.full_edgedata if args.full_edgedata
+                             else None),
+                        ) if value is not None
+                    }
                     result = run_case(case, workers, args.seeds, False,
-                                      args.timeout, trial_root)
+                                      args.timeout, trial_root,
+                                      **routing_kwargs)
                     result["trial"] = trial + 1
                     report["cases"].append(result)
                     print(json.dumps(result, sort_keys=True), flush=True)

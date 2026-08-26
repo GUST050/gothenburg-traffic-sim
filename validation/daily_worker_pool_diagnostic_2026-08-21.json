@@ -1,0 +1,87 @@
+{
+  "arm_order": [
+    "fresh_interpreter",
+    "reusable_spawn_pool"
+  ],
+  "comparison": {
+    "continue_to_counterbalanced_campaign": false,
+    "exact_evidence_equal": true,
+    "production_adoption_authorized": false,
+    "speedup": 1.026747
+  },
+  "configuration": {
+    "chunksize": 1,
+    "fresh_sumo_per_task": true,
+    "minimum_continuation_speedup": 1.1,
+    "per_task_timeout_s": 900.0,
+    "pool_workers": 1,
+    "recycle_after": 25,
+    "units": 2
+  },
+  "created_at": "2026-08-21T20:10:12Z",
+  "diagnostic_only": true,
+  "environment": {
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "pool_start_method": "spawn",
+    "python": "3.9.6"
+  },
+  "fresh_interpreter": {
+    "evidence_digests": [
+      "0109133e0349234898a211d326ac33eff5887292620a0ad466941c37bf717b7c",
+      "ce43d3094b389553f9e189b3345ff4c76c7325504b68df658b0543ef4580bd3d"
+    ],
+    "sumo_child_peak_rss_bytes": 219529216,
+    "task_wall_s": [
+      31.332272,
+      22.966324
+    ],
+    "wall_s": 54.445031,
+    "worker_peak_rss_bytes": 993935360,
+    "worker_pids": [
+      33798,
+      33824
+    ]
+  },
+  "frozen_inputs": {
+    "archive_paths": [
+      "/Users/gt/Documents/gs-project/runs/demand-20260819-203712-9cf030aa-d1e7"
+    ],
+    "release_sha256": "a80a5f70100267afffa2c89f461564dbffc5f50131cac49e744539afdbeac6eb",
+    "schedule_ids": [
+      "closure-e226e47eb8e66236b790",
+      "closure-598cbefecf3ce3a369ad"
+    ],
+    "search_content_key": "4fd492522e5fa6bbb839",
+    "spec_sha256": "0b2ab506f50b8837c714cd1556c95b9126a3ed7f638382d880cc03d1b1a0c0f3",
+    "units_ledger_sha256": "caa5fd305ff54c5a9e305148a48bdef63f9e077ef542208877c001e327931b43",
+    "variant": "q50",
+    "warm_execution": false,
+    "work_date": "2027-07-15",
+    "workspace_manifest_sha256": "52b31d0dc9eea98cc8389a43f667ba7d79cc933e2cb3b0372bbfa6c756da8618"
+  },
+  "order_bias": "pool runs second and therefore receives the favourable filesystem cache condition; a pass requires a counterbalanced campaign",
+  "reusable_spawn_pool": {
+    "evidence_digests": [
+      "0109133e0349234898a211d326ac33eff5887292620a0ad466941c37bf717b7c",
+      "ce43d3094b389553f9e189b3345ff4c76c7325504b68df658b0543ef4580bd3d"
+    ],
+    "sumo_child_peak_rss_bytes": 220250112,
+    "task_wall_s": [
+      30.973712,
+      22.002462
+    ],
+    "wall_s": 53.026709,
+    "worker_peak_rss_bytes": 991346688,
+    "worker_pids": [
+      33842
+    ]
+  },
+  "schema": "daily_worker_pool_diagnostic_v1",
+  "source_fingerprints": {
+    "harness": "b7b70c7028c16191bde43fa906c1045f651f618ce0802d88fdafe0d7a7f2508e",
+    "monthly_sumo": "0f63d4a355c4d566e90e354259a002b3a1a02b87ef766be8e6ed0689c0d88a70",
+    "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "run_scenario": "c959a01cea1ef5aef68ed7e9e699aa10ca45edaaaee942d275713adc1fae5542",
+    "worker": "3f8b21ee2791f1a6b77b66f5c9cae804aad37fa813e4be37245c6b2cc644c2bb"
+  }
+}

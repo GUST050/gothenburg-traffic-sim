@@ -65,6 +65,14 @@ TEST_CAMPAIGN_ID = "scenario_phase_profile_test"
 def _build_synthetic_current() -> Path:
     contract = json.loads(CAMPAIGN_V6.read_text())
     contract["campaign_id"] = TEST_CAMPAIGN_ID
+    live_meta = json.loads(
+        (benchmark_speed.ROOT / "sumo" / "demand_meta.json").read_text())
+    contract["demand_window"] = {
+        field: live_meta[field] for field in contract["demand_window"]
+    }
+    contract["demand_identity"] = {
+        field: live_meta[field] for field in contract["demand_identity"]
+    }
     inputs = dict(benchmark_speed.file_fingerprints())
     inputs["harness:benchmark_speed.py"] = benchmark_speed.sha256_file(
         benchmark_speed.HARNESS)
@@ -276,9 +284,14 @@ class TestCampaignCannotTouchTheSemanticComparison:
                                                                    monkeypatch):
         for flag, value in (("--trials", "9"), ("--workers", "4"),
                             ("--seeds", "1"), ("--timeout", "60"),
-                            ("--case", "micro")):
+                            ("--case", "micro"),
+                            ("--rerouting-threads", "2"),
+                            ("--routing-algorithm", "astar"),
+                            ("--minimal-edgedata", None),
+                            ("--full-edgedata", None)):
             monkeypatch.setattr(sys, "argv", [
-                "benchmark_speed.py", "--campaign", str(CAMPAIGN), flag, value])
+                "benchmark_speed.py", "--campaign", str(CAMPAIGN), flag]
+                + ([value] if value is not None else []))
             with pytest.raises(SystemExit):
                 benchmark_speed.parse_args()
 
@@ -289,6 +302,112 @@ class TestCampaignCannotTouchTheSemanticComparison:
         assert args.workers == [1, 2] and args.seeds == 3
         assert args.trials == 1 and args.timeout == 1800
         assert args.campaign is None and args.preflight_only is False
+
+    def test_ad_hoc_rerouting_threads_must_be_positive(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", [
+            "benchmark_speed.py", "--rerouting-threads", "0",
+        ])
+        with pytest.raises(SystemExit):
+            benchmark_speed.parse_args()
+
+    def test_edge_data_modes_are_mutually_exclusive(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", [
+            "benchmark_speed.py", "--minimal-edgedata", "--full-edgedata",
+        ])
+        with pytest.raises(SystemExit):
+            benchmark_speed.parse_args()
+
+    def test_ad_hoc_routing_options_reach_the_case_boundary(
+            self, monkeypatch, tmp_path, capsys):
+        seen = []
+
+        def fake_case(case, workers, seeds, micro, timeout, root, **kwargs):
+            seen.append(kwargs)
+            return {
+                "case": case, "workers": workers, "seeds": seeds,
+                "micro": micro, "command": ["stub"], "returncode": 0,
+                "wall_s": 1.0, "peak_child_rss_bytes": 0,
+                "scenario_bytes": 1, "trajectory_bytes": 1,
+                "scenario_digest": "s" * 64,
+                "trajectory_digest": "t" * 64,
+                "phase_profile": None, "closure_integrity": None,
+                "seed_health": None, "log": str(root),
+            }
+
+        monkeypatch.setattr(benchmark_speed, "run_case", fake_case)
+        monkeypatch.setattr(benchmark_speed, "sumo_version",
+                            lambda: "SUMO test")
+        monkeypatch.setattr(sys, "argv", [
+            "benchmark_speed.py", "--case", "closure", "--workers", "1",
+            "--trials", "1", "--rerouting-threads", "2",
+            "--routing-algorithm", "astar", "--artifact-dir",
+            str(tmp_path / "artifacts"),
+        ])
+
+        assert benchmark_speed.main() == 0
+        capsys.readouterr()
+        assert seen == [{
+            "rerouting_threads": 2,
+            "routing_algorithm": "astar",
+        }]
+
+    def test_ad_hoc_minimal_edgedata_reaches_the_case_boundary(
+            self, monkeypatch, tmp_path, capsys):
+        seen = []
+
+        def fake_case(case, workers, seeds, micro, timeout, root, **kwargs):
+            seen.append(kwargs)
+            return {
+                "case": case, "workers": workers, "seeds": seeds,
+                "micro": micro, "command": ["stub"], "returncode": 0,
+                "wall_s": 1.0, "peak_child_rss_bytes": 0,
+                "scenario_bytes": 1, "trajectory_bytes": 1,
+                "scenario_digest": "s" * 64,
+                "trajectory_digest": "t" * 64,
+                "phase_profile": None, "closure_integrity": None,
+                "seed_health": None, "log": str(root),
+            }
+
+        monkeypatch.setattr(benchmark_speed, "run_case", fake_case)
+        monkeypatch.setattr(benchmark_speed, "sumo_version", lambda: "SUMO test")
+        monkeypatch.setattr(sys, "argv", [
+            "benchmark_speed.py", "--case", "closure", "--workers", "3",
+            "--trials", "1", "--minimal-edgedata", "--artifact-dir",
+            str(tmp_path / "artifacts"),
+        ])
+
+        assert benchmark_speed.main() == 0
+        capsys.readouterr()
+        assert seen == [{"minimal_edgedata": True}]
+
+    def test_ad_hoc_full_edgedata_reaches_the_case_boundary(
+            self, monkeypatch, tmp_path, capsys):
+        seen = []
+
+        def fake_case(case, workers, seeds, micro, timeout, root, **kwargs):
+            seen.append(kwargs)
+            return {
+                "case": case, "workers": workers, "seeds": seeds,
+                "micro": micro, "command": ["stub"], "returncode": 0,
+                "wall_s": 1.0, "peak_child_rss_bytes": 0,
+                "scenario_bytes": 1, "trajectory_bytes": 1,
+                "scenario_digest": "s" * 64,
+                "trajectory_digest": "t" * 64,
+                "phase_profile": None, "closure_integrity": None,
+                "seed_health": None, "log": str(root),
+            }
+
+        monkeypatch.setattr(benchmark_speed, "run_case", fake_case)
+        monkeypatch.setattr(benchmark_speed, "sumo_version", lambda: "SUMO test")
+        monkeypatch.setattr(sys, "argv", [
+            "benchmark_speed.py", "--case", "closure", "--workers", "3",
+            "--trials", "1", "--full-edgedata", "--artifact-dir",
+            str(tmp_path / "artifacts"),
+        ])
+
+        assert benchmark_speed.main() == 0
+        capsys.readouterr()
+        assert seen == [{"full_edgedata": True}]
 
     def test_campaign_metadata_is_not_part_of_any_digest(self):
         payload = {"generated_at": "t", "flows": {"a_b_0": [1, 2]}}
@@ -421,7 +540,7 @@ class TestDeclaredDemandIdentityIsVerified:
     @pytest.mark.parametrize("identity,match", [
         ({"demand_build_key": "not_the_live_key"}, "demand_build_key"),
         ({"build_id": "not_the_live_build"}, "build_id"),
-        ({"n_variants": 1}, "n_variants"),
+        ({"n_variants": 999}, "n_variants"),
     ])
     def test_a_false_demand_identity_is_refused(self, identity, match):
         campaign = benchmark_speed.load_campaign(CAMPAIGN)
@@ -868,10 +987,11 @@ class TestTheHarnessWorksInItsRealScriptContext:
         phases = {name: 1.0 for name in (
             "input_validation", "closure_preparation", "job_preparation",
             "sumo_execution", "aggregation_validation",
-            "trajectory_publication", "scenario_publication", "cleanup")}
+            "trajectory_publication", "disruption_analysis",
+            "payload_construction", "artifact_publication", "cleanup")}
         sidecar = tmp_path / "phase_profile.json"
         sidecar.write_text(json.dumps({
-            "schema_version": 1, "kind": "scenario_phase_profile",
+            "schema_version": 2, "kind": "scenario_phase_profile",
             "status": "succeeded", "scenario_id": "baseline", "closures": [],
             "simulation_mode": "meso", "seed_set": [1000, 1001, 1002],
             "demand_variant_mapping": {"1000": "q50", "1001": "q10",
@@ -882,7 +1002,7 @@ class TestTheHarnessWorksInItsRealScriptContext:
                                     "network": "a" * 64,
                                     "demand_meta": "c" * 64},
             "phase_schema": list(phases), "phases": phases,
-            "total": 10.0, "unattributed": 2.0,
+            "total": float(len(phases) + 2), "unattributed": 2.0,
             "sumo_seconds_by_seed": {"1000": 3.0, "1001": 3.1, "1002": 2.9},
             "seed_job_seconds_by_seed": {"1000": 3.4, "1001": 3.5,
                                          "1002": 3.2},

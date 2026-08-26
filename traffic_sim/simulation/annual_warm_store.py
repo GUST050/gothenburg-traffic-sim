@@ -339,6 +339,8 @@ class AnnualWarmArtifactStore:
             }
         finally:
             gzip_path.unlink(missing_ok=True)
+            if xz_path is not None:
+                xz_path.unlink(missing_ok=True)
             if "chosen" in locals():
                 chosen.unlink(missing_ok=True)
 

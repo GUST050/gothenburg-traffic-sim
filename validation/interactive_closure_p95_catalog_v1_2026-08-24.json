@@ -1,0 +1,1373 @@
+{
+  "artifact_dir": "runs/interactive-closure-p95-catalog-v1-2026-08-24",
+  "cases": [
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t1/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t1/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t1/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 333430784,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.415642,
+          "artifact_publication": 0.135278,
+          "cleanup": 0.002119,
+          "closure_preparation": 0.445215,
+          "disruption_analysis": 1.203459,
+          "input_validation": 0.180887,
+          "job_preparation": 0.006789,
+          "payload_construction": 0.000373,
+          "sumo_execution": 6.606021,
+          "trajectory_publication": 1.13064
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.605741,
+          "1001": 6.103771,
+          "1002": 6.084532
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.457083,
+          "1001": 5.794925,
+          "1002": 5.779349
+        },
+        "total": 10.126529,
+        "unattributed": 0.000106
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 1,
+      "wall_s": 10.478,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t2/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t2/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t2/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 334282752,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.424318,
+          "artifact_publication": 0.132802,
+          "cleanup": 0.002217,
+          "closure_preparation": 0.433158,
+          "disruption_analysis": 1.244519,
+          "input_validation": 0.186249,
+          "job_preparation": 0.007326,
+          "payload_construction": 0.000434,
+          "sumo_execution": 6.60905,
+          "trajectory_publication": 1.133669
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.608684,
+          "1001": 6.102972,
+          "1002": 6.10305
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.454017,
+          "1001": 5.810734,
+          "1002": 5.760532
+        },
+        "total": 10.173834,
+        "unattributed": 9.2e-05
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 2,
+      "wall_s": 10.459,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t3/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t3/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t3/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 334282752,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.434448,
+          "artifact_publication": 0.131335,
+          "cleanup": 0.002249,
+          "closure_preparation": 0.436695,
+          "disruption_analysis": 1.172047,
+          "input_validation": 0.18554,
+          "job_preparation": 0.00684,
+          "payload_construction": 0.000334,
+          "sumo_execution": 6.630888,
+          "trajectory_publication": 1.109161
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.630606,
+          "1001": 6.127677,
+          "1002": 6.159115
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.481387,
+          "1001": 5.84697,
+          "1002": 5.874549
+        },
+        "total": 10.109625,
+        "unattributed": 9e-05
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 3,
+      "wall_s": 10.409,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t4/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t4/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t4/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 334282752,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.436146,
+          "artifact_publication": 0.132245,
+          "cleanup": 0.002424,
+          "closure_preparation": 0.465358,
+          "disruption_analysis": 1.201052,
+          "input_validation": 0.185655,
+          "job_preparation": 0.007312,
+          "payload_construction": 0.000405,
+          "sumo_execution": 6.648465,
+          "trajectory_publication": 1.114968
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.648169,
+          "1001": 6.175555,
+          "1002": 6.118343
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.495724,
+          "1001": 5.926772,
+          "1002": 5.861516
+        },
+        "total": 10.194129,
+        "unattributed": 9.9e-05
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 4,
+      "wall_s": 10.482,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t5/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t5/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t5/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 334282752,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.417262,
+          "artifact_publication": 0.131422,
+          "cleanup": 0.002361,
+          "closure_preparation": 0.449904,
+          "disruption_analysis": 1.184017,
+          "input_validation": 0.184384,
+          "job_preparation": 0.007238,
+          "payload_construction": 0.000383,
+          "sumo_execution": 6.624522,
+          "trajectory_publication": 1.129581
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.624253,
+          "1001": 6.122662,
+          "1002": 6.032297
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.47507,
+          "1001": 5.889565,
+          "1002": 5.791528
+        },
+        "total": 10.131163,
+        "unattributed": 8.9e-05
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 5,
+      "wall_s": 10.429,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t6/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t6/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t6/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 335200256,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.421996,
+          "artifact_publication": 0.14731,
+          "cleanup": 0.002307,
+          "closure_preparation": 0.435873,
+          "disruption_analysis": 1.183457,
+          "input_validation": 0.183667,
+          "job_preparation": 0.007285,
+          "payload_construction": 0.000317,
+          "sumo_execution": 6.658425,
+          "trajectory_publication": 1.13064
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.658165,
+          "1001": 6.099681,
+          "1002": 6.04318
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.506588,
+          "1001": 5.863368,
+          "1002": 5.78361
+        },
+        "total": 10.171377,
+        "unattributed": 0.0001
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 6,
+      "wall_s": 10.48,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t7/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t7/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t7/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 335200256,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.426227,
+          "artifact_publication": 0.13134,
+          "cleanup": 0.002367,
+          "closure_preparation": 0.451209,
+          "disruption_analysis": 1.178361,
+          "input_validation": 0.182664,
+          "job_preparation": 0.007279,
+          "payload_construction": 0.000479,
+          "sumo_execution": 6.656538,
+          "trajectory_publication": 1.127997
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.65627,
+          "1001": 6.148106,
+          "1002": 6.192034
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.507752,
+          "1001": 5.882402,
+          "1002": 5.938834
+        },
+        "total": 10.164557,
+        "unattributed": 9.7e-05
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 7,
+      "wall_s": 10.463,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t8/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t8/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t8/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 335200256,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.421315,
+          "artifact_publication": 0.132928,
+          "cleanup": 0.002247,
+          "closure_preparation": 0.432887,
+          "disruption_analysis": 1.176611,
+          "input_validation": 0.185925,
+          "job_preparation": 0.007229,
+          "payload_construction": 0.000335,
+          "sumo_execution": 6.64056,
+          "trajectory_publication": 1.131267
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.640254,
+          "1001": 6.139359,
+          "1002": 6.032492
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.491114,
+          "1001": 5.899424,
+          "1002": 5.811383
+        },
+        "total": 10.131404,
+        "unattributed": 0.0001
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 8,
+      "wall_s": 10.423,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t9/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t9/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t9/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 335200256,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.417522,
+          "artifact_publication": 0.148438,
+          "cleanup": 0.002554,
+          "closure_preparation": 0.436159,
+          "disruption_analysis": 1.180233,
+          "input_validation": 0.185562,
+          "job_preparation": 0.007414,
+          "payload_construction": 0.00032,
+          "sumo_execution": 6.673408,
+          "trajectory_publication": 1.133736
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.673117,
+          "1001": 6.118488,
+          "1002": 6.068377
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.508543,
+          "1001": 5.843583,
+          "1002": 5.804155
+        },
+        "total": 10.185453,
+        "unattributed": 0.000105
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 9,
+      "wall_s": 10.508,
+      "workers": 3
+    },
+    {
+      "case": "closure",
+      "closure_integrity": "verified_clean",
+      "command": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/gt/Documents/gs-project/run_scenario.py",
+        "--seeds",
+        "3",
+        "--seed-workers",
+        "3",
+        "--out-dir",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t10/output",
+        "--timing-sidecar",
+        "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t10/phase_profile.json",
+        "--close",
+        "26842525_26355153_0"
+      ],
+      "full_edgedata": false,
+      "log": "runs/interactive-closure-p95-catalog-v1-2026-08-24/closure-w3-t10/stdout.log",
+      "micro": false,
+      "minimal_edgedata": false,
+      "peak_child_rss_bytes": 338165760,
+      "phase_profile": {
+        "closures": [
+          {
+            "edge_id": "26842525_26355153_0",
+            "end_time": "2027-09-09T00:00:00",
+            "start_time": "2027-09-08T00:00:00"
+          }
+        ],
+        "demand_build_key": "ab9711a80586fffb",
+        "demand_signature": "ab27c11be5a6a8b52045",
+        "demand_variant_mapping": {
+          "1000": "q50",
+          "1001": "q50",
+          "1002": "q50"
+        },
+        "kind": "scenario_phase_profile",
+        "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+        "phase_schema": [
+          "input_validation",
+          "closure_preparation",
+          "job_preparation",
+          "sumo_execution",
+          "aggregation_validation",
+          "trajectory_publication",
+          "disruption_analysis",
+          "payload_construction",
+          "artifact_publication",
+          "cleanup"
+        ],
+        "phases": {
+          "aggregation_validation": 0.418877,
+          "artifact_publication": 0.131593,
+          "cleanup": 0.002136,
+          "closure_preparation": 0.459059,
+          "disruption_analysis": 1.198366,
+          "input_validation": 0.186173,
+          "job_preparation": 0.008836,
+          "payload_construction": 0.000389,
+          "sumo_execution": 6.603883,
+          "trajectory_publication": 1.135303
+        },
+        "scenario_id": "close_26842525_26355153_0",
+        "schema_version": 2,
+        "seed_job_seconds_by_seed": {
+          "1000": 6.603637,
+          "1001": 6.150549,
+          "1002": 6.157477
+        },
+        "seed_set": [
+          1000,
+          1001,
+          1002
+        ],
+        "simulation_mode": "meso",
+        "source_fingerprints": {
+          "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+          "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+          "run_scenario": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3"
+        },
+        "status": "succeeded",
+        "sumo_seconds_by_seed": {
+          "1000": 6.452776,
+          "1001": 5.833994,
+          "1002": 5.898384
+        },
+        "total": 10.144737,
+        "unattributed": 0.000122
+      },
+      "rerouting_threads": null,
+      "returncode": 0,
+      "routing_algorithm": null,
+      "scenario_bytes": 1842106,
+      "scenario_digest": "142380c6d9206116013d6cbc2a3dba3746fe5e88f619071c96a05ac197ef793d",
+      "seed_health": [
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1000,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1001,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        },
+        {
+          "collisions": 0,
+          "inserted": 20818,
+          "loaded": 20818,
+          "running_at_end": 0,
+          "seed": 1002,
+          "teleports": 0,
+          "variant": "calibrated.rou_close_26842525_26355153_0.rou.xml",
+          "waiting_at_end": 0
+        }
+      ],
+      "seeds": 3,
+      "trajectory_bytes": 13035303,
+      "trajectory_digest": "6e55c253194b947d3a8d2523acd44ec636a37c7692538a84faaa5804d0495caa",
+      "trial": 10,
+      "wall_s": 10.438,
+      "workers": 3
+    }
+  ],
+  "cpu_count": 10,
+  "finished_at": "2026-08-24T15:58:37+0200",
+  "git_commit": "eeef6543850aec97df7ded7282c076b883f69d87",
+  "git_dirty": false,
+  "inputs": {
+    "bounds": "4e045b4b9a8dc79b68e8d920f547cb519744fa8f55c8d255ae784f3b13f656b1",
+    "calibrated_q10": "ca3bcea4ab4b8910d0f45fd1f4ffc2ca6f6b4d451229d987cea0b1bc85f3dbf9",
+    "calibrated_q50": "934aae48e3914c72471dd2cfe5a1dc691aabb56c8cc71e8d343b80fceb7b5cf5",
+    "calibrated_q90": "4027727058c976dbfb493b91c0cdd026b4d2dadab00fdb21c953ee5864406843",
+    "demand_meta": "3661d5be16f15456b715d88118142070a85131c8a9196580ca19791d839987cc",
+    "direction_split": "4b07c37d64cc986bd4c97e3020b40d8ca61c58643c51391a8259b8177c60e405",
+    "flows": "cd8793581c02d89d0106fd3e4ae35e46eaddb19cf29f5bb047d49e9556f22be6",
+    "graph": "651b0a841e0d4ea4107411e8ba34d04a0b85c853a2296e3ffcf404ba9099d69a",
+    "network": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "priors": null,
+    "source:build_sumo_demand.py": "04857546bd0d3580368ef63a4fcc91cae9eea6a5530a63e1c80b18e82e0c5eea",
+    "source:closure_metrics.py": "4db53e218b7a59e963b20702deec9bfee33dddb88ad2ae5b992197990621b7d8",
+    "source:demand/calibration.py": "55d23a92326e09fe39442723de4f45dd3ddbd2037a02cd7a5608e044993eb613",
+    "source:run_scenario.py": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3",
+    "source:sumo_runtime.py": "f7c640565ed405823714ebc0d516f034472ed32d035b49a694e83a1b9828656e"
+  },
+  "platform": "macOS-15.6.1-arm64-arm-64bit",
+  "python": "3.9.6 (default, Apr 30 2025, 02:07:17) \n[Clang 17.0.0 (clang-1700.0.13.5)]",
+  "reference_mismatches": [],
+  "schema_version": 1,
+  "semantic_mismatches": [],
+  "started_at": "2026-08-24T15:56:44+0200",
+  "sumo_version": "Eclipse SUMO sumo 1.27.1\n Build features: Darwin-23.6.0 arm64 AppleClang 15.0.0.15000309 Release FMI Proj GUI FMT Intl SWIG Parquet Eigen GDAL GL2PS JuPedSim\n Copyright (C) 2001-2026 German Aerospace Center (DLR) and others; https://sumo.dlr.de\n\nEclipse SUMO sumo 1.27.1 is part of SUMO.\nThis program and the accompanying materials\nare made available under the terms of the Eclipse Public License v2.0\nwhich accompanies this distribution, and is available at\nhttp://www.eclipse.org/legal/epl-v20.html\nThis program may also be made available under the following Secondary\nLicenses when the conditions for such availability set forth in the Eclipse\nPublic License 2.0 are satisfied: GNU General Public License, version 2\nor later which is available at\nhttps://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html\nSPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later"
+}

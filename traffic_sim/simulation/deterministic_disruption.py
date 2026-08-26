@@ -54,7 +54,7 @@ from traffic_sim.simulation.metadata import load_metadata
 
 #: Version of the deterministic disruption contract. Any change to how a
 #: record is computed or shaped must bump it; it is part of every cache key.
-DISRUPTION_SCHEMA = "deterministic_closure_disruption_v1"
+DISRUPTION_SCHEMA = "deterministic_closure_disruption_v2"
 
 #: Version of the on-disk daily-cost cache.
 DAILY_COST_CACHE_SCHEMA = "deterministic_daily_cost_cache_v1"
@@ -75,6 +75,7 @@ VARIANT_FILENAMES = {
 #: code that computed it.
 COSTING_SOURCES = (
     "run_scenario.py",
+    "traffic_sim/simulation/disruption.py",
     "traffic_sim/simulation/deterministic_disruption.py",
     "traffic_sim/simulation/closure_ranking.py",
 )

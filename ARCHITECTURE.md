@@ -1,11 +1,12 @@
-# Architecture — locked 2026-07-05
+# Architecture — structure locked 2026-07-05, status corrected 2026-08-21
 
 **Product contract:** the city drops 15-minute count data (any number of
 stations, directional or two-way) into the program and gets back (1) a
 simulation of the measured period, (2) a simulation of any future date, and
 (3) "what if we close these streets" — with a per-street statement of how
-trustworthy each answer is and *where that number came from*. Every added
-station must improve all three outputs without code changes.
+trustworthy each answer is and *where that number came from*. A reviewed added
+station enters all three outputs without sensor-specific calibration code;
+whether it actually improves held-out accuracy must be measured, not promised.
 
 ## The estimation hierarchy (the core idea)
 
@@ -18,22 +19,28 @@ of this hierarchy, and its provenance is carried all the way to the map:
    where it is not. Also yields consistency alarms between sensors.
    (Literature: link-flow observability, Castillo et al. 2015.)
 3. **LEARNED PRIOR, INSIDE THE BOUNDS** — for what remains: the expected
-   pattern for "a street of this type at this hour", learned from cities
-   where directions/volumes ARE measured (Norwegian open directional data
-   today — the validated dirsplit model; FCD fusion when the city licenses
-   probe data). Soft pull, never overrides levels 1–2. (An informative
-   prior is REQUIRED for identifiability — Marzano et al.)
-4. **RECONCILIATION** — a single convex program selects concrete vehicle
-   routes that (a) match level 1 exactly (within GEH tolerance), (b) never
-   violate level 2, (c) stay close to level 3, with an entropy-flavoured
-   preference against unwarranted structure. This is a modern
-   **Path Flow Estimator** (Bell & Shield 1996; Chen et al. 2009 — the
-   single-level formulation that explicitly tolerates counts on only part
-   of the network, supports inequality constraints, and has published
-   confidence-interval theory).
+   pattern for a street or direction at this hour. The current direction
+   centre is a simple hour x day-type D-factor curve fitted from the tracked
+   Nordic aggregate and pooled toward 0.5, with sensor 107 re-levelled to its
+   published 2025 period aggregate. Its frozen Gate M is inconclusive because
+   raw counts and independent day blocks are unavailable; q10/q90 are stress
+   bands, not calibrated probabilities. The retired LightGBM model and data
+   acquisition client are not production dependencies. This layer is a soft
+   pull and yields before measurements. (An informative prior is required for
+   identifiability — Marzano et al.)
+4. **RECONCILIATION AND PUBLICATION** — continuous entropy/IPF and LP solves
+   select route weights, followed by a joint integer projection that produces
+   publishable vehicle counts. The ladder first tries to match level 1 inside
+   its declared band, retain level-2 bounds and stay close to level 3. If these
+   conflict, optional layers are surrendered in the executable order below and
+   every relaxation is recorded. Hard publication infeasibility fails closed.
+   This is a modern **Path Flow Estimator** informed by Bell & Shield 1996 and
+   Chen et al. 2009, adapted to partial counts, inequality constraints and
+   integer route publication.
 
-Flows on unmeasured streets are the OUTPUT of level 4 — never an input
-guess. Their trustworthiness is measured (stage F), not presumed.
+Flows on unmeasured streets are the reconciled OUTPUT of level 4 rather than
+measurements. They are influenced by candidate supply and level-3 priors, so
+their trustworthiness is bounded and reported in stage F, not presumed.
 
 **The hierarchy is enforced by the ORDER of the relaxation ladder** (`pfe.py`,
 `solve_interval_with_relaxation`). When an interval is infeasible something
@@ -184,6 +191,19 @@ shadow constraint, without reading its held observation. This prevents purpose,
 structure and provenance repairs from arbitrarily moving an otherwise valid
 continuous held prediction.
 
+The capacity contract is 50 physical sensor stations. Sensor count expands
+calibration constraints and the bounded final audit. It can also indirectly
+increase the calibrated population when newly observed movements require more
+route instances; that vehicle growth is part of the supported product. A route
+may satisfy multiple sensor margins, so station counts must be solved jointly
+and must never be added as 50 independent city populations. Interactive closure
+p95 remains <=10 s at 50 stations only for the fixed-load reference arm; actual
+50-station releases additionally pass calibrated 21k/32k/43k/50k/60k load
+tiers and fail closed on uninserted or waiting vehicles. Demand-build,
+sensor-only and vehicle/network-load scaling are measured separately. The test
+matrix and service budgets are in
+`docs/plans/FIFTY_SENSOR_PERFORMANCE_CONTRACT_2026-08-22.md`.
+
 The vehicle-level sensor-anchor contract is checked again on the final route
 instances, after integer projection and purpose-route replacement. Every real
 demand build and LOSO fold passes the union of the current registry's resolved
@@ -233,6 +253,60 @@ profile, while each calendar day's measured or forecast profile controls only
 departures; the first date encountered in a multi-day window can no longer
 alter the template. These contracts fail closed automatically when a sensor is
 added, removed or re-snapped.
+
+The `build_sumo_demand.py --candidate-source catalog` path materializes
+that boundary as a content-addressed `sumo/route_catalog/` artifact. A bounded
+per-key file lock prevents duplicate producers; manifests verify every XML,
+metadata and validation byte before restore; and mixed weekday/weekend windows
+merge prefixed candidate IDs without changing the physical route geometry.
+The catalog removes only date-shaped inputs from the identity and retains the
+network, sensor edge set, route gates, runtime and complete demand-source
+inventory. The daily purpose-by-quarter margin is passed explicitly to PFE.
+The two-date invariance and current seven-edge sensor-coverage gates passed on
+2026-08-24. The first unequal 12,000/6,000-candidate campaign is retained only
+as diagnostic history. Its schema-v2 replacement ran 30 counterbalanced pairs
+with 6,000 candidates in both arms and passed every declared gate: median wall
+time 55.246→24.715 s (2.235x ratio of arm medians; 2.220x median paired
+speedup), catalog adapter p95 0.678 s, no slower day class,
+paired vehicle-population deviation at most 0.761% and peak RSS below 8 GiB.
+PFE time is an end-to-end product measure, not an isolated solver comparison:
+the old campaign did not record the distinct route×purpose variable count, so
+it cannot prove equal PFE workload. New campaigns record that count explicitly.
+Suite/negative-path contracts are bound once per campaign, while seven
+build-specific contracts are measured independently in each arm. A schema-v3
+`sumo/route_catalog_adoption.json` makes catalog the normal default only after
+it opens and hashes the named qualification and build reports, follows and
+hashes their trials and suite-evidence links, cross-checks exact catalog keys
+and selected sizes through the chain, and verifies the immutable entries.
+Missing, stale, legacy-schema, corrupt, path-escaping or unbound records fail
+safely to legacy. A source/input mismatch discovered after argument parsing
+also falls back to the qualified legacy candidate builder when catalog use was
+implicit; `demand_meta.json` records the catalog-to-legacy reason and selected
+pool. An explicit `--candidate-source catalog` remains strict and may build
+only an isolated, unadopted catalog. `tools/build_route_catalog.py` owns
+isolated materialization and the bounded
+sensor-support sizing ladder; `tools/verify_route_catalog_invariance.py` owns
+the two-date gate; `tools/qualify_route_catalog.py` applies the frozen 30-pair
+performance contract, including equal candidate requests in both arms. Only
+`tools/adopt_route_catalog.py` may write the small adoption record that changes
+the default, and it refuses evidence that is not cryptographically bound to
+the supplied build and stored catalog bytes.
+An explicit `--candidate-source legacy` always remains the rollback path.
+The old unmatched campaign measured 66.402 s versus 19.437 s and is useful for
+diagnosis only. The matched campaign is bound in
+`validation/route_catalog_qualification_v3_2026-08-24.json`; seven catalog
+fixtures plus explicit legacy rollback passed the versioned soak report, so
+the catalog is now the production default.
+Catalog reuse is still bypassed explicitly
+for `--congestion-iterations > 1`, because feedback weights make route supply
+date-specific. Annual warming is not implied by adoption: it remains keyed to
+the exact finished daily route bytes. The refreshed preflight and one q50 unit
+passed; the other 104,684 planned units remain unexecuted.
+Mixed weekday/weekend materialization prefixes both vehicle IDs and embedded
+`tour_id` values, so tour provenance cannot cross day-type namespaces. PFE may
+use wider continuous feasibility rungs internally, but the publication worker
+retries at the exact no-bounds rung and fails closed unless every rounded
+sensor-edge/quarter target is met exactly.
 
 Randomised duarouter costs can produce a loop or excessive detour from an
 otherwise grounded OD/via request. After the ordinary physical filters, v13
@@ -358,6 +432,15 @@ runtime, `tools/` contains bounded experiments, `tests/` contains contract and
 regression tests, and generated artifacts stay under `web/data/`, `sumo/`,
 `runs/` or `cache/` rather than in source packages.
 
+The browser keeps measured input and model inference distinct. Sensor
+deliveries contain station, date, 15-minute interval and passage count; they do
+not contain observed trip purpose. The `arbete`/`service`/`fritid` values in
+`agent_demand` are therefore labelled as modelled trip purposes, while
+`external` and `through` are shown separately as geographic route categories.
+Internal representative seed and demand-variant identifiers remain in scenario
+artifacts and validation evidence but are not exposed in the normal vehicle or
+sensor-audit labels.
+
 ### A — Intake (`build_data.py`) — built
 Validate 15-min CSVs; join coordinates + **measured-direction metadata**
 (`data_in/sensors.json` — the delivered "Total" label is proven unreliable);
@@ -425,6 +508,106 @@ length or OD statistics. Publication requires 7,125/7,125 candidate and
 q10/q50/q90 edge equality plus exact candidate-route/agent provenance. The PFE
 touch index is constructed once before worker fork and reused without changing
 numeric order or output.
+
+**Exact sensor-count publication gate (2026-08-23).** A directional forecast
+target can be fractional, but a route file can contain only whole vehicles.
+For every registered directed sensor edge and every 15-minute interval, PFE
+must therefore publish exactly `int(round(target))` route crossings. The fit
+report records the number of constraints, exact matches, maximum and summed
+absolute integer residual; production publication refuses a missing record or
+any non-zero residual. GEH remains a secondary conventional diagnostic and
+cannot make a non-exact build publishable. SUMO's `loaded`/`inserted` counters
+are a separate runtime integrity check: they prove that the simulator accepted
+the already calibrated route file, not that the simulation added demand.
+
+**Grounded sensor-incidence basis (2026-08-26).** Candidate onboarding now
+checks the final post-filter route matrix, not only raw per-sensor route
+counts. Every measured edge must have at least one route whose measured-edge
+incidence is exactly that edge. Missing columns are supplied by the minimum
+legal SUMO-connection route from an existing anonymous-home endpoint pool to
+an existing activity/POI endpoint pool, with all other measured edges removed
+from the routing graph. The route must be simple and remain within the normal
+global stretch limit. It is marked `support_only` so it cannot change purpose
+or behavioral quota targets; it can only carry a real measured margin. If no
+such grounded route exists, candidate generation fails before the 96-quarter
+PFE solve and names the unsupported edges. This non-negative identity basis is
+sufficient to represent every rounded non-negative sensor target vector and
+prevents a late integer-projection failure caused solely by candidate
+coupling. The older every-unmeasured-edge support mechanism described above is
+historical and disabled: no unmeasured-background vehicles are reintroduced.
+
+**Exact simulated-passage diagnostic (2026-08-23).** A baseline scenario now
+also retains raw 15-minute `edgeData` counts for every directed sensor edge,
+the unrounded three-seed ensemble mean, the animated representative seed and
+every individual seed. `raw_edgedata_15min_exact_integer_targets_v1`
+recomputes all evidence from those detailed arrays and compares each cell with
+the same declared integer target. A lying compact summary, a missing seed row
+or an ensemble average that hides opposite per-seed errors is rejected. This
+test is diagnostic and non-mutating: it does not add vehicles, move departures
+or change routes, and road-closure scenarios deliberately do not claim
+baseline exactness. The validation UI exposes it as a separate gate rather
+than replacing the existing hourly GEH publication check.
+
+On the active 2027-09-08 forecast baseline, the demand route file is exactly
+672/672, but raw SUMO passage time is only 81/672 exact in the ensemble
+(12.053571%; maximum absolute residual 16.333333 and summed residual 1910).
+The representative seed is 114/672 exact and the three seeds are respectively
+114, 119 and 120 exact. This establishes the next correctness task: reconcile
+departures with simulated sensor crossing time while freezing population,
+OD, purpose and route provenance. Until that task passes, the exact-passage
+section correctly remains `warn`.
+
+**Departure-reconciliation diagnostic (2026-08-23, rejected).** SUMO's
+documented clocks explain the mismatch: route `depart` is the requested network
+entry, `tripinfo.depart` is the real insertion time, and edgeData `entered`
+counts the later upstream-to-sensor-edge transition. The default passenger-car
+speed deviation is also sampled during vehicle loading, so changing XML order
+changes which id receives which driver speed. The isolated
+`tools/departure_reconciliation.py` prototype therefore intersected
+the observed passage-safe departure windows for seeds 1000/1001/1002 and kept
+the original vehicle order. It changed no route and added/removed no vehicle;
+all three runs reached 672/672 exact with clean health and retained three
+distinct speed profiles.
+
+That numerical success is deliberately **not production**. Order preservation
+compressed the active route from a 2.7 s median departure gap and at most one
+departure per second to a 0.1 s median, 15,545 minimum-gap adjacencies and up
+to ten departures per second. Five counterbalanced baseline trials also put
+the candidate median 3.15% slower. Manufacturing insertion convoys is not a
+valid city-demand calibration. The module now rejects that shape before
+publication, as well as incomplete evidence, population/route drift, collapsed
+seed profiles, unhealthy SUMO output or any non-exact sensor cell. The active
+route remains unchanged and the raw passage section remains `warn`; the bound
+diagnostic is recorded in
+`validation/departure_reconciliation_diagnostic_2026-08-23.json`.
+
+SUMO's calibrator is not an acceptable shortcut for this contract because its
+documented behavior inserts vehicles when flow is low and removes vehicles
+when flow is high or jammed.
+
+`tools/standard_driver_pool.py` now implements the safer design as an isolated
+post-picker layer. The picker still chooses a date's exact vehicles and routes;
+the pool identity binds that date, demand build, route bytes, network, sensor
+targets and three profile arms. Each arm assigns an explicit deterministic
+per-vehicle `speedFactor`, so XML ordering cannot silently remap random driver
+attributes. All arms share one passage-aware departure schedule. The scheduler
+first tries to reuse the complete original slot set and otherwise uses an
+earliest-deadline feasible ordering projected toward those slots, guarded by
+the same anti-convoy checks. Baseline and closure for one arm must later reuse
+that arm unchanged (common random numbers).
+
+The real 2027-09-08 diagnostic kept all 21,240 vehicles and every route, kept
+three distinct near-default speed distributions, cleanly inserted every
+vehicle, and reached raw 672/672 in every arm after two offline iterations.
+Departure spacing remained non-bunched (minimum 2.0 s, median 2.7→2.5 s,
+maximum one departure/s), although 21,183 vehicle ids exchanged latent origin
+times with a median absolute shift of 254.4 s. It is still **not production**:
+ten counterbalanced three-arm baseline timings measured a 1.805 s current
+median versus 1.846 s for the pool (+2.30%), and no production-shaped closure
+comparison exists. The tool writes only to a caller-selected content-addressed
+experiment directory and cannot replace `sumo/calibrated.rou.xml`; therefore
+it has not invalidated the current warming. See
+`validation/standard_driver_pool_diagnostic_2026-08-23.json`.
   - **E-E** (through) — gate→gate, gate weight ∝ approach-road class
     (motorway/trunk draw more than a residential fringe street — the only
     local proxy available; no external cordon counts exist to calibrate
@@ -1097,7 +1280,12 @@ It reproduces the production calendar semantics rather than approximating them:
 15-minute alignment, the configured timezone and DST policy, allowed weekdays,
 blackout dates, exact equal daily shifts, up to 90 workdays, rolling periods
 that may cross weeks, months and years, and one identical start/end clock time
-on every selected workday.  Counting is a run-length identity — a maximal run
+on every selected workday. `ClosureSearchSpec.min_consecutive_start_days`
+defaults to one and is omitted from the content payload at that default, so
+legacy search identities remain stable. A non-default minimum restricts both
+the generator and exact preflight; setting minimum equal to maximum requests an
+exact workday count instead of paying to evaluate shorter periods. Counting is
+a run-length identity — a maximal run
 of `L` usable dates contains `max(0, L - n + 1)` windows of length `n` — which
 is why it needs no objects.  `equal_daily_rounded_v1` counts on the
 calendar-date axis and `exact_equal_daily_v1` on the eligible-date axis,
@@ -1271,6 +1459,32 @@ the cheapest legal path with and without the closure. Nothing in that needs a
 simulator, but until PR D it was reachable only through
 `ArchivedDemandSumoRunner` — so a search had to simulate a candidate to learn
 whether the candidate was worth simulating.
+
+**The headline closure impact is not a SUMO delay result.** The deployed
+ranking headline (`added_vehicle_hours`, followed by added metres and affected
+vehicles) is produced by the static free-flow graph calculation above. It has
+no volume-delay function, dynamic traffic assignment, link-capacity term or
+lane-count term. This is deliberate but limiting: the active network has not
+shown a stable congestion-delay signal, and the current working baseline has
+zero simulated flow on 3,981 of 7,147 published edges (55.7%). SUMO therefore
+acts mainly as the candidate's integrity and health verifier — insertion,
+unfinished traffic, teleports, closed-edge zero flow and survivability — not
+as the producer of the number that orders candidates. A four-lane and a
+one-lane edge with equal length and speed have equal per-vehicle free-flow
+cost. Capacity-aware ranking requires a separately preregistered and validated
+volume-delay or DTA model; adding `numLanes` as an uncalibrated divisor would
+not be such a model and must not silently replace `closure_cost_v1`.
+
+The runtime closure rerouter is attached within 400 m of the closed edge for
+the production arm. A vehicle already beyond that neighbourhood when the
+closure begins may not receive advance rerouting, so this radius limits the
+propagation represented by the SUMO verification. `run_scenario.py` exposes
+`--rerouter-radius-m` for isolated, timing-bound comparison arms, but changing
+the production radius requires paired semantic, health and latency evidence;
+the all-network rerouter previously made a whole-day seed roughly an order of
+magnitude slower. `--sumo-warnings` can be used in diagnostic runs so route,
+departure and rerouter warnings are not hidden by the production log-suppression
+default.
 
 `DeterministicDisruptionProvider` is the protocol and exposes no simulation
 handle; `ArchiveDisruptionProvider` implements it from one immutable archive
@@ -1790,6 +2004,20 @@ byte-identical to an uninterrupted enumeration. The web API exposes the
 versioned resource policy and a `paused` state, and the browser restores the
 exact form and directed edges after reload.
 
+Resource-policy v2 also declares execution width rather than inheriting CLI
+defaults: independent-day jobs started by the web server pass eight daily
+workers, one seed worker and an eight-process active-SUMO ceiling. The CLI
+still validates that width against the recorded isolated-worker resource gate;
+the policy is an admitted resource setting, not a linear speed claim.
+
+Every search workspace accumulates `active_elapsed_s` across resumed process
+segments with an awake monotonic clock (`CLOCK_UPTIME_RAW` on macOS), while UTC
+creation/finish timestamps retain ordinary wall-clock provenance. Throughput
+evidence must use the active value: wall elapsed may include laptop suspension.
+While the monthly CLI owns the shared simulation workspace on macOS it starts
+`caffeinate -i -w <pid>` and releases that assertion during cleanup; failure to
+start it is visible on stderr rather than silently pretending sleep prevention.
+
 The named six-month 360-hour case contains 11,813 parents and 23,349 unique
 daily units. It is therefore admitted by the current server policy instead of
 being rejected by the historical 10,000-unit implementation cap. This changes
@@ -1857,6 +2085,61 @@ not the other, changing hard-failure, health, selected-id and restart evidence.
 All four stop proofs were independently valid. This is a fail-closed
 reproducibility result: policy v3 is not activated and held-out/micro release
 evidence does not run downstream of it.
+
+### Exact interactive closure cache (2026-08-21)
+
+`serve.py` keeps exact structured closure reuse in `runs/scenario-cache/`,
+separate from the published scenario directory. A schema-v2 cache identity
+hashes the canonical `ScenarioSpec`, execution/output policy, Python/platform/
+SUMO runtime, direct route and agent bytes, network/metadata/flow inputs and
+the relevant scenario source tree. After a normal run has passed the existing
+`verified_clean` gate, the server writes an atomic sidecar naming the scenario
+and trajectory. A later structured request can return immediately only when
+the sidecar provenance/digest matches, the live index still contains the same
+normalized spec, both safe in-directory output files exist, and the payload
+remains `verified_clean`. Verification holds the normal cross-process
+simulation workspace slot, repeats the identity check against source edits,
+and a miss is cached only if the pre-run and post-run identities agree.
+Identical concurrent misses share the first job; malformed cache data is a
+miss. Loose legacy query requests are not cached because they do not carry
+enough identity to prove an exact repeat. Cache failure is fail-open to the
+normal SUMO path; a hit is explicitly labelled cached and does not claim a new
+start time. The whole post-acquire preparation region has one final release
+guard, including unexpected cache-identity failures, so an exception cannot
+strand either the process-local slot or the cross-process workspace lock.
+While locked verification is in progress, the close-status API uses the
+distinct `checking_cache` state and cancel may terminate preparation before a
+child exists; only a miss changes atomically to a durable `running` job and
+receives a new `started_at` timestamp. Cache payload fields are allowlisted so
+an index entry cannot overwrite lifecycle status or the requested spec.
+
+The same speed work keeps first-run experiments opt-in: `run_scenario.py`
+accepts `--rerouting-threads` and `--routing-algorithm` only as explicit
+benchmark parameters; they require an isolated output directory plus timing
+sidecar and refuse the live scenario directory. EdgeData's production default
+is the paired-qualified `entered timeLoss` field set; `--full-edgedata` is an
+isolated rollback/benchmark arm. Phase-profile schema v2 reports deterministic
+disruption, payload construction and atomic artifact publication separately.
+`traffic_sim/simulation/disruption.py` uses batched sparse shortest paths for
+larger OD sets, retains a grouped Python fallback and keeps the former per-OD
+calculation as an equivalence oracle. Seed workers receive a frozen
+`SeedRunPlan`, and final scenario/index publication cannot launch SUMO.
+Monthly
+independent-day runs expose result-neutral cache/worker timing in their
+resumable progress detail and enforce a declared
+`--max-active-sumo-slots` budget before expensive work starts. Nested daily
+and seed parallelism remains refused until its full equivalence/resource gate
+passes. The matched-baseline cache now has per-key cross-process single-flight;
+one producer computes under `flock` and every waiter re-reads and verifies the
+atomic result. Waiters emit one content-key diagnostic and fail after a bounded
+600 seconds by default rather than appearing dead forever; lock pathnames are
+retained because unlinking an active `flock` pathname can split serialization
+across inodes. Browser job polling uses bounded exponential backoff and stops
+after five consecutive transport/HTTP failures with an explicit reconnect
+message; the server-side job may continue and can be recovered by status.
+Neither the
+routing matrix nor a worker allocation is a production adoption until its
+paired semantic/evidence and resource gates pass.
 
 ## Build order
 1. **B — observability module** (junction solves, bounds, alarms).

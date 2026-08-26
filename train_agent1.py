@@ -66,7 +66,7 @@ HOLIDAY_DATES_2025: set[str] = {
     "2025-05-29",   # Kristi Himmelsfärdsdag
     "2025-06-06",   # Sveriges nationaldag
     "2025-06-08",   # Pingstdagen
-    "2025-06-20",   # Midsommardagen
+    "2025-06-20",   # Midsommarafton (a Friday; Midsommardagen is the 21st)
     "2025-11-01",   # Alla helgons dag
     "2025-12-24",   # Julafton  (not official but structurally different)
     "2025-12-25",   # Juldagen

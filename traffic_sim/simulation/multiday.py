@@ -293,6 +293,8 @@ def aggregate(seed_payloads: list[dict], *, days: int,
         if len(day_rows) != len(seed_payloads):
             reasons.append(f"dag {day} saknar komplett sammanfattning för ett frö")
         def values(key: str, cast=int) -> list:
+            # pylint: disable=cell-var-from-loop  # invoked inside this same iteration, so the late binding
+            # cannot be observed; the closure never escapes the loop.
             return [cast(row[key]) for row in day_rows if row.get(key) is not None]
         loaded, inserted, teleports = values("loaded_delta"), values("inserted_delta"), values("teleports_delta")
         boundary_lags = values("boundary_lag_s", float)

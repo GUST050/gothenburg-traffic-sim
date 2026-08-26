@@ -38,8 +38,10 @@ import subprocess
 import sys
 import tempfile
 import time
+import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -50,6 +52,7 @@ from traffic_sim.core.fingerprint import (fingerprint_files, make_fingerprint,
 from traffic_sim.core.contracts import (DemandBuildSpec, load_demand_build_spec,
                                          write_demand_build_spec)
 from traffic_sim.demand import cache as candidate_cache
+from traffic_sim.demand import route_catalog
 from traffic_sim.demand.build_lock import demand_build_lock, parent_holds_lock
 from traffic_sim.demand.provenance import (DAY_PROVENANCE_NAME,
                                            validate_assembled_provenance,
@@ -193,6 +196,78 @@ def candidate_router_cache_input(home: Path) -> Path:
     return Path(home) / "bin" / "duarouter"
 
 
+def candidate_identity_components(
+    *,
+    n_total: int,
+    through_fraction: float,
+    gravity_km: float,
+    gravity_alpha: float,
+    cross_fraction: float,
+    is_weekend: bool,
+    start_date: str,
+    seed: int,
+    home: Path,
+    flows_path: Path,
+    day_shape_path: Path | None = None,
+    day_blocks_path: Path | None = None,
+    weight_file: Path | None = None,
+) -> tuple[dict, dict[str, Path], dict[str, Path]]:
+    """One identity inventory shared by legacy cache and route catalogs."""
+    import build_candidates
+
+    inputs = {
+        "network": NET_PATH,
+        "duarouter_binary": candidate_router_cache_input(home),
+        "graph": Path("web/data/graph.graphml"),
+        "map_network": GEO_PATH,
+        "source_flows": flows_path,
+        "source_flow_edge_set": FLOWS_PATH,
+        "sensor_registry": Path("data_in/sensors.json"),
+        "normal_profile": Path("web/data/normal_profile.json"),
+        "direction_split": SUMO_DIR / "direction_split.json",
+        "population": Path("data_in/deso/population_2023.json"),
+        "deso": Path("data_in/deso/deso_goteborg.geojson"),
+        "official_buildings": Path("data_in/deso/buildings.geojson"),
+        "osm_buildings": Path("data_in/deso/osm_buildings.geojson"),
+        "poi": Path("data_in/deso/osm_pois.geojson"),
+        "real_day_shape": day_shape_path or Path("sumo/.missing-real-day-shape"),
+        "day_blocks": day_blocks_path or Path("sumo/.missing-day-blocks"),
+        "routing_weights": candidate_routing_weight_cache_input(weight_file),
+        "assignment_priors": SUMO_DIR / "assignment_priors.json",
+    }
+    config = {
+        "n_total": int(n_total),
+        "through_fraction": through_fraction,
+        "gravity_km": gravity_km,
+        "gravity_alpha": gravity_alpha,
+        "cross_fraction": cross_fraction,
+        "is_weekend": bool(is_weekend),
+        "start_date": start_date,
+        "min_per_sensor": 50,
+        "route_diversity": build_candidates.DEFAULT_ROUTE_DIVERSITY,
+        "max_stretch": build_candidates.DEFAULT_MAX_STRETCH,
+        "max_local_stretch": build_candidates.DEFAULT_MAX_LOCAL_STRETCH,
+        "pool_departure_floor":
+            build_candidates.POOL_DEPARTURE_UNIFORM_FLOOR,
+        "seed": int(seed),
+        "runtime": runtime_package_identity((
+            "networkx", "numpy", "osmnx", "shapely")),
+        "routing_cost_mode": "feedback" if weight_file is not None else "free_flow",
+    }
+    sources = {
+        "build_candidates": Path("build_candidates.py"),
+        "build_sumo_demand": Path(__file__),
+        "build_data": Path("build_data.py"),
+        "dirsplit_geo": Path("dirsplit/geo.py"),
+        "endpoint_locations": Path("demand/locations.py"),
+        "candidate_cache": Path("traffic_sim/demand/cache.py"),
+        "sensor_registry_loader": Path("traffic_sim/intake/sensors.py"),
+        "direction_anchor": Path("traffic_sim/intake/direction_anchor.py"),
+        "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
+    }
+    return config, inputs, sources
+
+
 def pfe_fit_by_day(report: dict, targets: list[dict],
                    days: int) -> list[dict]:
     """Recompute PFE's hourly GEH gate separately for every full day.
@@ -253,6 +328,16 @@ def fit_summary(report: dict, *, targets: list[dict] | None = None,
         "geh_pct": report.get("geh_pct"),
         "infeasible_intervals": report.get("infeasible_intervals", 0),
         "vehicles": report.get("vehicles"),
+        "integer_sensor_constraints": report.get(
+            "integer_sensor_constraints"),
+        "integer_sensor_exact": report.get("integer_sensor_exact"),
+        "integer_sensor_exact_pct": report.get("integer_sensor_exact_pct"),
+        "integer_sensor_max_abs_error": report.get(
+            "integer_sensor_max_abs_error"),
+        "integer_sensor_sum_abs_error": report.get(
+            "integer_sensor_sum_abs_error"),
+        "integer_sensor_target_rule": report.get(
+            "integer_sensor_target_rule"),
         "unserviceable_edges": list(report.get("unserviceable_edges", [])),
         "bound_violations": list(report.get("bound_violations", [])),
         "relaxed_bound_violations": list(report.get("relaxed_bound_violations", [])),
@@ -315,6 +400,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--pfe-workers", type=int, default=None,
                    help="Maximum PFE worker processes (default: CPU count; "
                         "use 1 for serial solving and publication)")
+    p.add_argument(
+        "--direction-stress-variants", action="store_true",
+        help="Explicitly build the q10/q90 direction-allocation stress arms "
+             "beside q50. Ordinary interactive recalibration is q50-only; "
+             "closure-envelope studies opt in to all three arms.")
     p.add_argument("--through-share-target", type=float, default=0.25,
                    help="Enforced calibrated through share (start AND end "
                         "outside the canvas). The share is unidentifiable "
@@ -328,6 +418,25 @@ def parse_args() -> argparse.Namespace:
                    help="Use uniform randomTrips instead of the subarea/DeSO/"
                         "RVU candidate generator (build_candidates.py). Kept "
                         "only for comparison; the grounded generator is default.")
+    p.add_argument("--candidate-source", choices=["legacy", "catalog"],
+                   default=None,
+                   help="Candidate support source. legacy preserves the "
+                        "date-shaped builder/cache; catalog uses "
+                        "a content-addressed weekday/weekend support set "
+                        "and keeps daily behaviour in calibration. Catalog "
+                        "is the default only through a verified adoption "
+                        "record and is bypassed for congestion feedback.")
+    p.add_argument("--candidate-n-total", type=int, default=None,
+                   help=argparse.SUPPRESS)
+    p.add_argument("--candidate-cache-root", type=Path,
+                   default=candidate_cache.DEFAULT_ROOT,
+                   help=argparse.SUPPRESS)
+    p.add_argument("--route-catalog-root", type=Path,
+                   default=route_catalog.DEFAULT_ROOT,
+                   help=argparse.SUPPRESS)
+    p.add_argument("--day-library-root", type=Path,
+                   default=DayLibrary().root,
+                   help=argparse.SUPPRESS)
     p.add_argument("--through-fraction", type=float, default=0.5,
                    help="θ passed to build_candidates.py: the sensor-"
                         "conditioned candidate pool's E-E supply share — "
@@ -414,12 +523,24 @@ def parse_args() -> argparse.Namespace:
         return any(value == flag or value.startswith(flag + "=")
                    for value in sys.argv[1:])
 
+    args.candidate_source_implicit = args.candidate_source is None
+    if args.candidate_source is None:
+        args.candidate_source = route_catalog.configured_candidate_source(
+            root=args.route_catalog_root)
+
     if (not np.isfinite(args.through_share_target)
             or args.through_share_target >= 1):
         p.error("--through-share-target must be finite and below 1; "
                 "values <=0 disable the target")
     if args.pfe_workers is not None and args.pfe_workers < 1:
         p.error("--pfe-workers must be a positive integer")
+    if args.candidate_n_total is not None and args.candidate_n_total < 1:
+        p.error("--candidate-n-total must be a positive integer")
+    if args.candidate_source == "catalog" and args.legacy_random_pool:
+        p.error("--candidate-source catalog cannot be combined with "
+                "--legacy-random-pool")
+    if args.candidate_source == "catalog" and args.engine != "pfe":
+        p.error("--candidate-source catalog requires --engine pfe")
     if args.date is not None and args.start_date is not None:
         p.error("use either --date or --start-date, not both")
     if args.date is not None and args.days != 1:
@@ -515,6 +636,8 @@ from demand.feedback import (BPR_PERIOD_S, FEEDBACK_SIM_TIMEOUT_S,
 # PFE calibration orchestration — moved to demand/calibration.py (H1,
 # 2026-07-14). The _PFE_PAR_* pool globals live there.
 from demand.calibration import (_agent_path_for, _report_is_publishable,
+                                catalog_daily_purpose_mixes,
+                                purpose_mixes_for_candidates,
                                 run_pfe_variants_flat_parallel,
                                 warn_bound_violations,
                                 warn_prior_relaxations,
@@ -525,12 +648,109 @@ from demand.calibration import (_agent_path_for, _report_is_publishable,
                                 warn_unserviceable_measured_edges)
 
 
+def median_variant(variants: Sequence[tuple[str, str]]
+                   ) -> tuple[str, str] | None:
+    """The q50 arm of a variant contract, by the key the solver keys on.
+
+    Named once because three places depend on picking the same arm: the
+    solver freezes this arm's integer population before the stress arms run,
+    the day library stores it a second time under a q50-only identity, and a
+    q50-only build must compute that identical identity. A local copy of the
+    rule in any of them is a silent way for the map to stop finding the day
+    a search already paid for.
+    """
+    for entry in variants:
+        if entry[1] in {"edge_shares", "q50"}:
+            return entry
+    return None
+
+
+def direction_variants(include_stress: bool) -> list[tuple[str, str]]:
+    """Return the exact route-slot/target contract for one demand build.
+
+    q10/q90 describe uncertainty in direction allocation. They are not extra
+    ordinary demand cases and must never appear merely because a split file
+    happens to contain quantiles.
+    """
+    central = [("", "edge_shares")]
+    if not include_stress:
+        return central
+    if not has_split_quantiles():
+        raise ValueError(
+            "--direction-stress-variants requires a complete q10/q90 "
+            "direction-split contract")
+    return central + [
+        ("_v1", "edge_shares_q10"),
+        ("_v2", "edge_shares_q90"),
+    ]
+
+
+def direction_variant_manifest(
+        variants: list[tuple[str, str]],
+) -> dict:
+    """Build an additive, semantic manifest instead of relying on filenames."""
+    labels = {
+        "edge_shares": "q50",
+        "edge_shares_q10": "q10",
+        "edge_shares_q90": "q90",
+    }
+    entries = []
+    for suffix, target_key in variants:
+        try:
+            label = labels[target_key]
+        except KeyError as exc:
+            raise ValueError(f"unknown direction target key: {target_key}") from exc
+        entries.append({
+            "name": label,
+            "target_key": target_key,
+            "route_file": f"calibrated{suffix}.rou.xml",
+        })
+    names = [entry["name"] for entry in entries]
+    if names not in (["q50"], ["q50", "q10", "q90"]):
+        raise ValueError(
+            "direction variants must be exactly q50 or q50/q10/q90")
+    return {
+        "schema_version": 1,
+        "mode": "direction_stress" if len(entries) == 3 else "q50_only",
+        "variants": entries,
+    }
+
+
+def implicit_catalog_fallback_reason(
+    adoption: dict | None,
+    *,
+    pool_key: str,
+    expected_key: str,
+) -> str | None:
+    """Explain why an implicitly adopted catalog must use legacy support.
+
+    An explicit ``--candidate-source catalog`` remains a strict operator
+    request and may build a new isolated catalog. The implicit production
+    default is only an optimization: when its verified adoption disappears or
+    its immutable key no longer matches current structural inputs, the
+    already-qualified legacy builder is the safe operational fallback.
+    """
+    if adoption is None:
+        return "adoption_invalid_during_build"
+    keys = adoption.get("catalog_keys")
+    if not isinstance(keys, dict) or keys.get(pool_key) != expected_key:
+        return "adopted_key_stale_for_current_inputs"
+    return None
+
+
 def main() -> None:
     args = parse_args()
     demand_spec: DemandBuildSpec = args.demand_contract
     if demand_spec.structural_reference_date != STRUCTURAL_REFERENCE_DATE:
         sys.exit("demand spec structural_reference_date does not match "
                  f"the pipeline reference {STRUCTURAL_REFERENCE_DATE}")
+    if demand_spec.purpose == "closure_envelope" \
+            and not args.direction_stress_variants:
+        sys.exit("closure-envelope demand requires "
+                 "--direction-stress-variants")
+    if args.direction_stress_variants and args.engine != "pfe":
+        sys.exit("--direction-stress-variants requires --engine pfe so q10/q90 "
+                 "can keep q50's exact per-quarter population")
     # Keep the path stable, but do not overwrite the previous contract until
     # calibration has succeeded.  A failed build must leave the old demand and
     # its provenance coherent for the live scenario set.
@@ -608,10 +828,41 @@ def main() -> None:
     home = sumo_home()
 
     cand_path = SUMO_DIR / "candidates.rou.xml"
+    catalog_requested = args.candidate_source == "catalog"
+    catalog_enabled = (catalog_requested and not args.legacy_random_pool
+                       and args.congestion_iterations == 1)
+    if catalog_requested and not catalog_enabled:
+        print("  candidate catalog bypassed: congestion feedback requires "
+              "date/weight-dependent candidate geometry")
+    catalog_pool_keys = window_pool_composition(range_start, args.days)
+    catalog_ready = False
+    catalog_identity_keys: dict[str, str] = {}
+    catalog_cache_events: dict[str, str] = {}
+    catalog_sizing_attempts: dict[str, list[dict]] = {}
+    catalog_selected_sizes: dict[str, int] = {}
+    catalog_fallback: dict[str, object] | None = None
+
+    # Candidate endpoint weights consume this structural artifact, so refresh
+    # it before candidate/catalog identity and routing. Computing it later in
+    # calibration made every source-driven prior refresh invalidate the
+    # catalog that had just been built from the previous bytes.
+    assignment_prior_data = None
+    if args.engine == "pfe" and not args.no_assignment_prior:
+        assignment_prior_data = timed(
+            "assignment_priors",
+            lambda: ensure_assignment_priors(
+                gravity_km=args.gravity_km,
+                through_fraction=args.through_fraction,
+                cross_fraction=args.cross_fraction,
+                gravity_alpha=args.gravity_alpha,
+                seed=args.seed))
 
     def generate_candidates(weight_file: Path | None = None,
                             cache_date: str | None = None) -> None:
+        nonlocal catalog_ready, catalog_enabled, catalog_fallback
         started = time.perf_counter()
+        if catalog_enabled and weight_file is None and catalog_ready:
+            return
         if args.legacy_random_pool:
             print("\nGenerating candidate route pool (LEGACY: uniform randomTrips) …")
             # The pool needs DIVERSITY, not volume — cap it so whole-day windows
@@ -632,7 +883,11 @@ def main() -> None:
             # A multi-day PFE needs additional time coverage, not a fresh
             # 12k route geometries per day. build_candidates reuses one pool
             # per behavioural day type and only re-samples day departures.
-            n_total = 12000 if args.days > 1 else max(6000, int(12000 * duration_s / 86400))
+            default_n_total = (12000 if args.days > 1 else
+                               max(6000, int(12000 * duration_s / 86400)))
+            n_total = args.candidate_n_total or default_n_total
+            catalog_n_total = (args.candidate_n_total
+                               or route_catalog.DEFAULT_INITIAL_N_TOTAL)
             cache_outputs = {
                 "candidates.rou.xml": cand_path,
                 "candidates.meta.json": cand_path.with_name("candidates.meta.json"),
@@ -641,104 +896,141 @@ def main() -> None:
                 "sensor_coverage_report.json": SUMO_DIR / "sensor_coverage_report.json",
                 "endpoint_location_report.json": SUMO_DIR / "endpoint_location_report.json",
             }
-            cache_inputs = {
-                "network": NET_PATH,
-                # The router is part of the pool-producing implementation.
-                # Its exact bytes, rather than only the later demand report's
-                # human-readable SUMO version, must invalidate cached routes.
-                "duarouter_binary": candidate_router_cache_input(home),
-                "graph": Path("web/data/graph.graphml"),
-                "map_network": GEO_PATH,
-                "source_flows": flows_path,
-                # Candidate anchoring is defined by the reviewed physical
-                # registry, not merely by whichever keys happen to exist in
-                # the current flow artifact. A new/re-snapped sensor must
-                # never restore a pool built for the old edge set.
-                "sensor_registry": Path("data_in/sensors.json"),
-                "normal_profile": Path("web/data/normal_profile.json"),
-                "direction_split": SUMO_DIR / "direction_split.json",
-                "population": Path("data_in/deso/population_2023.json"),
-                "deso": Path("data_in/deso/deso_goteborg.geojson"),
-                # An official GeoJSON, if later supplied, wins over the OSM
-                # fallback. Fingerprint both paths so either source changing
-                # invalidates the candidate pool that depends on it.
-                "official_buildings": Path("data_in/deso/buildings.geojson"),
-                "osm_buildings": Path("data_in/deso/osm_buildings.geojson"),
-                "poi": Path("data_in/deso/osm_pois.geojson"),
-                "real_day_shape": day_shape_path or Path(
-                    "sumo/.missing-real-day-shape"),
-                "day_blocks": day_blocks_path or Path(
-                    "sumo/.missing-day-blocks"),
-                "routing_weights": candidate_routing_weight_cache_input(weight_file),
-                # Gate draws follow the structural assignment field (2026-07-17)
-                # — a changed field must invalidate the candidate pool.
-                "assignment_priors": SUMO_DIR / "assignment_priors.json",
-            }
-            # Local: build_candidates does heavy module-level OSM/registry work
-            # that every importer of this module would otherwise pay for.
-            import build_candidates
-            cache_config = {
-                "n_total": n_total,
-                "through_fraction": args.through_fraction,
-                "gravity_km": args.gravity_km,
-                "gravity_alpha": args.gravity_alpha,
-                "cross_fraction": args.cross_fraction,
-                "is_weekend": use_weekend_shape,
-                # Candidate departures are keyed by calendar date (stage B),
-                # so the date is part of the pool's identity. Without it two
-                # dates whose measured day-shape happens to be identical (or
-                # absent) would share a cache entry and one would silently be
-                # served the other's candidates.
-                # In day-library mode each day generates its own pool, and
-                # the same calendar day must hit the same cache entry from
-                # ANY window - keying on the window start would regenerate an
-                # identical pool per envelope (cache_date is the day's date).
-                "start_date": cache_date or range_start.strftime("%Y-%m-%d"),
-                "min_per_sensor": 50,
-                # Imported, never restated. This key must name the jitter the
-                # pool was ACTUALLY built with, and the subprocess below does
-                # not pass --route-diversity, so it inherits build_candidates'
-                # default. A local copy of the number silently decoupled the
-                # two the moment that default changed, which would have served
-                # a pool built at one jitter for a request at another.
-                "route_diversity": build_candidates.DEFAULT_ROUTE_DIVERSITY,
-                "max_stretch": build_candidates.DEFAULT_MAX_STRETCH,
-                "max_local_stretch": build_candidates.DEFAULT_MAX_LOCAL_STRETCH,
-                # Changes WHICH route shapes exist per departure hour, so a
-                # pool built at one floor must never be served for a request
-                # at another.
-                "pool_departure_floor":
-                    build_candidates.POOL_DEPARTURE_UNIFORM_FLOOR,
-                "seed": args.seed,
-                # build_candidates uses Generator plus graph/geometry
-                # libraries whose algorithms are outside our source tree.
-                # A dependency upgrade must not inherit an older pool merely
-                # because the seed and Python files are unchanged.
-                "runtime": runtime_package_identity((
-                    "networkx", "numpy", "osmnx", "shapely")),
-                # The content fingerprint above is the identity. Keep this
-                # label stable so moving a byte-identical weight file does
-                # not create a needless second cache entry.
-                "routing_cost_mode": "feedback" if weight_file is not None else "free_flow",
-            }
-            cache_sources = {
-                "build_candidates": Path("build_candidates.py"),
-                "build_sumo_demand": Path(__file__),
-                "build_data": Path("build_data.py"),
-                "dirsplit_geo": Path("dirsplit/geo.py"),
-                "endpoint_locations": Path("demand/locations.py"),
-                "candidate_cache": Path("traffic_sim/demand/cache.py"),
-                "sensor_registry_loader": Path(
-                    "traffic_sim/intake/sensors.py"),
-                # Applied to direction_split.json at load time, so the split
-                # file's own bytes do not reveal a change in this code.
-                "direction_anchor": Path(
-                    "traffic_sim/intake/direction_anchor.py"),
-                "pipeline_fingerprint": Path("traffic_sim/core/fingerprint.py"),
-            }
+            cache_config, cache_inputs, cache_sources = (
+                candidate_identity_components(
+                    n_total=n_total,
+                    through_fraction=args.through_fraction,
+                    gravity_km=args.gravity_km,
+                    gravity_alpha=args.gravity_alpha,
+                    cross_fraction=args.cross_fraction,
+                    is_weekend=use_weekend_shape,
+                    start_date=(cache_date
+                                or range_start.strftime("%Y-%m-%d")),
+                    seed=args.seed, home=home, flows_path=flows_path,
+                    day_shape_path=day_shape_path,
+                    day_blocks_path=day_blocks_path,
+                    weight_file=weight_file))
+            if catalog_enabled and weight_file is None:
+                # Build each structural day type once.  The date-shaped
+                # source flow, day-shape and day-block files are intentionally
+                # excluded from the catalog identity; their behavioural
+                # margins are applied by the picker/PFE below.
+                catalog_destinations: dict[str, tuple[Path, Path]] = {}
+                catalog_storage_started = time.perf_counter()
+                # The catalog stores the same routed pool the legacy
+                # candidate cache stores, so it is keyed on the same curated
+                # generator sources. It used to add the ENTIRE demand source
+                # inventory on top, which made every PFE, calibration or
+                # storage-layer edit invalidate a pool those files cannot
+                # affect — see route_catalog.CATALOG_SOURCE_LABELS.
+                catalog_sources = dict(cache_sources)
+                for pool_key in catalog_pool_keys:
+                    pool_config = dict(cache_config)
+                    pool_config["is_weekend"] = pool_key == "weekend"
+                    pool_config["catalog_mode"] = True
+                    pool_inputs = dict(cache_inputs)
+                    pool_inputs["source_flow_edge_set"] = FLOWS_PATH
+                    destinations = {
+                        "catalog.rou.xml": SUMO_DIR / f"catalog_{pool_key}.rou.xml",
+                        "catalog.meta.json": SUMO_DIR / f"catalog_{pool_key}.meta.json",
+                        "catalog.validation.json": SUMO_DIR / f"catalog_{pool_key}.validation.json",
+                        "catalog.template.json": SUMO_DIR / f"catalog_{pool_key}.template.json",
+                    }
+                    catalog_destinations[pool_key] = (
+                        destinations["catalog.rou.xml"],
+                        destinations["catalog.meta.json"])
+
+                    def command_for(size: int, output_dir: Path,
+                                    *, pool=pool_key) -> list[str]:
+                        return route_catalog.candidate_catalog_command(
+                            output_dir=output_dir, pool_key=pool,
+                            n_total=size,
+                            through_fraction=args.through_fraction,
+                            gravity_km=args.gravity_km,
+                            gravity_alpha=args.gravity_alpha,
+                            cross_fraction=args.cross_fraction,
+                            assignment_priors=(
+                                SUMO_DIR / "assignment_priors.json"),
+                            seed=args.seed, min_per_sensor=50)
+
+                    if args.candidate_source_implicit:
+                        adoption = route_catalog.adopted_catalog_config(
+                            root=args.route_catalog_root)
+                        if adoption is None:
+                            reason = implicit_catalog_fallback_reason(
+                                adoption, pool_key=pool_key, expected_key="")
+                        else:
+                            catalog_n_total = adoption[
+                                "catalog_selected_n_total"][pool_key]
+                            expected_key = route_catalog.catalog_key(
+                                dict(pool_config, n_total=catalog_n_total,
+                                     min_per_sensor=50),
+                                pool_inputs, catalog_sources,
+                                pool_key=pool_key)
+                            reason = implicit_catalog_fallback_reason(
+                                adoption, pool_key=pool_key,
+                                expected_key=expected_key)
+                        if reason is not None:
+                            catalog_fallback = {
+                                "schema_version": 1,
+                                "from": "catalog",
+                                "to": "legacy",
+                                "pool_key": pool_key,
+                                "reason": reason,
+                            }
+                            catalog_enabled = False
+                            catalog_ready = False
+                            args.candidate_source = "legacy"
+                            catalog_identity_keys.clear()
+                            catalog_cache_events.clear()
+                            catalog_sizing_attempts.clear()
+                            catalog_selected_sizes.clear()
+                            print(
+                                "  WARNING adopted route catalog cannot serve "
+                                f"the current {pool_key} inputs ({reason}); "
+                                "using the provenance-recorded legacy "
+                                "candidate builder")
+                            break
+
+                    selected = route_catalog.ensure_sized_catalog(
+                        root=args.route_catalog_root, pool_key=pool_key,
+                        base_config=pool_config, inputs=pool_inputs,
+                        source_files=catalog_sources,
+                        destinations=destinations, command_for=command_for,
+                        start_n_total=catalog_n_total, min_per_sensor=50,
+                        attempts=(1 if args.candidate_source_implicit else 3))
+                    catalog_identity_keys[pool_key] = selected["key"]
+                    catalog_cache_events[pool_key] = selected["cache_event"]
+                    catalog_sizing_attempts[pool_key] = selected["attempts"]
+                    catalog_selected_sizes[pool_key] = selected["n_total"]
+                if catalog_enabled:
+                    timings_s["catalog_restore_or_build"] = (
+                        timings_s.get("catalog_restore_or_build", 0.0)
+                        + time.perf_counter() - catalog_storage_started)
+                    adapter_started = time.perf_counter()
+                    if catalog_pool_keys == ("weekday", "weekend"):
+                        route_catalog.combine_catalogs(
+                            catalog_destinations, cand_path,
+                            cand_path.with_name("candidates.meta.json"))
+                    else:
+                        pool = catalog_pool_keys[0]
+                        shutil.copy2(catalog_destinations[pool][0], cand_path)
+                        shutil.copy2(catalog_destinations[pool][1],
+                                     cand_path.with_name("candidates.meta.json"))
+                    timings_s["catalog_adapter"] = (
+                        timings_s.get("catalog_adapter", 0.0)
+                        + time.perf_counter() - adapter_started)
+                    catalog_ready = True
+                    elapsed = time.perf_counter() - started
+                    timings_s["candidate_generation"] = (
+                        timings_s.get("candidate_generation", 0.0) + elapsed)
+                    print("  route catalog ready "
+                          f"({', '.join(catalog_identity_keys.values())}; "
+                          f"{elapsed:.2f}s)")
+                    return
             cache_key = candidate_cache.cache_key(
                 cache_config, cache_inputs, cache_sources)
-            if candidate_cache.restore(candidate_cache.DEFAULT_ROOT,
+            if candidate_cache.restore(args.candidate_cache_root,
                                        cache_key, cache_outputs):
                 elapsed = time.perf_counter() - started
                 timings_s["candidate_generation"] = (
@@ -780,7 +1072,7 @@ def main() -> None:
                 # cache file in its fingerprint.
                 store_key = candidate_cache.cache_key(
                     cache_config, cache_inputs, cache_sources)
-                candidate_cache.store(candidate_cache.DEFAULT_ROOT,
+                candidate_cache.store(args.candidate_cache_root,
                                       store_key, cache_outputs)
                 print(f"  candidate cache stored {store_key}")
             except (FileNotFoundError, OSError) as exc:
@@ -793,13 +1085,11 @@ def main() -> None:
         print(f"  timing candidate_generation: {elapsed:.1f}s")
 
     # ── Calibrate: one route set per direction-split variant ───────────────────
-    # q50 = the default (calibrated.rou.xml). If the split file carries
-    # quantile bounds, two extra variants are built — run_scenario spreads
-    # its Monte Carlo seeds over them so direction uncertainty reaches the
-    # per-edge confidence numbers.
-    variants = [("", "edge_shares")]
-    if has_split_quantiles():
-        variants += [("_v1", "edge_shares_q10"), ("_v2", "edge_shares_q90")]
+    # Ordinary recalibration publishes one q50 case. Direction uncertainty is
+    # an explicit diagnostic/study axis, never an implicit consequence of a
+    # split artifact containing quantiles.
+    variants = direction_variants(args.direction_stress_variants)
+    variant_manifest = direction_variant_manifest(variants)
 
     calib_path = SUMO_DIR / "calibrated.rou.xml"
     variant_fit_reports: dict[str, dict] = {}
@@ -825,15 +1115,8 @@ def main() -> None:
         if corridor:
             print(f"  corridor coupling: {len(corridor)} edges between "
                   f"sensor pairs get data-derived priors")
-        assign_data = (timed(
-                           "assignment_priors",
-                           lambda: ensure_assignment_priors(
-                               gravity_km=args.gravity_km,
-                               through_fraction=args.through_fraction,
-                               cross_fraction=args.cross_fraction,
-                               gravity_alpha=args.gravity_alpha,
-                               seed=args.seed))
-                       if not args.no_assignment_prior
+        assign_data = (assignment_prior_data
+                       if assignment_prior_data is not None
                        else {"weight": 0.0, "flows": {}})
         assign_w    = assign_data.get("weight", 0.0)
         assign_flows = assign_data.get("flows", {})
@@ -888,8 +1171,16 @@ def main() -> None:
         assembled_day_dirs: list[Path] = []
 
         def day_identity(day: pd.Timestamp, day_index: int,
-                         variant_inputs: dict) -> DayIdentity:
-            """Everything this day's calibration is a function of."""
+                         variant_inputs: dict,
+                         day_variants: list | None = None) -> DayIdentity:
+            """Everything this day's calibration is a function of.
+
+            ``day_variants`` names the arms the identity is for, defaulting to
+            the ones this build publishes. Passing a subset yields the exact
+            identity a build of only those arms would have produced, which is
+            what lets a three-variant day also answer a q50-only request.
+            """
+            chosen = variants if day_variants is None else day_variants
             span = slice(day_index * 96, (day_index + 1) * 96)
             constraints = {
                 suffix: {
@@ -898,7 +1189,7 @@ def main() -> None:
                     "hard_bounds": variant_inputs[suffix]["hard_bounds_pq"][span],
                     "priors": variant_inputs[suffix]["priors_pq"][span],
                 }
-                for suffix, _key in variants
+                for suffix, _key in chosen
             }
             return DayIdentity(
                 date=day.strftime("%Y-%m-%d"),
@@ -912,8 +1203,10 @@ def main() -> None:
                     "candidate_pool": sha256_file(cand_path),
                     "candidate_metadata": sha256_file(
                         cand_path.with_name("candidates.meta.json")),
+                    "candidate_source": args.candidate_source,
+                    "catalog_keys": dict(catalog_identity_keys),
                     "edge_geometry": sha256_file(GEO_PATH),
-                    "variants": [key for _suffix, key in variants],
+                    "variants": [key for _suffix, key in chosen],
                     "picker_runtime": runtime_package_identity((
                         "numba", "numpy", "scipy")),
                 },
@@ -922,10 +1215,25 @@ def main() -> None:
 
         def calibrate_window(variants, variant_inputs, **options):
             if not use_day_library:
+                quarters = len(variant_inputs[variants[0][0]]["targets"])
+                if catalog_enabled:
+                    options["purpose_mixes_per_q"] = catalog_daily_purpose_mixes(
+                        cand_path, quarters,
+                        activity_shares_by_quarter=options[
+                            "activity_purpose_shares_by_quarter"],
+                        through_share_target=options.get("through_share_target"))
+                else:
+                    options["purpose_mixes_per_q"] = purpose_mixes_for_candidates(
+                        cand_path, quarters,
+                        departure_offset_s=options.get(
+                            "purpose_departure_offset_s", 0.0),
+                        activity_shares_by_quarter=options.get(
+                            "activity_purpose_shares_by_quarter"),
+                        through_share_target=options.get("through_share_target"))
                 return run_pfe_variants_flat_parallel(
                     cand_path, variants, variant_inputs, **options)
             nonlocal day_blocks_path
-            library = DayLibrary()
+            library = DayLibrary(args.day_library_root)
             nonlocal assembled_day_dirs
             day_blocks_path = SUMO_DIR / "candidate_day_blocks.json"
             day_directories: list[Path] = []
@@ -1000,6 +1308,64 @@ def main() -> None:
                     _agent_path_for(staged_path).unlink(missing_ok=True)
             return reports
 
+        def _store_q50_subset(library, day_index, day_variants, variant_inputs,
+                              scratch_dir, day_reports):
+            """Also store the median arm under a q50-only build's identity.
+
+            A closure search calibrates three direction arms; the map asks for
+            q50 alone. Those are different identities, so a warmed search day
+            could not answer a "byt dag" click and the SAME calendar day was
+            paid for twice — once at ~350 s for the search, again at ~150 s
+            for the map.
+
+            The bytes are shareable because the median arm does not depend on
+            the stress arms: it is solved first, its integer population is
+            then FROZEN as their constraint, and every arm is published from
+            its own solution through the same writer. That is the argument;
+            the evidence is a byte comparison of both builds of one real date,
+            recorded in validation/q50_subset_identity_v1.json. Storing the
+            bytes under a second identity would be a silent approximation
+            without it.
+
+            The provenance record is recomputed for the single arm rather than
+            copied: validate_assembled_provenance binds vehicle counts PER
+            VARIANT, so a record naming three arms cannot stand in for one.
+            Costs ~3.5 MB per stored day on top of the ~13 MB the full entry
+            already uses.
+            """
+            if len(day_variants) <= 1:
+                return
+            median = median_variant(day_variants)
+            if median is None:
+                return
+            suffix, _key = median
+            day = range_start + pd.Timedelta(days=day_index)
+            subset_identity = day_identity(day, day_index, variant_inputs,
+                                           [median])
+            if library.get(subset_identity) is not None:
+                return
+            route = scratch_dir / f"calibrated{suffix}.rou.xml"
+            agents = _agent_path_for(route)
+            record = scratch_dir / f"subset-{DAY_PROVENANCE_NAME}"
+            record.write_text(json.dumps(validate_calibrated_provenance(
+                cand_path,
+                cand_path.with_name(
+                    cand_path.name.replace(".rou.xml", ".meta.json")),
+                [(route, agents)]), separators=(",", ":")))
+            # Stored under the names a q50-only build writes, which is what a
+            # q50-only window will look for when it assembles.
+            library.put(subset_identity, {
+                "calibrated.rou.xml": route,
+                "calibrated.agents.json": agents,
+                "fit.json": scratch_dir / f"fit{suffix}.json",
+                DAY_PROVENANCE_NAME: record,
+            }, fit={
+                "geh_pct": day_reports[suffix]["geh_pct"],
+                "vehicles": day_reports[suffix]["vehicles"],
+            })
+            print(f"  day {subset_identity.date}: also stored as a q50-only "
+                  f"day {subset_identity.key[:12]}")
+
         def _calibrate_one_day(library, identity, day_index, variants,
                                variant_inputs, options):
             """Calibrate and publish ONE day, day-local, into the library."""
@@ -1026,8 +1392,27 @@ def main() -> None:
                     activity_purpose_shares[span])
                 day_options["day_quarters"] = 96
                 day_options["purpose_departure_offset_s"] = 0.0
-                day_reports = run_pfe_variants_flat_parallel(
-                    cand_path, variants, day_inputs, **day_options)
+                if catalog_enabled:
+                    day_options["purpose_mixes_per_q"] = catalog_daily_purpose_mixes(
+                        cand_path, len(day_inputs[variants[0][0]]["targets"]),
+                        activity_shares_by_quarter=day_options[
+                            "activity_purpose_shares_by_quarter"],
+                        through_share_target=day_options.get(
+                            "through_share_target"))
+                else:
+                    day_options["purpose_mixes_per_q"] = purpose_mixes_for_candidates(
+                        cand_path, len(day_inputs[variants[0][0]]["targets"]),
+                        activity_shares_by_quarter=day_options[
+                            "activity_purpose_shares_by_quarter"],
+                        through_share_target=day_options.get(
+                            "through_share_target"))
+                try:
+                    day_reports = run_pfe_variants_flat_parallel(
+                        cand_path, variants, day_inputs, **day_options)
+                except RuntimeError as exc:
+                    raise RuntimeError(
+                        f"demand day {identity.date} calibration failed: "
+                        f"{exc}") from exc
                 artifacts = {}
                 for suffix, _key in variants:
                     route = scratch_dir / f"calibrated{suffix}.rou.xml"
@@ -1063,6 +1448,8 @@ def main() -> None:
                     "geh_pct": day_reports[""]["geh_pct"],
                     "vehicles": day_reports[""]["vehicles"],
                 })
+                _store_q50_subset(library, day_index, variants,
+                                  variant_inputs, scratch_dir, day_reports)
 
         # ── Congestion-feedback loop (primary "" / q50 variant only) ──────────
         # PFE picks route USE COUNTS to match sensor totals, but the candidate
@@ -1272,7 +1659,21 @@ def main() -> None:
         build_options={
             "engine": args.engine,
             "seed": args.seed,
+            "direction_stress_variants": args.direction_stress_variants,
             "legacy_random_pool": args.legacy_random_pool,
+            "candidate_source": args.candidate_source,
+            "candidate_source_implicit": args.candidate_source_implicit,
+            "candidate_n_total": args.candidate_n_total,
+            "catalog_enabled": catalog_enabled,
+            "catalog_pool_keys": list(catalog_pool_keys),
+            "catalog_keys": dict(catalog_identity_keys),
+            "catalog_cache_events": dict(catalog_cache_events),
+            "catalog_selected_n_total": dict(catalog_selected_sizes),
+            "catalog_sizing_attempts": dict(catalog_sizing_attempts),
+            "catalog_fallback": catalog_fallback,
+            "purpose_margin_contract": (
+                "daily_purpose_margin_v1" if catalog_enabled
+                else "legacy_survivor_margin_explicit_v1"),
             "through_fraction": args.through_fraction,
             "gravity_km": args.gravity_km,
             "gravity_alpha": args.gravity_alpha,
@@ -1287,6 +1688,29 @@ def main() -> None:
             "through_share_target": args.through_share_target,
         },
     )
+    meta["demand_variant_contract"] = variant_manifest
+    if catalog_enabled:
+        meta["candidate_catalog"] = {
+            "schema_version": 1,
+            "purpose_margin_contract": "daily_purpose_margin_v1",
+            "pool_composition": list(catalog_pool_keys),
+            "keys": dict(catalog_identity_keys),
+            "selected_n_total": dict(catalog_selected_sizes),
+            "cache_events": dict(catalog_cache_events),
+            "artifacts": {
+                pool: {
+                    "routes_sha256": sha256_file(
+                        SUMO_DIR / f"catalog_{pool}.rou.xml"),
+                    "metadata_sha256": sha256_file(
+                        SUMO_DIR / f"catalog_{pool}.meta.json"),
+                    "validation_sha256": sha256_file(
+                        SUMO_DIR / f"catalog_{pool}.validation.json"),
+                    "template_sha256": sha256_file(
+                        SUMO_DIR / f"catalog_{pool}.template.json"),
+                }
+                for pool in catalog_pool_keys
+            },
+        }
     # What the published local D-factors did to the estimated split, if
     # anything. Empty when no station has a verified directional_reference.
     anchor_report = direction_anchor_report()
@@ -1303,6 +1727,19 @@ def main() -> None:
             "geh_pct": report.get("geh_pct"),
             "infeasible_intervals": report.get("infeasible_intervals"),
             "vehicles": report.get("vehicles"),
+            "integer_sensor_constraints": report.get(
+                "integer_sensor_constraints"),
+            "integer_sensor_exact": report.get("integer_sensor_exact"),
+            "integer_sensor_exact_pct": report.get(
+                "integer_sensor_exact_pct"),
+            "integer_sensor_max_abs_error": report.get(
+                "integer_sensor_max_abs_error"),
+            "integer_sensor_sum_abs_error": report.get(
+                "integer_sensor_sum_abs_error"),
+            "integer_sensor_target_rule": report.get(
+                "integer_sensor_target_rule"),
+            "pfe_shape_variables": report.get("pfe_shape_variables"),
+            "pfe_source_candidates": report.get("pfe_source_candidates"),
         }
     if variant_fit_reports:
         meta["pfe_fit_variants"] = variant_fit_reports
@@ -1479,7 +1916,7 @@ def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
     manifest. Optional direction variants are included only when present.
     """
     sumo_dir = Path(sumo_dir)
-    candidates = [
+    base = [
         sumo_dir / "demand_meta.json",
         sumo_dir / "demand_build_spec.json",
         # The calibrated structure and purpose audit is relative to this exact
@@ -1489,11 +1926,26 @@ def demand_run_products(sumo_dir: Path = SUMO_DIR) -> list[Path]:
         sumo_dir / "candidates.meta.json",
         sumo_dir / "calibrated.rou.xml",
         sumo_dir / "calibrated.agents.json",
+    ]
+    auxiliaries = [
         sumo_dir / "calibrated_v1.rou.xml",
         sumo_dir / "calibrated_v1.agents.json",
         sumo_dir / "calibrated_v2.rou.xml",
         sumo_dir / "calibrated_v2.agents.json",
     ]
+    # A q50-only build may deliberately leave old auxiliary files beside the
+    # live route during publish-after-validate. Never archive those stale
+    # siblings as products of the new run. Without metadata, retain the
+    # historical helper behaviour used by diagnostics and older fixtures.
+    include_auxiliaries = True
+    try:
+        metadata = json.loads((sumo_dir / "demand_meta.json").read_text())
+        if not isinstance(metadata, dict):
+            raise ValueError("demand metadata must be an object")
+        include_auxiliaries = int(metadata.get("n_variants", 1)) == 3
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+    candidates = base + (auxiliaries if include_auxiliaries else [])
     return [path for path in candidates if path.is_file()]
 
 

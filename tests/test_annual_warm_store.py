@@ -62,6 +62,7 @@ def test_pack_restore_is_byte_exact_and_compresses_routes(tmp_path):
     assert manifest["members"]["route.rou.xml"]["encoding"] == "gzip"
     assert manifest["members"]["route.rou.xml"]["stored_bytes"] < \
         manifest["members"]["route.rou.xml"]["content_bytes"]
+    assert list((store.root / ".staging").iterdir()) == []
 
 
 def test_existing_shared_member_is_reused_without_recompression(

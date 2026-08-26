@@ -27,11 +27,19 @@ diverging logic. The only judgment made here is aggregation.
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 
+from traffic_sim.confidence.trip_length_gate import (
+    MAXIMUM_TRIP_LENGTH_L1,
+    TRIP_LENGTH_GATE_RATIONALE,
+    effective_maximum_l1,
+)
+
 from traffic_sim.core.fingerprint import sha256_file
-from traffic_sim.simulation.sensor_fit import assess_output_fit
+from traffic_sim.simulation.sensor_fit import (assess_exact_output_fit,
+                                               assess_output_fit)
 
 SUMO_DIR = Path("sumo")
 WEB_DATA = Path("web/data")
@@ -54,14 +62,32 @@ def _counts_section(meta: dict | None) -> dict:
     if not meta or "pfe_fit" not in meta:
         return {"status": "missing", "reason": "demand_meta.json/pfe_fit saknas"}
     fit = meta["pfe_fit"]
+    constraints = fit.get("integer_sensor_constraints")
+    exact = fit.get("integer_sensor_exact")
+    max_abs_error = fit.get("integer_sensor_max_abs_error")
+    exact_ok = (
+        isinstance(constraints, int) and constraints > 0
+        and isinstance(exact, int) and exact == constraints
+        and isinstance(max_abs_error, (int, float))
+        and not isinstance(max_abs_error, bool)
+        and math.isfinite(max_abs_error)
+        and max_abs_error == 0
+    )
     ok = (fit.get("geh_pct", 0) >= 99.0
-          and not fit.get("infeasible_intervals"))
+          and not fit.get("infeasible_intervals")
+          and exact_ok)
     return {
         "status": "pass" if ok else "warn",
         "geh_pct": fit.get("geh_pct"),
         "infeasible_intervals": fit.get("infeasible_intervals"),
         "vehicles": fit.get("vehicles"),
-        "gate": "GEH<5 på ≥99% av sensorintervall, 0 olösliga kvartar",
+        "integer_sensor_constraints": constraints,
+        "integer_sensor_exact": exact,
+        "integer_sensor_exact_pct": fit.get("integer_sensor_exact_pct"),
+        "integer_sensor_max_abs_error": max_abs_error,
+        "integer_sensor_target_rule": fit.get("integer_sensor_target_rule"),
+        "gate": "exakt heltalsmatchning på varje riktad sensor × 15 minuter, "
+                "GEH<5 på ≥99% av sensorintervall och 0 olösliga kvartar",
     }
 
 
@@ -73,17 +99,51 @@ def _structure_section(meta: dict | None) -> dict:
     prox = cs.get("dest_sensor_proximity", {})
     onward = cs.get("onward_after_last_sensor", {})
     tl = cs.get("trip_length_fit", {})
+    l1_distance = tl.get("l1_distance")
+    # The threshold is frozen in source and owned by ONE module, so a build
+    # cannot travel with the limit that judges it.  A build-declared value is
+    # honoured only when stricter — see trip_length_gate for why, and for how
+    # the 0.20 limit is derived from total-variation distance.
+    maximum_l1 = effective_maximum_l1(tl.get("maximum_l1_distance"))
+    l1_gate_defined = True
+    # A perfect fit is L1 == 0.0, so "is it a usable number?" must be asked
+    # separately from truthiness — `l1_distance or nan` would report the one
+    # flawless build as missing.
+    l1_is_measured = (
+        isinstance(l1_distance, (int, float))
+        and not isinstance(l1_distance, bool)
+        and math.isfinite(l1_distance)
+    )
+    l1_gate_passed = l1_is_measured and l1_distance <= maximum_l1
+    reasons = []
+    if not l1_is_measured:
+        reasons.append(
+            "trip-length L1 saknas eller är inte ett ändligt tal")
+    elif not l1_gate_passed:
+        reasons.append(
+            f"trip-length L1 {l1_distance} överstiger den frysta gränsen "
+            f"{maximum_l1} ({TRIP_LENGTH_GATE_RATIONALE})")
+    if flags:
+        reasons.extend(str(flag) for flag in flags)
     return {
-        "status": "pass" if not flags else "warn",
+        "status": "pass" if not reasons else "warn",
         "flags": flags,
         "dest_within_200m_pct": prox.get("pct_within"),
         "dest_baseline_pct": prox.get("baseline_pct_within"),
         "trip_length_shares": tl.get("shares"),
-        "trip_length_l1_vs_rvu": tl.get("l1_distance"),
+        "trip_length_l1_vs_rvu": l1_distance,
+        "trip_length_l1_maximum": maximum_l1,
+        "trip_length_l1_gate_defined": l1_gate_defined,
+        "trip_length_l1_gate_passed": l1_gate_passed,
         "onward_after_sensor_median_m": onward.get("median_m"),
         "onward_under_200m_pct": onward.get("pct_under_200m"),
-        "gate": "kalibrerad struktur får inte driva >2.5x från poolen "
-                "(destinationer nära sensor, längdintervall, ärendelängder)",
+        "trip_length_l1_gate_source": "frozen_project_limit_v1",
+        "gate": "kalibrerad struktur får inte driva >2.5x från poolen; "
+                "trip-length L1 måste dessutom klara den frysta absoluta "
+                f"gränsen {MAXIMUM_TRIP_LENGTH_L1} mot den deklarerade "
+                "externa målfördelningen "
+                f"({TRIP_LENGTH_GATE_RATIONALE})",
+        **({"reason": "; ".join(reasons)} if reasons else {}),
     }
 
 
@@ -165,8 +225,8 @@ def _simulation_section(baseline: dict | None) -> dict:
                           + (h.get("waiting_at_end", 0) or 0),
             "teleports": h.get("teleports"),
         } for h in health],
-        "gate": "alla fordon insatta, <2% ofullbordade, "
-                "teleporteringar under tröskel, per frö",
+        "gate": "SUMO accepterar hela den redan kalibrerade ruttfilen, "
+                "<2% ofullbordade och teleporteringar under tröskel, per frö",
     }
 
 
@@ -199,6 +259,42 @@ def _sensor_output_section(meta: dict | None,
     }
     if assessment["errors"]:
         result["reason"] = "; ".join(assessment["errors"][:3])
+    return result
+
+
+def _exact_sensor_output_section(baseline: dict | None) -> dict:
+    """Expose the strict, non-mutating 15-minute SUMO passage test."""
+    audit = (baseline or {}).get("sensor_audit") if baseline else None
+    exact = audit.get("exact_output_fit") if isinstance(audit, dict) else None
+    if not isinstance(exact, dict):
+        return {
+            "status": "missing",
+            "reason": "baseline saknar exakt 15-minuters sensor-test",
+        }
+    assessment = assess_exact_output_fit(
+        audit, n_intervals=int((baseline or {}).get("n_quarters", 0) or 0))
+    ensemble = assessment.get("ensemble") or {}
+    representative = assessment.get("representative") or {}
+    per_seed = assessment.get("per_seed") or []
+    result = {
+        "status": "pass" if not assessment["errors"] else "warn",
+        "contract": exact.get("contract"),
+        "aggregation_minutes": 15,
+        "target_rule": exact.get("target_rule"),
+        "constraints": ensemble.get("constraints"),
+        "exact": ensemble.get("exact"),
+        "exact_pct": ensemble.get("exact_pct"),
+        "max_abs_error": ensemble.get("max_abs_error"),
+        "sum_abs_error": ensemble.get("sum_abs_error"),
+        "mismatch_count": len(assessment.get("ensemble_mismatches") or []),
+        "representative_exact": representative.get("exact"),
+        "representative_constraints": representative.get("constraints"),
+        "per_seed": per_seed,
+        "gate": "rå SUMO-passage måste matcha varje riktad sensor × "
+                "15-minuters heltalsmål exakt; testet ändrar inga fordon",
+    }
+    if assessment["errors"]:
+        result["reason"] = "; ".join(assessment["errors"][:5])
     return result
 
 
@@ -340,6 +436,7 @@ def assemble() -> dict:
         "purposes": _purpose_section(meta),
         "simulation": _simulation_section(baseline),
         "sensor_output": _sensor_output_section(meta, baseline),
+        "sensor_output_exact": _exact_sensor_output_section(baseline),
         "multi_day": _multi_day_section(meta, baseline),
         "held_out": _held_out_section(loso),
         "temporal_holdout": _temporal_holdout_section(temporal, meta),

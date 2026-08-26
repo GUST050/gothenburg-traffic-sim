@@ -119,7 +119,9 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/cost_ordered_execution.py",
     "traffic_sim/simulation/cost_ordered_search.py",
     "traffic_sim/simulation/deterministic_disruption.py",
+    "traffic_sim/simulation/disruption.py",
     "traffic_sim/simulation/envelope.py",
+    "traffic_sim/simulation/execution.py",
     "traffic_sim/simulation/finalist_decision.py",
     # Lazily imported by `load_passing_heldout_gate`, which decides the CLAIM
     # BOUNDARY on every result. A static import probe misses them; the full
@@ -150,6 +152,8 @@ SEMANTIC_SOURCES = (
     "traffic_sim/simulation/warm_state_cache.py",
     "traffic_sim/simulation/warm_state_forensics.py",
     "traffic_sim/simulation/workspace.py",
+    "traffic_sim/storage/__init__.py",
+    "traffic_sim/storage/singleflight.py",
 )
 
 #: Where calibrated archives live. An archive is usable only if it carries all

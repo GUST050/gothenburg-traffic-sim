@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from traffic_sim.simulation.monthly_search import PROGRESS_PHASES
+from traffic_sim.simulation.monthly_search import _runner_timing_snapshot
 from traffic_sim.simulation.search_workspace import (
     create_search_workspace,
     load_search_workspace,
@@ -113,6 +114,20 @@ class TestProgressDetail:
         with pytest.raises(ValueError, match="detail must be an object"):
             workspace.update_progress("pilot", detail=["not", "an", "object"])
 
+    def test_optional_timing_cannot_fail_the_search(self):
+        class RaisingRunner:
+            @staticmethod
+            def timing_snapshot():
+                raise RuntimeError("diagnostic unavailable")
+
+        class NonJsonRunner:
+            @staticmethod
+            def timing_snapshot():
+                return {"bad": {1, 2}}
+
+        assert _runner_timing_snapshot(RaisingRunner()) == {}
+        assert _runner_timing_snapshot(NonJsonRunner()) == {}
+
 
 class TestTheUiRendersTheDetail:
     def test_the_bundle_renders_every_detail_counter(self):
@@ -132,3 +147,91 @@ class TestTheUiRendersTheDetail:
         assert "state.status === 'paused'" in source
         assert "restoreMonthlySearchSpec(state.closure_search_spec)" in source
         assert "starta samma sökning igen" in source
+
+    def test_an_observed_external_search_cannot_offer_server_cancel(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        assert "let monthlyJobServerTracked = true" in source
+        assert "monthlyJobServerTracked = state.server_tracked !== false" in source
+        assert "monthlyJobRunning && !monthlyJobServerTracked" in source
+        assert "btnMonthlyCancel.hidden = unownedMonthlyJob" in source
+        assert "if (!monthlyJobServerTracked) return" in source
+
+    def test_an_observed_external_result_is_restored_without_a_running_job(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        assert "const completedExternal = states.find" in source
+        assert "state.server_tracked === false && state.result" in source
+        completed = source[source.index("if (completedExternal) {"):]
+        completed = completed[:completed.index("const paused =")]
+        assert "monthlyJobRunning = false" in completed
+        assert "restoreMonthlySearchSpec(state.closure_search_spec)" in completed
+        assert "state.closure_search_spec?.directed_edges" in completed
+        assert "renderMonthlyResults(state.result)" in completed
+
+    def test_polling_has_bounded_failures_and_exponential_backoff(self):
+        source = APP_JS.read_text(encoding="utf-8")
+        poller = source[source.index(
+            "async function runRoadClosureOperation("):]
+        poller = poller[:poller.index("async function activateClosedScenario(")]
+        assert "maxConsecutivePollFailures = 5" in poller
+        assert "2 ** consecutivePollFailures" in poller
+        assert "consecutivePollFailures = 0" in poller
+        assert "servern svarar inte" in poller
+
+
+def _job_error_catch_blocks() -> list[str]:
+    """The catch blocks that end a road-closure job's status poll loop.
+
+    Each `runRoadClosureOperation` caller converts a terminal `error` status
+    into a thrown Error; the catch that receives it is the last code to run
+    for that job in this tab.
+    """
+    source = APP_JS.read_text(encoding="utf-8")
+    blocks = []
+    marker = "if (status.status === 'error') throw new Error(status.error);"
+    start = 0
+    while True:
+        hit = source.find(marker, start)
+        if hit == -1:
+            break
+        # Road-closure jobs only. Signal optimization also polls, but its
+        # failure is NOT a study outcome — the map keeps whatever scenario it
+        # had either way, so announceStudyOutcome's "the map still shows the
+        # previous study" wording would be actively wrong there. It needs its
+        # own non-blocking panel message, which does not exist yet.
+        if "runRoadClosureOperation(" not in source[max(0, hit - 1500):hit]:
+            start = hit + len(marker)
+            continue
+        catch = source.find("} catch (e) {", hit)
+        assert catch != -1, "a job error path must be caught"
+        end = source.find("} finally {", catch)
+        blocks.append(source[catch:end if end != -1 else catch + 600])
+        start = hit + len(marker)
+    return blocks
+
+
+def test_a_failed_job_never_reports_through_a_blocking_alert():
+    """alert() freezes the event loop, so the poll loop cannot be replaced.
+
+    MDN documents alert() as a legacy exception to the non-blocking model: it
+    holds the main thread until dismissed, starving timers and pending
+    promises. Found live 2026-08-26 — a paused monthly search left this alert
+    on screen and the tab still showed that failure over three hours after a
+    replacement search had started and was running normally. app.js already
+    owns the right mechanism (announceStudyOutcome, whose own comment says
+    "a transient alert() is not a label"); this keeps every job error path on
+    it.
+    """
+    def strip_comments(block: str) -> str:
+        # A block explaining WHY it avoids alert() must not read as using it.
+        return "\n".join(
+            line for line in block.splitlines()
+            if not line.strip().startswith("//"))
+
+    blocks = _job_error_catch_blocks()
+    assert blocks, "expected at least one road-closure job error path"
+    offenders = [b for b in blocks if "alert(" in strip_comments(b)]
+    assert not offenders, (
+        "a job-failure path still uses a blocking alert(); use "
+        f"announceStudyOutcome instead: {offenders}")
+    assert all("announceStudyOutcome(" in b for b in blocks), (
+        "every job-failure path must announce through the persistent banner")

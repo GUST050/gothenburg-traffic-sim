@@ -259,19 +259,17 @@
           const traj = trajCache[provider.trajectories];
           Render.setTrajectories(traj);
           Render.setVehicleMode(true);
-          // F1 provenance: label the vehicles as the single run they are.
-          // Older artifacts without the fields keep an unlabelled display
-          // rather than a made-up claim.
+          // The animated vehicles come from one simulator execution while
+          // road colours and sensor summaries use the ensemble. Keep that
+          // distinction visible without exposing internal seed/variant IDs.
+          // Older artifacts without provenance keep an unlabelled display.
           const provEl = document.getElementById('traj-provenance');
           if (traj?.seed != null) {
-            const variantLabel = { 'calibrated.rou.xml': 'q50',
-                                   'calibrated_v1.rou.xml': 'q10',
-                                   'calibrated_v2.rou.xml': 'q90' }[traj.variant] || traj.variant;
             const sampled = traj.sampling?.enabled === true;
-            provEl.textContent = `🚗 representativ körning (frö ${traj.seed}, ${variantLabel})`;
-            provEl.title = 'Vägfärgerna är medelvärdet av 3 Monte Carlo-körningar; '
-              + 'de animerade bilarna är EN av dessa körningar — representativ, '
-              + 'inte identisk med medelvärdet.'
+            provEl.textContent = '🚗 Fordonsanimation';
+            provEl.title = 'Vägfärger och sensorresultat bygger på medelvärdet '
+              + 'av tre simuleringar. Animationen visar fordon från en av '
+              + 'simuleringarna och är därför inte identisk med medelvärdet.'
               + (sampled
                  ? ` Ett deterministiskt urval på ${traj.n_vehicles} av `
                    + `${traj.inserted_in_run} riktiga fordon ritas `
@@ -620,9 +618,10 @@
             return;
           }
           const counts = demand.purpose_counts_by_quarter?.[qi] ?? demand.purpose_counts;
-          const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+          const total = Object.values(counts).reduce(
+            (sum, value) => sum + (Number(value) || 0), 0);
           if (!total) {
-            simAgentHint.textContent = 'Resor nu: inga avgångar';
+            simAgentHint.textContent = 'Modellfördelning nu: inga avgångar';
             simAgentHint.title = 'Inga kalibrerade fordonsavgångar i denna 15-minutersruta';
             simAgentHint.hidden = false;
             return;
@@ -633,20 +632,47 @@
           // "genomfart" lästes som "saknar ärende" (Gustav 2026-07-17,
           // 07:54-skärmbilden: "varför så lite arbete vid 8-tiden?" — svaret
           // var till stor del att rusningens pendlare låg i denna kategori).
-          const labels = { work: 'arbete', arbete: 'arbete', service: 'service',
-                           leisure: 'fritid', fritid: 'fritid',
-                           through: 'passerar området',
-                           external: 'extern', unknown: 'okänd' };
-          const parts = Object.entries(counts).map(([purpose, count]) =>
-            `${labels[purpose] || purpose} ${Math.round(100 * count / total)}%`);
-          simAgentHint.textContent = `Resor nu: ${parts.join(' · ')}`;
+          const countFor = (...keys) => keys.reduce(
+            (sum, key) => sum + (Number(counts[key]) || 0), 0);
+          const percentage = count => `${Math.round(100 * count / total)} %`;
+          const purposeParts = [
+            ['arbete', countFor('arbete', 'work')],
+            ['service', countFor('service')],
+            ['fritid', countFor('fritid', 'leisure')],
+          ].filter(([, count]) => count > 0)
+            .map(([label, count]) => `${label} ${percentage(count)}`);
+          const relationParts = [
+            ['ena änden utanför', countFor('external')],
+            ['passerar området', countFor('through')],
+          ].filter(([, count]) => count > 0)
+            .map(([label, count]) => `${label} ${percentage(count)}`);
+          const shownKeys = new Set([
+            'arbete', 'work', 'service', 'fritid', 'leisure',
+            'external', 'through',
+          ]);
+          const otherCount = Object.entries(counts).reduce(
+            (sum, [key, count]) => shownKeys.has(key)
+              ? sum : sum + (Number(count) || 0), 0);
+          const groups = [];
+          if (purposeParts.length) {
+            groups.push(`modellerat reseärende: ${purposeParts.join(', ')}`);
+          }
+          if (relationParts.length) {
+            groups.push(`geografiskt flöde: ${relationParts.join(', ')}`);
+          }
+          if (otherCount > 0) {
+            groups.push(`övrig modellkategori ${percentage(otherCount)}`);
+          }
+          simAgentHint.textContent = `Trafikmodell nu · ${groups.join(' · ')}`;
           simAgentHint.title =
             `${total} individuella kalibrerade avgångar i denna 15-minutersruta.\n` +
-            'passerar området = både start och mål utanför kartområdet ' +
-            '(inkluderar t.ex. pendlare som kör igenom) · extern = ena änden ' +
-            'utanför området · arbete/service/fritid = resans ärende inne i ' +
-            'området. Andelarna beskriver den sensor-förklarade simulerade ' +
-            'trafiken, inte all verklig trafik.';
+            'Sensorindatan anger antal passager per mätplats, datum och ' +
+            '15-minutersintervall, inte reseärende. Arbete, service och fritid ' +
+            'är modellerade ärenden från resvanepriorer och aktivitetsplatser. ' +
+            'Ena änden utanför och passerar området beskriver i stället ruttens ' +
+            'geografiska relation till modellområdet. Andelarna gäller den ' +
+            'sensoranpassade simulerade trafiken, inte observerade ärenden eller ' +
+            'all verklig trafik.';
           simAgentHint.hidden = false;
         }
 
@@ -665,8 +691,10 @@
         const validationBody = document.getElementById('validation-body');
         const V_LABELS = {
           counts_fit: 'Sensorräkningar', structure: 'Strukturrealism',
-          purposes: 'Ärenden & längder', simulation: 'Simuleringshälsa',
+          purposes: 'Modellerade reseärenden & längder',
+          simulation: 'Simuleringshälsa',
           sensor_output: 'SUMO sensorutdata', multi_day: 'Flerdagskontinuitet',
+          sensor_output_exact: 'Exakt SUMO-passagetest',
           held_out: 'Utelämnad-station (LOSO)',
         };
         const V_MARK = { pass: ['✓', 'v-pass'], warn: ['⚠', 'v-warn'],
@@ -688,12 +716,12 @@
               const l = s.purpose_length_km || {};
               const rows = ['arbete', 'service', 'fritid']
                 .filter(p => l[p]).map(p => `${p} ${l[p].median_km} km`);
-              return `medianlängd: ${rows.join(' · ')}`
+              return `modellerad medianlängd: ${rows.join(' · ')}`
                 + (s.ordering_violated ? ' · ORDNING BRUTEN (fritid ska vara längst)' : '');
             }
             case 'simulation':
               return (s.seeds || []).map(x =>
-                `frö ${x.seed}: ${x.inserted}/${x.loaded} insatta, `
+                `frö ${x.seed}: ${x.inserted}/${x.loaded} accepterade, `
                 + `${x.unfinished} ofullbordade, ${x.teleports} teleport`).join(' · ')
                 + (s.flags?.length ? ` · FLAGGOR: ${s.flags.join('; ')}` : '');
             case 'sensor_output':
@@ -701,6 +729,11 @@
                 + `${s.aggregation_minutes === 60 ? 'sensor-timmar' : 'intervall'} · `
                 + `GEH<5 ${s.geh_lt_5_pct ?? '–'}% · `
                 + (s.reason || 'rå SUMO edgeData och stationsaggregering');
+            case 'sensor_output_exact':
+              return `${s.exact ?? '–'}/${s.constraints ?? '–'} exakta riktade `
+                + `sensor×kvartar · maxfel ${s.max_abs_error ?? '–'} · `
+                + `${s.mismatch_count ?? '–'} avvikelser · `
+                + (s.reason || 'alla råa 15-minuterspassager matchar exakt');
             case 'multi_day':
               return s.not_applicable ? 'inte tillämpligt för en dag' :
                 `${s.days ?? '–'} dagar · `
@@ -810,9 +843,6 @@
         const sensorAuditMeta = document.getElementById('sensor-audit-meta');
         const sensorAuditSourceLabel = document.getElementById('sensor-audit-source-label');
         const sensorAuditBody = document.getElementById('sensor-audit-body');
-        const AUDIT_VARIANT_LABEL = {
-          edge_shares: 'q50', edge_shares_q10: 'q10', edge_shares_q90: 'q90',
-        };
         let renderedSensorAuditProvider = null;
         let renderedSensorAuditQI = null;
 
@@ -870,12 +900,8 @@
           renderedSensorAuditProvider = provider;
           renderedSensorAuditQI = interval;
 
-          const variant = AUDIT_VARIANT_LABEL[audit.representative?.variant]
-            || audit.representative?.variant || 'okänd variant';
-          const seed = audit.representative?.seed;
           sensorAuditHeading.textContent =
-            `Sensorflöden per riktning · ${sensorAuditInterval(provider, interval)} · `
-            + `visad körning ${variant}${seed == null ? '' : ` (frö ${seed})`}`;
+            `Sensorflöden per riktning · ${sensorAuditInterval(provider, interval)}`;
           sensorAuditSourceLabel.textContent = audit.source === 'forecast'
             ? 'Prognosvärde' : 'Sensorvärde';
 
@@ -886,7 +912,8 @@
           const ensembleFit = audit.fit?.ensemble;
           const representativeFit = audit.fit?.representative;
           const fitText = audit.comparison === 'calibration' && ensembleFit?.available
-            ? ` Medel: ${ensembleFit.geh_lt_5_pct}% GEH<5; visad ${variant}: `
+            ? ` Simuleringsmedel: ${ensembleFit.geh_lt_5_pct}% GEH<5; `
+              + 'enskild simulering: '
               + `${representativeFit?.geh_lt_5_pct ?? '–'}% GEH<5.`
             : ' Scenarioflöden kan avvika från baslinjemålet när vägar är stängda.';
           const targetWasRebuilt = audit.provenance?.targets === 'reconstructed_current_inputs';
@@ -1097,19 +1124,34 @@
             }
             return { response, data };
           };
-          let result = await parseResponse(await fetch('/api/recalibrate', {
+          const post = async (url, options) => {
+            try {
+              return await parseResponse(await fetch(url, options));
+            } catch (error) {
+              const detail = String(error?.message || error || 'okänt nätverksfel');
+              if (/failed to fetch|load failed|networkerror/i.test(detail)) {
+                const openedFrom = window.location.origin === 'null'
+                  ? 'en lokal fil' : window.location.origin;
+                throw new Error(
+                  `ingen kontakt med API-servern från ${openedFrom}. `
+                  + 'Öppna http://localhost:8000/ och ladda om sidan');
+              }
+              throw error;
+            }
+          };
+          let result = await post('/api/recalibrate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ demand_spec })
-          }));
+          });
           const errorText = String(result.data.error || '');
           if (!result.response.ok && result.response.status === 400 &&
               /datum(?: saknas)? .*YYYY-MM-DD/i.test(errorText)) {
             const query = new URLSearchParams({
               date, source, days: String(days)
             });
-            result = await parseResponse(await fetch(
-              `/api/recalibrate?${query.toString()}`, { method: 'POST' }));
+            result = await post(
+              `/api/recalibrate?${query.toString()}`, { method: 'POST' });
           }
           if (!result.response.ok) {
             throw new Error(result.data.error || `HTTP ${result.response.status}`);
@@ -1154,6 +1196,7 @@
         const monthlyBandEnd    = document.getElementById('monthly-band-end');
         const monthlyFullday    = document.getElementById('monthly-fullday');
         const monthlyWorkHours  = document.getElementById('monthly-work-hours');
+        const monthlyMinDays    = document.getElementById('monthly-min-days');
         const monthlyMaxDays    = document.getElementById('monthly-max-days');
         const monthlyPeriodMode = document.getElementById('monthly-period-mode');
         const monthlyWeekdays   = document.getElementById('monthly-weekdays');
@@ -1170,6 +1213,10 @@
         const monthlyColSecondary = document.getElementById('monthly-col-secondary');
         const btnMonthlyResultsClose = document.getElementById('monthly-results-close');
         let monthlyJobRunning = false;
+        // A restarted server can observe a CLI search through its durable
+        // workspace without owning that process.  Preserve that distinction:
+        // /api/cancel can signal only jobs started by this server instance.
+        let monthlyJobServerTracked = true;
 
         // ── Optimera signaler (IMPROVEMENT_PLAN.md Phase D5) — no picking mode:
         // acts on the currently loaded scenario and sends its full
@@ -1209,6 +1256,10 @@
             monthlyPickCount.textContent =
               `${selected.size} vald${selected.size === 1 ? '' : 'a'}`;
             btnMonthlyRun.disabled = monthlyJobRunning || selected.size === 0;
+            const unownedMonthlyJob =
+              monthlyJobRunning && !monthlyJobServerTracked;
+            btnMonthlyCancel.hidden = unownedMonthlyJob;
+            btnMonthlyCancel.disabled = unownedMonthlyJob;
           }
           Render.setPending([...selected]);
         }
@@ -1598,8 +1649,12 @@
               throw new Error(data.error || `HTTP ${response.status}`);
             }
           }
+          let consecutivePollFailures = 0;
+          const maxConsecutivePollFailures = 5;
           for (;;) {
-            await new Promise(r => setTimeout(r, operation.pollMs));
+            const backoff = Math.min(4, 2 ** consecutivePollFailures);
+            await new Promise(r => setTimeout(
+              r, operation.pollMs * backoff));
             let status;
             try {
               const response = await fetch(operation.statusUrl, {
@@ -1608,9 +1663,17 @@
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               status = await response.json();
             } catch (e) {
-              continue;   // transient network hiccup — keep polling
+              consecutivePollFailures += 1;
+              if (consecutivePollFailures >= maxConsecutivePollFailures) {
+                throw new Error(
+                  'servern svarar inte; jobbet kan fortfarande köras — ' +
+                  'kontrollera servern och försök sedan återansluta');
+              }
+              continue;
             }
-            if (status.status === 'running' || status.status === 'cancelling') {
+            consecutivePollFailures = 0;
+            if (status.status === 'checking_cache' ||
+                status.status === 'running' || status.status === 'cancelling') {
               onProgress?.(status);
               continue;
             }
@@ -1934,7 +1997,11 @@
             setClosureTool(null);
             await activateClosedScenario(status);
           } catch (e) {
-            alert('Kunde inte ladda scenariot: ' + e.message);
+            // Same class as the main simulate path: a poll loop just ended,
+            // so this must not block the event loop. See announceStudyOutcome.
+            announceStudyOutcome('Avstängningssimuleringen', 'error',
+                                 (lastSuggestResult.edges || []).join(', '),
+                                 e.message);
           } finally {
             others.forEach(b => b.disabled = false);
             btn.textContent = 'Ladda';
@@ -1966,7 +2033,14 @@
             }
             renderSuggestResults(status.result);
           } catch (e) {
-            alert('Sökningen misslyckades: ' + e.message);
+            // Not alert(): a modal blocks the event loop, so the poll loop
+            // this catch just ended cannot be replaced by a new one until the
+            // operator dismisses it, and the tab then sits on a stale failure
+            // knowing nothing about any job started since. The persistent
+            // banner is the mechanism this file already chose for exactly
+            // this case — see announceStudyOutcome and the simulate path.
+            announceStudyOutcome('Tidsoptimeringen', 'error',
+                                 [...selected].join(', '), e.message);
           } finally {
             suggestJobRunning = false;
             btnSuggestRun.disabled = selected.size === 0;
@@ -2000,6 +2074,8 @@
         function monthlyClosureSearchSpec(edges) {
           const weekdays = [...monthlyWeekdays.querySelectorAll('button.active')]
             .map(btn => Number(btn.dataset.day));
+          const minimumDays = Math.min(90, Math.max(
+            1, Number(monthlyMinDays.value) || 1));
           const body = {
             directed_edges: edges,
             source: monthlySource,
@@ -2039,6 +2115,11 @@
             period_comparison_policy: monthlyPeriodMode.checked
               ? 'rolling_period_v1' : 'none_v1',
           };
+          // Preserve existing default search IDs/workspaces. The contract's
+          // omitted default is one; only a real lower bound changes intent.
+          if (minimumDays > 1) {
+            body.min_consecutive_start_days = minimumDays;
+          }
           const key = monthlyStableKey(JSON.stringify(body));
           return {
             search_id: `ui-monthly-${key}`,
@@ -2056,6 +2137,7 @@
           monthlyDateStart.value = spec.permitted_date_start || '';
           monthlyDateEnd.value = spec.permitted_date_end || '';
           monthlyWorkHours.value = Number(spec.required_work_minutes || 0) / 60;
+          monthlyMinDays.value = spec.min_consecutive_start_days || 1;
           monthlyMaxDays.value = spec.max_consecutive_start_days || 1;
           const band = spec.permitted_daily_band || {};
           const fullDay = band.earliest_start === '00:00' &&
@@ -2122,12 +2204,20 @@
         }
 
         function updateMonthlyProgress(status) {
+          if (status.server_tracked === false) {
+            monthlyJobServerTracked = false;
+          }
+          const unownedMonthlyJob =
+            monthlyJobRunning && !monthlyJobServerTracked;
+          btnMonthlyCancel.hidden = unownedMonthlyJob;
+          btnMonthlyCancel.disabled = unownedMonthlyJob;
           const progress = status.progress || {};
           const label = MONTHLY_PHASE_LABELS[progress.phase] || 'Söker';
           const counts = progress.total
             ? ` ${progress.completed}/${progress.total}` : '';
           const detail = monthlyProgressDetail(progress.detail);
-          btnMonthlyRun.textContent = `Söker… (${status.elapsed_s || 0}s)`;
+          btnMonthlyRun.textContent =
+            `Söker… (${status.elapsed_s || 0}s aktiv tid)`;
           monthlyProgress.hidden = false;
           monthlyProgress.textContent = status.status === 'cancelling'
             ? 'Avbryter…' : `${label}${counts}${detail}`;
@@ -2392,7 +2482,10 @@
             setClosureTool(null);
             await activateClosedScenario(status);
           } catch (e) {
-            alert('Kunde inte ladda schemat: ' + e.message);
+            // Same class as the main simulate path: a poll loop just ended,
+            // so this must not block the event loop. See announceStudyOutcome.
+            announceStudyOutcome('Avstängningssimuleringen', 'error',
+                                 edges.join(', '), e.message);
           } finally {
             others.forEach(b => b.disabled = false);
             btn.textContent = 'Ladda';
@@ -2437,6 +2530,10 @@
           }
           if (spec.permitted_date_start > spec.permitted_date_end) {
             return 'Första datumet måste vara före det sista.';
+          }
+          const minimumDays = spec.min_consecutive_start_days || 1;
+          if (minimumDays > spec.max_consecutive_start_days) {
+            return 'Minsta antal arbetsdagar får inte vara större än max.';
           }
           const band = spec.permitted_daily_band;
           const start = monthlyBandMinutes(band.earliest_start);
@@ -2539,6 +2636,7 @@
                 + 'sökning igen. Fortsätta?')) return;
           }
           lastMonthlySpec = spec;
+          monthlyJobServerTracked = true;
           monthlyJobRunning = true;
           refreshCloseUI();
           btnMonthlyRun.disabled = true;
@@ -2562,7 +2660,13 @@
             monthlyProgress.hidden = true;
             renderMonthlyResults(status.result);
           } catch (e) {
-            alert('Sökningen misslyckades: ' + e.message);
+            // See the suggest path above. Found live 2026-08-26: a paused
+            // monthly search left this alert on screen, the frozen event loop
+            // stopped the status poll, and the tab still showed the failure
+            // more than three hours after a replacement search had started
+            // and was running normally.
+            announceStudyOutcome('Sökningen efter arbetsperiod', 'error',
+                                 [...selected].join(', '), e.message);
           } finally {
             monthlyJobRunning = false;
             btnMonthlyRun.textContent = 'Sök arbetsperiod';
@@ -2572,6 +2676,7 @@
 
         btnMonthlyCancel.addEventListener('click', async () => {
           if (!monthlyJobRunning) return setClosureTool(null);
+          if (!monthlyJobServerTracked) return;
           btnMonthlyCancel.disabled = true;
           btnMonthlyCancel.textContent = 'Avbryter…';
           try {
@@ -2603,8 +2708,30 @@
                   return [kind, await response.json()];
                 }));
             const active = states.find(([, state]) =>
+              state.status === 'checking_cache' ||
               state.status === 'running' || state.status === 'cancelling');
             if (!active) {
+              const completedExternal = states.find(([kind, state]) =>
+                kind === 'monthly' && state.status === 'done' &&
+                state.server_tracked === false && state.result);
+              if (completedExternal) {
+                const [, state] = completedExternal;
+                await openWorkspace('closure');
+                setClosureTool('monthly');
+                monthlyJobRunning = false;
+                monthlyJobServerTracked = false;
+                restoreMonthlySearchSpec(state.closure_search_spec);
+                selected.clear();
+                for (const edge of state.edges ||
+                     state.closure_search_spec?.directed_edges || []) {
+                  selected.add(edge);
+                }
+                lastMonthlySpec = state.closure_search_spec || lastMonthlySpec;
+                monthlyProgress.hidden = true;
+                renderMonthlyResults(state.result);
+                refreshCloseUI();
+                return;
+              }
               const paused = states.find(([kind, state]) =>
                 kind === 'monthly' && state.status === 'paused');
               if (!paused) return;
@@ -2634,13 +2761,18 @@
             closureJobRunning = kind === 'simulate';
             suggestJobRunning = kind === 'suggest';
             monthlyJobRunning = kind === 'monthly';
+            if (kind === 'monthly') {
+              monthlyJobServerTracked = state.server_tracked !== false;
+            }
             refreshCloseUI();
 
             const onProgress = current => {
               if (kind === 'simulate') {
-                btnRun.textContent = current.status === 'cancelling'
-                  ? 'Avbryter…'
-                  : `Simulerar… (${current.elapsed_s || 0}s)`;
+                btnRun.textContent = current.status === 'checking_cache'
+                  ? 'Kontrollerar cache…'
+                  : current.status === 'cancelling'
+                    ? 'Avbryter…'
+                    : `Simulerar… (${current.elapsed_s || 0}s)`;
               } else if (kind === 'suggest') {
                 btnSuggestRun.textContent = current.status === 'cancelling'
                   ? 'Avbryter…'

@@ -11,6 +11,7 @@ LOSO folds, both delegating to pfe.solve_interval_with_structure_guard
 from __future__ import annotations
 
 from collections import Counter
+import json
 import multiprocessing as mp
 import os
 import resource
@@ -43,6 +44,7 @@ _PFE_PAR_SOLVE_S = None
 _PFE_PAR_COUNTS = None
 _PFE_PAR_COUNTS_S = None
 _PFE_PAR_DAY_QUARTERS = None
+_PFE_PAR_FIXED_TOTALS = None
 
 
 def apply_activity_purpose_margin(
@@ -74,6 +76,65 @@ def apply_activity_purpose_margin(
         raise ValueError(str(exc).replace("category shares", "activity purpose shares")) from exc
 
 
+def purpose_mixes_for_candidates(
+    cand_path: Path,
+    quarters: int,
+    *,
+    departure_offset_s: float = 0.0,
+    activity_shares_by_quarter: list[dict[str, float]] | None = None,
+    through_share_target: float | None = None,
+) -> list[dict[str, float]]:
+    """Materialize the final purpose margin used by the flat PFE pool.
+
+    Catalog candidates have a stable departure support set, so the daily
+    behavioural margin must be an explicit input rather than an accidental
+    consequence of whichever date built the routes first.
+    """
+    shapes, _route_cost = pfe.prepare_calibration(cand_path)
+    source = pfe._purpose_targets_per_quarter(
+        shapes, quarters, departure_offset_s)
+    mixed = apply_activity_purpose_margin(source, activity_shares_by_quarter)
+    return [dict(mix) for mix in pfe.apply_through_share_target(
+        mixed, through_share_target)]
+
+
+def catalog_daily_purpose_mixes(
+    cand_path: Path,
+    quarters: int,
+    *,
+    activity_shares_by_quarter: list[dict[str, float]],
+    through_share_target: float | None = None,
+) -> list[dict[str, float]]:
+    """Daily margin independent of the catalog's neutral departure clock."""
+    if len(activity_shares_by_quarter) != quarters:
+        raise ValueError("catalog daily purpose shares must match target quarters")
+    shapes, _route_cost = pfe.prepare_calibration(cand_path)
+    source = Counter()
+    for shape in shapes:
+        for candidate in shape.source_candidates or [shape]:
+            if candidate.intent.get("support_only"):
+                continue
+            source[pfe._purpose(candidate)] += 1
+    if not source:
+        raise ValueError("catalog contains no behavioural purpose support")
+    requested = {
+        str(purpose)
+        for shares in activity_shares_by_quarter
+        for purpose, share in shares.items()
+        if float(share) > 0
+    }
+    missing = sorted(requested - set(source))
+    if missing:
+        raise ValueError(
+            "catalog lacks route support for daily purposes: "
+            + ", ".join(missing))
+    repeated = [source.copy() for _quarter in range(quarters)]
+    mixed = apply_activity_purpose_margin(
+        repeated, activity_shares_by_quarter)
+    return [dict(mix) for mix in pfe.apply_through_share_target(
+        mixed, through_share_target)]
+
+
 def _agent_path_for(route_path: Path) -> Path:
     """Return the provenance sidecar emitted beside one route XML file."""
     return route_path.with_name(route_path.name.replace(".rou.xml", ".agents.json"))
@@ -86,9 +147,14 @@ def _staged_route_path(route_path: Path) -> Path:
 
 def _report_is_publishable(report: dict) -> bool:
     """Demand variants are one contract: publish none unless all are valid."""
+    constraints = int(report.get("integer_sensor_constraints", 0) or 0)
+    exact = int(report.get("integer_sensor_exact", -1) or 0)
     return (
         report.get("infeasible_intervals", 0) == 0
         and float(report.get("geh_pct") or 0.0) >= 100.0
+        and constraints > 0
+        and exact == constraints
+        and float(report.get("integer_sensor_max_abs_error") or 0.0) == 0.0
         and not report.get("bound_violations")
         and not report.get("unserviceable_edges")
     )
@@ -111,6 +177,11 @@ def _run_pfe_interval_job(job: dict):
         raise RuntimeError("PFE interval worker was not initialized")
     suffix, key, quarter = job
     data = _PFE_PAR_VARIANT_INPUTS[suffix]
+    fixed_total = None
+    if _PFE_PAR_FIXED_TOTALS and suffix in _PFE_PAR_FIXED_TOTALS:
+        fixed_total = _PFE_PAR_FIXED_TOTALS[suffix][quarter]
+        if fixed_total is None:
+            return suffix, key, quarter, None, pfe.RUNG_INFEASIBLE
     sol, rung = pfe.solve_interval_with_structure_guard(
         _PFE_PAR_SHAPES,
         data["targets"][quarter],
@@ -120,6 +191,7 @@ def _run_pfe_interval_job(job: dict):
         structure_groups=_PFE_PAR_STRUCTURE_GROUPS,
         purpose_mix=_PFE_PAR_PURPOSE_MIXES[suffix][quarter],
         touch_index=_PFE_PAR_TOUCH_INDEX,
+        fixed_total=fixed_total,
     )
     return suffix, key, quarter, sol, rung
 
@@ -134,41 +206,87 @@ def _variant_quarter_purpose_mix(suffix: str, quarter: int):
     return mixes[quarter] if quarter < len(mixes) else Counter()
 
 
-def _run_pfe_counts_job(job: tuple[str, int]):
-    """ProcessPool worker for one quarter's integer repair (stage A1).
-
-    The repair/purpose-reconciliation MILPs are per-quarter pure functions
-    (pfe.quarter_publish_counts), so they parallelize exactly like the
-    interval solves. The sequential remainder of publishing — endpoint draw
-    ordinals, vehicle numbering, XML order — stays in the writer.
-
-    Counts are returned SPARSE (nonzero indices + their values). A dense
-    vector per (variant, quarter) would be hundreds of megabytes on a
-    multi-day build for a vector that is almost entirely zero; taking the
-    values through a nonzero mask reproduces the original array exactly,
-    dtype included.
-    """
+def _compute_pfe_counts(suffix: str, quarter: int):
+    """Compute one quarter's exact publication counts in any process."""
     from traffic_sim.demand import pfe
     import numpy as np
 
-    suffix, quarter = job
+    # Same guard as the interval and publish workers. Without it a call
+    # sequenced before the globals are populated fails as "NoneType is not
+    # subscriptable" from inside a pool worker, which says nothing about the
+    # actual mistake. Found by pylint's unsubscriptable-object, 2026-08-18.
+    if (_PFE_PAR_SHAPES is None or _PFE_PAR_VARIANT_INPUTS is None
+            or _PFE_PAR_SOLUTIONS is None or _PFE_PAR_RUNGS is None
+            or _PFE_PAR_PURPOSE_MIXES is None):
+        raise RuntimeError("PFE counts worker was not initialized")
     data = _PFE_PAR_VARIANT_INPUTS[suffix]
     sol = _PFE_PAR_SOLUTIONS[suffix][quarter]
     if sol is None:
-        return suffix, quarter, None
+        return None
     purpose_mix = _variant_quarter_purpose_mix(suffix, quarter)
     bounds_pq = data["hard_bounds_pq"]
-    counts, margin_enforced = pfe.quarter_publish_counts(
-        _PFE_PAR_SHAPES, sol, data["targets"][quarter],
-        bounds_pq[quarter] if bounds_pq is not None else None,
-        _PFE_PAR_RUNGS[suffix][quarter],
-        purpose_mix, bool(purpose_mix), True,
-        [(members, cap_share)
-         for _name, members, cap_share in (_PFE_PAR_STRUCTURE_GROUPS or [])],
-    )
+    published_rung = _PFE_PAR_RUNGS[suffix][quarter]
+    def publish(rung: int):
+        return pfe.quarter_publish_counts(
+            _PFE_PAR_SHAPES, sol, data["targets"][quarter],
+            bounds_pq[quarter] if bounds_pq is not None else None,
+            rung,
+            purpose_mix, bool(purpose_mix), True,
+            [(members, cap_share)
+             for _name, members, cap_share in (_PFE_PAR_STRUCTURE_GROUPS or [])],
+        )
+
+    try:
+        counts, margin_enforced = publish(published_rung)
+    except RuntimeError as exc:
+        # Integer exactness is stronger than the continuous tolerance band.
+        # If retained Level-2 bounds are the only obstacle, follow the
+        # documented counts-first ladder and record the no-bounds rung. Do
+        # not catch unrelated solver, support or publication failures.
+        if ("final integer projection cannot satisfy every exact sensor margin"
+                not in str(exc)
+                or not pfe._rung_keeps_structural_bounds(published_rung)):
+            raise
+        published_rung = pfe.RUNG_NOBND_TOL1
+        counts, margin_enforced = publish(published_rung)
+    if not pfe.exact_sensor_margins(
+            counts, _PFE_PAR_SHAPES, data["targets"][quarter]):
+        # A widened continuous rung may return successfully inside its 2x/4x
+        # band.  Publication is stricter: retry without Level-2 bounds at the
+        # exact 1x rung, or fail closed.  Never let a tolerant solution reach
+        # the route writer merely because no exception was raised.
+        if not pfe._rung_keeps_structural_bounds(published_rung):
+            raise RuntimeError(
+                "final integer projection cannot satisfy every exact sensor "
+                "margin after the no-bounds fallback")
+        published_rung = pfe.RUNG_NOBND_TOL1
+        counts, margin_enforced = publish(published_rung)
+        if not pfe.exact_sensor_margins(
+                counts, _PFE_PAR_SHAPES, data["targets"][quarter]):
+            raise RuntimeError(
+                "final integer projection cannot satisfy every exact sensor "
+                "margin after the no-bounds fallback")
     idx = np.nonzero(counts)[0]
-    return suffix, quarter, (idx.astype(np.int64), counts[idx],
-                             counts.dtype.str, len(counts), margin_enforced)
+    return (idx.astype(np.int64), counts[idx], counts.dtype.str, len(counts),
+            margin_enforced, published_rung)
+
+
+def _run_pfe_counts_job(job: tuple[str, int]):
+    """ProcessPool worker for one quarter's sparse integer repair result."""
+    suffix, quarter = job
+    try:
+        result = _compute_pfe_counts(suffix, quarter)
+    except RuntimeError as exc:
+        variant = {"": "q50", "_v1": "q10", "_v2": "q90"}.get(
+            suffix, suffix or "q50")
+        start_minute = int(quarter) * 15
+        end_minute = start_minute + 15
+        start = f"{start_minute // 60:02d}:{start_minute % 60:02d}"
+        end = f"{end_minute // 60:02d}:{end_minute % 60:02d}"
+        raise RuntimeError(
+            f"PFE integer publication failed for {variant} quarter {quarter} "
+            f"({start}-{end}): {exc}") from exc
+    return suffix, quarter, result
 
 
 def _publish_worker_budget(variant_count: int) -> int:
@@ -231,6 +349,10 @@ def _write_pfe_variant_report_job(job: tuple[str, str]):
             _PFE_PAR_COUNTS[suffix] if _PFE_PAR_COUNTS is not None else None),
         required_anchor_edges=data.get("required_anchor_edges"),
     )
+    report["pfe_shape_variables"] = len(_PFE_PAR_SHAPES)
+    report["pfe_source_candidates"] = sum(
+        len(getattr(candidate, "source_candidates", ()) or (candidate,))
+        for candidate in _PFE_PAR_SHAPES)
     publish_s = time.perf_counter() - started
     report["timings_s"] = {
         "prepare_shared": round(_PFE_PAR_PREPARE_S, 3),
@@ -249,6 +371,8 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
                                    activity_purpose_shares_by_quarter:
                                    list[dict[str, float]] | None = None,
                                    through_share_target: float | None = None,
+                                   purpose_mixes_per_q:
+                                   list[dict[str, float]] | None = None,
                                    day_quarters: int | None = None) -> dict[str, dict]:
     """Solve all final direction variants through one flat worker pool.
 
@@ -269,6 +393,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     global _PFE_PAR_SOLUTIONS, _PFE_PAR_RUNGS, _PFE_PAR_STAGED_OUTPUTS
     global _PFE_PAR_PREPARE_S, _PFE_PAR_SOLVE_S
     global _PFE_PAR_COUNTS, _PFE_PAR_COUNTS_S, _PFE_PAR_DAY_QUARTERS
+    global _PFE_PAR_FIXED_TOTALS
     phase_started = time.perf_counter()
     shapes, route_cost = pfe.prepare_calibration(cand_path)
     prepare_s = time.perf_counter() - phase_started
@@ -284,17 +409,25 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
     _PFE_PAR_VARIANT_INPUTS = variant_inputs
     _PFE_PAR_PURPOSE_MIXES = {}
     for suffix, _key in variants:
-        source_mixes = pfe._purpose_targets_per_quarter(
-            shapes, len(variant_inputs[suffix]["targets"]),
-            purpose_departure_offset_s)
-        # Through-share target LAST: the activity margin restores
-        # P(purpose | hour) among activity classes, then the target sets
-        # the through level while preserving that relative activity mix
-        # (see pfe.apply_through_share_target for the validation record).
-        _PFE_PAR_PURPOSE_MIXES[suffix] = pfe.apply_through_share_target(
-            apply_activity_purpose_margin(
-                source_mixes, activity_purpose_shares_by_quarter),
-            through_share_target)
+        if purpose_mixes_per_q is not None:
+            if len(purpose_mixes_per_q) != len(variant_inputs[suffix]["targets"]):
+                raise ValueError(
+                    "purpose_mixes_per_q must have one mapping per target quarter")
+            _PFE_PAR_PURPOSE_MIXES[suffix] = [
+                Counter({str(p): float(v) for p, v in mix.items() if float(v)})
+                for mix in purpose_mixes_per_q
+            ]
+        else:
+            source_mixes = pfe._purpose_targets_per_quarter(
+                shapes, len(variant_inputs[suffix]["targets"]),
+                purpose_departure_offset_s)
+            # Through-share target LAST: the activity margin restores
+            # P(purpose | hour) among activity classes, then the target sets
+            # the through level while preserving that relative activity mix.
+            _PFE_PAR_PURPOSE_MIXES[suffix] = pfe.apply_through_share_target(
+                apply_activity_purpose_margin(
+                    source_mixes, activity_purpose_shares_by_quarter),
+                through_share_target)
     staged_outputs = {
         suffix: _staged_route_path(Path(variant_inputs[suffix]["out_path"]))
         for suffix, _key in variants
@@ -317,45 +450,79 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             for i in range(nq):
                 tasks.append((suffix, key, i))
 
-        n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
-        print(f"  PFE final variants: solving {len(tasks)} independent "
-              f"variant×quarter intervals in one pool ({n_workers} workers)")
-        solve_started = time.perf_counter()
-        with mp.get_context("fork").Pool(processes=n_workers) as pool:
-            for suffix, _key, quarter, sol, rung in pool.imap_unordered(
-                _run_pfe_interval_job, tasks
-            ):
-                solutions[suffix][quarter] = sol
-                rungs[suffix][quarter] = rung
-        solve_s = time.perf_counter() - solve_started
-        print(f"  timing PFE interval solving: {solve_s:.1f}s")
-
         _PFE_PAR_SOLUTIONS = solutions
         _PFE_PAR_RUNGS = rungs
         _PFE_PAR_STAGED_OUTPUTS = staged_outputs
         _PFE_PAR_PREPARE_S = prepare_s
-        _PFE_PAR_SOLVE_S = solve_s
+        n_workers = min(max_workers or (os.cpu_count() or 1), len(tasks))
 
-        # Stage A1: the integer repair + purpose reconciliation MILPs are the
-        # bulk of publishing and are per-quarter pure (pfe.quarter_publish_
-        # counts). Solve them in the same flat (variant x quarter) shape as
-        # the interval solves — one non-nested pool, results reassembled in
-        # deterministic order — so the writer that follows only has to do the
-        # genuinely sequential work. Results are IDENTICAL either way: the
-        # writer computes any quarter left unfilled inline exactly as before.
-        counts_started = time.perf_counter()
-        with mp.get_context("fork").Pool(processes=n_workers) as pool:
-            for suffix, quarter, packed in pool.imap_unordered(
-                _run_pfe_counts_job,
-                [(suffix, quarter) for suffix, _key, quarter in tasks]
-            ):
-                if packed is None:
-                    continue
-                idx, vals, dtype, length, margin_enforced = packed
-                dense = np.zeros(length, dtype=np.dtype(dtype))
-                dense[idx] = vals
-                counts_by_variant[suffix][quarter] = (dense, margin_enforced)
-        counts_s = time.perf_counter() - counts_started
+        def solve_batch(batch):
+            if not batch:
+                return 0.0
+            started = time.perf_counter()
+            workers = min(n_workers, len(batch))
+            with mp.get_context("fork").Pool(processes=workers) as pool:
+                for suffix, _key, quarter, sol, rung in pool.imap_unordered(
+                    _run_pfe_interval_job, batch
+                ):
+                    solutions[suffix][quarter] = sol
+                    rungs[suffix][quarter] = rung
+            return time.perf_counter() - started
+
+        def collect_counts(batch):
+            if not batch:
+                return 0.0
+            started = time.perf_counter()
+            workers = min(n_workers, len(batch))
+            with mp.get_context("fork").Pool(processes=workers) as pool:
+                results = pool.imap_unordered(
+                    _run_pfe_counts_job,
+                    [(suffix, quarter) for suffix, _key, quarter in batch],
+                )
+                for suffix, quarter, packed in results:
+                    if packed is None and solutions[suffix][quarter] is not None:
+                        packed = _compute_pfe_counts(suffix, quarter)
+                    if packed is None:
+                        continue
+                    (idx, vals, dtype, length, margin_enforced,
+                     published_rung) = packed
+                    dense = np.zeros(length, dtype=np.dtype(dtype))
+                    dense[idx] = vals
+                    rungs[suffix][quarter] = published_rung
+                    counts_by_variant[suffix][quarter] = (
+                        dense, margin_enforced)
+            return time.perf_counter() - started
+
+        # Solve/publish q50 first. Its exact integer population is then a hard
+        # equality for q10/q90, so stress arms vary direction allocation only.
+        q50_suffixes = [suffix for suffix, key in variants
+                        if key in {"edge_shares", "q50"}]
+        if len(variants) > 1 and len(q50_suffixes) != 1:
+            raise ValueError(
+                "multi-variant PFE requires exactly one q50/edge_shares arm")
+        q50_suffix = q50_suffixes[0] if q50_suffixes else variants[0][0]
+        q50_tasks = [task for task in tasks if task[0] == q50_suffix]
+        stress_tasks = [task for task in tasks if task[0] != q50_suffix]
+
+        print(f"  PFE final variants: solving {len(tasks)} "
+              f"variant×quarter intervals ({n_workers} workers; q50 totals "
+              "frozen before direction stress arms)")
+        solve_s = solve_batch(q50_tasks)
+        counts_s = collect_counts(q50_tasks)
+        if stress_tasks:
+            fixed = [
+                None if entry is None else int(entry[0].sum())
+                for entry in counts_by_variant[q50_suffix]
+            ]
+            _PFE_PAR_FIXED_TOTALS = {
+                suffix: fixed for suffix, _key in variants
+                if suffix != q50_suffix
+            }
+            solve_s += solve_batch(stress_tasks)
+            counts_s += collect_counts(stress_tasks)
+
+        _PFE_PAR_SOLVE_S = solve_s
+        print(f"  timing PFE interval solving: {solve_s:.1f}s")
         print(f"  timing PFE integer repair: {counts_s:.1f}s")
         _PFE_PAR_COUNTS = counts_by_variant
         _PFE_PAR_COUNTS_S = counts_s
@@ -395,9 +562,22 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
             if not _report_is_publishable(reports[suffix])
         ]
         if rejected:
+            diagnostics = {
+                key: {
+                    field: reports[suffix].get(field)
+                    for field in (
+                        "infeasible_intervals", "geh_pct",
+                        "integer_sensor_constraints", "integer_sensor_exact",
+                        "integer_sensor_max_abs_error", "bound_violations",
+                        "unserviceable_edges",
+                    )
+                }
+                for suffix, key in variants if key in rejected
+            }
             raise RuntimeError(
                 "PFE publication gate rejected variant(s) "
-                f"{', '.join(rejected)}; no route variants were published")
+                f"{', '.join(rejected)}; no route variants were published; "
+                f"diagnostics={json.dumps(diagnostics, sort_keys=True)}")
         # The direction variants form one demand contract. Publishing q50
         # immediately and failing q10/q90 later left a hybrid set whose
         # metadata and scenario ensemble described different builds. Stage
@@ -434,6 +614,7 @@ def run_pfe_variants_flat_parallel(cand_path: Path, variants: list[tuple[str, st
         _PFE_PAR_VARIANT_INPUTS = None
         _PFE_PAR_PURPOSE_MIXES = None
         _PFE_PAR_DAY_QUARTERS = None
+        _PFE_PAR_FIXED_TOTALS = None
 
 
 def warn_unserviceable_measured_edges(report: dict, label: str) -> None:

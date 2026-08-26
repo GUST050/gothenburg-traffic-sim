@@ -73,6 +73,7 @@ from traffic_sim.simulation.warm_state_forensics import (  # noqa: E402
 from traffic_sim.simulation.warm_route_windows import (  # noqa: E402
     WarmRouteWindowCache,
 )
+from traffic_sim.storage.singleflight import content_key_lock
 
 
 SCHEMA_VERSION = 1
@@ -837,6 +838,46 @@ class ArchivedDemandSumoRunner:
         })[:32]
 
     def _run_baseline(
+        self,
+        variant: str,
+        seed: int,
+        *,
+        n_intervals: int | None = None,
+        duration_s: int | None = None,
+        begin_s: int = 0,
+        flush_s: int = 3600,
+    ) -> tuple[
+        closure_metrics.DisruptionMetrics,
+        tuple[RecoveryBucket, ...],
+    ]:
+        """Run or restore one baseline with one producer per content key."""
+        resolved_intervals = (
+            self.n_intervals if n_intervals is None else n_intervals
+        )
+        resolved_duration = (
+            self.duration_s if duration_s is None else duration_s
+        )
+        key = self._baseline_cache_key(
+            variant,
+            seed,
+            n_intervals=resolved_intervals,
+            duration_s=resolved_duration,
+            begin_s=begin_s,
+            flush_s=flush_s,
+        )
+        with content_key_lock(self.cache_root, key):
+            # Recheck only after owning the lock: a prior producer may have
+            # completed while this process waited.
+            return self._run_baseline_locked(
+                variant,
+                seed,
+                n_intervals=resolved_intervals,
+                duration_s=resolved_duration,
+                begin_s=begin_s,
+                flush_s=flush_s,
+            )
+
+    def _run_baseline_locked(
         self,
         variant: str,
         seed: int,

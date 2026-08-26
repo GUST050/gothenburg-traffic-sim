@@ -313,6 +313,8 @@ class TestFrozenArtifact:
         "traffic_sim/simulation/independent_daily.py",
         "traffic_sim/simulation/monthly_search.py",
         "run_monthly_closure_search.py",
+        "run_scenario.py",
+        "suggest_closure_time.py",
     })
 
     def test_frozen_input_key_and_tracked_sources_recompute(self):

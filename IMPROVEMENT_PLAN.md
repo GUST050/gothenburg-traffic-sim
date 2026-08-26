@@ -1,14 +1,273 @@
 # Gothenburg Traffic Simulation Improvement Plan
 
-**Date:** 2026-07-18 (consolidated 2026-07-15; status re-verified against the
-working tree 2026-07-18)
-**Status:** Canonical improvement plan — active implementation is in progress.
+**Date:** 2026-08-24 (historical plan consolidated 2026-07-18; current status
+re-verified against the branch, active artifacts and validation records)
+**Status:** Canonical strategic and historical improvement record. The
+"Current verified status" block immediately below is the only current status
+summary; later dated checkpoints describe their stated date unless explicitly
+carried into that block.
 **Structural authority:** `ARCHITECTURE.md` remains the source of truth for
 the six-stage pipeline and fixed contracts. This is the only improvement,
 review, performance, simulation, closure, signal and sensor-growth plan.
 Historical Sol/Luna task names and exact-approval wording below describe the
 process used at the time; current collaboration follows the flexible,
 model-independent protocol in `AGENTS.md`.
+
+## Current verified status — 2026-08-24
+
+- The active published demand is forecast date 2027-11-11, build
+  `b927e6de0b6443fd87e2`, one full day and 21,744 vehicles. It is an ordinary
+  `q50_only` build: seeds 1000/1001/1002 all use the same central demand arm.
+  All 672 directed sensor-edge × 15-minute integer targets match exactly. The
+  current validation is `overall: warn`: trip-length external-fit is fail-closed
+  pending an absolute threshold, one quarter exceeds the short-trip structure
+  cap by two vehicles and two quarters required a six-vehicle purpose-mix
+  relaxation. Count fit and SUMO health pass; the raw-source-to-map audit still
+  passes on all seven directed sensor edges.
+- The active immutable reference is
+  `runs/releases/golden-2025-09-16-7day-v1`. Older three-variant releases are
+  preserved evidence; they do not describe ordinary current recalibration.
+- The deployed direction centre is the simple hour x day-type
+  `shrunk_dfactor` curve pooled toward 0.5, with sensor 107 re-levelled to its
+  published 2025 aggregate 3400/3100 (0.5231). The retired LightGBM model,
+  `model.pkl`, training CLI and Norwegian acquisition client are absent.
+- Direction Gate S is still **UNDECIDED** because the preregistered matched-seed
+  closure-sensitivity run has not been executed on a suitable calibrated
+  historical demand build. Gate M is **INCONCLUSIVE** because the tracked
+  aggregate lacks raw counts and independent day blocks. q10/q90 are
+  uncalibrated stress bands, not probability intervals.
+- Ordinary recalibration is q50-only. q10/q90 are opt-in direction-stress arms
+  for closure-envelope studies, and every stress arm is constrained to q50's
+  exact integer population per quarter. This runtime repair did not decide
+  Gate S or Gate M and did not rewrite legacy evidence.
+- The seven-day normal/multi-day release, sensor-output publication gate,
+  semantic build identity, purpose-route compatibility, job history and
+  synthetic SignalPlan certificates are implemented. Signal studies remain
+  synthetic because no city controller plans or local queue/travel-time truth
+  are available.
+- Monthly search is resumable and defaults to bounded-exhaustive execution
+  where an adopted release gate does not authorize proxy claims. Cost-first
+  policy v3 and unrestricted/global-best claims remain closed after the frozen
+  equivalence benchmark failed. Independent-day UI execution now declares the
+  recorded 8-daily × 1-seed worker width inside an eight-SUMO slot ceiling,
+  accumulates awake active wall time across resumes and holds a macOS
+  keep-awake assertion while it owns the workspace. The closure contract also
+  accepts a minimum workday count; min=max requests an exact length while the
+  omitted min=1 default preserves legacy identities. On the frozen stopped
+  input, exact five-day intent sizes to 780 periods/1,040 units instead of
+  1,776/2,224. No replacement throughput campaign has been run, so this does
+  not establish a 2.7x or >=2.0x result.
+- The next exact-five-day retry failed after roughly 95 minutes while preparing
+  the 2027-09-29..2027-10-01 demand window. The 2027-10-01 q50 candidate matrix
+  had hundreds of routes through every sensor but no route exclusive to edge
+  `26842525_26355153_0`; independent q11/q16/q17 targets were consequently
+  integer-infeasible. Candidate generation now guarantees one legal,
+  endpoint-grounded single-sensor incidence column per measured edge after all
+  route filters, or fails before PFE. The frozen failed pool needed exactly one
+  new support-only shape and then published all three quarters exactly. The
+  search remains stopped in error state; post-fix end-to-end time and monthly
+  throughput are still unmeasured.
+- Interactive baseline and closure runs now use three independent seed workers
+  through `serve.py` (commit `46e7048`). The adoption check measured baseline
+  11.0 -> 5.9 s and closure 21.6 -> 13.9 s with byte-identical scenario,
+  trajectory and index output apart from `generated_at`. This current wiring
+  supersedes the 2026-07-23 historical decision below that left the default
+  serial. The frozen campaign later measured 10.496 s p95; on 2026-08-24 the
+  user accepted the current interactive speed. On 2026-08-25 the user reopened
+  the faster-closure goal. The active 2027-11-11 fixture then measured a fresh
+  10.765 s p95 baseline and a byte-exact single-write JSON candidate at 10.359 s
+  p95; the <=10 s target remains open by 0.359 s.
+- The externally launched monthly search `ui-monthly-euc9qp` was explicitly
+  stopped on 2026-08-21 after 476/1,776 schedules. Its workspace and completed
+  evidence remain intact and resumable; the manifest progress pointer records
+  `interrupted_by_user` and `resumable: true`. It is not a completed or
+  promoted result.
+- No annual warming population is currently running. Earlier `RUNNING`
+  headings below are preserved historical checkpoints; later source changes
+  invalidated those identities, and only bounded pilot evidence was recorded.
+- External monthly-search observation is now complete in the working tree.
+  The server distinguishes a live CLI owner from a stale running manifest,
+  preserves explicit user pauses, verifies a succeeded workspace/result before
+  returning it, and labels all observed work `server_tracked: false`. The
+  browser restores verified external results and never offers server cancel
+  for an unowned process.
+- The two existing reusable-Python-worker measurements are single paired
+  draws, so they are diagnostics, not an adoption or rejection result. They
+  preserved exact evidence and measured 1.027x on two units and 0.998x on six
+  units, both inside plausible SUMO/runtime noise. No production pool is
+  activated. The benchmark is now schema v2 and requires at least four even,
+  counterbalanced paired trials, separate per-trial caches and a conservative
+  all-trials gate: continue only if every paired speedup is at least 1.10;
+  reject only if every speedup is below 1.10; otherwise report inconclusive.
+  The old records remain useful raw observations but cannot close the line.
+- The empty-cache single-draw arm also reproduced a real
+  matched-baseline publication race. Content-keyed cross-process single-flight
+  now repairs that race and its multiprocess regression passes; nested
+  concurrency still requires the remaining equivalence, resource and
+  cancellation benchmark before adoption. See
+  `docs/plans/DAILY_SIMULATION_CONCURRENCY_STRUCTURE_2026-08-21.md` and the two
+  bound `daily_worker_pool_*_2026-08-21.json` reports.
+- The capacity target is now explicit: 50 physical sensor stations, including
+  any larger calibrated vehicle population that their joint evidence requires.
+  At fixed load, final sensor-fit validation measured only 3.325 ms p95 for 50
+  rows, so the sensor audit is not the current 13.9 s closure bottleneck. A
+  one-seed diagnostic doubled demand from 21,408 to 42,816 complete vehicles in
+  1.57x wall time, but the 85,632 arm left 28,977 waiting and became 35.1x
+  slower; the old 100k point is therefore superseded by a calibrated
+  21k/32k/43k/50k/60k ladder that fails closed on insertion backlog. Restricting
+  edgeData to production's `entered` and `timeLoss` fields cut output 79.6% and
+  diagnostic wall 16.9% with equal flow/recovery values. The full paired
+  baseline/closure/trajectory follow-up then passed across 40 scenario runs and
+  120 seed executions: identical semantic digests and health, with baseline
+  wall 16.4% lower and closure wall 7.1% lower. The qualified field set is now
+  the production default, with isolated `--full-edgedata` as rollback. The
+  historical paired record still correctly says `production_adopted: false`
+  because it predates this implementation. See
+  `docs/plans/FIFTY_SENSOR_PERFORMANCE_CONTRACT_2026-08-22.md` and
+  `validation/edgedata_attributes_paired_adoption_2026-08-22.json`.
+- Sensor satisfaction is now an exact publication contract, not merely a GEH
+  score. Every registered directed sensor edge × 15-minute target must equal
+  `int(round(target))` in the calibrated route file, with zero maximum and
+  summed integer residual. Missing exactness evidence or one mismatching cell
+  rejects publication. SUMO loaded/inserted counts remain a separate proof
+  that it accepted those already calibrated trips; they do not authorize
+  adding traffic to improve performance.
+- A separate raw-SUMO 15-minute passage test is implemented for baselines. It
+  recomputes the ensemble, representative seed and every individual seed from
+  detailed edgeData and cannot be applied to closures to calibrate away their
+  effect. The active 2027-11-11 forecast result is 75/672 exact in the ensemble,
+  with a maximum absolute residual of 18.333333; individual seeds are 115/672,
+  109/672 and 114/672. Therefore departure-quarter calibration is exact but
+  simulated crossing-time calibration is not. A bounded, order-preserving
+  reconciliation prototype then reached 672/672 in all three seeds without
+  changing population or routes, but it was correctly rejected: the median
+  departure gap collapsed 2.7→0.1 s, 15,545 adjacent gaps hit the 0.1 s floor,
+  peak departures rose 1→10 per second, and a five-trial paired median was
+  3.15% slower. The fail-closed implementation and full diagnostic are in
+  `tools/departure_reconciliation.py` and
+  `validation/departure_reconciliation_diagnostic_2026-08-23.json`; neither
+  mutates the active demand.
+- Large-simulation function-boundary research is recorded in
+  `docs/plans/LARGE_SIMULATION_FUNCTION_STRUCTURE_2026-08-23.md`. A
+  process-free trace isolated 4.0654-4.1757 s of the active closure path in
+  `closure_disruption_across_variants`. Phase schema v2 now separates that
+  work, and grouped sparse routing reduced the same exact calculation from
+  4.1364 s to 1.051 s. A production-shaped three-seed closure completed in
+  10.690 s versus 11.549 s for full edgeData with equal semantic digests and
+  clean evidence. Per-key cross-process matched-baseline single-flight is also
+  implemented and tested. These are implementation/adoption diagnostics, not
+  a <=10 s p95 or >=2x monthly-throughput claim.
+
+### Current priorities
+
+1. Use and monitor the now-qualified canonical routed weekday/weekend catalog
+   matched-size and provenance-bound harness documented in
+   [`docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md`](docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md).
+   The two-date invariance proof remains valid. The original unequal
+   12,000/6,000-candidate campaign remains diagnostic only. Its schema-v2
+   replacement used 6,000 candidates in both arms across 30 counterbalanced
+   pairs and passed every gate: median 55.246→24.715 s (2.235x ratio of arm
+   medians; 2.220x median paired speedup), adapter p95
+   0.678 s, faster medians for every day class, maximum paired vehicle-count
+   deviation 0.761% and maximum RSS 0.794 GiB. The old trials did not record
+   distinct route×purpose variables, so their PFE timing is not claimed as a
+   matched-work solver speedup; new campaigns record that workload. Seven
+   catalog soak fixtures plus explicit legacy rollback
+   passed. The route catalog owns bounded
+   plausible route supply; PFE remains
+   responsible for each date's exact sensor totals, purpose margins, vehicle
+   multiplicities and departures; warming remains bound to the exact finished
+   day. The `--candidate-source catalog` path has content-addressed
+   weekday/weekend artifacts, bounded single-flight publication and sizing,
+   explicit PFE purpose-mix inputs, isolated two-date verification, a 30-pair
+   qualification contract and verdict-gated schema-v3 adoption. Runtime now
+   reads and hashes the named qualification/build/trials/suite files and
+   cross-checks identities through the chain. Suite-only contracts are counted
+   once, not copied into every arm. The corrected
+   harness passes the same explicit candidate request to both arms and rejects
+   key, size or report mismatches. The historical unequal-size 66.402→19.437 s
+   ratio must not be used as a production claim. Catalog is the current default;
+   `--candidate-source legacy` remains the tested rollback.
+   The
+   existing `congestion_iterations > 1` feedback path will bypass catalog v1.
+   Do not substitute one historical day's XML or a union of daily pools for
+   the canonical pre-resampling template. The resulting daily identity is now
+   changed with this repair, so a versioned annual plan and preflight were
+   refreshed. Exactly one q50 state succeeded and was restore-verified; 104,684
+   planned units remain pending. Annual warming still requires an explicit
+   future launch decision; catalog adoption does not start it automatically.
+2. Keep both passage candidates out of production. The new day-specific
+   standard-pool tool pre-samples explicit driver attributes for three arms,
+   keeps population/routes/OD/purpose, retains arm variation and reached raw
+   672/672 per arm without insertion bursts on the active day. The picker
+   remains responsible for each day's different vehicles/routes; the pool is
+   a deterministic post-picker layer, not one year-wide static vehicle file.
+   Its first ten-trial baseline comparison measured +2.30% at the median and
+   a production-shaped closure comparison is still absent, so it did not clear
+   the no-slowdown gate and remains isolated. Before any integration, add a
+   compact profile/materialization path that filters closure topology once,
+   freeze a route-to-time reassignment bound, and require paired baseline
+   **and closure** non-regression. SUMO's calibrator remains out of scope
+   because it inserts/removes vehicles. Evidence:
+   `validation/standard_driver_pool_diagnostic_2026-08-23.json`.
+3. Execute the road-closure and monthly-simulation speed goal in
+   [`docs/plans/ROAD_CLOSURE_SIMULATION_SPEED_PLAN_2026-08-21.md`](docs/plans/ROAD_CLOSURE_SIMULATION_SPEED_PLAN_2026-08-21.md).
+   The named monthly run is paused, so S0 measurement and the remaining
+   implementation phases may proceed under the plan's resource guard. The
+   adopted active release now has real measurements: exact structured repeats
+   pass at 0.329 s p95 over 10/10 verified hits, while ten first-new closures
+   give 10.496 s p95 with identical evidence and clean health. The user accepted
+   that speed on 2026-08-24 and reopened the goal on 2026-08-25. On the current
+   active fixture, single-write atomic JSON publication reduced p50
+   10.654→10.212 s and p95 10.765→10.359 s with identical scenario/trajectory
+   digests and clean health. Keep the generic Python-worker pool inactive;
+   remaining performance work includes the last 0.359 s to the first-new p95
+   target, monthly throughput and scale evidence.
+   Revisit the pool only with the schema-v2 multi-trial harness; do not infer a
+   decision from either historical single draw.
+   Preserve the full-edgeData rollback and the 50-station calibrated
+   vehicle-load matrix as an independent adoption gate.
+4. Run the frozen Gate S study on the specified historical demand if deciding
+   whether direction stress has product value is still desired.
+5. Treat Gate M as unavailable without independently supplied raw directional
+   volumes; do not substitute the aggregate or relax its frozen rule.
+6. Keep citywide, OD, queue, signal and closure claims bounded by the six
+   clustered stations and the evidence limitations in the error register.
+
+### Active simulation performance goal
+
+The linked speed plan is the canonical current implementation sequence for this
+goal. It separates exact-repeat latency, first-new-closure latency and exhaustive
+monthly throughput; records which optimizations are already adopted or already
+failed; ranks routing, exact caching, resource scheduling, cost-ordered search,
+targeted warm prefixes, worker reuse, trajectory output, custom SUMO state and
+libsumo by local applicability; and gives Sol phase files, measurements,
+acceptance thresholds, stop gates and rollback rules. The user has accepted the
+current first-new interactive latency, so the remaining headline targets are
+cached p95 <=2 s, async acknowledgement p95 <=1 s and at least 2.0x monthly
+verified-unit throughput, all with unchanged semantic/evidence output. The
+first implementation slice is now present in
+`serve.py`: structured ScenarioSpec requests use an exact, provenance-bound
+  sidecar cache and re-validate the published scenario and trajectory before a
+  cache hit skips SUMO. Sol review expanded the key to direct route/agent,
+  network, runtime and source-tree bytes; cache verification now owns the same
+  cross-process workspace slot, coalesces identical misses, rejects malformed
+  or path-traversing artifacts, and refuses publication if inputs changed
+  during the run. Legacy loose query requests remain uncached. This proves the
+  zero-SUMO repeat path structurally, not its latency target. S0 now records
+  independent-daily cache/worker
+  timing in resumable progress, S1 routing flags are explicit benchmark-only
+  options, and S2 enforces a declared monthly active-SUMO-slot budget. These
+  are instrumentation/guardrails, not adopted speed claims; the p95 and
+  monthly throughput targets remain open pending isolated paired benchmarks.
+
+### Historical-status convention
+
+Everything below is retained because it records measurements, decisions and
+superseded designs. Words such as "current", "active", "next" and "running"
+inside a dated subsection mean current at that subsection's date, not at
+2026-08-21. When such text conflicts with the block above, the block above
+wins.
 
 **Direction uncertainty supplement (2026-08-13, scope-corrected after review):**
 the researched, decision-gated design for improving `dirsplit` is
@@ -46,11 +305,12 @@ silently forgotten.  Ordered by pipeline stage.
    this — that is the product's own pitch, not a bug, but every downstream
    number inherits it.
 2. **Direction is modelled, not measured**, at the five single-direction
-   stations' opposite carriageways and inside every "Total" sum: the
-   dirsplit model is shrunk λ=0.256 toward 50/50 and validated only
-   region-transfer (Nordic cities) plus two local spot checks (107: 52/48;
-   1076 AM/PM 0.90).  The q10/q50/q90 variants carry this uncertainty into
-   the ensemble — but the *center* of that interval is still a model.
+   stations' opposite carriageways and inside every "Total" sum. The current
+   centre is the hour x day-type `shrunk_dfactor` curve pooled toward 50/50;
+   sensor 107 is re-levelled to its measured 2025 period aggregate 52.31%.
+   Gate M remains inconclusive without raw counts/day blocks. q10/q90 are
+   leave-city-out residual stress bands with unmeasured coverage, used only in
+   explicit stress studies; ordinary builds and all ordinary seeds use q50.
 3. **One year (2025), local time**: DST days each miss 4 quarters (kept as
    null); the 2027 forecast is LightGBM point estimates at the 6 sensors
    only, and simulating 2027 assumes 2025 structure (bounds/priors/
@@ -254,9 +514,11 @@ silently forgotten.  Ordered by pipeline stage.
     travel-time distributions.  Micro exists behind --micro for windows
     that need it; queue-based closure advice carries the
     queue_proxy_unmeasured fail-closed gate for exactly this reason.
-19. **Three seeds over three direction variants** is a small Monte Carlo
-    ensemble; per-edge confidence = spatial_prior × exp(−CV) is a
-    heuristic combination, not a calibrated probability.
+19. **Three ordinary seeds over one q50 demand arm** is a small Monte Carlo
+    ensemble. Explicit closure-envelope stress builds add q10/q90 as separate
+    direction-allocation cases with q50's exact population held fixed.
+    Per-edge confidence = spatial_prior × exp(−CV) remains a heuristic
+    combination, not a calibrated probability.
 20. **No en-route rerouting in the baseline** (closure rerouters only,
     within 400 m): drivers never divert due to congestion alone.
 21. **Closure behaviour rules are assumptions**: truncate-stranded (driver
@@ -284,29 +546,28 @@ silently forgotten.  Ordered by pipeline stage.
     flows, not a tracked real journey (candidate tours provide AM/PM
     structure as a prior; PFE calibrates aggregates independently).
 
-The mitigation order stays as recorded in the Recommended Implementation
-Order: cluster-corridor over-prediction damping (D/10), golden freeze,
-then the external data package (cordon count first) — external evidence is
-the only closure for C8–C9, D14 and E21.
+The current mitigation order is the one in "Current priorities" above.
+Independent external evidence remains the only way to reduce several
+scientific limitations, but no such data is expected; those limitations stay
+explicit instead of remaining implementation dependencies.
 
 ## How To Use This Document
 
 This document consolidates the former forward plan, program-improvement plan,
 simulation accuracy/speed plans, code audit, destination-bias research, and
-dated execution log. It retains the current conclusions and active work; it
-does not preserve obsolete intermediate proposals as separate instructions.
+dated execution log. It preserves obsolete proposals and checkpoints as dated
+history, not as current instructions.
 
 1. Read `ARCHITECTURE.md` first for system structure and contracts.
-2. Use this document for status, priorities, evidence gates and implementation
-   order.
+2. Use the 2026-08-21 block at the top for current status and priorities; use
+   later sections for rationale, evidence gates and history.
 3. Treat an item as complete only when its acceptance gate and recorded
    measurement pass. A code change or green sensor GEH by itself is not enough.
 4. Keep historical evidence in immutable run artifacts, tests, validation
    reports and Git history rather than duplicating it across planning files.
-5. When resuming work, start from "Current verified status and concrete
-   entry points" at the end of "Recommended Implementation Order" — it
-   records what was last verified as done and the concrete entry point for
-   each next step. The rest of this document explains why that order holds.
+5. When resuming work, start from "Current verified status — 2026-08-21".
+   Dated "current" or "running" statements below it are historical unless the
+   top block explicitly carries them forward.
 
 ## Consolidated Status
 
@@ -319,8 +580,8 @@ does not preserve obsolete intermediate proposals as separate instructions.
   runs archive the exact scenario/trajectory they wrote instead of guessing
   from filesystem modification time. Run output records now include SHA-256
   content hashes. The golden-release mechanism extends the existing run
-  registry under `runs/releases/`; its first frozen release remains a Phase 0
-  deliverable, not a completed fact.
+  registry under `runs/releases/`; the active immutable reference is
+  `golden-2025-09-16-7day-v1`.
 - Trajectory parsing includes SUMO reroutes in `routeDistribution`; unfinished
   vehicles and displayed-share integrity are explicit rather than silently
   omitted.
@@ -3161,7 +3422,9 @@ runs the frozen `PHASE_NAMES` sequence:
 | `sumo_execution` | `run_seed_job` → `run_sumo` | one SUMO **subprocess per seed** (`--seed <seed>`, `--mesosim true`, private `work_dir`) |
 | `aggregation_validation` | `parse_edgedata`, `aggregate_flows`, `closure_integrity_status` | flows, Monte-Carlo confidence, integrity/health gates |
 | `trajectory_publication` | `publish_trajectories_from_vehroute` | trajectory product |
-| `scenario_publication` | `atomic_write_json` | `web/data/scenarios/<name>.json` + `index.json` manifest entry |
+| `disruption_analysis` | `closure_disruption_across_variants` | grouped/sparse deterministic closure cost, with the former per-OD path retained as an oracle |
+| `payload_construction` | `build_scenario_payload` | deterministic in-memory payload construction |
+| `artifact_publication` | `publish_scenario_artifacts` | atomic scenario JSON and `index.json` manifest publication |
 | `cleanup` | `cleanup_scenario_workspace` | scratch removal, only after successful publication |
 
 Artifact lifecycle. **Staged/mutable** — everything under
@@ -3622,45 +3885,33 @@ The original four (kept for the record — what each would have unlocked):
 
 ## Recommended Implementation Order
 
+The original July order is complete through the registry, final sensor-output
+gate, semantic demand identity, purpose/structure repair, immutable reference
+release, multi-day product, job history and synthetic SignalPlan contracts.
+It is preserved in Git history rather than repeated here as unfinished work.
+
+The current order is:
+
 ```text
-0. Enforce SensorRegistry active/quality/snap gate            (size M)  — bootstrap-review the six current snaps;
-                                                                          record resolved-snap and registry hashes
-1. Final normal SUMO sensor-output fit + publish gate         (size M–L) — input PFE GEH is not sufficient;
-                                                                          retain raw per-seed and ensemble values
-2. Variant identity/coverage and closure audit repair         (size S)  — semantic q10/q50/q90 IDs, no filename inference
-3. Stale-artifact proof across every publication path         (size S–M) — complete existing DemandBuildSpec migration
-4. Normal demand realism: purpose + structure repairs         (size M–L) — rerun temporal/LOSO validation afterward
-5. Freeze reference release                                   (size S–M) — only after 0–4; freeze the proved state,
-                                                                          not a mid-migration snapshot
-6. Multi-day golden gate, then full UI release                (size M–L) ✓ seven-day release active; exact 3/4/5
-                                                                          ranges pass and day 6 is gated inside week
-7. Closure decision engine, paired feasible evaluation        (size L)  ◐ exhaustive CLI mode exists
-8. SignalPlan audit and explicitly synthetic optimization     (size M–L; city-configured import blocked on data)
-9. Browser study UI/history and regression smoke suite        (size M)
-10. Expand sensor coverage and signal scope only after each gate passes
+1. Run the speed plan's isolated S0 references on current frozen inputs
+2. Benchmark routing S1A and resource-allocation S2 under the active-slot cap
+3. Adopt only arms that pass paired semantic, restart, provenance and RSS gates
+4. Run frozen direction Gate S if that product-value decision is still wanted
+5. Obtain independent raw direction volumes or keep Gate M inconclusive
+6. Add independent spatial counts/travel-time evidence before broader claims
+7. Re-run the applicable frozen gates after any model, source or contract change
 ```
 
-(Sizes: S ≤ half a day, M ≈ a day, L = multi-day.
-◐ = partially done as of 2026-07-16; the markers are status, not a licence
-to skip the item's remaining work or its owning phase's acceptance gate.)
+External monthly-search observation, stale-owner handling, verified completion
+recovery and unowned-cancel suppression are implemented and tested; they are no
+longer an unfinished item in this order.
 
-Phase ownership, so each item inherits the right acceptance gate: item 0 →
-Phases 1-2 (registry artifact and intake rules); item 1 → the sensor-value
-contract section plus Phase 3's output-fit work and the publication gate;
-items 2-3 → Phase 1; items 4 and 6 → Phase 3; item 5 → Phase 0; item 7 →
-Phase 4; item 8 → Phase 5; item 9 → Phase 6; item 10 → Phases 2 and 7.
+Do not reopen completed foundation work merely because an older dated section
+calls it "next". Do not treat unavailable external data as an implementation
+dependency: the product remains bounded and explicit about what cannot be
+validated without it.
 
-The immediate next implementation block is therefore: **make input identity
-real** (approved SensorRegistry snap plus variant identity), then **prove
-final normal SUMO sensor output**, then **complete stale-artifact proof**.
-Only then repair purpose/structure allocation and freeze the resulting normal
-release.  This order prevents a golden release from preserving an unreviewed
-sensor mapping, an incomplete uncertainty set or a PFE-only notion of sensor
-fit.  Send the external-data request package (see above) at the START of this
-block — the city's response time, not implementation time, is the critical
-path for the city-configured signal rung.
-
-### Current verified status and concrete entry points
+### Historical verified status and concrete entry points — 2026-07-16
 
 Verified end to end on the dev machine 2026-07-16 evening, after the
 2027-10-20 forecast demand was REBUILT with the new code and the baseline
@@ -4044,7 +4295,7 @@ route-safe binding, equivalence evidence and cold fallback are unchanged. Full
 population under that narrow plan was not started and the plan is no longer
 eligible for execution.
 
-### RUNNING: audited full-day 2027 population (started 2026-08-04)
+### Historical, superseded run: audited full-day 2027 population (started 2026-08-04)
 
 Plan `de071336…f203db` is the active plan; it supersedes `9cc823d3…45283b` and
 every earlier root after the candidate/demand release was extended to all 7,125
@@ -4243,10 +4494,11 @@ but saved nothing. Every stop proof was valid. This is negative evidence, not
 permission to raise the timeout or weaken a gate. Policy v3, held-out, micro,
 unrestricted UI and global-best remain closed.
 
-## Current supersession note — 2026-08-09
+## Historical supersession note — 2026-08-09
 
-The earlier statement that a full population was running describes a prior
-warming identity and is historical evidence, not current execution state.
+The earlier statement that a full population was running described a prior
+warming identity and was historical evidence, not current execution state even
+at this later checkpoint.
 Production source changes created plan `9b640a0c…`; its preflight passes, but
 only two deliberately bounded q10 pilot units have been populated. The current
 status is 2 succeeded, 0 failed and 104,683 pending. Full population remains a

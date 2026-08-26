@@ -393,7 +393,10 @@ def preflight(
     # identity is keyed on once the constant spec fields are factored out.
     unique_units: set[tuple[date, int, int]] = set()
 
-    for day_count in range(1, spec.max_consecutive_start_days + 1):
+    for day_count in range(
+        spec.min_consecutive_start_days,
+        spec.max_consecutive_start_days + 1,
+    ):
         duration = _daily_duration(spec, day_count)
         if duration is None:
             continue

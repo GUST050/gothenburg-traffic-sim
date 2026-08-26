@@ -300,6 +300,10 @@ def test_larger_cached_replication_set_can_serve_smaller_request(tmp_path):
 
     assert second_child.calls == []
     assert len(evidence.observations) == 3
+    timing = second.timing_snapshot()
+    assert timing["cache_hits"] == 2
+    assert timing["units_simulated"] == 0
+    assert timing["worker_seconds"] == 0.0
 
 
 def test_non_object_cache_is_a_safe_miss_and_is_repaired(tmp_path):
@@ -332,6 +336,12 @@ def test_non_object_cache_is_a_safe_miss_and_is_repaired(tmp_path):
     )
     assert len(child.calls) == 1
     assert damaged.read_text(encoding="utf-8").lstrip().startswith("{")
+    timing = resumed.timing_snapshot()
+    assert timing["cache_corrupt"] == 1
+    assert timing["cache_hits"] == 1
+    assert timing["cache_misses"] == 1
+    assert timing["cache_hits"] + timing["cache_misses"] == 2
+    assert timing["units_simulated"] == 1
 
 
 def test_isolated_runner_batches_units_and_keeps_exact_evidence():
@@ -587,6 +597,7 @@ def test_independent_cli_rejects_before_network_or_search_workspace(monkeypatch)
         daily_unit_total_cap=100_000,
         seed_workers=1,
         daily_workers=1,
+        max_active_sumo_slots=8,
         warm_execution=False,
         workspace_wait_s=0,
         screening_mode="independent-exhaustive",

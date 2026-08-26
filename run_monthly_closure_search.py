@@ -7,6 +7,8 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -47,6 +49,115 @@ from traffic_sim.simulation.seed_worker_budget import (
     approved_seed_workers,
 )
 from traffic_sim.simulation.search_workspace import DEFAULT_ROOT
+
+
+# `-i` alone holds only the IDLE-sleep assertion. A multi-hour search also
+# has to survive the disk idle-sleep path (`-m`) and the plain system-sleep
+# path (`-s`, honoured only on AC power), so assert all three rather than
+# discovering at hour six that one of them was never held. `-d` is
+# deliberately NOT asserted: keeping the panel lit burns power and buys no
+# compute, and the display sleeping has never paused a unit.
+KEEP_AWAKE_FLAGS = ("-i", "-m", "-s")
+
+
+def _on_ac_power() -> bool | None:
+    """Return True on AC, False on battery, None when it cannot be read.
+
+    This is not decoration.  `caffeinate -s` is documented as valid ONLY on
+    AC power, so on battery the strongest assertion this process can make is
+    silently weaker than the flags suggest.  A long search deserves to be
+    told that at start rather than to be found asleep.
+    """
+    executable = shutil.which("pmset")
+    if executable is None:
+        return None
+    try:
+        result = subprocess.run(
+            [executable, "-g", "batt"], capture_output=True, text=True,
+            timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    text = result.stdout.lower()
+    if "'ac power'" in text or "drawing from 'ac power'" in text:
+        return True
+    if "'battery power'" in text:
+        return False
+    return None
+
+
+def _start_macos_keep_awake() -> subprocess.Popen[bytes] | None:
+    """Hold idle/disk/system sleep assertions while this monthly CLI is alive.
+
+    HONEST LIMIT, stated here because no flag can remove it: caffeinate
+    asserts against SOFTWARE sleep paths only.  Closing the lid of a Mac
+    laptop triggers clamshell sleep in the power-management layer below any
+    assertion this process can hold, unless the machine is on AC power with
+    an external display attached.  The operator instruction "keep it plugged
+    in and the lid open" is therefore part of the contract, not a
+    superstition, and the warning below says so at the one moment it can
+    still be acted on.
+    """
+    if sys.platform != "darwin":
+        return None
+    executable = shutil.which("caffeinate")
+    if executable is None:
+        print(
+            "warning: caffeinate is unavailable; this long search cannot "
+            "prevent laptop sleep",
+            file=sys.stderr,
+        )
+        return None
+    try:
+        process = subprocess.Popen(
+            [executable, *KEEP_AWAKE_FLAGS, "-w", str(os.getpid())],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        print(
+            f"warning: could not start caffeinate ({exc}); this long search "
+            "cannot prevent laptop sleep",
+            file=sys.stderr,
+        )
+        return None
+    print(
+        f"keep-awake: {executable} {' '.join(KEEP_AWAKE_FLAGS)} "
+        f"-w {os.getpid()}",
+        file=sys.stderr,
+    )
+    on_ac = _on_ac_power()
+    if on_ac is False:
+        print(
+            "warning: this machine is on BATTERY power; caffeinate -s is "
+            "honoured only on AC, so system sleep can still interrupt this "
+            "search. Connect the charger.",
+            file=sys.stderr,
+        )
+    elif on_ac is None:
+        print(
+            "warning: power source could not be read; connect the charger "
+            "before leaving this search unattended",
+            file=sys.stderr,
+        )
+    print(
+        "note: closing the laptop lid suspends the machine below any "
+        "caffeinate assertion. Leave the lid OPEN for the whole run.",
+        file=sys.stderr,
+    )
+    return process
+
+
+def _stop_macos_keep_awake(process: subprocess.Popen[bytes] | None) -> None:
+    if process is None or process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
 
 
 def _simulation_backends():
@@ -837,6 +948,16 @@ def parse_args() -> argparse.Namespace:
             "units. Ignored by continuous searches."
         ),
     )
+    parser.add_argument(
+        "--max-active-sumo-slots",
+        type=int,
+        default=8,
+        help=(
+            "One declared outer/inner SUMO process budget. The product of "
+            "--daily-workers and --seed-workers may not exceed this value "
+            "(default 8; evidence budget, not a speed claim)."
+        ),
+    )
     execution = parser.add_mutually_exclusive_group()
     execution.add_argument(
         "--warm-execution",
@@ -888,6 +1009,26 @@ def main() -> None:
         raise SystemExit("--seed-workers must be at least 1")
     if args.daily_workers < 1:
         raise SystemExit("--daily-workers must be at least 1")
+    if args.warm_execution and args.seed_workers != 1:
+        raise SystemExit(
+            "warm execution currently requires --seed-workers 1 because the "
+            "production TraCI controller owns one active connection; use "
+            "--cold-execution for parallel seed workers")
+    max_active_slots = args.max_active_sumo_slots
+    if max_active_slots < 1:
+        raise SystemExit("--max-active-sumo-slots must be at least 1")
+    if args.daily_workers * args.seed_workers > max_active_slots:
+        raise SystemExit(
+            "daily-workers * seed-workers exceeds the declared "
+            "--max-active-sumo-slots process budget"
+        )
+    if args.seed_workers > 1 and args.daily_workers > 1:
+        raise SystemExit(
+            "parallel seed workers and parallel daily workers cannot yet be "
+            "combined: isolated daily children currently own fresh SUMO "
+            "processes and shared baseline-cache publication has not passed "
+            "the nested-concurrency equivalence gate"
+        )
     if args.daily_unit_budget is not None and args.daily_unit_budget < 1:
         raise SystemExit("--daily-unit-budget must be positive")
     if (
@@ -903,11 +1044,6 @@ def main() -> None:
         )
     if args.daily_unit_total_cap < 1:
         raise SystemExit("--daily-unit-total-cap must be positive")
-    if args.warm_execution and args.seed_workers != 1:
-        raise SystemExit(
-            "warm execution currently requires --seed-workers 1 because the "
-            "production TraCI controller owns one active connection; use "
-            "--cold-execution for parallel seed workers")
     approved = approved_seed_workers()
     if args.seed_workers > approved and os.environ.get(
             "MONTHLY_SEED_WORKER_BENCHMARK") == "1":
@@ -931,11 +1067,6 @@ def main() -> None:
         raise SystemExit(
             f"--daily-workers {args.daily_workers} exceeds the {approved} "
             "approved isolated SUMO worker count"
-        )
-    if args.seed_workers > 1 and args.daily_workers > 1:
-        raise SystemExit(
-            "parallel seed workers and parallel daily workers cannot be "
-            "combined; that would multiply the approved SUMO process ceiling"
         )
     # Read the inputs and SIZE the search before anything expensive exists.
     # The exact preflight is read-only calendar arithmetic: it needs no demand
@@ -982,6 +1113,7 @@ def main() -> None:
         raise SystemExit(
             f"demand workspace busy: {workspace.holder_description()}; "
             "wait for it, stop it, or raise --workspace-wait-s")
+    keep_awake_process = _start_macos_keep_awake()
     try:
         # Only a run that owns the workspace may load or mutate the demand
         # backend. A refused lock therefore stays on the same light import
@@ -1136,9 +1268,14 @@ def main() -> None:
         raise SystemExit(str(exc)) from exc
     finally:
         cleanup = getattr(runner, "cleanup", None)
-        if callable(cleanup):
-            cleanup()
-        workspace.release()
+        try:
+            if callable(cleanup):
+                cleanup()
+        finally:
+            try:
+                _stop_macos_keep_awake(keep_awake_process)
+            finally:
+                workspace.release()
 
     if result.get("status") == "paused":
         print(json.dumps(result, sort_keys=True))

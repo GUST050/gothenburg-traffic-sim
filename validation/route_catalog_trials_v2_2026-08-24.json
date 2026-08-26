@@ -1,0 +1,2115 @@
+{
+ "candidate_n_total": 6000,
+ "execute": true,
+ "fixtures": [
+  {
+   "date": "2027-09-08",
+   "days": 1,
+   "name": "weekday"
+  },
+  {
+   "date": "2027-09-11",
+   "days": 1,
+   "name": "weekend"
+  },
+  {
+   "date": "2027-05-13",
+   "days": 1,
+   "name": "holiday"
+  },
+  {
+   "date": "2027-09-10",
+   "days": 2,
+   "name": "mixed"
+  }
+ ],
+ "kind": "route_catalog_paired_trials",
+ "requested_pairs": 30,
+ "schema_version": 1,
+ "trials": [
+  {
+   "catalog": {
+    "adapter_s": 0.262,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 674398208,
+    "pfe_s": 13.331,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 17.050577
+   },
+   "date": "2027-09-08",
+   "day_class": "weekday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d83354bba06815baa50e",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 673284096,
+    "pfe_s": 27.396,
+    "validation_overall": "warn",
+    "vehicles": 20803,
+    "wall_s": 44.739246
+   },
+   "order": "legacy_first",
+   "trial_id": 1
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.269,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 674398208,
+    "pfe_s": 12.633,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 16.30415
+   },
+   "date": "2027-09-11",
+   "day_class": "weekend",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "c5c7641b757b8b7375b0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 741048320,
+    "pfe_s": 27.012,
+    "validation_overall": "warn",
+    "vehicles": 18923,
+    "wall_s": 44.02674
+   },
+   "order": "catalog_first",
+   "trial_id": 2
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.258,
+    "build_id": "a1f17ae60026e7e85774",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 741048320,
+    "pfe_s": 20.036,
+    "validation_overall": "warn",
+    "vehicles": 22145,
+    "wall_s": 23.828644
+   },
+   "date": "2027-05-13",
+   "day_class": "holiday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d6e597e321eab902d102",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 741048320,
+    "pfe_s": 31.923,
+    "validation_overall": "warn",
+    "vehicles": 22200,
+    "wall_s": 49.246681
+   },
+   "order": "legacy_first",
+   "trial_id": 3
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.634,
+    "build_id": "ab2a4827587d546e893c",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808",
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000,
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 815874048,
+    "pfe_s": 69.678,
+    "validation_overall": "warn",
+    "vehicles": 42200,
+    "wall_s": 75.198143
+   },
+   "date": "2027-09-10",
+   "day_class": "mixed",
+   "days": 2,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "6033e2d3bdf349f8ddf0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 815874048,
+    "pfe_s": 120.564,
+    "validation_overall": "warn",
+    "vehicles": 42172,
+    "wall_s": 148.732959
+   },
+   "order": "catalog_first",
+   "trial_id": 4
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.256,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 815874048,
+    "pfe_s": 26.002,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 29.493399
+   },
+   "date": "2027-09-08",
+   "day_class": "weekday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d83354bba06815baa50e",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 815874048,
+    "pfe_s": 42.021,
+    "validation_overall": "warn",
+    "vehicles": 20803,
+    "wall_s": 60.713452
+   },
+   "order": "legacy_first",
+   "trial_id": 5
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.256,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 815874048,
+    "pfe_s": 22.71,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 26.043869
+   },
+   "date": "2027-09-11",
+   "day_class": "weekend",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "c5c7641b757b8b7375b0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 815874048,
+    "pfe_s": 35.964,
+    "validation_overall": "warn",
+    "vehicles": 18923,
+    "wall_s": 56.025768
+   },
+   "order": "catalog_first",
+   "trial_id": 6
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.252,
+    "build_id": "a1f17ae60026e7e85774",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 815874048,
+    "pfe_s": 22.808,
+    "validation_overall": "warn",
+    "vehicles": 22145,
+    "wall_s": 26.542153
+   },
+   "date": "2027-05-13",
+   "day_class": "holiday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d6e597e321eab902d102",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 815874048,
+    "pfe_s": 38.816,
+    "validation_overall": "warn",
+    "vehicles": 22200,
+    "wall_s": 59.612373
+   },
+   "order": "legacy_first",
+   "trial_id": 7
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.6779999999999999,
+    "build_id": "ab2a4827587d546e893c",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808",
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000,
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 74.855,
+    "validation_overall": "warn",
+    "vehicles": 42200,
+    "wall_s": 80.526146
+   },
+   "date": "2027-09-10",
+   "day_class": "mixed",
+   "days": 2,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "6033e2d3bdf349f8ddf0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 126.118,
+    "validation_overall": "warn",
+    "vehicles": 42172,
+    "wall_s": 155.079466
+   },
+   "order": "catalog_first",
+   "trial_id": 8
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.256,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 23.888,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 27.686519
+   },
+   "date": "2027-09-08",
+   "day_class": "weekday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d83354bba06815baa50e",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 39.579,
+    "validation_overall": "warn",
+    "vehicles": 20803,
+    "wall_s": 58.001968
+   },
+   "order": "legacy_first",
+   "trial_id": 9
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.257,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 20.952,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 24.506274
+   },
+   "date": "2027-09-11",
+   "day_class": "weekend",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "c5c7641b757b8b7375b0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 35.599,
+    "validation_overall": "warn",
+    "vehicles": 18923,
+    "wall_s": 54.465324
+   },
+   "order": "catalog_first",
+   "trial_id": 10
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.253,
+    "build_id": "a1f17ae60026e7e85774",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 21.054,
+    "validation_overall": "warn",
+    "vehicles": 22145,
+    "wall_s": 24.923224
+   },
+   "date": "2027-05-13",
+   "day_class": "holiday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d6e597e321eab902d102",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 37.783,
+    "validation_overall": "warn",
+    "vehicles": 22200,
+    "wall_s": 56.803848
+   },
+   "order": "legacy_first",
+   "trial_id": 11
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.683,
+    "build_id": "ab2a4827587d546e893c",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808",
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000,
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 73.691,
+    "validation_overall": "warn",
+    "vehicles": 42200,
+    "wall_s": 79.286482
+   },
+   "date": "2027-09-10",
+   "day_class": "mixed",
+   "days": 2,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "6033e2d3bdf349f8ddf0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 119.096,
+    "validation_overall": "warn",
+    "vehicles": 42172,
+    "wall_s": 150.383015
+   },
+   "order": "catalog_first",
+   "trial_id": 12
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.293,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 23.485,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 27.443495
+   },
+   "date": "2027-09-08",
+   "day_class": "weekday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d83354bba06815baa50e",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 38.353,
+    "validation_overall": "warn",
+    "vehicles": 20803,
+    "wall_s": 57.115318
+   },
+   "order": "legacy_first",
+   "trial_id": 13
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.249,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 19.268,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 23.024831
+   },
+   "date": "2027-09-11",
+   "day_class": "weekend",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "c5c7641b757b8b7375b0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 39.254,
+    "validation_overall": "warn",
+    "vehicles": 18923,
+    "wall_s": 62.175305
+   },
+   "order": "catalog_first",
+   "trial_id": 14
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.257,
+    "build_id": "a1f17ae60026e7e85774",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 21.772,
+    "validation_overall": "warn",
+    "vehicles": 22145,
+    "wall_s": 25.986972
+   },
+   "date": "2027-05-13",
+   "day_class": "holiday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d6e597e321eab902d102",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 41.154,
+    "validation_overall": "warn",
+    "vehicles": 22200,
+    "wall_s": 61.681025
+   },
+   "order": "legacy_first",
+   "trial_id": 15
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.665,
+    "build_id": "ab2a4827587d546e893c",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808",
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000,
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 67.049,
+    "validation_overall": "warn",
+    "vehicles": 42200,
+    "wall_s": 72.79622
+   },
+   "date": "2027-09-10",
+   "day_class": "mixed",
+   "days": 2,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "6033e2d3bdf349f8ddf0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 100.737,
+    "validation_overall": "warn",
+    "vehicles": 42172,
+    "wall_s": 127.066368
+   },
+   "order": "catalog_first",
+   "trial_id": 16
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.254,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 16.526,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 20.263855
+   },
+   "date": "2027-09-08",
+   "day_class": "weekday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d83354bba06815baa50e",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 28.843,
+    "validation_overall": "warn",
+    "vehicles": 20803,
+    "wall_s": 45.867516
+   },
+   "order": "legacy_first",
+   "trial_id": 17
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.25,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 15.834,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 19.421498
+   },
+   "date": "2027-09-11",
+   "day_class": "weekend",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "c5c7641b757b8b7375b0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 27.747,
+    "validation_overall": "warn",
+    "vehicles": 18923,
+    "wall_s": 44.347238
+   },
+   "order": "catalog_first",
+   "trial_id": 18
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.255,
+    "build_id": "a1f17ae60026e7e85774",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 16.67,
+    "validation_overall": "warn",
+    "vehicles": 22145,
+    "wall_s": 20.40706
+   },
+   "date": "2027-05-13",
+   "day_class": "holiday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d6e597e321eab902d102",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 29.299,
+    "validation_overall": "warn",
+    "vehicles": 22200,
+    "wall_s": 46.406335
+   },
+   "order": "legacy_first",
+   "trial_id": 19
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.63,
+    "build_id": "ab2a4827587d546e893c",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808",
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000,
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 57.914,
+    "validation_overall": "warn",
+    "vehicles": 42200,
+    "wall_s": 63.430892
+   },
+   "date": "2027-09-10",
+   "day_class": "mixed",
+   "days": 2,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "6033e2d3bdf349f8ddf0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 98.319,
+    "validation_overall": "warn",
+    "vehicles": 42172,
+    "wall_s": 123.676153
+   },
+   "order": "catalog_first",
+   "trial_id": 20
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.26,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 22.434,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 25.852512
+   },
+   "date": "2027-09-08",
+   "day_class": "weekday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d83354bba06815baa50e",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 28.831,
+    "validation_overall": "warn",
+    "vehicles": 20803,
+    "wall_s": 45.746136
+   },
+   "order": "legacy_first",
+   "trial_id": 21
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.245,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 17.848,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 21.160025
+   },
+   "date": "2027-09-11",
+   "day_class": "weekend",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "c5c7641b757b8b7375b0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 27.633,
+    "validation_overall": "warn",
+    "vehicles": 18923,
+    "wall_s": 44.119869
+   },
+   "order": "catalog_first",
+   "trial_id": 22
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.253,
+    "build_id": "a1f17ae60026e7e85774",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 17.049,
+    "validation_overall": "warn",
+    "vehicles": 22145,
+    "wall_s": 20.719484
+   },
+   "date": "2027-05-13",
+   "day_class": "holiday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d6e597e321eab902d102",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 820346880,
+    "pfe_s": 29.566,
+    "validation_overall": "warn",
+    "vehicles": 22200,
+    "wall_s": 45.957295
+   },
+   "order": "legacy_first",
+   "trial_id": 23
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.627,
+    "build_id": "ab2a4827587d546e893c",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808",
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000,
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 55.909,
+    "validation_overall": "warn",
+    "vehicles": 42200,
+    "wall_s": 61.378532
+   },
+   "date": "2027-09-10",
+   "day_class": "mixed",
+   "days": 2,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "6033e2d3bdf349f8ddf0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 94.526,
+    "validation_overall": "warn",
+    "vehicles": 42172,
+    "wall_s": 119.648535
+   },
+   "order": "catalog_first",
+   "trial_id": 24
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.246,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 16.338,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 19.722634
+   },
+   "date": "2027-09-08",
+   "day_class": "weekday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d83354bba06815baa50e",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 29.647,
+    "validation_overall": "warn",
+    "vehicles": 20803,
+    "wall_s": 46.271672
+   },
+   "order": "legacy_first",
+   "trial_id": 25
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.252,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 14.704,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 17.880952
+   },
+   "date": "2027-09-11",
+   "day_class": "weekend",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "c5c7641b757b8b7375b0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 26.501,
+    "validation_overall": "warn",
+    "vehicles": 18923,
+    "wall_s": 42.687739
+   },
+   "order": "catalog_first",
+   "trial_id": 26
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.253,
+    "build_id": "a1f17ae60026e7e85774",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 15.258,
+    "validation_overall": "warn",
+    "vehicles": 22145,
+    "wall_s": 19.041721
+   },
+   "date": "2027-05-13",
+   "day_class": "holiday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d6e597e321eab902d102",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 29.443,
+    "validation_overall": "warn",
+    "vehicles": 22200,
+    "wall_s": 45.910954
+   },
+   "order": "legacy_first",
+   "trial_id": 27
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.622,
+    "build_id": "ab2a4827587d546e893c",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808",
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000,
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 55.22,
+    "validation_overall": "warn",
+    "vehicles": 42200,
+    "wall_s": 60.684875
+   },
+   "date": "2027-09-10",
+   "day_class": "mixed",
+   "days": 2,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "6033e2d3bdf349f8ddf0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 95.316,
+    "validation_overall": "warn",
+    "vehicles": 42172,
+    "wall_s": 120.472155
+   },
+   "order": "catalog_first",
+   "trial_id": 28
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.252,
+    "build_id": "b40f227c9efdbc96482b",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekday": "13020f80f1be36df59e27144aad8d808"
+    },
+    "catalog_selected_n_total": {
+     "weekday": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 14.945,
+    "validation_overall": "warn",
+    "vehicles": 20818,
+    "wall_s": 18.367116
+   },
+   "date": "2027-09-08",
+   "day_class": "weekday",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "d83354bba06815baa50e",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 28.545,
+    "validation_overall": "warn",
+    "vehicles": 20803,
+    "wall_s": 45.162307
+   },
+   "order": "legacy_first",
+   "trial_id": 29
+  },
+  {
+   "catalog": {
+    "adapter_s": 0.252,
+    "build_id": "f964fb214cd9828d9fe7",
+    "candidate_n_total": 6000,
+    "candidate_source": "catalog",
+    "catalog_keys": {
+     "weekend": "b0426c8b73dd1201a0ea386bada9c45f"
+    },
+    "catalog_selected_n_total": {
+     "weekend": 6000
+    },
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 14.442,
+    "validation_overall": "warn",
+    "vehicles": 19067,
+    "wall_s": 18.065517
+   },
+   "date": "2027-09-11",
+   "day_class": "weekend",
+   "days": 1,
+   "legacy": {
+    "adapter_s": 0.0,
+    "build_id": "c5c7641b757b8b7375b0",
+    "candidate_n_total": 6000,
+    "candidate_source": "legacy",
+    "catalog_keys": {},
+    "catalog_selected_n_total": {},
+    "hard_gates": {
+     "candidate_structure": true,
+     "confidence_health": true,
+     "day_library_restore": true,
+     "deterministic_repeat": true,
+     "exact_sensor_targets": true,
+     "malformed_catalog_rejected": true,
+     "population_contract": true,
+     "purpose_route_compatibility": true,
+     "route_agent_provenance": true,
+     "sensor_anchor_contract": true,
+     "singleflight_recovery": true,
+     "sumo_runtime_no_regression": true,
+     "warm_state_identity": true,
+     "zero_integer_residual": true
+    },
+    "peak_rss_bytes": 852393984,
+    "pfe_s": 29.366,
+    "validation_overall": "warn",
+    "vehicles": 18923,
+    "wall_s": 46.803064
+   },
+   "order": "catalog_first",
+   "trial_id": 30
+  }
+ ]
+}
