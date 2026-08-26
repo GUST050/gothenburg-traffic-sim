@@ -40,3 +40,6 @@ web/data/scenarios_staging/
 validation/scenario_phase_profile_report_*.json
 validation/*_outcome/
 validation/online_latency_baseline_v1/
+# Local AI-flow execution state
+/.ai-flow/runs/
+/.ai-flow/active.lock

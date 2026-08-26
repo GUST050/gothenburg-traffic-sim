@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {"type": "string", "enum": ["APPROVED", "CHANGES_REQUIRED", "BLOCKED"]},
+    "summary": {"type": "string"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+          "file": {"type": "string"},
+          "evidence": {"type": "string"},
+          "required_change": {"type": "string"}
+        },
+        "required": ["severity", "file", "evidence", "required_change"],
+        "additionalProperties": false
+      }
+    },
+    "blocked_reason": {"type": "string"}
+  },
+  "required": ["status", "summary", "findings", "blocked_reason"],
+  "additionalProperties": false
+}

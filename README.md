@@ -13,6 +13,12 @@ Sol/Luna routing or mandatory state machine. Start with `AGENTS.md`, then use
 the marked current blocks in `TASKS.md` and `AGENT_NOTES.md` for context.
 Historical role labels remain only for traceability.
 
+For a bounded hands-off implementation loop, run `./ai-flow setup` once and
+then `./ai-flow "your task"`. It routes planning and review to Codex xhigh,
+implementation and repairs to Claude Opus high, runs configured checks, and
+repeats review until approved or a real stop condition is reached. See
+[`.ai-flow/README.md`](.ai-flow/README.md) for safety rules and configuration.
+
 ## What it does
 
 1. **Animate** historical traffic on a real map of Gothenburg (done)

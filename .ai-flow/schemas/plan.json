@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "summary": {"type": "string"},
+    "implementation_steps": {"type": "array", "items": {"type": "string"}},
+    "likely_files": {"type": "array", "items": {"type": "string"}},
+    "acceptance_criteria": {"type": "array", "items": {"type": "string"}},
+    "suggested_checks": {"type": "array", "items": {"type": "string"}},
+    "risks": {"type": "array", "items": {"type": "string"}},
+    "blocked_reason": {"type": "string"}
+  },
+  "required": ["summary", "implementation_steps", "likely_files", "acceptance_criteria", "suggested_checks", "risks", "blocked_reason"],
+  "additionalProperties": false
+}
