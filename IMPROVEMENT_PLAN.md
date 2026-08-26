@@ -48,15 +48,35 @@ model-independent protocol in `AGENTS.md`.
 - Monthly search is resumable and defaults to bounded-exhaustive execution
   where an adopted release gate does not authorize proxy claims. Cost-first
   policy v3 and unrestricted/global-best claims remain closed after the frozen
-  equivalence benchmark failed.
+  equivalence benchmark failed. Independent-day UI execution now declares the
+  recorded 8-daily × 1-seed worker width inside an eight-SUMO slot ceiling,
+  accumulates awake active wall time across resumes and holds a macOS
+  keep-awake assertion while it owns the workspace. The closure contract also
+  accepts a minimum workday count; min=max requests an exact length while the
+  omitted min=1 default preserves legacy identities. On the frozen stopped
+  input, exact five-day intent sizes to 780 periods/1,040 units instead of
+  1,776/2,224. No replacement throughput campaign has been run, so this does
+  not establish a 2.7x or >=2.0x result.
+- The next exact-five-day retry failed after roughly 95 minutes while preparing
+  the 2027-09-29..2027-10-01 demand window. The 2027-10-01 q50 candidate matrix
+  had hundreds of routes through every sensor but no route exclusive to edge
+  `26842525_26355153_0`; independent q11/q16/q17 targets were consequently
+  integer-infeasible. Candidate generation now guarantees one legal,
+  endpoint-grounded single-sensor incidence column per measured edge after all
+  route filters, or fails before PFE. The frozen failed pool needed exactly one
+  new support-only shape and then published all three quarters exactly. The
+  search remains stopped in error state; post-fix end-to-end time and monthly
+  throughput are still unmeasured.
 - Interactive baseline and closure runs now use three independent seed workers
   through `serve.py` (commit `46e7048`). The adoption check measured baseline
   11.0 -> 5.9 s and closure 21.6 -> 13.9 s with byte-identical scenario,
   trajectory and index output apart from `generated_at`. This current wiring
   supersedes the 2026-07-23 historical decision below that left the default
   serial. The frozen campaign later measured 10.496 s p95; on 2026-08-24 the
-  user accepted the current interactive speed and retired the remaining 0.496 s
-  optimization requirement.
+  user accepted the current interactive speed. On 2026-08-25 the user reopened
+  the faster-closure goal. The active 2027-11-11 fixture then measured a fresh
+  10.765 s p95 baseline and a byte-exact single-write JSON candidate at 10.359 s
+  p95; the <=10 s target remains open by 0.359 s.
 - The externally launched monthly search `ui-monthly-euc9qp` was explicitly
   stopped on 2026-08-21 after 476/1,776 schedules. Its workspace and completed
   evidence remain intact and resumable; the manifest progress pointer records
@@ -197,9 +217,12 @@ model-independent protocol in `AGENTS.md`.
    adopted active release now has real measurements: exact structured repeats
    pass at 0.329 s p95 over 10/10 verified hits, while ten first-new closures
    give 10.496 s p95 with identical evidence and clean health. The user accepted
-   the current interactive speed on 2026-08-24; do not spend more work on the
-   former 0.496 s target miss. Keep the generic Python-worker pool inactive;
-   remaining performance work belongs to monthly throughput or scale evidence.
+   that speed on 2026-08-24 and reopened the goal on 2026-08-25. On the current
+   active fixture, single-write atomic JSON publication reduced p50
+   10.654→10.212 s and p95 10.765→10.359 s with identical scenario/trajectory
+   digests and clean health. Keep the generic Python-worker pool inactive;
+   remaining performance work includes the last 0.359 s to the first-new p95
+   target, monthly throughput and scale evidence.
    Revisit the pool only with the schema-v2 multi-trial harness; do not infer a
    decision from either historical single draw.
    Preserve the full-edgeData rollback and the 50-station calibrated

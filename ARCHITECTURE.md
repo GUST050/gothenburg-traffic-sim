@@ -279,9 +279,12 @@ it opens and hashes the named qualification and build reports, follows and
 hashes their trials and suite-evidence links, cross-checks exact catalog keys
 and selected sizes through the chain, and verifies the immutable entries.
 Missing, stale, legacy-schema, corrupt, path-escaping or unbound records fail
-safely to legacy; a source/input
-mismatch discovered after argument parsing stops before an unqualified catalog
-is built. `tools/build_route_catalog.py` owns isolated materialization and the bounded
+safely to legacy. A source/input mismatch discovered after argument parsing
+also falls back to the qualified legacy candidate builder when catalog use was
+implicit; `demand_meta.json` records the catalog-to-legacy reason and selected
+pool. An explicit `--candidate-source catalog` remains strict and may build
+only an isolated, unadopted catalog. `tools/build_route_catalog.py` owns
+isolated materialization and the bounded
 sensor-support sizing ladder; `tools/verify_route_catalog_invariance.py` owns
 the two-date gate; `tools/qualify_route_catalog.py` applies the frozen 30-pair
 performance contract, including equal candidate requests in both arms. Only
@@ -516,6 +519,22 @@ any non-zero residual. GEH remains a secondary conventional diagnostic and
 cannot make a non-exact build publishable. SUMO's `loaded`/`inserted` counters
 are a separate runtime integrity check: they prove that the simulator accepted
 the already calibrated route file, not that the simulation added demand.
+
+**Grounded sensor-incidence basis (2026-08-26).** Candidate onboarding now
+checks the final post-filter route matrix, not only raw per-sensor route
+counts. Every measured edge must have at least one route whose measured-edge
+incidence is exactly that edge. Missing columns are supplied by the minimum
+legal SUMO-connection route from an existing anonymous-home endpoint pool to
+an existing activity/POI endpoint pool, with all other measured edges removed
+from the routing graph. The route must be simple and remain within the normal
+global stretch limit. It is marked `support_only` so it cannot change purpose
+or behavioral quota targets; it can only carry a real measured margin. If no
+such grounded route exists, candidate generation fails before the 96-quarter
+PFE solve and names the unsupported edges. This non-negative identity basis is
+sufficient to represent every rounded non-negative sensor target vector and
+prevents a late integer-projection failure caused solely by candidate
+coupling. The older every-unmeasured-edge support mechanism described above is
+historical and disabled: no unmeasured-background vehicles are reintroduced.
 
 **Exact simulated-passage diagnostic (2026-08-23).** A baseline scenario now
 also retains raw 15-minute `edgeData` counts for every directed sensor edge,
@@ -1261,7 +1280,12 @@ It reproduces the production calendar semantics rather than approximating them:
 15-minute alignment, the configured timezone and DST policy, allowed weekdays,
 blackout dates, exact equal daily shifts, up to 90 workdays, rolling periods
 that may cross weeks, months and years, and one identical start/end clock time
-on every selected workday.  Counting is a run-length identity — a maximal run
+on every selected workday. `ClosureSearchSpec.min_consecutive_start_days`
+defaults to one and is omitted from the content payload at that default, so
+legacy search identities remain stable. A non-default minimum restricts both
+the generator and exact preflight; setting minimum equal to maximum requests an
+exact workday count instead of paying to evaluate shorter periods. Counting is
+a run-length identity — a maximal run
 of `L` usable dates contains `max(0, L - n + 1)` windows of length `n` — which
 is why it needs no objects.  `equal_daily_rounded_v1` counts on the
 calendar-date axis and `exact_equal_daily_v1` on the eligible-date axis,
@@ -1979,6 +2003,20 @@ latest checkpoint; after the final page, the resulting screening payload is
 byte-identical to an uninterrupted enumeration. The web API exposes the
 versioned resource policy and a `paused` state, and the browser restores the
 exact form and directed edges after reload.
+
+Resource-policy v2 also declares execution width rather than inheriting CLI
+defaults: independent-day jobs started by the web server pass eight daily
+workers, one seed worker and an eight-process active-SUMO ceiling. The CLI
+still validates that width against the recorded isolated-worker resource gate;
+the policy is an admitted resource setting, not a linear speed claim.
+
+Every search workspace accumulates `active_elapsed_s` across resumed process
+segments with an awake monotonic clock (`CLOCK_UPTIME_RAW` on macOS), while UTC
+creation/finish timestamps retain ordinary wall-clock provenance. Throughput
+evidence must use the active value: wall elapsed may include laptop suspension.
+While the monthly CLI owns the shared simulation workspace on macOS it starts
+`caffeinate -i -w <pid>` and releases that assertion during cleanup; failure to
+start it is visible on stderr rather than silently pretending sleep prevention.
 
 The named six-month 360-hour case contains 11,813 parents and 23,349 unique
 daily units. It is therefore admitted by the current server policy instead of

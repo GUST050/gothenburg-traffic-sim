@@ -31,6 +31,12 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path
 
+from traffic_sim.confidence.trip_length_gate import (
+    MAXIMUM_TRIP_LENGTH_L1,
+    TRIP_LENGTH_GATE_RATIONALE,
+    effective_maximum_l1,
+)
+
 from traffic_sim.core.fingerprint import sha256_file
 from traffic_sim.simulation.sensor_fit import (assess_exact_output_fit,
                                                assess_output_fit)
@@ -94,27 +100,29 @@ def _structure_section(meta: dict | None) -> dict:
     onward = cs.get("onward_after_last_sensor", {})
     tl = cs.get("trip_length_fit", {})
     l1_distance = tl.get("l1_distance")
-    maximum_l1 = tl.get("maximum_l1_distance")
-    l1_gate_defined = (
-        isinstance(maximum_l1, (int, float))
-        and not isinstance(maximum_l1, bool)
-        and math.isfinite(maximum_l1)
-        and maximum_l1 >= 0
-    )
-    l1_gate_passed = (
-        l1_gate_defined
-        and isinstance(l1_distance, (int, float))
+    # The threshold is frozen in source and owned by ONE module, so a build
+    # cannot travel with the limit that judges it.  A build-declared value is
+    # honoured only when stricter — see trip_length_gate for why, and for how
+    # the 0.20 limit is derived from total-variation distance.
+    maximum_l1 = effective_maximum_l1(tl.get("maximum_l1_distance"))
+    l1_gate_defined = True
+    # A perfect fit is L1 == 0.0, so "is it a usable number?" must be asked
+    # separately from truthiness — `l1_distance or nan` would report the one
+    # flawless build as missing.
+    l1_is_measured = (
+        isinstance(l1_distance, (int, float))
         and not isinstance(l1_distance, bool)
         and math.isfinite(l1_distance)
-        and l1_distance <= maximum_l1
     )
+    l1_gate_passed = l1_is_measured and l1_distance <= maximum_l1
     reasons = []
-    if not l1_gate_defined:
+    if not l1_is_measured:
         reasons.append(
-            "trip-length L1 publiceras men saknar fryst acceptansgräns")
+            "trip-length L1 saknas eller är inte ett ändligt tal")
     elif not l1_gate_passed:
         reasons.append(
-            f"trip-length L1 {l1_distance} överstiger gränsen {maximum_l1}")
+            f"trip-length L1 {l1_distance} överstiger den frysta gränsen "
+            f"{maximum_l1} ({TRIP_LENGTH_GATE_RATIONALE})")
     if flags:
         reasons.extend(str(flag) for flag in flags)
     return {
@@ -129,9 +137,12 @@ def _structure_section(meta: dict | None) -> dict:
         "trip_length_l1_gate_passed": l1_gate_passed,
         "onward_after_sensor_median_m": onward.get("median_m"),
         "onward_under_200m_pct": onward.get("pct_under_200m"),
+        "trip_length_l1_gate_source": "frozen_project_limit_v1",
         "gate": "kalibrerad struktur får inte driva >2.5x från poolen; "
-                "trip-length L1 måste dessutom ha och klara en fryst absolut "
-                "gräns mot den deklarerade externa målfördelningen",
+                "trip-length L1 måste dessutom klara den frysta absoluta "
+                f"gränsen {MAXIMUM_TRIP_LENGTH_L1} mot den deklarerade "
+                "externa målfördelningen "
+                f"({TRIP_LENGTH_GATE_RATIONALE})",
         **({"reason": "; ".join(reasons)} if reasons else {}),
     }
 

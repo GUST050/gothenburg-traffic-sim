@@ -274,7 +274,19 @@ def _compute_pfe_counts(suffix: str, quarter: int):
 def _run_pfe_counts_job(job: tuple[str, int]):
     """ProcessPool worker for one quarter's sparse integer repair result."""
     suffix, quarter = job
-    return suffix, quarter, _compute_pfe_counts(suffix, quarter)
+    try:
+        result = _compute_pfe_counts(suffix, quarter)
+    except RuntimeError as exc:
+        variant = {"": "q50", "_v1": "q10", "_v2": "q90"}.get(
+            suffix, suffix or "q50")
+        start_minute = int(quarter) * 15
+        end_minute = start_minute + 15
+        start = f"{start_minute // 60:02d}:{start_minute % 60:02d}"
+        end = f"{end_minute // 60:02d}:{end_minute % 60:02d}"
+        raise RuntimeError(
+            f"PFE integer publication failed for {variant} quarter {quarter} "
+            f"({start}-{end}): {exc}") from exc
+    return suffix, quarter, result
 
 
 def _publish_worker_budget(variant_count: int) -> int:

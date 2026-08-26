@@ -270,10 +270,16 @@ MONTHLY_BOUNDED_EXHAUSTIVE_CAP = 12
 # The first value is a per-invocation page size; the second is the cumulative
 # hard safety ceiling. Both are passed explicitly to the CLI and surfaced by
 # preflight/status so they cannot drift as hidden defaults.
-MONTHLY_RESOURCE_POLICY_VERSION = "monthly_resource_policy_v1"
+MONTHLY_RESOURCE_POLICY_VERSION = "monthly_resource_policy_v2"
 MONTHLY_DAILY_UNIT_BUDGET = 30_000
 MONTHLY_TOTAL_DAILY_UNIT_CAP = 100_000
 MONTHLY_PARENT_SCHEDULE_CAP = 100_000
+# The recorded isolated-worker resource gate approves eight concurrent SUMO
+# processes on this host. Keep the two-dimensional CLI budget explicit: the UI
+# runs one seed per daily unit and up to eight independent daily units.
+MONTHLY_DAILY_WORKERS = 8
+MONTHLY_SEED_WORKERS = 1
+MONTHLY_MAX_ACTIVE_SUMO_SLOTS = 8
 # A monthly search is resumable by design; a timeout here only pauses it
 # (the workspace keeps every completed candidate), so the cap can be
 # generous without risking an unbounded server job.
@@ -549,6 +555,9 @@ def monthly_screening_cli_args(spec: ClosureSearchSpec) -> list[str]:
     if spec.interday_policy == "independent_daily_reset_v1":
         return [
             "--screening-mode", "independent-exhaustive",
+            "--daily-workers", str(MONTHLY_DAILY_WORKERS),
+            "--seed-workers", str(MONTHLY_SEED_WORKERS),
+            "--max-active-sumo-slots", str(MONTHLY_MAX_ACTIVE_SUMO_SLOTS),
             "--daily-unit-budget", str(MONTHLY_DAILY_UNIT_BUDGET),
             "--daily-unit-total-cap", str(MONTHLY_TOTAL_DAILY_UNIT_CAP),
             "--independent-exhaustive-candidate-cap",
@@ -1370,6 +1379,18 @@ def summarize_signal_optimization(result: dict, closure: bool) -> dict:
     }
 
 
+def _manifest_active_elapsed_s(manifest: dict) -> float | None:
+    value = manifest.get("active_elapsed_s")
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        return None
+    return round(float(value), 3)
+
+
 def adopted_monthly_search() -> dict | None:
     """A running monthly search this server did not start, read from disk.
 
@@ -1426,13 +1447,15 @@ def adopted_monthly_search() -> dict | None:
             spec = None
 
         started = manifest.get("created_at")
-        elapsed = None
+        wall_elapsed = None
         if isinstance(started, str):
             try:
-                elapsed = round(time.time() - datetime.fromisoformat(
+                wall_elapsed = round(time.time() - datetime.fromisoformat(
                     started.replace("Z", "+00:00")).timestamp())
             except ValueError:
-                elapsed = None
+                wall_elapsed = None
+        active_elapsed = _manifest_active_elapsed_s(manifest)
+        elapsed = active_elapsed if active_elapsed is not None else wall_elapsed
 
         if manifest.get("status") == "succeeded":
             try:
@@ -1476,6 +1499,8 @@ def adopted_monthly_search() -> dict | None:
                 "search_id": search_id,
                 "progress": progress,
                 "elapsed_s": elapsed if elapsed is not None and elapsed >= 0 else 0,
+                "active_elapsed_s": active_elapsed,
+                "wall_elapsed_s": wall_elapsed,
                 "server_tracked": False,
                 "started_at_iso": started,
                 "finished_at_iso": manifest.get("finished_at"),
@@ -1510,6 +1535,8 @@ def adopted_monthly_search() -> dict | None:
             "search_id": search_id,
             "progress": progress,
             "elapsed_s": elapsed if elapsed is not None and elapsed >= 0 else 0,
+            "active_elapsed_s": active_elapsed,
+            "wall_elapsed_s": wall_elapsed,
             "server_tracked": False,
             "stale": stale,
             "started_at_iso": started,
@@ -2712,6 +2739,9 @@ class Handler(SimpleHTTPRequestHandler):
                 MONTHLY_DAILY_UNIT_BUDGET),
             "maximum_total_daily_units": MONTHLY_TOTAL_DAILY_UNIT_CAP,
             "maximum_parent_schedules": MONTHLY_PARENT_SCHEDULE_CAP,
+            "daily_workers": MONTHLY_DAILY_WORKERS,
+            "seed_workers": MONTHLY_SEED_WORKERS,
+            "maximum_active_sumo_slots": MONTHLY_MAX_ACTIVE_SUMO_SLOTS,
         }
         return self._json(200, payload)
 
@@ -2866,6 +2896,10 @@ class Handler(SimpleHTTPRequestHandler):
                     manifest = json.load(f)
             except (OSError, json.JSONDecodeError):
                 manifest = None
+            active_elapsed = (
+                _manifest_active_elapsed_s(manifest)
+                if isinstance(manifest, dict) else None
+            )
             progress = (
                 manifest.get("progress")
                 if isinstance(manifest, dict) else None
@@ -2885,6 +2919,9 @@ class Handler(SimpleHTTPRequestHandler):
                     closure_search_spec=spec.to_dict(),
                     edges=list(spec.directed_edges),
                     resource_policy_version=MONTHLY_RESOURCE_POLICY_VERSION,
+                    active_elapsed_s=active_elapsed,
+                    elapsed_s=(round(active_elapsed)
+                               if active_elapsed is not None else None),
                 )
                 return
             result_path = (MONTHLY_SEARCH_ROOT / spec.search_id
@@ -2906,7 +2943,13 @@ class Handler(SimpleHTTPRequestHandler):
                 summary["edges"] = list(spec.directed_edges)
             if not summary.get("source"):
                 summary["source"] = spec.source
-            self._set_monthly(status="done", result=summary)
+            self._set_monthly(
+                status="done",
+                result=summary,
+                active_elapsed_s=active_elapsed,
+                elapsed_s=(round(active_elapsed)
+                           if active_elapsed is not None else None),
+            )
         except subprocess.TimeoutExpired:
             self._set_monthly(status="error",
                               error="månadssökningen nådde tidsgränsen och "
@@ -2925,7 +2968,9 @@ class Handler(SimpleHTTPRequestHandler):
         with _monthly_lock:
             state = dict(_monthly_state)
         if state.get("status") in {"running", "cancelling"}:
-            state["elapsed_s"] = round(time.time() - state["started_at"])
+            wall_elapsed = round(time.time() - state["started_at"])
+            state["wall_elapsed_s"] = wall_elapsed
+            state["elapsed_s"] = wall_elapsed
             # The CLI child persists a resumable progress pointer in its
             # workspace manifest (atomic replace) — surface it so any tab,
             # including one opened after the job started, sees which stage
@@ -2941,9 +2986,16 @@ class Handler(SimpleHTTPRequestHandler):
                         manifest = json.load(f)
                 except (OSError, json.JSONDecodeError):
                     manifest = None
-                if isinstance(manifest, dict) and \
-                        isinstance(manifest.get("progress"), dict):
-                    state["progress"] = manifest["progress"]
+                if isinstance(manifest, dict):
+                    if isinstance(manifest.get("progress"), dict):
+                        state["progress"] = manifest["progress"]
+                    active_elapsed = _manifest_active_elapsed_s(manifest)
+                    if active_elapsed is not None:
+                        state["active_elapsed_s"] = active_elapsed
+                        # The primary elapsed clock shown by the UI is active
+                        # search time. wall_elapsed_s remains available as
+                        # provenance but may include suspended-laptop time.
+                        state["elapsed_s"] = round(active_elapsed)
             return self._json(200, state)
         # Fall back to the workspace ONLY when this server knows nothing.
         # A terminal state it produced itself (done/error/cancelled/paused)

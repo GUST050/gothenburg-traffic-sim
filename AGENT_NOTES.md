@@ -11,11 +11,25 @@ which model may continue. See `AGENTS.md`.
   robustness-repaired, matched-size qualified, schema-v3 adopted and soaked.
   Production defaults to the verified catalog with explicit legacy rollback.
   The user successfully rebuilt the active 2027-11-11 forecast day through the
-  browser; the current first-new interactive performance is accepted. Annual
+  browser. On 2026-08-25 the user reopened the faster-closure goal; a byte-exact
+  atomic JSON publication optimization is implemented and qualified, while the
+  <=10 s first-new p95 target remains open by 0.359 s. Annual
   warming remains deliberately inactive after a refreshed preflight and one
   successful bounded q50 unit; 104,684 planned units remain pending. It remains part of the broader
   road-closure and monthly-simulation speed goal. The named monthly search is
-  stopped at 476/1,776 with its workspace preserved as resumable.`
+  stopped at 476/1,776 with its workspace preserved as resumable. The monthly
+  intake/runtime defects reported on 2026-08-25 are repaired: exact workday
+  length, explicit 8×1 worker allocation, awake active-time telemetry and
+  macOS keep-awake are implemented. The first replacement UI attempt exposed a
+  stale implicit catalog identity and paused at demand key 06cc309e4779897c;
+  implicit catalog use now falls back to legacy with recorded provenance, and
+  a real rebuild of that exact three-day key succeeded. The workspace remains
+  resumable; no full replacement S0 campaign was launched. A later retry
+  failed at demand key c796667235591888 on 2027-10-01 because the final
+  candidate matrix lacked a route exclusive to sensor
+  26842525_26355153_0. That structural infeasibility is now repaired at
+  candidate-generation time and verified against the frozen failed pool; no
+  new campaign has been launched after the repair.`
 - Summary: `The canonical speed plan separates exact repeats, first-new
   interactive closures and exhaustive monthly throughput. Implemented slices
   now include the provenance-bound exact cache, result-neutral independent-day
@@ -31,6 +45,17 @@ which model may continue. See `AGENTS.md`.
   versus spawn-pool diagnostics are single draws and do not close the generic
   reusable-Python-worker line; the pool remains inactive pending the new
   counterbalanced multi-trial gate.
+  The catalog fallback repair preserves strict explicit catalog requests while
+  preventing a stale implicit adoption from aborting the whole monthly search.
+  Its exact real-input rebuild produced q50/q10/q90 with 100% integer sensor
+  exactness, zero infeasible intervals and passing candidate provenance; the
+  active 2027-11-11 live demand products were restored byte-for-byte.
+  The new exact-incidence invariant checks the final pool after every ordinary
+  route filter. It adds only a missing legal home-to-POI route grounded in the
+  existing endpoint pools, marks it support-only so it cannot alter purpose
+  quotas, and fails before PFE if no such route exists. This preserves exact
+  whole-day sensor margins without adding unmeasured background traffic. PFE
+  exceptions now include the date, q variant, quarter index and clock range.
   A larger concurrency test exposed the matched-baseline race that the new
   single-flight regression now covers. The product capacity contract now explicitly targets
   50 physical sensors, including any vehicle growth their joint calibration
@@ -62,7 +87,10 @@ which model may continue. See `AGENTS.md`.
   recorded once rather than copied into every trial arm; seven catalog fixtures
   plus explicit legacy rollback passed soak. Seed/variant order, exact
   widened-rung PFE fallback and mixed-pool tour IDs are regression-tested. See
-  docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md.`
+  docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md. For the frozen
+  ui-monthly-euc9qp intent, min=max=5 removes the 2- and 4-day work: exact
+  preflight falls from 1,776 periods/2,224 units to 780 periods/1,040 units.
+  Default min=1 preserves old content keys and resumability.`
 - Current product evidence: `Active forecast demand: 2027-11-11, catalog build
   b927e6de0b6443fd87e2, q50_only, 21,744 calibrated trips selected by PFE. All 672 directed
   sensor-edge × 15-minute integer targets match exactly: 672/672, maximum and
@@ -90,15 +118,23 @@ which model may continue. See `AGENTS.md`.
   forecast 2027-07-15..2027-07-30 on edge 96527131_26842526_0. Its manifest
   records interrupted_by_user at 476/1,776, with completed artifacts and
   scratch preserved for resume. It is not a completed or promoted result. The
-  local server was restarted after catalog adoption and the warm pilot;
-  `/api/ping` returns ok and closure/recalibration are idle.`
+  stale non-responsive port-8000 process was replaced after the JSON
+  optimization; `/api/ping` returns ok and closure/recalibration are idle. New
+  monthly CLI runs hold `/usr/bin/caffeinate -i -w <pid>` while owning the
+  workspace; existing historical wall time remains unsuitable for throughput.
+  The current server reports ui-monthly-12hg8f3 as error (not running), the
+  workspace lock is free, and its preserved manifest still records the failed
+  prepare-backend attempt. A retry is safe but was not started automatically.`
 - Performance evidence: `Current serve.py passes three seed workers: commit
   46e7048 measured baseline 11.0 -> 5.9 s and closure 21.6 -> 13.9 s with
   identical output apart from generated_at. Frozen v6 measured closure p95
   10.4234 s. Persistent external SUMO v2 was equivalent but slower (11.3904 s
   vs 11.0998 s) and is closed. The monthly eight-worker benchmark measured
   1.69x and 2.11 GiB RSS. Cost-order v5 saved 18 calls but failed strict
-  equivalence; annual multi-snapshot state creation measured 20.8x but ordinary
+  equivalence. The web path now selects that admitted eight-worker width
+  explicitly, but no new active-time campaign has measured its end-to-end
+  speed, so 1.69x remains the only supported parallel figure and 2.7x is not a
+  result. Annual multi-snapshot state creation measured 20.8x but ordinary
   SUMO omits the required exact meso tripinfo accumulator. The frozen July 15
   daily-unit cold-execution comparison measured fresh interpreters at 54.445 s and one
   reusable spawn worker at 53.027 s (1.027x), with exact evidence equality;
@@ -130,8 +166,17 @@ which model may continue. See `AGENTS.md`.
   p95 0.329 s and max 0.330 s; every response/status proved a cache hit and
   scenario/trajectory hashes stayed unchanged. On 2026-08-24 the user observed
   roughly 30 s end-to-end in the browser and explicitly accepted the current
-  speed; the former 0.496 s miss against the <=10 s benchmark is retained as
-  historical evidence, not remaining product work.`
+  speed. The user reopened the faster-closure goal on 2026-08-25. A fresh
+  active-demand baseline measured p50 10.654 s and p95 10.765 s; encoding each
+  JSON artifact once before its existing atomic replace reduced the candidate
+  to p50 10.212 s and p95 10.359 s. Scenario and trajectory digests were
+  identical, closure integrity stayed verified-clean, and all 60 seed records
+  across both arms loaded/inserted 21,744 vehicles with zero waiting, running,
+  teleports or collisions. Median trajectory publication fell 1.194→0.737 s
+  and artifact publication 0.132→0.025 s. Evidence:
+  validation/atomic_json_publication_benchmark_2026-08-25.json. A separate
+  loopback API smoke returned 202 immediately and reached done in 11.088 s with
+  verified-clean closure integrity; its temporary server was stopped.`
 - Passage-reconciliation evidence: `Five counterbalanced three-seed baseline
   trials measured current median 1.9908 s versus candidate 2.0536 s (candidate
   3.15% slower); this is not a p95 claim. Learning plus exact verification cost
@@ -181,6 +226,7 @@ which model may continue. See `AGENTS.md`.
   available and falls back to exact grouped Python routing; neither path
   changes the scientific oracle.`
 - Files changed by this task: `serve.py, run_scenario.py,
+  build_candidates.py, build_sumo_demand.py, demand/calibration.py,
   run_monthly_closure_search.py, tools/benchmark_speed.py,
   traffic_sim/simulation/independent_daily.py,
   traffic_sim/confidence/report.py,
@@ -189,6 +235,9 @@ which model may continue. See `AGENTS.md`.
   traffic_sim/simulation/annual_warm_store.py,
   traffic_sim/storage/singleflight.py,
   traffic_sim/simulation/monthly_search.py, web/app.js, related tests,
+  traffic_sim/core/contracts.py, traffic_sim/core/closure_calendar.py,
+  traffic_sim/simulation/closure_preflight.py,
+  traffic_sim/simulation/search_workspace.py, web/index.html,
   tools/benchmark_daily_worker_pool.py,
   tools/benchmark_exact_close_cache.py,
   tools/soak_route_catalog.py,
@@ -223,7 +272,12 @@ which model may continue. See `AGENTS.md`.
   after packing and restore-verifying its isolated artifact. The new demand run and the preceding diagnostic
   historical run remain archived under runs/. Unrelated dirty source changes
   were preserved.`
-- Checks: `Catalog invariance, a fresh catalog build, 30 matched paired trials,
+- Checks: `The grounded-incidence repair passes 207 candidate/integer-identity tests,
+  226 complete build-demand/PFE tests and all 14 monthly-search server tests;
+  the frozen failed 2027-10-01 pool gained exactly one grounded shape and
+  publishes q11/q16/q17 with exact sensor margins. make lint and git diff
+  --check pass.
+  Catalog invariance, a fresh catalog build, 30 matched paired trials,
   schema-v2 qualification/adoption, seven-case soak plus legacy rollback, the
   active-day build/baseline and one q50 warm unit all completed successfully.
   The catalog/demand/PFE/day-library focused suites pass 647 tests with one
@@ -284,7 +338,10 @@ which model may continue. See `AGENTS.md`.
   trajectory digests and clean seed health. The standard-pool plus passage
   unit set passes 17 tests. The real isolated pool passed all 672 raw SUMO
   constraints in each of three arms with clean health; its ten-trial baseline
-  timing is recorded as non-adoption evidence.`
+  timing is recorded as non-adoption evidence. The monthly exact-length,
+  active-time and keep-awake contract set passes 149 tests; its loopback
+  preflight/lifecycle slice passes 26 tests, and JavaScript syntax plus diff
+  checks pass.`
 - Catalog-plan review checks: `In the named local environment
   MPLCONFIGDIR=/tmp/gs-mpl with PYTHONDONTWRITEBYTECODE=1, the focused
   candidate, PFE, DayLibrary, warm-state, provenance, intake, singleflight,
@@ -309,16 +366,21 @@ which model may continue. See `AGENTS.md`.
   plus deletion share one workspace lock. The focused evidence suite passes
   136 tests; the broader demand/PFE/catalog regression passes 351 tests with
   one LibreSSL warning; make lint and git diff --check pass.`
-- Blockers or risks: `S0 telemetry and monthly throughput evidence are still
-  open; do not claim the p95 or 2.0x targets from instrumentation. The frozen
+- Blockers or risks: `Awake active-time telemetry is implemented, but the
+  repaired search has not yet been rerun, so end-to-end completion and elapsed
+  time remain unmeasured; the old 95-minute failed attempt is diagnosis, not
+  post-fix performance evidence. Because generator identity changed, caches
+  must continue to fail closed rather than be force-reused. The remaining S0
+  host telemetry and monthly throughput evidence are still open;
+  do not claim the p95 or 2.0x targets from instrumentation. The frozen
   scenario benchmark campaign preflight refuses because live demand has moved
   from its 2025 historical/q10-q90 fixture to the current 2027 forecast/q50
   build; a new campaign identity is required before SUMO evidence. A real
   calibrated 50-station PFE fixture, vehicle-load ladder and the 6-versus-50
   identical-load SUMO comparison do not yet exist; synthetic 50-sensor exact
   projection and output-validation tests do pass. Minimal edgeData is now the
-  production default with a full-field rollback. A frozen multi-trial p95 for
-  the new code, the remaining monthly resource matrix and calibrated 50-station
+  production default with a full-field rollback. The current 10-trial
+  first-new p95 is 10.359 s; the remaining monthly resource matrix and calibrated 50-station
   vehicle tiers are still missing. Gate S/M remain undecided/inconclusive and
   outside the speed goal. Catalog adoption is complete; its retained v2 trial
   rows predate PFE workload-count telemetry, so they support product latency
@@ -334,10 +396,12 @@ which model may continue. See `AGENTS.md`.
   translates browser network failures into an actionable localhost:8000
   message; this covers stale tabs left on a stopped fallback port. Focused
   validation/UI tests pass 24/24, JavaScript syntax and diff checks pass.`
-- Suggested next action: `Keep the accepted interactive closure path unchanged.
-  If further performance work is requested, use the still-open monthly
-  throughput or 50-sensor evidence rather than reopening the retired 0.496 s
-  optimization. Keep annual warming inactive and rejected pools isolated.`
+- Suggested next action: `Retain the qualified single-write JSON path. Retry
+  the same exact 5–5-day monthly search and measure verified units per
+  awake active hour under the explicit 8×1 policy; do not infer a 2.7x result
+  from worker count. If interactive closure work continues, target the measured
+  SUMO or disruption phase against the 10.359 s p95 reference. Keep annual
+  warming inactive and rejected pools isolated.`
 - Actor notes: `Historical handoff detail follows outside the current markers;
   it is evidence for its date, not current workflow authority.`
 <!-- CURRENT_HANDOFF_END -->

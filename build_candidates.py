@@ -2103,6 +2103,219 @@ def sensor_pool_support_failures(
     }
 
 
+def measured_incidence_basis_failures(
+    routed_path: Path, measured: set[str] | list[str] | tuple[str, ...],
+) -> list[str]:
+    """Return sensors lacking a route that touches exactly that sensor.
+
+    Exact quarter-hour margins are integer constraints.  A candidate pool
+    can contain hundreds of routes per sensor and still be structurally
+    infeasible when every route through one sensor also crosses another one.
+    One non-negative, single-sensor column per measured edge is a sufficient
+    basis for every non-negative integer target vector.  Check that stronger
+    invariant explicitly instead of discovering its absence after PFE has
+    solved hundreds of quarters.
+    """
+    measured_set = {str(edge) for edge in measured}
+    exclusive: set[str] = set()
+    for vehicle in ET.parse(routed_path).getroot().findall("vehicle"):
+        route = vehicle.find("route")
+        route_edges = ((route.get("edges") or "").split()
+                       if route is not None else [])
+        hits = measured_set.intersection(route_edges)
+        if len(hits) == 1:
+            exclusive.update(hits)
+    return sorted(measured_set - exclusive)
+
+
+def _grounded_pool_edges(
+    location_pools: dict[str, list[dict]], *, home: bool,
+) -> list[tuple[str, str]]:
+    """Return deterministic ``(edge, pool-key)`` grounded endpoint choices."""
+    choices: list[tuple[str, str]] = []
+    for pool_key, locations in location_pools.items():
+        if not isinstance(locations, list) or not locations:
+            continue
+        is_home = str(pool_key).startswith("home:")
+        if is_home != home or ":" not in str(pool_key):
+            continue
+        edge_id = str(pool_key).split(":", 1)[1]
+        choices.append((edge_id, str(pool_key)))
+    return sorted(set(choices))
+
+
+def grounded_sensor_basis_route(
+    target: str,
+    measured: set[str] | list[str] | tuple[str, ...],
+    location_pools: dict[str, list[dict]],
+    net_path: Path = NET_PATH,
+    max_stretch: float = DEFAULT_MAX_STRETCH,
+) -> dict | None:
+    """Find one legal, simple and fully grounded route exclusive to ``target``.
+
+    The origin must be an existing anonymous-home pool and the destination an
+    existing activity/POI pool.  Routing uses SUMO's connection table, with
+    every other measured edge removed.  The result therefore accounts for
+    observed traffic at ``target`` without reviving the retired synthetic
+    unmeasured-background population.
+    """
+    measured_set = {str(edge) for edge in measured}
+    if target not in measured_set:
+        raise ValueError(f"basis target is not measured: {target}")
+    edge_ids, costs = load_sumo_routing_data(net_path)
+    full_graph = load_sumo_connection_graph(net_path, edge_ids, costs)
+    if target not in full_graph:
+        return None
+
+    allowed = set(full_graph) - (measured_set - {target})
+    graph = full_graph.subgraph(allowed).copy()
+    if target not in graph:
+        return None
+    home_choices = [choice for choice in _grounded_pool_edges(
+        location_pools, home=True) if choice[0] in graph and choice[0] != target]
+    activity_choices = [choice for choice in _grounded_pool_edges(
+        location_pools, home=False) if choice[0] in graph and choice[0] != target]
+    if not home_choices or not activity_choices:
+        return None
+
+    prefix_cost = nx.single_source_dijkstra_path_length(
+        graph.reverse(copy=False), target, weight="weight")
+    suffix_cost = nx.single_source_dijkstra_path_length(
+        graph, target, weight="weight")
+    origins = [(edge, pool, prefix_cost[edge] + costs[edge])
+               for edge, pool in home_choices if edge in prefix_cost]
+    destinations = [(edge, pool, suffix_cost[edge])
+                    for edge, pool in activity_choices if edge in suffix_cost]
+    if not origins or not destinations:
+        return None
+
+    # Retain a bounded set closest to a representative five-minute trip,
+    # then apply the more expensive simplicity and direct-stretch checks.
+    # This is deterministic and bounded even for a city-wide endpoint pool.
+    import heapq
+    shortlist: list[tuple[float, str, str, str, str]] = []
+    shortlist_limit = 4096
+    for origin, origin_pool, pre_cost in origins:
+        for destination, destination_pool, post_cost in destinations:
+            score = abs((pre_cost + post_cost) - 300.0)
+            item = (-score, origin, destination, origin_pool, destination_pool)
+            if len(shortlist) < shortlist_limit:
+                heapq.heappush(shortlist, item)
+            elif item > shortlist[0]:
+                heapq.heapreplace(shortlist, item)
+
+    ranked = sorted(
+        [(-neg_score, origin, destination, origin_pool, destination_pool)
+         for neg_score, origin, destination, origin_pool, destination_pool
+         in shortlist])
+    for _score, origin, destination, origin_pool, destination_pool in ranked:
+        prefix = nx.shortest_path(graph, origin, target, weight="weight")
+        suffix = nx.shortest_path(graph, target, destination, weight="weight")
+        route_edges = prefix + suffix[1:]
+        if len(route_edges) < 2 or route_visits_a_node_twice(route_edges):
+            continue
+        if measured_set.intersection(route_edges) != {target}:
+            continue
+        try:
+            direct_cost = costs[origin] + nx.shortest_path_length(
+                full_graph, origin, destination, weight="weight")
+        except nx.NetworkXNoPath:
+            continue
+        route_cost = sum(costs[edge] for edge in route_edges)
+        if route_cost > float(max_stretch) * direct_cost + 1e-9:
+            continue
+        purpose = destination_pool.split(":", 1)[0]
+        return {
+            "route_edges": route_edges,
+            "origin_edge": origin,
+            "destination_edge": destination,
+            "origin_location_pool": origin_pool,
+            "destination_location_pool": destination_pool,
+            "purpose": purpose,
+            "route_cost_s": route_cost,
+            "direct_cost_s": direct_cost,
+        }
+    return None
+
+
+def install_grounded_sensor_basis_routes(
+    routed_path: Path,
+    metadata_path: Path,
+    measured: set[str] | list[str] | tuple[str, ...],
+    net_path: Path = NET_PATH,
+    max_stretch: float = DEFAULT_MAX_STRETCH,
+) -> dict[str, object]:
+    """Install missing single-sensor basis columns or fail before PFE runs."""
+    missing = measured_incidence_basis_failures(routed_path, measured)
+    if not missing:
+        return {"missing_before": [], "installed": [], "missing_after": []}
+    document = json.loads(metadata_path.read_text())
+    candidates = document.get("candidates")
+    location_pools = document.get("location_pools")
+    if not isinstance(candidates, dict) or not isinstance(location_pools, dict):
+        raise ValueError("candidate metadata lacks candidates or location_pools")
+
+    tree = ET.parse(routed_path)
+    root = tree.getroot()
+    installed: list[str] = []
+    unresolved: list[str] = []
+    departure_by_purpose = {"arbete": 8 * 3600.0,
+                            "service": 12 * 3600.0,
+                            "fritid": 18 * 3600.0}
+    for edge in missing:
+        basis = grounded_sensor_basis_route(
+            edge, measured, location_pools, net_path, max_stretch)
+        if basis is None:
+            unresolved.append(edge)
+            continue
+        digest = hashlib.sha256(
+            (edge + "|" + " ".join(basis["route_edges"])).encode()).hexdigest()[:16]
+        vehicle_id = f"sensor_basis_{digest}"
+        if vehicle_id in candidates:
+            raise ValueError(f"duplicate grounded basis id: {vehicle_id}")
+        depart = departure_by_purpose.get(str(basis["purpose"]), 12 * 3600.0)
+        vehicle = ET.Element("vehicle", id=vehicle_id, depart=f"{depart:.1f}")
+        ET.SubElement(vehicle, "route", edges=" ".join(basis["route_edges"]))
+        root.append(vehicle)
+        candidates[vehicle_id] = {
+            "purpose": basis["purpose"],
+            "tour_id": f"sensor-basis-{digest}",
+            "leg": "outbound",
+            "origin_edge": basis["origin_edge"],
+            "destination_edge": basis["destination_edge"],
+            "via_edge": edge,
+            "candidate_depart_s": depart,
+            "origin_location_pool": basis["origin_location_pool"],
+            "destination_location_pool": basis["destination_location_pool"],
+            "coverage_edge": edge,
+            "support_only": True,
+            "support_kind": "grounded_sensor_incidence_basis_v1",
+            "synthetic_endpoint": False,
+            "unavoidable_loop": False,
+        }
+        installed.append(vehicle_id)
+
+    if unresolved:
+        raise ValueError(
+            "no legal grounded single-sensor route exists for: "
+            + ", ".join(unresolved))
+    vehicles = list(root.findall("vehicle"))
+    for vehicle in vehicles:
+        root.remove(vehicle)
+    vehicles.sort(key=lambda vehicle: (
+        float(vehicle.get("depart", "0")), str(vehicle.get("id", ""))))
+    root.extend(vehicles)
+    tree.write(routed_path)
+    metadata_path.write_text(json.dumps(document, separators=(",", ":")))
+    missing_after = measured_incidence_basis_failures(routed_path, measured)
+    if missing_after:
+        raise ValueError(
+            "grounded basis installation did not satisfy: "
+            + ", ".join(missing_after))
+    return {"missing_before": missing, "installed": installed,
+            "missing_after": missing_after}
+
+
 def upstream_downstream_gates(
     G, m_edge: str, entries: list[tuple[str, int]], exits: list[tuple[str, int]],
 ) -> tuple[list[str], list[str]]:
@@ -4398,6 +4611,16 @@ def main() -> None:
     else:
         mark_orphaned_tour_legs(out, meta_out, expected_legs=generated_legs)
     prune_candidate_metadata(meta_out, out)
+    try:
+        basis_report = install_grounded_sensor_basis_routes(
+            out, meta_out, measured, NET_PATH,
+            max_stretch=args.max_stretch)
+    except (ET.ParseError, OSError, ValueError, nx.NetworkXException) as exc:
+        sys.exit(f"candidate sensor-incidence basis failed: {exc}")
+    if basis_report["installed"]:
+        print("  installed "
+              f"{len(basis_report['installed'])} grounded single-sensor "
+              "basis candidate(s)")
     final_count = sum(1 for _ in ET.parse(out).getroot().iter("vehicle"))
     if target_candidate_count:
         final_metadata = json.loads(meta_out.read_text()).get("candidates", {})

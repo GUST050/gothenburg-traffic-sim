@@ -1196,6 +1196,7 @@
         const monthlyBandEnd    = document.getElementById('monthly-band-end');
         const monthlyFullday    = document.getElementById('monthly-fullday');
         const monthlyWorkHours  = document.getElementById('monthly-work-hours');
+        const monthlyMinDays    = document.getElementById('monthly-min-days');
         const monthlyMaxDays    = document.getElementById('monthly-max-days');
         const monthlyPeriodMode = document.getElementById('monthly-period-mode');
         const monthlyWeekdays   = document.getElementById('monthly-weekdays');
@@ -2062,6 +2063,8 @@
         function monthlyClosureSearchSpec(edges) {
           const weekdays = [...monthlyWeekdays.querySelectorAll('button.active')]
             .map(btn => Number(btn.dataset.day));
+          const minimumDays = Math.min(90, Math.max(
+            1, Number(monthlyMinDays.value) || 1));
           const body = {
             directed_edges: edges,
             source: monthlySource,
@@ -2101,6 +2104,11 @@
             period_comparison_policy: monthlyPeriodMode.checked
               ? 'rolling_period_v1' : 'none_v1',
           };
+          // Preserve existing default search IDs/workspaces. The contract's
+          // omitted default is one; only a real lower bound changes intent.
+          if (minimumDays > 1) {
+            body.min_consecutive_start_days = minimumDays;
+          }
           const key = monthlyStableKey(JSON.stringify(body));
           return {
             search_id: `ui-monthly-${key}`,
@@ -2118,6 +2126,7 @@
           monthlyDateStart.value = spec.permitted_date_start || '';
           monthlyDateEnd.value = spec.permitted_date_end || '';
           monthlyWorkHours.value = Number(spec.required_work_minutes || 0) / 60;
+          monthlyMinDays.value = spec.min_consecutive_start_days || 1;
           monthlyMaxDays.value = spec.max_consecutive_start_days || 1;
           const band = spec.permitted_daily_band || {};
           const fullDay = band.earliest_start === '00:00' &&
@@ -2196,7 +2205,8 @@
           const counts = progress.total
             ? ` ${progress.completed}/${progress.total}` : '';
           const detail = monthlyProgressDetail(progress.detail);
-          btnMonthlyRun.textContent = `Söker… (${status.elapsed_s || 0}s)`;
+          btnMonthlyRun.textContent =
+            `Söker… (${status.elapsed_s || 0}s aktiv tid)`;
           monthlyProgress.hidden = false;
           monthlyProgress.textContent = status.status === 'cancelling'
             ? 'Avbryter…' : `${label}${counts}${detail}`;
@@ -2506,6 +2516,10 @@
           }
           if (spec.permitted_date_start > spec.permitted_date_end) {
             return 'Första datumet måste vara före det sista.';
+          }
+          const minimumDays = spec.min_consecutive_start_days || 1;
+          if (minimumDays > spec.max_consecutive_start_days) {
+            return 'Minsta antal arbetsdagar får inte vara större än max.';
           }
           const band = spec.permitted_daily_band;
           const start = monthlyBandMinutes(band.earliest_start);

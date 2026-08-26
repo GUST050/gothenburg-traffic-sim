@@ -83,7 +83,7 @@ def test_web_shell_is_desktop_only_and_uses_the_professional_palette():
     # Bumped with the step-4 progress phases and their detail line so a cached
     # bundle cannot hide them; the pin exists to force exactly this deliberate
     # edit.
-    assert 'app.js?v=23' in html
+    assert 'app.js?v=24' in html
 
 
 def _signal_scenario_spec(*, closure=False, simulation_mode="micro",
@@ -1164,6 +1164,20 @@ class TestMonthlySearchPreflight:
         assert body["resource_policy"][
             "maximum_new_daily_units_per_invocation"] == (
                 serve.MONTHLY_DAILY_UNIT_BUDGET)
+        assert body["resource_policy"]["daily_workers"] == 8
+        assert body["resource_policy"]["seed_workers"] == 1
+        assert body["resource_policy"]["maximum_active_sumo_slots"] == 8
+
+    def test_ui_independent_search_passes_the_approved_worker_budget(self):
+        spec = serve.ClosureSearchSpec.from_dict(self._preflight_spec())
+        args = serve.monthly_screening_cli_args(spec)
+
+        daily_workers = int(args[args.index("--daily-workers") + 1])
+        seed_workers = int(args[args.index("--seed-workers") + 1])
+        slots = int(args[args.index("--max-active-sumo-slots") + 1])
+        assert daily_workers == serve.MONTHLY_DAILY_WORKERS == 8
+        assert seed_workers == serve.MONTHLY_SEED_WORKERS == 1
+        assert daily_workers * seed_workers <= slots
 
     def test_the_six_month_case_is_no_longer_rejected_by_the_old_cap(
             self, base_url):
@@ -1314,6 +1328,7 @@ class TestMonthlySearch:
         (directory / "manifest.json").write_text(json.dumps({
             "status": "running",
             "created_at": "2026-08-21T10:00:00Z",
+            "active_elapsed_s": 123.5,
             "progress": {
                 "phase": "pilot", "completed": 12, "total": 20,
                 "updated_at": "2026-08-21T11:00:00Z",
@@ -1327,6 +1342,9 @@ class TestMonthlySearch:
         assert state["stale"] is True
         assert state["server_tracked"] is False
         assert state["search_id"] == sid
+        assert state["elapsed_s"] == 123.5
+        assert state["active_elapsed_s"] == 123.5
+        assert state["wall_elapsed_s"] >= state["elapsed_s"]
         assert "ingen månadsprocess" in state["note"]
 
     def test_succeeded_external_workspace_loads_only_verified_result(

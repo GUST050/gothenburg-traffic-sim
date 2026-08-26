@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "kind": "interactive_closure_atomic_json_publication_benchmark",
+  "measured_at": "2026-08-25",
+  "verdict": "pass_faster_and_semantically_exact_but_p95_still_above_10_seconds",
+  "fixture": {
+    "date": "2027-11-11",
+    "demand_build_key": "67baaa56beffec11",
+    "demand_signature": "b927e6de0b6443fd87e2",
+    "network_build_id": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+    "closure_edge": "26842525_26355153_0",
+    "seeds": [1000, 1001, 1002],
+    "seed_workers": 3,
+    "vehicles_per_seed": 21744
+  },
+  "method": {
+    "fresh_trials_per_arm": 10,
+    "order": "ten baseline trials followed by ten candidate trials",
+    "p95": "nearest rank",
+    "note": "The end-to-end arms are sequential rather than counterbalanced. A separate six-pair isolated encoding measurement bound the changed operation directly."
+  },
+  "baseline": {
+    "run_scenario_sha256": "66aa9ce59a500c3c080264f86b52847775a663238980c8b6712d6588529266c3",
+    "raw_report_sha256": "9a997fbcdabadcbec60e964078d3bd18bbbfa93536182b639ea3e10a6c0dcfd0",
+    "wall_seconds": [10.691, 10.663, 10.634, 10.642, 10.765, 10.645, 10.681, 10.706, 10.55, 10.518],
+    "wall_p50_seconds": 10.654,
+    "wall_p95_seconds": 10.765,
+    "median_phase_seconds": {
+      "sumo_execution": 6.744401,
+      "trajectory_publication": 1.193559,
+      "disruption_analysis": 1.190882,
+      "artifact_publication": 0.131878
+    }
+  },
+  "candidate": {
+    "change": "encode JSON once with json.dumps and perform one text write before the same atomic os.replace",
+    "run_scenario_sha256": "2f90d6d747e120199f959a8333eaa26ae190050fef5af1eda7d829c079387bff",
+    "raw_report_sha256": "b1ff195afe38e9f1b5ec09de1e8cdc672c7c19d22ad1123c138d1ab1ab8d38e1",
+    "wall_seconds": [10.219, 10.359, 10.24, 10.12, 10.201, 10.244, 10.247, 10.123, 10.204, 10.035],
+    "wall_p50_seconds": 10.2115,
+    "wall_p95_seconds": 10.359,
+    "median_phase_seconds": {
+      "sumo_execution": 6.825207,
+      "trajectory_publication": 0.736976,
+      "disruption_analysis": 1.19653,
+      "artifact_publication": 0.025347
+    }
+  },
+  "comparison": {
+    "wall_p50_improvement_seconds": 0.4425,
+    "wall_p50_improvement_percent": 4.1534,
+    "wall_p95_improvement_seconds": 0.406,
+    "wall_p95_improvement_percent": 3.7715,
+    "trajectory_publication_median_improvement_seconds": 0.456583,
+    "artifact_publication_median_improvement_seconds": 0.106532,
+    "under_10_second_p95": false
+  },
+  "equality_and_health": {
+    "scenario_digest": "9d0a00b195e0d629b040c20ad434a572c72353222e842251cce48a31d2d6838f",
+    "trajectory_digest": "b42eb71233e78e9bcbe5ea09ee51333b08e63ba946795bc984c6775eecb6d968",
+    "semantic_mismatches": 0,
+    "trajectory_mismatches": 0,
+    "seed_health_records": 60,
+    "all_loaded_equal_inserted": true,
+    "all_waiting_running_teleports_collisions_zero": true,
+    "closure_integrity": "verified_clean"
+  },
+  "isolated_encoding_measurement": {
+    "pairs": 6,
+    "json_dump_median_seconds": 0.564908,
+    "json_dumps_single_write_median_seconds": 0.10757,
+    "speedup": 5.2516,
+    "byte_exact": true
+  },
+  "rejected_diagnostics": [
+    {
+      "arm": "parallel sparse disruption price calls",
+      "median_speedup": 1.0119,
+      "decision": "reject_as_noise"
+    },
+    {
+      "arm": "parallel trajectory publication and disruption analysis",
+      "median_speedup": 0.974,
+      "decision": "reject_as_regression"
+    }
+  ],
+  "checks": {
+    "scenario_timing_benchmark_suite": "336 passed, 1 skipped",
+    "close_http_suite": "18 passed",
+    "json_byte_parity_variants": 3,
+    "live_api_smoke": {
+      "port": 8001,
+      "start_status": 202,
+      "terminal_status": "done",
+      "terminal_elapsed_seconds": 11.088,
+      "closure_integrity": "verified_clean",
+      "test_server_stopped": true
+    }
+  }
+}

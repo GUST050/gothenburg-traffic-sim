@@ -39,6 +39,39 @@ def test_workspace_is_exclusive_and_stores_exact_input(tmp_path):
         create_search_workspace(_spec(), root=tmp_path)
 
 
+def test_active_elapsed_accumulates_monotonic_segments_across_resume(
+        tmp_path, monkeypatch):
+    import traffic_sim.simulation.search_workspace as module
+
+    now = [100.0]
+    monkeypatch.setattr(module, "_active_clock_s", lambda: now[0])
+    workspace = create_search_workspace(_spec(), root=tmp_path)
+    assert workspace.manifest["active_elapsed_s"] == 0.0
+
+    now[0] = 105.0
+    workspace.update_progress("pilot", completed=1, total=2)
+    assert workspace.manifest["active_elapsed_s"] == 5.0
+
+    now[0] = 110.0
+    resumed = load_search_workspace(workspace.directory)
+    now[0] = 117.0
+    resumed.finish("succeeded")
+
+    manifest = json.loads(
+        (workspace.directory / "manifest.json").read_text())
+    assert manifest["active_elapsed_s"] == 12.0
+    assert manifest["active_elapsed_basis"] == (
+        "awake_monotonic_segments_v1")
+
+
+def test_active_elapsed_basis_tampering_fails_workspace_verification(tmp_path):
+    workspace = create_search_workspace(_spec(), root=tmp_path)
+    workspace.manifest["active_elapsed_basis"] = "wall_clock_v1"
+
+    assert "workspace active elapsed basis is invalid" in (
+        verify_search_workspace(workspace))
+
+
 def test_open_resumes_running_workspace_and_reads_succeeded_idempotently(
         tmp_path):
     created, was_created = open_search_workspace(_spec(), root=tmp_path)

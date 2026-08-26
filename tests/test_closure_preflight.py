@@ -80,6 +80,22 @@ def exhaustive_counts(spec: ClosureSearchSpec) -> dict:
     return truth
 
 
+def test_exact_five_day_request_sizes_only_five_day_schedules():
+    spec = make_spec(
+        required_work_minutes=5 * 60,
+        min_consecutive_start_days=5,
+        max_consecutive_start_days=5,
+    )
+
+    report = preflight(spec)
+    truth = exhaustive_counts(spec)
+
+    assert report.parent_schedules_by_workday_count == truth["by_day_count"]
+    assert set(report.parent_schedules_by_workday_count) == {5}
+    assert report.parent_schedule_count == truth["parents"]
+    assert report.unique_daily_unit_count == truth["units"]
+
+
 def assert_exact(spec: ClosureSearchSpec) -> dict:
     """Every reported count equals the enumerated truth. Returns the report."""
     truth = exhaustive_counts(spec)

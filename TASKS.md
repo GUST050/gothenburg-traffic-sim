@@ -9,18 +9,19 @@ owners, states and approval formulas are not active workflow rules. See
 ## WORKFLOW_CONTROL
 
 - Mode: `FLEXIBLE — roles are capabilities, not model identities`
-- Current focus: `Keep the adopted canonical weekday/weekend route catalog and
-  current interactive performance stable; do not spend more work shaving the
-  former 0.496 s first-new-closure target miss. Keep full annual warming
-  disabled until explicitly launched.`
+- Current focus: `Make the exact five-day monthly search robust for full-day
+  comparisons, including fail-fast candidate feasibility and actionable
+  demand-build errors. Keep the adopted canonical weekday/weekend route
+  catalog stable, preserve exact scenario/trajectory/seed-health evidence and
+  keep full annual warming disabled until explicitly launched.`
 - Status: `CATALOG QUALIFIED, ADOPTED AND SOAKED. A matched-size campaign used
   the same 6,000-candidate request in both arms for 30 counterbalanced pairs.
   Median cold demand preparation fell 55.246→24.715 s (2.235x ratio of arm
   medians; 2.220x median paired speedup), every day
   class was faster, adapter p95 was 0.678 s and all hard
   correctness/resource gates passed. Seven catalog fixtures plus an explicit
-  legacy rollback passed soak. The active 2027-09-08 release uses the verified
-  weekday key, has 20,818 vehicles and matches all 672 integer sensor targets
+  legacy rollback passed soak. The active 2027-11-11 release uses the verified
+  weekday key, has 21,744 vehicles and matches all 672 integer sensor targets
   exactly. A refreshed annual plan/preflight passed and exactly one q50 warm
   state was produced and verified; the remaining 104,684 units were not run.
   Stress seeds map q10/q50/q90, widened PFE rungs cannot publish non-exact
@@ -29,13 +30,41 @@ owners, states and approval formulas are not active workflow rules. See
   evidence remains open. The broader
   performance implementation remains in progress. The named external monthly search
   ui-monthly-euc9qp was stopped at 476/1,776 and its workspace remains
-  resumable. Current server wiring already runs three interactive seeds in
+  resumable. Monthly resource-policy v2 now passes the recorded eight daily
+  workers explicitly, logs awake monotonic active time across resumes, holds a
+  macOS sleep assertion while the CLI owns the workspace, and supports an exact
+  workday count through min=max without changing legacy default identities. On
+  the stopped search's frozen input, exact five-day intent reduces the exact
+  preflight from 1,776 periods/2,224 units to 780 periods/1,040 units. This is
+  workload removal and instrumentation, not yet a measured throughput result.
+  A new UI five-day search (`ui-monthly-12hg8f3`) exposed that an implicitly
+  adopted catalog with a stale weekday identity aborted demand build
+  06cc309e4779897c. Implicit catalog use now falls back to the qualified legacy
+  builder with explicit metadata; the exact 2027-09-18 three-day build then
+  succeeded with 6,048/6,048 exact integer sensor constraints across q50/q10/q90,
+  zero infeasible intervals and passing candidate provenance. The active
+  2027-11-11 live demand products were restored byte-exact afterwards.
+  A later retry (`ui-monthly-12hg8f3`) reached the 2027-10-01 q50 projection
+  after roughly 95 minutes and failed because sensor edge
+  26842525_26355153_0 had no route exclusive to that sensor; q11/q16/q17
+  therefore had physically valid targets that the candidate matrix could not
+  represent. Candidate generation now installs the minimum legal,
+  endpoint-grounded single-sensor incidence basis after normal filters and
+  fails before PFE if any edge remains unsupported. The frozen failed pool was
+  repaired with one route (6,030→6,031 route×purpose shapes), and exact integer
+  publication passed q11/q16/q17. PFE errors now name date, variant, quarter
+  and clock interval. The failed search is idle/error with its workspace
+  retained; no replacement campaign has been launched.
+  Current server wiring already runs three interactive seeds in
   parallel (measured baseline 11.0 -> 5.9 s and closure 21.6 -> 13.9 s,
   byte-identical apart from generated_at). A clean 10-trial active-demand run
   pins first-new closure p95 at 10.496 s: all outputs and 30 seed-health
-  records match. The user accepted the current interactive performance on
-  2026-08-24 after observing roughly 30 s end-to-end in the UI, so the former
-  <=10 s product target and its 0.496 s miss are no longer open work. Exact-repeat
+  records match. The user accepted that performance on 2026-08-24, then
+  explicitly reopened the faster-closure goal on 2026-08-25. On the current
+  2027-11-11 demand, single-write atomic JSON publication reduced a new
+  ten-trial baseline/candidate comparison from p50 10.654 to 10.212 s and p95
+  10.765 to 10.359 s, with identical scenario/trajectory digests and all 60
+  seed-health records clean. The <=10 s p95 target remains open by 0.359 s. Exact-repeat
   structured cache p95 is 0.329 s over 10/10 verified hits with zero SUMO work,
   safely inside its <=2 s goal. Exact structured closure caching, result-neutral daily timing,
   opt-in routing controls and an active-slot guard are implemented. The
@@ -48,10 +77,10 @@ owners, states and approval formulas are not active workflow rules. See
   live-shaped reusable-Python-worker single draws preserved exact evidence but
   measured 1.027x and 0.998x; they are insufficient to accept or reject the
   pool. The replacement harness requires at least four counterbalanced paired
-  trials and the generic pool remains inactive. The new closure profile has
-  median SUMO 6.636 s, disruption 1.184 s and trajectory publication 1.131 s;
-  these measured phases remain useful diagnostics, not a required next optimization.
-  Remaining performance targets are exact-repeat p95 <=2 s, async ack p95 <=1 s
+  trials and the generic pool remains inactive. The current optimized closure
+  profile has median SUMO 6.825 s, disruption 1.197 s, trajectory publication
+  0.737 s and scenario-artifact publication 0.025 s.
+  Remaining performance targets are first-new closure p95 <=10 s, exact-repeat p95 <=2 s, async ack p95 <=1 s
   and >=2.0x monthly verified-unit throughput without semantic or evidence
   changes. These targets now explicitly cover 50 physical stations and the
   larger calibrated population their evidence may require. Fixed-load 50-row
@@ -71,11 +100,17 @@ owners, states and approval formulas are not active workflow rules. See
   2.7→2.5 s, max one departure/s). It is not active: ten paired concurrent
   baseline trials measured median 1.805→1.846 s (+2.30%), and closure-shaped
   equivalence/performance is unmeasured.`
-- Suggested next action: `Keep the accepted interactive closure path and the
-  passing exact-repeat cache unchanged. If performance work resumes, measure
-  the still-open async acknowledgement or monthly verified-unit throughput;
-  do not reopen the retired 0.496 s first-new optimization without a new user
-  requirement. Do not launch the remaining 104,684 annual warm units or activate
+- Suggested next action: `Keep the byte-exact single-write JSON optimization
+  and the passing exact-repeat cache. For monthly work, retry the same exact
+  5–5-day UI search (the failed workspace is retained and unlocked) and
+  measure verified units per active hour with the explicit 8×1 policy. Let
+  source/provenance identity rebuild any incompatible candidate or day cache;
+  do not force reuse, reuse created-at wall time or claim 2.7x before
+  measurement.
+  If interactive closure work continues, profile a
+  bounded SUMO or disruption-analysis arm against the new 10.359 s p95
+  reference; require exact digests and clean seed health. Do not launch the
+  remaining 104,684 annual warm units or activate
   rejected generic/driver pools without a separate explicit decision.`
 - Eligible actors: `Any model or person; no model-specific gate`
 - Safety boundary: `Preserve user-owned uncommitted source/generated artifacts
@@ -86,7 +121,11 @@ owners, states and approval formulas are not active workflow rules. See
   for low observability, or activate policy/UI/global-best claims without the
   applicable frozen evidence. Do not hardcode 107's annual 0.5231 as 96
   measured quarters or present q10/q90 as calibrated probabilities.`
-- Updated: `2026-08-24 after schema-v3 provenance repair of the matched-size
+- Updated: `2026-08-26 after repairing the real 2027-10-01 candidate-matrix
+  infeasibility with a grounded single-sensor basis and verifying all three
+  formerly failing quarters; previous 2026-08-25 monthly exact-length, explicit-worker,
+  awake-active-time and macOS keep-awake repairs, plus schema-v3 provenance
+  repair of the matched-size
   qualification/adoption chain, atomic candidate-cache pruning,
   soak, active-day rebuild, one bounded q50 warm-state pilot and clean-tree
   exact-repeat/first-new closure p95 measurement and user acceptance of the
@@ -117,7 +156,14 @@ owners, states and approval formulas are not active workflow rules. See
   single-draw diagnostics (1.027x and 0.998x), not rejection evidence; the new
   counterbalanced multi-trial harness is implemented but not yet run. The prior
   strict single-flight regression now passes. Multi-trial p95 and remaining
-  resource-allocation evidence are still open.`
+  resource-allocation evidence are still open. Monthly resource-policy v2 now
+  explicitly runs 8 daily × 1 seed worker within eight slots; exact min=max
+  workday intent, resumable awake active-time telemetry and macOS keep-awake
+  are implemented. The old 2,224-unit run has not been reclassified as valid
+  throughput evidence. The subsequent 2027-10-01 failure is repaired by a
+  generator-level exact-incidence basis invariant; the real frozen q11/q16/q17
+  projection now passes, but the replacement monthly campaign has not been
+  restarted.`
 - Objective and scope: `Reduce cold daily demand preparation by reusing a
   verified weekday/weekend routed catalog without changing exact daily PFE or
   warm-state semantics. Also reduce exact-repeat and first-new interactive closure
@@ -129,8 +175,9 @@ owners, states and approval formulas are not active workflow rules. See
   equivalence at 50 physical sensors when simulation load is fixed, then prove calibrated population tiers because
   new observations can require more vehicles. Keep high-risk custom
   SUMO/libsumo work profile-gated.`
-- Completion outcome: `Current first-new interactive closure performance is
-  accepted and no additional 0.496 s reduction is required. Exact repeat p95
+- Completion outcome: `First-new interactive closure p95 <=10 s on the active
+  frozen fixture with identical scenario/trajectory digests and clean per-seed
+  health. Exact repeat p95
   <=2 s with zero SUMO calls; async ack p95 <=1 s; monthly verified-unit throughput
   >=2.0x the frozen baseline with a <=24 h stretch target on the named
   1,776-schedule/2,224-unit fixture. Every adopted arm preserves required
@@ -148,7 +195,9 @@ owners, states and approval formulas are not active workflow rules. See
   multiprocess regression proves one producer per content key. A multi-snapshot warm pilot measured 20.8x state creation
   but lacks ordinary SUMO meso-accumulator serialization. The stopped search
   ui-monthly-euc9qp is 476/1,776; its manifest records an interrupted_by_user
-  progress pointer with resumable scratch. The active process-free disruption
+  progress pointer with resumable scratch. Its exact five-day form now sizes to
+  780 periods/1,040 units instead of 1,776/2,224, but no replacement campaign
+  has been launched. The active process-free disruption
   case improved from 4.1364 s to 1.051 s exactly. One isolated three-seed
   production-shaped closure completed in 10.690 s versus 11.549 s with the
   full-field rollback, with equal scenario/trajectory digests and clean health;
@@ -170,10 +219,14 @@ owners, states and approval formulas are not active workflow rules. See
   traffic_sim/simulation/independent_daily.py;
   traffic_sim/simulation/independent_daily_worker.py;
   traffic_sim/demand/route_catalog.py;
+  build_candidates.py; build_sumo_demand.py; demand/calibration.py;
   traffic_sim/demand/catalog_qualification.py;
   tools/benchmark_route_catalog.py; tools/qualify_route_catalog.py;
   tools/adopt_route_catalog.py; tools/prune_candidate_cache.py;
   traffic_sim/simulation/monthly_sumo.py; run_monthly_closure_search.py;
+  traffic_sim/core/contracts.py; traffic_sim/core/closure_calendar.py;
+  traffic_sim/simulation/closure_preflight.py;
+  traffic_sim/simulation/search_workspace.py; web/app.js; web/index.html;
   tools/cost_ordered_benchmark_suite.py; related tests and new frozen validation
   contracts/outcomes; tests/test_closure_disruption.py;
   tests/test_singleflight.py.`
@@ -201,7 +254,9 @@ owners, states and approval formulas are not active workflow rules. See
   calibrated 21k/32k/43k/50k/60k tiers meet their 10/20/30 s budgets with
   loaded=inserted and zero waiting, stopping at the first failed capacity tier;
   peak RSS <=8 GiB for the named host benchmark; no new timeout, orphan or
-  cancellation defect; old path remains a tested rollback until adoption.`
+  cancellation defect; monthly throughput is derived from awake active wall
+  time on an exact-length fixture; old path remains a tested rollback until
+  adoption.`
 - Useful checks: `make lint; focused scenario timing/benchmark tests; focused
   independent_daily/monthly_sumo/cost-order tests; paired idle-host benchmark
   reports; semantic digest and field-by-field evidence comparison; restart,

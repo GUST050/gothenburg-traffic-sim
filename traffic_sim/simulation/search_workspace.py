@@ -10,9 +10,11 @@ artifacts are immutable; only ``manifest.json`` and the disposable
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
@@ -28,10 +30,19 @@ from traffic_sim.core.fingerprint import git_commit, sha256_file
 SCHEMA_VERSION = 1
 DEFAULT_ROOT = Path("runs") / "closure-search"
 _TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
+ACTIVE_ELAPSED_BASIS = "awake_monotonic_segments_v1"
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _active_clock_s() -> float:
+    """Awake monotonic time, excluding wall-clock changes and system sleep."""
+    uptime_clock = getattr(time, "CLOCK_UPTIME_RAW", None)
+    if uptime_clock is not None and hasattr(time, "clock_gettime"):
+        return time.clock_gettime(uptime_clock)
+    return time.monotonic()
 
 
 def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -76,6 +87,22 @@ class SearchWorkspace:
 
     directory: Path
     manifest: dict[str, Any]
+    _active_elapsed_base_s: float = field(init=False, repr=False)
+    _active_segment_started_s: float | None = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        raw_elapsed = self.manifest.get("active_elapsed_s", 0.0)
+        if (
+            isinstance(raw_elapsed, bool)
+            or not isinstance(raw_elapsed, (int, float))
+            or not math.isfinite(raw_elapsed)
+            or raw_elapsed < 0
+        ):
+            raise ValueError(
+                "closure-search workspace active_elapsed_s is invalid")
+        self._active_elapsed_base_s = float(raw_elapsed)
+        self._active_segment_started_s = (
+            _active_clock_s() if self.status == "running" else None)
 
     @property
     def spec_path(self) -> Path:
@@ -98,7 +125,30 @@ class SearchWorkspace:
             raise RuntimeError(
                 f"closure-search workspace is already {self.status!r}")
 
+    def _snapshot_active_elapsed(self, *, stop: bool = False) -> None:
+        """Accumulate this process's awake run segment in the manifest.
+
+        UTC timestamps remain useful provenance, but cannot distinguish a slow
+        algorithm from a suspended laptop. Each process invocation therefore
+        contributes a monotonic segment to one resumable total. On macOS the
+        monotonic clock does not advance while the machine is asleep.
+        """
+        started = self._active_segment_started_s
+        if started is None:
+            self.manifest.setdefault(
+                "active_elapsed_s", round(self._active_elapsed_base_s, 6))
+            self.manifest.setdefault(
+                "active_elapsed_basis", ACTIVE_ELAPSED_BASIS)
+            return
+        now = _active_clock_s()
+        self._active_elapsed_base_s += max(0.0, now - started)
+        self.manifest["active_elapsed_s"] = round(
+            self._active_elapsed_base_s, 6)
+        self.manifest["active_elapsed_basis"] = ACTIVE_ELAPSED_BASIS
+        self._active_segment_started_s = None if stop else now
+
     def _flush(self) -> None:
+        self._snapshot_active_elapsed()
         _atomic_json(self.directory / "manifest.json", self.manifest)
 
     def update_progress(
@@ -216,6 +266,7 @@ class SearchWorkspace:
                 raise ValueError(
                     "cannot finish invalid closure-search workspace: "
                     + "; ".join(errors))
+        self._snapshot_active_elapsed(stop=True)
         # Cancellation always removes only this search's disposable scratch;
         # it must not leave a large half-run behind or touch any artifact.
         preserve = bool(status == "failed"
@@ -260,6 +311,8 @@ def create_search_workspace(
             "search_content_key": spec.content_key,
             "status": "running",
             "created_at": _now(),
+            "active_elapsed_s": 0.0,
+            "active_elapsed_basis": ACTIVE_ELAPSED_BASIS,
             "git_commit": git_commit(),
             "input": spec_record,
             "artifacts": [],
@@ -338,6 +391,23 @@ def verify_search_workspace(workspace: SearchWorkspace) -> list[str]:
         errors.append("workspace kind is invalid")
     if manifest.get("status") not in {"running", *_TERMINAL_STATUSES}:
         errors.append("workspace status is invalid")
+    active_elapsed = manifest.get("active_elapsed_s")
+    if active_elapsed is not None and (
+        isinstance(active_elapsed, bool)
+        or not isinstance(active_elapsed, (int, float))
+        or not math.isfinite(active_elapsed)
+        or active_elapsed < 0
+    ):
+        errors.append("workspace active elapsed time is invalid")
+    if active_elapsed is not None and (
+        manifest.get("active_elapsed_basis") != ACTIVE_ELAPSED_BASIS
+    ):
+        errors.append("workspace active elapsed basis is invalid")
+    if (
+        active_elapsed is None
+        and manifest.get("active_elapsed_basis") is not None
+    ):
+        errors.append("workspace active elapsed time is missing")
     try:
         spec = load_closure_search_spec(workspace.spec_path)
     except (OSError, ValueError, json.JSONDecodeError) as exc:

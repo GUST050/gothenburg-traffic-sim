@@ -1065,11 +1065,18 @@ def atomic_write_json(path: Path, obj, **dump_kwargs) -> None:
     2026-07-10). Write to a same-directory temp file, then os.replace(),
     which POSIX guarantees is atomic — readers see either the fully old or
     fully new file, never a partial one."""
+    # ``json.dump`` feeds TextIOWrapper one encoder fragment at a time.  A
+    # one-day trajectory contains millions of small list/dict fragments, so
+    # that turns a ~14 MB artifact into millions of Python ``write`` calls.
+    # Encode once and write once instead. ``json.dumps`` and ``json.dump`` use
+    # the same encoder and keyword arguments, preserving the exact JSON bytes
+    # while keeping the same atomic same-directory replace contract.
+    encoded = json.dumps(obj, **dump_kwargs)
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.",
                                     suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
-            json.dump(obj, f, **dump_kwargs)
+            f.write(encoded)
         os.replace(tmp_name, path)
     except BaseException:
         os.unlink(tmp_name)

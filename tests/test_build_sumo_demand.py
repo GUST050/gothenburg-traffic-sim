@@ -55,6 +55,17 @@ class TestExactSensorPublicationGate:
         del report["integer_sensor_exact"]
         assert dcal._report_is_publishable(report) is False
 
+    def test_worker_error_names_variant_quarter_and_clock_time(self, monkeypatch):
+        def fail(_suffix, _quarter):
+            raise RuntimeError("projection infeasible")
+
+        monkeypatch.setattr(dcal, "_compute_pfe_counts", fail)
+
+        with pytest.raises(
+                RuntimeError,
+                match=r"q50 quarter 11 \(02:45-03:00\).*projection infeasible"):
+            dcal._run_pfe_counts_job(("", 11))
+
 
 class TestPurposeMarginAfterRouteFiltering:
     def test_restores_only_activity_categories(self):
@@ -211,6 +222,21 @@ class TestB1DateRangeContract:
                            "--engine", "routesampler"])
         with pytest.raises(SystemExit):
             bsd.parse_args()
+
+    def test_implicit_catalog_falls_back_only_when_adoption_is_unusable(self):
+        adoption = {"catalog_keys": {
+            "weekday": "a" * 32,
+            "weekend": "b" * 32,
+        }}
+
+        assert bsd.implicit_catalog_fallback_reason(
+            adoption, pool_key="weekend", expected_key="b" * 32) is None
+        assert bsd.implicit_catalog_fallback_reason(
+            adoption, pool_key="weekend", expected_key="c" * 32
+        ) == "adopted_key_stale_for_current_inputs"
+        assert bsd.implicit_catalog_fallback_reason(
+            None, pool_key="weekend", expected_key=""
+        ) == "adoption_invalid_during_build"
 
     def test_candidate_benchmark_size_must_be_positive(self, monkeypatch):
         monkeypatch.setattr(

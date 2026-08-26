@@ -35,6 +35,78 @@ def test_monthly_command_has_an_explicit_cold_escape_hatch(monkeypatch):
     assert _arguments(monkeypatch, "--cold-execution").warm_execution is False
 
 
+def test_macos_monthly_command_holds_and_releases_idle_sleep_assertion(
+        monkeypatch):
+    calls = []
+
+    class FakeProcess:
+        def __init__(self):
+            self.running = True
+
+        def poll(self):
+            return None if self.running else 0
+
+        def terminate(self):
+            calls.append("terminate")
+            self.running = False
+
+        def wait(self, timeout):
+            calls.append(("wait", timeout))
+            return 0
+
+    def fake_popen(args, **kwargs):
+        calls.append((args, kwargs))
+        return FakeProcess()
+
+    monkeypatch.setattr(command.sys, "platform", "darwin")
+    monkeypatch.setattr(command.shutil, "which", lambda name: "/usr/bin/caffeinate")
+    monkeypatch.setattr(command.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(command.os, "getpid", lambda: 4321)
+    monkeypatch.setattr(command, "_on_ac_power", lambda: True)
+
+    process = command._start_macos_keep_awake()
+    command._stop_macos_keep_awake(process)
+
+    # A multi-hour search must hold the disk and system sleep assertions too,
+    # not idle alone.
+    assert calls[0][0] == [
+        "/usr/bin/caffeinate", "-i", "-m", "-s", "-w", "4321"]
+    assert calls[1:] == ["terminate", ("wait", 5)]
+
+
+def test_keep_awake_warns_when_the_machine_is_on_battery(monkeypatch, capsys):
+    """`caffeinate -s` is honoured only on AC, so battery must be reported.
+
+    Found live on 2026-08-26: a 30+ hour search was running on a laptop at
+    16% battery with ~26 minutes remaining, and nothing in the pipeline said
+    so.  The assertion the process holds was strictly weaker than its own
+    log line implied.
+    """
+    class FakeProcess:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            return None
+
+        def wait(self, timeout):
+            return 0
+
+    monkeypatch.setattr(command.sys, "platform", "darwin")
+    monkeypatch.setattr(command.shutil, "which", lambda name: "/usr/bin/caffeinate")
+    monkeypatch.setattr(command.subprocess, "Popen",
+                        lambda args, **kwargs: FakeProcess())
+    monkeypatch.setattr(command.os, "getpid", lambda: 4321)
+    monkeypatch.setattr(command, "_on_ac_power", lambda: False)
+
+    command._start_macos_keep_awake()
+
+    stderr = capsys.readouterr().err
+    assert "BATTERY" in stderr
+    # The one limit no flag can remove must always be stated.
+    assert "lid" in stderr.lower()
+
+
 @pytest.mark.parametrize("mode", ["proxy", "bounded-exhaustive"])
 def test_daily_unit_budget_is_refused_for_modes_that_cannot_use_it(
         monkeypatch, mode):

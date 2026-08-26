@@ -6,6 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import validation_report as vr
+from traffic_sim.confidence import trip_length_gate as gate
 
 
 def test_web_panel_exposes_the_exact_sumo_passage_test():
@@ -86,9 +87,10 @@ def _write_inputs(tmp_path, monkeypatch, *, geh=100.0, infeasible=0,
             "structure_flags": list(structure_flags),
             "dest_sensor_proximity": {"pct_within": 7.5,
                                       "baseline_pct_within": 1.9},
+            # Production never writes maximum_l1_distance; the frozen project
+            # limit in traffic_sim.confidence.trip_length_gate owns it.
             "trip_length_fit": {"shares": [0.02, 0.73, 0.25],
-                                "l1_distance": 0.4031,
-                                "maximum_l1_distance": 0.5},
+                                "l1_distance": 0.1204},
             "onward_after_last_sensor": {"median_m": 2901.9,
                                          "pct_under_200m": 5.9},
             "purpose_length_km": {
@@ -190,33 +192,76 @@ class TestAssemble:
         assert r["sections"]["structure"]["status"] == "warn"
         assert r["overall"] == "warn"
 
-    def test_trip_length_l1_without_a_frozen_threshold_warns(
-            self, tmp_path, monkeypatch):
+    def _structure_with_l1(self, tmp_path, monkeypatch, **fit):
         _write_inputs(tmp_path, monkeypatch)
         meta_path = vr.SUMO_DIR / "demand_meta.json"
         meta = json.loads(meta_path.read_text())
-        del meta["calibrated_structure"]["trip_length_fit"][
-            "maximum_l1_distance"]
+        meta["calibrated_structure"]["trip_length_fit"].update(fit)
         meta_path.write_text(json.dumps(meta))
+        return vr.assemble()["sections"]["structure"]
 
-        section = vr.assemble()["sections"]["structure"]
-        assert section["status"] == "warn"
-        assert section["trip_length_l1_gate_defined"] is False
-        assert "saknar fryst acceptansgräns" in section["reason"]
-
-    def test_trip_length_l1_over_its_frozen_threshold_warns(
+    def test_trip_length_l1_uses_the_frozen_limit_when_none_is_declared(
             self, tmp_path, monkeypatch):
-        _write_inputs(tmp_path, monkeypatch)
-        meta_path = vr.SUMO_DIR / "demand_meta.json"
-        meta = json.loads(meta_path.read_text())
-        meta["calibrated_structure"]["trip_length_fit"][
-            "maximum_l1_distance"] = 0.3
-        meta_path.write_text(json.dumps(meta))
+        """A build that declares nothing is still judged.
 
-        section = vr.assemble()["sections"]["structure"]
-        assert section["status"] == "warn"
+        Before 2026-08-26 no production code wrote maximum_l1_distance at
+        all, so this gate was permanently undefined and every build reported
+        overall "warn" whatever its data — burying the real structure flags
+        published beside it.
+        """
+        section = self._structure_with_l1(tmp_path, monkeypatch)
+
         assert section["trip_length_l1_gate_defined"] is True
+        assert section["trip_length_l1_maximum"] == gate.MAXIMUM_TRIP_LENGTH_L1
+        assert section["trip_length_l1_gate_passed"] is True
+        assert section["trip_length_l1_gate_source"] == "frozen_project_limit_v1"
+
+    def test_trip_length_l1_over_the_frozen_limit_warns(
+            self, tmp_path, monkeypatch):
+        section = self._structure_with_l1(
+            tmp_path, monkeypatch,
+            l1_distance=gate.MAXIMUM_TRIP_LENGTH_L1 + 0.05)
+
+        assert section["status"] == "warn"
         assert section["trip_length_l1_gate_passed"] is False
+        assert "överstiger den frysta gränsen" in section["reason"]
+
+    def test_a_build_cannot_declare_a_looser_limit_than_the_project(
+            self, tmp_path, monkeypatch):
+        """The limit that judges an artifact must not travel inside it."""
+        section = self._structure_with_l1(
+            tmp_path, monkeypatch,
+            l1_distance=0.45, maximum_l1_distance=0.9)
+
+        assert section["trip_length_l1_maximum"] == gate.MAXIMUM_TRIP_LENGTH_L1
+        assert section["trip_length_l1_gate_passed"] is False
+
+    def test_a_build_may_hold_itself_to_a_stricter_limit(
+            self, tmp_path, monkeypatch):
+        section = self._structure_with_l1(
+            tmp_path, monkeypatch,
+            l1_distance=0.1204, maximum_l1_distance=0.05)
+
+        assert section["trip_length_l1_maximum"] == 0.05
+        assert section["trip_length_l1_gate_passed"] is False
+
+    def test_a_perfect_zero_l1_passes_rather_than_reading_as_missing(
+            self, tmp_path, monkeypatch):
+        """0.0 is the best possible fit, not an absent measurement."""
+        section = self._structure_with_l1(
+            tmp_path, monkeypatch, l1_distance=0.0)
+
+        assert section["trip_length_l1_gate_passed"] is True
+        assert "saknas" not in section.get("reason", "")
+
+    def test_a_missing_l1_is_reported_rather_than_silently_passed(
+            self, tmp_path, monkeypatch):
+        section = self._structure_with_l1(
+            tmp_path, monkeypatch, l1_distance=None)
+
+        assert section["status"] == "warn"
+        assert section["trip_length_l1_gate_passed"] is False
+        assert "saknas" in section["reason"]
 
     def test_geh_collapse_warns(self, tmp_path, monkeypatch):
         _write_inputs(tmp_path, monkeypatch, geh=71.0)

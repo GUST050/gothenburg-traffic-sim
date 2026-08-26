@@ -1,11 +1,12 @@
 # Road-closure and simulation speed goal — 2026-08-21
 
-> **Current supersession (2026-08-24):** the frozen first-new campaign measured
-> 10.496 s p95, and the user accepted the current interactive experience after
-> observing roughly 30 s end-to-end in the browser. The 0.496 s miss against
-> the original <=10 s target is historical evidence, not remaining work. Exact
-> repeat, acknowledgement, monthly-throughput and semantic gates remain as
-> documented unless separately superseded.
+> **Current supersession (2026-08-25):** the user reopened the faster-closure
+> goal. On the active 2027-11-11 fixture, single-write atomic JSON publication
+> reduced a fresh ten-trial baseline from p50 10.654 / p95 10.765 s to p50
+> 10.212 / p95 10.359 s. Scenario and trajectory digests were identical and all
+> 60 seed-health records were clean. The <=10 s first-new target remains open by
+> 0.359 s. Exact repeat, acknowledgement, monthly-throughput and semantic gates
+> remain as documented.
 
 ## Decision and scope
 
@@ -82,6 +83,7 @@ Known measurements are:
 | Commit `46e7048`, current server wiring | closure 21.6 s -> 13.9 s; baseline 11.0 s -> 5.9 s | Three interactive workers are now adopted after byte-equivalence apart from `generated_at`. This supersedes the older 2026-07-23 current-default decision. |
 | `validation/scenario_phase_profile_report_v6.json` | frozen closure p95 17.5994 s -> 10.4234 s; baseline p95 10.4722 s -> 5.883 s | Parallel seeds are a real 40.8–43.8% lever, but that older three-variant fixture still missed the 10-second closure gate. |
 | `validation/interactive_closure_p95_catalog_v1_2026-08-24.json` | active catalog release, 10 first-new trials: p50 10.461 s, p95 10.496 s, range 10.409–10.508 s | All scenario/trajectory digests and 30 seed-health records match, but the <=10 s gate misses by 0.496 s. Median phases: SUMO 6.636 s, disruption 1.184 s, trajectory publication 1.131 s. |
+| `validation/atomic_json_publication_benchmark_2026-08-25.json` | active 2027-11-11 release, 10 baseline then 10 candidate trials: p50 10.654→10.212 s, p95 10.765→10.359 s | Encoding once before the same atomic replace is byte-exact and faster; all 60 seed-health records are clean. The end-to-end arms are sequential, and the <=10 s gate remains open by 0.359 s. |
 | `validation/exact_close_cache_p95_catalog_v1_2026-08-24.json` | 10 exact structured hits: p50 0.312 s, p95 0.329 s, max 0.330 s | Passes the <=2 s cache target; every POST/status proves cache hit, no new start timestamp appears, and scenario/trajectory hashes remain unchanged. |
 | `validation/persistent_sumo_campaign_v2_outcome/persistent_sumo_report.json` | persistent 11.3904 s vs fresh subprocess 11.0998 s | Reusing external SUMO processes was equivalent but 2.6% slower. That hypothesis is closed. |
 | Historical phase profile | closure preparation about 1.16 s; vehroute parse about 0.6 s | Neither alone explains the remaining gap. Output *generation* cost still needs a paired measurement. |
@@ -186,9 +188,22 @@ already measured them.
 Implementation status: the interactive `PhaseTimer`/timing-sidecar path is
 present, and independent-daily execution now records result-neutral cache
 verification, cache writes, worker wall time and simulated-unit counters in
-the resumable workspace progress detail. The named monthly run was stopped at
-476/1,776, so its terminal throughput baseline still needs a new isolated
-reference campaign; telemetry alone is not a performance result.
+the resumable workspace progress detail. Search manifests now also accumulate
+`active_elapsed_s` from awake monotonic process segments across resumes; UTC
+created/finished timestamps remain provenance only. The S0 rate gate is
+fail-closed: a throughput result without a positive `active_elapsed_s` and the
+`awake_monotonic_segments_v1` basis is invalid. The named monthly run predates
+this field and was stopped at 476/1,776, so its wall time and derived 6.8-day
+estimate are not baseline evidence. A new isolated reference campaign remains
+required; telemetry alone is not a performance result.
+
+The replacement input should express its actual question as min=max=5. On the
+stopped run's otherwise identical contract, exact preflight drops from 1,776
+parents/2,224 unique daily units to 780/1,040 by excluding the 2- and 4-day
+arms. Resource-policy v2 passes 8 daily workers × 1 seed within the recorded
+eight-SUMO ceiling and macOS `caffeinate` prevents idle sleep while the CLI owns
+the workspace. Neither the smaller workload nor the worker count is itself a
+speed measurement; the existing parallel benchmark supports 1.69x, not 2.7x.
 
 Do this only after `ui-monthly-euc9qp` has reached a terminal state or has been
 explicitly paused. Do not compete with it for CPU, memory or demand-workspace

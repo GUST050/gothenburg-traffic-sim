@@ -79,6 +79,22 @@ def test_content_key_describes_intent_not_label_or_edge_order():
     assert first.content_key == second.content_key
 
 
+def test_default_minimum_preserves_legacy_identity_and_exact_length_is_opt_in():
+    legacy = _spec()
+    explicit_default = _spec(min_consecutive_start_days=1)
+    exact_five = _spec(min_consecutive_start_days=5)
+
+    assert explicit_default.content_key == legacy.content_key
+    assert "min_consecutive_start_days" not in legacy.to_dict()
+    assert exact_five.to_dict()["min_consecutive_start_days"] == 5
+    assert {item.day_count for item in generate_closure_schedules(exact_five)} == {5}
+
+
+def test_minimum_days_cannot_exceed_maximum_days():
+    with pytest.raises(ValueError, match="through max_consecutive"):
+        _spec(min_consecutive_start_days=6)
+
+
 def test_rolling_period_can_cross_week_and_month_boundary():
     common = {
         "permitted_date_start": "2027-07-30",  # Friday

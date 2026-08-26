@@ -208,6 +208,7 @@ def test_demand_builder_is_independent_of_process_working_directory(monkeypatch,
     assert seen["cwd"] == monthly_demand._PROJECT_ROOT
     assert seen["env"]["GS_PROJECT_DEMAND_BUILD_LOCK_HELD_BY_PARENT"] == "1"
     assert "--direction-stress-variants" in seen["command"]
+    assert "--candidate-source" not in seen["command"]
 
 
 def test_archive_validation_checks_contract_and_manifest_hashes(tmp_path):

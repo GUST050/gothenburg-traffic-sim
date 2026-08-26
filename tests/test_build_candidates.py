@@ -39,6 +39,89 @@ def read_vehicle_ids(path):
     return [veh.get("id") for veh in ET.parse(path).getroot().iter("vehicle")]
 
 
+def write_sumo_net(path, edge_ids, connections):
+    root = ET.Element("net")
+    for index, edge_id in enumerate(edge_ids):
+        edge = ET.SubElement(root, "edge", id=edge_id,
+                             **{"from": str(index), "to": str(index + 1)})
+        ET.SubElement(edge, "lane", id=f"{edge_id}_0", index="0",
+                      speed="10", length="100")
+    for source, destination in connections:
+        ET.SubElement(root, "connection", **{
+            "from": source, "to": destination, "dir": "s"})
+    ET.ElementTree(root).write(path)
+
+
+class TestMeasuredIncidenceBasis:
+    def test_reports_only_sensors_without_an_exclusive_route(self, tmp_path):
+        routed = tmp_path / "candidates.rou.xml"
+        write_routes(routed, [
+            ("coupled", ["1_2_0", "2_3_0"]),
+            ("second-only", ["2_3_0", "3_4_0"]),
+        ])
+
+        assert bc.measured_incidence_basis_failures(
+            routed, {"1_2_0", "2_3_0"}) == ["1_2_0"]
+
+    def test_installs_a_legal_grounded_single_sensor_route(self, tmp_path):
+        home, target, activity, other = (
+            "0_1_0", "1_2_0", "2_3_0", "8_9_0")
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(
+            net, [home, target, activity, other],
+            [(home, target), (target, activity)])
+        routed = tmp_path / "candidates.rou.xml"
+        write_routes(routed, [("other-only", [other])])
+        metadata = tmp_path / "candidates.meta.json"
+        metadata.write_text(json.dumps({
+            "schema_version": 2,
+            "location_pools": {
+                f"home:{home}": [{"id": "home-1", "w": 1.0}],
+                f"fritid:{activity}": [{"id": "poi-1", "w": 1.0}],
+            },
+            "candidates": {"other-only": {"purpose": "fritid"}},
+        }))
+
+        report = bc.install_grounded_sensor_basis_routes(
+            routed, metadata, {target, other}, net, max_stretch=1.5)
+
+        assert report["missing_before"] == [target]
+        assert len(report["installed"]) == 1
+        assert report["missing_after"] == []
+        vehicle_id = report["installed"][0]
+        routes = {
+            vehicle.get("id"): vehicle.find("route").get("edges").split()
+            for vehicle in ET.parse(routed).getroot().findall("vehicle")
+        }
+        assert routes[vehicle_id] == [home, target, activity]
+        record = json.loads(metadata.read_text())["candidates"][vehicle_id]
+        assert record["origin_location_pool"] == f"home:{home}"
+        assert record["destination_location_pool"] == f"fritid:{activity}"
+        assert record["coverage_edge"] == target
+        assert record["support_only"] is True
+        assert record["synthetic_endpoint"] is False
+
+    def test_fails_early_when_no_grounded_basis_route_exists(self, tmp_path):
+        home, target, activity = "0_1_0", "1_2_0", "2_3_0"
+        net = tmp_path / "net.net.xml"
+        write_sumo_net(net, [home, target, activity], [(home, target)])
+        routed = tmp_path / "candidates.rou.xml"
+        write_routes(routed, [])
+        metadata = tmp_path / "candidates.meta.json"
+        metadata.write_text(json.dumps({
+            "schema_version": 2,
+            "location_pools": {
+                f"home:{home}": [{"id": "home-1"}],
+                f"service:{activity}": [{"id": "poi-1"}],
+            },
+            "candidates": {},
+        }))
+
+        with pytest.raises(ValueError, match="no legal grounded.*1_2_0"):
+            bc.install_grounded_sensor_basis_routes(
+                routed, metadata, {target}, net, max_stretch=1.5)
+
+
 class TestSensorEdgeContract:
     @staticmethod
     def record(sensor_id, edges):

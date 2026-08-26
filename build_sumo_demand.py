@@ -716,6 +716,28 @@ def direction_variant_manifest(
     }
 
 
+def implicit_catalog_fallback_reason(
+    adoption: dict | None,
+    *,
+    pool_key: str,
+    expected_key: str,
+) -> str | None:
+    """Explain why an implicitly adopted catalog must use legacy support.
+
+    An explicit ``--candidate-source catalog`` remains a strict operator
+    request and may build a new isolated catalog. The implicit production
+    default is only an optimization: when its verified adoption disappears or
+    its immutable key no longer matches current structural inputs, the
+    already-qualified legacy builder is the safe operational fallback.
+    """
+    if adoption is None:
+        return "adoption_invalid_during_build"
+    keys = adoption.get("catalog_keys")
+    if not isinstance(keys, dict) or keys.get(pool_key) != expected_key:
+        return "adopted_key_stale_for_current_inputs"
+    return None
+
+
 def main() -> None:
     args = parse_args()
     demand_spec: DemandBuildSpec = args.demand_contract
@@ -818,6 +840,7 @@ def main() -> None:
     catalog_cache_events: dict[str, str] = {}
     catalog_sizing_attempts: dict[str, list[dict]] = {}
     catalog_selected_sizes: dict[str, int] = {}
+    catalog_fallback: dict[str, object] | None = None
 
     # Candidate endpoint weights consume this structural artifact, so refresh
     # it before candidate/catalog identity and routing. Computing it later in
@@ -836,7 +859,7 @@ def main() -> None:
 
     def generate_candidates(weight_file: Path | None = None,
                             cache_date: str | None = None) -> None:
-        nonlocal catalog_ready
+        nonlocal catalog_ready, catalog_enabled, catalog_fallback
         started = time.perf_counter()
         if catalog_enabled and weight_file is None and catalog_ready:
             return
@@ -930,21 +953,40 @@ def main() -> None:
                         adoption = route_catalog.adopted_catalog_config(
                             root=args.route_catalog_root)
                         if adoption is None:
-                            raise RuntimeError(
-                                "route catalog adoption became invalid during "
-                                "the build; rerun with --candidate-source "
-                                "legacy or requalify the catalog")
-                        catalog_n_total = adoption[
-                            "catalog_selected_n_total"][pool_key]
-                        expected_key = route_catalog.catalog_key(
-                            dict(pool_config, n_total=catalog_n_total,
-                                 min_per_sensor=50),
-                            pool_inputs, catalog_sources, pool_key=pool_key)
-                        if expected_key != adoption["catalog_keys"][pool_key]:
-                            raise RuntimeError(
-                                "adopted route catalog is stale for the current "
-                                f"{pool_key} inputs/source; rerun with "
-                                "--candidate-source legacy or requalify")
+                            reason = implicit_catalog_fallback_reason(
+                                adoption, pool_key=pool_key, expected_key="")
+                        else:
+                            catalog_n_total = adoption[
+                                "catalog_selected_n_total"][pool_key]
+                            expected_key = route_catalog.catalog_key(
+                                dict(pool_config, n_total=catalog_n_total,
+                                     min_per_sensor=50),
+                                pool_inputs, catalog_sources,
+                                pool_key=pool_key)
+                            reason = implicit_catalog_fallback_reason(
+                                adoption, pool_key=pool_key,
+                                expected_key=expected_key)
+                        if reason is not None:
+                            catalog_fallback = {
+                                "schema_version": 1,
+                                "from": "catalog",
+                                "to": "legacy",
+                                "pool_key": pool_key,
+                                "reason": reason,
+                            }
+                            catalog_enabled = False
+                            catalog_ready = False
+                            args.candidate_source = "legacy"
+                            catalog_identity_keys.clear()
+                            catalog_cache_events.clear()
+                            catalog_sizing_attempts.clear()
+                            catalog_selected_sizes.clear()
+                            print(
+                                "  WARNING adopted route catalog cannot serve "
+                                f"the current {pool_key} inputs ({reason}); "
+                                "using the provenance-recorded legacy "
+                                "candidate builder")
+                            break
 
                     selected = route_catalog.ensure_sized_catalog(
                         root=args.route_catalog_root, pool_key=pool_key,
@@ -957,30 +999,31 @@ def main() -> None:
                     catalog_cache_events[pool_key] = selected["cache_event"]
                     catalog_sizing_attempts[pool_key] = selected["attempts"]
                     catalog_selected_sizes[pool_key] = selected["n_total"]
-                timings_s["catalog_restore_or_build"] = (
-                    timings_s.get("catalog_restore_or_build", 0.0)
-                    + time.perf_counter() - catalog_storage_started)
-                adapter_started = time.perf_counter()
-                if catalog_pool_keys == ("weekday", "weekend"):
-                    route_catalog.combine_catalogs(
-                        catalog_destinations, cand_path,
-                        cand_path.with_name("candidates.meta.json"))
-                else:
-                    pool = catalog_pool_keys[0]
-                    shutil.copy2(catalog_destinations[pool][0], cand_path)
-                    shutil.copy2(catalog_destinations[pool][1],
-                                 cand_path.with_name("candidates.meta.json"))
-                timings_s["catalog_adapter"] = (
-                    timings_s.get("catalog_adapter", 0.0)
-                    + time.perf_counter() - adapter_started)
-                catalog_ready = True
-                elapsed = time.perf_counter() - started
-                timings_s["candidate_generation"] = (
-                    timings_s.get("candidate_generation", 0.0) + elapsed)
-                print("  route catalog ready "
-                      f"({', '.join(catalog_identity_keys.values())}; "
-                      f"{elapsed:.2f}s)")
-                return
+                if catalog_enabled:
+                    timings_s["catalog_restore_or_build"] = (
+                        timings_s.get("catalog_restore_or_build", 0.0)
+                        + time.perf_counter() - catalog_storage_started)
+                    adapter_started = time.perf_counter()
+                    if catalog_pool_keys == ("weekday", "weekend"):
+                        route_catalog.combine_catalogs(
+                            catalog_destinations, cand_path,
+                            cand_path.with_name("candidates.meta.json"))
+                    else:
+                        pool = catalog_pool_keys[0]
+                        shutil.copy2(catalog_destinations[pool][0], cand_path)
+                        shutil.copy2(catalog_destinations[pool][1],
+                                     cand_path.with_name("candidates.meta.json"))
+                    timings_s["catalog_adapter"] = (
+                        timings_s.get("catalog_adapter", 0.0)
+                        + time.perf_counter() - adapter_started)
+                    catalog_ready = True
+                    elapsed = time.perf_counter() - started
+                    timings_s["candidate_generation"] = (
+                        timings_s.get("candidate_generation", 0.0) + elapsed)
+                    print("  route catalog ready "
+                          f"({', '.join(catalog_identity_keys.values())}; "
+                          f"{elapsed:.2f}s)")
+                    return
             cache_key = candidate_cache.cache_key(
                 cache_config, cache_inputs, cache_sources)
             if candidate_cache.restore(args.candidate_cache_root,
@@ -1359,8 +1402,13 @@ def main() -> None:
                             "activity_purpose_shares_by_quarter"],
                         through_share_target=day_options.get(
                             "through_share_target"))
-                day_reports = run_pfe_variants_flat_parallel(
-                    cand_path, variants, day_inputs, **day_options)
+                try:
+                    day_reports = run_pfe_variants_flat_parallel(
+                        cand_path, variants, day_inputs, **day_options)
+                except RuntimeError as exc:
+                    raise RuntimeError(
+                        f"demand day {identity.date} calibration failed: "
+                        f"{exc}") from exc
                 artifacts = {}
                 for suffix, _key in variants:
                     route = scratch_dir / f"calibrated{suffix}.rou.xml"
@@ -1618,6 +1666,7 @@ def main() -> None:
             "catalog_cache_events": dict(catalog_cache_events),
             "catalog_selected_n_total": dict(catalog_selected_sizes),
             "catalog_sizing_attempts": dict(catalog_sizing_attempts),
+            "catalog_fallback": catalog_fallback,
             "purpose_margin_contract": (
                 "daily_purpose_margin_v1" if catalog_enabled
                 else "legacy_survivor_margin_explicit_v1"),

@@ -231,6 +231,27 @@ class TestProfileValidation:
 
 class TestSidecarIsWrittenAtomically:
 
+    @pytest.mark.parametrize("dump_kwargs", [
+        {},
+        {"indent": 2, "sort_keys": True},
+        {"separators": (",", ":"), "ensure_ascii": False},
+    ])
+    def test_single_write_encoding_matches_json_dump_exactly(
+            self, tmp_path, dump_kwargs):
+        target = tmp_path / "artifact.json"
+        payload = {
+            "unicode": "Göteborg",
+            "nested": [{"values": list(range(40))}],
+            "flag": True,
+        }
+        expected = tmp_path / "expected.json"
+        with expected.open("w") as stream:
+            json.dump(payload, stream, **dump_kwargs)
+
+        rs.atomic_write_json(target, payload, **dump_kwargs)
+
+        assert target.read_bytes() == expected.read_bytes()
+
     def test_atomic_write_leaves_no_partial_file_on_failure(self, tmp_path,
                                                             monkeypatch):
         target = tmp_path / "phase_profile.json"
