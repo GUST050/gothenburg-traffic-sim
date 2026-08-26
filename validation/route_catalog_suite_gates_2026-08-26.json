@@ -1,0 +1,63 @@
+{
+ "environment": {
+  "date": "2026-08-26",
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "sumo_version": "1.27.1"
+ },
+ "gates": {
+  "day_library_restore": {
+   "status": "pass",
+   "tests": [
+    "tests/test_day_library.py"
+   ]
+  },
+  "deterministic_repeat": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_catalog_identity_excludes_date_but_keeps_structure",
+    "tests/test_route_catalog.py::TestCatalogSourceContract",
+    "validation/route_catalog_invariance_2026-08-26.json"
+   ]
+  },
+  "malformed_catalog_rejected": {
+   "status": "pass",
+   "tests": [
+    "tests/test_route_catalog.py::test_ensure_catalog_is_single_complete_manifest",
+    "tests/test_route_catalog.py::test_adoption_default_is_fail_safe_and_explicit"
+   ]
+  },
+  "purpose_route_compatibility": {
+   "status": "pass",
+   "tests": [
+    "tests/test_pfe.py::TestPurposeStratifiedCalibration",
+    "tests/test_demand_provenance.py"
+   ]
+  },
+  "singleflight_recovery": {
+   "status": "pass",
+   "tests": [
+    "tests/test_singleflight.py"
+   ]
+  },
+  "sumo_runtime_no_regression": {
+   "status": "pass",
+   "tests": [
+    "tests/test_warm_state_sumo_equivalence.py"
+   ]
+  },
+  "warm_state_identity": {
+   "status": "pass",
+   "tests": [
+    "tests/test_warm_state_cache.py",
+    "tests/test_q50_subset_identity.py"
+   ]
+  }
+ },
+ "kind": "route_catalog_suite_gate_evidence",
+ "note": "Re-established 2026-08-26 after the catalog identity was narrowed to pool-generation sources. Suite-level contracts are one evidence set for the campaign; per-build sensor, population, structure, provenance and confidence gates are measured in every arm.",
+ "schema_version": 2,
+ "verification": {
+  "command_scope": "catalog qualification, route catalog source contract, purpose/provenance, singleflight, day library, warm-state identity and SUMO equivalence focused tests",
+  "result": "122 passed (99 + 23) on 2026-08-26 against the narrowed catalog source contract"
+ }
+}

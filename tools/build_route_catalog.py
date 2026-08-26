@@ -105,9 +105,9 @@ def main() -> int:
                 home=home,
                 flows_path=demand.FLOWS_PATH)
             base_config["catalog_mode"] = True
-            catalog_sources = {**sources, **{
-                f"source:{name}": path
-                for name, path in demand.SOURCE_FILES.items()}}
+            # Same contract the production builder uses: the catalog is keyed
+            # on pool generation only — see route_catalog.CATALOG_SOURCE_LABELS.
+            catalog_sources = dict(sources)
             destinations = {
                 label: materialized / pool / label
                 for label in route_catalog.OUTPUTS

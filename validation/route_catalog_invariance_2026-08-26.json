@@ -1,0 +1,58 @@
+{
+ "dates": [
+  "2027-09-08",
+  "2027-09-09"
+ ],
+ "elapsed_s": 28.201,
+ "environment": {
+  "network_sha256": "68ecde399ee7177bf8b3c9839a959170cca5d979f68bf15ca9f1cf6599ad5240",
+  "sumo_home": "/Users/gt/Library/Python/3.9/lib/python/site-packages/sumo",
+  "sumo_version": "Eclipse SUMO sumo 1.27.1\n Build features: Darwin-23.6.0 arm64 AppleClang 15.0.0.15000309 Release FMI Proj GUI FMT Intl SWIG Parquet Eigen GDAL GL2PS JuPedSim\n Copyright (C) 2001-2026 German Aerospace Center (DLR) and others; https://sumo.dlr.de\n\nEclipse SUMO sumo 1.27.1 is part of SUMO.\nThis program and the accompanying materials\nare made available under the terms of the Eclipse Public License v2.0\nwhich accompanies this distribution, and is available at\nhttp://www.eclipse.org/legal/epl-v20.html\nThis program may also be made available under the following Secondary\nLicenses when the conditions for such availability set forth in the Eclipse\nPublic License 2.0 are satisfied: GNU General Public License, version 2\nor later which is available at\nhttps://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html\nSPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later"
+ },
+ "execute": true,
+ "kind": "route_catalog_two_date_invariance",
+ "n_total": 6000,
+ "neutral_routes_invariant": true,
+ "pool_key": "weekday",
+ "records": [
+  {
+   "artifact_sha256": {
+    "catalog.meta.json": "0bf0bb6d1100aef829e028f6f8b089f7873c70e0ab708cff1586509b0784bc9e",
+    "catalog.rou.xml": "476be3c6ed8e6afb71145fc67c6acda779b628b2e4a2bbf135e6f5a2025a1e0a",
+    "catalog.template.json": "2d6d7807e61a67ba968d97928b28ef3ae65cd71d371ffd4b6e501a3c276bce5e",
+    "catalog.validation.json": "906c5bf68ee6e8a411b52d6737df305768b00f77285e3a8d480a6a268ea0fa75"
+   },
+   "date": "2027-09-08",
+   "label": "a",
+   "route_semantic_sha256": "f1971980daff15e5c13447ee15130adad082e3be068c028d5c1d336e4ee035ab",
+   "template_semantic_sha256": "6aa01e81bea36c6ef6b9b5ec6c0d9d025db18153dc9c3f79dd241989b4058fc7",
+   "validation": {
+    "min_unique_routes": 320,
+    "sensors": 7,
+    "vehicles": 4686
+   },
+   "wall_s": 13.868
+  },
+  {
+   "artifact_sha256": {
+    "catalog.meta.json": "0bf0bb6d1100aef829e028f6f8b089f7873c70e0ab708cff1586509b0784bc9e",
+    "catalog.rou.xml": "476be3c6ed8e6afb71145fc67c6acda779b628b2e4a2bbf135e6f5a2025a1e0a",
+    "catalog.template.json": "2d6d7807e61a67ba968d97928b28ef3ae65cd71d371ffd4b6e501a3c276bce5e",
+    "catalog.validation.json": "906c5bf68ee6e8a411b52d6737df305768b00f77285e3a8d480a6a268ea0fa75"
+   },
+   "date": "2027-09-09",
+   "label": "b",
+   "route_semantic_sha256": "f1971980daff15e5c13447ee15130adad082e3be068c028d5c1d336e4ee035ab",
+   "template_semantic_sha256": "6aa01e81bea36c6ef6b9b5ec6c0d9d025db18153dc9c3f79dd241989b4058fc7",
+   "validation": {
+    "min_unique_routes": 320,
+    "sensors": 7,
+    "vehicles": 4686
+   },
+   "wall_s": 14.101
+  }
+ ],
+ "schema_version": 1,
+ "status": "pass",
+ "template_invariant": true
+}
