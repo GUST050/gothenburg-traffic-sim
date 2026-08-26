@@ -28,7 +28,13 @@ def _identity_inputs(tmp_path):
         "real_day_shape": tmp_path / "missing-shape",
         "day_blocks": tmp_path / "missing-blocks",
     }
-    sources = {"builder": source}
+    # The identity contract is exact, so a fixture must present the real
+    # label set rather than a stand-in name.
+    sources = {"build_candidates": source}
+    for label in route_catalog.CATALOG_SOURCE_LABELS - {"build_candidates"}:
+        extra = tmp_path / f"{label.replace('/', '_')}.py"
+        extra.write_text(f"# {label}")
+        sources[label] = extra
     return config, inputs, sources
 
 
@@ -275,3 +281,117 @@ def test_combine_catalogs_prefixes_ids_and_preserves_metadata(tmp_path):
     assert {v.get("id") for v in ET.parse(out_rou).getroot().findall("vehicle")} == {
         "weekday__t0", "weekend__t0"
     }
+
+
+class TestCatalogSourceContract:
+    """The catalog identity binds pool generation, and nothing downstream.
+
+    Narrowed 2026-08-26 after commit c653b24 — whose purpose was to harden
+    the catalog's qualification evidence — invalidated the adopted catalog by
+    editing pfe.py, route_catalog.py and catalog_qualification.py, none of
+    which pool generation executes.
+    """
+
+    def test_a_missing_generator_source_is_refused(self, tmp_path):
+        config, inputs, sources = _identity_inputs(tmp_path)
+        del sources["build_candidates"]
+        with pytest.raises(ValueError, match="missing"):
+            route_catalog.catalog_identity_payload(
+                config, inputs, sources, pool_key="weekday")
+
+    def test_an_unexpected_source_is_refused(self, tmp_path):
+        """This is exactly how the whole demand inventory crept in."""
+        config, inputs, sources = _identity_inputs(tmp_path)
+        stray = tmp_path / "pfe.py"
+        stray.write_text("# solver")
+        sources["source:pfe"] = stray
+        with pytest.raises(ValueError, match="unexpected"):
+            route_catalog.catalog_identity_payload(
+                config, inputs, sources, pool_key="weekday")
+
+    def test_the_bound_set_still_covers_what_generation_imports(self):
+        """Measured, not asserted: what build_candidates actually imports.
+
+        If pool generation ever starts importing a module the identity does
+        not bind, a stale catalog could serve a changed pool. This fails then,
+        rather than after a silently wrong build.
+        """
+        import subprocess
+        import sys
+
+        probe = (
+            "import sys, json, pathlib\n"
+            "root = pathlib.Path('.').resolve()\n"
+            "before = set(sys.modules)\n"
+            "import build_candidates\n"
+            "out = []\n"
+            "for name in set(sys.modules) - before:\n"
+            "    mod = sys.modules.get(name)\n"
+            "    path = getattr(mod, '__file__', None)\n"
+            "    if not path:\n"
+            "        continue\n"
+            "    p = pathlib.Path(path).resolve()\n"
+            "    try:\n"
+            "        out.append(str(p.relative_to(root)))\n"
+            "    except ValueError:\n"
+            "        pass\n"
+            "print(json.dumps(sorted(out)))\n"
+        )
+        result = subprocess.run([sys.executable, "-c", probe],
+                                capture_output=True, text=True, timeout=600)
+        assert result.returncode == 0, result.stderr[-2000:]
+        imported = set(json.loads(result.stdout.strip().splitlines()[-1]))
+
+        import build_sumo_demand
+
+        bound = set()
+        for label, path in build_sumo_demand.candidate_identity_components(
+                n_total=6000, through_fraction=0.5, gravity_km=1.8,
+                gravity_alpha=1.5, cross_fraction=0.3, is_weekend=False,
+                start_date="2027-09-01", seed=42,
+                home=build_sumo_demand.sumo_home(),
+                flows_path=build_sumo_demand.FLOWS_PATH)[2].items():
+            assert label in route_catalog.CATALOG_SOURCE_LABELS
+            bound.add(str(Path(path)))
+
+        # Imported by generation but deliberately NOT bound, each because it
+        # is a thin locator whose behaviour is already pinned elsewhere in the
+        # identity. Listed explicitly so a NEW unbound import fails this test.
+        known_unbound = {
+            "demand/__init__.py",
+            "traffic_sim/simulation/__init__.py",
+            "traffic_sim/simulation/runtime.py",
+            "traffic_sim/intake/__init__.py",
+            "traffic_sim/__init__.py",
+            "demand/locations.py",
+            "traffic_sim/intake/sensors.py",
+            "build_data.py",
+            "build_candidates.py",
+            "dirsplit/__init__.py",
+            "dirsplit/geo.py",
+            "traffic_sim/core/__init__.py",
+            "traffic_sim/core/fingerprint.py",
+        }
+        escaped = imported - bound - known_unbound
+        assert not escaped, (
+            "pool generation imports project code the catalog identity does "
+            f"not bind: {sorted(escaped)}")
+
+    def test_downstream_stages_are_genuinely_not_imported_by_generation(self):
+        """Pins the reason those 22 entries were dropped from the identity."""
+        import subprocess
+        import sys
+
+        probe = (
+            "import sys\n"
+            "import build_candidates\n"
+            "downstream = ['traffic_sim.demand.pfe', 'demand.calibration',\n"
+            "              'demand.publication', 'demand.structure',\n"
+            "              'traffic_sim.demand.catalog_qualification',\n"
+            "              'traffic_sim.demand.route_catalog']\n"
+            "print([m for m in downstream if m in sys.modules])\n"
+        )
+        result = subprocess.run([sys.executable, "-c", probe],
+                                capture_output=True, text=True, timeout=600)
+        assert result.returncode == 0, result.stderr[-2000:]
+        assert result.stdout.strip().endswith("[]"), result.stdout

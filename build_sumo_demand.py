@@ -917,9 +917,13 @@ def main() -> None:
                 # margins are applied by the picker/PFE below.
                 catalog_destinations: dict[str, tuple[Path, Path]] = {}
                 catalog_storage_started = time.perf_counter()
-                catalog_sources = {**cache_sources, **{
-                    f"source:{name}": path
-                    for name, path in SOURCE_FILES.items()}}
+                # The catalog stores the same routed pool the legacy
+                # candidate cache stores, so it is keyed on the same curated
+                # generator sources. It used to add the ENTIRE demand source
+                # inventory on top, which made every PFE, calibration or
+                # storage-layer edit invalidate a pool those files cannot
+                # affect — see route_catalog.CATALOG_SOURCE_LABELS.
+                catalog_sources = dict(cache_sources)
                 for pool_key in catalog_pool_keys:
                     pool_config = dict(cache_config)
                     pool_config["is_weekend"] = pool_key == "weekend"

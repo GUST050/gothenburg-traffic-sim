@@ -35,6 +35,47 @@ OUTPUTS = ("catalog.rou.xml", "catalog.meta.json", "catalog.validation.json",
            "catalog.template.json")
 _DATE_CONFIG_KEYS = {"date", "start_date", "real_day_shape", "day_blocks"}
 
+# WHICH SOURCE BYTES CAN CHANGE A STORED CATALOG ENTRY (narrowed 2026-08-26).
+#
+# A catalog entry holds exactly ONE artifact: the routed candidate pool that
+# ``build_candidates.py --catalog-mode`` writes.  Only code that pool
+# generation actually executes can change those bytes.  The LEGACY candidate
+# cache stores the same artifact from the same generator and has always been
+# keyed on precisely this set of labels; the catalog additionally piled the
+# whole 31-entry demand source inventory on top.  That asymmetry was the bug:
+#
+#   * measured, 6 of the 31 inventory entries are reachable from
+#     build_candidates.py's import closure and 25 are not.  The 25 include
+#     pfe, pfe_kernel, demand/calibration.py, demand/publication.py,
+#     demand/structure.py and this module's own qualification helper - all of
+#     which run AFTER the pool exists and cannot alter a single routed edge;
+#   * the consequence was not theoretical.  Commit c653b24, whose entire
+#     purpose was to HARDEN the catalog's qualification evidence, changed
+#     pfe.py, route_catalog.py and catalog_qualification.py and thereby
+#     invalidated the adopted catalog - sending production back to the slower
+#     legacy builder for a change that could not affect the pool;
+#   * binding this module into the identity is also self-referential: every
+#     edit to the storage layer invalidated everything the storage layer
+#     held.  Stored bytes are already protected by the per-artifact digests
+#     in each entry's manifest, which is the check that actually detects a
+#     corrupted or substituted entry.
+#
+# Narrowing does NOT weaken the guarantee that matters.  A real change to
+# pool generation still invalidates the catalog through build_candidates.py
+# itself, and through sumo/assignment_priors.json, which is a hashed catalog
+# INPUT and is regenerated whenever build_candidates.py changes.
+CATALOG_SOURCE_LABELS = frozenset({
+    "build_candidates",
+    "build_sumo_demand",
+    "build_data",
+    "dirsplit_geo",
+    "endpoint_locations",
+    "candidate_cache",
+    "sensor_registry_loader",
+    "direction_anchor",
+    "pipeline_fingerprint",
+})
+
 
 class CatalogSupportError(ValueError):
     """A valid attempt needs a larger route pool for sensor support."""
@@ -265,6 +306,17 @@ def catalog_identity_payload(
     if "source_flow_edge_set" in inputs:
         edge_set = _flow_edge_set_fingerprint(
             Path(inputs["source_flow_edge_set"]))
+    # Fail closed in BOTH directions.  A missing label would silently drop a
+    # generator input from the identity; an unexpected one is how the whole
+    # demand inventory crept in.  Either way the caller must decide
+    # deliberately rather than have the key quietly change meaning.
+    provided = set(source_files)
+    missing = CATALOG_SOURCE_LABELS - provided
+    unexpected = provided - CATALOG_SOURCE_LABELS
+    if missing or unexpected:
+        raise ValueError(
+            "catalog source files must match the declared contract exactly; "
+            f"missing={sorted(missing)} unexpected={sorted(unexpected)}")
     payload = {
         "schema_version": SCHEMA_VERSION,
         "pool_key": pool_key,
