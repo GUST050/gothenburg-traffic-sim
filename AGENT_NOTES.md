@@ -114,17 +114,23 @@ which model may continue. See `AGENTS.md`.
   not an active release.
   Active immutable release: golden-2025-09-16-7day-v1. The map-to-sensor audit
   passes on all seven directed sensor edges.`
-- Live operation: `External monthly search ui-monthly-euc9qp is stopped for
-  forecast 2027-07-15..2027-07-30 on edge 96527131_26842526_0. Its manifest
-  records interrupted_by_user at 476/1,776, with completed artifacts and
-  scratch preserved for resume. It is not a completed or promoted result. The
-  stale non-responsive port-8000 process was replaced after the JSON
-  optimization; `/api/ping` returns ok and closure/recalibration are idle. New
-  monthly CLI runs hold `/usr/bin/caffeinate -i -w <pid>` while owning the
-  workspace; existing historical wall time remains unsuitable for throughput.
-  The current server reports ui-monthly-12hg8f3 as error (not running), the
-  workspace lock is free, and its preserved manifest still records the failed
-  prepare-backend attempt. A retry is safe but was not started automatically.`
+- Live operation: `Monthly search ui-monthly-13lhsoy-5d is RUNNING on main for
+  forecast 2027-09-01..2027-09-30 on edge 96527131_26842526_0, min=max=5
+  workdays (1,690 periods, 1,950 daily units). Older runs superseded:
+  ui-monthly-euc9qp stopped at 476/1,776 (July window), ui-monthly-13lhsoy
+  (min=4/max=5) abandoned by user decision after 144 four-day units, none of
+  which a five-day search can reuse because unit identity binds
+  duration_minutes. Monthly CLI runs now hold
+  `caffeinate -i -m -s -w <pid>` and report the power source at startup.
+  TWO OPERATIONAL FAILURES WORTH KEEPING, both external to the code:
+  (1) a `git checkout main` while the campaign ran removed
+  min_consecutive_start_days from ClosureSearchSpec, so the spec's content_key
+  no longer matched its contents and every worker died. The contract check
+  behaved correctly - it refused a spec whose key did not match rather than
+  silently searching something else. Merging PR #3 restored the tree and all
+  29 demand archives validated again with zero rebuilds (prepare 6.4 min).
+  (2) a closed laptop lid suspended the machine for 3.00 of 4.84 wall hours.
+  caffeinate cannot prevent clamshell sleep; only an open lid can.`
 - Performance evidence: `Current serve.py passes three seed workers: commit
   46e7048 measured baseline 11.0 -> 5.9 s and closure 21.6 -> 13.9 s with
   identical output apart from generated_at. Frozen v6 measured closure p95
@@ -177,6 +183,25 @@ which model may continue. See `AGENTS.md`.
   validation/atomic_json_publication_benchmark_2026-08-25.json. A separate
   loopback API smoke returned 202 immediately and reached done in 11.088 s with
   verified-clean closure integrity; its temporary server was stopped.`
+- Monthly throughput evidence, MEASURED 2026-08-26: `The open "no active-time
+  campaign has measured end-to-end speed" gap is now closed for this machine.
+  Measured on the live ui-monthly-13lhsoy-5d run by timestamping the
+  content-addressed daily-result cache and subtracting every gap over 10
+  minutes: 125 units in 1.86 h awake against 3.00 h suspended, i.e. 67.3
+  units/h, 53.5 s per unit of AWAKE wall time. An earlier sample of the same
+  campaign read 97-107 units/h before settling, and the 4+5-day predecessor
+  settled at 97.1 units/h, so 65-105 units/h is the honest band and the early
+  readings of 128-183 units/h were transient ramp-up, not steady state.
+  DO NOT compose the frozen 54.445 s single-unit figure with the 1.69x
+  eight-worker benchmark to predict a campaign: that product predicted 32 h
+  where the measured rate gives 24 h of awake time for 1,600 remaining units.
+  The two benchmarks were measured in different conditions and do not
+  multiply. NOTE FOR A FUTURE MEASUREMENT, not a conclusion: 53.5 s per unit
+  of wall time across eight workers sits suspiciously close to the frozen
+  54.445 s for ONE unit, which would imply the eight-worker width is buying
+  almost nothing. That needs its own controlled comparison before it is
+  claimed either way. Historical wall time remains unusable for throughput -
+  the same campaign reads 25.4 units/h if suspended hours are not removed.`
 - Passage-reconciliation evidence: `Five counterbalanced three-seed baseline
   trials measured current median 1.9908 s versus candidate 2.0536 s (candidate
   3.15% slower); this is not a p95 claim. Learning plus exact verification cost
@@ -355,6 +380,37 @@ which model may continue. See `AGENTS.md`.
   make lint and diff checks pass. The
   active catalog day also ran through three SUMO seeds with 20,818/20,818
   loaded/inserted and zero waiting, unfinished, teleports or collisions.`
+- Identity and gate repairs, 2026-08-26: `Three defects found while
+  investigating why a live campaign was slow, each root-caused before being
+  fixed. (1) The route catalog identity hashed the entire 31-entry demand
+  source inventory; measured, only 6 of those are reachable from
+  build_candidates.py's import closure. Commit c653b24 - whose purpose was to
+  HARDEN catalog qualification - therefore invalidated the adopted catalog by
+  editing pfe.py, route_catalog.py and catalog_qualification.py, none of which
+  can change a routed pool. The identity is now the same curated generator set
+  the legacy candidate cache uses, fails closed on both missing and unexpected
+  labels, and is pinned by a test that measures the real import closure in a
+  subprocess. Re-qualified: 30 paired trials, verdict adopt, speedup median
+  2.270x; measured live afterwards at candidate generation 135 s to 1.03 s and
+  campaign prepare 54 min to 2.9 min. (2) maximum_l1_distance was written only
+  by tests, so the trip-length gate could never be evaluated and every build
+  reported overall warn whatever its data. The threshold now lives once in
+  traffic_sim/confidence/trip_length_gate.py, derived from total-variation
+  distance (L1 <= 0.20 = at most 10% of vehicles in the wrong RVU length bin);
+  a build may declare a stricter limit, never a looser one. Seven real builds
+  measure 0.2318-0.3636 and FAIL it, while the candidate pool sits at ~0.026 -
+  the gate separates the generator from PFE's selection, which over-selects
+  5-10 km. (3) A validation report never emits the string fail, so
+  confidence_health was defined as overall != fail and was therefore
+  unconditionally true, while candidate_structure collapsed to the metadata
+  exists: two of seven per-trial hard gates in the ADOPTED qualification could
+  not fail. Both are now bound to sections that can report a problem, and the
+  new test breaks each gate's own contract in turn - falsifiability is what is
+  under test. OBSERVED, NOT FIXED, because it is out of that tool's domain:
+  population_contract and route_agent_provenance compare
+  candidate_provenance.vehicles against pfe_fit.vehicles, which differ on a
+  three-variant build (169,683 vs 56,632); the benchmark's own arms are
+  single-variant so its gates are correct where they run.`
 - Catalog evidence robustness review: `The five reported findings were
   reproduced against the current tree. The named v2 qualification/build files
   did exist and matched their old adoption hashes, but runtime did not read

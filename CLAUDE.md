@@ -436,6 +436,46 @@ Goal arc, in order:
   and the relaxation ladder surrenders bounds FIRST (`RUNG_NOBND_TOL1`), before
   purpose quotas, before priors, and long before any measured band is widened.
   A ceiling can only prevent invention; it can never cause it.
+- ROUTE CATALOG IDENTITY BINDS POOL GENERATION, NOT THE PIPELINE (2026-08-26,
+  `traffic_sim/demand/route_catalog.CATALOG_SOURCE_LABELS`). A catalog entry
+  holds ONE artifact: the routed candidate pool `build_candidates.py
+  --catalog-mode` writes. Its identity therefore binds the same curated
+  generator sources the LEGACY candidate cache has always used for the same
+  artifact — and nothing downstream. It used to hash the whole 31-entry demand
+  source inventory; measured, only 6 of those are reachable from
+  build_candidates.py's import closure, and the other 25 include pfe,
+  pfe_kernel, demand/calibration.py, demand/publication.py, demand/structure.py
+  and the catalog's own qualification helper, all of which run AFTER the pool
+  exists. The cost was real: commit c653b24, whose entire purpose was to HARDEN
+  catalog qualification, invalidated the adopted catalog by editing three files
+  that cannot change a routed edge, sending production back to the slower
+  legacy builder. `catalog_identity_payload` now fails closed on BOTH a missing
+  and an unexpected label, so the set cannot drift back in either direction,
+  and a test measures the real import closure in a subprocess and fails if
+  generation ever imports code the identity does not bind. Narrowing does not
+  weaken the guarantee: a genuine change to pool generation still invalidates
+  the catalog through build_candidates.py itself AND through
+  sumo/assignment_priors.json, a hashed catalog input that is regenerated
+  whenever build_candidates.py changes.
+- TRIP-LENGTH ACCEPTANCE IS A FROZEN PROJECT LIMIT (2026-08-26,
+  `traffic_sim/confidence/trip_length_gate.py`). The validation report has
+  always evaluated "L1 against the declared external target must be at most
+  maximum_l1_distance" and failed closed without it — but NOTHING in production
+  ever wrote that limit; a repository-wide search found it only in tests. The
+  gate could therefore never be evaluated, so EVERY demand build reported
+  `overall: "warn"` regardless of its data, burying the real structure flags
+  published beside it. A gate that cannot be evaluated is not a conservative
+  gate; it is no gate plus noise. The limit is now declared once, in source, so
+  it cannot travel inside the artifact it judges: bin shares are a distribution,
+  so `L1 = 2 x total-variation distance`, and the frozen `L1 <= 0.20` states
+  that at most 10% of calibrated vehicles may sit in the wrong RVU length bin
+  relative to the availability-corrected behavioural target. A build may
+  declare a STRICTER limit; a looser one is ignored. HONEST STATUS: current
+  builds FAIL it (measured 0.2318-0.3636 across seven 2026-08-26 forecast
+  builds) while the candidate pool sits at ~0.026 — the gate separates the
+  generator, which reproduces the target well, from PFE's selection, which
+  over-selects the 5-10 km bin (21.6% against a 6.1% target). That is the gate
+  working, not the gate being wrong.
 - One ID space across data/model/sim/map. One coordinate system (WGS84). Time = ISO datetime / abstract index — never "row in the 2025 file".
 - `NormalProfile.flowAt/calmAt(edgeId, qi, dayOfWeek)`: dayOfWeek (0=Mon) MUST be derived from the ACTIVE provider's epoch (2025 starts Wednesday, 2027 Friday) — never from qi alone.
 
