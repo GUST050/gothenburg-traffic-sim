@@ -1997,7 +1997,11 @@
             setClosureTool(null);
             await activateClosedScenario(status);
           } catch (e) {
-            alert('Kunde inte ladda scenariot: ' + e.message);
+            // Same class as the main simulate path: a poll loop just ended,
+            // so this must not block the event loop. See announceStudyOutcome.
+            announceStudyOutcome('Avstängningssimuleringen', 'error',
+                                 (lastSuggestResult.edges || []).join(', '),
+                                 e.message);
           } finally {
             others.forEach(b => b.disabled = false);
             btn.textContent = 'Ladda';
@@ -2029,7 +2033,14 @@
             }
             renderSuggestResults(status.result);
           } catch (e) {
-            alert('Sökningen misslyckades: ' + e.message);
+            // Not alert(): a modal blocks the event loop, so the poll loop
+            // this catch just ended cannot be replaced by a new one until the
+            // operator dismisses it, and the tab then sits on a stale failure
+            // knowing nothing about any job started since. The persistent
+            // banner is the mechanism this file already chose for exactly
+            // this case — see announceStudyOutcome and the simulate path.
+            announceStudyOutcome('Tidsoptimeringen', 'error',
+                                 [...selected].join(', '), e.message);
           } finally {
             suggestJobRunning = false;
             btnSuggestRun.disabled = selected.size === 0;
@@ -2471,7 +2482,10 @@
             setClosureTool(null);
             await activateClosedScenario(status);
           } catch (e) {
-            alert('Kunde inte ladda schemat: ' + e.message);
+            // Same class as the main simulate path: a poll loop just ended,
+            // so this must not block the event loop. See announceStudyOutcome.
+            announceStudyOutcome('Avstängningssimuleringen', 'error',
+                                 edges.join(', '), e.message);
           } finally {
             others.forEach(b => b.disabled = false);
             btn.textContent = 'Ladda';
@@ -2646,7 +2660,13 @@
             monthlyProgress.hidden = true;
             renderMonthlyResults(status.result);
           } catch (e) {
-            alert('Sökningen misslyckades: ' + e.message);
+            // See the suggest path above. Found live 2026-08-26: a paused
+            // monthly search left this alert on screen, the frozen event loop
+            // stopped the status poll, and the tab still showed the failure
+            // more than three hours after a replacement search had started
+            // and was running normally.
+            announceStudyOutcome('Sökningen efter arbetsperiod', 'error',
+                                 [...selected].join(', '), e.message);
           } finally {
             monthlyJobRunning = false;
             btnMonthlyRun.textContent = 'Sök arbetsperiod';

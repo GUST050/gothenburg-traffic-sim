@@ -176,3 +176,62 @@ class TestTheUiRendersTheDetail:
         assert "2 ** consecutivePollFailures" in poller
         assert "consecutivePollFailures = 0" in poller
         assert "servern svarar inte" in poller
+
+
+def _job_error_catch_blocks() -> list[str]:
+    """The catch blocks that end a road-closure job's status poll loop.
+
+    Each `runRoadClosureOperation` caller converts a terminal `error` status
+    into a thrown Error; the catch that receives it is the last code to run
+    for that job in this tab.
+    """
+    source = APP_JS.read_text(encoding="utf-8")
+    blocks = []
+    marker = "if (status.status === 'error') throw new Error(status.error);"
+    start = 0
+    while True:
+        hit = source.find(marker, start)
+        if hit == -1:
+            break
+        # Road-closure jobs only. Signal optimization also polls, but its
+        # failure is NOT a study outcome — the map keeps whatever scenario it
+        # had either way, so announceStudyOutcome's "the map still shows the
+        # previous study" wording would be actively wrong there. It needs its
+        # own non-blocking panel message, which does not exist yet.
+        if "runRoadClosureOperation(" not in source[max(0, hit - 1500):hit]:
+            start = hit + len(marker)
+            continue
+        catch = source.find("} catch (e) {", hit)
+        assert catch != -1, "a job error path must be caught"
+        end = source.find("} finally {", catch)
+        blocks.append(source[catch:end if end != -1 else catch + 600])
+        start = hit + len(marker)
+    return blocks
+
+
+def test_a_failed_job_never_reports_through_a_blocking_alert():
+    """alert() freezes the event loop, so the poll loop cannot be replaced.
+
+    MDN documents alert() as a legacy exception to the non-blocking model: it
+    holds the main thread until dismissed, starving timers and pending
+    promises. Found live 2026-08-26 — a paused monthly search left this alert
+    on screen and the tab still showed that failure over three hours after a
+    replacement search had started and was running normally. app.js already
+    owns the right mechanism (announceStudyOutcome, whose own comment says
+    "a transient alert() is not a label"); this keeps every job error path on
+    it.
+    """
+    def strip_comments(block: str) -> str:
+        # A block explaining WHY it avoids alert() must not read as using it.
+        return "\n".join(
+            line for line in block.splitlines()
+            if not line.strip().startswith("//"))
+
+    blocks = _job_error_catch_blocks()
+    assert blocks, "expected at least one road-closure job error path"
+    offenders = [b for b in blocks if "alert(" in strip_comments(b)]
+    assert not offenders, (
+        "a job-failure path still uses a blocking alert(); use "
+        f"announceStudyOutcome instead: {offenders}")
+    assert all("announceStudyOutcome(" in b for b in blocks), (
+        "every job-failure path must announce through the persistent banner")
