@@ -54,7 +54,11 @@ owners, states and approval formulas are not active workflow rules. See
   repaired with one route (6,030→6,031 route×purpose shapes), and exact integer
   publication passed q11/q16/q17. PFE errors now name date, variant, quarter
   and clock interval. The failed search is idle/error with its workspace
-  retained; no replacement campaign has been launched.
+  retained. Replacement campaign `ui-monthly-13lhsoy-5d` is now running with
+  the explicit 8x1 worker policy. A 2026-08-27 test run rewrote its durable
+  ledger record to `orphaned_running`; the still-live PID/PGID and owning
+  server were reverified, the record was restored to `running` with an audit
+  trail, and tests now isolate both `JOBS_DIR` and recovery-gate globals.
   Current server wiring already runs three interactive seeds in
   parallel (measured baseline 11.0 -> 5.9 s and closure 21.6 -> 13.9 s,
   byte-identical apart from generated_at). A clean 10-trial active-demand run
@@ -101,9 +105,9 @@ owners, states and approval formulas are not active workflow rules. See
   baseline trials measured median 1.805→1.846 s (+2.30%), and closure-shaped
   equivalence/performance is unmeasured.`
 - Suggested next action: `Keep the byte-exact single-write JSON optimization
-  and the passing exact-repeat cache. For monthly work, retry the same exact
-  5–5-day UI search (the failed workspace is retained and unlocked) and
-  measure verified units per active hour with the explicit 8×1 policy. Let
+  and the passing exact-repeat cache. Monitor the running exact 5–5-day UI
+  search and measure verified units per active hour with the explicit 8×1
+  policy. Let
   source/provenance identity rebuild any incompatible candidate or day cache;
   do not force reuse, reuse created-at wall time or claim 2.7x before
   measurement.
@@ -121,7 +125,10 @@ owners, states and approval formulas are not active workflow rules. See
   for low observability, or activate policy/UI/global-best claims without the
   applicable frozen evidence. Do not hardcode 107's annual 0.5231 as 96
   measured quarters or present q10/q90 as calibrated probabilities.`
-- Updated: `2026-08-26 after repairing the real 2027-10-01 candidate-matrix
+- Updated: `2026-08-27 after isolating the test job ledger, restoring the
+  verified live monthly record and explicitly declaring direct SciPy/NetworkX
+  dependencies. Previously updated 2026-08-26 after repairing the real
+  2027-10-01 candidate-matrix
   infeasibility with a grounded single-sensor basis and verifying all three
   formerly failing quarters; previous 2026-08-25 monthly exact-length, explicit-worker,
   awake-active-time and macOS keep-awake repairs, plus schema-v3 provenance
@@ -162,8 +169,9 @@ owners, states and approval formulas are not active workflow rules. See
   are implemented. The old 2,224-unit run has not been reclassified as valid
   throughput evidence. The subsequent 2027-10-01 failure is repaired by a
   generator-level exact-incidence basis invariant; the real frozen q11/q16/q17
-  projection now passes, but the replacement monthly campaign has not been
-  restarted.`
+  projection now passes. Replacement campaign `ui-monthly-13lhsoy-5d` is
+  running; its test-damaged durable record has been restored with audit fields
+  and regression coverage prevents future live-ledger reconciliation.`
 - Objective and scope: `Reduce cold daily demand preparation by reusing a
   verified weekday/weekend routed catalog without changing exact daily PFE or
   warm-state semantics. Also reduce exact-repeat and first-new interactive closure
@@ -196,8 +204,8 @@ owners, states and approval formulas are not active workflow rules. See
   but lacks ordinary SUMO meso-accumulator serialization. The stopped search
   ui-monthly-euc9qp is 476/1,776; its manifest records an interrupted_by_user
   progress pointer with resumable scratch. Its exact five-day form now sizes to
-  780 periods/1,040 units instead of 1,776/2,224, but no replacement campaign
-  has been launched. The active process-free disruption
+  780 periods/1,040 units instead of 1,776/2,224. The replacement exact
+  five-day campaign is running. The active process-free disruption
   case improved from 4.1364 s to 1.051 s exactly. One isolated three-seed
   production-shaped closure completed in 10.690 s versus 11.549 s with the
   full-field rollback, with equal scenario/trajectory digests and clean health;
@@ -230,9 +238,9 @@ owners, states and approval formulas are not active workflow rules. See
   tools/cost_ordered_benchmark_suite.py; related tests and new frozen validation
   contracts/outcomes; tests/test_closure_disruption.py;
   tests/test_singleflight.py.`
-- Constraints and safety: `The named monthly run is paused; still bind every
-  S0/reference run to frozen inputs and isolated output. Do not compete with a
-  newly resumed evidence-producing run.
+- Constraints and safety: `The named monthly run is active; bind every
+  S0/reference run to frozen inputs and isolated output. Do not compete with
+  this evidence-producing run or mutate source read by newly spawned workers.
   Do not reduce seeds/variants, closure horizon, rerouter coverage, recovery,
   precision or outputs needed by the product; do not loosen timeouts or gates;
   do not activate proxy/global-best/cost-first claims without new frozen

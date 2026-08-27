@@ -28,8 +28,11 @@ which model may continue. See `AGENTS.md`.
   failed at demand key c796667235591888 on 2027-10-01 because the final
   candidate matrix lacked a route exclusive to sensor
   26842525_26355153_0. That structural infeasibility is now repaired at
-  candidate-generation time and verified against the frozen failed pool; no
-  new campaign has been launched after the repair.`
+  candidate-generation time and verified against the frozen failed pool.
+  Replacement campaign `ui-monthly-13lhsoy-5d` is running. Its durable job
+  record was incorrectly reconciled by a test run on 2026-08-27; PID, PGID,
+  server ownership and spec were reverified, the record was restored to
+  `running` with an audit trail, and the test ledger is now isolated.`
 - Summary: `The canonical speed plan separates exact repeats, first-new
   interactive closures and exhaustive monthly throughput. Implemented slices
   now include the provenance-bound exact cache, result-neutral independent-day
@@ -279,6 +282,9 @@ which model may continue. See `AGENTS.md`.
   docs/plans/FIFTY_SENSOR_PERFORMANCE_CONTRACT_2026-08-22.md,
   docs/plans/LARGE_SIMULATION_FUNCTION_STRUCTURE_2026-08-23.md,
   docs/plans/CANONICAL_ROUTE_CATALOG_PLAN_2026-08-24.md,
+  docs/plans/FROZEN_EVIDENCE_RETIREMENT_PLAN_2026-08-27.md,
+  requirements.txt, requirements-dev.txt, .github/workflows/ci.yml,
+  tests/conftest.py, tests/test_serve.py, tests/test_independent_daily.py,
   tests/test_sensor_scale_contract.py, tests/test_closure_disruption.py,
   tests/test_benchmark_exact_close_cache.py,
   tests/test_annual_warm_store.py, tests/test_annual_warm_readiness.py,
@@ -297,7 +303,10 @@ which model may continue. See `AGENTS.md`.
   after packing and restore-verifying its isolated artifact. The new demand run and the preceding diagnostic
   historical run remain archived under runs/. Unrelated dirty source changes
   were preserved.`
-- Checks: `The grounded-incidence repair passes 207 candidate/integer-identity tests,
+- Checks: `The 2026-08-27 isolation repair passes all 155 server tests and
+  leaves the live monthly record `running`; direct SciPy/NetworkX surfaces pass
+  451 focused tests, and the corrected independent-daily CLI assertion passes
+  all 18 tests in its module. The grounded-incidence repair passes 207 candidate/integer-identity tests,
   226 complete build-demand/PFE tests and all 14 monthly-search server tests;
   the frozen failed 2027-10-01 pool gained exactly one grounded shape and
   publishes q11/q16/q17 with exact sensor margins. make lint and git diff
@@ -422,10 +431,10 @@ which model may continue. See `AGENTS.md`.
   plus deletion share one workspace lock. The focused evidence suite passes
   136 tests; the broader demand/PFE/catalog regression passes 351 tests with
   one LibreSSL warning; make lint and git diff --check pass.`
-- Blockers or risks: `Awake active-time telemetry is implemented, but the
-  repaired search has not yet been rerun, so end-to-end completion and elapsed
-  time remain unmeasured; the old 95-minute failed attempt is diagnosis, not
-  post-fix performance evidence. Because generator identity changed, caches
+- Blockers or risks: `Awake active-time telemetry is implemented and the
+  repaired search is running, but end-to-end completion remains unmeasured.
+  The old 95-minute failed attempt is diagnosis, not post-fix performance
+  evidence. Because generator identity changed, caches
   must continue to fail closed rather than be force-reused. The remaining S0
   host telemetry and monthly throughput evidence are still open;
   do not claim the p95 or 2.0x targets from instrumentation. The frozen
@@ -452,8 +461,8 @@ which model may continue. See `AGENTS.md`.
   translates browser network failures into an actionable localhost:8000
   message; this covers stale tabs left on a stopped fallback port. Focused
   validation/UI tests pass 24/24, JavaScript syntax and diff checks pass.`
-- Suggested next action: `Retain the qualified single-write JSON path. Retry
-  the same exact 5–5-day monthly search and measure verified units per
+- Suggested next action: `Retain the qualified single-write JSON path. Monitor
+  the running exact 5–5-day monthly search and measure verified units per
   awake active hour under the explicit 8×1 policy; do not infer a 2.7x result
   from worker count. If interactive closure work continues, target the measured
   SUMO or disruption phase against the 10.359 s p95 reference. Keep annual
