@@ -1,0 +1,138 @@
+{
+  "backend_identity": {
+    "daily_backend_digest": "90f07a50c203f88b5f2c690a0c56b48c339cb63202658e34aa81cab0cbfcbeef",
+    "daily_unit_count": 1950,
+    "interday_policy": "independent_daily_reset_v1",
+    "simulation_mode": "meso",
+    "unit_backend_digest_count": 1950,
+    "work_allocation_policy": "exact_equal_daily_v1"
+  },
+  "cache_bound_source_proof": {
+    "aggregate_digest_after_edit": "90f07a50c203f88b5f2c690a0c56b48c339cb63202658e34aa81cab0cbfcbeef",
+    "all_cache_bound_files_unchanged_after_edit": true,
+    "also_bound_separately": "traffic_sim/simulation/independent_daily_worker.py (worker_source_sha256 in the isolated provenance)",
+    "cache_bound_sources": [
+      "traffic_sim/simulation/monthly_sumo.py",
+      "traffic_sim/simulation/closure_teleport.py",
+      "traffic_sim/simulation/monthly_demand.py",
+      "traffic_sim/simulation/monthly_proxy.py",
+      "traffic_sim/simulation/proxy_projection.py",
+      "traffic_sim/simulation/pilot_selection.py",
+      "traffic_sim/simulation/closure_ranking.py",
+      "traffic_sim/simulation/period_comparison.py",
+      "traffic_sim/simulation/finalist_decision.py",
+      "traffic_sim/simulation/search_workspace.py",
+      "suggest_closure_time.py",
+      "run_scenario.py",
+      "traffic_sim/simulation/envelope.py",
+      "traffic_sim/simulation/metrics.py"
+    ],
+    "claim": "The scheduler change cannot move cache identity, because independent_daily.py is not one of the sources bound into monthly_sumo.py's source_digest, which is carried in the backend provenance that the unit cache key hashes.",
+    "edited_files_outside_that_set": [
+      "traffic_sim/simulation/independent_daily.py",
+      "run_monthly_closure_search.py"
+    ],
+    "entries_still_resolvable_after_edit": 1083
+  },
+  "cache_state": {
+    "cache_corrupt": 0,
+    "cache_file_count_all_searches": 2158,
+    "cache_hits": 3229,
+    "cache_manifest_note": "Per-file sha256 manifest of every cache entry, frozen at /tmp/gs-provenance/cache_manifest_prestop.txt. The cache root is shared across searches, so the raw file count is NOT this campaign's completed-unit count.",
+    "cache_manifest_sha256": "dc1683fa57123348f5afe704324dd774c8916a923183459257d6af149ef5f100",
+    "cache_misses": 851,
+    "cache_partial_tmp_files": 0,
+    "cache_root": "runs/closure-search-daily-results",
+    "cache_verify_seconds": 0.207913,
+    "cache_write_seconds": 0.560128,
+    "units_simulated": 851
+  },
+  "frozen_at": "2026-08-27T16:40:02Z",
+  "identity": {
+    "job_id": "monthly-20260826-170800-570e",
+    "job_pgid": 68201,
+    "job_server_pid": 28345,
+    "job_started_at": 1787756880.148902,
+    "repo_head_at_freeze": "465f4716c2d31cc808d606750be4bd7c044ee458",
+    "search_content_key": "006503271b848cdc6ec2",
+    "search_id": "ui-monthly-13lhsoy-5d",
+    "spec_content_key": "006503271b848cdc6ec2",
+    "spec_path": "runs/closure_search_specs/ui-monthly-13lhsoy-5d-20260826-170800-b23f.json",
+    "workspace_git_commit": "e6ce55779bfdaa0c075895a8c4c5e7eed40543d4",
+    "workspace_input_sha256": "6c88f49fe6d98c86fb4cf02ba33eaeb37c56089c46725236e01288aefd47fa8e"
+  },
+  "kind": "monthly_global_queue_baseline",
+  "measured_bottleneck": {
+    "active_elapsed_s": 88771.26916,
+    "configured_daily_workers": 8,
+    "configured_max_active_sumo_slots": 8,
+    "effective_slot_utilization": 0.113115,
+    "interpretation": "worker_seconds/active_elapsed_s = 0.905 means ONE unit worker was busy ~90% of wall time. Against 8 configured slots that is ~11.3% utilization. The width is configured but unreachable because batching is parent-local: a 5-day parent supplies at most 5 units and, measured here, 3229 hits vs 851 misses means ~3.96 of every 5 parent units are already cached, leaving ~1.04 genuinely new units per parent - not enough to fill even two slots, let alone eight.",
+    "mean_units_per_parent": 5.0,
+    "measured_cached_units_per_parent": 3.9571,
+    "measured_new_units_per_parent": 1.0429,
+    "observed_concurrent_sumo": {
+      "max": 1,
+      "min": 0,
+      "samples": 20
+    },
+    "observed_concurrent_workers": {
+      "max": 1,
+      "min": 1,
+      "samples": 20
+    },
+    "sampling_note": "20 samples at 3 s intervals over the live process group 68201, immediately before the stop. Every sample showed exactly one isolated daily worker; SUMO was absent in one sample during worker turnaround.",
+    "worker_seconds": 80330.939967,
+    "worker_to_active_ratio": 0.90492
+  },
+  "measured_unit_cost": {
+    "basis": "worker_seconds / units_simulated over the frozen campaign",
+    "seconds_per_simulated_unit": 94.396
+  },
+  "post_stop_verification": {
+    "cache_bytes_identical_to_prestop": true,
+    "cache_files_after": 2158,
+    "cache_partial_tmp_files_after": 0,
+    "escalated_to_sigkill": false,
+    "escalated_to_sigterm": false,
+    "group_gone_within_s": 3,
+    "job_ledger": {
+      "amendment": "operator_stop block added via serve.job_record",
+      "prior_audit_fields_preserved": true,
+      "server_finalization_observed_before_amendment": true,
+      "server_recorded": "status=error, result.error=KeyboardInterrupt"
+    },
+    "leftover_worker_tempdir_note": "One /var/folders worker temp directory remains, dated 2026-08-21. It predates this campaign (started 2026-08-26) and was not created by the stop; left untouched.",
+    "remaining_campaign_python_sumo_caffeinate": 0,
+    "remaining_pgid_68201_rows": 0,
+    "resume_probe": {
+      "method": "Reconstructed each unit's cache key as sha256(canonical({unit: identity, unit_backend_digest: ...})) from ledgers/units.ndjson and artifacts/simulation-backend.json, then validated schema, unit identity, backend digest and content_key of every entry found.",
+      "units_cached_and_fully_valid": 1083,
+      "units_corrupt": 0,
+      "units_missing": 867,
+      "units_total": 1950
+    },
+    "signal_sequence": [
+      "SIGINT to process group 68201"
+    ],
+    "workspace_integrity": "verify_search_workspace returned no errors",
+    "workspace_lock_holders_after": [],
+    "workspace_progress_pointer_note": "The shutdown path reset the manifest progress pointer to completed=0/total=null. That is a DISPLAY counter, not the resume state: resumability is carried by the content-addressed cache, which a resumed run re-verifies per unit against the frozen unit ledger and backend map.",
+    "workspace_status": "running (resumable)"
+  },
+  "progress": {
+    "candidate_index": 816,
+    "parents_completed": 816,
+    "parents_total": 1690,
+    "phase": "pilot",
+    "updated_at": "2026-08-27T16:21:23Z"
+  },
+  "purpose": "Frozen pre-stop state of campaign ui-monthly-13lhsoy-5d, recorded immediately before a user-approved controlled stop for performance optimization. Grounds the measured parent-local batching bottleneck.",
+  "release_evidence": false,
+  "remaining_work": {
+    "unique_units_remaining": 1099,
+    "unique_units_simulated": 851,
+    "unique_units_total": 1950
+  },
+  "schema_version": 1
+}

@@ -29,10 +29,17 @@ which model may continue. See `AGENTS.md`.
   candidate matrix lacked a route exclusive to sensor
   26842525_26355153_0. That structural infeasibility is now repaired at
   candidate-generation time and verified against the frozen failed pool.
-  Replacement campaign `ui-monthly-13lhsoy-5d` is running. Its durable job
-  record was incorrectly reconciled by a test run on 2026-08-27; PID, PGID,
-  server ownership and spec were reverified, the record was restored to
-  `running` with an audit trail, and the test ledger is now isolated.`
+  Replacement campaign `ui-monthly-13lhsoy-5d` is OPERATOR-STOPPED as of
+  2026-08-27 (SIGINT to process group 68201, user-requested, 16/16 identity
+  audit, group gone in under 3 s) and has NOT been restarted. It is resumable:
+  1 083 of 1 950 units cached and valid, 0 corrupt, 867 missing, zero partial
+  files. Read the durable job record (`status: error` plus `operator_stop`)
+  and the workspace manifest (`status: running`, `completed: 0`, reset by the
+  shutdown path) as two different records; the content-addressed cache is the
+  resume authority. Earlier the same day its durable job record was
+  incorrectly reconciled by a test run; PID, PGID, server ownership and spec
+  were reverified, the record was restored with an audit trail, and the test
+  ledger is now isolated.`
 - Summary: `The canonical speed plan separates exact repeats, first-new
   interactive closures and exhaustive monthly throughput. Implemented slices
   now include the provenance-bound exact cache, result-neutral independent-day
@@ -431,8 +438,14 @@ which model may continue. See `AGENTS.md`.
   plus deletion share one workspace lock. The focused evidence suite passes
   136 tests; the broader demand/PFE/catalog regression passes 351 tests with
   one LibreSSL warning; make lint and git diff --check pass.`
-- Blockers or risks: `Awake active-time telemetry is implemented and the
-  repaired search is running, but end-to-end completion remains unmeasured.
+- Blockers or risks: `Awake active-time telemetry is implemented, but the
+  repaired search is operator-stopped rather than complete, so end-to-end
+  completion remains unmeasured. The global daily-unit queue's 7.78x is
+  SYNTHETIC scheduler scaling on a sleeping stand-in, the eight-concurrent-SUMO
+  ceiling is a single SAVED real observation, and the 2.93 h resume / 6.58 h
+  cold figures are PROJECTIONS; per-unit cost under sustained eight-way
+  contention is unmeasured and the report records that >~21% per-unit inflation
+  would put the eight-hour goal at risk.
   The old 95-minute failed attempt is diagnosis, not post-fix performance
   evidence. Because generator identity changed, caches
   must continue to fail closed rather than be force-reused. The remaining S0
@@ -461,12 +474,76 @@ which model may continue. See `AGENTS.md`.
   translates browser network failures into an actionable localhost:8000
   message; this covers stale tabs left on a stopped fallback port. Focused
   validation/UI tests pass 24/24, JavaScript syntax and diff checks pass.`
-- Suggested next action: `Retain the qualified single-write JSON path. Monitor
-  the running exact 5–5-day monthly search and measure verified units per
-  awake active hour under the explicit 8×1 policy; do not infer a 2.7x result
-  from worker count. If interactive closure work continues, target the measured
-  SUMO or disruption phase against the 10.359 s p95 reference. Keep annual
-  warming inactive and rejected pools isolated.`
+- Global daily-unit queue (2026-08-27): `The 8x1 worker policy was never
+  reaching eight. Measured on the live campaign before stopping it:
+  80 330.94 worker-seconds over 88 771.27 active seconds = 0.905, one worker
+  busy ~90% of wall time against eight slots, and 20/20 process samples showed
+  one worker and at most one SUMO. Batching was parent-local, and a warm
+  five-day parent yields only ~1.04 uncached units (3 229 hits vs 851 misses
+  over 816 parents), so the pool was fed one item at a time. The replacement
+  is an opt-in global bounded queue over the whole missing-unit remainder,
+  living in orchestration-only independent_daily.py: exactly `workers` puller
+  threads (the width IS the ceiling and the backpressure), per-content-key
+  cross-process single-flight with a post-lock cache recheck, atomic
+  publication as the last step inside the lock, canonical lookahead order and
+  parent-order result assembly so completion order cannot reach the evidence.
+  SYNTHETIC SCHEDULER SCALING on a 180-unit fixture replaying one seeded cost
+  profile per arm, SUMO replaced by a sleeping stand-in: legacy 170.33 s /
+  width 0.999, w2 1.995, w4 3.965, w8 21.89 s / width 7.771 = 7.78x and 97.1%
+  of theoretical, with byte-identical cache across all arms. Separately, a
+  SAVED real cold SUMO observation reached exactly 8 concurrent workers and 8
+  concurrent SUMO over 170 samples and never exceeded either; it has not been
+  repeated. The 2.93 h resume and 6.58 h cold figures are PROJECTIONS, not
+  campaign measurements. CACHE IDENTITY, corrected: monthly_sumo.py binds
+  NINETEEN sources including run_monthly_closure_search.py, so the first
+  implementation - which added a --global-daily-queue CLI flag - WOULD have
+  orphaned all 1 083 cached units (source_digest c0bbfc32... -> 8b040d90...).
+  The flag was removed, the CLI restored byte-identical to HEAD, and
+  activation moved to independent_daily.py, which is not cache-bound. Enable
+  with TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS=8 AND
+  TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING=independent-exhaustive; the
+  resolver fails closed otherwise, because global lookahead would falsify a
+  cost-ordered stop proof. Without both variables the legacy path is
+  bit-for-bit what it was. The aggregate backend digest is unchanged at
+  90f07a50...cbeef; the `cache_bound_source_proof` block in the frozen
+  baseline report is wrong and is superseded by this entry.
+  REVIEW ROUND 2 (2026-08-27) found and fixed four defects, each now pinned by
+  a test that fails against the pre-fix code. (i) Global lookahead is
+  restricted to the exhaustive PILOT stage; a finalist round previously
+  rebuilt its remainder from all 1 950 prepared units and would have upgraded
+  every one of them to finalist coverage, with an adaptive bump ordering it
+  again. (ii) Queue width is now bound to the real SUMO budget before any unit
+  exists - the daily runner must be process-isolated and start exactly one
+  SUMO per unit, and the width may not exceed either the declared
+  --daily-workers or the benchmark approval of 8. Two configurations that
+  passed every prior check are now refused: --daily-workers 1 (which leaves
+  the production TraCI runner unwrapped) and --daily-workers 1 --seed-workers
+  8 (which would be 64 concurrent SUMO). (iii) The pullers are daemon threads
+  with a bounded threading-shutdown hook; as non-daemon threads an abandoned
+  queue hung the interpreter forever, because threading._shutdown() joins
+  before any atexit handler runs. (iv) The benchmark's real arm now owns a
+  process group, captured at spawn, and escalates TERM then KILL across it; it
+  reaps the leader itself and reports success only when the leader is reaped
+  and a TRUSTED census shows no LIVE member left (a zombie is dead and belongs
+  to the platform reaper; an unreadable process table is unknown, never a
+  reaping). It refuses a speed claim unless every arm exited 0, did not time out, published a complete
+  non-empty evidence population, left no partials and produced real ancestry
+  samples - equal cache fingerprints alone were satisfied by two arms that
+  both crashed early. SCOPE CORRECTION: 6.58 h / 2.93 h are PILOT-SWEEP
+  projections; adding the policy's finalist stage bounds them at ~7.19/~3.54 h
+  initially and ~8.81/~5.15 h at the adaptive ceiling, so the upper bound
+  crosses the eight-hour goal.`
+- Suggested next action: `Decide whether to resume campaign
+  ui-monthly-13lhsoy-5d with the global queue enabled through the two
+  environment variables. It is operator-stopped and resumable: 1 083 of 1 950
+  units are cached and fully valid, 867 remain, and nothing was lost. Note
+  the workspace manifest still reads status=running / completed=0 because the
+  shutdown path reset that pointer; the cache, not the manifest, is the
+  resume authority. Resuming is a USER decision and was deliberately not
+  taken automatically. Retain the qualified single-write JSON
+  path. If interactive closure work continues, target the measured SUMO or
+  disruption phase against the 10.359 s p95 reference. Keep annual warming
+  inactive and rejected pools isolated.`
 - Actor notes: `Historical handoff detail follows outside the current markers;
   it is evidence for its date, not current workflow authority.`
 <!-- CURRENT_HANDOFF_END -->

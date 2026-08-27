@@ -1938,9 +1938,69 @@ open the global-best release claim while that policy remains provisional.
 
 Daily evidence is content-addressed by simulation-affecting unit and child
 backend identity, not by parent search ID, month range or total-work label.
-Consequently, widening a search can reuse already-computed exact units. Up to
-three daily units execute in isolated interpreters, each with a private TraCI
-connection; seed-level and daily-level parallelism cannot be multiplied.
+Consequently, widening a search can reuse already-computed exact units. Daily
+units execute in isolated interpreters, each with a private TraCI connection;
+seed-level and daily-level parallelism cannot be multiplied.
+
+HOW UNITS ARE FED TO THAT WIDTH (2026-08-27). Batching used to be PARENT-LOCAL:
+`run_candidate` collected one parent's pending units and sized the pool
+`min(unit_workers, len(requests))`. A five-day parent supplies at most five
+units, and once the cache is warm it supplies about one, so an operator asking
+for eight workers measurably got one. The live campaign
+`ui-monthly-13lhsoy-5d` ran at 80 330.94 worker-seconds over 88 771.27 active
+seconds - a ratio of 0.905, i.e. one busy worker against eight configured slots
+(11.3%) - with 20/20 process samples showing a single worker, while its cache
+counters read 3 229 hits against 851 misses over 816 parents, i.e. 1.04
+genuinely new units per parent. The configured width was never the binding
+constraint; the supply of independent work was.
+
+`GlobalDailyUnitQueue` (opt-in via `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS`,
+width normally `--daily-workers`) enumerates the missing units ONCE across the
+whole shortlist in canonical unit order and serves them from exactly `workers`
+puller threads. A parent promotes
+its own units and waits only for those; the rest of the width runs lookahead
+into the same content-addressed cache. The contract, all test-pinned:
+
+* the thread count IS the SUMO ceiling and the backpressure - one unit per
+  thread at a time, so outstanding work never exceeds the width;
+* every content key is single-flight across processes via `flock`, the cache
+  is RE-READ and re-validated after the lock is taken, and publication is
+  atomic and last, so a lost race costs a read and an interrupted unit
+  publishes nothing;
+* a parent assembles its result from the cache in its own canonical unit
+  order, so completion order cannot reach the evidence;
+* coverage participates in the work identity, so a finalist round asking for
+  more repetitions rebuilds the queue instead of returning pilot coverage;
+* retiring a queue never holds `_state_lock`, whose only other holders are the
+  puller threads themselves - the obvious ordering deadlocks on the first
+  finalist retarget and is pinned by a regression test.
+
+WHERE THE SWITCH LIVES, AND WHY IT IS NOT A CLI FLAG. `monthly_sumo.py` hashes
+NINETEEN source files into `source_digest`, and `run_monthly_closure_search.py`
+is one of them. That digest travels in the backend provenance the daily-unit
+cache key is built from - `_stable_backend_identity` drops only the four
+search/release labels - so a single added CLI flag moves `source_digest`
+(measured: c0bbfc32... -> 8b040d90...) and orphans every cached unit. The
+switch therefore lives in `independent_daily.py`, which is NOT among the
+nineteen: `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS` for the width, plus a
+required `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING=independent-exhaustive`.
+The second variable is a gate, not decoration. Global lookahead produces units
+nobody has asked for; under `--screening-mode=independent-cost-ordered-exact`
+that would simulate precisely the work the mode's stop proof claims to have
+skipped, making its recorded saving false. The resolver fails closed on a
+missing, unknown, or command-line-contradicting declaration.
+
+EVIDENCE, WITH ITS KIND STATED. SYNTHETIC SCHEDULER SCALING, 180-unit fixture
+replaying one seeded cost profile per arm with a sleeping stand-in in place of
+SUMO: achieved width rose 0.999 -> 7.771 (7.78x, 97.1% of theoretical) with
+byte-identical cache across arms. This measures the scheduler, not per-unit
+SUMO cost. A SAVED REAL cold SUMO observation (170 samples, not repeated
+since) reached exactly 8 concurrent isolated workers and 8 concurrent SUMO
+processes without exceeding either. The campaign ETAs of 2.93 h (resume) and
+6.58 h (cold) are PROJECTIONS multiplying production's 94.396 s/unit by the
+measured width; no full campaign has been run at either width. Per-unit cost
+under sustained eight-way contention is NOT measured, and the report states
+that more than ~21% per-unit inflation would put the eight-hour goal at risk.
 Broad cache-hit reconstruction does not publish one redundant pilot file or
 progress-manifest rewrite per parent. The full pilot statistics and schedule
 ledger remain workspace artifacts, while the final API payload contains only

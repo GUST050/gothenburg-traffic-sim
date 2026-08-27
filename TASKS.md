@@ -54,11 +54,20 @@ owners, states and approval formulas are not active workflow rules. See
   repaired with one route (6,030→6,031 route×purpose shapes), and exact integer
   publication passed q11/q16/q17. PFE errors now name date, variant, quarter
   and clock interval. The failed search is idle/error with its workspace
-  retained. Replacement campaign `ui-monthly-13lhsoy-5d` is now running with
-  the explicit 8x1 worker policy. A 2026-08-27 test run rewrote its durable
-  ledger record to `orphaned_running`; the still-live PID/PGID and owning
-  server were reverified, the record was restored to `running` with an audit
-  trail, and tests now isolate both `JOBS_DIR` and recovery-gate globals.
+  retained. Replacement campaign `ui-monthly-13lhsoy-5d` ran with the explicit
+  8x1 worker policy and is now OPERATOR-STOPPED (2026-08-27, SIGINT to process
+  group 68201 at the user's request, after a 16/16 identity audit); it is
+  resumable and has NOT been restarted. Its durable job record is
+  `status: error` carrying an `operator_stop` block, while its workspace
+  manifest still reads `running`/`completed: 0` because the shutdown path
+  reset that pointer; neither is the resume authority - the content-addressed
+  cache is, and it holds 1 083 of 1 950 units valid, 0 corrupt, 867 missing.
+  The measured 8x1 policy never achieved eight: 0.905 achieved width, one busy
+  worker against eight slots, because batching was parent-local. An earlier
+  2026-08-27 test run rewrote the durable ledger record to `orphaned_running`;
+  the then-live PID/PGID and owning server were reverified, the record was
+  restored with an audit trail, and tests now isolate both `JOBS_DIR` and
+  recovery-gate globals.
   Current server wiring already runs three interactive seeds in
   parallel (measured baseline 11.0 -> 5.9 s and closure 21.6 -> 13.9 s,
   byte-identical apart from generated_at). A clean 10-trial active-demand run
@@ -105,9 +114,15 @@ owners, states and approval formulas are not active workflow rules. See
   baseline trials measured median 1.805→1.846 s (+2.30%), and closure-shaped
   equivalence/performance is unmeasured.`
 - Suggested next action: `Keep the byte-exact single-write JSON optimization
-  and the passing exact-repeat cache. Monitor the running exact 5–5-day UI
-  search and measure verified units per active hour with the explicit 8×1
-  policy. Let
+  and the passing exact-repeat cache. Campaign `ui-monthly-13lhsoy-5d` is
+  operator-stopped, not running; do NOT restart it without a separate explicit
+  user decision. When a restart is authorised, enable the global daily-unit
+  queue by exporting TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS=8 and
+  TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING=independent-exhaustive before
+  launching, then measure verified units per active hour against the frozen
+  0.905 achieved width - the 7.78x figure is synthetic scheduler scaling and
+  the 2.93/6.58 h figures are projections, so a real campaign number is still
+  missing. Let
   source/provenance identity rebuild any incompatible candidate or day cache;
   do not force reuse, reuse created-at wall time or claim 2.7x before
   measurement.
@@ -125,7 +140,16 @@ owners, states and approval formulas are not active workflow rules. See
   for low observability, or activate policy/UI/global-best claims without the
   applicable frozen evidence. Do not hardcode 107's annual 0.5231 as 96
   measured quarters or present q10/q90 as calibrated probabilities.`
-- Updated: `2026-08-27 after isolating the test job ledger, restoring the
+- Updated: `2026-08-27 after completing, testing and self-reviewing the global
+  daily-unit queue: the cache-identity defect was found and fixed (the CLI is
+  one of nineteen provenance-bound sources, so its queue flag was removed and
+  the file restored byte-exact; activation moved to the non-cache-bound
+  environment seam), a retarget deadlock was fixed and pinned by a test that
+  hangs on the pre-fix code, and the benchmark sampler was moved to process
+  ancestry. The two 2026-08-27 validation reports are unchanged frozen
+  evidence; the `cache_bound_source_proof` block in the baseline report is
+  wrong about the source count and is superseded in this file. Previously
+  updated the same day after isolating the test job ledger, restoring the
   verified live monthly record and explicitly declaring direct SciPy/NetworkX
   dependencies. Previously updated 2026-08-26 after repairing the real
   2027-10-01 candidate-matrix
@@ -169,9 +193,100 @@ owners, states and approval formulas are not active workflow rules. See
   are implemented. The old 2,224-unit run has not been reclassified as valid
   throughput evidence. The subsequent 2027-10-01 failure is repaired by a
   generator-level exact-incidence basis invariant; the real frozen q11/q16/q17
-  projection now passes. Replacement campaign `ui-monthly-13lhsoy-5d` is
-  running; its test-damaged durable record has been restored with audit fields
-  and regression coverage prevents future live-ledger reconciliation.`
+  projection now passes. Replacement campaign `ui-monthly-13lhsoy-5d` ran
+  until 2026-08-27 and is now OPERATOR-STOPPED, not running (see the stop
+  record below); its test-damaged durable record has been restored with audit
+  fields and regression coverage prevents future live-ledger reconciliation.
+  2026-08-27: campaign `ui-monthly-13lhsoy-5d` was STOPPED at the user's
+  explicit request for performance optimization, after a 16/16 identity audit
+  (PID/PGID leader/PPID==server_pid/start identity/full command/cwd/spec path
+  and content key/search id/job record/workspace keys/workspace lock holder).
+  SIGINT to process group 68201 was sufficient; no SIGTERM or SIGKILL. The
+  group was gone in under 3 s, the workspace flock is free and no campaign
+  Python, SUMO or caffeinate process remains. The stop is provably lossless:
+  all 2 158 cache files are byte-identical across the stop, zero partial
+  `.tmp` files, `verify_search_workspace` reports no errors, and a probe over
+  the frozen unit ledger finds 1 083 of 1 950 units cached AND fully valid
+  (schema + unit identity + backend digest + content key), 0 corrupt, 867
+  missing. The durable job record carries an `operator_stop` block recording
+  the signal, the audit and the resume state. THE FULL CAMPAIGN HAS NOT BEEN
+  RESTARTED and awaits a separate user decision.
+  ROOT CAUSE, measured not inferred: batching was PARENT-LOCAL. The frozen
+  baseline shows 80 330.94 worker-seconds against 88 771.27 active seconds -
+  a ratio of 0.905, i.e. ONE unit worker busy ~90% of wall time against eight
+  configured slots (11.3% utilization) - and 20/20 live process samples showed
+  exactly one worker and at most one SUMO. The cause is structural: a five-day
+  parent supplies at most five units, and with 3 229 hits against 851 misses
+  over 816 parents only ~1.04 of them are genuinely new, so the eight-wide
+  pool was handed roughly one item at a time.
+  FIX: an opt-in global bounded daily-unit queue in the orchestration-only
+  `independent_daily.py`, width = `--daily-workers`, so every existing SUMO
+  budget check still applies. SYNTHETIC SCHEDULER SCALING, 180-unit fixture
+  with one seeded per-unit cost profile replayed by every arm and a sleeping
+  stand-in in place of SUMO: legacy 170.33 s at width 0.999; queue w1
+  170.25 s / 0.999; w2 85.31 s / 1.995; w4 42.91 s / 3.965; w8 21.89 s /
+  7.771 - 7.78x, 97.1% of theoretical. This measures the SCHEDULER, not
+  per-unit SUMO cost. Cache bytes were identical across every arm. SAVED REAL
+  OBSERVATION, not repeated in later runs: one real cold SUMO arm reached
+  exactly 8 concurrent isolated workers and 8 concurrent SUMO processes and
+  never exceeded either, over 170 samples. The campaign ETAs (2.93 h resume,
+  6.58 h cold at width 8) are PROJECTIONS - two separately measured
+  quantities multiplied - and are labelled as such in the report; no cold or
+  resumed full campaign has been run.
+  CACHE IDENTITY - CORRECTED 2026-08-27, THE EARLIER CLAIM WAS WRONG.
+  `monthly_sumo.py` hashes NINETEEN source files into `source_digest`, not
+  fourteen, and `run_monthly_closure_search.py` is one of them. The frozen
+  report `validation/monthly_global_queue_baseline_2026-08-27.json` states
+  the opposite in its `cache_bound_source_proof` block; that block is
+  FACTUALLY WRONG and is superseded here. It is left byte-unchanged because
+  it is frozen evidence. Measured: adding a single CLI flag moved
+  `source_digest` from
+  c0bbfc3202bf30c0b1be52dbd5060da3fc7d77e9681466adec7cd2e7ffb0efb0 to
+  8b040d909753823756a10a459186f1e83140e41656c173febd72e351b15bf6d6, which
+  would have orphaned all 1 083 cached units. The flag was therefore REMOVED
+  and `run_monthly_closure_search.py` restored byte-identical to HEAD
+  (sha256 26c3dbca7acb50eb4273aa188f6f73a88e6eb739b85c49b89099b277188d3abf);
+  `source_digest` is back to c0bbfc32... Activation now lives in
+  `independent_daily.py`, which is NOT in the nineteen, via
+  `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS` plus a required
+  `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING=independent-exhaustive`
+  declaration. The second variable is a safety gate, not decoration: global
+  lookahead produces units nobody asked for, which under
+  `--screening-mode=independent-cost-ordered-exact` would simulate exactly
+  the work that mode's stop proof claims to have skipped. The resolver fails
+  closed on a missing, unknown or command-line-contradicting declaration.
+  The aggregate backend digest is unchanged at
+  90f07a50c203f88b5f2c690a0c56b48c339cb63202658e34aa81cab0cbfcbeef.
+  REVIEW ROUND 2, 2026-08-27 - four defects found and fixed, each pinned by a
+  test that fails against the pre-fix code: (i) global lookahead is now
+  restricted to the exhaustive PILOT stage, because a finalist round rebuilt
+  its remainder from all 1 950 prepared units and would have upgraded every
+  one of them to finalist coverage; (ii) queue width is now bound to the real
+  SUMO budget before any unit exists - the daily runner must be
+  process-isolated and start exactly one SUMO per unit, and the width may
+  exceed neither the declared `--daily-workers` nor the benchmark approval of
+  8, which refuses two configurations that passed every prior check
+  (`--daily-workers 1`, leaving the production TraCI runner unwrapped, and
+  `--daily-workers 1 --seed-workers 8`, which would be 64 concurrent SUMO);
+  (iii) the queue's pullers are daemon threads with a bounded
+  threading-shutdown hook, because as non-daemon threads an abandoned queue
+  hung the interpreter forever; (iv) the benchmark's real arm owns a process
+  group with bounded TERM/KILL escalation and refuses a speed claim unless
+  every arm exited 0, did not time out, published a complete non-empty
+  evidence population, left no partials and produced real ancestry samples.
+  SCOPE CORRECTION to the ETAs: 6.58 h cold and 2.93 h resume are PILOT-SWEEP
+  projections that omit the finalist stage. Bounded by the policy's own
+  ceilings (12 finalists x 5 daily units, 4 initial repetitions adapting to
+  12) they become ~7.19 h / ~3.54 h initially and ~8.81 h / ~5.15 h at the
+  adaptive maximum, so the upper bound CROSSES the eight-hour goal. The frozen
+  reports state the unqualified figures and are left byte-unchanged.
+  CAMPAIGN STATE, stated precisely because two records disagree by design:
+  the durable JOB record is `status: error` with an `operator_stop` block
+  (the KeyboardInterrupt is the server finalizing the delivered SIGINT, not a
+  search failure), while the WORKSPACE manifest still reads
+  `status: running` with `progress.completed: 0` because the shutdown path
+  reset the pointer. Neither is the resume authority: the content-addressed
+  cache is, and it holds 1 083 of 1 950 units valid, 0 corrupt, 867 missing.`
 - Objective and scope: `Reduce cold daily demand preparation by reusing a
   verified weekday/weekend routed catalog without changing exact daily PFE or
   warm-state semantics. Also reduce exact-repeat and first-new interactive closure
@@ -205,7 +320,8 @@ owners, states and approval formulas are not active workflow rules. See
   ui-monthly-euc9qp is 476/1,776; its manifest records an interrupted_by_user
   progress pointer with resumable scratch. Its exact five-day form now sizes to
   780 periods/1,040 units instead of 1,776/2,224. The replacement exact
-  five-day campaign is running. The active process-free disruption
+  five-day campaign ran and is now operator-stopped and resumable; it was NOT
+  restarted. The active process-free disruption
   case improved from 4.1364 s to 1.051 s exactly. One isolated three-seed
   production-shaped closure completed in 10.690 s versus 11.549 s with the
   full-field rollback, with equal scenario/trajectory digests and clean health;
@@ -238,9 +354,12 @@ owners, states and approval formulas are not active workflow rules. See
   tools/cost_ordered_benchmark_suite.py; related tests and new frozen validation
   contracts/outcomes; tests/test_closure_disruption.py;
   tests/test_singleflight.py.`
-- Constraints and safety: `The named monthly run is active; bind every
-  S0/reference run to frozen inputs and isolated output. Do not compete with
-  this evidence-producing run or mutate source read by newly spawned workers.
+- Constraints and safety: `The named monthly run is OPERATOR-STOPPED and must
+  not be restarted without a separate user decision; its workspace and cache
+  remain resumable, so treat them as live evidence. Bind every S0/reference
+  run to frozen inputs and isolated output. Do not mutate the stopped run's
+  cache, ledgers or workspace, and do not mutate source read by newly spawned
+  workers.
   Do not reduce seeds/variants, closure horizon, rerouter coverage, recovery,
   precision or outputs needed by the product; do not loosen timeouts or gates;
   do not activate proxy/global-best/cost-first claims without new frozen

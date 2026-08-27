@@ -2,14 +2,27 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
+    "status": {"type": "string", "enum": ["READY", "BLOCKED"]},
     "summary": {"type": "string"},
     "implementation_steps": {"type": "array", "items": {"type": "string"}},
     "likely_files": {"type": "array", "items": {"type": "string"}},
     "acceptance_criteria": {"type": "array", "items": {"type": "string"}},
     "suggested_checks": {"type": "array", "items": {"type": "string"}},
     "risks": {"type": "array", "items": {"type": "string"}},
-    "blocked_reason": {"type": "string"}
+    "blocked_reason": {
+      "type": "string",
+      "description": "Required only when status is BLOCKED, where it must name the concrete human or safety blocker. READY routing reads status alone and never this field, so a READY plan may omit it entirely."
+    }
   },
-  "required": ["summary", "implementation_steps", "likely_files", "acceptance_criteria", "suggested_checks", "risks", "blocked_reason"],
-  "additionalProperties": false
+  "required": ["status", "summary", "implementation_steps", "likely_files", "acceptance_criteria", "suggested_checks", "risks"],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"required": ["status"], "properties": {"status": {"const": "BLOCKED"}}},
+      "then": {
+        "required": ["blocked_reason"],
+        "properties": {"blocked_reason": {"type": "string", "minLength": 1, "pattern": "\\S"}}
+      }
+    }
+  ]
 }

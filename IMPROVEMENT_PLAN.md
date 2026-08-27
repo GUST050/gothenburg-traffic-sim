@@ -15,6 +15,42 @@ model-independent protocol in `AGENTS.md`.
 
 ## Current verified status — 2026-08-24
 
+- MONTHLY SEARCH THROUGHPUT (added 2026-08-27). The declared 8x1 worker policy
+  was never achieved: campaign `ui-monthly-13lhsoy-5d` measured 80 330.94
+  worker-seconds over 88 771.27 active seconds (ratio 0.905 - one busy worker
+  against eight slots, 11.3% utilization), with 20/20 process samples showing a
+  single worker. Cause: batching was PARENT-LOCAL, and a warm five-day parent
+  supplies only ~1.04 uncached units (3 229 hits vs 851 misses over 816
+  parents), so an eight-wide pool was fed one item at a time. Fixed by an
+  opt-in global bounded daily-unit queue in the orchestration-only
+  `independent_daily.py`, enabled by
+  `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS` together with a required
+  `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING=independent-exhaustive`
+  declaration. SYNTHETIC SCHEDULER SCALING (SUMO replaced by a sleeping
+  stand-in): achieved width 0.999 -> 7.771 (7.78x, 97.1% of theoretical) on a
+  180-unit fixture with byte-identical cache across arms. SAVED REAL
+  OBSERVATION, not repeated: one cold SUMO arm held exactly 8 concurrent
+  workers and 8 concurrent SUMO over 170 samples without exceeding either.
+  CACHE IDENTITY, corrected 2026-08-27: `monthly_sumo.py` binds NINETEEN
+  sources, not fourteen, and `run_monthly_closure_search.py` is one of them,
+  so the first implementation's CLI flag WOULD have orphaned all 1 083 cached
+  units. The flag was removed and the CLI restored byte-identical to HEAD;
+  `independent_daily.py` is genuinely outside the nineteen, and the aggregate
+  backend digest is unchanged at `90f07a50...cbeef`. The
+  `cache_bound_source_proof` block in the frozen baseline report asserts the
+  fourteen-source version and is wrong; it is kept byte-unchanged as frozen
+  evidence and superseded here.
+  The campaign is OPERATOR-STOPPED and resumable (1 083 of 1 950 units cached
+  and fully valid, 0 corrupt, 867 remaining) and was deliberately NOT
+  restarted; its workspace manifest still reads `running`/`completed: 0`
+  because the shutdown path reset that pointer, so the cache is the resume
+  authority, not the manifest. Evidence:
+  `validation/monthly_global_queue_baseline_2026-08-27.json` and
+  `validation/monthly_global_queue_benchmark_2026-08-27.json`. The 6.58 h cold
+  and 2.93 h resume figures are PROJECTIONS from production's 94.396 s/unit
+  and the measured width, not measured campaigns; per-unit cost under
+  sustained eight-way contention is unmeasured.
+
 - The active published demand is forecast date 2027-11-11, build
   `b927e6de0b6443fd87e2`, one full day and 21,744 vehicles. It is an ordinary
   `q50_only` build: seeds 1000/1001/1002 all use the same central demand arm.

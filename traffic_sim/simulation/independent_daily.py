@@ -17,6 +17,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -35,6 +36,11 @@ from traffic_sim.simulation.finalist_decision import (
     PairedObservation,
 )
 from traffic_sim.simulation.envelope import EnvelopePolicy
+from traffic_sim.simulation.seed_worker_budget import (
+    SEED_WORKER_BENCHMARK_RECORD,
+    approved_seed_workers,
+)
+from traffic_sim.storage.singleflight import content_key_lock
 
 
 CACHE_SCHEMA = "independent_daily_evidence_cache_v2"
@@ -45,6 +51,231 @@ ISOLATED_BACKEND_KIND = "isolated_daily_sumo_backend_v1"
 # closure look better by truncating its own recovery tail. This means a daily
 # unit may correctly resolve a two-date archive.
 INDEPENDENT_DAILY_ENVELOPE_POLICY = EnvelopePolicy()
+
+
+# ---------------------------------------------------------------------------
+# Global daily-unit queue activation seam
+#
+# The queue is a SCHEDULER choice: it changes which order units are produced
+# in and how many run at once, never what a unit computes.  It must therefore
+# be switched on from a file that is NOT bound into the daily-unit cache
+# identity, or turning it on would orphan every cached unit.
+#
+# Measured 2026-08-27: `monthly_sumo.py` hashes NINETEEN source files into
+# `source_digest`, and `run_monthly_closure_search.py` is one of them.  That
+# digest travels in the backend provenance the unit cache key hashes
+# (`_candidate_backend_identity` keeps it; `_stable_backend_identity` only
+# drops the four release/search labels).  Adding a single CLI flag to the CLI
+# moved `source_digest` from
+#   c0bbfc3202bf30c0b1be52dbd5060da3fc7d77e9681466adec7cd2e7ffb0efb0  to
+#   8b040d909753823756a10a459186f1e83140e41656c173febd72e351b15bf6d6,
+# which would have invalidated all 1 083 cached units of campaign
+# ui-monthly-13lhsoy-5d.  `independent_daily.py` is NOT in that set, so the
+# switch lives here instead and the CLI stays byte-identical.
+QUEUE_WORKERS_ENV = "TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS"
+QUEUE_SCREENING_ENV = "TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING"
+# Global lookahead produces units nobody has asked for yet.  Under exhaustive
+# screening that is free - every candidate is verified anyway, so the work is
+# only reordered.  Under `independent-cost-ordered-exact` it is NOT free: that
+# mode's whole claim is that a stop proof let it SKIP candidates, and a queue
+# chewing through the remainder in the background would simulate exactly the
+# work the proof says was avoided, making the recorded saving false.  The
+# queue is therefore permitted for one declared screening mode only.
+QUEUE_SUPPORTED_SCREENING = "independent-exhaustive"
+# The ONLY stage whose lookahead may range over the whole prepared shortlist.
+# `monthly_search.py` runs exactly two: "pilot", which under exhaustive
+# screening verifies every prepared unit, and "finalist", which promotes a
+# short list and asks it for more repetitions.  Sweeping the world at
+# finalist coverage would simulate ~1 950 units nobody selected.
+QUEUE_LOOKAHEAD_STAGE = "pilot"
+# How long interpreter shutdown waits for a unit that is already running.
+# Long enough to reap an isolated worker that is finishing, short enough that
+# a wedged one cannot hold the process open.
+QUEUE_SHUTDOWN_GRACE_S = 30.0
+
+
+class GlobalQueueActivationError(RuntimeError):
+    """The global queue was requested in a way that is not safe to honour."""
+
+
+def _declared_screening_mode(argv: Sequence[str] | None) -> str | None:
+    """The `--screening-mode` value on a command line, if it carries one."""
+    if not argv:
+        return None
+    values = list(argv)
+    for index, item in enumerate(values):
+        if item == "--screening-mode" and index + 1 < len(values):
+            return values[index + 1]
+        if item.startswith("--screening-mode="):
+            return item.split("=", 1)[1]
+    return None
+
+
+def resolve_global_queue_workers(
+    environ: Mapping[str, str] | None = None,
+    argv: Sequence[str] | None = None,
+) -> int:
+    """Resolve the opt-in global queue width, failing closed.
+
+    Returns ``1`` - the historical parent-local path, bit-for-bit unchanged -
+    unless BOTH variables are set and agree with the actual command line:
+
+    ``TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS``
+        a positive integer width.  It is also the SUMO ceiling: the queue
+        runs exactly this many puller threads, each of which runs at most one
+        isolated worker subprocess, each of which runs SUMO with
+        ``seed_workers=1``.
+    ``TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING``
+        must be ``independent-exhaustive``.  Requiring the operator to name
+        the mode is what keeps the lookahead from silently invalidating a
+        cost-ordered stop proof.
+
+    A malformed width, an unrecognised screening declaration, or a
+    declaration that contradicts ``--screening-mode`` on the live command line
+    raises instead of quietly falling back, because a silent fallback would
+    look exactly like the bug this queue exists to fix.
+    """
+    environ = os.environ if environ is None else environ
+    raw = str(environ.get(QUEUE_WORKERS_ENV, "")).strip()
+    if not raw:
+        return 1
+    try:
+        workers = int(raw)
+    except ValueError:
+        raise GlobalQueueActivationError(
+            f"{QUEUE_WORKERS_ENV}={raw!r} is not an integer"
+        ) from None
+    if workers < 1:
+        raise GlobalQueueActivationError(
+            f"{QUEUE_WORKERS_ENV}={raw!r} must be a positive integer"
+        )
+    if workers == 1:
+        return 1
+    declared = str(environ.get(QUEUE_SCREENING_ENV, "")).strip()
+    if not declared:
+        raise GlobalQueueActivationError(
+            f"{QUEUE_WORKERS_ENV}={workers} also requires "
+            f"{QUEUE_SCREENING_ENV}={QUEUE_SUPPORTED_SCREENING}"
+        )
+    if declared != QUEUE_SUPPORTED_SCREENING:
+        raise GlobalQueueActivationError(
+            f"the global daily queue supports "
+            f"{QUEUE_SUPPORTED_SCREENING!r} only, not {declared!r}: global "
+            "lookahead would simulate work a cost-ordered stop proof claims "
+            "to have skipped"
+        )
+    actual = _declared_screening_mode(
+        sys.argv if argv is None else argv
+    )
+    if actual is not None and actual != declared:
+        raise GlobalQueueActivationError(
+            f"{QUEUE_SCREENING_ENV}={declared!r} contradicts the command "
+            f"line's --screening-mode={actual!r}"
+        )
+    approved = approved_seed_workers()
+    if workers > approved:
+        raise GlobalQueueActivationError(
+            f"{QUEUE_WORKERS_ENV}={workers} exceeds the {approved} concurrent "
+            "SUMO workers approved by the recorded resource benchmark "
+            f"({SEED_WORKER_BENCHMARK_RECORD}); the queue width IS the SUMO "
+            "ceiling, so it may never be declared above the approval"
+        )
+    return workers
+
+
+def daily_runner_sumo_profile(daily_runner: Any) -> tuple[bool, int, int | None]:
+    """What ONE ``run_candidate`` call on ``daily_runner`` may start.
+
+    Returns ``(process_isolated, sumo_per_call, declared_unit_workers)``.
+
+    The queue calls ``run_candidate`` directly from every puller thread, so
+    the honest ceiling is ``queue width x sumo_per_call`` - not the width
+    alone.  Two facts make that distinction load-bearing rather than
+    theoretical:
+
+    * ``run_monthly_closure_search.py`` only wraps the production runner in
+      ``IsolatedDailySumoRunner`` when ``--daily-workers > 1``.  At
+      ``--daily-workers 1`` the daily runner IS the production
+      ``MonthlySumoRunner``, whose ``WarmPrefixController`` owns one global
+      TraCI connection; pulling it from eight threads is precisely the
+      sharing that process isolation exists to prevent.
+    * the CLI accepts ``--daily-workers 1 --seed-workers 8`` (product 8, at
+      the declared slot budget).  An eight-wide queue over an eight-seed
+      runner is 64 concurrent SUMO processes while every existing check
+      still reads as satisfied.
+
+    A test double that runs no SUMO at all declares itself with
+    ``queue_sumo_profile()``; nothing else is trusted to be safe by default.
+    """
+    declared = getattr(daily_runner, "queue_sumo_profile", None)
+    if callable(declared):
+        isolated, per_call = declared()
+        return bool(isolated), int(per_call), getattr(
+            daily_runner, "unit_workers", None
+        )
+    if isinstance(daily_runner, IsolatedDailySumoRunner):
+        delegate = daily_runner.delegate
+        per_call = getattr(delegate, "seed_workers", 1)
+        try:
+            per_call = int(per_call)
+        except (TypeError, ValueError):
+            per_call = 1
+        return True, max(per_call, 1), int(daily_runner.unit_workers)
+    per_call = getattr(daily_runner, "seed_workers", 1)
+    try:
+        per_call = int(per_call)
+    except (TypeError, ValueError):
+        per_call = 1
+    return False, max(per_call, 1), getattr(daily_runner, "unit_workers", None)
+
+
+def validate_queue_concurrency_budget(
+    daily_runner: Any, queue_workers: int
+) -> None:
+    """Refuse a queue width the approved SUMO budget does not cover.
+
+    Fails closed on every axis the CLI cannot see: process isolation, the
+    per-call SUMO fan-out, the declared isolated-runner width, and the
+    absolute benchmark approval.
+    """
+    if queue_workers <= 1:
+        return
+    isolated, per_call, declared_unit_workers = daily_runner_sumo_profile(
+        daily_runner
+    )
+    if not isolated:
+        raise GlobalQueueActivationError(
+            f"a global queue of width {queue_workers} requires a "
+            "process-isolated daily runner; the production runner owns one "
+            "global TraCI connection and cannot be pulled from several "
+            "threads (start the search with --daily-workers "
+            f"{queue_workers})"
+        )
+    if per_call != 1:
+        raise GlobalQueueActivationError(
+            f"a global queue of width {queue_workers} over a daily runner "
+            f"that starts {per_call} SUMO processes per unit would run "
+            f"{queue_workers * per_call} concurrent SUMO processes; the queue "
+            "width is the ceiling, so the isolated runner must use "
+            "--seed-workers 1"
+        )
+    if (
+        declared_unit_workers is not None
+        and queue_workers > int(declared_unit_workers)
+    ):
+        raise GlobalQueueActivationError(
+            f"{QUEUE_WORKERS_ENV}={queue_workers} exceeds the "
+            f"{declared_unit_workers} isolated daily workers the run "
+            "declared; the queue replaces that dimension, so the width must "
+            "stay inside the budget --max-active-sumo-slots already validated"
+        )
+    approved = approved_seed_workers()
+    if queue_workers > approved:
+        raise GlobalQueueActivationError(
+            f"{QUEUE_WORKERS_ENV}={queue_workers} exceeds the {approved} "
+            "concurrent SUMO workers approved by the recorded resource "
+            f"benchmark ({SEED_WORKER_BENCHMARK_RECORD})"
+        )
 
 
 def _canonical_digest(value: Any, *, length: int = 64) -> str:
@@ -623,6 +854,290 @@ class IsolatedDailySumoRunner:
         return dict(results)
 
 
+class QueueCancelled(RuntimeError):
+    """Raised to a waiter when the global unit queue was shut down."""
+
+
+class GlobalDailyUnitQueue:
+    """Saturate the unit-worker width from ONE global pool of missing units.
+
+    The parent-local batch is the measured bottleneck.  A five-day parent
+    supplies at most five daily units, and once a campaign is warm nearly all
+    of them are cache hits: production measured 3 229 hits against 851 misses
+    over 816 parents, i.e. ~1.04 genuinely new units per parent.  Handing that
+    to an eight-wide pool leaves seven slots idle, which is exactly what the
+    live process table showed (one worker, one SUMO, 20/20 samples).
+
+    This queue inverts the relationship.  Missing units are enumerated ONCE
+    across the whole shortlist and served by a fixed set of ``workers`` puller
+    threads, so the width is filled from the global remainder instead of from
+    whichever parent happens to be current.  A parent that needs a unit marks
+    it urgent and waits only for its own units; everything else is lookahead
+    that lands in the shared content-addressed cache for later parents.
+
+    What deliberately does NOT change: the unit is executed by the same
+    isolated one-shot worker with the same schedule, the same target
+    repetitions and the same canonical seeds, and it is published under the
+    same content key.  Completion order is therefore invisible in the result -
+    a parent reads its units back from the cache in its own canonical order.
+    """
+
+    def __init__(
+        self,
+        unit_ids: Sequence[str],
+        *,
+        workers: int,
+        execute: Callable[[str], None],
+    ) -> None:
+        if (
+            isinstance(workers, bool)
+            or not isinstance(workers, int)
+            or workers < 1
+        ):
+            raise ValueError("global daily queue workers must be a positive integer")
+        ordered = list(dict.fromkeys(str(value) for value in unit_ids))
+        self._execute = execute
+        self.workers = workers
+        self._lock = threading.Lock()
+        self._ready = threading.Condition(self._lock)
+        # Canonical remainder order.  Urgent work jumps ahead of it, but two
+        # units that nobody is waiting for are always taken in this order, so
+        # a resumed run schedules the same lookahead as a fresh one.
+        self._pending: list[str] = ordered
+        self._pending_set: set[str] = set(ordered)
+        self._urgent: list[str] = []
+        self._inflight: set[str] = set()
+        self._done: set[str] = set()
+        self._errors: dict[str, BaseException] = {}
+        self._stopped = False
+        self._active = 0
+        self._started_at = time.monotonic()
+        self._stats = {
+            "queue_total": len(ordered),
+            "queue_completed": 0,
+            "queue_failed": 0,
+            "queue_max_active_workers": 0,
+        }
+        # Exactly ``workers`` threads exist, so at most ``workers`` isolated
+        # worker subprocesses - and therefore at most ``workers`` SUMO
+        # processes - can be alive at once.  This is the concurrency ceiling
+        # itself, not a limit checked after the fact.  It is also the
+        # backpressure: pullers take one unit at a time, so the number of
+        # outstanding work items never exceeds the width.
+        #
+        # The pullers are DAEMON threads deliberately.  A puller parked in
+        # `self._ready.wait()` is not waiting on any queue the interpreter
+        # knows how to drain, so as a non-daemon thread it made shutdown
+        # unreachable: `threading._shutdown()` joins non-daemon threads
+        # BEFORE atexit handlers run, so neither `concurrent.futures`' exit
+        # hook nor one of our own could ever wake it.  Measured directly on
+        # the pre-fix code: an owner that skipped `cleanup()` hung the
+        # interpreter forever.  Daemon threads plus the shutdown hook below
+        # keep the orderly path orderly - `stop()` still joins, so a unit in
+        # flight is still reaped - while making the disorderly path exit.
+        self._pumps = [
+            threading.Thread(
+                target=self._pump,
+                name=f"daily-unit-{index}",
+                daemon=True,
+            )
+            for index in range(workers)
+        ]
+        for pump in self._pumps:
+            pump.start()
+        # Runs during `threading._shutdown()`, i.e. early enough to matter.
+        # It asks the pullers to retire and waits a BOUNDED time for the unit
+        # in flight, so a normal exit still reaps its SUMO child instead of
+        # abandoning it, and a wedged one still exits.
+        self._shutdown_hook = self._shutdown_stop
+        register = getattr(threading, "_register_atexit", None)
+        if callable(register):
+            register(self._shutdown_hook)
+
+    # -- scheduling ------------------------------------------------------
+    def _take_locked(self) -> str | None:
+        while self._urgent:
+            unit_id = self._urgent.pop(0)
+            if unit_id in self._pending_set:
+                self._pending_set.discard(unit_id)
+                self._pending.remove(unit_id)
+                return unit_id
+        while self._pending:
+            unit_id = self._pending.pop(0)
+            if unit_id in self._pending_set:
+                self._pending_set.discard(unit_id)
+                return unit_id
+        return None
+
+    def _has_work_locked(self) -> bool:
+        return bool(self._pending_set)
+
+    def _pump(self) -> None:
+        while True:
+            with self._ready:
+                while not self._stopped and not self._has_work_locked():
+                    self._ready.wait()
+                if self._stopped:
+                    return
+                unit_id = self._take_locked()
+                if unit_id is None:
+                    continue
+                self._inflight.add(unit_id)
+                self._active += 1
+                if self._active > self._stats["queue_max_active_workers"]:
+                    self._stats["queue_max_active_workers"] = self._active
+            error: BaseException | None = None
+            try:
+                self._execute(unit_id)
+            except BaseException as exc:  # noqa: BLE001 - delivered to waiter
+                error = exc
+            with self._ready:
+                self._active -= 1
+                self._inflight.discard(unit_id)
+                self._done.add(unit_id)
+                if error is not None:
+                    self._errors[unit_id] = error
+                    self._stats["queue_failed"] += 1
+                else:
+                    self._stats["queue_completed"] += 1
+                self._ready.notify_all()
+
+    # -- public API ------------------------------------------------------
+    def require(self, unit_ids: Sequence[str]) -> None:
+        """Block until every requested unit has been produced.
+
+        Requested units are promoted ahead of the lookahead remainder so a
+        waiting parent is never stuck behind work nobody needs yet.
+        """
+        wanted = [str(value) for value in unit_ids]
+        if not wanted:
+            return
+        with self._ready:
+            if self._stopped:
+                raise QueueCancelled("global daily unit queue is stopped")
+            for unit_id in reversed(wanted):
+                if unit_id in self._pending_set and unit_id not in self._urgent:
+                    self._urgent.insert(0, unit_id)
+            self._ready.notify_all()
+            for unit_id in wanted:
+                while unit_id not in self._done:
+                    if self._stopped:
+                        raise QueueCancelled(
+                            "global daily unit queue was stopped while waiting "
+                            f"for {unit_id}"
+                        )
+                    if (
+                        unit_id not in self._pending_set
+                        and unit_id not in self._inflight
+                    ):
+                        # Not queued, not running and not finished: this unit
+                        # is not part of the queue's remainder.  Fail loudly
+                        # rather than wait forever.
+                        raise KeyError(
+                            f"global daily unit queue does not hold {unit_id}"
+                        )
+                    self._ready.wait(timeout=1.0)
+                error = self._errors.pop(unit_id, None)
+                if error is not None:
+                    # Popping keeps the queue reusable: a resumed or retried
+                    # run re-executes this unit instead of replaying a stale
+                    # failure.  Units already produced stay produced.
+                    self._done.discard(unit_id)
+                    self._pending_set.add(unit_id)
+                    self._pending.insert(0, unit_id)
+                    raise error
+
+    def add(self, unit_ids: Sequence[str]) -> None:
+        """Append newly-missing units to the remainder (idempotent)."""
+        with self._ready:
+            if self._stopped:
+                raise QueueCancelled("global daily unit queue is stopped")
+            added = 0
+            for unit_id in (str(value) for value in unit_ids):
+                if (
+                    unit_id in self._pending_set
+                    or unit_id in self._inflight
+                    or unit_id in self._done
+                ):
+                    continue
+                self._pending.append(unit_id)
+                self._pending_set.add(unit_id)
+                added += 1
+            if added:
+                self._stats["queue_total"] += added
+                self._ready.notify_all()
+
+    def stats(self) -> dict[str, Any]:
+        with self._lock:
+            completed = self._stats["queue_completed"]
+            running = self._active
+            pending = len(self._pending_set)
+            elapsed = time.monotonic() - self._started_at
+            rate = (completed / elapsed) if completed and elapsed > 0 else 0.0
+            snapshot = dict(self._stats)
+        snapshot["queue_running"] = running
+        snapshot["queue_pending"] = pending
+        snapshot["queue_workers"] = self.workers
+        snapshot["queue_units_per_hour"] = round(rate * 3600.0, 3)
+        snapshot["queue_eta_seconds"] = (
+            round((pending + running) / rate, 1) if rate > 0 else None
+        )
+        return snapshot
+
+    def _request_stop(self) -> bool:
+        """Tell every puller to retire.  True when this call did it."""
+        with self._ready:
+            if self._stopped:
+                self._ready.notify_all()
+                return False
+            self._stopped = True
+            self._pending.clear()
+            self._pending_set.clear()
+            self._urgent.clear()
+            self._ready.notify_all()
+        return True
+
+    def stop(self, *, wait: bool = True) -> None:
+        """Cancel queued work and reap the pullers.
+
+        Units already published stay published; a unit interrupted mid-flight
+        publishes nothing, because publication is the last step inside its
+        single-flight lock.  ``flock`` is released by the kernel even if a
+        worker dies, so a cancelled run never strands a content key.
+        """
+        started_stop = self._request_stop()
+        self._shutdown_hook = None
+        if not started_stop:
+            return
+        # Threads block in ``subprocess.run`` until their unit finishes, so
+        # shutdown waits for real reaping instead of leaving orphan SUMO
+        # children behind.
+        if wait:
+            self._join_pumps(None)
+
+    def _join_pumps(self, timeout: float | None) -> None:
+        deadline = None if timeout is None else time.monotonic() + timeout
+        for pump in self._pumps:
+            if deadline is None:
+                pump.join()
+            else:
+                pump.join(max(0.0, deadline - time.monotonic()))
+
+    def _shutdown_stop(self) -> None:
+        """Interpreter shutdown: retire the pullers, reap what is in flight.
+
+        Bounded on purpose.  Waiting forever here would reintroduce the hang
+        this hook exists to remove, and a unit that is still running after the
+        grace period publishes nothing anyway - publication is the last step
+        inside its single-flight lock.
+        """
+        if self._shutdown_hook is None:
+            return
+        self._shutdown_hook = None
+        self._request_stop()
+        self._join_pumps(QUEUE_SHUTDOWN_GRACE_S)
+
+
 class IndependentDailyRunner:
     """CandidateRunner adapter with reusable persistent daily evidence."""
 
@@ -638,12 +1153,44 @@ class IndependentDailyRunner:
         *,
         daily_runner: Any,
         cache_root: Path,
+        queue_workers: int | None = None,
     ) -> None:
         if spec.interday_policy != "independent_daily_reset_v1":
             raise ValueError("independent daily runner requires its policy")
+        if queue_workers is None:
+            # Not passed: read the opt-in seam.  This is how production turns
+            # the queue on, because the only production construction site is
+            # `run_monthly_closure_search.py`, which is hashed into the daily
+            # unit cache identity and therefore must not change.
+            queue_workers = resolve_global_queue_workers()
+        if (
+            isinstance(queue_workers, bool)
+            or not isinstance(queue_workers, int)
+            or queue_workers < 1
+        ):
+            raise ValueError("queue_workers must be a positive integer")
+        # The width IS the SUMO ceiling, so it is checked against the real
+        # runner before any unit exists - not asserted afterwards from a
+        # sample of the process table.
+        validate_queue_concurrency_budget(daily_runner, queue_workers)
         self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
         self.daily_runner = daily_runner
         self.cache_root = Path(cache_root)
+        # ``1`` keeps the historical parent-local batch path untouched, so the
+        # global queue is opt-in and directly comparable against it.
+        self.queue_workers = queue_workers
+        self._queue: GlobalDailyUnitQueue | None = None
+        self._queue_targets: tuple[tuple[str, int], ...] | None = None
+        self._queue_stage: str | None = None
+        # Survives shutdown so an end-of-run progress write still reports what
+        # the queue actually did instead of silently dropping the fields.
+        self._queue_final_stats: dict[str, Any] = {}
+        # The queue mutates diagnostic counters and the in-memory evidence map
+        # from several puller threads at once.
+        self._state_lock = threading.RLock()
+        # Serialises queue construction/retirement only.  Never taken by a
+        # puller thread, which is what makes the ordering above safe.
+        self._queue_build_lock = threading.Lock()
         self._units: dict[str, DailyClosureUnit] = {}
         self._parents: dict[str, tuple[str, ...]] = {}
         self._backend_digest: str | None = None
@@ -660,25 +1207,70 @@ class IndependentDailyRunner:
             "cache_write_seconds": 0.0,
             "worker_seconds": 0.0,
             "units_simulated": 0,
+            "queue_singleflight_skips": 0,
         }
         self._prepared_parent_ids: tuple[str, ...] | None = None
 
-    def timing_snapshot(self) -> dict[str, Any]:
-        """Return result-neutral S0 telemetry accumulated by this runner."""
-        return {
-            key: (round(value, 6) if isinstance(value, float) else value)
-            for key, value in self._timing.items()
-        }
+    def _bump(self, key: str, value: Any = 1) -> None:
+        with self._state_lock:
+            self._timing[key] += value
 
-    def _record_corrupt_cache_miss(self) -> None:
+    def timing_snapshot(self) -> dict[str, Any]:
+        """Return result-neutral S0 telemetry accumulated by this runner.
+
+        With the global queue active ``worker_seconds`` is the SUM of unit
+        execution time across puller threads, so ``worker_seconds`` divided by
+        active wall time is the achieved width - the number the parent-local
+        path could never lift above ~1.
+
+        Read ``cache_hits``/``cache_misses`` as PARENT-FACING lookups, which is
+        what they have always been.  Under the queue a parent legitimately hits
+        the cache almost every time, because the queue produced its units
+        moments earlier, so a warm-looking ``cache_misses: 0`` next to a
+        nonzero ``units_simulated`` is correct rather than contradictory:
+        ``units_simulated`` is the count of units this process actually ran.
+        The queue's own lookups (remainder enumeration and the post-lock
+        recheck) are deliberately uncounted - they are not a parent asking for
+        evidence, and counting them would redefine a published diagnostic.
+        """
+        with self._state_lock:
+            snapshot = {
+                key: (round(value, 6) if isinstance(value, float) else value)
+                for key, value in self._timing.items()
+            }
+            queue = self._queue
+            snapshot.update(self._queue_final_stats)
+        if queue is not None:
+            snapshot.update(queue.stats())
+        return snapshot
+
+    def _record_corrupt_cache_miss(self, *, count: bool = True) -> None:
         """One corrupt lookup is both a miss and a diagnostic corruption."""
-        self._timing["cache_corrupt"] += 1
-        self._timing["cache_misses"] += 1
+        with self._state_lock:
+            self._timing["cache_corrupt"] += 1
+            if count:
+                self._timing["cache_misses"] += 1
 
     def cleanup(self) -> None:
-        cleanup = getattr(self.daily_runner, "cleanup", None)
-        if callable(cleanup):
-            cleanup()
+        # Same lock order as `_ensure_queue`, so cleanup cannot race a
+        # retarget into leaving a live queue behind after shutdown, and
+        # `stop()` is still called with no state lock held.
+        with self._queue_build_lock:
+            with self._state_lock:
+                queue, self._queue = self._queue, None
+                self._queue_targets = None
+                self._queue_stage = None
+                if queue is not None:
+                    self._queue_final_stats = queue.stats()
+            try:
+                if queue is not None:
+                    queue.stop()
+                    with self._state_lock:
+                        self._queue_final_stats = queue.stats()
+            finally:
+                cleanup = getattr(self.daily_runner, "cleanup", None)
+                if callable(cleanup):
+                    cleanup()
 
     @staticmethod
     def _stable_backend_identity(provenance: Mapping[str, Any]) -> dict[str, Any]:
@@ -872,17 +1464,29 @@ class IndependentDailyRunner:
         })
         return self.cache_root / key[:2] / f"{key}.json"
 
-    def _load_cached(self, unit: DailyClosureUnit) -> CandidateEvidence | None:
+    def _load_cached(
+        self, unit: DailyClosureUnit, *, count: bool = True
+    ) -> CandidateEvidence | None:
+        """Read verified evidence for ``unit``.
+
+        ``count=False`` performs the identical verification without touching
+        the hit/miss counters.  The global queue needs two extra reads per
+        unit - one to enumerate the remainder, one to re-check after taking
+        the single-flight lock - and neither is a parent asking for evidence,
+        so counting them would silently redefine the published diagnostics.
+        """
         started = time.perf_counter()
         remembered = self._memory_evidence.get(unit.unit_id)
         if remembered is not None:
-            self._timing["cache_hits"] += 1
-            self._timing["cache_verify_seconds"] += time.perf_counter() - started
+            if count:
+                self._bump("cache_hits")
+            self._bump("cache_verify_seconds", time.perf_counter() - started)
             return remembered
         path = self._cache_path(unit)
         if not path.is_file():
-            self._timing["cache_misses"] += 1
-            self._timing["cache_verify_seconds"] += time.perf_counter() - started
+            if count:
+                self._bump("cache_misses")
+            self._bump("cache_verify_seconds", time.perf_counter() - started)
             return None
         try:
             payload = json.loads(
@@ -890,7 +1494,7 @@ class IndependentDailyRunner:
                 object_pairs_hook=_reject_duplicate_keys,
             )
             if not isinstance(payload, Mapping):
-                self._record_corrupt_cache_miss()
+                self._record_corrupt_cache_miss(count=count)
                 return None
             body = {key: value for key, value in payload.items()
                     if key != "content_key"}
@@ -904,14 +1508,14 @@ class IndependentDailyRunner:
                 != self._unit_backend_digests.get(unit.unit_id)
                 or payload.get("content_key") != _canonical_digest(body)
             ):
-                self._record_corrupt_cache_miss()
+                self._record_corrupt_cache_miss(count=count)
                 return None
             stored = _evidence_from_dict(payload["evidence"])
             if stored.candidate_id != unit.unit_id or any(
                 item.candidate_id != unit.unit_id
                 for item in stored.observations
             ):
-                self._record_corrupt_cache_miss()
+                self._record_corrupt_cache_miss(count=count)
                 return None
             rebound = CandidateEvidence(
                 candidate_id=unit.schedule.schedule_id,
@@ -927,17 +1531,19 @@ class IndependentDailyRunner:
                 hard_failures=stored.hard_failures,
                 disruption=stored.disruption,
             )
-            self._memory_evidence[unit.unit_id] = rebound
-            self._timing["cache_hits"] += 1
+            with self._state_lock:
+                self._memory_evidence[unit.unit_id] = rebound
+                if count:
+                    self._timing["cache_hits"] += 1
             return rebound
         except (
             OSError, UnicodeError, AttributeError, ValueError, TypeError,
             KeyError, json.JSONDecodeError,
         ):
-            self._record_corrupt_cache_miss()
+            self._record_corrupt_cache_miss(count=count)
             return None
         finally:
-            self._timing["cache_verify_seconds"] += time.perf_counter() - started
+            self._bump("cache_verify_seconds", time.perf_counter() - started)
 
     def _save_cached(
         self,
@@ -978,8 +1584,157 @@ class IndependentDailyRunner:
         payload["content_key"] = _canonical_digest(payload)
         started = time.perf_counter()
         _atomic_json(self._cache_path(unit), payload)
-        self._timing["cache_write_seconds"] += time.perf_counter() - started
-        self._memory_evidence[unit.unit_id] = evidence
+        self._bump("cache_write_seconds", time.perf_counter() - started)
+        with self._state_lock:
+            self._memory_evidence[unit.unit_id] = evidence
+
+    def _is_covered(
+        self,
+        evidence: CandidateEvidence | None,
+        targets: Mapping[str, int],
+    ) -> bool:
+        """A unit is done when it hard-failed or already meets every target."""
+        if evidence is None:
+            return False
+        if evidence.hard_failures:
+            # A valid hard failure is a real, cacheable outcome, not an error.
+            return True
+        coverage = self._coverage(evidence)
+        return all(
+            coverage[variant] >= targets[variant] for variant in DEMAND_VARIANTS
+        )
+
+    def _cache_key(self, unit: DailyClosureUnit) -> str:
+        return self._cache_path(unit).stem
+
+    def _produce_unit(
+        self,
+        unit_id: str,
+        targets: Mapping[str, int],
+        stage: str,
+    ) -> None:
+        """Execute one daily unit exactly once and publish it atomically.
+
+        Ordering inside the single-flight lock is what makes this safe to run
+        from many threads and many processes at the same time:
+
+        1. take the cross-process ``flock`` for this unit's content key;
+        2. RE-READ the cache, because another producer may have published
+           while this caller was waiting for the lock;
+        3. only then execute, and publish atomically as the last step.
+
+        Step 2 is the reason a race costs a filesystem read rather than a
+        duplicate SUMO run, and step 3 is why an interrupted unit leaves no
+        entry: ``_atomic_json`` writes a temporary file and ``os.replace``s it.
+        """
+        unit = self._units[unit_id]
+        key = self._cache_key(unit)
+        with content_key_lock(self.cache_root, key):
+            cached = self._load_cached(unit, count=False)
+            if self._is_covered(cached, targets):
+                self._bump("queue_singleflight_skips")
+                return
+            started = time.perf_counter()
+            evidence = self.daily_runner.run_candidate(
+                unit.schedule,
+                target_repetitions=targets,
+                existing=cached,
+                stage=stage,
+            )
+            self._bump("worker_seconds", time.perf_counter() - started)
+            self._bump("units_simulated")
+            self._save_cached(unit, evidence)
+
+    def _missing_unit_ids(self, targets: Mapping[str, int]) -> list[str]:
+        """Every prepared unit that still needs work, in canonical unit order.
+
+        Canonical order makes the lookahead deterministic: two runs of the
+        same shortlist schedule the same remainder, so a resumed run continues
+        the same sweep instead of re-deciding it.
+        """
+        missing: list[str] = []
+        for unit_id in sorted(self._units):
+            unit = self._units[unit_id]
+            if not self._is_covered(self._load_cached(unit, count=False), targets):
+                missing.append(unit_id)
+        return missing
+
+    def _ensure_queue(
+        self,
+        targets: Mapping[str, int],
+        stage: str,
+        *,
+        scope: Sequence[str] | None = None,
+    ) -> GlobalDailyUnitQueue:
+        """Start (or retarget) the one global queue for these exact targets.
+
+        Coverage participates in the work identity.  A finalist round asks for
+        MORE repetitions than the pilot, and a queue built for pilot coverage
+        would otherwise report those units complete and hand back pilot-only
+        evidence.  Different targets therefore retire the queue and rebuild it
+        from a fresh coverage scan.
+
+        ``stage`` is part of the signature too.  The production backend only
+        validates it, so today a stale stage changes nothing - but the stage
+        is baked into the executor closure, so keying on coverage alone would
+        quietly replay "pilot" for a finalist round whenever the two happen to
+        ask for the same repetitions.  That is a trap for the next backend
+        that gives the label meaning, and it costs one extra retarget to
+        avoid.
+
+        ``scope`` is what keeps the lookahead honest.  ``None`` means the
+        whole prepared remainder, which is only ever correct for the
+        exhaustive pilot sweep, where every prepared unit is verified anyway
+        and the queue merely reorders work the run had already committed to.
+        A finalist round has NOT committed to that: the policy promotes at
+        most a handful of parents and asks them for more repetitions, so a
+        global rebuild at finalist coverage would upgrade all 1 950 prepared
+        units - hours of SUMO nobody asked for, and an adaptive bump from 4
+        to 12 repetitions would order it again.  Every non-pilot caller
+        therefore passes an explicit unit scope.
+        """
+        signature = (
+            str(stage),
+            tuple((variant, int(targets[variant])) for variant in DEMAND_VARIANTS),
+            scope is None,
+        )
+        # Lock ORDER is always _queue_build_lock -> _state_lock, and puller
+        # threads take _state_lock ONLY.  Retiring a queue therefore never
+        # holds a lock a pump needs.  Doing it the obvious way instead -
+        # calling `queue.stop()` inside `_state_lock` - deadlocks on the
+        # first finalist retarget: `stop()` joins the pullers, and a puller
+        # inside `_produce_unit` blocks on `_bump`/`_load_cached`, which want
+        # the very lock the retargeting thread is holding.
+        with self._queue_build_lock:
+            with self._state_lock:
+                queue = self._queue
+                if queue is not None and self._queue_targets == signature:
+                    return queue
+                retired, self._queue = queue, None
+                self._queue_targets = None
+                self._queue_stage = None
+            if retired is not None:
+                retired.stop()
+                with self._state_lock:
+                    self._queue_final_stats = retired.stats()
+            # Also outside the state lock: the global scan rescans the whole
+            # prepared unit set on disk and would otherwise stall progress
+            # reporting.
+            missing = (
+                self._missing_unit_ids(targets)
+                if scope is None
+                else list(dict.fromkeys(str(value) for value in scope))
+            )
+            queue = GlobalDailyUnitQueue(
+                missing,
+                workers=self.queue_workers,
+                execute=partial(self._produce_unit, targets=targets, stage=stage),
+            )
+            with self._state_lock:
+                self._queue = queue
+                self._queue_targets = signature
+                self._queue_stage = stage
+            return queue
 
     @staticmethod
     def _coverage(evidence: CandidateEvidence | None) -> dict[str, int]:
@@ -1044,6 +1799,33 @@ class IndependentDailyRunner:
 
         evidence_by_unit: dict[str, CandidateEvidence] = {}
         units = [self._units[unit_id] for unit_id in unit_ids]
+        if self.queue_workers > 1:
+            # Global path: this parent's own missing units are promoted to the
+            # front of ONE shared remainder and awaited here, while the same
+            # puller threads keep the remaining width busy with lookahead for
+            # later parents.  Everything below then runs unchanged against a
+            # cache that already holds this parent's units, so the parent's
+            # result is assembled in its own canonical order and cannot depend
+            # on which unit happened to finish first.
+            needed = [
+                unit.unit_id
+                for unit in units
+                if not self._is_covered(
+                    self._load_cached(unit, count=False), target_repetitions
+                )
+            ]
+            if needed:
+                # Lookahead is global for the exhaustive pilot sweep only.
+                # Any other stage gets a queue scoped to the units it asked
+                # for, so a finalist round never upgrades the whole prepared
+                # shortlist to finalist coverage.
+                queue = self._ensure_queue(
+                    target_repetitions,
+                    stage,
+                    scope=None if stage == QUEUE_LOOKAHEAD_STAGE else needed,
+                )
+                queue.add(needed)
+                queue.require(needed)
         pending: list[
             tuple[
                 ClosureSchedule,

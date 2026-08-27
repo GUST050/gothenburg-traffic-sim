@@ -164,3 +164,207 @@ Libsumo and save/load remain higher-risk experiments. They must pass the same
 per-seed flow, health, recovery, trajectory, restart and cancellation contracts;
 neither should block the lower-risk baseline single-flight and resource-matrix
 work.
+
+
+## 2026-08-27 — the width was never the binding constraint
+
+The resource matrix above assumed the configured width was the thing to tune.
+Production measurement says otherwise: the campaign ran with `--daily-workers 8
+--max-active-sumo-slots 8` and reached ONE.
+
+Frozen from the live campaign immediately before it was stopped
+(`validation/monthly_global_queue_baseline_2026-08-27.json`):
+
+| quantity | measured |
+|---|---|
+| worker-seconds | 80 330.94 |
+| active elapsed seconds | 88 771.27 |
+| worker/active ratio | 0.905 |
+| effective utilization of 8 slots | 11.3% |
+| live samples showing 1 worker | 20 / 20 |
+| live samples showing >1 SUMO | 0 / 20 |
+| cache hits vs misses over 816 parents | 3 229 vs 851 |
+| genuinely new units per five-day parent | 1.04 |
+
+The cause is structural, not a tuning error. `run_candidate` collected ONE
+parent's pending units and handed that list to
+`IsolatedDailySumoRunner.run_candidate_batch`, whose pool is sized
+`min(unit_workers, len(requests))`. A five-day parent can supply at most five
+units, and once the cache is warm it supplies about one. The pool was therefore
+sized 1 no matter what the operator asked for.
+
+### What replaced it
+
+`GlobalDailyUnitQueue` in the orchestration-only `independent_daily.py`, opt-in
+behind the environment pair `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS` +
+`TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING=independent-exhaustive`. It is
+deliberately NOT a CLI flag: `run_monthly_closure_search.py` is one of the
+nineteen files `monthly_sumo.py` hashes into `source_digest`, which rides in
+the backend provenance the daily-unit cache key is built from, so a flag there
+moves cache identity (measured: c0bbfc32... -> 8b040d90...) and orphans every
+cached unit. The screening declaration is a safety gate: global lookahead
+would simulate the work a `independent-cost-ordered-exact` stop proof claims
+to have skipped, so the resolver fails closed on a missing, unknown or
+command-line-contradicting value. Missing units are enumerated ONCE across the
+whole shortlist in canonical unit order and served by exactly `workers` puller
+threads. A parent promotes its own units to the front and waits only for those;
+the remaining threads run lookahead that lands in the shared cache for later
+parents.
+
+Properties, each pinned by a test in `tests/test_independent_daily_queue.py`:
+
+- **The width is the ceiling, not a check.** There are exactly `workers`
+  threads and each runs one unit synchronously, so at most `workers` isolated
+  workers - hence at most `workers` SUMO processes - can exist. The same fact
+  is the backpressure: pullers take one item at a time, so outstanding work
+  never exceeds the width.
+- **Single-flight with a post-lock recheck.** Take the cross-process `flock`
+  for the content key, RE-READ and fully validate the cache, skip if another
+  producer won, otherwise execute once and publish atomically as the last step
+  inside the lock. A race costs a filesystem read, not a duplicate SUMO run.
+- **Completion order cannot reach the evidence.** A parent assembles its result
+  from the cache in its own canonical unit order, so a randomized-jitter run is
+  byte-identical to the legacy path.
+- **Coverage is part of the work identity.** A finalist round asking for more
+  repetitions retires the queue and rebuilds it from a fresh coverage scan, so
+  it can never hand back pilot-only evidence.
+- **Cancellation reaps.** `cleanup()` clears the remainder and shuts the pool
+  down with `wait=True`, so it blocks until real subprocesses are reaped rather
+  than orphaning SUMO children. An interrupted unit publishes nothing.
+- **Retirement never deadlocks.** A queue is stopped OUTSIDE `_state_lock`,
+  under a separate build lock the pullers never take. Stopping it inside
+  `_state_lock` - the obvious shape - hangs on the first finalist retarget,
+  because `stop()` joins pullers that are blocked wanting that same lock.
+  Pinned by `test_retargeting_does_not_deadlock_against_a_running_worker`,
+  which hangs on the pre-fix code.
+
+### Measured (`validation/monthly_global_queue_benchmark_2026-08-27.json`)
+
+SYNTHETIC SCHEDULER SCALING. 180-unit sliding five-day fixture with a sleeping
+stand-in in place of SUMO; every arm replays the SAME seeded per-unit cost
+profile, so a wide arm cannot win by drawing cheaper units. These numbers
+describe the scheduler, not per-unit SUMO cost.
+
+| arm | wall | achieved width | speedup |
+|---|---|---|---|
+| legacy parent-local | 170.33 s | 0.999 | 1.00x |
+| global queue w1 | 170.25 s | 0.999 | 1.00x |
+| global queue w2 | 85.31 s | 1.995 | 2.00x |
+| global queue w4 | 42.91 s | 3.965 | 3.97x |
+| global queue w8 | 21.89 s | 7.771 | **7.78x** |
+
+Cache bytes were identical across every arm; the harness refuses to report a
+speed number otherwise. Note that `global queue w1` reproducing legacy exactly
+is the control: it shows the gain is the WIDTH, not incidental rework.
+
+SAVED REAL OBSERVATION, not repeated since. One cold SUMO arm at width 8
+reached a maximum of 8 concurrent isolated workers and 8 concurrent SUMO
+processes over 170 samples and never exceeded either. That run predates the
+present activation seam, so its recorded command line still shows the removed
+`--global-daily-queue` flag; the scheduler it exercised is the one that ships.
+It was sampled by process ancestry rather than by `grep`, and
+`tools/benchmark_independent_daily_queue.py` now implements ancestry sampling
+so the tool matches the claim - the earlier grep-based sampler counted every
+SUMO on the machine and could be inflated by an unrelated campaign.
+
+The campaign ETAs in the report - 2.93 h resume, 6.58 h cold at width 8 - are
+PROJECTIONS multiplying production's 94.396 s/unit by the measured width. No
+full campaign has been run at any width, and per-unit cost under sustained
+eight-way contention is unmeasured; the report records that more than ~21%
+per-unit inflation would put the eight-hour goal at risk.
+
+### How to enable it (and what it does NOT do)
+
+The queue is off by default. Both variables are required, in the environment
+of whichever process launches the search:
+
+```sh
+export TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS=8
+export TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING=independent-exhaustive
+```
+
+For the web UI this means exporting them BEFORE starting `serve.py`.
+`run_in_new_session` does not pass an explicit `env`, so the CLI child
+inherits them, and `monthly_screening_cli_args` already sends
+`--screening-mode independent-exhaustive` for every independent-daily spec,
+so the resolver's command-line cross-check agrees. For a direct CLI run,
+export them in the same shell.
+
+Turning the queue on does NOT restart anything by itself, does not change any
+cache key, and does not change what a unit computes. With either variable
+unset the legacy parent-local path runs bit-for-bit as before.
+
+### Four defects found in review, and what now prevents them
+
+Recorded because each was invisible from the outside and each is now pinned by
+a test that fails against the pre-fix code.
+
+**1. Global lookahead upgraded units nobody selected.** `_ensure_queue()`
+rebuilt its remainder from every prepared unit whenever the target coverage
+changed. Under the exhaustive PILOT sweep that is free - every prepared unit is
+verified anyway, so the queue only reorders committed work. A FINALIST round is
+different: the policy promotes at most 12 parents and asks them for 4
+repetitions, adapting to 12, so a global rebuild at finalist coverage would
+have upgraded all 1 950 prepared units, and an adaptive bump would have ordered
+it again. Global lookahead is now permitted for `stage == "pilot"` only
+(`QUEUE_LOOKAHEAD_STAGE`); every other stage gets a queue scoped to the units
+it actually asked for.
+
+**2. The width was not bound to the SUMO budget.** It was validated only as a
+positive integer. Two configurations passed every existing check and broke the
+eight-SUMO ceiling anyway: `--daily-workers 1` leaves the production runner
+UNWRAPPED, so an eight-wide queue would pull one `WarmPrefixController`'s
+single TraCI connection from eight threads; and `--daily-workers 1
+--seed-workers 8` has a product of 8, so an eight-wide queue over it is 64
+concurrent SUMO processes. `validate_queue_concurrency_budget()` now fails
+closed before any unit exists, on four axes: the runner must be
+process-isolated, it must start exactly one SUMO per unit, the width must not
+exceed the declared `--daily-workers`, and it must not exceed the resource
+benchmark's approval (`approved_seed_workers()`, currently 8). A test double
+declares itself safe explicitly via `queue_sumo_profile()`; nothing is assumed
+safe by default.
+
+**3. An abandoned queue wedged the interpreter.** The pullers park on the
+queue's own condition variable, which no shutdown path knows how to drain, and
+as non-daemon threads they made exit unreachable - `threading._shutdown()`
+joins them BEFORE any atexit handler runs, so neither `concurrent.futures`'
+exit hook nor one of our own could wake them. Measured: an owner that skipped
+`cleanup()` hung forever. The pullers are now daemon threads with a
+`threading._register_atexit` hook that retires them and waits a bounded
+`QUEUE_SHUTDOWN_GRACE_S` for the unit in flight, so the orderly path still
+reaps its SUMO child and the disorderly path still exits.
+
+**4. The benchmark orphaned what it killed, and would publish a speed number
+for a failed run.** `run_real_arm()` created no process group and killed only
+the parent on timeout - the exact behaviour the frozen report records leaving
+isolated workers and SUMO children running. It now owns a session
+(`start_new_session=True`), records that group id at spawn rather than deriving
+it from a possibly reused pid at timeout, and escalates TERM then KILL across
+the whole group with a bounded wait at each step. It also REAPS the leader
+itself: an unwaited-for child stays in the process table as a zombie and still
+reports its group, so a shutdown that only inspected the table could never
+observe its own success. The census now separates live members from dead ones
+(state `Z`), because escalating against a zombie signals nothing and counting
+one as a survivor reports a leak that cannot execute another instruction; an
+unreadable process table is UNKNOWN and never a success. It also refused too
+little: a speed claim
+needed only equal cache fingerprints, and two arms that both crashed early
+agree byte for byte. `speed_claim_blockers` now additionally requires every arm
+to exit 0, not time out, publish a non-empty and complete evidence population,
+leave no partial files, and produce real ancestry-based concurrency samples.
+
+### Honest limits
+
+The 180-unit benchmark measures the SCHEDULER with a sleeping stand-in. The
+per-unit COST is not measured there; it is taken from production's 94.396 s
+(80 330.94 worker-seconds over 851 real units). Any full-month figure built
+from those two numbers is a PROJECTION, and is labelled as one. Only a complete
+cold campaign can settle it, and no campaign was restarted.
+
+Those projections are also narrower in SCOPE than their name suggests: 6.58 h
+cold and 2.93 h resume count unique units at the pilot's one repetition per
+variant and omit the finalist stage entirely. Bounded above by the policy's own
+ceilings that is ~7.19 h / ~3.54 h with the initial finalist round and ~8.81 h
+/ ~5.15 h at the adaptive maximum - so the upper bound CROSSES the eight-hour
+goal. See the corrected table in
+`docs/plans/ROAD_CLOSURE_SIMULATION_SPEED_PLAN_2026-08-21.md`.

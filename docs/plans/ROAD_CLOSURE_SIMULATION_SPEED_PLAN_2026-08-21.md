@@ -508,3 +508,96 @@ ranked measured budget. Do not combine S0 with a production optimization.
 After S0, the first implementation experiment should be S1A if rerouting is a
 material phase, otherwise S2A. S1B may proceed independently because it affects
 exact repeats rather than first-run simulation throughput.
+
+
+## 2026-08-27 — S0 answered: the bottleneck was work supply, not simulation
+
+The plan above assumed the next win would come from making a SUMO unit cheaper
+(S1A rerouting, S2A execution). Measurement of the live campaign says the
+first-order loss was elsewhere: the eight configured slots were running one
+unit at a time.
+
+`ui-monthly-13lhsoy-5d`, frozen immediately before a user-approved stop:
+
+- 80 330.94 worker-seconds against 88 771.27 active seconds = **0.905**, one
+  worker busy ~90% of wall time against eight declared slots (11.3%);
+- 20/20 live process samples: exactly one isolated worker, at most one SUMO;
+- 3 229 cache hits against 851 misses over 816 five-day parents = **1.04**
+  genuinely new units per parent.
+
+The parent-local batch sized its pool `min(unit_workers, len(requests))`, and a
+warm five-day parent supplies about one request. No per-unit optimization could
+have recovered this: the machine was ~89% idle of its own declared budget.
+
+`GlobalDailyUnitQueue` (opt-in via `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_WORKERS`
+plus `TRAFFIC_SIM_GLOBAL_DAILY_QUEUE_SCREENING=independent-exhaustive`; not a
+CLI flag, because the CLI is hashed into daily-unit cache identity) serves the
+whole missing-unit remainder from `workers` puller threads instead. SYNTHETIC
+SCHEDULER SCALING on a 180-unit fixture where every arm replays one seeded
+per-unit cost profile and SUMO is a sleeping stand-in: achieved width
+0.999 -> 7.771 and wall 170.33 s -> 21.89 s, a **7.78x** speedup at 97.1% of
+theoretical, with byte-identical cache across all arms. Separately, a SAVED
+real cold SUMO observation reached exactly 8 concurrent workers and 8
+concurrent SUMO processes over 170 samples and never exceeded either. The
+7.78x is scheduler scaling, not an end-to-end campaign measurement.
+
+### What this changes for S1A/S2A
+
+They are still worth doing, but their ceiling has moved. Before, a 2x cheaper
+unit bought 2x. Now the width recovers ~7.8x in scheduler
+terms, so unit-level work competes against a much smaller remaining margin and should be prioritized by
+measured phase cost rather than by expectation.
+
+### What it does NOT settle
+
+The per-unit cost under sustained eight-way contention was not isolated against
+a width-1 control on the same spec. The campaign ETA below is therefore a
+projection from two separately measured numbers - production's 94.396 s/unit
+(851 real units) and the measured achieved width - not a measured campaign:
+
+| quantity | value |
+|---|---|
+| serial reference, 1 950 units | 51.13 h |
+| projected cold PILOT SWEEP at width 8 | **6.58 h** |
+| projected resume of the stopped campaign's PILOT SWEEP (867 units left) | **2.93 h** |
+
+**Scope corrected 2026-08-27: both figures are PILOT-SWEEP projections, and
+they do not cover the whole campaign.** Each multiplies a UNIQUE-unit count
+(1 950 cold, 867 remaining) by the measured 94.396 s, which is the cost of one
+repetition per variant - exactly what the pilot stage asks for
+(`policy.json`: `pilot.repetitions_per_variant: 1`). The finalist stage is
+omitted: the same policy promotes up to 12 finalists
+(`pilot.maximum_finalists: 12`), asks each for 4 repetitions per variant
+(`finalist.initial_repetitions: 4`) and may adapt to 12
+(`finalist.max_repetitions: 12`). A five-day finalist covers 5 daily units, so
+the omitted work is bounded above by 12 x 5 = 60 units re-run for 3 further
+repetitions initially, and up to 11 further at the adaptive ceiling:
+
+| stage covered | cold | resume |
+|---|---|---|
+| pilot sweep only (the figures above) | 6.58 h | 2.93 h |
+| + initial finalist round (4 reps) | ~7.19 h | ~3.54 h |
+| + adaptive finalist ceiling (12 reps) | ~8.81 h | ~5.15 h |
+
+The upper bound therefore **crosses the 8 h goal**, where the pilot-only
+figure sits comfortably inside it. It is an upper bound rather than an
+estimate: finalists whose date windows overlap share daily units, and the
+adaptive rule stops as soon as its precision target is met, so the real cost
+lands somewhere between the rows. The frozen reports state 6.58 h / 2.93 h
+without this qualification; they are left byte-unchanged as evidence and are
+superseded in scope by this table.
+
+A sub-hour claim is not made and is not supported. One real observation worth
+carrying: unit cost is not uniform - 17 of 20 fixture units averaged 35.5 s of
+worker time while the last three each needed multi-minute SUMO invocations. The
+projection deliberately uses production's own 851-unit mean, which already
+contains that spec's tail.
+
+### Operational rule learned here
+
+Stop a search by signalling its process GROUP, not its PID. A SIGTERM to the
+parent alone let it exit while in-flight isolated workers and their SUMO
+children ran on as orphans until they finished. The production campaign stop
+used SIGINT to process group 68201 and left nothing behind. Nothing was
+corrupted either way, because publication is atomic and last inside the
+per-content-key single-flight lock.

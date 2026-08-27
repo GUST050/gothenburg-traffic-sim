@@ -192,6 +192,64 @@ def codex_profile_path(role: Role) -> Path | None:
     return codex_home() / f"{role.profile}.config.toml"
 
 
+# Keywords a strict structured-output transport cannot express. They are
+# dropped from the WIRE copy only; the canonical schema keeps them and
+# ``run_flow`` re-checks the same condition on the returned object, so
+# nothing the provider cannot police goes unpoliced.  ``anyOf`` is
+# deliberately NOT in this list - strict structured output accepts it, and
+# discarding a constraint the transport can carry would weaken the wire
+# schema for no reason.
+_UNSUPPORTED_TRANSPORT_KEYWORDS = (
+    "allOf",
+    "oneOf",
+    "not",
+    "if",
+    "then",
+    "else",
+    "dependentRequired",
+    "dependentSchemas",
+)
+
+
+def strict_transport_schema(schema: Any) -> Any:
+    """A strict-object copy of a canonical schema, for Codex's --output-schema.
+
+    Codex accepts strict objects only: every declared property listed in
+    ``required`` and ``additionalProperties`` false, with no conditional
+    keywords anywhere.  The canonical schema in ``.ai-flow/schemas`` is the
+    source of truth and says what is actually true - ``blocked_reason`` is
+    required only when ``status`` is BLOCKED - so it is TRANSLATED here
+    rather than flattened in place.  Weakening the canonical file to fit the
+    wire would delete a real contract to satisfy a transport limitation; this
+    keeps the contract and pays the limitation where it belongs.
+    """
+    if isinstance(schema, list):
+        return [strict_transport_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    transported = {
+        key: strict_transport_schema(value)
+        for key, value in schema.items()
+        if key not in _UNSUPPORTED_TRANSPORT_KEYWORDS
+    }
+    properties = transported.get("properties")
+    if isinstance(properties, dict):
+        transported["required"] = list(properties)
+        transported["additionalProperties"] = False
+    return transported
+
+
+def write_transport_schema(schema_path: Path, destination: Path) -> Path:
+    """Materialise the wire copy beside the run's other artifacts."""
+    canonical = json.loads(schema_path.read_text(encoding="utf-8"))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(strict_transport_schema(canonical), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return destination
+
+
 def build_codex_command(
     role: Role,
     root: Path,
@@ -199,6 +257,15 @@ def build_codex_command(
     output_path: Path,
     prompt: str,
 ) -> tuple[list[str], bool]:
+    """Build the Codex invocation, writing the strict wire schema it needs.
+
+    The canonical schema is never handed to Codex directly: the transport
+    copy is written next to this invocation's output so the run directory
+    records exactly what was sent.
+    """
+    transport_path = write_transport_schema(
+        schema_path, output_path.with_name(f"{output_path.stem}.schema.json")
+    )
     command = ["codex", "exec", "--strict-config", "-C", str(root)]
     profile_path = codex_profile_path(role)
     profile_found = bool(profile_path and profile_path.is_file())
@@ -220,7 +287,7 @@ def build_codex_command(
     command.extend(
         [
             "--output-schema",
-            str(schema_path),
+            str(transport_path),
             "--output-last-message",
             str(output_path),
             prompt,
@@ -230,7 +297,14 @@ def build_codex_command(
 
 
 def build_claude_command(role: Role, schema_path: Path, prompt: str) -> list[str]:
-    schema = json.dumps(json.loads(schema_path.read_text(encoding="utf-8")), separators=(",", ":"))
+    schema_value = json.loads(schema_path.read_text(encoding="utf-8"))
+    # Claude Code validates the supplied output schema with its bundled
+    # validator, which rejects the draft-2020-12 meta-schema URI even though
+    # the schema keywords used by ai-flow are supported.  The declaration is
+    # documentation only, so omit it from the CLI payload without weakening
+    # any of the actual output constraints.
+    schema_value.pop("$schema", None)
+    schema = json.dumps(schema_value, separators=(",", ":"))
     return [
         "claude",
         "--print",
@@ -329,6 +403,27 @@ def read_json(path: Path, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise FlowError(f"{label} output must be a JSON object")
     return value
+
+
+def planner_blocked_reason(plan: dict[str, Any]) -> str:
+    """The blocker text of a BLOCKED plan, or a loud failure.
+
+    ``blocked_reason`` is REQUIRED here and only here, which is exactly what
+    the canonical plan schema says; this re-checks it because the strict wire
+    schema Codex is handed cannot carry a conditional.  Inventing a
+    placeholder for a missing one - which this flow used to do - ends the run
+    with a message that names no blocker, so nobody can tell an unanswerable
+    question from a planner that simply forgot to fill the field in.  A
+    non-string is failed rather than coerced: ``str(None)`` is the truthy
+    text "None", which would sail straight through a strip-and-test.
+    """
+    reason = plan.get("blocked_reason")
+    if not isinstance(reason, str) or not reason.strip():
+        raise FlowError(
+            "Planner returned status BLOCKED without a usable blocked_reason "
+            f"({reason!r}); a blocker must name what it is"
+        )
+    return reason.strip()
 
 
 def compose_prompt(base: str, sections: Sequence[tuple[str, str]]) -> str:
@@ -601,8 +696,13 @@ def run_flow(
             "plan",
             False,
         )
-        if plan.get("blocked_reason"):
-            return _final("BLOCKED", str(plan["blocked_reason"]), run_dir, EXIT_BLOCKED)
+        plan_status = plan.get("status")
+        if plan_status == "BLOCKED":
+            return _final(
+                "BLOCKED", planner_blocked_reason(plan), run_dir, EXIT_BLOCKED
+            )
+        if plan_status != "READY":
+            raise FlowError(f"Planner returned unknown status: {plan_status!r}")
 
         plan_text = json.dumps(plan, ensure_ascii=False, indent=2)
         _stage("CLAUDE WORKER")

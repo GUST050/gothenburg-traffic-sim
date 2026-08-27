@@ -1,0 +1,211 @@
+{
+  "arms": [
+    {
+      "achieved_width": 0.999,
+      "arm": "legacy_parent_local",
+      "cache_corrupt": 0,
+      "cache_hits": 540,
+      "cache_misses": 180,
+      "max_concurrent_unit_workers": 1,
+      "partial_files": [],
+      "queue_workers": 1,
+      "singleflight_skips": 0,
+      "speedup_vs_legacy": 1.0,
+      "unit_seconds_p50": 0.9549,
+      "unit_seconds_p95": 1.4648,
+      "units_simulated": 180,
+      "wall_seconds": 170.3324,
+      "worker_seconds": 170.124
+    },
+    {
+      "achieved_width": 0.999,
+      "arm": "global_queue_w1",
+      "cache_corrupt": 0,
+      "cache_hits": 540,
+      "cache_misses": 180,
+      "max_concurrent_unit_workers": 1,
+      "partial_files": [],
+      "queue_workers": 1,
+      "singleflight_skips": 0,
+      "speedup_vs_legacy": 1.001,
+      "unit_seconds_p50": 0.9546,
+      "unit_seconds_p95": 1.4648,
+      "units_simulated": 180,
+      "wall_seconds": 170.2465,
+      "worker_seconds": 170.0712
+    },
+    {
+      "achieved_width": 1.995,
+      "arm": "global_queue_w2",
+      "cache_corrupt": 0,
+      "cache_hits": 720,
+      "cache_misses": 0,
+      "max_concurrent_unit_workers": 2,
+      "partial_files": [],
+      "queue_workers": 2,
+      "singleflight_skips": 0,
+      "speedup_vs_legacy": 1.997,
+      "unit_seconds_p50": 0.9575,
+      "unit_seconds_p95": 1.4648,
+      "units_simulated": 180,
+      "wall_seconds": 85.3056,
+      "worker_seconds": 170.2131
+    },
+    {
+      "achieved_width": 3.965,
+      "arm": "global_queue_w4",
+      "cache_corrupt": 0,
+      "cache_hits": 720,
+      "cache_misses": 0,
+      "max_concurrent_unit_workers": 4,
+      "partial_files": [],
+      "queue_workers": 4,
+      "singleflight_skips": 0,
+      "speedup_vs_legacy": 3.969,
+      "unit_seconds_p50": 0.9542,
+      "unit_seconds_p95": 1.4647,
+      "units_simulated": 180,
+      "wall_seconds": 42.9119,
+      "worker_seconds": 170.1626
+    },
+    {
+      "achieved_width": 7.771,
+      "arm": "global_queue_w8",
+      "cache_corrupt": 0,
+      "cache_hits": 720,
+      "cache_misses": 0,
+      "max_concurrent_unit_workers": 8,
+      "partial_files": [],
+      "queue_workers": 8,
+      "singleflight_skips": 0,
+      "speedup_vs_legacy": 7.781,
+      "unit_seconds_p50": 0.953,
+      "unit_seconds_p95": 1.4647,
+      "units_simulated": 180,
+      "wall_seconds": 21.8906,
+      "worker_seconds": 170.1204
+    }
+  ],
+  "campaign_eta_projection": {
+    "inputs": {
+      "achieved_width_at_8_workers": 7.771,
+      "achieved_width_basis": "180-unit scheduler fixture, 97.1% of theoretical",
+      "seconds_per_unit_basis": "80 330.94 worker-seconds over 851 real units of THIS campaign's own spec, so it already contains that spec's cost tail",
+      "seconds_per_unit_measured_in_production": 94.396,
+      "unique_units_full_campaign": 1950
+    },
+    "primary_goal_8_active_hours": "met by the projection",
+    "projected_cold_hours_at_width_8": 6.58,
+    "projected_resume_hours_at_width_8": 2.93,
+    "resume_from_current_cache_units": 867,
+    "risk_not_captured": "Per-unit cost under sustained 8-way contention on this MacBook Air M4 was not isolated against a width-1 control on the SAME spec, so the projection assumes the production 94.396 s/unit does not inflate under load. If it inflates by more than ~21% the 8-hour goal is at risk. Memory was not a limiter in the real arm.",
+    "serial_reference_hours": 51.13,
+    "status": "PROJECTION - not a measured full-campaign result",
+    "stretch_goal_4_active_hours": "NOT supported by this projection for a cold full campaign; it IS comfortably met for resuming the stopped campaign from its existing 1 083 cached units",
+    "sub_one_hour_claim": "not made - no direct measurement supports it",
+    "why_projection": "No cold full campaign was run; the stopped campaign was deliberately NOT restarted. The projection multiplies two separately measured quantities."
+  },
+  "complete_cache_reconstruction": {
+    "campaign_projection": {
+      "basis": "The frozen campaign measured cache_verify_seconds 0.207913 for 4 080 parent-facing lookups, i.e. ~51 microseconds per verified lookup. A fully cached 1 690-parent campaign performs 8 450 such lookups.",
+      "caveat": "This is extrapolation from a partially cached production workspace plus a fully cached synthetic one. A genuinely complete production cache does not exist yet, so the 30-minute target is not claimed as directly measured.",
+      "projected_total_minutes": "well under 30, dominated by enumeration and artifact publication rather than by cache reads",
+      "projected_verification_seconds": 0.43
+    },
+    "measured": {
+      "fixture": "180-unit scheduler fixture, second pass over a full cache",
+      "result": "zero units executed, zero SUMO, units_simulated == 0",
+      "test": "tests/test_independent_daily_queue.py::test_a_complete_cache_runs_no_units_at_all"
+    },
+    "status": "MEASURED on a representative fixture, PROJECTED for the campaign"
+  },
+  "evidence_equality": {
+    "all_arms_byte_identical": true,
+    "entries_per_arm": [
+      180,
+      180,
+      180,
+      180,
+      180
+    ],
+    "no_partial_files": true
+  },
+  "fixture": {
+    "duration_spread": 0.35,
+    "mean_unit_seconds_standin": 0.944,
+    "note": "Every arm replays the same seeded per-unit duration profile, so a wide arm cannot win by drawing cheaper units.",
+    "parents": 144,
+    "permitted_date_end": "2027-09-20",
+    "permitted_date_start": "2027-09-01",
+    "production_seconds_per_unit": 94.396,
+    "seed": 20260827,
+    "targets": {
+      "q10": 1,
+      "q50": 1,
+      "q90": 1
+    },
+    "time_scale_vs_production": 100.0
+  },
+  "generated_at": "2026-08-27T17:00:41Z",
+  "kind": "independent_daily_queue_benchmark",
+  "mode": "scheduler",
+  "real_sumo_arm": {
+    "command": "run_monthly_closure_search.py --global-daily-queue --daily-workers 8 --seed-workers 1 --max-active-sumo-slots 8 on an isolated spec, workspace root and cache root",
+    "exceeded_configured_width": false,
+    "max_concurrent_isolated_workers": 8,
+    "max_concurrent_sumo": 8,
+    "purpose": "The scheduler arms above replace SUMO with a sleeping stand-in. This arm runs the REAL pipeline end to end so the concurrency ceiling and the achieved width are measured against actual SUMO processes.",
+    "runner_telemetry_at_17_of_20_units": {
+      "cache_hits": 40,
+      "cache_misses": 0,
+      "cache_misses_note": "0 is correct and not a contradiction: under the queue a parent legitimately hits the cache because the queue produced its units moments earlier. units_simulated is the count of real work.",
+      "queue_completed": 17,
+      "queue_failed": 0,
+      "queue_max_active_workers": 8,
+      "queue_pending": 0,
+      "queue_running": 3,
+      "queue_singleflight_skips": 0,
+      "queue_total": 20,
+      "queue_units_per_hour": 580.366,
+      "queue_workers": 8,
+      "seconds_per_unit_worker_time_under_8_way_load": 35.53,
+      "units_simulated": 17,
+      "worker_seconds": 603.949591
+    },
+    "samples": 170,
+    "sampling_method": "Process ancestry from the run's PID (full ps tree walk), not a grep over command lines - an early grep-based attempt was inflated by the agent's own command line and by the grep process itself.",
+    "shutdown_observation": {
+      "finding": "SIGTERM to the search PID ALONE let the parent exit while two in-flight isolated workers (and their SUMO children) kept running as orphans until they finished their unit on their own.",
+      "no_corruption": "The orphans published nothing partial: publication is atomic and is the last step inside the per-content-key single-flight lock, and flock is released by the kernel on exit.",
+      "operational_rule": "Signal the process GROUP, not the PID. The production campaign stop used SIGINT to process group 68201 and left nothing behind - zero workers, zero SUMO, zero caffeinate, lock released - because group delivery reaches the workers and their SUMO children too.",
+      "why": "Each daily unit runs in its own subprocess. IndependentDailyRunner.cleanup() shuts the pool down with wait=True and does reap them, but only when cleanup actually runs; a signal that ends the parent first bypasses it. This is a property of the pre-existing isolated-worker design, not of the queue."
+    },
+    "spec": "runs/closure_search_specs/queue-bench-real-w8b.json",
+    "spec_note": "2027-09-01..2027-09-20, five-day parents, 06:00-14:00 band. These units are EIGHT-HOUR closures and are therefore much cheaper than the production campaign's full-day (00:00-24:00) units. This arm measures CONCURRENCY, not per-unit cost.",
+    "sumo_concurrency_histogram": {
+      "0": 23,
+      "1": 1,
+      "2": 2,
+      "3": 106,
+      "4": 13,
+      "5": 6,
+      "6": 7,
+      "7": 7,
+      "8": 5
+    },
+    "tail_observation": {
+      "finding": "17 of 20 units completed in 74.1 s wall (35.53 s worker time each). The final 3 units were far more expensive - individual SUMO invocations of 3-5 minutes each, with several run per unit.",
+      "interpretation": "A minority of units is much costlier than the mean. This is a property of the units, not of the scheduler: the same units are equally slow on the legacy path, where they would run one at a time instead of overlapped. It is the reason the campaign ETA below is built from production's own 851-unit mean rather than from this small fixture.",
+      "run_was_stopped_before_the_tail_completed": true
+    }
+  },
+  "release_evidence": false,
+  "schema_version": 1,
+  "speed_claim_permitted": true,
+  "widths": [
+    1,
+    2,
+    4,
+    8
+  ]
+}
