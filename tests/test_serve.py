@@ -42,6 +42,16 @@ def _validation_report_writes_to_tmp(monkeypatch, tmp_path):
                         tmp_path / "validation.json")
 
 
+@pytest.fixture(autouse=True)
+def _recovery_gate_does_not_leak_between_tests():
+    """Reset process-global recovery state at each endpoint-test boundary."""
+    serve._RECOVERY_BLOCKED = False
+    serve._ORPHANED_JOB_IDS.clear()
+    yield
+    serve._RECOVERY_BLOCKED = False
+    serve._ORPHANED_JOB_IDS.clear()
+
+
 class FakeCompletedProcess:
     def __init__(self, returncode=0, stdout="", stderr=""):
         self.returncode = returncode
@@ -239,6 +249,34 @@ class TestPing:
 
 
 class TestServerStartup:
+    def test_startup_never_reconciles_the_repositorys_own_job_records(self):
+        assert serve.JOBS_DIR != serve.ROOT / "runs" / "jobs"
+        assert serve.ROOT / "runs" not in serve.JOBS_DIR.parents
+
+    def test_the_recovery_gate_starts_clear_in_every_test(self):
+        assert serve._RECOVERY_BLOCKED is False
+        assert serve._ORPHANED_JOB_IDS == set()
+
+    def test_a_stranded_record_still_arms_the_gate(self, monkeypatch):
+        """Isolation must not disable recovery of a genuinely stranded job."""
+        class FakeServer:
+            def __init__(self, address, handler):
+                pass
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+        monkeypatch.setattr(serve, "known_edges", lambda: frozenset())
+        monkeypatch.setattr(serve, "ThreadingHTTPServer", FakeServer)
+        serve.job_record("stranded-by-this-test", kind="monthly",
+                         status="running", started_at=time.time())
+        serve.main()
+
+        assert serve._RECOVERY_BLOCKED is True
+        assert serve.simulation_recovery_block()["orphaned_jobs"] == [
+            "stranded-by-this-test"]
+        assert serve.job_read("stranded-by-this-test")["status"] == "orphaned"
+
     def test_invalid_monthly_timeout_uses_safe_default(self, monkeypatch, capsys):
         monkeypatch.setenv("TRAFFIC_SIM_TEST_TIMEOUT_S", "24h")
         assert serve._positive_env_seconds(

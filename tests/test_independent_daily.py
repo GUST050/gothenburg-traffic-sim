@@ -770,8 +770,11 @@ def test_independent_exhaustive_search_is_ui_visible_without_proxy_claim(
 
 def test_server_routes_independent_search_to_exact_exhaustive_mode():
     from serve import (
+        MONTHLY_DAILY_WORKERS,
         MONTHLY_DAILY_UNIT_BUDGET,
+        MONTHLY_MAX_ACTIVE_SUMO_SLOTS,
         MONTHLY_PARENT_SCHEDULE_CAP,
+        MONTHLY_SEED_WORKERS,
         MONTHLY_TOTAL_DAILY_UNIT_CAP,
         monthly_screening_cli_args,
     )
@@ -779,6 +782,12 @@ def test_server_routes_independent_search_to_exact_exhaustive_mode():
     assert monthly_screening_cli_args(_spec()) == [
         "--screening-mode",
         "independent-exhaustive",
+        "--daily-workers",
+        str(MONTHLY_DAILY_WORKERS),
+        "--seed-workers",
+        str(MONTHLY_SEED_WORKERS),
+        "--max-active-sumo-slots",
+        str(MONTHLY_MAX_ACTIVE_SUMO_SLOTS),
         "--daily-unit-budget",
         str(MONTHLY_DAILY_UNIT_BUDGET),
         "--daily-unit-total-cap",
