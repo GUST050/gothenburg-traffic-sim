@@ -2,3 +2,4 @@
 # does not pull a linter. Install with:
 #     pip3 install --user -r requirements-dev.txt
 pylint>=3.3,<4
+websocket-client>=1.8,<2

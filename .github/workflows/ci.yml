@@ -18,10 +18,11 @@ jobs:
           cache: pip
 
       # eclipse-sumo (~100 MB binaries) and matplotlib are not needed by the
-      # test suite — install the analytical stack only.
+      # test suite — install the analytical stack only. scipy and networkx
+      # are direct production imports and must not rely on transitive installs.
       - name: Install dependencies
         run: |
-          pip install pandas numpy osmnx pyproj shapely geopandas \
+          pip install pandas numpy scipy osmnx networkx pyproj shapely geopandas \
                       lightgbm scikit-learn numba==0.60.0 pytest
 
       - name: Run tests
