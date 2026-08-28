@@ -13,13 +13,19 @@ from traffic_sim.core.contracts import (
     load_closure_search_spec,
 )
 from traffic_sim.simulation.finalist_decision import (
+    CanonicalObservationDigest,
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    TIMEOUT_IDENTITY_SCHEMA,
     CandidateEvidence,
     FinalistPolicy,
     PairedObservation,
 )
 from traffic_sim.simulation.monthly_search import (
+    EVIDENCE_SCHEMA_VERSION,
     MonthlySearchPolicy,
     canonical_seed,
+    evidence_from_dict,
+    evidence_to_dict,
     run_monthly_search,
 )
 from traffic_sim.simulation.pilot_selection import PilotPolicy
@@ -75,6 +81,78 @@ def _policy(status="provisional"):
 
 
 V4_MANIFEST = Path("validation/monthly_proxy_manifest_v4.json")
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("seed", True),
+    ("attempt", 1.5),
+    ("threshold_s", "300"),
+    ("retry_protocol", "unknown_retry_v1"),
+    ("work_date", "not-a-date"),
+])
+def test_workspace_artifact_deserialization_rejects_malformed_timeout_fields(
+        field, value):
+    """Published candidate artifacts fail closed on malformed timeout v3."""
+    raw_timeout = {
+        "schema": TIMEOUT_IDENTITY_SCHEMA,
+        "candidate_id": "candidate-a",
+        "work_date": "2027-01-01",
+        "search_content_key": "search-key",
+        "variant": "q50",
+        "seed": 1000,
+        "attempt": 1,
+        "threshold_s": 300.0,
+        "retry_protocol": RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+        "search_provenance_key": "study",
+    }
+    raw_timeout[field] = value
+    with pytest.raises(ValueError, match="timeout identity"):
+        evidence_from_dict({
+            "schema_version": EVIDENCE_SCHEMA_VERSION,
+            "kind": "monthly_closure_candidate_evidence",
+            "stage": "pilot",
+            "candidate_id": "candidate-a",
+            "target_repetitions": {"q10": 1, "q50": 1, "q90": 1},
+            "hard_failures": [],
+            "observations": [],
+            "disruption": [],
+            "timeout_undecided": [raw_timeout],
+            "canonical_observation_digests": [],
+        })
+
+
+def test_workspace_artifact_rejects_missing_timeout_population():
+    raw = {
+        "schema_version": EVIDENCE_SCHEMA_VERSION,
+        "kind": "monthly_closure_candidate_evidence",
+        "stage": "pilot",
+        "candidate_id": "candidate-a",
+        "target_repetitions": {"q10": 0, "q50": 0, "q90": 0},
+        "hard_failures": [],
+        "observations": [],
+        "disruption": [],
+        "timeout_undecided": [],
+        "canonical_observation_digests": [],
+    }
+    del raw["timeout_undecided"]
+    with pytest.raises(ValueError, match="fields are invalid"):
+        evidence_from_dict(raw)
+
+
+def test_workspace_artifact_round_trips_canonical_observation_digest():
+    digest = CanonicalObservationDigest(
+        candidate_id="daily-a", work_date="2027-01-01", variant="q50",
+        seed=1001, sha256="a" * 64)
+    evidence = CandidateEvidence(
+        candidate_id="candidate-a", canonical_observation_digests=(digest,))
+    payload = evidence_to_dict(
+        evidence, stage="pilot",
+        target_repetitions={"q10": 0, "q50": 0, "q90": 0})
+    assert evidence_from_dict(payload).canonical_observation_digests == (digest,)
+
+    payload["unknown"] = True
+    with pytest.raises(ValueError, match="fields are invalid"):
+        evidence_from_dict(payload)
 
 
 def _frozen_campaign_gate_record(**overrides):

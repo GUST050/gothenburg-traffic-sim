@@ -280,7 +280,7 @@ def run_suite(
     results: list[dict[str, Any]] = []
     namespace = str(registration["output_roots"]["workspace_namespace"])
     cache = str(registration["output_roots"]["daily_cost_cache"])
-    for case in registration["selected_cases"]:
+    for index, case in enumerate(registration["selected_cases"]):
         case_id = str(case["case_id"])
         child = copy.deepcopy(dict(registration))
         child["schema"] = base.REGISTRATION_SCHEMA
@@ -288,7 +288,17 @@ def run_suite(
         child["output_roots"] = {
             "exhaustive": f"{case_id}-exhaustive",
             "cost_ordered": f"{case_id}-cost-ordered",
-            "daily_cost_cache": cache,
+            # Case-specific, not the suite's shared `cache`: the real
+            # per-daily-unit SUMO evidence cache
+            # (`_isolated_daily_results_cache_root`) is derived from this
+            # path's PARENT and is only cloned once, the first time a given
+            # destination is seen. A cache path shared across every case in
+            # the suite made every case after the first silently resume
+            # whatever case 1 already computed there — a real cross-case
+            # evidence leak, not merely a missed optimisation, because it
+            # corrupts exactly the attempt-count/wall-time numbers this
+            # benchmark exists to measure.
+            "daily_cost_cache": f"{cache}-{case_id}",
         }
         try:
             executed = base.run_benchmark(
@@ -298,6 +308,14 @@ def run_suite(
                 release_root=Path(release_root),
                 workspace_root=Path(workspace_root) / namespace,
                 fault_injection=fault_injection,
+                # Alternate which arm starts first across cases so a
+                # systematic host-load difference between "runs first" and
+                # "runs second" cannot land entirely on one arm across the
+                # whole suite — the isolation-hardening requirement this
+                # runner was missing (each individual case already isolates
+                # the two arms into separate processes; this is the
+                # complementary cross-case control).
+                counterbalance=bool(index % 2),
             )
             comparison = dict(executed["comparison"])
             health_count = _pilot_health_viable_count(

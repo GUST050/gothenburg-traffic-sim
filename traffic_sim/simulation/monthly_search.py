@@ -28,10 +28,12 @@ from traffic_sim.core.contracts import (
 from traffic_sim.simulation import closure_ledgers
 from traffic_sim.simulation.independent_daily import daily_unit_records
 from traffic_sim.simulation.finalist_decision import (
+    CanonicalObservationDigest,
     CandidateEvidence,
     DEMAND_VARIANTS,
     FinalistPolicy,
     PairedObservation,
+    TimeoutIdentity,
     decide_finalists,
 )
 from traffic_sim.simulation.pilot_selection import (
@@ -50,7 +52,27 @@ from traffic_sim.simulation.search_workspace import (
 from traffic_sim.simulation.period_comparison import build_period_comparison
 
 
+#: SHARED by `MonthlySearchPolicy`, `evidence_to_dict`/`evidence_from_dict`
+#: and several other artifact kinds in this module (see every
+#: ``"schema_version": SCHEMA_VERSION`` site) — frozen golden artifacts such
+#: as ``validation/monthly_search_policy_v1.json`` are pinned against this
+#: exact value, so it must NEVER move for a change scoped to only one of
+#: those artifact kinds. Candidate-evidence's own schema break (below) uses
+#: its OWN dedicated version instead.
 SCHEMA_VERSION = 1
+
+#: v3: v2 made `timeout_undecided` entries validated `TimeoutIdentity`
+#: records; v3 adds complete canonical-observation digests and requires the
+#: exact current evidence envelope. This is deliberately its OWN constant,
+#: separate from the shared
+#: `SCHEMA_VERSION` above: candidate evidence is the only artifact kind this
+#: pass changed the shape of, and bumping the shared constant would also
+#: have silently invalidated `MonthlySearchPolicy` and every other artifact
+#: keyed on it, including frozen golden validation files this pass must not
+#: touch. The version-gate in `evidence_from_dict` fails closed on any
+#: artifact written under v1; no v1 artifact is rewritten, it simply becomes
+#: unreadable, exactly as a genuine schema break should.
+EVIDENCE_SCHEMA_VERSION = 3
 POLICY_STATUSES = frozenset({"provisional", "golden_frozen"})
 RANKING_OBJECTIVES = frozenset({"legacy_time_loss_v1", "closure_cost_v1"})
 # PR C.  The streaming enumeration lives in a workspace-owned directory OUTSIDE
@@ -360,7 +382,7 @@ def evidence_to_dict(
     target_repetitions: Mapping[str, int],
 ) -> dict[str, Any]:
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": EVIDENCE_SCHEMA_VERSION,
         "kind": "monthly_closure_candidate_evidence",
         "stage": stage,
         "candidate_id": evidence.candidate_id,
@@ -371,27 +393,63 @@ def evidence_to_dict(
         "hard_failures": list(evidence.hard_failures),
         "observations": [asdict(item) for item in evidence.observations],
         "disruption": [dict(item) for item in evidence.disruption],
+        "timeout_undecided": [
+            item.to_dict() for item in evidence.timeout_undecided
+        ],
+        "canonical_observation_digests": [
+            item.to_dict() for item in evidence.canonical_observation_digests
+        ],
     }
 
 
 def evidence_from_dict(raw: Mapping[str, Any]) -> CandidateEvidence:
     if not isinstance(raw, Mapping):
         raise ValueError("candidate evidence must be an object")
+    expected_fields = {
+        "schema_version", "kind", "stage", "candidate_id",
+        "target_repetitions", "hard_failures", "observations", "disruption",
+        "timeout_undecided", "canonical_observation_digests",
+    }
+    if set(raw) != expected_fields:
+        raise ValueError("candidate evidence fields are invalid")
     if (
-        raw.get("schema_version") != SCHEMA_VERSION
+        raw.get("schema_version") != EVIDENCE_SCHEMA_VERSION
         or raw.get("kind") != "monthly_closure_candidate_evidence"
     ):
         raise ValueError("candidate evidence schema/kind is invalid")
-    candidate_id = str(raw.get("candidate_id", ""))
+    if raw["stage"] not in {"pilot", "finalist"}:
+        raise ValueError("candidate evidence stage is invalid")
+    if not isinstance(raw["candidate_id"], str):
+        raise ValueError("candidate evidence candidate_id must be a string")
+    if not isinstance(raw["target_repetitions"], Mapping):
+        raise ValueError("candidate evidence target_repetitions is invalid")
+    if set(raw["target_repetitions"]) != set(DEMAND_VARIANTS):
+        raise ValueError("candidate evidence target_repetitions is incomplete")
+    for value in raw["target_repetitions"].values():
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("candidate evidence target repetition is invalid")
+    for field in ("hard_failures", "observations", "disruption",
+                  "timeout_undecided", "canonical_observation_digests"):
+        if not isinstance(raw[field], list):
+            raise ValueError(f"candidate evidence {field} must be a list")
+    candidate_id = raw["candidate_id"]
     observations = tuple(
         PairedObservation(**dict(item))
-        for item in raw.get("observations", ())
+        for item in raw["observations"]
     )
     return CandidateEvidence(
         candidate_id=candidate_id,
         observations=observations,
-        hard_failures=tuple(str(item) for item in raw.get("hard_failures", ())),
-        disruption=tuple(dict(item) for item in raw.get("disruption", ())),
+        hard_failures=tuple(str(item) for item in raw["hard_failures"]),
+        disruption=tuple(dict(item) for item in raw["disruption"]),
+        timeout_undecided=tuple(
+            TimeoutIdentity.from_dict(item)
+            for item in raw["timeout_undecided"]
+        ),
+        canonical_observation_digests=tuple(
+            CanonicalObservationDigest.from_dict(item)
+            for item in raw["canonical_observation_digests"]
+        ),
     )
 
 
@@ -1329,6 +1387,7 @@ def _cost_ordered_pilot(
     pilot_targets: Mapping[str, int],
     pilot_records: Mapping[str, Any],
     compact_pilot: bool,
+    disable_early_stop: bool = False,
 ) -> tuple[list[CandidateEvidence], Any]:
     """Price every candidate, then simulate only the boundary set.
 
@@ -1336,6 +1395,10 @@ def _cost_ordered_pilot(
     first, and the candidates above the boundary are never simulated at all.
     The evidence it returns goes to the same unchanged selector the exhaustive
     path uses.
+
+    `disable_early_stop=True` runs the ordered-exhaustive reference instead:
+    every candidate in the same ledger order is simulated, none are skipped
+    at the band.
     """
     from traffic_sim.simulation import cost_ordered_execution as coe
 
@@ -1459,6 +1522,7 @@ def _cost_ordered_pilot(
         verified_evidence=verified_evidence,
         checkpoint=checkpoint,
         progress=report,
+        disable_early_stop=disable_early_stop,
     )
 
     # The durable account of what cost ordering actually did. Without it
@@ -1471,6 +1535,7 @@ def _cost_ordered_pilot(
     record = coe.execution_record(
         spec, ledger, result,
         exhaustive_candidate_count=len(shortlist_ids),
+        disable_early_stop=disable_early_stop,
     )
     existing_execution = _artifact_records(workspace, kind=coe.EXECUTION_KIND)
     if existing_execution:
@@ -1505,6 +1570,7 @@ def run_monthly_search(
     screen_builder: ScreenBuilder,
     root: Path = DEFAULT_ROOT,
     cost_source: Any = None,
+    disable_early_stop: bool = False,
 ) -> dict[str, Any]:
     """Run or resume one monthly search through a robust mesoscopic decision.
 
@@ -1513,7 +1579,18 @@ def run_monthly_search(
     then runs only for the candidates the ordering boundary requires. It is the
     real execution, not a replay — the exhaustive path stays available and
     unchanged as the reference by simply not passing one.
+
+    `disable_early_stop=True` requires `cost_source` and produces the
+    ORDERED-EXHAUSTIVE reference run: the same cost ledger and candidate
+    order as a real cost-ordered execution, but every candidate is verified
+    regardless of the band. This is the apples-to-apples baseline a
+    structural-speedup claim needs — see
+    `cost_ordered_search.run_cost_ordered_search`'s docstring.
     """
+    if disable_early_stop and cost_source is None:
+        raise ValueError(
+            "disable_early_stop requires cost_source: it only has meaning "
+            "for a cost-ordered execution")
     spec = ClosureSearchSpec.from_dict(spec.to_dict())
     policy = MonthlySearchPolicy.from_dict(policy.to_dict())
     workspace, _ = open_search_workspace(spec, root=root)
@@ -1654,6 +1731,7 @@ def run_monthly_search(
                 pilot_targets=pilot_targets,
                 pilot_records=pilot_records,
                 compact_pilot=compact_pilot,
+                disable_early_stop=disable_early_stop,
             )
         else:
             pilot_evidence = _exhaustive_pilot(

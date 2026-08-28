@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import tools.cost_ordered_benchmark as base
 import tools.cost_ordered_benchmark_suite as suite
 
 
@@ -57,6 +58,81 @@ def test_suite_selection_does_not_mutate_discovery_records():
     before = copy.deepcopy(records)
     suite.select_suite_cases({"evaluated": records})
     assert records == before
+
+
+def test_run_suite_counterbalances_arm_order_across_cases(monkeypatch,
+                                                            tmp_path):
+    """Cross-case control complementing per-case process isolation.
+
+    A systematic host-load difference between "runs first" and "runs
+    second" must not land entirely on one arm across a whole suite, so
+    `run_suite` alternates `counterbalance` case by case. This asserts the
+    alternation itself without running any arm — `base.run_benchmark` is
+    replaced with a recorder.
+    """
+    registration = {
+        "output_roots": {
+            "workspace_namespace": "ns",
+            "daily_cost_cache": "cache.json",
+        },
+        "selected_cases": [
+            _profile(str(index), "2027-03-22", f"edge-{index}")
+            | {"case_id": f"case-{index}"}
+            for index in range(4)
+        ],
+    }
+    seen: list[bool] = []
+
+    def fake_run_benchmark(child, *, runs_root, data_root, release_root,
+                            workspace_root, fault_injection, counterbalance):
+        seen.append(counterbalance)
+        return {"arms": {"exhaustive": {}}, "comparison": {}}
+
+    monkeypatch.setattr(base, "run_benchmark", fake_run_benchmark)
+    suite.run_suite(
+        registration, runs_root=tmp_path, data_root=tmp_path,
+        release_root=tmp_path / "releases", workspace_root=tmp_path / "ws")
+    assert seen == [False, True, False, True]
+
+
+def test_each_case_gets_its_own_daily_cost_cache_root(monkeypatch, tmp_path):
+    """A shared cache root let case 2+ silently resume case 1's real SUMO
+
+    evidence: `_isolated_daily_results_cache_root` only clones the FIRST
+    time a given destination is seen, and that destination is derived from
+    `daily_cost_cache`'s parent — so every case sharing one `daily_cost_cache`
+    path shared one real evidence cache too, corrupting the very
+    attempt-count/wall-time numbers this benchmark measures. Each case must
+    get a distinct, non-overlapping cache root.
+    """
+    registration = {
+        "output_roots": {
+            "workspace_namespace": "ns",
+            "daily_cost_cache": "runs/suite-daily-costs",
+        },
+        "selected_cases": [
+            _profile(str(index), "2027-03-22", f"edge-{index}")
+            | {"case_id": f"case-{index}"}
+            for index in range(4)
+        ],
+    }
+    seen_caches: list[str] = []
+
+    def fake_run_benchmark(child, *, runs_root, data_root, release_root,
+                            workspace_root, fault_injection, counterbalance):
+        seen_caches.append(child["output_roots"]["daily_cost_cache"])
+        return {"arms": {"exhaustive": {}}, "comparison": {}}
+
+    monkeypatch.setattr(base, "run_benchmark", fake_run_benchmark)
+    suite.run_suite(
+        registration, runs_root=tmp_path, data_root=tmp_path,
+        release_root=tmp_path / "releases", workspace_root=tmp_path / "ws")
+    assert len(set(seen_caches)) == 4, (
+        "every case must get a distinct daily_cost_cache root, or "
+        f"case caches collide: {seen_caches}")
+    for case_id, cache in zip(
+            (f"case-{index}" for index in range(4)), seen_caches):
+        assert case_id in cache
 
 
 def _case(*, semantic=True, saved=1, viable=2, error=False):

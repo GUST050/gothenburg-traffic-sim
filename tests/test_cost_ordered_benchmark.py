@@ -176,6 +176,8 @@ class TestTheOutcomeIsSeparate:
             "candidate_costs_field_identical": True,
             "hard_failures_identical": True,
             "health_classifications_identical": True,
+            "timeout_outcomes_identical": True,
+            "ledger_population_complete": True,
             "status_identical": True,
             "selected_ids_identical": True,
             "final_decision_identical": True,
@@ -253,3 +255,145 @@ class TestTheOutcomeIsSeparate:
         outcome = bench.build_outcome(
             registration, self._comparison(), status="measured")
         assert outcome["gates"]["thresholds"] == bench.GATE_THRESHOLDS
+
+
+class TestIsolatedDailyResultsCacheRoot:
+    """Each arm must get its own real-SUMO-evidence cache, cloned once from a
+    shared initial snapshot — see `_isolated_daily_results_cache_root`'s
+    docstring for the v5-style contamination this closes.
+    """
+
+    def test_two_arms_get_two_distinct_roots(self, tmp_path):
+        daily_cost_cache = tmp_path / "costs" / "cache"
+        bound_source = bench._bind_daily_results_source_snapshot(
+            daily_cost_cache)
+        exhaustive_root, _ = bench._isolated_daily_results_cache_root(
+            daily_cost_cache, "exhaustive", bound_source=bound_source)
+        cost_ordered_root, _ = bench._isolated_daily_results_cache_root(
+            daily_cost_cache, "cost_ordered", bound_source=bound_source)
+        assert exhaustive_root != cost_ordered_root
+        assert exhaustive_root.parent == cost_ordered_root.parent
+
+    def test_an_unknown_arm_name_is_rejected(self, tmp_path):
+        daily_cost_cache = tmp_path / "cache"
+        bound_source = bench._bind_daily_results_source_snapshot(
+            daily_cost_cache)
+        with pytest.raises(ValueError, match="unknown arm"):
+            bench._isolated_daily_results_cache_root(
+                daily_cost_cache, "both", bound_source=bound_source)
+
+    def test_the_clone_reproduces_the_source_snapshot_byte_for_byte(
+            self, tmp_path):
+        daily_cost_cache = tmp_path / "costs" / "cache"
+        source = daily_cost_cache.parent / "daily-results"
+        (source / "ab").mkdir(parents=True)
+        (source / "ab" / "abcdef.json").write_text(
+            '{"schema": "x"}', encoding="utf-8")
+        bound_source = bench._bind_daily_results_source_snapshot(
+            daily_cost_cache)
+        dest, digest = bench._isolated_daily_results_cache_root(
+            daily_cost_cache, "exhaustive", bound_source=bound_source)
+        assert (dest / "ab" / "abcdef.json").read_text(
+            encoding="utf-8") == '{"schema": "x"}'
+        assert digest == bench._tree_digest(source)
+
+    def test_a_pre_existing_destination_is_refused_not_reused(self, tmp_path):
+        """A fresh comparison never silently reuses an arbitrary leftover root.
+
+        Only an explicit restart probe may reuse a root — and it does so by
+        holding the SAME already-obtained Python object, never by calling
+        this function again for a destination that already exists.
+        """
+        daily_cost_cache = tmp_path / "costs" / "cache"
+        dest = (daily_cost_cache.parent
+               / f"{daily_cost_cache.name}-daily-results-exhaustive")
+        dest.mkdir(parents=True)
+        (dest / "leftover.json").write_text("{}", encoding="utf-8")
+        bound_source = bench._bind_daily_results_source_snapshot(
+            daily_cost_cache)
+        with pytest.raises(RuntimeError, match="already exists"):
+            bench._isolated_daily_results_cache_root(
+                daily_cost_cache, "exhaustive", bound_source=bound_source)
+
+    def test_distinct_cases_sharing_a_parent_never_collide(self, tmp_path):
+        """A suite case only varies `daily_cost_cache`'s BASENAME — the
+
+        destination must be keyed on the full path, not merely its parent,
+        or every case in a suite would collide on one shared per-arm root.
+        """
+        case_one = tmp_path / "costs" / "cache-case-1"
+        case_two = tmp_path / "costs" / "cache-case-2"
+        dest_one, _ = bench._isolated_daily_results_cache_root(
+            case_one, "exhaustive",
+            bound_source=bench._bind_daily_results_source_snapshot(case_one))
+        dest_two, _ = bench._isolated_daily_results_cache_root(
+            case_two, "exhaustive",
+            bound_source=bench._bind_daily_results_source_snapshot(case_two))
+        assert dest_one != dest_two
+
+    def test_two_clones_from_the_same_source_have_identical_digests(
+            self, tmp_path):
+        daily_cost_cache = tmp_path / "costs" / "cache"
+        source = daily_cost_cache.parent / "daily-results"
+        (source / "cd").mkdir(parents=True)
+        (source / "cd" / "cdef01.json").write_text("{}", encoding="utf-8")
+        bound_source = bench._bind_daily_results_source_snapshot(
+            daily_cost_cache)
+        _, exhaustive_digest = bench._isolated_daily_results_cache_root(
+            daily_cost_cache, "exhaustive", bound_source=bound_source)
+        _, cost_ordered_digest = bench._isolated_daily_results_cache_root(
+            daily_cost_cache, "cost_ordered", bound_source=bound_source)
+        assert exhaustive_digest == cost_ordered_digest
+
+    def test_an_absent_source_still_produces_an_empty_verified_clone(
+            self, tmp_path):
+        daily_cost_cache = tmp_path / "nowhere" / "cache"
+        bound_source = bench._bind_daily_results_source_snapshot(
+            daily_cost_cache)
+        dest, digest = bench._isolated_daily_results_cache_root(
+            daily_cost_cache, "exhaustive", bound_source=bound_source)
+        assert dest.is_dir()
+        assert list(dest.iterdir()) == []
+        assert digest == bench._tree_digest(dest)
+
+    def test_a_source_that_drifted_before_binding_is_still_a_valid_bind(
+            self, tmp_path):
+        """Binding just reads whatever the source currently is — drift is
+
+        only ever detected AFTER a digest has been bound, by
+        `_assert_daily_results_source_unchanged` or a second clone reusing
+        the same bound digest.
+        """
+        daily_cost_cache = tmp_path / "costs" / "cache"
+        source = daily_cost_cache.parent / "daily-results"
+        source.mkdir(parents=True)
+        bound_source = bench._bind_daily_results_source_snapshot(
+            daily_cost_cache)
+        (source / "late.json").write_text("{}", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="changed since it was bound"):
+            bench._isolated_daily_results_cache_root(
+                daily_cost_cache, "exhaustive", bound_source=bound_source)
+
+
+class TestFreshSnapshotPairMatches:
+    """A benchmark's two arms must be provably cloned from ONE snapshot.
+
+    `_assert_fresh_snapshot_pair_matches` is the guard, now unconditional:
+    every call into a comparison clones fresh (a pre-existing destination is
+    refused by `_isolated_daily_results_cache_root` itself), so a mismatched
+    pair can only mean the shared source drifted between the two clones —
+    there is no more "legitimately resumed, so exempt" case to carve out.
+    """
+
+    def test_a_matching_fresh_pair_is_accepted(self, tmp_path):
+        bench._assert_fresh_snapshot_pair_matches(
+            tmp_path / "costs" / "cache", ("exhaustive", "cost_ordered"),
+            {"exhaustive": {"digest": "same"},
+             "cost_ordered": {"digest": "same"}})
+
+    def test_a_drifted_fresh_pair_is_refused(self, tmp_path):
+        with pytest.raises(RuntimeError, match="different content"):
+            bench._assert_fresh_snapshot_pair_matches(
+                tmp_path / "costs" / "cache", ("exhaustive", "cost_ordered"),
+                {"exhaustive": {"digest": "one"},
+                 "cost_ordered": {"digest": "two"}})

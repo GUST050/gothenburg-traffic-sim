@@ -13,8 +13,11 @@ from traffic_sim.core.contracts import (
     DemandBuildSpec,
 )
 from traffic_sim.simulation.finalist_decision import (
+    CanonicalObservationDigest,
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
     CandidateEvidence,
     PairedObservation,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.monthly_search import canonical_seed
 from traffic_sim.simulation.monthly_sumo import ArchivedDemandSumoRunner
@@ -459,6 +462,107 @@ def test_sumo_timeout_is_recorded_as_candidate_failure(
     assert result.hard_failures == (
         "sumo_execution_failure:q10:1000:sumo timed out after 300s (seed 1000)",
     )
+    # Regression for cost-order v5: a timeout must be visible as an explicit
+    # undecided outcome, distinct from an ordinary hard failure, so a reader
+    # cannot silently treat it as if the run had simply been disqualified.
+    # v3 (schema TIMEOUT_IDENTITY_SCHEMA): a validated structured record
+    # naming the candidate, day, search and provenance, not a string.
+    assert result.timeout_undecided == (
+        TimeoutIdentity(
+            schema=monthly_sumo.TIMEOUT_IDENTITY_SCHEMA,
+            candidate_id=schedule.schedule_id,
+            work_date=schedule.first_work_date,
+            search_content_key=schedule.search_content_key,
+            variant="q10",
+            seed=1000,
+            attempt=1,
+            threshold_s=300.0,
+            retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+            search_provenance_key="study",
+        ),
+    )
+    assert result.timeout_undecided[0].schema == monthly_sumo.TIMEOUT_IDENTITY_SCHEMA
+    assert result.has_undecided_timeout
+    # Exact-launch telemetry: one pilot-stage attempt, counted as a timeout —
+    # the scan stops at the first failure, so only q10 was ever launched.
+    assert runner.launch_telemetry["pilot"] == {
+        "attempts": 1, "timeouts": 1, "other_outcomes": 0}
+    assert runner.launch_telemetry["finalist"] == {
+        "attempts": 0, "timeouts": 0, "other_outcomes": 0}
+
+
+def test_a_non_timeout_sumo_failure_is_not_an_undecided_timeout(
+        tmp_path, patched_runtime, monkeypatch):
+    """A genuine SUMO crash is a hard failure, never labelled undecided."""
+    runner = ArchivedDemandSumoRunner(
+        _spec(),
+        archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study",
+        cache_root=tmp_path / "cache",
+    )
+    schedule = generate_closure_schedules(_spec())[0]
+
+    def crash(*args, **kwargs):
+        raise SystemExit("sumo failed with exit code 1")
+
+    monkeypatch.setattr(runner, "_run_observation", crash)
+    result = runner.run_candidate(
+        schedule,
+        target_repetitions={"q10": 1, "q50": 1, "q90": 1},
+        existing=None,
+        stage="pilot",
+    )
+    assert result.hard_failures == (
+        "sumo_execution_failure:q10:1000:sumo failed with exit code 1",
+    )
+    assert result.timeout_undecided == ()
+    assert not result.has_undecided_timeout
+    # A non-timeout hard failure is still a real launch attempt, just not a
+    # timeout one.
+    assert runner.launch_telemetry["pilot"] == {
+        "attempts": 1, "timeouts": 0, "other_outcomes": 1}
+
+
+def test_complete_canonical_observation_digest_survives_cumulative_run(
+        tmp_path, patched_runtime, monkeypatch):
+    runner = ArchivedDemandSumoRunner(
+        _spec(), archive=_archive(tmp_path),
+        baseline_trip_duration_p99_s=1800,
+        study_provenance_key="study", cache_root=tmp_path / "cache")
+    schedule = generate_closure_schedules(_spec())[0]
+    canonical = {
+        "baseline": {"time_loss_s": 100.0, "health": {"teleports": 0}},
+        "candidate": {"time_loss_s": 110.0, "recovery": {"passed": True}},
+        "feasible": True,
+    }
+
+    def observation(selected, *, variant, seed):
+        return (
+            PairedObservation(
+                candidate_id=selected.schedule_id, demand_variant=variant,
+                seed=seed, baseline_time_loss_s=100.0,
+                candidate_time_loss_s=110.0,
+                matched_baseline_id=runner.matched_baseline_id,
+                provenance_key="study"),
+            (), canonical,
+        )
+
+    monkeypatch.setattr(runner, "_run_observation", observation)
+    first = runner.run_candidate(
+        schedule, target_repetitions={"q10": 1, "q50": 0, "q90": 0},
+        existing=None, stage="pilot")
+    expected = CanonicalObservationDigest(
+        candidate_id=schedule.schedule_id,
+        work_date=schedule.first_work_date,
+        variant="q10", seed=1000,
+        sha256=monthly_sumo._canonical_digest(canonical))
+    assert first.canonical_observation_digests == (expected,)
+
+    resumed = runner.run_candidate(
+        schedule, target_repetitions={"q10": 1, "q50": 0, "q90": 0},
+        existing=first, stage="pilot")
+    assert resumed.canonical_observation_digests == (expected,)
 
 
 def _observation_stub(runner, calls, *, failing=(), raising=(), lock=None):
@@ -537,6 +641,37 @@ class TestParallelSeedEquivalence:
         assert parallel == serial
         assert sorted(parallel_calls) == sorted(serial_calls)
         assert len(serial.observations) == 6
+
+    def test_successful_launches_are_counted_once_per_stage(
+            self, tmp_path, patched_runtime):
+        """Every clean observation is one exact launch attempt, not a timeout.
+
+        Pilot and finalist stages accumulate in SEPARATE buckets on the same
+        runner instance, and neither a serial nor a concurrent scan changes
+        the total (concurrency is a pure speed change on launch counting too).
+        """
+        root = tmp_path / "telemetry"
+        root.mkdir()
+        runner = _runner(root, 4)
+        schedule = generate_closure_schedules(_spec())[0]
+        calls: list = []
+        runner._run_observation = _observation_stub(
+            runner, calls, lock=threading.Lock())
+        runner.run_candidate(
+            schedule, target_repetitions=self.TARGETS, existing=None,
+            stage="pilot")
+        assert runner.launch_telemetry["pilot"] == {
+            "attempts": 6, "timeouts": 0, "other_outcomes": 6}
+        assert runner.launch_telemetry["finalist"] == {
+            "attempts": 0, "timeouts": 0, "other_outcomes": 0}
+        runner.run_candidate(
+            schedule, target_repetitions=self.TARGETS,
+            existing=None, stage="finalist")
+        assert runner.launch_telemetry["finalist"] == {
+            "attempts": 6, "timeouts": 0, "other_outcomes": 6}
+        # The pilot bucket is untouched by the finalist call.
+        assert runner.launch_telemetry["pilot"] == {
+            "attempts": 6, "timeouts": 0, "other_outcomes": 6}
 
     def test_failure_truncates_at_the_same_observation(
             self, tmp_path, patched_runtime):

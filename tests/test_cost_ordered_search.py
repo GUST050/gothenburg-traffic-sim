@@ -32,8 +32,11 @@ from traffic_sim.simulation.cost_ordered_search import (
     run_cost_ordered_search,
 )
 from traffic_sim.simulation.finalist_decision import (
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    TIMEOUT_IDENTITY_SCHEMA,
     CandidateEvidence,
     PairedObservation,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.pilot_selection import (
     PilotPolicy,
@@ -108,9 +111,11 @@ def _evidence(candidate, policy, *, failures=()):
 
 
 def _run(candidates, policy, *, failures=(), band=0.0, state=None,
-         verified_evidence=None, stop_after=None):
+         verified_evidence=None, stop_after=None, disable_early_stop=False,
+         timeouts=()):
     """Cost-ordered scan with a recording verifier."""
     failed = set(failures)
+    timed_out = set(timeouts)
     verified: list[str] = []
 
     def verify(candidate_id):
@@ -119,6 +124,27 @@ def _run(candidates, policy, *, failures=(), band=0.0, state=None,
         verified.append(candidate_id)
         candidate = next(item for item in candidates
                          if item.candidate_id == candidate_id)
+        if candidate_id in timed_out:
+            identity = TimeoutIdentity(
+                schema=TIMEOUT_IDENTITY_SCHEMA,
+                candidate_id=candidate_id,
+                work_date="2027-09-16",
+                search_content_key=SEARCH_KEY,
+                variant="q50",
+                seed=1000,
+                attempt=1,
+                threshold_s=300.0,
+                retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+                search_provenance_key="provenance",
+            )
+            return CandidateEvidence(
+                candidate_id=candidate_id,
+                observations=(),
+                hard_failures=(
+                    f"q50:1000:attempt1:threshold300s:{candidate_id}",),
+                disruption=tuple(candidate.disruption),
+                timeout_undecided=(identity,),
+            )
         return _evidence(
             candidate, policy,
             failures=("hard_gate",) if candidate_id in failed else (),
@@ -132,6 +158,7 @@ def _run(candidates, policy, *, failures=(), band=0.0, state=None,
         practical_equivalence_vehicle_hours=band,
         state=state,
         verified_evidence=verified_evidence,
+        disable_early_stop=disable_early_stop,
     )
     return result, verified
 
@@ -243,6 +270,88 @@ class TestOrderAndStop:
         assert proof["unexamined"] == 3
         assert "cheaper candidate was" in proof["argument"]
         json.dumps(proof)  # machine-readable
+
+
+class TestDisableEarlyStop:
+    """The ordered-exhaustive reference arm: same order, no early stop."""
+
+    def test_it_verifies_every_candidate_in_the_same_cost_order(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 11)]
+        result, verified = _run(candidates, _policy(minimum=2), band=0.0,
+                                disable_early_stop=True)
+        assert verified == [f"closure-{index:04d}" for index in range(1, 11)]
+        assert result.stop_proof["stop_reason"] == "search_space_exhausted"
+        assert result.stop_proof["unexamined"] == 0
+        assert result.stop_proof["disable_early_stop"] is True
+
+    def test_it_reaches_the_same_selection_as_the_bounded_scan(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 11)]
+        bounded, bounded_verified = _run(candidates, _policy(minimum=2),
+                                         band=0.0)
+        exhaustive, exhaustive_verified = _run(
+            candidates, _policy(minimum=2), band=0.0,
+            disable_early_stop=True)
+        assert len(bounded_verified) < len(exhaustive_verified)
+        assert (bounded.selection.status, bounded.selection.selected_ids) == (
+            exhaustive.selection.status, exhaustive.selection.selected_ids)
+
+    def test_a_disabled_and_a_normal_scan_do_not_share_an_identity(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 4)]
+        bounded, _ = _run(candidates, _policy(minimum=2), band=0.0)
+        exhaustive, _ = _run(candidates, _policy(minimum=2), band=0.0,
+                             disable_early_stop=True)
+        assert bounded.state.identity_key != exhaustive.state.identity_key
+
+    def test_a_normal_state_cannot_be_resumed_with_stopping_disabled(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 5)]
+        bounded, _ = _run(candidates, _policy(minimum=2), band=0.0)
+        with pytest.raises(ValueError, match="policy, cost ledger or"):
+            _run(candidates, _policy(minimum=2), band=0.0,
+                state=bounded.state, disable_early_stop=True)
+
+
+class TestUndecidedTimeoutBlocksEarlyStop:
+    """cost-order-v5's failure mode: a timeout must never justify a stop."""
+
+    def test_a_timeout_inside_the_band_forces_full_exhaustion(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 8)]
+        result, verified = _run(candidates, _policy(minimum=2), band=0.0,
+                                timeouts={"closure-0002"})
+        # Without the timeout this would stop at closure-0002 (cutoff 2.0,
+        # band_exhausted at closure-0003). The undecided evidence must push
+        # it all the way to exhaustion instead.
+        assert verified == [f"closure-{index:04d}" for index in range(1, 8)]
+        assert result.stop_proof["stop_reason"] == "search_space_exhausted"
+        assert result.stop_proof["undecided_candidate_ids"] == [
+            "closure-0002"]
+        assert result.selection.status == "inconclusive"
+
+    def test_a_timeout_never_reached_does_not_taint_a_clean_stop(self):
+        """A candidate beyond the band is never examined either way — a
+
+        timeout that would only occur past the natural stop point cannot
+        possibly be seen, so the scan still stops cleanly there.
+        """
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 8)]
+        result, verified = _run(candidates, _policy(minimum=2), band=0.0,
+                                timeouts={"closure-0005"})
+        assert verified == ["closure-0001", "closure-0002"]
+        assert result.stop_proof["stop_reason"] == "band_exhausted"
+        assert result.stop_proof["undecided_candidate_ids"] == []
+
+    def test_no_timeout_still_stops_normally(self):
+        candidates = [_candidate(index, float(index))
+                      for index in range(1, 8)]
+        result, verified = _run(candidates, _policy(minimum=2), band=0.0)
+        assert result.stop_proof["stop_reason"] == "band_exhausted"
+        assert result.stop_proof["undecided_candidate_ids"] == []
+        assert len(verified) < 7
 
 
 # --------------------------------------------------------------------------

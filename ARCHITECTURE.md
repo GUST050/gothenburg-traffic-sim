@@ -1642,12 +1642,106 @@ Two comparisons matter and only one of them is obvious. The cost-ordered arm
 has pilot statistics only for what it simulated — two candidates of forty-five —
 so the field-by-field cost gate reads the arm's published cost LEDGER, which
 priced every candidate before any SUMO ran, against the exhaustive arm's own
-evidence. The stop proof is re-derived rather than trusted, against its own
-vocabulary: `band_exhausted` requires the first unexamined candidate to be
-STRICTLY above cutoff plus practical equivalence. Fault injection is part of the
-run — the probe interrupts a cost-ordered arm, resumes it, and requires the
-resumed decision and every candidate cost to match; skipping it fails the
-restart gate rather than passing by absence.
+evidence. The stop proof is re-derived rather than trusted: `band_exhausted`
+requires the first unexamined candidate to be STRICTLY above cutoff plus
+practical equivalence, and (2026-08-28) every bound field of the proof is ALSO
+independently recomputed from OTHER published artifacts, not merely re-checked
+against itself — `verified_prefix_digest` from the execution cursor and
+`evidence_digest` from the complete immutable pilot-candidate artifacts for
+the verified prefix (observations and their provenance, disruption, hard
+failures and structured timeout identities), the undecided-timeout set from
+the same per-candidate evidence (cost-
+order v5's exact failure mode: a timeout dropped from the proof while still
+present in the evidence), and a band stop's first-unexamined cost against the
+published `cost-ledger.json` file. `_stop_proof_valid(execution, arm=...)` in
+`tools/cost_ordered_benchmark.py` does the recomputation. It also reconstructs
+the k-th viable cutoff from the cursor's verified/viable population and the
+integrity-checked ledger, adds the finalist policy's equivalence width to derive
+the selection band, and derives schema, examined/total/unexamined counts,
+terminal stop reason, first-unexamined identity/cost, proof argument and the
+arm's expected `disable_early_stop` value. The cursor's own cutoff and stop
+reason must match those independent results. Resealed-execution tamper tests
+mutate every proof field in turn, so passing the execution record's self-digest
+cannot conceal a changed proof. Fault
+injection is part of the run — the probe interrupts a cost-ordered arm, resumes
+it, and requires the resumed decision and every candidate cost to match;
+skipping it fails the restart gate rather than passing by absence.
+
+**Timeout identity, exact-launch telemetry and semantic-evidence hygiene
+(2026-08-28).** A SUMO run that hits the frozen 300 s timeout produces a
+versioned structured `TimeoutIdentity` object
+(`TIMEOUT_IDENTITY_SCHEMA = "timeout_v3"`) naming the
+candidate, daily-unit date, search content key, variant, seed, attempt, fixed
+threshold, retry protocol and semantic provenance. Malformed objects and the
+retired string formats fail closed on deserialization; historical artifacts
+are not rewritten. The v3 wire reader requires exactly the declared field set
+and native JSON-compatible types: it never coerces booleans, fractional
+attempts or string numerics, validates a canonical ISO work date and the sole
+supported fixed-threshold/no-retry protocol, and rejects unknown fields.
+The daily cache and monthly candidate-artifact readers both pass through this
+same strict validator. Every real SUMO launch — one (variant, seed)
+attempt, success, hard failure or timeout alike — is now counted exactly once
+at the actual launch seam inside `ArchivedDemandSumoRunner._observations_for`
+(`self.launch_telemetry`, split by pilot/finalist stage), summed across a
+study's per-archive runners by `MonthlyDemandResolverRunner.
+launch_telemetry_snapshot()`, and surfaced (fail-open, diagnostic-only) as
+`exact_launch_telemetry` in `IndependentDailyRunner.timing_snapshot()`'s
+existing S0 progress payload. A daily-unit cache hit never reaches this seam,
+so it structurally cannot be double-counted as a launch. Isolated workers also
+append an fsync'd start record before entering SUMO and a final record after
+classification. The parent always consumes this sidecar, even after an
+exception or abnormal worker exit; an unmatched start becomes
+`worker_terminated`, and retry-local attempt numbers are rebound after the
+parent's existing attempt population. `product_arm.run_arm`
+publishes that telemetry plus the workspace manifest's own
+`active_elapsed_s`/`active_elapsed_basis` (the pre-existing
+`awake_monotonic_segments_v1` basis from `search_workspace.py`) in its returned
+dict, and `compare_ordered_exhaustive` computes real exact-attempt and
+awake-active-time reduction fractions from them — the 30% gates this benchmark
+exists to check — instead of approximating from the pilot CANDIDATE count
+(kept, renamed, for readability only). Both arms of a comparison now build
+under one shared `BENCHMARK_STUDY_PROVENANCE_KEY`, not an arm-name-suffixed
+value: that key is stamped onto every `PairedObservation.provenance_key`,
+which is semantic evidence content that gets cached and is supposed to be
+directly comparable across arms, so giving the two arms different values used
+to make their evidence differ by a label baked into content even when the
+underlying simulation was identical — confirmed safe because
+`IndependentDailyRunner._stable_backend_identity` already strips
+`study_provenance_key` before hashing a daily unit's cache key, so unifying it
+changes no caching behaviour, only what a `PairedObservation` reads. Which arm
+produced a result remains available from `run_arm`'s own `"arm"` field, the
+workspace path and the cache-snapshot root — orchestration facts that were
+never inside evidence to begin with. Each arm's daily-results SUMO-evidence
+cache is still cloned once from one shared initial snapshot into a separate,
+non-overlapping root per arm (`_isolated_daily_results_cache_root`); a new
+`_assert_fresh_snapshot_pair_matches` additionally asserts the two arms'
+pre-run cache digests are equal whenever NEITHER arm's root pre-existed the
+call, catching a source that drifted between the two clones, while a genuinely
+resumed run reusing its own interrupted arm root is exempt by design.
+Candidate evidence is loaded through full workspace-integrity verification;
+parse errors, missing expected pilot/finalist stages and incomplete candidate
+populations fail closed. Cache comparison uses complete identity-bearing event
+records rather than aggregate inequalities alone, and final-decision equality
+compares the complete robust-decision payload.
+
+Candidate-evidence schema v3 additionally persists one validated
+`CanonicalObservationDigest` for every successful canonical SUMO observation.
+The record binds candidate/daily-unit identity, work date, variant, seed and
+the SHA-256 of the complete canonical observation produced by
+`build_monthly_observation`, so baseline/candidate metrics, recovery,
+feasibility and health cannot differ while the reduced ranking observation
+still happens to match. These records travel in worker-result v3, independent
+daily cache v4, daily aggregation, trimming/resume and immutable pilot/finalist
+artifacts. The benchmark compares their complete expected stage populations
+and requires the cost-ordered population to match the ordered-exhaustive
+prefix. Current monthly evidence, daily evidence/cache and worker-result
+envelopes require their exact field sets; a missing whole
+`timeout_undecided` population or an unknown field is malformed, never
+interpreted as an empty timeout set. `MonthlyDemandResolverRunner` exposes
+both aggregate launch counters and the complete de-duplicated launch-record
+population across every archive runner, validating native identity/outcome
+fields and requiring the two views to reconcile before the production runner
+chain publishes them.
 
 `--run` writes a SEPARATE outcome record naming the registration by content
 key; the registration is never edited, and a run that turns out

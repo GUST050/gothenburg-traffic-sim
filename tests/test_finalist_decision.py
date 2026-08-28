@@ -5,12 +5,32 @@ from pathlib import Path
 import pytest
 
 from traffic_sim.simulation.finalist_decision import (
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    TIMEOUT_IDENTITY_SCHEMA,
     CandidateEvidence,
     FinalistPolicy,
     PairedObservation,
+    TimeoutIdentity,
     decide_finalists,
     paired_candidate_evidence,
 )
+
+
+def _timeout_identity(candidate_id="a", **overrides):
+    values = {
+        "schema": TIMEOUT_IDENTITY_SCHEMA,
+        "candidate_id": candidate_id,
+        "work_date": "2027-09-16",
+        "search_content_key": "0" * 20,
+        "variant": "q50",
+        "seed": 1000,
+        "attempt": 1,
+        "threshold_s": 300.0,
+        "retry_protocol": RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+        "search_provenance_key": "study-one",
+    }
+    values.update(overrides)
+    return TimeoutIdentity(**values)
 from traffic_sim.simulation.micro_confirmation import (
     MicroContext,
     MicroResult,
@@ -66,6 +86,88 @@ def _all_variants(q10, q50=None, q90=None):
         "q50": q10 if q50 is None else q50,
         "q90": q10 if q90 is None else q90,
     }
+
+
+class TestUndecidedTimeoutEvidence:
+    def test_defaults_to_no_undecided_timeout(self):
+        evidence = CandidateEvidence(candidate_id="a")
+        assert evidence.timeout_undecided == ()
+        assert evidence.has_undecided_timeout is False
+
+    def test_an_undecided_timeout_is_reported_but_stays_ineligible(self):
+        evidence = CandidateEvidence(
+            candidate_id="a",
+            hard_failures=("sumo_execution_failure:q50:1000:sumo timed out"
+                           " after 300s (seed 1000)",),
+            timeout_undecided=(_timeout_identity("a"),),
+        )
+        assert evidence.has_undecided_timeout is True
+        # Still ineligible: an "old reader" that only checks .eligible must
+        # keep excluding it exactly as before this field existed.
+        assert evidence.eligible is False
+
+    def test_a_bare_string_timeout_entry_is_rejected(self):
+        """The old v1/v2 wire format must fail closed, not be reinterpreted."""
+        with pytest.raises(ValueError, match="TimeoutIdentity"):
+            CandidateEvidence(
+                candidate_id="a",
+                timeout_undecided=("q50:1000:attempt1:threshold300s",),
+            )
+
+
+class TestTimeoutIdentity:
+    def test_round_trips_through_to_dict_and_from_dict(self):
+        identity = _timeout_identity("a")
+        assert TimeoutIdentity.from_dict(identity.to_dict()) == identity
+
+    def test_from_dict_rejects_a_bare_string(self):
+        with pytest.raises(ValueError, match="not accepted"):
+            TimeoutIdentity.from_dict("q50:1000:attempt1:threshold300s")
+
+    def test_from_dict_rejects_a_record_missing_fields(self):
+        raw = _timeout_identity("a").to_dict()
+        del raw["search_provenance_key"]
+        with pytest.raises(ValueError, match="missing fields"):
+            TimeoutIdentity.from_dict(raw)
+
+    @pytest.mark.parametrize(("field", "value", "message"), [
+        ("seed", True, "seed must be a native integer"),
+        ("seed", 1.9, "seed must be a native integer"),
+        ("attempt", True, "attempt must be a native integer"),
+        ("attempt", 1.9, "attempt must be a native integer"),
+        ("threshold_s", "300", "threshold_s must be a native number"),
+        ("retry_protocol", "retry_twice_v1", "retry_protocol is unsupported"),
+        ("work_date", "2027-02-30", "ISO calendar date"),
+        ("candidate_id", "", "non-empty native strings"),
+        ("search_content_key", 123, "native string values"),
+        ("search_provenance_key", "   ", "non-empty native strings"),
+    ])
+    def test_from_dict_rejects_malformed_native_fields(
+            self, field, value, message):
+        raw = _timeout_identity("a").to_dict()
+        raw[field] = value
+        with pytest.raises(ValueError, match=message):
+            TimeoutIdentity.from_dict(raw)
+
+    def test_from_dict_rejects_unknown_fields(self):
+        raw = _timeout_identity("a").to_dict()
+        raw["future_unvalidated_field"] = "must-not-be-ignored"
+        with pytest.raises(ValueError, match="unknown fields"):
+            TimeoutIdentity.from_dict(raw)
+
+    def test_rejects_an_unknown_schema_tag(self):
+        with pytest.raises(ValueError, match="unsupported timeout identity schema"):
+            _timeout_identity("a", schema="timeout_v2")
+
+    def test_rejects_a_non_q_variant(self):
+        with pytest.raises(ValueError, match="variant"):
+            _timeout_identity("a", variant="am_peak")
+
+    def test_is_hashable_and_orderable(self):
+        one = _timeout_identity("a", seed=1000)
+        two = _timeout_identity("a", seed=1001)
+        assert len({one, two}) == 2
+        assert sorted([two, one]) == [one, two]
 
 
 class TestPairedCandidateEvidence:
@@ -331,6 +433,34 @@ class TestRobustFinalistDecision:
 
         assert result.status == "unique_winner"
         assert result.winner_id == "valid"
+
+    def test_an_unresolved_timeout_makes_the_finalist_decision_inconclusive(self):
+        """Regression for cost-order v5: a finalist that timed out during
+
+        finalist-stage verification must not let the decision silently pick
+        a winner from the remaining candidates as if the timed-out one had
+        never existed.
+        """
+        timed_out = CandidateEvidence(
+            candidate_id="timed-out",
+            hard_failures=(
+                "sumo_execution_failure:q50:1000:sumo timed out after 300s "
+                "(seed 1000)",
+            ),
+            timeout_undecided=(_timeout_identity("timed-out"),),
+        )
+        result = decide_finalists(
+            [
+                timed_out,
+                _candidate("valid", _all_variants([100.0] * 4)),
+            ],
+            _policy(),
+        )
+        assert result.status == "inconclusive"
+        assert result.winner_id is None
+        assert result.tie_ids == ()
+        assert result.next_runs == ()
+        assert "timeout" in result.reason.lower()
 
     def test_different_date_envelopes_may_use_different_matched_baselines(self):
         result = decide_finalists(

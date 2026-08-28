@@ -20,6 +20,7 @@ exactly which candidate/variant pairs still need matched repetitions.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
+from datetime import date
 import math
 from statistics import mean, median, stdev
 from typing import Any, Mapping, Sequence
@@ -52,6 +53,212 @@ def _student_t_ppf(probability: float, degrees_of_freedom: int) -> float:
 SCHEMA_VERSION = 1
 DECISION_METHOD = "paired_worst_variant_ucb_v1"
 CLOSURE_COST_DECISION_METHOD = "deterministic_worst_variant_closure_cost_v1"
+
+#: Versioned schema tag for `TimeoutIdentity` records. v1/v2 (retired, never
+#: emitted by any released code) were bare colon-encoded strings — first a
+#: positionless `"{variant}:{seed}:attempt1:threshold{s}s"`, then a
+#: self-describing but still-a-string `"timeout_v2:candidate=...:..."`.
+#: Neither was a validated record: a reader could not distinguish a
+#: malformed or truncated string from a real one without re-parsing it, and
+#: nothing stopped an old bare string from round-tripping through JSON
+#: forever. v3 is a real object (see `TimeoutIdentity`) that validates its
+#: own fields on construction AND on every deserialization, so a legacy
+#: string or a record missing a required field fails closed instead of
+#: silently reading back as valid.
+TIMEOUT_IDENTITY_SCHEMA = "timeout_v3"
+
+#: The one retry/threshold protocol every producer of a `TimeoutIdentity`
+#: currently implements: a candidate (variant, seed) run gets exactly one
+#: attempt at a fixed wall-clock threshold, and a timeout is never silently
+#: retried with more time or resources. Named explicitly (not merely implied
+#: by `attempt=1`) so the record states the POLICY, not only its numeric
+#: effect — a reader should not have to infer "no retries happen" from the
+#: absence of a second record for the same candidate/variant/seed.
+RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD = (
+    "single_attempt_fixed_threshold_no_retry_v1"
+)
+
+
+@dataclass(frozen=True, order=True)
+class TimeoutIdentity:
+    """One validated, versioned record of a SUMO wall-clock timeout.
+
+    Every field a reader needs to answer "which run, in which search,
+    produced this undecided outcome, and under which protocol" — not encoded
+    into a string a downstream reader has to re-parse, but real typed fields
+    validated once here. Frozen and orderable so it stays usable exactly
+    where the old string was: a hashable, sortable member of
+    `CandidateEvidence.timeout_undecided`.
+
+    `work_date` is the schedule's own `first_work_date` at the point the
+    timeout was recorded. For an independent daily unit (day_count == 1)
+    this is unambiguously the single day that timed out. For a multi-day
+    warm-started schedule it identifies the SCHEDULE the timeout belongs to,
+    not a specific day within it — a warm run's SUMO process spans the whole
+    schedule, so no finer day-level attribution is available at the point a
+    timeout is observed.
+    """
+
+    schema: str
+    candidate_id: str
+    work_date: str
+    search_content_key: str
+    variant: str
+    seed: int
+    attempt: int
+    threshold_s: float
+    retry_protocol: str
+    search_provenance_key: str
+
+    def __post_init__(self) -> None:
+        string_fields = {
+            "schema": self.schema,
+            "candidate_id": self.candidate_id,
+            "work_date": self.work_date,
+            "search_content_key": self.search_content_key,
+            "variant": self.variant,
+            "retry_protocol": self.retry_protocol,
+            "search_provenance_key": self.search_provenance_key,
+        }
+        malformed_strings = [
+            name for name, value in string_fields.items()
+            if not isinstance(value, str) or not value.strip()
+        ]
+        if malformed_strings:
+            raise ValueError(
+                "timeout identity string fields must be non-empty native "
+                f"strings: {malformed_strings}"
+            )
+        if self.schema != TIMEOUT_IDENTITY_SCHEMA:
+            raise ValueError(
+                f"unsupported timeout identity schema: {self.schema!r}"
+            )
+        try:
+            parsed_work_date = date.fromisoformat(self.work_date)
+        except ValueError as error:
+            raise ValueError(
+                "timeout identity work_date must be an ISO calendar date"
+            ) from error
+        if parsed_work_date.isoformat() != self.work_date:
+            raise ValueError(
+                "timeout identity work_date must use canonical YYYY-MM-DD"
+            )
+        if self.variant not in DEMAND_VARIANTS:
+            raise ValueError("timeout identity variant must be q10/q50/q90")
+        if (
+            isinstance(self.seed, bool)
+            or not isinstance(self.seed, int)
+            or self.seed < 0
+        ):
+            raise ValueError("timeout identity seed must be a non-negative int")
+        if (
+            isinstance(self.attempt, bool)
+            or not isinstance(self.attempt, int)
+            or self.attempt < 1
+        ):
+            raise ValueError("timeout identity attempt must be a positive int")
+        if (
+            isinstance(self.threshold_s, bool)
+            or not isinstance(self.threshold_s, (int, float))
+            or not math.isfinite(self.threshold_s)
+            or self.threshold_s <= 0
+        ):
+            raise ValueError("timeout identity threshold_s must be positive")
+        if self.retry_protocol != (
+                RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD):
+            raise ValueError(
+                "timeout identity retry_protocol is unsupported: "
+                f"{self.retry_protocol!r}"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": self.schema,
+            "candidate_id": self.candidate_id,
+            "work_date": self.work_date,
+            "search_content_key": self.search_content_key,
+            "variant": self.variant,
+            "seed": self.seed,
+            "attempt": self.attempt,
+            "threshold_s": self.threshold_s,
+            "retry_protocol": self.retry_protocol,
+            "search_provenance_key": self.search_provenance_key,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Any) -> "TimeoutIdentity":
+        """Reconstruct a record, failing closed on anything not a valid v3.
+
+        A bare string (the retired v1/v2 wire format) is exactly the shape
+        this must reject: `isinstance(raw, Mapping)` is False for a `str`,
+        so a legacy entry raises here instead of silently deserializing as
+        something else. This is intentional and is never relaxed to "coerce
+        old strings" — old artifacts are read-only history, not rewritten,
+        and a reader that cannot validate them must refuse them.
+        """
+        if not isinstance(raw, Mapping):
+            raise ValueError(
+                "timeout identity record must be an object with named "
+                f"fields, not {raw!r} (a legacy plain string is not "
+                "accepted)"
+            )
+        required = {
+            "schema", "candidate_id", "work_date", "search_content_key",
+            "variant", "seed", "attempt", "threshold_s", "retry_protocol",
+            "search_provenance_key",
+        }
+        actual = set(raw)
+        missing = sorted(required - actual)
+        extra = sorted(actual - required, key=str)
+        if missing:
+            raise ValueError(
+                f"timeout identity record is missing fields: {missing}"
+            )
+        if extra:
+            raise ValueError(
+                f"timeout identity record has unknown fields: {extra}"
+            )
+        string_fields = (
+            "schema", "candidate_id", "work_date", "search_content_key",
+            "variant", "retry_protocol", "search_provenance_key",
+        )
+        wrong_strings = [
+            key for key in string_fields if not isinstance(raw[key], str)
+        ]
+        if wrong_strings:
+            raise ValueError(
+                "timeout identity record string fields must use native string "
+                f"values: {wrong_strings}"
+            )
+        if (isinstance(raw["seed"], bool)
+                or not isinstance(raw["seed"], int)):
+            raise ValueError(
+                "timeout identity record seed must be a native integer"
+            )
+        if (isinstance(raw["attempt"], bool)
+                or not isinstance(raw["attempt"], int)):
+            raise ValueError(
+                "timeout identity record attempt must be a native integer"
+            )
+        if (isinstance(raw["threshold_s"], bool)
+                or not isinstance(raw["threshold_s"], (int, float))):
+            raise ValueError(
+                "timeout identity record threshold_s must be a native number"
+            )
+        return cls(
+            schema=raw["schema"],
+            candidate_id=raw["candidate_id"],
+            work_date=raw["work_date"],
+            search_content_key=raw["search_content_key"],
+            variant=raw["variant"],
+            seed=raw["seed"],
+            attempt=raw["attempt"],
+            threshold_s=raw["threshold_s"],
+            retry_protocol=raw["retry_protocol"],
+            search_provenance_key=raw["search_provenance_key"],
+        )
+
+
 RANKING_OBJECTIVES = frozenset({
     "auto",
     "legacy_time_loss_v1",
@@ -198,6 +405,53 @@ from traffic_sim.simulation.closure_ranking import (  # noqa: E402
     ClosureCost, rank_closures, worst_variant_cost)
 
 
+@dataclass(frozen=True, order=True)
+class CanonicalObservationDigest:
+    """Identity and digest of one complete canonical SUMO observation."""
+
+    candidate_id: str
+    work_date: str
+    variant: str
+    seed: int
+    sha256: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.candidate_id, str) or not self.candidate_id:
+            raise ValueError("canonical observation candidate_id is required")
+        if not isinstance(self.work_date, str):
+            raise ValueError("canonical observation work_date must be a string")
+        try:
+            parsed = date.fromisoformat(self.work_date)
+        except ValueError as error:
+            raise ValueError(
+                "canonical observation work_date must be an ISO date"
+            ) from error
+        if parsed.isoformat() != self.work_date:
+            raise ValueError("canonical observation work_date is not canonical")
+        if self.variant not in DEMAND_VARIANTS:
+            raise ValueError("canonical observation variant is invalid")
+        if isinstance(self.seed, bool) or not isinstance(self.seed, int) or self.seed < 0:
+            raise ValueError("canonical observation seed must be a non-negative int")
+        if (
+            not isinstance(self.sha256, str)
+            or len(self.sha256) != 64
+            or any(character not in "0123456789abcdef" for character in self.sha256)
+        ):
+            raise ValueError("canonical observation sha256 is invalid")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, raw: Any) -> "CanonicalObservationDigest":
+        if not isinstance(raw, Mapping):
+            raise ValueError("canonical observation digest must be an object")
+        expected = {"candidate_id", "work_date", "variant", "seed", "sha256"}
+        if set(raw) != expected:
+            raise ValueError("canonical observation digest fields are invalid")
+        return cls(**dict(raw))
+
+
 @dataclass(frozen=True)
 class CandidateEvidence:
     candidate_id: str
@@ -206,6 +460,22 @@ class CandidateEvidence:
     #: One closure_disruption() record per demand variant, or () when the
     #: candidate was evaluated before this objective existed.
     disruption: tuple[Mapping, ...] = ()
+    #: Validated `TimeoutIdentity` records for SUMO runs that hit the frozen
+    #: wall-clock timeout for this candidate. A timeout is folded into
+    #: ``hard_failures`` too (so old readers that only check ``eligible``
+    #: still exclude it), but this field is what lets a reader distinguish
+    #: "we don't know" from "genuinely disqualified" — see
+    #: ``has_undecided_timeout`` and ``pilot_selection.
+    #: select_pilot_finalists``, which refuses to declare a decision while
+    #: this is non-empty rather than silently treating a timed-out candidate
+    #: as if it never existed.
+    timeout_undecided: tuple[TimeoutIdentity, ...] = ()
+    #: Complete canonical monthly-observation payloads are intentionally not
+    #: duplicated into every cache/artifact. Their full canonical JSON digest
+    #: is retained with the launch identity so semantic comparison can prove
+    #: that recovery, feasibility, health, baseline and candidate metrics all
+    #: matched, rather than comparing only the reduced ranking observation.
+    canonical_observation_digests: tuple[CanonicalObservationDigest, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
@@ -217,10 +487,41 @@ class CandidateEvidence:
             raise ValueError("observation candidate_id mismatch")
         if any(not reason for reason in self.hard_failures):
             raise ValueError("hard failure names cannot be empty")
+        if any(
+            not isinstance(item, TimeoutIdentity)
+            for item in self.timeout_undecided
+        ):
+            raise ValueError(
+                "timeout_undecided entries must be validated TimeoutIdentity "
+                "records, not bare strings or other values"
+            )
+        if any(
+            not isinstance(item, CanonicalObservationDigest)
+            for item in self.canonical_observation_digests
+        ):
+            raise ValueError(
+                "canonical_observation_digests entries must be validated records"
+            )
+        identities = [
+            (item.candidate_id, item.work_date, item.variant, item.seed)
+            for item in self.canonical_observation_digests
+        ]
+        if len(identities) != len(set(identities)):
+            raise ValueError("canonical observation digest identity is duplicated")
+        # NOTE: a timeout identity's own `candidate_id` is deliberately NOT
+        # required to equal `self.candidate_id` here. `independent_daily.
+        # aggregate_daily_evidence` rolls several daily units' timeouts up
+        # into one PARENT `CandidateEvidence`; each identity correctly names
+        # the daily unit that actually timed out, not the parent schedule
+        # that aggregates it.
 
     @property
     def eligible(self) -> bool:
         return not self.hard_failures
+
+    @property
+    def has_undecided_timeout(self) -> bool:
+        return bool(self.timeout_undecided)
 
 
 def paired_candidate_evidence(
@@ -338,6 +639,7 @@ class CandidateStatistics:
     provenance_key: str | None
     #: Worst-variant closure cost, or None when no disruption evidence exists.
     closure_cost: ClosureCost | None = None
+    timeout_undecided: tuple[TimeoutIdentity, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -588,6 +890,7 @@ def _candidate_statistics(
             precision_met=False,
             provenance_key=None,
             closure_cost=_closure_cost_for(candidate),
+            timeout_undecided=tuple(sorted(set(candidate.timeout_undecided))),
         )
     grouped = _validate_candidate_observations(candidate, policy)
     variants = tuple(
@@ -705,6 +1008,35 @@ def decide_finalists(
         )
         for candidate in evidence
     )
+    # Mirror pilot_selection's fail-closed rule at the finalist seam: a
+    # finalist can acquire a fresh unresolved timeout during finalist-stage
+    # verification even if it timed out nowhere during piloting, and the
+    # same "we don't know if this would have changed the winner/tie" problem
+    # applies. Never let an undecided candidate silently become invisible to
+    # the decision the way cost-order v5's exhaustive arm did.
+    undecided = tuple(sorted({
+        identity
+        for candidate in evidence
+        for identity in candidate.timeout_undecided
+    }))
+    if undecided:
+        return DecisionResult(
+            status="inconclusive",
+            winner_id=None,
+            tie_ids=(),
+            reason=(
+                "finalist evidence includes an unresolved SUMO timeout; the "
+                "search cannot rule out that candidate changing the winner "
+                "or tie set"
+            ),
+            candidates=statistics,
+            next_runs=(),
+            policy=policy,
+            confidence_level=policy.confidence_level,
+            simultaneous_comparisons=comparisons,
+            method=declared_method,
+        )
+
     viable = [candidate for candidate in statistics if candidate.eligible]
     if not viable:
         return DecisionResult(

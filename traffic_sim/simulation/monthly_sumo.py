@@ -12,6 +12,7 @@ import os
 import platform
 import shutil
 import tempfile
+import threading
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -51,9 +52,13 @@ from traffic_sim.simulation.envelope import (
     read_edgedata_time_loss,
 )
 from traffic_sim.simulation.finalist_decision import (
+    CanonicalObservationDigest,
     CandidateEvidence,
     DEMAND_VARIANTS,
     PairedObservation,
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    TIMEOUT_IDENTITY_SCHEMA,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.monthly_search import canonical_seed
 from traffic_sim.simulation.monthly_warm_state import (  # noqa: E402
@@ -120,6 +125,51 @@ def _canonical_digest(payload: Any) -> str:
         allow_nan=False,
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _timeout_identity(
+    variant: str, seed: int, message: str,
+    *, candidate_id: str, work_date: str, search_content_key: str,
+    provenance_key: str,
+) -> tuple[TimeoutIdentity, ...]:
+    """Structured identity for a SUMO run that hit the frozen timeout.
+
+    Frozen retry/resource protocol (do not change without a new benchmark
+    registration): a run gets exactly one attempt at the fixed
+    ``run_scenario.SUMO_TIMEOUT_S`` (300s) wall-clock threshold; there is no
+    automatic retry, and nothing here may silently raise the threshold or
+    give a candidate more CPU because of which arm or search happened to run
+    it. A non-timeout SUMO failure ("sumo failed" in message) is a genuine
+    hard failure, not an undecided outcome, and returns no identity here.
+
+    Returns a validated `TimeoutIdentity` (see `finalist_decision`), not a
+    string. Every caller passes the SCHEDULE's own `first_work_date` and
+    `search_content_key` (see `TimeoutIdentity`'s docstring for what
+    `work_date` means on a multi-day warm schedule), so the daily-unit/date
+    and search-identity fields the record needs are always populated at the
+    point of creation — `independent_daily.aggregate_daily_evidence` no
+    longer needs to (and does not) stamp a date prefix onto this afterwards.
+    """
+    if "sumo timed out" not in message:
+        return ()
+    if not candidate_id:
+        raise ValueError("timeout identity requires a candidate_id")
+    if not provenance_key:
+        raise ValueError("timeout identity requires a provenance_key")
+    return (
+        TimeoutIdentity(
+            schema=TIMEOUT_IDENTITY_SCHEMA,
+            candidate_id=candidate_id,
+            work_date=work_date,
+            search_content_key=search_content_key,
+            variant=variant,
+            seed=seed,
+            attempt=1,
+            threshold_s=float(rs.SUMO_TIMEOUT_S),
+            retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+            search_provenance_key=provenance_key,
+        ),
+    )
 
 
 def _file_record(path: Path, *, label: str) -> dict[str, Any]:
@@ -446,6 +496,7 @@ class ArchivedDemandSumoRunner:
         sumo_invoker=None,
         boundary_controller=None,
         forensic_observer=None,
+        launch_sidecar_path: Path | None = None,
     ) -> None:
         self.spec = ClosureSearchSpec.from_dict(spec.to_dict())
         self.archive = Path(archive).resolve()
@@ -587,6 +638,44 @@ class ArchivedDemandSumoRunner:
         self._warm_route_window_caches: dict[str, WarmRouteWindowCache] = {}
         self._warm_route_window_directories: list[tempfile.TemporaryDirectory] = []
         self.canonical_observations: list = []
+        # Result-neutral S0 telemetry, diagnostic only: never enters cache
+        # identity or CandidateEvidence bytes. One real SUMO subprocess launch
+        # (a single (variant, seed) attempt) is counted exactly once here, at
+        # the actual launch seam in `_observations_for` — the only place this
+        # runner starts a SUMO process — split by pilot/finalist `stage` and
+        # by outcome (timeout vs. any other outcome, success or hard failure).
+        # A daily unit fully served from `IndependentDailyRunner`'s cache
+        # never reaches this runner at all, so a cache hit is structurally
+        # incapable of being double-counted as a launch here.
+        self.launch_telemetry: dict[str, dict[str, int]] = {
+            "pilot": {"attempts": 0, "timeouts": 0, "other_outcomes": 0},
+            "finalist": {"attempts": 0, "timeouts": 0, "other_outcomes": 0},
+        }
+        # Identity-bearing companion to the aggregate counters above: one
+        # record per real SUMO launch, naming the candidate, work date,
+        # variant, seed, attempt number (within that candidate/stage/variant/
+        # seed) and outcome. The aggregate counters alone cannot support a
+        # true exact-attempt POPULATION comparison (candidate/variant/seed
+        # identity, not just a total) between the cost-ordered and
+        # ordered-exhaustive arms; this list is what makes that possible.
+        self.launch_records: list[dict[str, Any]] = []
+        # Durable transport for launch records: an isolated worker subprocess
+        # that crashes on an unrecognized exception, or is killed outright
+        # (OOM, signal), never reaches the point where its result JSON is
+        # written, so the in-memory list above would vanish with it. When set,
+        # every record is also appended, synchronously and fsync'd, to this
+        # file the instant it is produced — so whatever attempts happened
+        # before an abrupt termination are still on disk for the parent
+        # process to recover. None means "not wired" (in-process/test use).
+        self._launch_sidecar_path = (
+            Path(launch_sidecar_path) if launch_sidecar_path is not None else None
+        )
+        # One runner instance is shared by every daily unit on its archive,
+        # and the global daily-unit queue can call `run_candidate` for two
+        # such units from two puller threads at once, so the counters above
+        # need real mutual exclusion, not merely the single-threaded default
+        # this class otherwise assumes.
+        self._launch_telemetry_lock = threading.Lock()
         self.baseline_trip_duration_p99_s = baseline_trip_duration_p99_s
         self.study_provenance_key = study_provenance_key
         self.cache_root = Path(cache_root)
@@ -2118,10 +2207,112 @@ class ArchivedDemandSumoRunner:
         finally:
             shutil.rmtree(temporary_root, ignore_errors=True)
 
+    def _bump_launch_telemetry(
+        self, stage: str, *, timed_out: bool,
+        candidate_id: str, work_date: str, variant: str, seed: int,
+        outcome: str,
+    ) -> None:
+        if stage not in self.launch_telemetry:
+            raise ValueError(f"unknown launch-telemetry stage: {stage!r}")
+        with self._launch_telemetry_lock:
+            bucket = self.launch_telemetry[stage]
+            bucket["attempts"] += 1
+            bucket["timeouts" if timed_out else "other_outcomes"] += 1
+            attempt_number = 1 + sum(
+                1 for record in self.launch_records
+                if record["candidate_id"] == candidate_id
+                and record["stage"] == stage
+                and record["variant"] == variant
+                and record["seed"] == int(seed)
+            )
+            record = {
+                "candidate_id": str(candidate_id),
+                "work_date": str(work_date),
+                "stage": stage,
+                "variant": str(variant),
+                "seed": int(seed),
+                "attempt": attempt_number,
+                "timed_out": bool(timed_out),
+                "outcome": str(outcome),
+            }
+            self.launch_records.append(record)
+            if self._launch_sidecar_path is not None:
+                self._append_launch_sidecar(record)
+
+    def _record_launch_start(
+        self, stage: str, *, candidate_id: str, work_date: str,
+        variant: str, seed: int,
+    ) -> None:
+        """Durably record a launch before entering the SUMO call.
+
+        The matching final record is appended by `_bump_launch_telemetry`.
+        A worker killed while SUMO is active therefore leaves a start record
+        that the parent can classify as a terminated attempt instead of
+        silently losing the launch.
+        """
+        if self._launch_sidecar_path is None:
+            return
+        with self._launch_telemetry_lock:
+            attempt_number = 1 + sum(
+                1 for record in self.launch_records
+                if record["candidate_id"] == candidate_id
+                and record["stage"] == stage
+                and record["variant"] == variant
+                and record["seed"] == int(seed)
+            )
+            self._append_launch_sidecar({
+                "candidate_id": str(candidate_id),
+                "work_date": str(work_date),
+                "stage": stage,
+                "variant": str(variant),
+                "seed": int(seed),
+                "attempt": attempt_number,
+                "timed_out": False,
+                "outcome": "in_progress",
+            })
+
+    def _append_launch_sidecar(self, record: dict[str, Any]) -> None:
+        """Append one launch record to the durable sidecar file, fsync'd.
+
+        Called while ``_launch_telemetry_lock`` is held so records land on
+        disk in the same order they were produced. A start-record write is a
+        fail-closed prerequisite to launching SUMO: continuing after it
+        failed would create the exact unaccounted attempt this transport is
+        designed to prevent.
+        """
+        path = self._launch_sidecar_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def launch_telemetry_snapshot(self) -> dict[str, dict[str, int]]:
+        """A locked, independent copy of the real-launch counters.
+
+        This is the public hook `IndependentDailyRunner.timing_snapshot`
+        (and, transitively, `product_arm._runner_exact_launch_telemetry`)
+        reads. Without it, the counters `_bump_launch_telemetry` maintains
+        are real but unreachable from outside this instance — exactly the
+        gap that left every S0 exact-attempt gate silently empty for this
+        backend.
+        """
+        with self._launch_telemetry_lock:
+            return {
+                stage: dict(counts)
+                for stage, counts in self.launch_telemetry.items()
+            }
+
+    def launch_records_snapshot(self) -> list[dict[str, Any]]:
+        """A locked, independent copy of every identity-bearing launch record."""
+        with self._launch_telemetry_lock:
+            return [dict(record) for record in self.launch_records]
+
     def _observations_for(
         self,
         schedule: ClosureSchedule,
         pending: list[tuple[str, int]],
+        stage: str,
     ):
         """Yield this candidate's observations in canonical (variant, seed) order.
 
@@ -2140,50 +2331,142 @@ class ArchivedDemandSumoRunner:
         surfacing early. Concurrency therefore costs speculative work on
         candidates that fail, never a different result.
         """
+        def timeout_identity_for(variant: str, seed: int, message: str):
+            return _timeout_identity(
+                variant, seed, message,
+                candidate_id=schedule.schedule_id,
+                work_date=schedule.first_work_date,
+                search_content_key=schedule.search_content_key,
+                provenance_key=self.study_provenance_key,
+            )
+
+        def bump(variant: str, seed: int, *, timed_out: bool, outcome: str) -> None:
+            self._bump_launch_telemetry(
+                stage, timed_out=timed_out,
+                candidate_id=schedule.schedule_id,
+                work_date=schedule.first_work_date,
+                variant=variant, seed=seed, outcome=outcome)
+
+        def record_start(variant: str, seed: int) -> None:
+            self._record_launch_start(
+                stage, candidate_id=schedule.schedule_id,
+                work_date=schedule.first_work_date,
+                variant=variant, seed=seed)
+
+        def run_started(variant: str, seed: int):
+            record_start(variant, seed)
+            return self._run_observation(schedule, variant=variant, seed=seed)
+
         if self.seed_workers == 1 or len(pending) <= 1:
             for variant, seed in pending:
+                run_timeouts: tuple[TimeoutIdentity, ...] = ()
                 try:
-                    observation, run_failures, canonical = self._run_observation(
-                        schedule, variant=variant, seed=seed)
+                    observation, run_failures, canonical = run_started(
+                        variant, seed)
                 except SystemExit as error:
                     message = str(error)
-                    if "sumo timed out" not in message and "sumo failed" not in message:
+                    timed_out = "sumo timed out" in message
+                    recognized = timed_out or "sumo failed" in message
+                    # Attempt telemetry is bumped here, at the launch
+                    # boundary, BEFORE deciding whether this outcome is
+                    # recognized — a SystemExit this module does not know how
+                    # to classify is still a real SUMO launch that happened,
+                    # and it must not go uncounted merely because the search
+                    # is about to re-raise and abort.
+                    bump(variant, seed, timed_out=timed_out,
+                         outcome=("timeout" if timed_out else
+                                  ("recognized_failure" if recognized else
+                                   "unrecognized_exception")))
+                    if not recognized:
                         raise
                     observation, canonical = None, None
                     run_failures = (
                         f"sumo_execution_failure:{variant}:{seed}:" + message,
                     )
-                yield variant, seed, observation, run_failures, canonical
+                    if timed_out:
+                        run_timeouts = timeout_identity_for(variant, seed, message)
+                except BaseException:
+                    # Any other failure at the launch seam (a bug, a signal,
+                    # anything not SystemExit) is still a launched attempt;
+                    # count it, then let it propagate unchanged.
+                    bump(variant, seed, timed_out=False,
+                         outcome="unrecognized_exception")
+                    raise
+                else:
+                    bump(variant, seed, timed_out=False, outcome="success")
+                yield variant, seed, observation, run_failures, run_timeouts, canonical
             return
 
         executor = ThreadPoolExecutor(
             max_workers=min(self.seed_workers, len(pending)),
             thread_name_prefix="monthly-seed")
         futures: list = []
+        consumed: set[int] = set()
         try:
             futures = [
                 executor.submit(
-                    self._run_observation, schedule, variant=variant, seed=seed)
+                    run_started, variant, seed)
                 for variant, seed in pending
             ]
-            for (variant, seed), future in zip(pending, futures):
+            for index, ((variant, seed), future) in enumerate(
+                    zip(pending, futures)):
+                consumed.add(index)
+                run_timeouts = ()
                 try:
                     observation, run_failures, canonical = future.result()
                 except SystemExit as error:
                     message = str(error)
-                    if "sumo timed out" not in message and "sumo failed" not in message:
+                    timed_out = "sumo timed out" in message
+                    recognized = timed_out or "sumo failed" in message
+                    bump(variant, seed, timed_out=timed_out,
+                         outcome=("timeout" if timed_out else
+                                  ("recognized_failure" if recognized else
+                                   "unrecognized_exception")))
+                    if not recognized:
                         raise
                     observation, canonical = None, None
                     run_failures = (
                         f"sumo_execution_failure:{variant}:{seed}:" + message,
                     )
-                yield variant, seed, observation, run_failures, canonical
+                    if timed_out:
+                        run_timeouts = timeout_identity_for(variant, seed, message)
+                except BaseException:
+                    bump(variant, seed, timed_out=False,
+                         outcome="unrecognized_exception")
+                    raise
+                else:
+                    bump(variant, seed, timed_out=False, outcome="success")
+                yield variant, seed, observation, run_failures, run_timeouts, canonical
         finally:
-            # Drop what has not started, then wait for the few still in
-            # flight: a search that walked away from a failed candidate must
-            # not leave stray SUMO processes competing with the next one.
-            for future in futures:
-                future.cancel()
+            # Every future not yet consumed above is either genuinely
+            # cancellable (never started — no SUMO process was launched, so
+            # it is NOT an attempt) or already running/finished (a real
+            # launch the search is walking away from without ever asking for
+            # its result). The second case is still counted, exactly like a
+            # consumed attempt would have been — a search that abandons
+            # speculative work must not also make its own launch telemetry
+            # under-report how much work actually happened. Its own outcome
+            # is never allowed to raise here: whatever exception is already
+            # propagating through this cleanup (or none) takes precedence.
+            for index, future in enumerate(futures):
+                if index in consumed:
+                    continue
+                if future.cancel():
+                    continue
+                abandoned_variant, abandoned_seed = pending[index]
+                try:
+                    future.result()
+                except SystemExit as error:
+                    timed_out = "sumo timed out" in str(error)
+                    bump(abandoned_variant, abandoned_seed, timed_out=timed_out,
+                         outcome=("timeout" if timed_out else
+                                  "recognized_failure_abandoned"))
+                except BaseException:
+                    bump(abandoned_variant, abandoned_seed, timed_out=False,
+                         outcome="unrecognized_exception_abandoned")
+                else:
+                    bump(abandoned_variant, abandoned_seed, timed_out=False,
+                         outcome="success_abandoned")
             executor.shutdown(wait=True)
 
     def run_candidate(
@@ -2200,6 +2483,9 @@ class ArchivedDemandSumoRunner:
             raise ValueError("schedule does not belong to SUMO runner search")
         observations = list(existing.observations if existing is not None else ())
         failures = set(existing.hard_failures if existing is not None else ())
+        timeouts = set(existing.timeout_undecided if existing is not None else ())
+        canonical_digests = set(
+            existing.canonical_observation_digests if existing is not None else ())
         disruption = (
             existing.disruption
             if existing is not None and existing.disruption
@@ -2211,6 +2497,8 @@ class ArchivedDemandSumoRunner:
                 observations=tuple(observations),
                 hard_failures=tuple(sorted(failures)),
                 disruption=disruption,
+                timeout_undecided=tuple(sorted(timeouts)),
+                canonical_observation_digests=tuple(sorted(canonical_digests)),
             )
         seen = {
             (item.demand_variant, item.seed) for item in observations
@@ -2231,14 +2519,23 @@ class ArchivedDemandSumoRunner:
                     continue
                 pending.append((variant, seed))
 
-        with closing(self._observations_for(schedule, pending)) as stream:
-            for variant, seed, observation, run_failures, canonical in stream:
+        with closing(
+                self._observations_for(schedule, pending, stage)) as stream:
+            for variant, seed, observation, run_failures, run_timeouts, canonical in stream:
                 if observation is not None:
                     observations.append(observation)
                 if canonical is not None:
                     self.canonical_observations.append(canonical)
+                    canonical_digests.add(CanonicalObservationDigest(
+                        candidate_id=schedule.schedule_id,
+                        work_date=schedule.first_work_date,
+                        variant=variant,
+                        seed=seed,
+                        sha256=_canonical_digest(canonical),
+                    ))
                 seen.add((variant, seed))
                 failures.update(run_failures)
+                timeouts.update(run_timeouts)
                 if failures:
                     break
         observations.sort(
@@ -2252,4 +2549,6 @@ class ArchivedDemandSumoRunner:
             observations=tuple(observations),
             hard_failures=tuple(sorted(failures)),
             disruption=disruption,
+            timeout_undecided=tuple(sorted(timeouts)),
+            canonical_observation_digests=tuple(sorted(canonical_digests)),
         )

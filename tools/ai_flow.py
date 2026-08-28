@@ -14,10 +14,11 @@ import sys
 import tempfile
 import textwrap
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 try:
     import tomllib
@@ -59,6 +60,8 @@ class Role:
     profile: str = ""
     sandbox: str = ""
     permission_mode: str = ""
+    max_turns: int | None = None
+    max_budget_usd: float | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,7 @@ class Config:
     checks: tuple[tuple[str, ...], ...]
     max_review_cycles: int
     max_test_fix_cycles: int
+    max_review_findings_per_repair: int
     agent_timeout_seconds: int
     check_timeout_seconds: int
 
@@ -83,6 +87,20 @@ def _positive_int(raw: Any, key: str) -> int:
     if not isinstance(raw, int) or isinstance(raw, bool) or raw <= 0:
         raise FlowError(f"{key} must be a positive integer")
     return raw
+
+
+def _optional_positive_int(raw: Any, key: str) -> int | None:
+    if raw is None:
+        return None
+    return _positive_int(raw, key)
+
+
+def _optional_positive_number(raw: Any, key: str) -> float | None:
+    if raw is None:
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+        raise FlowError(f"{key} must be a positive number")
+    return float(raw)
 
 
 def repository_root(cwd: Path) -> Path:
@@ -118,6 +136,7 @@ def load_config(path: Path, root: Path) -> Config:
         "worker": "claude",
         "reviewer": "codex",
         "fixer": "claude",
+        "fixer_fallback": "codex",
     }
     for name, expected_runner in expected_runners.items():
         item = roles_raw.get(name)
@@ -142,6 +161,12 @@ def load_config(path: Path, root: Path) -> Config:
             profile=str(item.get("profile", "")),
             sandbox=str(item.get("sandbox", "")),
             permission_mode=str(item.get("permission_mode", "")),
+            max_turns=_optional_positive_int(
+                item.get("max_turns"), f"roles.{name}.max_turns"
+            ),
+            max_budget_usd=_optional_positive_number(
+                item.get("max_budget_usd"), f"roles.{name}.max_budget_usd"
+            ),
         )
         if runner == "codex" and role.sandbox not in {
             "read-only",
@@ -171,6 +196,10 @@ def load_config(path: Path, root: Path) -> Config:
         max_review_cycles=_positive_int(raw.get("max_review_cycles"), "max_review_cycles"),
         max_test_fix_cycles=_positive_int(
             raw.get("max_test_fix_cycles"), "max_test_fix_cycles"
+        ),
+        max_review_findings_per_repair=_positive_int(
+            raw.get("max_review_findings_per_repair"),
+            "max_review_findings_per_repair",
         ),
         agent_timeout_seconds=_positive_int(
             raw.get("agent_timeout_seconds"), "agent_timeout_seconds"
@@ -268,7 +297,11 @@ def build_codex_command(
     )
     command = ["codex", "exec", "--strict-config", "-C", str(root)]
     profile_path = codex_profile_path(role)
-    profile_found = bool(profile_path and profile_path.is_file())
+    profile_found = bool(
+        profile_path
+        and profile_path.is_file()
+        and profile_path.read_text(encoding="utf-8") == profile_toml(role)
+    )
     if profile_found:
         command.extend(["--profile", role.profile])
     else:
@@ -296,7 +329,14 @@ def build_codex_command(
     return command, profile_found
 
 
-def build_claude_command(role: Role, schema_path: Path, prompt: str) -> list[str]:
+def build_claude_command(
+    role: Role,
+    schema_path: Path,
+    prompt: str,
+    *,
+    session_id: str | None = None,
+    resume_session: bool = False,
+) -> list[str]:
     schema_value = json.loads(schema_path.read_text(encoding="utf-8"))
     # Claude Code validates the supplied output schema with its bundled
     # validator, which rejects the draft-2020-12 meta-schema URI even though
@@ -305,7 +345,7 @@ def build_claude_command(role: Role, schema_path: Path, prompt: str) -> list[str
     # any of the actual output constraints.
     schema_value.pop("$schema", None)
     schema = json.dumps(schema_value, separators=(",", ":"))
-    return [
+    command = [
         "claude",
         "--print",
         "--model",
@@ -320,9 +360,15 @@ def build_claude_command(role: Role, schema_path: Path, prompt: str) -> list[str
         "json",
         "--json-schema",
         schema,
-        "--no-session-persistence",
-        prompt,
     ]
+    if role.max_turns is not None:
+        command.extend(["--max-turns", str(role.max_turns)])
+    if role.max_budget_usd is not None:
+        command.extend(["--max-budget-usd", f"{role.max_budget_usd:g}"])
+    if session_id:
+        command.extend(["--resume" if resume_session else "--session-id", session_id])
+    command.append(prompt)
+    return command
 
 
 def _redacted_command(command: Sequence[str]) -> str:
@@ -342,6 +388,32 @@ def _redacted_command(command: Sequence[str]) -> str:
     return shlex.join(redacted)
 
 
+def _terminate_process_group(process: subprocess.Popen[str]) -> tuple[str, str]:
+    """Stop and reap the exact process group created for one invocation."""
+    if process.poll() is None:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    try:
+        return process.communicate(timeout=10)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        return process.communicate()
+
+
+def _write_process_log(
+    log_path: Path, command: Sequence[str], stdout: str, stderr: str
+) -> None:
+    log_path.write_text(
+        f"$ {_redacted_command(command)}\n\nSTDOUT\n{stdout}\n\nSTDERR\n{stderr}",
+        encoding="utf-8",
+    )
+
+
 def run_process(
     command: Sequence[str],
     root: Path,
@@ -349,6 +421,7 @@ def run_process(
     log_path: Path,
     dry_run: bool,
     check: bool = True,
+    progress: Callable[[int, float], None] | None = None,
 ) -> ProcessResult:
     if dry_run:
         rendered = _redacted_command(command)
@@ -366,27 +439,36 @@ def run_process(
         )
     except FileNotFoundError as exc:
         raise FlowError(f"Required command not found: {command[0]}") from exc
+    started = time.monotonic()
     deadline = time.monotonic() + timeout
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            os.killpg(process.pid, signal.SIGTERM)
+    try:
+        if progress:
+            progress(process.pid, 0.0)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                stdout, stderr = _terminate_process_group(process)
+                _write_process_log(log_path, command, stdout, stderr)
+                raise FlowError(f"Command timed out after {timeout}s: {command[0]}")
             try:
-                process.communicate(timeout=10)
+                stdout, stderr = process.communicate(timeout=min(60, remaining))
+                break
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.communicate()
-            raise FlowError(f"Command timed out after {timeout}s: {command[0]}")
-        try:
-            stdout, stderr = process.communicate(timeout=min(60, remaining))
-            break
-        except subprocess.TimeoutExpired:
-            print(f"  {command[0]} is still running...", flush=True)
+                elapsed = time.monotonic() - started
+                if progress:
+                    progress(process.pid, elapsed)
+                print(f"  {command[0]} is still running ({elapsed:.0f}s)...", flush=True)
+    except (KeyboardInterrupt, SystemExit):
+        stdout, stderr = _terminate_process_group(process)
+        _write_process_log(log_path, command, stdout, stderr)
+        raise
+    except BaseException:
+        if process.poll() is None:
+            stdout, stderr = _terminate_process_group(process)
+            _write_process_log(log_path, command, stdout, stderr)
+        raise
     result = ProcessResult(process.returncode, stdout, stderr)
-    log_path.write_text(
-        f"$ {_redacted_command(command)}\n\nSTDOUT\n{result.stdout}\n\nSTDERR\n{result.stderr}",
-        encoding="utf-8",
-    )
+    _write_process_log(log_path, command, result.stdout, result.stderr)
     if check and result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         raise FlowError(
@@ -433,6 +515,76 @@ def compose_prompt(base: str, sections: Sequence[tuple[str, str]]) -> str:
     return "\n\n".join(blocks) + "\n"
 
 
+def _atomic_write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent, delete=False
+    ) as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+        temporary = Path(handle.name)
+    temporary.replace(path)
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent, delete=False
+    ) as handle:
+        handle.write(content)
+        temporary = Path(handle.name)
+    temporary.replace(path)
+
+
+def _save_run_state(run_dir: Path, state: dict[str, Any], **changes: Any) -> None:
+    state.update(changes)
+    state["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _atomic_write_json(run_dir / "state.json", state)
+
+
+def _progress_callback(
+    run_dir: Path, state: dict[str, Any], invocation: str
+) -> Callable[[int, float], None]:
+    def update(pid: int, elapsed_s: float) -> None:
+        _save_run_state(
+            run_dir,
+            state,
+            status="RUNNING",
+            active_invocation=invocation,
+            child_pid=pid,
+            active_elapsed_s=round(elapsed_s, 1),
+        )
+        _write_status(
+            run_dir,
+            "RUNNING",
+            f"{invocation} active for {elapsed_s:.0f}s",
+            stage=invocation,
+            child_pid=pid,
+        )
+        lock_path = run_dir.parents[1] / "active.lock"
+        if lock_path.is_file():
+            _atomic_write_text(
+                lock_path, f"pid={os.getpid()} run={run_dir.name} child={pid}\n"
+            )
+
+    return update
+
+
+def _next_artifact_invocation(run_dir: Path, invocation: str) -> str:
+    """Choose an append-only artifact stem without replacing an earlier attempt."""
+    if not (run_dir / f"{invocation}.log").exists() and not (
+        run_dir / f"{invocation}.json"
+    ).exists():
+        return invocation
+    attempt = 2
+    while True:
+        candidate = f"{invocation}-attempt-{attempt:02d}"
+        if not (run_dir / f"{candidate}.log").exists() and not (
+            run_dir / f"{candidate}.json"
+        ).exists():
+            return candidate
+        attempt += 1
+
+
 def run_codex_role(
     config: Config,
     role_name: str,
@@ -442,25 +594,51 @@ def run_codex_role(
     prompt: str,
     invocation: str,
     dry_run: bool,
+    state: dict[str, Any] | None = None,
+    append_attempt: bool = False,
 ) -> dict[str, Any]:
     role = config.roles[role_name]
     schema_path = root / ".ai-flow" / "schemas" / schema_name
-    output_path = run_dir / f"{invocation}.json"
+    artifact_invocation = (
+        _next_artifact_invocation(run_dir, invocation) if append_attempt else invocation
+    )
+    output_path = run_dir / f"{artifact_invocation}.json"
     command, profile_found = build_codex_command(role, root, schema_path, output_path, prompt)
     if role.profile and not profile_found:
         print(
-            f"  profile {role.profile!r} is not installed; using equivalent inline Codex settings"
+            f"  profile {role.profile!r} is missing or stale; using equivalent inline Codex settings"
         )
     run_process(
         command,
         root,
         config.agent_timeout_seconds,
-        run_dir / f"{invocation}.log",
+        run_dir / f"{artifact_invocation}.log",
         dry_run,
+        progress=(
+            _progress_callback(run_dir, state, invocation) if state is not None else None
+        ),
     )
     if dry_run:
         return {}
-    return read_json(output_path, role_name)
+    structured = read_json(output_path, role_name)
+    if state is not None and append_attempt:
+        state.setdefault("attempt_artifacts", {}).setdefault(invocation, []).append(
+            artifact_invocation
+        )
+        state.setdefault("fallback_usage", {})[artifact_invocation] = {
+            "runner": "codex",
+            "model": role.model,
+            "effort": role.effort,
+            "status": "SUCCESS",
+        }
+        _save_run_state(
+            run_dir,
+            state,
+            active_invocation=None,
+            active_session_id=None,
+            child_pid=None,
+        )
+    return structured
 
 
 def run_claude_role(
@@ -471,17 +649,78 @@ def run_claude_role(
     prompt: str,
     invocation: str,
     dry_run: bool,
+    state: dict[str, Any] | None = None,
+    resume_session: bool = False,
 ) -> dict[str, Any]:
     role = config.roles[role_name]
     schema_path = root / ".ai-flow" / "schemas" / "work.json"
-    command = build_claude_command(role, schema_path, prompt)
-    result = run_process(
-        command,
-        root,
-        config.agent_timeout_seconds,
-        run_dir / f"{invocation}.log",
-        dry_run,
+    artifact_invocation = _next_artifact_invocation(run_dir, invocation)
+    session_id: str | None = None
+    if not dry_run:
+        if state is None:
+            session_id = str(uuid.uuid4())
+        else:
+            sessions = state.setdefault("claude_sessions", {})
+            session_id = sessions.get(invocation)
+            if not session_id:
+                session_id = str(uuid.uuid4())
+                sessions[invocation] = session_id
+                resume_session = False
+            _save_run_state(
+                run_dir,
+                state,
+                active_invocation=invocation,
+                active_session_id=session_id,
+            )
+    command = build_claude_command(
+        role,
+        schema_path,
+        prompt,
+        session_id=session_id,
+        resume_session=resume_session,
     )
+    log_path = run_dir / f"{artifact_invocation}.log"
+    try:
+        result = run_process(
+            command,
+            root,
+            config.agent_timeout_seconds,
+            log_path,
+            dry_run,
+            progress=(
+                _progress_callback(run_dir, state, invocation)
+                if state is not None
+                else None
+            ),
+        )
+    except FlowError:
+        if state is not None and log_path.is_file():
+            log_text = log_path.read_text(encoding="utf-8")
+            stdout = log_text.partition("\nSTDOUT\n")[2].partition("\n\nSTDERR\n")[0]
+            try:
+                failed_envelope = json.loads(stdout)
+            except json.JSONDecodeError:
+                failed_envelope = {}
+            usage = {
+                key: failed_envelope.get(key)
+                for key in (
+                    "session_id",
+                    "total_cost_usd",
+                    "num_turns",
+                    "duration_ms",
+                    "terminal_reason",
+                    "api_error_status",
+                    "result",
+                )
+                if failed_envelope.get(key) is not None
+            }
+            usage["status"] = "ERROR"
+            state.setdefault("claude_usage", {})[artifact_invocation] = usage
+            state.setdefault("attempt_artifacts", {}).setdefault(invocation, []).append(
+                artifact_invocation
+            )
+            _save_run_state(run_dir, state, child_pid=None)
+        raise
     if dry_run:
         return {}
     try:
@@ -491,9 +730,26 @@ def run_claude_role(
         raise FlowError(f"{role_name} did not return Claude structured_output") from exc
     if not isinstance(structured, dict):
         raise FlowError(f"{role_name} structured_output must be an object")
-    (run_dir / f"{invocation}.json").write_text(
+    (run_dir / f"{artifact_invocation}.json").write_text(
         json.dumps(structured, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    if state is not None:
+        usage = {
+            key: envelope.get(key)
+            for key in ("session_id", "total_cost_usd", "num_turns", "duration_ms")
+            if envelope.get(key) is not None
+        }
+        state.setdefault("claude_usage", {})[artifact_invocation] = usage
+        state.setdefault("attempt_artifacts", {}).setdefault(invocation, []).append(
+            artifact_invocation
+        )
+        _save_run_state(
+            run_dir,
+            state,
+            active_invocation=None,
+            active_session_id=None,
+            child_pid=None,
+        )
     return structured
 
 
@@ -555,15 +811,24 @@ def _stage(title: str) -> None:
     print(f"\n=== {title} ===", flush=True)
 
 
-def _write_status(run_dir: Path, status: str, summary: str) -> None:
+def _write_status(
+    run_dir: Path,
+    status: str,
+    summary: str,
+    *,
+    stage: str | None = None,
+    child_pid: int | None = None,
+) -> None:
     payload = {
+        "schema_version": 2,
         "status": status,
         "summary": summary,
+        "stage": stage,
+        "controller_pid": os.getpid(),
+        "child_pid": child_pid,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    (run_dir / "status.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    _atomic_write_json(run_dir / "status.json", payload)
 
 
 def _final(status: str, summary: str, run_dir: Path, code: int) -> int:
@@ -585,6 +850,7 @@ def acquire_lock(lock_path: Path, run_id: str) -> None:
                     for item in lock_path.read_text(encoding="utf-8").strip().split()
                 )
                 owner_pid = int(fields["pid"])
+                child_pid = int(fields.get("child", "0"))
             except (OSError, ValueError, KeyError) as parse_error:
                 raise FlowError(
                     f"Another or malformed ai-flow lock exists: {lock_path}"
@@ -593,6 +859,20 @@ def acquire_lock(lock_path: Path, run_id: str) -> None:
                 os.kill(owner_pid, 0)
             except ProcessLookupError:
                 if attempt == 0:
+                    if child_pid:
+                        try:
+                            os.kill(child_pid, 0)
+                        except ProcessLookupError:
+                            pass
+                        except PermissionError:
+                            raise FlowError(
+                                f"Previous ai-flow child PID {child_pid} cannot be inspected"
+                            ) from exc
+                        else:
+                            raise FlowError(
+                                f"Previous controller is gone but its child PID {child_pid} "
+                                "is still active; inspect it before resuming"
+                            ) from exc
                     lock_path.unlink()
                     print(f"Recovered stale ai-flow lock from PID {owner_pid}")
                     continue
@@ -647,6 +927,137 @@ def _dry_run(
     return _final("DRY_RUN_COMPLETE", "no model calls or edits were made", run_dir, 0)
 
 
+def _resume_run_dir(root: Path, run_id: str) -> Path:
+    if not run_id or any(character not in "0123456789-" for character in run_id):
+        raise FlowError(f"Invalid run id: {run_id!r}")
+    runs_root = (root / ".ai-flow" / "runs").resolve()
+    run_dir = (runs_root / run_id).resolve()
+    if run_dir.parent != runs_root or not run_dir.is_dir():
+        raise FlowError(f"Run does not exist: {run_id}")
+    return run_dir
+
+
+def _read_existing_json(path: Path, label: str) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    return read_json(path, label)
+
+
+def _infer_legacy_state(run_dir: Path, task: str) -> dict[str, Any]:
+    """Infer a safe restart point for runs created before state.json existed."""
+    plan = _read_existing_json(run_dir / "plan.json", "planner")
+    worker = _read_existing_json(run_dir / "worker-01.json", "worker")
+    reviews = sorted(run_dir.glob("review-[0-9][0-9].json"))
+    checks = sorted(run_dir.glob("checks-[0-9][0-9].json"))
+    test_fixes = sorted(run_dir.glob("test-fix-[0-9][0-9].json"))
+    review_cycles = len(reviews)
+    execution_cycle = len(checks)
+    test_fix_cycles = len(test_fixes)
+
+    next_stage = "planner"
+    if plan is not None:
+        if plan.get("status") == "BLOCKED":
+            next_stage = "complete"
+        elif worker is None:
+            next_stage = "worker"
+        elif reviews:
+            latest_review = read_json(reviews[-1], "reviewer")
+            review_fix = run_dir / f"review-fix-{review_cycles:02d}.json"
+            if latest_review.get("status") in {"APPROVED", "BLOCKED"}:
+                next_stage = "complete"
+            elif latest_review.get("status") == "CHANGES_REQUIRED" and not review_fix.is_file():
+                next_stage = "review_fix"
+            else:
+                next_stage = "checks"
+        elif checks:
+            latest_checks = json.loads(checks[-1].read_text(encoding="utf-8"))
+            failed = [item for item in latest_checks if item.get("returncode") != 0]
+            next_stage = "test_fix" if failed and not test_fixes else "review"
+            if failed and not test_fixes:
+                test_fix_cycles = 1
+        else:
+            next_stage = "checks"
+
+    return {
+        "schema_version": 1,
+        "status": "RUNNING",
+        "task": task,
+        "next_stage": next_stage,
+        "execution_cycle": execution_cycle,
+        "review_cycles": review_cycles,
+        "test_fix_cycles": test_fix_cycles,
+        "active_invocation": None,
+        "active_session_id": None,
+        "claude_sessions": {},
+        "claude_usage": {},
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "recovered_from_legacy_artifacts": True,
+    }
+
+
+def _load_or_create_state(run_dir: Path, task: str, resume: bool) -> dict[str, Any]:
+    state_path = run_dir / "state.json"
+    if state_path.is_file():
+        state = read_json(state_path, "run state")
+        if state.get("task") != task:
+            raise FlowError("Run state task does not match task.txt")
+        return state
+    if resume:
+        return _infer_legacy_state(run_dir, task)
+    return {
+        "schema_version": 1,
+        "status": "RUNNING",
+        "task": task,
+        "next_stage": "planner",
+        "execution_cycle": 0,
+        "review_cycles": 0,
+        "test_fix_cycles": 0,
+        "active_invocation": None,
+        "active_session_id": None,
+        "claude_sessions": {},
+        "claude_usage": {},
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _recover_claude_usage_from_logs(run_dir: Path, state: dict[str, Any]) -> None:
+    """Index successful and failed Claude envelopes already present in append-only logs."""
+    usage_index = state.setdefault("claude_usage", {})
+    artifact_index = state.setdefault("attempt_artifacts", {})
+    for pattern in ("worker-*.log", "test-fix-*.log", "review-fix-*.log"):
+        for log_path in sorted(run_dir.glob(pattern)):
+            artifact = log_path.stem
+            if artifact in usage_index:
+                continue
+            log_text = log_path.read_text(encoding="utf-8")
+            stdout = log_text.partition("\nSTDOUT\n")[2].partition("\n\nSTDERR\n")[0]
+            try:
+                envelope = json.loads(stdout)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(envelope, dict) or not envelope.get("session_id"):
+                continue
+            usage = {
+                key: envelope.get(key)
+                for key in (
+                    "session_id",
+                    "total_cost_usd",
+                    "num_turns",
+                    "duration_ms",
+                    "terminal_reason",
+                    "api_error_status",
+                    "result",
+                )
+                if envelope.get(key) is not None
+            }
+            usage["status"] = "ERROR" if envelope.get("is_error") else "SUCCESS"
+            usage_index[artifact] = usage
+            logical = artifact.partition("-attempt-")[0]
+            artifacts = artifact_index.setdefault(logical, [])
+            if artifact not in artifacts:
+                artifacts.append(artifact)
+
+
 def run_flow(
     config: Config,
     root: Path,
@@ -655,21 +1066,38 @@ def run_flow(
     dry_run: bool,
     extra_checks: Sequence[Sequence[str]],
     no_checks: bool,
+    resume_run_id: str | None = None,
+    fresh_stage: bool = False,
+    additional_review_cycles: int = 0,
+    use_fallback_fixer: bool = False,
+    retry_checks: bool = False,
 ) -> int:
     if not (root / "AGENTS.md").is_file():
         raise FlowError(f"AGENTS.md is required at repository root: {root}")
     initial_status = git_status(root)
-    if initial_status and not allow_dirty and not dry_run:
+    if initial_status and not allow_dirty and not dry_run and not resume_run_id:
         raise FlowError(
             "Worktree is not clean. Commit/stash your work or rerun with --allow-dirty "
             "after confirming the reviewer may include those changes."
         )
 
-    run_id = datetime.now().strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
-    run_dir = root / ".ai-flow" / "runs" / run_id
-    run_dir.mkdir(parents=True)
-    (run_dir / "task.txt").write_text(task + "\n", encoding="utf-8")
-    (run_dir / "initial-status.txt").write_text(initial_status, encoding="utf-8")
+    if resume_run_id:
+        if dry_run:
+            raise FlowError("--dry-run cannot be combined with --resume-run")
+        run_id = resume_run_id
+        run_dir = _resume_run_dir(root, run_id)
+        recorded_task = (run_dir / "task.txt").read_text(encoding="utf-8").strip()
+        if task and task != recorded_task:
+            raise FlowError("Do not replace a resumed run's task; omit the task argument")
+        task = recorded_task
+    else:
+        if not task:
+            raise FlowError("A task is required for a new run")
+        run_id = datetime.now().strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
+        run_dir = root / ".ai-flow" / "runs" / run_id
+        run_dir.mkdir(parents=True)
+        (run_dir / "task.txt").write_text(task + "\n", encoding="utf-8")
+        (run_dir / "initial-status.txt").write_text(initial_status, encoding="utf-8")
     checks = () if no_checks else (*config.checks, *extra_checks)
 
     if dry_run:
@@ -682,80 +1110,238 @@ def run_flow(
 
     lock_path = root / ".ai-flow" / "active.lock"
     acquire_lock(lock_path, run_id)
-
-    try:
-        _stage("CODEX PLANNER")
-        planner_base = config.roles["planner"].prompt_path.read_text(encoding="utf-8")
-        plan = run_codex_role(
-            config,
-            "planner",
-            root,
-            run_dir,
-            "plan.json",
-            compose_prompt(planner_base, (("User task", task),)),
-            "plan",
-            False,
-        )
-        plan_status = plan.get("status")
-        if plan_status == "BLOCKED":
-            return _final(
-                "BLOCKED", planner_blocked_reason(plan), run_dir, EXIT_BLOCKED
+    state = _load_or_create_state(run_dir, task, bool(resume_run_id))
+    _recover_claude_usage_from_logs(run_dir, state)
+    if retry_checks:
+        if not resume_run_id or state.get("next_stage") != "test_fix":
+            raise FlowError(
+                "--retry-checks requires a resumed run currently stopped at test_fix"
             )
-        if plan_status != "READY":
-            raise FlowError(f"Planner returned unknown status: {plan_status!r}")
-
-        plan_text = json.dumps(plan, ensure_ascii=False, indent=2)
-        _stage("CLAUDE WORKER")
-        worker_base = config.roles["worker"].prompt_path.read_text(encoding="utf-8")
-        work = run_claude_role(
-            config,
-            "worker",
-            root,
-            run_dir,
-            compose_prompt(
-                worker_base, (("User task", task), ("Planner output", plan_text))
-            ),
-            "worker-01",
-            False,
+        state.setdefault("check_retry_events", []).append(
+            {
+                "failed_checks": state.get("last_failed_checks"),
+                "reason": "explicit operator correction to deterministic check definition",
+                "at": datetime.now(timezone.utc).isoformat(),
+            }
         )
-        if work.get("status") == "BLOCKED":
-            return _final(
-                "BLOCKED", "; ".join(work.get("blockers", [])) or work.get("summary", ""), run_dir, EXIT_BLOCKED
-            )
+        state["next_stage"] = "checks"
+        state["active_invocation"] = None
+        state["active_session_id"] = None
+    review_cycle_limit = int(
+        state.get("review_cycle_limit", config.max_review_cycles)
+    )
+    if additional_review_cycles:
+        if not resume_run_id:
+            raise FlowError("--additional-review-cycles requires --resume-run")
+        review_cycle_limit += additional_review_cycles
+        state["review_cycle_limit"] = review_cycle_limit
+    if fresh_stage:
+        active = state.get("active_invocation")
+        if active:
+            state.setdefault("claude_sessions", {}).pop(active, None)
+        state["active_invocation"] = None
+        state["active_session_id"] = None
+    _save_run_state(run_dir, state, status="RUNNING")
 
-        test_fix_cycles = 0
-        review_cycles = 0
-        execution_cycle = 0
-        latest_reason = ""
-        while review_cycles < config.max_review_cycles:
-            execution_cycle += 1
-            _stage("DETERMINISTIC CHECKS")
-            check_results = run_checks(
-                checks,
+    def finish(status: str, summary: str, code: int) -> int:
+        _save_run_state(
+            run_dir,
+            state,
+            status=status,
+            next_stage="complete",
+            active_invocation=None,
+            active_session_id=None,
+            child_pid=None,
+        )
+        return _final(status, summary, run_dir, code)
+
+    def mark(next_stage: str, invocation: str | None = None) -> None:
+        _save_run_state(
+            run_dir,
+            state,
+            status="RUNNING",
+            next_stage=next_stage,
+            active_invocation=invocation,
+            child_pid=None,
+            active_elapsed_s=0.0,
+        )
+        _write_status(
+            run_dir,
+            "RUNNING",
+            f"next stage: {next_stage}",
+            stage=invocation or next_stage,
+        )
+
+    def run_fixer(prompt: str, invocation: str, resume_session: bool) -> dict[str, Any]:
+        if use_fallback_fixer:
+            state.setdefault("fallback_events", []).append(
+                {
+                    "invocation": invocation,
+                    "from": "fixer",
+                    "to": "fixer_fallback",
+                    "reason": "explicit operator selection",
+                    "at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            _save_run_state(run_dir, state)
+            return run_codex_role(
+                config,
+                "fixer_fallback",
                 root,
                 run_dir,
-                config.check_timeout_seconds,
-                execution_cycle,
+                "work.json",
+                prompt,
+                invocation,
                 False,
+                state,
+                append_attempt=True,
             )
-            failed = [item for item in check_results if item["returncode"] != 0]
-            if failed:
-                if test_fix_cycles >= config.max_test_fix_cycles:
-                    return _final(
-                        "BLOCKED",
-                        f"checks still fail after {test_fix_cycles} repair cycles",
-                        run_dir,
-                        EXIT_BLOCKED,
-                    )
-                test_fix_cycles += 1
-                latest_reason = json.dumps(failed, ensure_ascii=False, indent=2)
-                _stage(f"CLAUDE TEST REPAIR {test_fix_cycles}/{config.max_test_fix_cycles}")
-                fixer_base = config.roles["fixer"].prompt_path.read_text(encoding="utf-8")
-                work = run_claude_role(
-                    config,
-                    "fixer",
+        return run_claude_role(
+            config,
+            "fixer",
+            root,
+            run_dir,
+            prompt,
+            invocation,
+            False,
+            state,
+            resume_session=resume_session,
+        )
+    try:
+        if state.get("next_stage") == "complete":
+            terminal = _read_existing_json(run_dir / "status.json", "status") or {}
+            review_cycles = int(state.get("review_cycles", 0))
+            latest_review_path = run_dir / f"review-{review_cycles:02d}.json"
+            latest_review = _read_existing_json(latest_review_path, "reviewer")
+            can_extend = (
+                additional_review_cycles > 0
+                and terminal.get("status") == "BLOCKED"
+                and latest_review is not None
+                and latest_review.get("status") == "CHANGES_REQUIRED"
+            )
+            if can_extend:
+                state["last_review"] = latest_review_path.name
+                mark("review_fix")
+            else:
+                status = str(terminal.get("status", "BLOCKED"))
+                code = EXIT_APPROVED if status == "APPROVED" else EXIT_BLOCKED
+                return finish(
+                    status, str(terminal.get("summary", "run already complete")), code
+                )
+
+        plan = _read_existing_json(run_dir / "plan.json", "planner")
+        if state.get("next_stage") == "planner":
+            invocation = "plan"
+            mark("planner", invocation)
+            _stage("CODEX PLANNER")
+            planner_base = config.roles["planner"].prompt_path.read_text(encoding="utf-8")
+            plan = run_codex_role(
+                config,
+                "planner",
+                root,
+                run_dir,
+                "plan.json",
+                compose_prompt(planner_base, (("User task", task),)),
+                invocation,
+                False,
+                state,
+            )
+            plan_status = plan.get("status")
+            if plan_status == "BLOCKED":
+                return finish("BLOCKED", planner_blocked_reason(plan), EXIT_BLOCKED)
+            if plan_status != "READY":
+                raise FlowError(f"Planner returned unknown status: {plan_status!r}")
+            mark("worker")
+        if plan is None:
+            raise FlowError("Cannot continue without plan.json")
+
+        plan_text = json.dumps(plan, ensure_ascii=False, indent=2)
+        work = _read_existing_json(run_dir / "worker-01.json", "worker")
+        if state.get("next_stage") == "worker":
+            invocation = "worker-01"
+            resuming = state.get("active_invocation") == invocation
+            mark("worker", invocation)
+            _stage("CLAUDE WORKER")
+            worker_base = config.roles["worker"].prompt_path.read_text(encoding="utf-8")
+            work = run_claude_role(
+                config,
+                "worker",
+                root,
+                run_dir,
+                compose_prompt(
+                    worker_base, (("User task", task), ("Planner output", plan_text))
+                ),
+                invocation,
+                False,
+                state,
+                resume_session=resuming,
+            )
+            if work.get("status") == "BLOCKED":
+                return finish(
+                    "BLOCKED",
+                    "; ".join(work.get("blockers", [])) or work.get("summary", ""),
+                    EXIT_BLOCKED,
+                )
+            mark("checks")
+
+        while int(state.get("review_cycles", 0)) < review_cycle_limit:
+            next_stage = str(state.get("next_stage"))
+            if next_stage == "checks":
+                execution_cycle = int(state.get("execution_cycle", 0)) + 1
+                state["execution_cycle"] = execution_cycle
+                mark("checks", f"checks-{execution_cycle:02d}")
+            else:
+                execution_cycle = int(state.get("execution_cycle", 0))
+
+            if next_stage == "checks":
+                _stage("DETERMINISTIC CHECKS")
+                check_results = run_checks(
+                    checks,
                     root,
                     run_dir,
+                    config.check_timeout_seconds,
+                    execution_cycle,
+                    False,
+                )
+                _atomic_write_json(
+                    run_dir / f"checks-{execution_cycle:02d}.json",
+                    check_results,
+                )
+                failed = [item for item in check_results if item["returncode"] != 0]
+                if failed:
+                    test_fix_cycles = int(state.get("test_fix_cycles", 0))
+                    if test_fix_cycles >= config.max_test_fix_cycles:
+                        return finish(
+                            "BLOCKED",
+                            f"checks still fail after {test_fix_cycles} repair cycles",
+                            EXIT_BLOCKED,
+                        )
+                    state["test_fix_cycles"] = test_fix_cycles + 1
+                    state["last_failed_checks"] = f"checks-{execution_cycle:02d}.json"
+                    mark("test_fix")
+                    continue
+                mark("review")
+                continue
+
+            if next_stage == "test_fix":
+                test_fix_cycles = int(state.get("test_fix_cycles", 0))
+                failed_path = run_dir / str(state.get("last_failed_checks", ""))
+                if not failed_path.is_file():
+                    candidates = sorted(run_dir.glob("checks-[0-9][0-9].json"))
+                    if not candidates:
+                        raise FlowError("Test repair has no recorded failed checks")
+                    failed_path = candidates[-1]
+                latest_reason = failed_path.read_text(encoding="utf-8")
+                invocation = f"test-fix-{test_fix_cycles:02d}"
+                resuming = state.get("active_invocation") == invocation
+                mark("test_fix", invocation)
+                fixer_runner = "CODEX FALLBACK" if use_fallback_fixer else "CLAUDE"
+                _stage(
+                    f"{fixer_runner} TEST REPAIR "
+                    f"{test_fix_cycles}/{config.max_test_fix_cycles}"
+                )
+                fixer_base = config.roles["fixer"].prompt_path.read_text(encoding="utf-8")
+                work = run_fixer(
                     compose_prompt(
                         fixer_base,
                         (
@@ -764,93 +1350,147 @@ def run_flow(
                             ("Failed checks", latest_reason),
                         ),
                     ),
-                    f"test-fix-{test_fix_cycles:02d}",
-                    False,
+                    invocation,
+                    resuming,
                 )
                 if work.get("status") == "BLOCKED":
-                    return _final(
+                    return finish(
                         "BLOCKED",
                         "; ".join(work.get("blockers", [])) or work.get("summary", ""),
-                        run_dir,
                         EXIT_BLOCKED,
                     )
+                mark("checks")
                 continue
 
-            review_cycles += 1
-            _stage(f"CODEX REVIEW {review_cycles}/{config.max_review_cycles}")
-            reviewer_base = config.roles["reviewer"].prompt_path.read_text(encoding="utf-8")
-            review = run_codex_role(
-                config,
-                "reviewer",
-                root,
-                run_dir,
-                "review.json",
-                compose_prompt(
-                    reviewer_base,
-                    (
-                        ("User task", task),
-                        ("Planner output", plan_text),
+            if next_stage == "review":
+                review_cycles = int(state.get("review_cycles", 0)) + 1
+                state["review_cycles"] = review_cycles
+                invocation = f"review-{review_cycles:02d}"
+                mark("review", invocation)
+                check_path = run_dir / f"checks-{execution_cycle:02d}.json"
+                recorded_checks = json.loads(check_path.read_text(encoding="utf-8"))
+                check_results = (
+                    recorded_checks.get("results", [])
+                    if isinstance(recorded_checks, dict)
+                    else recorded_checks
+                )
+                _stage(f"CODEX REVIEW {review_cycles}/{review_cycle_limit}")
+                reviewer_base = config.roles["reviewer"].prompt_path.read_text(encoding="utf-8")
+                review = run_codex_role(
+                    config,
+                    "reviewer",
+                    root,
+                    run_dir,
+                    "review.json",
+                    compose_prompt(
+                        reviewer_base,
                         (
-                            "Deterministic check results",
-                            json.dumps(check_results, ensure_ascii=False, indent=2),
+                            ("User task", task),
+                            ("Planner output", plan_text),
+                            (
+                                "Deterministic check results",
+                                json.dumps(check_results, ensure_ascii=False, indent=2),
+                            ),
                         ),
                     ),
-                ),
-                f"review-{review_cycles:02d}",
-                False,
-            )
-            status = review.get("status")
-            if status == "APPROVED":
-                return _final(
-                    "APPROVED",
-                    str(review.get("summary", "task complete")),
-                    run_dir,
-                    EXIT_APPROVED,
+                    invocation,
+                    False,
+                    state,
                 )
-            if status == "BLOCKED":
-                return _final(
-                    "BLOCKED",
-                    str(review.get("blocked_reason") or review.get("summary", "")),
-                    run_dir,
-                    EXIT_BLOCKED,
-                )
-            if status != "CHANGES_REQUIRED":
-                raise FlowError(f"Reviewer returned unknown status: {status!r}")
-            if review_cycles >= config.max_review_cycles:
-                return _final(
-                    "BLOCKED",
-                    f"review still requires changes after {review_cycles} cycles",
-                    run_dir,
-                    EXIT_BLOCKED,
-                )
+                status = review.get("status")
+                if status == "APPROVED":
+                    return finish(
+                        "APPROVED", str(review.get("summary", "task complete")), EXIT_APPROVED
+                    )
+                if status == "BLOCKED":
+                    return finish(
+                        "BLOCKED",
+                        str(review.get("blocked_reason") or review.get("summary", "")),
+                        EXIT_BLOCKED,
+                    )
+                if status != "CHANGES_REQUIRED":
+                    raise FlowError(f"Reviewer returned unknown status: {status!r}")
+                if review_cycles >= review_cycle_limit:
+                    return finish(
+                        "BLOCKED",
+                        f"review still requires changes after {review_cycles} cycles",
+                        EXIT_BLOCKED,
+                    )
+                state["last_review"] = f"review-{review_cycles:02d}.json"
+                mark("review_fix")
+                continue
 
-            latest_reason = json.dumps(review, ensure_ascii=False, indent=2)
-            _stage(f"CLAUDE REVIEW REPAIR {review_cycles}/{config.max_review_cycles - 1}")
-            fixer_base = config.roles["fixer"].prompt_path.read_text(encoding="utf-8")
-            work = run_claude_role(
-                config,
-                "fixer",
-                root,
-                run_dir,
-                compose_prompt(
-                    fixer_base,
-                    (
-                        ("User task", task),
-                        ("Original plan", plan_text),
-                        ("Review requiring changes", latest_reason),
-                    ),
-                ),
-                f"review-fix-{review_cycles:02d}",
-                False,
-            )
-            if work.get("status") == "BLOCKED":
-                return _final(
-                    "BLOCKED",
-                    "; ".join(work.get("blockers", [])) or work.get("summary", ""),
-                    run_dir,
-                    EXIT_BLOCKED,
+            if next_stage == "review_fix":
+                review_cycles = int(state.get("review_cycles", 0))
+                review_path = run_dir / str(
+                    state.get("last_review", f"review-{review_cycles:02d}.json")
                 )
-        return _final("BLOCKED", "maximum review cycles reached", run_dir, EXIT_BLOCKED)
+                if not review_path.is_file():
+                    raise FlowError("Review repair has no recorded review")
+                review_payload = read_json(review_path, "reviewer")
+                findings = review_payload.get("findings", [])
+                if not isinstance(findings, list) or not findings:
+                    raise FlowError("CHANGES_REQUIRED review has no repairable findings")
+                selected = findings[: config.max_review_findings_per_repair]
+                bounded_review = dict(review_payload)
+                bounded_review["findings"] = selected
+                bounded_review["repair_batch"] = {
+                    "selected": len(selected),
+                    "total": len(findings),
+                    "instruction": "Repair only this severity-ordered batch; later review handles the remainder.",
+                }
+                latest_reason = json.dumps(bounded_review, ensure_ascii=False, indent=2)
+                invocation = f"review-fix-{review_cycles:02d}"
+                resuming = state.get("active_invocation") == invocation
+                mark("review_fix", invocation)
+                fixer_runner = "CODEX FALLBACK" if use_fallback_fixer else "CLAUDE"
+                _stage(
+                    f"{fixer_runner} REVIEW REPAIR "
+                    f"{review_cycles}/{review_cycle_limit - 1}"
+                )
+                fixer_base = config.roles["fixer"].prompt_path.read_text(encoding="utf-8")
+                work = run_fixer(
+                    compose_prompt(
+                        fixer_base,
+                        (
+                            ("User task", task),
+                            ("Original plan", plan_text),
+                            ("Review requiring changes", latest_reason),
+                        ),
+                    ),
+                    invocation,
+                    resuming,
+                )
+                if work.get("status") == "BLOCKED":
+                    return finish(
+                        "BLOCKED",
+                        "; ".join(work.get("blockers", [])) or work.get("summary", ""),
+                        EXIT_BLOCKED,
+                    )
+                mark("checks")
+                continue
+
+            raise FlowError(f"Unknown persisted next stage: {next_stage!r}")
+
+        return finish("BLOCKED", "maximum review cycles reached", EXIT_BLOCKED)
+    except KeyboardInterrupt:
+        _save_run_state(run_dir, state, status="INTERRUPTED")
+        _write_status(
+            run_dir,
+            "INTERRUPTED",
+            "controller interrupted; rerun with --resume-run",
+            stage=str(state.get("next_stage")),
+        )
+        raise
+    except FlowError as exc:
+        _save_run_state(run_dir, state, status="ERROR", error=str(exc))
+        _write_status(
+            run_dir,
+            "ERROR",
+            str(exc),
+            stage=str(state.get("next_stage")),
+        )
+        raise
     finally:
         try:
             lock_path.unlink()
@@ -977,8 +1617,43 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-checks", action="store_true")
     parser.add_argument("--check", action="append", default=[])
-    parser.add_argument("task", nargs="+", help="implementation task")
+    parser.add_argument(
+        "--resume-run",
+        metavar="RUN_ID",
+        help="continue an existing run without repeating completed stages",
+    )
+    parser.add_argument(
+        "--fresh-stage",
+        action="store_true",
+        help="with --resume-run, retry the interrupted stage in a new model session",
+    )
+    parser.add_argument(
+        "--additional-review-cycles",
+        type=int,
+        default=0,
+        metavar="N",
+        help="explicitly extend a review-blocked resumed run by N bounded cycles",
+    )
+    parser.add_argument(
+        "--use-fallback-fixer",
+        action="store_true",
+        help="use the configured Codex fixer for this run/resume instead of Claude",
+    )
+    parser.add_argument(
+        "--retry-checks",
+        action="store_true",
+        help="after correcting an operator-supplied check, rerun checks without a code repair",
+    )
+    parser.add_argument("task", nargs="*", help="implementation task")
     args = parser.parse_args(arguments)
+    if args.fresh_stage and not args.resume_run:
+        parser.error("--fresh-stage requires --resume-run")
+    if args.additional_review_cycles < 0:
+        parser.error("--additional-review-cycles must be zero or positive")
+    if args.use_fallback_fixer and not args.resume_run:
+        parser.error("--use-fallback-fixer requires --resume-run")
+    if args.retry_checks and not args.resume_run:
+        parser.error("--retry-checks requires --resume-run")
     config, root = _config_and_root(args.config)
     return run_flow(
         config,
@@ -988,6 +1663,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.dry_run,
         parse_extra_checks(args.check),
         args.no_checks,
+        args.resume_run,
+        args.fresh_stage,
+        args.additional_review_cycles,
+        args.use_fallback_fixer,
+        args.retry_checks,
     )
 
 

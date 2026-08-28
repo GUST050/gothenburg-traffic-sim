@@ -1,5 +1,7 @@
 import pytest
+import json
 
+from traffic_sim.simulation import independent_daily as independent_daily_module
 from traffic_sim.core.closure_calendar import generate_closure_schedules
 from traffic_sim.core.contracts import (
     ClosureSchedule,
@@ -8,8 +10,12 @@ from traffic_sim.core.contracts import (
     write_closure_search_spec,
 )
 from traffic_sim.simulation.finalist_decision import (
+    CanonicalObservationDigest,
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    TIMEOUT_IDENTITY_SCHEMA,
     CandidateEvidence,
     PairedObservation,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.independent_daily import (
     IndependentDailyRunner,
@@ -306,6 +312,106 @@ def test_larger_cached_replication_set_can_serve_smaller_request(tmp_path):
     assert timing["worker_seconds"] == 0.0
 
 
+class FakeDailyRunnerWithLaunchTelemetry(FakeDailyRunner):
+    """A `daily_runner` that exposes the optional exact-launch S0 hook."""
+
+    def __init__(self, *, telemetry=None, raise_on_call=False):
+        super().__init__()
+        self._telemetry = telemetry or {
+            "pilot": {"attempts": 3, "timeouts": 0, "other_outcomes": 3},
+            "finalist": {"attempts": 1, "timeouts": 1, "other_outcomes": 0},
+        }
+        self._raise_on_call = raise_on_call
+
+    def launch_telemetry_snapshot(self):
+        if self._raise_on_call:
+            raise RuntimeError("backend telemetry unavailable")
+        return self._telemetry
+
+
+def test_timing_snapshot_includes_exact_launch_telemetry_when_the_backend_has_it(
+        tmp_path):
+    spec = _spec()
+    schedule = generate_closure_schedules(spec)[0]
+    child = FakeDailyRunnerWithLaunchTelemetry()
+    runner = IndependentDailyRunner(
+        spec, daily_runner=child, cache_root=tmp_path / "daily-cache")
+    runner.prepare((schedule,))
+    runner.run_candidate(
+        schedule, target_repetitions={"q10": 1, "q50": 1, "q90": 1},
+        existing=None, stage="pilot")
+    snapshot = runner.timing_snapshot()
+    assert snapshot["exact_launch_telemetry"] == {
+        "pilot": {"attempts": 3, "timeouts": 0, "other_outcomes": 3},
+        "finalist": {"attempts": 1, "timeouts": 1, "other_outcomes": 0},
+    }
+
+
+def test_timing_snapshot_omits_the_key_without_the_optional_hook(tmp_path):
+    """A backend without the hook (e.g. a legacy/fake runner) is tolerated."""
+    spec = _spec()
+    schedule = generate_closure_schedules(spec)[0]
+    child = FakeDailyRunner()  # no launch_telemetry_snapshot method
+    runner = IndependentDailyRunner(
+        spec, daily_runner=child, cache_root=tmp_path / "daily-cache")
+    runner.prepare((schedule,))
+    runner.run_candidate(
+        schedule, target_repetitions={"q10": 1, "q50": 1, "q90": 1},
+        existing=None, stage="pilot")
+    assert "exact_launch_telemetry" not in runner.timing_snapshot()
+
+
+def test_a_broken_launch_telemetry_hook_fails_open(tmp_path):
+    """Diagnostic-only: a raising hook must not break a real search."""
+    spec = _spec()
+    schedule = generate_closure_schedules(spec)[0]
+    child = FakeDailyRunnerWithLaunchTelemetry(raise_on_call=True)
+    runner = IndependentDailyRunner(
+        spec, daily_runner=child, cache_root=tmp_path / "daily-cache")
+    runner.prepare((schedule,))
+    runner.run_candidate(
+        schedule, target_repetitions={"q10": 1, "q50": 1, "q90": 1},
+        existing=None, stage="pilot")
+    assert "exact_launch_telemetry" not in runner.timing_snapshot()
+
+
+def test_durable_launch_sidecar_counts_exception_termination_and_retry_once(
+        tmp_path):
+    """A final worker result is optional; launched attempts are not."""
+    isolated = IsolatedDailySumoRunner(
+        FakeDailyRunner(), unit_workers=1, worker_invoker=lambda _request: None)
+    sidecar = tmp_path / "telemetry.ndjson"
+    base = {
+        "candidate_id": "candidate-a", "work_date": "2027-01-01",
+        "stage": "pilot", "variant": "q50", "seed": 1000,
+        "timed_out": False,
+    }
+    first_records = [
+        {**base, "attempt": 1, "outcome": "in_progress"},
+        {**base, "attempt": 1, "outcome": "unrecognized_exception"},
+    ]
+    sidecar.write_text(
+        "".join(json.dumps(record) + "\n" for record in first_records),
+        encoding="utf-8")
+    isolated._merge_launch_sidecar(sidecar)
+
+    # A recovery uses a fresh subprocess whose local attempt counter starts
+    # at one again. The parent must rebind it to attempt two, even when that
+    # retry is killed before publishing a final result.
+    sidecar.write_text(
+        json.dumps({**base, "attempt": 1, "outcome": "in_progress"}) + "\n",
+        encoding="utf-8")
+
+    isolated._merge_launch_sidecar(sidecar)
+
+    assert isolated.launch_telemetry_snapshot()["pilot"] == {
+        "attempts": 2, "timeouts": 0, "other_outcomes": 2}
+    assert isolated.launch_records_snapshot() == [
+        {**base, "attempt": 1, "outcome": "unrecognized_exception"},
+        {**base, "attempt": 2, "outcome": "worker_terminated"},
+    ]
+
+
 def test_non_object_cache_is_a_safe_miss_and_is_repaired(tmp_path):
     spec = _spec(
         permitted_date_start="2027-01-01",
@@ -466,6 +572,195 @@ def test_daily_hard_failure_disqualifies_parent_without_seed_fabrication():
     assert combined.hard_failures == (
         "2027-01-01:no_viable_detour",
     )
+
+
+def _disruption_record(variant, *, vehicles_affected=5, vehicles_no_detour=0,
+                        added_vehicle_hours=1.0, added_metres_total=10.0):
+    return {
+        "demand_variant": variant,
+        "vehicles_affected": vehicles_affected,
+        "vehicles_considered": vehicles_affected,
+        "vehicles_no_detour": vehicles_no_detour,
+        "added_vehicle_hours": added_vehicle_hours,
+        "added_metres_total": added_metres_total,
+    }
+
+
+def test_daily_timeout_is_undecided_not_silently_a_hard_failure_and_keeps_disruption():
+    """Regression for the cost-order v5 root cause.
+
+    v5's exhaustive arm silently dropped disruption on ANY hard failure
+    (including a timeout) while the cost-ordered ledger kept it, so the two
+    arms judged a timed-out candidate on different fields and picked
+    different finalists. A timed-out daily unit must still surface
+    deterministic disruption for the whole parent, AND must be visible as an
+    explicit undecided timeout rather than an ordinary disqualification.
+    """
+    spec = _spec(
+        permitted_date_start="2027-01-01",
+        permitted_date_end="2027-01-02",
+    )
+    parent = next(
+        item for item in generate_closure_schedules(spec)
+        if item.day_count == 2 and item.daily_start == "15:00"
+    )
+    units, _ = decompose_schedules(spec, (parent,))
+    disruption = tuple(
+        _disruption_record(variant) for variant in ("q10", "q50", "q90")
+    )
+    daily_timeout = TimeoutIdentity(
+        schema=TIMEOUT_IDENTITY_SCHEMA,
+        candidate_id=units[0].schedule.schedule_id,
+        work_date=units[0].identity["work_date"],
+        search_content_key=units[0].schedule.search_content_key,
+        variant="q50",
+        seed=1000,
+        attempt=1,
+        threshold_s=300.0,
+        retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+        search_provenance_key="study",
+    )
+    evidence = {
+        units[0].unit_id: CandidateEvidence(
+            candidate_id=units[0].schedule.schedule_id,
+            hard_failures=(
+                "sumo_execution_failure:q50:1000:sumo timed out after 300s "
+                "(seed 1000)",
+            ),
+            disruption=disruption,
+            timeout_undecided=(daily_timeout,),
+        ),
+        units[1].unit_id: CandidateEvidence(
+            candidate_id=units[1].schedule.schedule_id,
+            observations=(PairedObservation(
+                candidate_id=units[1].schedule.schedule_id,
+                demand_variant="q10",
+                seed=1000,
+                baseline_time_loss_s=1,
+                candidate_time_loss_s=2,
+                matched_baseline_id="b",
+                provenance_key="p",
+            ),),
+            disruption=disruption,
+        ),
+    }
+
+    combined = aggregate_daily_evidence(parent, units, evidence)
+
+    assert combined.observations == ()
+    assert not combined.eligible
+    assert combined.hard_failures == (
+        "2027-01-01:sumo_execution_failure:q50:1000:sumo timed out after "
+        "300s (seed 1000)",
+    )
+    # The bug: this used to be (), losing the deterministic disruption a
+    # timed-out unit still computed.
+    assert combined.disruption != ()
+    assert len(combined.disruption) == 3
+    for record in combined.disruption:
+        # Summed across both units, one per unit contributing the same
+        # per-variant record.
+        assert record["vehicles_affected"] == 10
+        assert record["added_vehicle_hours"] == pytest.approx(2.0)
+    # No date-prefixing here any more: the identity already names its own
+    # work_date (see `monthly_sumo._timeout_identity`), so aggregation just
+    # carries the SAME validated record through unchanged.
+    assert combined.timeout_undecided == (daily_timeout,)
+    assert combined.timeout_undecided[0].work_date == "2027-01-01"
+    assert combined.has_undecided_timeout
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("seed", True),
+    ("attempt", 1.5),
+    ("threshold_s", "300"),
+    ("retry_protocol", "unknown_retry_v1"),
+    ("work_date", "not-a-date"),
+])
+def test_daily_cache_deserialization_rejects_malformed_timeout_fields(
+        field, value):
+    """The daily cache must not normalize malformed timeout-v3 records."""
+    raw_timeout = {
+        "schema": TIMEOUT_IDENTITY_SCHEMA,
+        "candidate_id": "candidate-a",
+        "work_date": "2027-01-01",
+        "search_content_key": "search-key",
+        "variant": "q50",
+        "seed": 1000,
+        "attempt": 1,
+        "threshold_s": 300.0,
+        "retry_protocol": RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+        "search_provenance_key": "study",
+    }
+    raw_timeout[field] = value
+    with pytest.raises(ValueError, match="timeout identity"):
+        independent_daily_module._evidence_from_dict({
+            "candidate_id": "candidate-a",
+            "observations": [],
+            "hard_failures": [],
+            "disruption": [],
+            "timeout_undecided": [raw_timeout],
+            "canonical_observation_digests": [],
+        })
+
+
+def test_daily_cache_evidence_rejects_missing_timeout_population():
+    raw = {
+        "candidate_id": "candidate-a",
+        "observations": [],
+        "hard_failures": [],
+        "disruption": [],
+        "timeout_undecided": [],
+        "canonical_observation_digests": [],
+    }
+    del raw["timeout_undecided"]
+    with pytest.raises(ValueError, match="fields are invalid"):
+        independent_daily_module._evidence_from_dict(raw)
+
+
+def test_daily_cache_round_trip_preserves_canonical_observation_digest(tmp_path):
+    spec = _spec()
+    schedule = generate_closure_schedules(spec)[0]
+    first = IndependentDailyRunner(
+        spec, daily_runner=FakeDailyRunner(), cache_root=tmp_path / "cache")
+    first.prepare((schedule,))
+    unit = next(iter(first._units.values()))
+    digest = CanonicalObservationDigest(
+        candidate_id=unit.schedule.schedule_id,
+        work_date=unit.identity["work_date"], variant="q10", seed=1000,
+        sha256="b" * 64)
+    first._save_cached(unit, CandidateEvidence(
+        candidate_id=unit.schedule.schedule_id,
+        canonical_observation_digests=(digest,)))
+
+    resumed = IndependentDailyRunner(
+        spec, daily_runner=FakeDailyRunner(), cache_root=tmp_path / "cache")
+    resumed.prepare((schedule,))
+    resumed_unit = next(iter(resumed._units.values()))
+    loaded = resumed._load_cached(resumed_unit)
+    assert loaded is not None
+    assert loaded.canonical_observation_digests == (digest,)
+
+
+def test_worker_result_rejects_missing_timeout_and_unknown_envelope_fields():
+    result = {
+        "schema": "independent_daily_worker_result_v3",
+        "evidence": {
+            "candidate_id": "candidate-a", "observations": [],
+            "hard_failures": [], "disruption": [], "timeout_undecided": [],
+            "canonical_observation_digests": [],
+        },
+        "launch_telemetry": {},
+        "launch_records": [],
+    }
+    del result["evidence"]["timeout_undecided"]
+    with pytest.raises(ValueError, match="fields are invalid"):
+        independent_daily_module._evidence_from_worker_result(result)
+
+    result["evidence"]["timeout_undecided"] = []
+    result["unknown"] = True
+    with pytest.raises(ValueError, match="worker result is malformed"):
+        independent_daily_module._evidence_from_worker_result(result)
 
 
 def test_cached_daily_hard_failure_is_terminal_and_reused(tmp_path):

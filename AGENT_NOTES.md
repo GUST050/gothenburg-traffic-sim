@@ -124,9 +124,12 @@ which model may continue. See `AGENTS.md`.
   not an active release.
   Active immutable release: golden-2025-09-16-7day-v1. The map-to-sensor audit
   passes on all seven directed sensor edges.`
-- Live operation: `Monthly search ui-monthly-13lhsoy-5d is RUNNING on main for
-  forecast 2027-09-01..2027-09-30 on edge 96527131_26842526_0, min=max=5
-  workdays (1,690 periods, 1,950 daily units). Older runs superseded:
+- Live operation: `Monthly search ui-monthly-13lhsoy-5d targets forecast
+  2027-09-01..2027-09-30 on edge 96527131_26842526_0, min=max=5 workdays
+  (1,690 periods, 1,950 daily units). It is OPERATOR-STOPPED as of
+  2026-08-27 and has NOT been restarted (see the current handoff above and
+  "Suggested next action" below for the resumable state); it must not be
+  restarted as part of unrelated benchmark/repair work. Older runs superseded:
   ui-monthly-euc9qp stopped at 476/1,776 (July window), ui-monthly-13lhsoy
   (min=4/max=5) abandoned by user decision after 144 four-day units, none of
   which a five-day search can reuse because unit identity binds
@@ -543,7 +546,371 @@ which model may continue. See `AGENTS.md`.
   taken automatically. Retain the qualified single-write JSON
   path. If interactive closure work continues, target the measured SUMO or
   disruption phase against the 10.359 s p95 reference. Keep annual warming
-  inactive and rejected pools isolated.`
+  inactive and rejected pools isolated. For the cost-ordered-benchmark
+  continuation: design and freeze a v6 suite registration whose gate
+  thresholds encode the plan's >=30% aggregate-exact-attempts and >=30%
+  aggregate-awake-active-wall-time reduction requirements (v5's frozen gate
+  only requires sumo_verifications_saved_minimum: 1), declare the
+  timeout/retry protocol and isolated-cache-snapshot bindings in the
+  registration, then run it once bounded in fresh isolated roots. Do not run
+  or resume the full monthly campaign or annual warming while doing this.`
+- Cost-ordered-benchmark timeout/isolation continuation (2026-08-28): `A
+  prior worker session was interrupted mid-edit adding a versioned SUMO
+  timeout/undecided model and isolated-process arm execution to the
+  cost-ordered-vs-exhaustive benchmark, leaving it dirty and unreviewed.
+  This session reviewed it in full and confirms it is correct: a SUMO
+  timeout now becomes a structured `timeout_undecided` identity that forces
+  `pilot_selection`/`finalist_decision` to `status: "inconclusive"` instead
+  of silently excluding the candidate (the v5 defect this closes), and each
+  benchmark arm now runs in its own process/process group at a frozen
+  1-daily-worker/1-seed-worker/1-SUMO-slot shape
+  (`tools/product_arm.run_arm_isolated`), with `--no-isolate-arms` kept as
+  a development-only escape hatch a registered run must never pass. Two real
+  defects were found and fixed, each pinned by a test: (1) three pre-existing
+  `tests/test_cost_ordered_benchmark_run.py` tests drove `bench.main()`
+  through its `wired` in-process `build_arm` monkeypatch without
+  `--no-isolate-arms`, so the isolate-arms-by-default change made them
+  silently run a real (failing) subprocess instead of the intended fake-arm
+  path; fixed by adding the flag to match this file's other `wired` tests.
+  (2) `tools/cost_ordered_benchmark_suite.py`'s `run_suite` never varied arm
+  order across suite cases even though `run_benchmark` supports
+  `counterbalance`, leaving the isolation plan's cross-case counterbalance
+  requirement unmet; fixed with `counterbalance=bool(index % 2)` and a new
+  test, since `run_suite`'s execution path had no test coverage at all
+  before. Files changed this session: `traffic_sim/simulation/
+  cost_ordered_execution.py, finalist_decision.py, independent_daily.py,
+  monthly_sumo.py, pilot_selection.py` (pre-existing dirty diff, reviewed
+  not rewritten); `tools/product_arm.py, cost_ordered_benchmark.py`
+  (pre-existing dirty diff, reviewed not rewritten);
+  `tools/cost_ordered_benchmark_suite.py` (counterbalance fix, new this
+  session); `tests/test_cost_ordered_benchmark_run.py` (three
+  `--no-isolate-arms` fixes); `tests/test_cost_ordered_benchmark_suite.py`
+  (new counterbalance test); `tests/test_product_arm.py` (new file, already
+  present from the interrupted session, reviewed only). Checks: every
+  planner-suggested focused suite plus the full set of tests importing the
+  six touched production modules — 1,982 tests, 146 failing, all confirmed
+  via `git stash` against clean HEAD to be PRE-EXISTING frozen-contract
+  source-fingerprint/schema-version drift unrelated to this diff (e.g.
+  `run_scenario.py`'s recorded digest, `monthly_prefix_evidence_v7` vs a
+  live `v3`) and left untouched as out of scope. `make lint` and `git diff
+  --check` clean; `validation/*.json` v1-v5 unchanged (zero diff). NOT done:
+  no v6 registration/outcome was designed or frozen, and no bounded
+  benchmark was run — deliberately, because a registration is meant to be
+  immutable once frozen and the existing v5 suite gate is materially weaker
+  than the plan's 30% reduction requirement, so freezing a v6 without first
+  deciding those thresholds would either under-specify the gate or need to
+  be redone.`
+- Cost-ordered-benchmark review repair, second pass same day (2026-08-28):
+  `The bullet directly above concluded "this session reviewed it in full and
+  confirms it is correct" — that was premature. An independent review of the
+  same diff found six real defects, and this pass fixed all six, each pinned
+  by a new or updated test:
+  (1) `monthly_search.evidence_to_dict`/`evidence_from_dict` and three
+  `CandidateEvidence(...)` sites in `independent_daily.py` (cache rebind on
+  read, cache save, target-trim) silently dropped `timeout_undecided` on
+  every round trip — a serialize-then-replay proof showed
+  `serialized_has_timeout=True` but `replayed_timeout=()` before the fix.
+  (2) Both benchmark arms shared ONE `daily-results` cache directory
+  (`product_arm.build_arm` derived it from `daily_cost_cache`'s parent for
+  both arms unconditionally), so whichever arm ran second could silently
+  reuse the first arm's real SUMO evidence, corrupting exactly the
+  attempt-count/wall-time numbers a benchmark exists to measure — fixed with
+  `_isolated_daily_results_cache_root` (clones a content-digest-verified
+  snapshot into a separate root per arm) plus a hard `run_benchmark` refusal
+  if both arms ever resolve to the same root.
+  (3) `_candidate_costs` ignored `timeout_undecided` entirely, and the
+  ledger-vs-exhaustive comparison never checked the two populations were
+  the SAME set (a silently truncated ledger would have passed) — fixed with
+  new `timeout_outcomes_identical` and `ledger_population_complete` gates,
+  both frozen into `GATE_THRESHOLDS`.
+  (4) `--no-isolate-arms` was a real, reachable CLI flag on `--run` — the
+  exact shared-process shape the v5 remediation exists to prevent — removed
+  from the command line entirely; `main()`'s `--run` body was extracted into
+  `_run_registered`/`_execute_and_publish`, which always isolates, and the
+  three `wired` tests that previously passed `--no-isolate-arms` to
+  `bench.main()` now call `_run_registered(..., isolate_arms=False)`
+  directly as an explicit non-CLI, non-evidence test seam.
+  (5) `peak_rss_bytes` was `max(this process's own peak, one already-reaped
+  child's peak)`, never a simultaneous process-tree total, and reaping only
+  ran on the timeout branch — fixed with `ProcessTreeRSSSampler` (a
+  background thread sampling the whole OS process group's live RSS via
+  `ps -eo pid=,pgid=,rss=`, filtered in Python rather than trusting `ps -g`
+  to mean the same thing on macOS and Linux) and
+  `_ensure_process_group_reaped`, now verified on every isolated-arm exit
+  path — success, failure, AND timeout — not only after a timeout.
+  (6) This file's "Live operation" bullet (further down, historical) said
+  the campaign "is RUNNING" while the handoff above it said
+  OPERATOR-STOPPED; corrected in place.
+  Verified: the full targeted suite for every touched module passed
+  (`tests/test_product_arm.py`, `test_cost_ordered_benchmark*.py`,
+  `test_monthly_search.py`, `test_independent_daily.py`,
+  `test_monthly_sumo.py`, `test_pilot_selection.py`,
+  `test_finalist_decision.py`, `test_cost_ordered_execution*.py`), pylint on
+  every changed file was clean, and `git diff --check` was clean. STILL NOT
+  DONE, unchanged from the bullet above: no v6 registration/outcome was
+  designed or frozen, and no bounded benchmark was run — that remains
+  separate, larger work gated on deciding the 30% thresholds, not a defect
+  in what already exists.`
+- Cost-ordered-benchmark review repair, third pass, narrow continuation
+  (2026-08-28): `The pass directly above was itself interrupted mid-edit
+  (a session rate limit hit while running its own verification), leaving
+  `_timeout_identity`'s two production call sites in `monthly_sumo.py`
+  (`_observations_for`'s serial and concurrent loops) calling the v2
+  structured-identity function without its two new required keyword
+  arguments — every timeout in a live run would have raised
+  `TypeError: _timeout_identity() missing 2 required keyword-only
+  arguments`. Fixed both call sites (`candidate_id=schedule.schedule_id,
+  provenance_key=self.study_provenance_key`) and updated the one test that
+  still asserted the retired v1 bare-string format
+  (`test_sumo_timeout_is_recorded_as_candidate_failure`) to assert the v2
+  `timeout_v2:candidate=...:variant=...:seed=...:attempt=1:threshold_s=300:
+  provenance=...` schema instead. With that fixed, addressed the five
+  findings review-02 left open (ordered-exhaustive execution, registered-run
+  isolation and the fail-closed process census were already correct in the
+  diff above and are unchanged here):
+  (1) STRUCTURED TIMEOUT EVIDENCE — confirmed `TIMEOUT_IDENTITY_SCHEMA =
+  "timeout_v2"` already carries candidate/variant/seed/attempt/threshold/
+  provenance as a self-describing `key=value` string (kept a `str` rather
+  than a JSON object deliberately — `timeout_undecided` is a hashable
+  `tuple[str, ...]` reused across `pilot_selection`/`finalist_decision`/JSON
+  round-trips, and widening its element type would be an unrelated breaking
+  schema change); only the call-site bug above was actually broken.
+  (2) EXACT-ATTEMPT/AWAKE-TIME TELEMETRY — new. `ArchivedDemandSumoRunner`
+  now owns `self.launch_telemetry` (`{"pilot"|"finalist": {"attempts",
+  "timeouts", "other_outcomes"}}`, lock-protected), bumped exactly once per
+  real SUMO launch at the actual seam in `_observations_for`'s two loops
+  (serial and `ThreadPoolExecutor`), for every outcome including hard
+  failures and timeouts — a daily-unit cache hit in `IndependentDailyRunner`
+  never reaches this class at all, so it cannot be double-counted.
+  `MonthlyDemandResolverRunner.launch_telemetry_snapshot()` sums it across
+  every per-archive child runner; `IndependentDailyRunner.timing_snapshot()`
+  pulls it fresh (fail-open) under the existing `exact_launch_telemetry` key
+  in its already-published S0 diagnostic snapshot.
+  `tools/product_arm.run_arm` now reads that snapshot before cleanup and
+  also reads the workspace manifest's `active_elapsed_s`/
+  `active_elapsed_basis` (the pre-existing `awake_monotonic_segments_v1`
+  basis in `search_workspace.py`) into its returned dict.
+  `cost_ordered_benchmark.compare_ordered_exhaustive` now sums real pilot+
+  finalist attempts across both arms for `exact_attempts_reduction_fraction`
+  /`_meets_30_percent`, and awake-active seconds for
+  `awake_active_time_reduction_fraction`/`_meets_30_percent`, replacing the
+  old `sumo_pilot_count`-only approximation (kept, renamed, for readability).
+  Both fields report `None` rather than a false `0%` when a backend
+  publishes no telemetry. Test-only: `FakeRunner` in
+  `test_cost_ordered_execution.py` gained an additive, opt-in
+  `timing_snapshot()` mirroring the real seam, exercised by six new
+  `TestOrderedExhaustiveComparison` tests.
+  (3) INDEPENDENTLY RECOMPUTABLE STOP PROOF — new
+  `_independently_recompute_stop_proof` in `cost_ordered_benchmark.py`
+  recomputes `verified_prefix_digest`/`evidence_digest` from the published
+  `cursor.verified`/`cursor.viable` fields (a SEPARATE part of the same
+  execution record `stop_proof()` did not write), recomputes the undecided
+  set from the per-candidate `timeout_undecided` evidence
+  `_candidate_costs` already parses (cost-order v5's exact failure mode: a
+  timeout dropped from the proof while still present in the evidence), and
+  for a band stop cross-checks `first_unexamined_added_vehicle_hours`
+  against the published `cost-ledger.json` file. `_stop_proof_valid` gained
+  an optional `arm=` parameter (backward compatible; omitting it keeps the
+  old proof-internal arithmetic checks only) and `compare_arms` now always
+  passes it. Six new tamper tests
+  (`TestTheStopProofIsIndependentlyRecomputed`) each flip exactly one bound
+  field on a REAL generated proof and confirm it is caught. Full identity-
+  key recomputation from the raw policy/provider-identity objects was
+  judged out of proportion for this pass (would need plumbing the policy
+  object through `compare_arms`'s call chain for a value the ledger/cursor/
+  evidence cross-checks above already make hard to falsify undetected) and
+  is left as a smaller possible follow-up, not claimed done.
+  (4) FRESH CACHE SNAPSHOTS — the cross-CASE reuse review-02 flagged was
+  already fixed upstream (`cost_ordered_benchmark_suite.py` suffixes
+  `daily_cost_cache` per case). Added the missing piece: new
+  `_assert_fresh_snapshot_pair_matches`, called by both `run_benchmark` and
+  `run_ordered_exhaustive_comparison` right after their existing
+  same-root-is-refused check, asserts the two arms' PRE-RUN cache digests
+  are equal whenever NEITHER arm's per-arm root pre-existed the call (a
+  genuinely fresh clone pair must come from one identical source snapshot);
+  a resumed run reusing its own interrupted arm root is exempt by design,
+  matching review-02's own carve-out. Three new tests
+  (`TestFreshSnapshotPairMatches`) cover match/drift/resume-exempt.
+  (5) COMPLETE SEMANTIC COMPARISON — `run_benchmark` and
+  `run_ordered_exhaustive_comparison` used to build each arm with
+  `study_provenance_key=f"cost-ordered-benchmark-{arm}"`, and that value is
+  stamped onto every `PairedObservation.provenance_key` — semantic evidence
+  content that gets cached and is supposed to be comparable across arms —
+  so the two arms' evidence differed by an arm-name label baked into
+  content, and neither `_candidate_costs` nor `compare_arms` ever looked at
+  the field to notice either way. Confirmed `study_provenance_key` is
+  already excluded from real cache identity
+  (`IndependentDailyRunner._stable_backend_identity` strips it before
+  hashing a daily unit's key, `_baseline_cache_key` never reads it), so
+  unifying it changes no caching behaviour. Both arms now build with one
+  frozen `BENCHMARK_STUDY_PROVENANCE_KEY = "cost-ordered-benchmark"`; which
+  arm ran is still available from `run_arm`'s own `"arm"` key, the
+  workspace path and the cache-snapshot root — orchestration facts that
+  were never inside evidence to begin with. New test
+  `test_both_arms_run_under_one_semantic_study_provenance_key`.
+  Verified this pass: the full targeted suite (`test_monthly_sumo.py`,
+  `test_independent_daily.py`, `test_monthly_search.py`,
+  `test_monthly_demand.py`, `test_pilot_selection.py`,
+  `test_finalist_decision.py`, `test_cost_ordered_search.py`,
+  `test_cost_ordered_execution*.py`, `test_search_workspace.py`,
+  `test_product_arm.py`, `test_cost_ordered_benchmark*.py`,
+  `test_ai_flow.py`) — 550 passed, 1 skipped; pylint on every touched
+  production file (found and fixed one genuine new finding of its own, a
+  `missing-kwoa` in `run_ordered_exhaustive_comparison`'s arm dispatch,
+  by matching `run_benchmark`'s existing explicit if/else pattern instead
+  of a runtime `run = pa.run_arm_isolated if isolate_arms else pa.run_arm`
+  dict-kwargs call pylint could not verify) was clean; `git diff --check`
+  clean; every changed `.py` file parses. `.ai-flow/runs/
+  20260828-092722-2676/` and `validation/*.json` v1-v5 are untouched (zero
+  diff). One PRE-EXISTING flaky test unrelated to this diff was observed
+  under load (`TestProcessTreeRSSSampling::
+  test_a_lone_sleeping_process_is_measured`, a `ps`-timing race) and passes
+  reliably in isolation — not touched, out of scope. STILL NOT DONE,
+  unchanged and explicitly out of scope for this pass per the user's
+  request: no v6 registration/outcome was designed or frozen, no bounded
+  benchmark or monthly campaign was created or run, nothing was committed
+  or pushed.`
+  FOURTH PASS, SAME DAY (2026-08-28): the pass above's own "550 passed"
+  claim did not survive a fresh re-run: `test_cost_ordered_benchmark_
+  discovery.py::TestItRefusesToFreezeAnEmptyRegistration::
+  test_discover_then_run_is_one_unbroken_pipeline` failed with
+  `cache_hits_consistent`/`candidate_costs_field_identical`/
+  `final_decision_identical`/`hard_failures_identical`/
+  `timeout_outcomes_identical` all false. Root cause: `run_benchmark`
+  (`cost_ordered_benchmark.py`) resolved `daily_cost_cache =
+  ROOT / roots["daily_cost_cache"]` against the module-global `ROOT`
+  constant instead of its own `data_root` parameter — the ONE output path
+  in that function not re-based onto a test-controllable root (contrast
+  the sibling `exhaustive`/`cost_ordered` roots, which already re-base
+  onto `workspace_root`). Every test that calls this production path with
+  an isolated `data_root=tmp_path` (as this capstone test does) therefore
+  still cloned its daily-results cache into the REAL repository's
+  `runs/closure-search-benchmark-daily-costs-daily-results-{exhaustive,
+  cost_ordered,restart_probe}` — confirmed by ctime (today) vs mtime
+  (preserved from the real warm-cache source it cloned) on those
+  directories. The prior pass's own execution of this same test is what
+  created that destination for the first time (this run is not idempotent
+  and left no cleanup); once it existed, `_isolated_daily_results_cache_
+  root`'s correct-by-design refusal of a pre-existing destination then
+  permanently failed every subsequent invocation, including this one and
+  presumably an unreported later re-run inside the prior pass itself
+  before it hit its session limit. Fixed by moving the `daily_cost_cache`
+  computation after `data_root = Path(data_root).resolve()` and resolving
+  it against `data_root` instead of `ROOT` — `data_root` defaults to
+  `ROOT` (see `--data-root`'s CLI default), so a real, no-flags production
+  run is byte-for-byte unaffected; only a caller that explicitly binds a
+  different `data_root` (i.e. tests) now also gets an isolated cache root.
+  No production `runs/` directory was created, moved or deleted by this
+  fix or by verifying it — the pre-existing real evidence under `runs/`
+  (including the now-orphaned, harmless leftover clone directories the
+  prior pass created) was inspected via `stat`/`find -newer` only, never
+  written to. Re-verified after the fix: the full targeted suite (same
+  file list as the third pass, plus `test_ai_flow.py`) — 545 passed,
+  1 skipped in the primary battery, and the single capstone test alone
+  passes on a second consecutive invocation (confirming the fix is
+  idempotent, not merely lucky once); pylint on the one touched file
+  clean; `git diff --check` clean; `.ai-flow/runs/20260828-092722-2676/`
+  and `validation/*.json` v1-v5 remain byte-identical; no v6 file
+  appeared anywhere. STILL NOT DONE, unchanged: no v6 registration/
+  outcome, no bounded benchmark or monthly campaign, no commit or push.`
+- Review-02 selected repair batch, fifth pass (2026-08-28): `Closed the three
+  supplied findings only. Isolated daily workers now durably publish launch
+  starts before SUMO and final classifications afterwards; the parent recovers
+  unmatched starts as worker termination and rebinds retries from new worker
+  processes into one exact-attempt sequence. The cost-order stop proof now
+  digests complete verified pilot evidence and the benchmark independently
+  recomputes it from integrity-verified candidate artifacts. Semantic
+  comparison requires exact expected pilot/finalist populations, complete
+  identity-bearing cache-event subset evidence and complete robust-decision
+  equality; malformed artifacts raise instead of disappearing. New tests cover
+  exception/termination/retry accounting, five evidence-class tampers,
+  missing stages, malformed artifacts, cache identities and decision payloads.
+  Focused process-free suite: 466 passed, 1 skipped. Broader selected suite:
+  504 passed, 1 skipped, 7 sandbox-only failures because `ps` is denied; the
+  census correctly failed closed. No v6, SUMO benchmark, monthly campaign,
+  commit or push.`
+- Review-02 supplied repair follow-up, sixth pass (2026-08-28): `Repaired only
+  the two remaining code findings and recorded verification. In
+  tools/cost_ordered_benchmark.py, independent stop-proof validation now loads
+  and validates the cursor, reconstructs the k-th viable cutoff from complete
+  pilot evidence plus the integrity-checked ledger, derives the policy band,
+  schema, examined/total/unexamined counts, terminal stop reason, first
+  unexamined identity/cost, argument and expected arm-mode early-stop flag, and
+  cross-checks the cursor cutoff/reason. Tests mutate every proof field, reseal
+  the execution content key and still require rejection. In
+  finalist_decision.py, timeout-v3 reads require the exact field set and native
+  types, reject boolean/fractional integers and string numerics, validate the
+  canonical ISO work date and supported retry protocol, and reject unknown or
+  empty identity fields; both independent-daily cache and monthly-search
+  artifact readers have malformed-field tests.
+
+  Exact recorded checks (all `PYTHONDONTWRITEBYTECODE=1` and pytest with
+  `-q -p no:cacheprovider`): `python3 -m pytest tests/test_monthly_sumo.py
+  tests/test_independent_daily.py tests/test_monthly_search.py
+  tests/test_pilot_selection.py tests/test_finalist_decision.py` returned 0,
+  228 passed; `python3 -m pytest tests/test_cost_ordered_search.py
+  tests/test_cost_ordered_execution.py
+  tests/test_cost_ordered_execution_review.py tests/test_search_workspace.py`
+  returned 0, 132 passed; `python3 -m pytest
+  tests/test_cost_ordered_benchmark.py
+  tests/test_cost_ordered_benchmark_discovery.py
+  tests/test_cost_ordered_benchmark_provenance.py
+  tests/test_cost_ordered_benchmark_run.py
+  tests/test_cost_ordered_benchmark_suite.py` returned 0, 155 passed and 1
+  skipped. Targeted `python3 -m pylint --rcfile=.pylintrc
+  --disable=import-error traffic_sim/simulation/finalist_decision.py
+  tools/cost_ordered_benchmark.py` returned 0. AST parsing returned 0 for all
+  28 changed Python files. `git diff --check` returned 0.
+
+  The broader command including `tests/test_product_arm.py` returned 1 with
+  169 passed, 1 skipped and seven existing process-census failures because the
+  managed sandbox denied `ps` with `Operation not permitted`; that code failed
+  closed as designed. The before/after SHA-256 manifests cover all 19 files in
+  `.ai-flow/runs/20260828-092722-2676` plus the 10 existing validation
+  registration/outcome v1-v5 files. Both manifest files hash to
+  `8af39ae988ef69e79a0d8a9af21d4ad8ff84346be1605967922e3e3c8b8ba9e0` and
+  `cmp` returned 0. No v6 file appeared; no SUMO benchmark, monthly campaign,
+  branch operation, commit or push was performed.`
+- Review-02 final three-finding repair, seventh pass (2026-08-28): `Closed only
+  the supplied batch. CandidateEvidence now carries validated
+  CanonicalObservationDigest identities for the full canonical SUMO payload;
+  worker-result v3, independent-daily cache v4, aggregation, trimming/resume
+  and immutable monthly artifacts preserve them, and ordered-exhaustive
+  comparison checks complete stage populations plus the cost-ordered prefix.
+  Monthly evidence, daily evidence/cache and worker-result readers require
+  exact current field sets, with regressions deleting the whole
+  timeout_undecided field and injecting unknown fields. The real resolver
+  aggregates launch records through every archive child, validates native
+  identity/date/stage/variant/attempt/outcome fields, rejects duplicates and
+  reconciles the record population with aggregate counters before the
+  IndependentDailyRunner timing snapshot exposes it.
+
+  Focused process-free verification: 261 passed for monthly SUMO/search/demand,
+  independent daily, pilot and finalist; 132 passed for cost-ordered
+  search/execution/review/workspace; 167 passed and 1 skipped for benchmark,
+  discovery, provenance, run, suite and worker-pool transport. make lint,
+  targeted pylint, AST parsing of every dirty Python file and git diff --check
+  passed. tests/test_product_arm.py separately returned 14 passed and seven
+  failures solely because the managed sandbox denied ps; the census remains
+  fail-closed. The 20 preserved run files plus nine cost-ordered validation
+  v1-v5 files still combine to
+  8af39ae988ef69e79a0d8a9af21d4ad8ff84346be1605967922e3e3c8b8ba9e0.
+  No cost-ordered v6 registration/outcome, SUMO benchmark, monthly campaign,
+  branch operation, commit or push was created or run.`
+- Review-02 three comparison-gate repair, eighth pass (2026-08-28): `Closed
+  only the supplied findings in tools/cost_ordered_benchmark.py and focused
+  tests. Exact launch records/counters now use strict native schemas and the
+  exhaustive arm cannot add retries for a shared-prefix candidate. Cache-event
+  aggregates are recomputed from complete identity records. Semantic evidence
+  requires equal observation/digest projections and launch-associated digest
+  candidate/date identities; a re-sealed extra digest fails closed.
+
+  Verification: the five cost-ordered benchmark test modules passed 160 tests
+  with 1 skipped; targeted pylint on the two touched files, AST parsing and
+  git diff --check passed. The 29-file before/after evidence manifests both
+  hash to 8af39ae988ef69e79a0d8a9af21d4ad8ff84346be1605967922e3e3c8b8ba9e0
+  and cmp passed. No cost-ordered v6 registration/outcome, SUMO benchmark,
+  monthly campaign, branch operation, commit or push was created or run.`
 - Actor notes: `Historical handoff detail follows outside the current markers;
   it is evidence for its date, not current workflow authority.`
 <!-- CURRENT_HANDOFF_END -->

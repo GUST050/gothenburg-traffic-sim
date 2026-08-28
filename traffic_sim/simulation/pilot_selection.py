@@ -20,6 +20,7 @@ from traffic_sim.simulation.finalist_decision import (
     CandidateEvidence,
     DEMAND_VARIANTS,
     PairedObservation,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.closure_ranking import (
     ClosureCost,
@@ -32,7 +33,9 @@ SCHEMA_VERSION = 1
 PILOT_METHOD = "matched_worst_variant_pilot_v1"
 CLOSURE_COST_PILOT_METHOD = "deterministic_closure_cost_pilot_v1"
 RANKING_OBJECTIVES = frozenset({"legacy_time_loss_v1", "closure_cost_v1"})
-_STATUSES = frozenset({"ready", "incomplete", "no_viable", "capacity_exceeded"})
+_STATUSES = frozenset(
+    {"ready", "incomplete", "no_viable", "capacity_exceeded", "inconclusive"}
+)
 
 
 def _finite(value: float, label: str) -> float:
@@ -95,6 +98,7 @@ class PilotCandidateStatistics:
     worst_variant_delta_s: float | None
     complete: bool
     closure_cost: ClosureCost | None = None
+    timeout_undecided: tuple[TimeoutIdentity, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -252,6 +256,9 @@ def select_pilot_finalists(
                     worst_variant=None,
                     worst_variant_delta_s=None,
                     complete=False,
+                    timeout_undecided=tuple(
+                        sorted(set(candidate.timeout_undecided))
+                    ),
                 )
             )
             continue
@@ -292,6 +299,37 @@ def select_pilot_finalists(
                 worst_variant_delta_s=worst_delta,
                 complete=complete,
             )
+        )
+
+    # An unresolved SUMO timeout is not a disqualification: it means the
+    # search genuinely does not know whether that candidate would have been
+    # viable, or whether its cost would have fallen inside the retention
+    # band and changed which OTHER candidates get selected. Cost-order v5
+    # showed exactly this go wrong — a candidate timed out in one arm and
+    # not the other, and the two arms picked different finalists while both
+    # silently proceeded as if the timed-out run had never happened. Rather
+    # than try to prove after the fact whether a specific timeout could have
+    # mattered (which would require bounding a cost the search never
+    # measured), fail closed: any unresolved timeout anywhere in the
+    # evidence set makes the whole decision explicitly inconclusive.
+    undecided = tuple(sorted({
+        identity
+        for candidate in evidence
+        for identity in candidate.timeout_undecided
+    }))
+    if undecided:
+        return PilotSelection(
+            status="inconclusive",
+            selected_ids=(),
+            reason=(
+                "pilot evidence includes an unresolved SUMO timeout; the "
+                "search cannot rule out that candidate changing the "
+                "retained set"
+            ),
+            candidates=tuple(statistics),
+            missing_pairs=(),
+            policy=policy,
+            method=selection_method,
         )
 
     viable = [candidate for candidate in statistics if candidate.eligible]

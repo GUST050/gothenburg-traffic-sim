@@ -288,12 +288,27 @@ class TestItRefusesToFreezeAnEmptyRegistration:
         monkeypatch.setattr(pa, "build_arm", fake_build_arm)
         monkeypatch.setattr(bench.pa, "build_arm", fake_build_arm)
 
-        code = bench.main(["--run", "--registration", str(registration_path),
-                           "--runs-root", str(library),
-                           "--data-root", str(tmp_path),
-                           "--release-root", str(tmp_path / "releases"),
-                           "--workspace-root", str(tmp_path / "ws"),
-                           "--out", str(outcome_path)])
+        # This fixture fakes SUMO by monkeypatching build_arm in THIS
+        # process. A real run (main()) always isolates each arm in its own
+        # subprocess (see tests/test_product_arm.py), which would not see
+        # the monkeypatch at all. `bench._run_registered` always isolates
+        # and has no escape hatch, so this drives the test-only unisolated
+        # twin instead of going through main() itself.
+        from tests._cost_ordered_benchmark_test_support import (
+            run_registered_unisolated_for_tests)
+
+        code = run_registered_unisolated_for_tests(
+            registration_path=registration_path,
+            runs_root=library,
+            data_root=tmp_path,
+            release_root=tmp_path / "releases",
+            workspace_root=tmp_path / "ws",
+            out=outcome_path,
+            overwrite=False,
+            stdout=False,
+            fault_injection=True,
+            allow_drift=False,
+        )
         outcome = json.loads(outcome_path.read_text(encoding="utf-8"))
         assert outcome["schema"] == bench.OUTCOME_SCHEMA
         assert outcome["registration"]["path"] == str(outcome_path.parent / "v2.json")

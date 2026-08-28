@@ -1,8 +1,11 @@
 import pytest
 
 from traffic_sim.simulation.finalist_decision import (
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    TIMEOUT_IDENTITY_SCHEMA,
     CandidateEvidence,
     PairedObservation,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.pilot_selection import (
     PilotPolicy,
@@ -273,3 +276,79 @@ def test_every_hard_failed_candidate_returns_no_viable():
     )
     assert result.status == "no_viable"
     assert result.selected_ids == ()
+
+
+def _timed_out(candidate_id, *, message="sumo timed out after 300s (seed 1000)"):
+    return CandidateEvidence(
+        candidate_id=candidate_id,
+        hard_failures=(f"sumo_execution_failure:q50:1000:{message}",),
+        timeout_undecided=(
+            TimeoutIdentity(
+                schema=TIMEOUT_IDENTITY_SCHEMA,
+                candidate_id=candidate_id,
+                work_date="2027-09-16",
+                search_content_key="0" * 20,
+                variant="q50",
+                seed=1000,
+                attempt=1,
+                threshold_s=300.0,
+                retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+                search_provenance_key="study-one",
+            ),
+        ),
+    )
+
+
+def test_an_unresolved_timeout_anywhere_makes_the_pilot_inconclusive():
+    """Regression for cost-order v5: a timed-out candidate must never be
+
+    silently treated as if it had never existed. Even though it is
+    ineligible (like any hard failure), its presence means the search
+    cannot prove the retained set is what it would have been had the run
+    completed, so the whole decision must say so rather than quietly
+    proceeding to pick finalists from the other candidates.
+    """
+    result = select_pilot_finalists(
+        [
+            _timed_out("timeout-candidate"),
+            _candidate("a"),
+            _candidate("b"),
+            _candidate("c"),
+        ],
+        _policy(minimum_finalists=1),
+    )
+    assert result.status == "inconclusive"
+    assert result.selected_ids == ()
+    assert "timeout" in result.reason.lower()
+    statistics_by_id = {item.candidate_id: item for item in result.candidates}
+    published = statistics_by_id["timeout-candidate"].timeout_undecided
+    assert len(published) == 1
+    assert published[0].candidate_id == "timeout-candidate"
+    assert published[0].variant == "q50"
+    assert published[0].seed == 1000
+
+
+def test_an_unresolved_timeout_outranks_capacity_and_completeness_status():
+    """The fail-closed rule fires before any other status determination."""
+    result = select_pilot_finalists(
+        [_timed_out("only-candidate")],
+        _policy(),
+    )
+    assert result.status == "inconclusive"
+
+
+def test_ordinary_hard_failures_without_a_timeout_are_unaffected():
+    """A genuine disqualification (no timeout involved) still proceeds
+
+    exactly as before — the new gate only fires on an unresolved timeout,
+    never on an ordinary SUMO failure or deterministic disqualification.
+    """
+    result = select_pilot_finalists(
+        [
+            _candidate("bad", failures=("teleport_detected",)),
+            _candidate("good"),
+        ],
+        _policy(minimum_finalists=1),
+    )
+    assert result.status == "ready"
+    assert result.selected_ids == ("good",)

@@ -18,6 +18,7 @@ from traffic_sim.simulation.monthly_demand import (
 )
 from traffic_sim.simulation.independent_daily import (
     INDEPENDENT_DAILY_ENVELOPE_POLICY,
+    IndependentDailyRunner,
     decompose_schedules,
 )
 from traffic_sim.demand.source_identity import demand_source_paths
@@ -185,6 +186,94 @@ class FakeChildRunner:
 def _required_for(runner, schedules):
     return {runner._required(schedule).build_key: runner._required(schedule)
             for schedule in schedules}
+
+
+def test_production_runner_chain_exposes_complete_validated_launch_population(
+        tmp_path):
+    raw_spec = _spec().to_dict()
+    raw_spec.update({
+        "interday_policy": "independent_daily_reset_v1",
+        "work_allocation_policy": "exact_balanced_daily_v1",
+    })
+    raw_spec.pop("content_key")
+    independent_spec = ClosureSearchSpec.from_dict(raw_spec)
+
+    class SnapshotRunner:
+        def __init__(self, records):
+            self.records = records
+
+        def launch_records_snapshot(self):
+            return [dict(record) for record in self.records]
+
+        def launch_telemetry_snapshot(self):
+            totals = {
+                "pilot": {"attempts": 0, "timeouts": 0, "other_outcomes": 0},
+                "finalist": {
+                    "attempts": 0, "timeouts": 0, "other_outcomes": 0},
+            }
+            for record in self.records:
+                bucket = totals[record["stage"]]
+                bucket["attempts"] += 1
+                bucket[
+                    "timeouts" if record["timed_out"] else "other_outcomes"
+                ] += 1
+            return totals
+
+    def arm():
+        resolver = MonthlyDemandResolverRunner(
+            independent_spec, baseline_trip_duration_p99_s=1800,
+            study_provenance_key="shared-study")
+        resolver._runners = {
+            "archive-a": SnapshotRunner([{
+                "candidate_id": "daily-a", "work_date": "2027-07-15",
+                "stage": "pilot", "variant": "q10", "seed": 1000,
+                "attempt": 1, "timed_out": False, "outcome": "success",
+            }]),
+            "archive-b": SnapshotRunner([{
+                "candidate_id": "daily-b", "work_date": "2027-07-22",
+                "stage": "finalist", "variant": "q50", "seed": 1001,
+                "attempt": 1, "timed_out": True, "outcome": "timeout",
+            }]),
+        }
+        return IndependentDailyRunner(
+            independent_spec, daily_runner=resolver,
+            cache_root=tmp_path / "cache")
+
+    for runner in (arm(), arm()):
+        snapshot = runner.timing_snapshot()
+        records = snapshot["exact_launch_records"]
+        telemetry = snapshot["exact_launch_telemetry"]
+        assert len(records) == 2
+        assert sum(
+            telemetry[stage]["attempts"] for stage in ("pilot", "finalist")
+        ) == len(records)
+        assert len({tuple(record[field] for field in (
+            "candidate_id", "work_date", "stage", "variant", "seed",
+            "attempt")) for record in records}) == len(records)
+
+
+def test_resolver_launch_population_rejects_malformed_record():
+    class BadRunner:
+        def launch_telemetry_snapshot(self):
+            return {
+                "pilot": {"attempts": 1, "timeouts": 0, "other_outcomes": 1},
+                "finalist": {
+                    "attempts": 0, "timeouts": 0, "other_outcomes": 0},
+            }
+
+        def launch_records_snapshot(self):
+            return [{
+                "candidate_id": "daily-a", "work_date": "2027-07-15",
+                "stage": "pilot", "variant": "q10", "seed": True,
+                "attempt": 1, "timed_out": False, "outcome": "success",
+            }]
+
+    resolver = MonthlyDemandResolverRunner(
+        _spec(), baseline_trip_duration_p99_s=1800,
+        study_provenance_key="shared-study")
+    resolver._runners = {"archive": BadRunner()}
+    with pytest.raises(ValueError, match="seed is invalid"):
+        resolver.launch_records_snapshot()
 
 
 def test_demand_builder_is_independent_of_process_working_directory(monkeypatch, tmp_path):

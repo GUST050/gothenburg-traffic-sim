@@ -4,6 +4,11 @@ Read AGENTS.md and the repository's relevant current coordination context. Inspe
 repository enough to ground the plan, but do not edit files. The user's task is the
 authority for scope.
 
+Start from the named run, review, task, or current coordination block when one is supplied.
+Do not broaden a CONTINUE request into a fresh repository-wide audit. Reuse completed work,
+identify the first unfinished safe stage, and keep the plan to the smallest bounded slice
+that can produce a verifiable outcome.
+
 Produce a concrete implementation plan that a different coding agent can execute. Include
 the likely files, acceptance criteria, focused verification, important risks, and any real
 human decision that would block safe implementation. Keep the plan proportional to the task.

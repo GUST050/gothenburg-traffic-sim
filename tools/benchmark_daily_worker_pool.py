@@ -39,7 +39,10 @@ if str(ROOT) not in sys.path:
 
 SCHEMA = "daily_worker_pool_diagnostic_v2"
 REQUEST_SCHEMA = "independent_daily_worker_request_v1"
-RESULT_SCHEMA = "independent_daily_worker_result_v1"
+# v3: candidate evidence carries canonical-observation digests and the result
+# envelope requires both launch telemetry populations. This diagnostic reads
+# that same artifact and must reject the older, incomplete shape.
+RESULT_SCHEMA = "independent_daily_worker_result_v3"
 MIN_CONTINUATION_SPEEDUP = 1.10
 
 

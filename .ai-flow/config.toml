@@ -1,6 +1,7 @@
 version = 1
-max_review_cycles = 4
-max_test_fix_cycles = 3
+max_review_cycles = 3
+max_test_fix_cycles = 2
+max_review_findings_per_repair = 3
 agent_timeout_seconds = 7200
 check_timeout_seconds = 1800
 
@@ -8,30 +9,41 @@ check_timeout_seconds = 1800
 runner = "codex"
 profile = "planner"
 model = "gpt-5.6-sol"
-effort = "xhigh"
+effort = "high"
 sandbox = "read-only"
 prompt = ".ai-flow/prompts/planner.md"
 
 [roles.worker]
 runner = "claude"
-model = "opus"
+model = "sonnet"
 effort = "high"
 permission_mode = "auto"
+max_turns = 260
+max_budget_usd = 14.0
 prompt = ".ai-flow/prompts/worker.md"
 
 [roles.reviewer]
 runner = "codex"
 profile = "reviewer"
 model = "gpt-5.6-sol"
-effort = "xhigh"
+effort = "high"
 sandbox = "read-only"
 prompt = ".ai-flow/prompts/reviewer.md"
 
 [roles.fixer]
 runner = "claude"
-model = "opus"
-effort = "high"
+model = "sonnet"
+effort = "medium"
 permission_mode = "auto"
+max_turns = 100
+max_budget_usd = 5.0
+prompt = ".ai-flow/prompts/fixer.md"
+
+[roles.fixer_fallback]
+runner = "codex"
+model = "gpt-5.6-sol"
+effort = "medium"
+sandbox = "workspace-write"
 prompt = ".ai-flow/prompts/fixer.md"
 
 [checks]

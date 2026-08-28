@@ -356,6 +356,7 @@ def bound_identity(
     policy: PilotPolicy,
     *,
     practical_equivalence_vehicle_hours: float,
+    disable_early_stop: bool = False,
 ) -> str:
     """One digest over everything a resume must not survive."""
     # The state machine binds the exact order it scans: deterministic
@@ -373,6 +374,7 @@ def bound_identity(
             practical_equivalence_vehicle_hours),
         provider_identity=ledger.provider_identity,
         ordered_costs=ordered,
+        disable_early_stop=disable_early_stop,
     )
 
 
@@ -387,6 +389,7 @@ def run_cost_ordered_execution(
     verified_evidence: Mapping[str, CandidateEvidence] | None = None,
     checkpoint: Callable[[ExecutionCursor, str, CandidateEvidence], None] | None = None,
     progress: Callable[[str, int, int, Mapping[str, Any]], None] | None = None,
+    disable_early_stop: bool = False,
 ) -> CostOrderedResult:
     """Verify in cost order, checkpointing after every SUMO run.
 
@@ -394,6 +397,12 @@ def run_cost_ordered_execution(
     happens only for candidates inside the boundary. `checkpoint` is called
     with the cursor AFTER each verification so a crash resumes at the exact
     next candidate rather than repeating the phase.
+
+    `disable_early_stop=True` is the ordered-exhaustive reference execution:
+    same ledger, same order, same verify callback, same checkpointing, but
+    every candidate is verified regardless of the band. See
+    `cost_ordered_search.run_cost_ordered_search` for why this is the correct
+    way to isolate early stopping as the only difference being measured.
     """
     if ledger.search_content_key != spec.content_key:
         raise ValueError("cost ledger belongs to another search")
@@ -401,6 +410,7 @@ def run_cost_ordered_execution(
         ledger, policy,
         practical_equivalence_vehicle_hours=(
             practical_equivalence_vehicle_hours),
+        disable_early_stop=disable_early_stop,
     )
     ledger_key = ledger.to_dict()["content_key"]
 
@@ -486,6 +496,7 @@ def run_cost_ordered_execution(
             practical_equivalence_vehicle_hours),
         state=state,
         verified_evidence=verified_evidence,
+        disable_early_stop=disable_early_stop,
     )
     # The mirror and the scan must agree, or a resumed run would continue from
     # a cursor describing a position the scan was never at.
@@ -521,6 +532,7 @@ def reconcile_disruption(
             observations=evidence.observations,
             hard_failures=evidence.hard_failures,
             disruption=tuple(priced.per_variant),
+            timeout_undecided=evidence.timeout_undecided,
         )
     produced = {str(item.get("demand_variant")): item
                 for item in evidence.disruption}
@@ -551,6 +563,7 @@ def execution_record(
     exhaustive_candidate_count: int,
     wall_time_s: float | None = None,
     peak_rss_bytes: int | None = None,
+    disable_early_stop: bool = False,
 ) -> dict[str, Any]:
     """The durable account of what this run actually did.
 
@@ -581,6 +594,7 @@ def execution_record(
         "cutoff": result.state.cutoff,
         "stop_proof": dict(result.stop_proof),
         "cursor": result.state.to_dict(),
+        "disable_early_stop": bool(disable_early_stop),
     }
     if wall_time_s is not None:
         payload["wall_time_s"] = round(float(wall_time_s), 3)

@@ -31,9 +31,11 @@ from traffic_sim.core.contracts import (
     ClosureSearchSpec,
 )
 from traffic_sim.simulation.finalist_decision import (
+    CanonicalObservationDigest,
     CandidateEvidence,
     DEMAND_VARIANTS,
     PairedObservation,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.envelope import EnvelopePolicy
 from traffic_sim.simulation.seed_worker_budget import (
@@ -43,7 +45,11 @@ from traffic_sim.simulation.seed_worker_budget import (
 from traffic_sim.storage.singleflight import content_key_lock
 
 
-CACHE_SCHEMA = "independent_daily_evidence_cache_v2"
+#: v4: v3 made `timeout_undecided` entries validated `TimeoutIdentity`
+#: records; v4 retains canonical-observation digests and requires the exact
+#: evidence/cache envelopes. Older cache entries fail closed rather than being
+#: silently reinterpreted or rewritten.
+CACHE_SCHEMA = "independent_daily_evidence_cache_v4"
 BACKEND_KIND = "independent_daily_reset_backend_v1"
 ISOLATED_BACKEND_KIND = "isolated_daily_sumo_backend_v1"
 # Keep the production six-hour recovery cap. Independent reset is permitted
@@ -528,6 +534,8 @@ def aggregate_daily_evidence(
     if not units:
         raise ValueError("a parent schedule must contain daily units")
     failures: set[str] = set()
+    timeouts: set[TimeoutIdentity] = set()
+    canonical_digests: set[CanonicalObservationDigest] = set()
     indexed: dict[str, dict[tuple[str, int], PairedObservation]] = {}
     for unit in units:
         evidence = evidence_by_unit.get(unit.unit_id)
@@ -539,6 +547,45 @@ def aggregate_daily_evidence(
             f"{unit.identity['work_date']}:{reason}"
             for reason in evidence.hard_failures
         )
+        # Unlike `hard_failures` (plain strings that still need a date
+        # prefix to stay unique across units), a `TimeoutIdentity` already
+        # names its own `work_date` at the point it was created — see
+        # `monthly_sumo._timeout_identity`. Merge the records directly, and
+        # verify each one actually names THIS unit's own day, schedule and
+        # search rather than trusting it silently: a mismatch here would mean
+        # a timeout is being attributed to the wrong daily unit or search.
+        for identity in evidence.timeout_undecided:
+            if identity.work_date != unit.identity["work_date"]:
+                raise ValueError(
+                    f"timeout identity work_date {identity.work_date!r} does "
+                    f"not match daily unit {unit.unit_id}'s own work_date "
+                    f"{unit.identity['work_date']!r}"
+                )
+            if identity.candidate_id != unit.schedule.schedule_id:
+                raise ValueError(
+                    "timeout identity candidate_id does not match daily unit "
+                    f"{unit.unit_id}'s own schedule "
+                    f"{unit.schedule.schedule_id!r}"
+                )
+            if identity.search_content_key != unit.schedule.search_content_key:
+                raise ValueError(
+                    "timeout identity search_content_key does not match "
+                    f"daily unit {unit.unit_id}'s own search "
+                    f"{unit.schedule.search_content_key!r}"
+                )
+            timeouts.add(identity)
+        for identity in evidence.canonical_observation_digests:
+            if identity.work_date != unit.identity["work_date"]:
+                raise ValueError(
+                    "canonical observation digest belongs to another daily unit"
+                )
+            if identity.candidate_id != unit.schedule.schedule_id:
+                raise ValueError(
+                    "canonical observation digest candidate_id does not match "
+                    f"daily unit {unit.unit_id}'s own schedule "
+                    f"{unit.schedule.schedule_id!r}"
+                )
+            canonical_digests.add(identity)
         observations: dict[tuple[str, int], PairedObservation] = {}
         for item in evidence.observations:
             key = (item.demand_variant, item.seed)
@@ -547,24 +594,15 @@ def aggregate_daily_evidence(
             observations[key] = item
         indexed[unit.unit_id] = observations
 
-    # A hard failure is already a terminal, fail-closed result for the parent.
-    # Do not require the failed daily unit to fabricate a complete replication
-    # matrix merely so the additive path can continue.  Namespacing the reason
-    # by work date keeps one cached daily failure useful (and diagnosable)
-    # across every parent schedule that includes that unit.
-    if failures:
-        return CandidateEvidence(
-            candidate_id=parent.schedule_id,
-            observations=(),
-            hard_failures=tuple(sorted(failures)),
-        )
-
-    expected = set(next(iter(indexed.values())))
-    for unit_id, observations in indexed.items():
-        if set(observations) != expected:
-            raise ValueError(
-                f"daily evidence variant/seed coverage differs for {unit_id}")
-
+    # Disruption is a deterministic, process-free function of the schedule
+    # (see monthly_sumo.py's _closure_disruption): every daily unit carries
+    # it whether or not that unit's SUMO run succeeded. Compute the combined
+    # record BEFORE the failure branch below, so a failed (including a timed
+    # out, undecided) parent still publishes the same deterministic
+    # disruption a viable one would — this is the fix for the defect found
+    # in cost-order v5, where the exhaustive path silently dropped
+    # disruption on any hard failure while the cost-ordered ledger did not,
+    # making the two arms judge a timed-out candidate on different fields.
     disruption_by_unit: list[dict[str, Mapping[str, Any]]] = []
     disruption_presence: set[bool] = set()
     for unit in units:
@@ -616,6 +654,33 @@ def aggregate_daily_evidence(
                 "reduction": "sum across independent daily reset units",
             })
 
+    # A hard failure is already a terminal, fail-closed result for the
+    # parent's OBSERVATIONS: do not require the failed daily unit to
+    # fabricate a complete replication matrix merely so the additive path
+    # can continue.  Namespacing the reason by work date keeps one cached
+    # daily failure useful (and diagnosable) across every parent schedule
+    # that includes that unit.  Disruption is unaffected by this branch —
+    # it was computed above from every unit unconditionally, so a failed
+    # parent still reports the same deterministic numbers a viable one
+    # would, instead of forcing a reader (or an equivalence gate comparing
+    # this path against cost_ordered_execution.reconcile_disruption's
+    # ledger fallback) to treat a failure as "no evidence at all".
+    if failures:
+        return CandidateEvidence(
+            candidate_id=parent.schedule_id,
+            observations=(),
+            hard_failures=tuple(sorted(failures)),
+            disruption=tuple(combined_disruption),
+            timeout_undecided=tuple(sorted(timeouts)),
+            canonical_observation_digests=tuple(sorted(canonical_digests)),
+        )
+
+    expected = set(next(iter(indexed.values())))
+    for unit_id, observations in indexed.items():
+        if set(observations) != expected:
+            raise ValueError(
+                f"daily evidence variant/seed coverage differs for {unit_id}")
+
     combined: list[PairedObservation] = []
     for variant, seed in sorted(
         expected,
@@ -646,6 +711,8 @@ def aggregate_daily_evidence(
         observations=tuple(combined),
         hard_failures=tuple(sorted(failures)),
         disruption=tuple(combined_disruption),
+        timeout_undecided=tuple(sorted(timeouts)),
+        canonical_observation_digests=tuple(sorted(canonical_digests)),
     )
 
 
@@ -657,19 +724,60 @@ def _evidence_to_dict(evidence: CandidateEvidence) -> dict[str, Any]:
         "observations": [dataclasses.asdict(item) for item in evidence.observations],
         "hard_failures": list(evidence.hard_failures),
         "disruption": [dict(item) for item in evidence.disruption],
+        "timeout_undecided": [
+            item.to_dict() for item in evidence.timeout_undecided
+        ],
+        "canonical_observation_digests": [
+            item.to_dict() for item in evidence.canonical_observation_digests
+        ],
     }
 
 
 def _evidence_from_dict(raw: Mapping[str, Any]) -> CandidateEvidence:
+    if not isinstance(raw, Mapping):
+        raise ValueError("daily candidate evidence must be an object")
+    expected = {
+        "candidate_id", "observations", "hard_failures", "disruption",
+        "timeout_undecided", "canonical_observation_digests",
+    }
+    if set(raw) != expected:
+        raise ValueError("daily candidate evidence fields are invalid")
+    if not isinstance(raw["candidate_id"], str):
+        raise ValueError("daily candidate evidence candidate_id is invalid")
+    for field in expected - {"candidate_id"}:
+        if not isinstance(raw[field], list):
+            raise ValueError(f"daily candidate evidence {field} must be a list")
     return CandidateEvidence(
-        candidate_id=str(raw.get("candidate_id", "")),
+        candidate_id=raw["candidate_id"],
         observations=tuple(
             PairedObservation(**dict(item))
-            for item in raw.get("observations", ())
+            for item in raw["observations"]
         ),
-        hard_failures=tuple(str(item) for item in raw.get("hard_failures", ())),
-        disruption=tuple(dict(item) for item in raw.get("disruption", ())),
+        hard_failures=tuple(str(item) for item in raw["hard_failures"]),
+        disruption=tuple(dict(item) for item in raw["disruption"]),
+        timeout_undecided=tuple(
+            TimeoutIdentity.from_dict(item)
+            for item in raw["timeout_undecided"]
+        ),
+        canonical_observation_digests=tuple(
+            CanonicalObservationDigest.from_dict(item)
+            for item in raw["canonical_observation_digests"]
+        ),
     )
+
+
+def _evidence_from_worker_result(raw: Any) -> CandidateEvidence:
+    """Validate the complete current worker-result envelope fail closed."""
+    if (
+        not isinstance(raw, Mapping)
+        or raw.get("schema") != "independent_daily_worker_result_v3"
+        or set(raw) != {
+            "schema", "evidence", "launch_telemetry", "launch_records"}
+        or not isinstance(raw["launch_telemetry"], Mapping)
+        or not isinstance(raw["launch_records"], list)
+    ):
+        raise ValueError("isolated daily worker result is malformed")
+    return _evidence_from_dict(raw["evidence"])
 
 
 class IsolatedDailySumoRunner:
@@ -699,6 +807,113 @@ class IsolatedDailySumoRunner:
         self._worker_invoker = worker_invoker
         worker = Path(__file__).with_name("independent_daily_worker.py")
         self._worker_source_sha256 = hashlib.sha256(worker.read_bytes()).hexdigest()
+        # Real SUMO launches happen inside the isolated subprocess, not this
+        # process, so they only reach this counter if the worker's result
+        # payload carries them back (see `_default_worker_invoker` and
+        # `independent_daily_worker.execute_request`). A caller-supplied
+        # `worker_invoker` fake that omits `launch_telemetry` simply leaves
+        # this at zero rather than fabricating a count — tests exercising
+        # this class do not need to launch real SUMO to stay correct.
+        self._launch_telemetry: dict[str, dict[str, int]] = {
+            "pilot": {"attempts": 0, "timeouts": 0, "other_outcomes": 0},
+            "finalist": {"attempts": 0, "timeouts": 0, "other_outcomes": 0},
+        }
+        # Identity-bearing companion, merged from every worker result the
+        # same way as the aggregate counters above.
+        self._launch_records: list[dict[str, Any]] = []
+        self._launch_telemetry_lock = threading.Lock()
+
+    def _merge_launch_telemetry(self, raw: Any) -> None:
+        if not isinstance(raw, Mapping):
+            return
+        with self._launch_telemetry_lock:
+            for stage, counts in raw.items():
+                if stage not in self._launch_telemetry or not isinstance(
+                        counts, Mapping):
+                    continue
+                bucket = self._launch_telemetry[stage]
+                for key in ("attempts", "timeouts", "other_outcomes"):
+                    bucket[key] += int(counts.get(key, 0))
+
+    def _merge_launch_records(self, raw: Any) -> None:
+        if not isinstance(raw, list):
+            return
+        with self._launch_telemetry_lock:
+            for record in raw:
+                if isinstance(record, Mapping):
+                    self._launch_records.append(dict(record))
+
+    def _merge_launch_sidecar(self, sidecar_path: Path) -> None:
+        """Recover launch records from the durable per-attempt sidecar file.
+
+        This is the ONLY telemetry source the isolated worker path uses: the
+        sidecar is written record-by-record, fsync'd, as each real SUMO
+        attempt happens inside the subprocess — before the worker's final
+        result JSON exists — so it is the one transport that survives an
+        unrecognized exception or an outright kill of the worker process.
+        Reading it after every subprocess exit, success or failure, closes
+        the gap where such an attempt disappeared from exact-attempt
+        accounting entirely.
+        """
+        if not sidecar_path.is_file():
+            return
+        records_by_identity: dict[tuple[Any, ...], dict[str, Any]] = {}
+        for line in sidecar_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            if isinstance(record, Mapping):
+                normalized = dict(record)
+                identity = tuple(normalized.get(key) for key in (
+                    "candidate_id", "work_date", "stage", "variant",
+                    "seed", "attempt"))
+                if any(value is None for value in identity):
+                    raise ValueError("launch sidecar record identity is incomplete")
+                records_by_identity[identity] = normalized
+        records = list(records_by_identity.values())
+        for record in records:
+            if record.get("outcome") == "in_progress":
+                record["outcome"] = "worker_terminated"
+        if not records:
+            return
+        # Each subprocess-local runner numbers its first attempt as 1. A
+        # parent retry starts a fresh subprocess and would otherwise publish
+        # another attempt 1, collapsing two real launches to one identity.
+        # Rebind each local sequence after the attempts already recovered by
+        # this parent, while holding the same lock as snapshots/other merges.
+        with self._launch_telemetry_lock:
+            prior_max: dict[tuple[Any, ...], int] = {}
+            for existing in self._launch_records:
+                key = tuple(existing.get(field) for field in (
+                    "candidate_id", "work_date", "stage", "variant", "seed"))
+                prior_max[key] = max(
+                    prior_max.get(key, 0), int(existing.get("attempt", 0)))
+            local_bases: dict[tuple[Any, ...], int] = {}
+            for record in records:
+                stage = record.get("stage")
+                if stage not in self._launch_telemetry:
+                    raise ValueError(f"launch sidecar stage is invalid: {stage!r}")
+                key = tuple(record.get(field) for field in (
+                    "candidate_id", "work_date", "stage", "variant", "seed"))
+                base = local_bases.setdefault(key, prior_max.get(key, 0))
+                record["attempt"] = base + int(record["attempt"])
+                bucket = self._launch_telemetry[stage]
+                bucket["attempts"] += 1
+                bucket["timeouts" if record.get("timed_out")
+                       else "other_outcomes"] += 1
+                self._launch_records.append(record)
+
+    def launch_telemetry_snapshot(self) -> dict[str, dict[str, int]]:
+        with self._launch_telemetry_lock:
+            return {
+                stage: dict(counts)
+                for stage, counts in self._launch_telemetry.items()
+            }
+
+    def launch_records_snapshot(self) -> list[dict[str, Any]]:
+        with self._launch_telemetry_lock:
+            return [dict(record) for record in self._launch_records]
 
     def prepare(self, schedules: Sequence[ClosureSchedule]) -> None:
         self.delegate.prepare(schedules)
@@ -764,31 +979,44 @@ class IsolatedDailySumoRunner:
             "stage": stage,
         }
 
-    @staticmethod
-    def _default_worker_invoker(request: Mapping[str, Any]) -> CandidateEvidence:
+    def _default_worker_invoker(self, request: Mapping[str, Any]) -> CandidateEvidence:
         with tempfile.TemporaryDirectory(prefix="independent-daily-worker-") as raw:
             root = Path(raw)
             request_path = root / "request.json"
             result_path = root / "result.json"
+            sidecar_path = root / "telemetry.ndjson"
             _atomic_json(request_path, request)
             environment = dict(os.environ)
             environment["PYTHONDONTWRITEBYTECODE"] = "1"
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "traffic_sim.simulation.independent_daily_worker",
-                    "--request",
-                    str(request_path),
-                    "--result",
-                    str(result_path),
-                ],
-                cwd=Path(__file__).resolve().parents[2],
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            try:
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "traffic_sim.simulation.independent_daily_worker",
+                        "--request",
+                        str(request_path),
+                        "--result",
+                        str(result_path),
+                        "--telemetry-sidecar",
+                        str(sidecar_path),
+                    ],
+                    cwd=Path(__file__).resolve().parents[2],
+                    env=environment,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+            finally:
+                # The sidecar is the durable transport: it is written
+                # record-by-record inside the subprocess as each real SUMO
+                # attempt happens, so it holds every attempt that occurred
+                # even when the subprocess never reaches its final result
+                # write (an unrecognized exception, a signal, an OOM kill).
+                # Merging it in a `finally` — ahead of the returncode check
+                # below — is what stops such attempts from disappearing
+                # from exact-attempt accounting entirely.
+                self._merge_launch_sidecar(sidecar_path)
             if completed.returncode != 0:
                 detail = (completed.stderr or completed.stdout).strip()[-2000:]
                 raise RuntimeError(
@@ -796,13 +1024,7 @@ class IsolatedDailySumoRunner:
                     f"{completed.returncode}: {detail}"
                 )
             payload = json.loads(result_path.read_text(encoding="utf-8"))
-            if (
-                not isinstance(payload, Mapping)
-                or payload.get("schema")
-                != "independent_daily_worker_result_v1"
-            ):
-                raise ValueError("isolated daily worker result is malformed")
-            return _evidence_from_dict(payload["evidence"])
+            return _evidence_from_worker_result(payload)
 
     def run_candidate(
         self,
@@ -1208,12 +1430,30 @@ class IndependentDailyRunner:
             "worker_seconds": 0.0,
             "units_simulated": 0,
             "queue_singleflight_skips": 0,
+            # A successful `_save_cached` write — distinct from
+            # `cache_write_seconds`, which only ever measured how long a
+            # write took, never how many actually happened.
+            "cache_publications": 0,
         }
+        # Identity-bearing companion to the aggregate counters above: one
+        # record per real daily-result cache lookup/publication, naming the
+        # daily unit and the event kind. The aggregate counts alone cannot
+        # support a true cache-event POPULATION comparison (which unit was
+        # hit, missed or published, not just how many) between the
+        # cost-ordered and ordered-exhaustive arms.
+        self._cache_event_records: list[dict[str, Any]] = []
         self._prepared_parent_ids: tuple[str, ...] | None = None
 
     def _bump(self, key: str, value: Any = 1) -> None:
         with self._state_lock:
             self._timing[key] += value
+
+    def _record_cache_event(self, unit_id: str, event: str) -> None:
+        with self._state_lock:
+            self._cache_event_records.append({
+                "unit_id": str(unit_id),
+                "event": event,
+            })
 
     def timing_snapshot(self) -> dict[str, Any]:
         """Return result-neutral S0 telemetry accumulated by this runner.
@@ -1240,16 +1480,45 @@ class IndependentDailyRunner:
             }
             queue = self._queue
             snapshot.update(self._queue_final_stats)
+            snapshot["cache_event_records"] = [
+                dict(record) for record in self._cache_event_records
+            ]
         if queue is not None:
             snapshot.update(queue.stats())
+        # Exact-launch telemetry (real SUMO (variant, seed) attempts, split
+        # by pilot/finalist stage and by timeout vs. any other outcome) is
+        # owned by the SUMO backend, not this class — it is pulled fresh on
+        # every snapshot rather than mirrored into ``self._timing`` so it can
+        # never drift from the backend's own counters. A backend without this
+        # hook (any fake/legacy runner) simply omits the key, exactly like
+        # the other optional diagnostics this method already tolerates.
+        launch_telemetry = getattr(
+            self.daily_runner, "launch_telemetry_snapshot", None)
+        if callable(launch_telemetry):
+            try:
+                snapshot["exact_launch_telemetry"] = launch_telemetry()
+            except Exception:  # diagnostic hook: fail open, never break a run
+                pass
+        launch_records = getattr(
+            self.daily_runner, "launch_records_snapshot", None)
+        if callable(launch_records):
+            try:
+                snapshot["exact_launch_records"] = launch_records()
+            except Exception:  # diagnostic hook: fail open, never break a run
+                pass
         return snapshot
 
-    def _record_corrupt_cache_miss(self, *, count: bool = True) -> None:
+    def _record_corrupt_cache_miss(
+        self, unit_id: str, *, count: bool = True
+    ) -> None:
         """One corrupt lookup is both a miss and a diagnostic corruption."""
         with self._state_lock:
             self._timing["cache_corrupt"] += 1
             if count:
                 self._timing["cache_misses"] += 1
+        self._record_cache_event(unit_id, "corrupt")
+        if count:
+            self._record_cache_event(unit_id, "miss")
 
     def cleanup(self) -> None:
         # Same lock order as `_ensure_queue`, so cleanup cannot race a
@@ -1480,12 +1749,14 @@ class IndependentDailyRunner:
         if remembered is not None:
             if count:
                 self._bump("cache_hits")
+                self._record_cache_event(unit.unit_id, "hit")
             self._bump("cache_verify_seconds", time.perf_counter() - started)
             return remembered
         path = self._cache_path(unit)
         if not path.is_file():
             if count:
                 self._bump("cache_misses")
+                self._record_cache_event(unit.unit_id, "miss")
             self._bump("cache_verify_seconds", time.perf_counter() - started)
             return None
         try:
@@ -1494,12 +1765,15 @@ class IndependentDailyRunner:
                 object_pairs_hook=_reject_duplicate_keys,
             )
             if not isinstance(payload, Mapping):
-                self._record_corrupt_cache_miss(count=count)
+                self._record_corrupt_cache_miss(unit.unit_id, count=count)
                 return None
             body = {key: value for key, value in payload.items()
                     if key != "content_key"}
             if (
-                payload.get("schema") != CACHE_SCHEMA
+                set(payload) != {
+                    "schema", "unit", "unit_backend_digest", "evidence",
+                    "content_key"}
+                or payload.get("schema") != CACHE_SCHEMA
                 or payload.get("unit") != {
                     "unit_id": unit.unit_id,
                     "identity": dict(unit.identity),
@@ -1508,14 +1782,27 @@ class IndependentDailyRunner:
                 != self._unit_backend_digests.get(unit.unit_id)
                 or payload.get("content_key") != _canonical_digest(body)
             ):
-                self._record_corrupt_cache_miss(count=count)
+                self._record_corrupt_cache_miss(unit.unit_id, count=count)
                 return None
             stored = _evidence_from_dict(payload["evidence"])
-            if stored.candidate_id != unit.unit_id or any(
-                item.candidate_id != unit.unit_id
-                for item in stored.observations
+            if (
+                stored.candidate_id != unit.unit_id
+                or any(
+                    item.candidate_id != unit.unit_id
+                    for item in stored.observations
+                )
+                or any(
+                    item.candidate_id != unit.schedule.schedule_id
+                    or item.search_content_key
+                    != unit.schedule.search_content_key
+                    for item in stored.timeout_undecided
+                )
+                or any(
+                    item.candidate_id != unit.schedule.schedule_id
+                    for item in stored.canonical_observation_digests
+                )
             ):
-                self._record_corrupt_cache_miss(count=count)
+                self._record_corrupt_cache_miss(unit.unit_id, count=count)
                 return None
             rebound = CandidateEvidence(
                 candidate_id=unit.schedule.schedule_id,
@@ -1530,17 +1817,22 @@ class IndependentDailyRunner:
                 ) for item in stored.observations),
                 hard_failures=stored.hard_failures,
                 disruption=stored.disruption,
+                timeout_undecided=stored.timeout_undecided,
+                canonical_observation_digests=(
+                    stored.canonical_observation_digests),
             )
             with self._state_lock:
                 self._memory_evidence[unit.unit_id] = rebound
                 if count:
                     self._timing["cache_hits"] += 1
+            if count:
+                self._record_cache_event(unit.unit_id, "hit")
             return rebound
         except (
             OSError, UnicodeError, AttributeError, ValueError, TypeError,
             KeyError, json.JSONDecodeError,
         ):
-            self._record_corrupt_cache_miss(count=count)
+            self._record_corrupt_cache_miss(unit.unit_id, count=count)
             return None
         finally:
             self._bump("cache_verify_seconds", time.perf_counter() - started)
@@ -1550,9 +1842,21 @@ class IndependentDailyRunner:
         unit: DailyClosureUnit,
         evidence: CandidateEvidence,
     ) -> None:
-        if evidence.candidate_id != unit.schedule.schedule_id or any(
-            item.candidate_id != unit.schedule.schedule_id
-            for item in evidence.observations
+        if (
+            evidence.candidate_id != unit.schedule.schedule_id
+            or any(
+                item.candidate_id != unit.schedule.schedule_id
+                for item in evidence.observations
+            )
+            or any(
+                item.candidate_id != unit.schedule.schedule_id
+                or item.search_content_key != unit.schedule.search_content_key
+                for item in evidence.timeout_undecided
+            )
+            or any(
+                item.candidate_id != unit.schedule.schedule_id
+                for item in evidence.canonical_observation_digests
+            )
         ):
             raise ValueError("daily backend returned evidence for another unit")
         normalized = CandidateEvidence(
@@ -1568,6 +1872,9 @@ class IndependentDailyRunner:
             ) for item in evidence.observations),
             hard_failures=evidence.hard_failures,
             disruption=evidence.disruption,
+            timeout_undecided=evidence.timeout_undecided,
+            canonical_observation_digests=(
+                evidence.canonical_observation_digests),
         )
         payload = {
             "schema": CACHE_SCHEMA,
@@ -1585,6 +1892,8 @@ class IndependentDailyRunner:
         started = time.perf_counter()
         _atomic_json(self._cache_path(unit), payload)
         self._bump("cache_write_seconds", time.perf_counter() - started)
+        self._bump("cache_publications")
+        self._record_cache_event(unit.unit_id, "publication")
         with self._state_lock:
             self._memory_evidence[unit.unit_id] = evidence
 
@@ -1767,11 +2076,18 @@ class IndependentDailyRunner:
                     f"daily evidence lacks {variant} target coverage"
                 )
             selected.extend(observations[:target])
+        selected_identities = {
+            (item.demand_variant, item.seed) for item in selected
+        }
         return CandidateEvidence(
             candidate_id=evidence.candidate_id,
             observations=tuple(selected),
             hard_failures=evidence.hard_failures,
             disruption=evidence.disruption,
+            timeout_undecided=evidence.timeout_undecided,
+            canonical_observation_digests=(
+                tuple(item for item in evidence.canonical_observation_digests
+                      if (item.variant, item.seed) in selected_identities)),
         )
 
     def run_candidate(

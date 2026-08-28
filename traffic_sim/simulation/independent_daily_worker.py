@@ -47,7 +47,9 @@ def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def execute_request(raw: Mapping[str, Any]) -> dict[str, Any]:
+def execute_request(
+    raw: Mapping[str, Any], *, telemetry_sidecar: Path | None = None
+) -> dict[str, Any]:
     if raw.get("schema") != "independent_daily_worker_request_v1":
         raise ValueError("daily worker request schema is unsupported")
     execution = raw.get("execution")
@@ -74,6 +76,7 @@ def execute_request(raw: Mapping[str, Any]) -> dict[str, Any]:
         include_disruption=execution.get("include_disruption") is True,
         warm_execution=warm_execution,
         boundary_controller=(WarmPrefixController() if warm_execution else None),
+        launch_sidecar_path=telemetry_sidecar,
     )
     existing_raw = raw.get("existing")
     existing = (
@@ -88,9 +91,17 @@ def execute_request(raw: Mapping[str, Any]) -> dict[str, Any]:
         existing=existing,
         stage=str(raw.get("stage", "")),
     )
+    # This subprocess is the ONLY place the real SUMO launch happens for an
+    # isolated daily unit — `runner.launch_telemetry` is therefore the whole
+    # truth about how many attempts occurred, and it dies with this process
+    # unless it rides back in the result. Without this, every isolated-worker
+    # run reported zero exact-launch telemetry regardless of how many SUMO
+    # processes actually ran.
     return {
-        "schema": "independent_daily_worker_result_v1",
+        "schema": "independent_daily_worker_result_v3",
         "evidence": _evidence_to_dict(evidence),
+        "launch_telemetry": runner.launch_telemetry_snapshot(),
+        "launch_records": runner.launch_records_snapshot(),
     }
 
 
@@ -98,8 +109,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--request", type=Path, required=True)
     parser.add_argument("--result", type=Path, required=True)
+    parser.add_argument("--telemetry-sidecar", type=Path, required=False, default=None)
     args = parser.parse_args(argv)
-    _atomic_json(args.result, execute_request(_read(args.request)))
+    # The sidecar (if supplied) is written to durably, record by record, as
+    # each real SUMO attempt happens inside `execute_request` — so it already
+    # holds the truth about every attempt regardless of whether this call
+    # returns normally, raises, or the process is killed before it can. Only
+    # the final evidence/summary result depends on reaching this line.
+    result = execute_request(_read(args.request), telemetry_sidecar=args.telemetry_sidecar)
+    _atomic_json(args.result, result)
     return 0
 
 

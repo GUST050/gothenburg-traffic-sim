@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -1043,3 +1044,128 @@ class MonthlyDemandResolverRunner:
             existing=existing,
             stage=stage,
         )
+
+    def launch_telemetry_snapshot(self) -> dict[str, dict[str, int]]:
+        """Sum every archive-scoped SUMO runner's exact-launch telemetry.
+
+        One runner exists per demand archive (`self._runners`), and a runner
+        persists across every daily unit that shares its archive, so summing
+        across them is summing across the whole monthly candidate set — not
+        a sample of it. Runners created but never asked to run anything
+        (`launch_telemetry` still all zero) contribute nothing, so this is
+        safe to call at any point, including before any candidate ran.
+        """
+        totals: dict[str, dict[str, int]] = {
+            "pilot": {"attempts": 0, "timeouts": 0, "other_outcomes": 0},
+            "finalist": {"attempts": 0, "timeouts": 0, "other_outcomes": 0},
+        }
+        for runner in self._runners.values():
+            telemetry, _records = self._validated_launch_snapshot(runner)
+            for stage, counts in telemetry.items():
+                bucket = totals[stage]
+                for key, value in counts.items():
+                    bucket[key] += value
+        return totals
+
+    @staticmethod
+    def _validated_launch_snapshot(
+        runner: ArchivedDemandSumoRunner,
+    ) -> tuple[dict[str, dict[str, int]], list[dict[str, Any]]]:
+        telemetry_hook = getattr(runner, "launch_telemetry_snapshot", None)
+        records_hook = getattr(runner, "launch_records_snapshot", None)
+        if not callable(telemetry_hook) or not callable(records_hook):
+            raise ValueError("archive runner lacks exact-launch snapshot hooks")
+        telemetry = telemetry_hook()
+        records = records_hook()
+        stages = {"pilot", "finalist"}
+        counter_fields = {"attempts", "timeouts", "other_outcomes"}
+        if not isinstance(telemetry, Mapping) or set(telemetry) != stages:
+            raise ValueError("archive launch telemetry stages are invalid")
+        normalized_telemetry: dict[str, dict[str, int]] = {}
+        for stage in sorted(stages):
+            counts = telemetry[stage]
+            if not isinstance(counts, Mapping) or set(counts) != counter_fields:
+                raise ValueError("archive launch telemetry fields are invalid")
+            normalized_telemetry[stage] = {}
+            for field in sorted(counter_fields):
+                value = counts[field]
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise ValueError("archive launch telemetry count is invalid")
+                normalized_telemetry[stage][field] = value
+            counts = normalized_telemetry[stage]
+            if counts["attempts"] != counts["timeouts"] + counts["other_outcomes"]:
+                raise ValueError("archive launch telemetry totals disagree")
+        if not isinstance(records, list):
+            raise ValueError("archive launch records must be a list")
+        record_fields = {
+            "candidate_id", "work_date", "stage", "variant", "seed",
+            "attempt", "timed_out", "outcome",
+        }
+        allowed_outcomes = {
+            "success", "timeout", "recognized_failure",
+            "unrecognized_exception", "recognized_failure_abandoned",
+            "unrecognized_exception_abandoned", "success_abandoned",
+            "worker_terminated",
+        }
+        normalized_records: list[dict[str, Any]] = []
+        identities: set[tuple[Any, ...]] = set()
+        derived = {
+            stage: {"attempts": 0, "timeouts": 0, "other_outcomes": 0}
+            for stage in stages
+        }
+        for raw in records:
+            if not isinstance(raw, Mapping) or set(raw) != record_fields:
+                raise ValueError("archive launch record fields are invalid")
+            record = dict(raw)
+            if record["stage"] not in stages or record["variant"] not in {
+                    "q10", "q50", "q90"}:
+                raise ValueError("archive launch record stage/variant is invalid")
+            if not isinstance(record["candidate_id"], str) or not record["candidate_id"]:
+                raise ValueError("archive launch record candidate is invalid")
+            if not isinstance(record["work_date"], str):
+                raise ValueError("archive launch record date is invalid")
+            try:
+                parsed_date = date.fromisoformat(record["work_date"])
+            except ValueError as error:
+                raise ValueError("archive launch record date is invalid") from error
+            if parsed_date.isoformat() != record["work_date"]:
+                raise ValueError("archive launch record date is not canonical")
+            for field in ("seed", "attempt"):
+                value = record[field]
+                minimum = 0 if field == "seed" else 1
+                if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+                    raise ValueError(f"archive launch record {field} is invalid")
+            if not isinstance(record["timed_out"], bool):
+                raise ValueError("archive launch record timed_out is invalid")
+            if record["outcome"] not in allowed_outcomes:
+                raise ValueError("archive launch record outcome is invalid")
+            if record["timed_out"] != (record["outcome"] == "timeout"):
+                raise ValueError("archive launch record timeout outcome disagrees")
+            identity = tuple(record[field] for field in (
+                "candidate_id", "work_date", "stage", "variant", "seed", "attempt"))
+            if identity in identities:
+                raise ValueError("archive launch record identity is duplicated")
+            identities.add(identity)
+            normalized_records.append(record)
+            bucket = derived[record["stage"]]
+            bucket["attempts"] += 1
+            bucket["timeouts" if record["timed_out"] else "other_outcomes"] += 1
+        if derived != normalized_telemetry:
+            raise ValueError("archive launch counters disagree with record population")
+        return normalized_telemetry, normalized_records
+
+    def launch_records_snapshot(self) -> list[dict[str, Any]]:
+        """Return the complete validated, de-duplicated archive population."""
+        records: list[dict[str, Any]] = []
+        identities: set[tuple[Any, ...]] = set()
+        for runner in self._runners.values():
+            _telemetry, child_records = self._validated_launch_snapshot(runner)
+            for record in child_records:
+                identity = tuple(record[field] for field in (
+                    "candidate_id", "work_date", "stage", "variant", "seed",
+                    "attempt"))
+                if identity in identities:
+                    raise ValueError("resolver launch record identity is duplicated")
+                identities.add(identity)
+                records.append(record)
+        return records

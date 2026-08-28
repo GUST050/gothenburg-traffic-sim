@@ -26,8 +26,11 @@ from traffic_sim.core.closure_calendar import generate_closure_schedules
 from traffic_sim.simulation.closure_ranking import ClosureCost
 from traffic_sim.simulation import cost_ordered_execution as coe
 from traffic_sim.simulation.finalist_decision import (
+    RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+    TIMEOUT_IDENTITY_SCHEMA,
     CandidateEvidence,
     PairedObservation,
+    TimeoutIdentity,
 )
 from traffic_sim.simulation.monthly_search import (
     MonthlySearchPolicy,
@@ -147,6 +150,7 @@ class FakeRunner:
         self.no_detour = set(no_detour)
         self.prepared: tuple = ()
         self.by_stage: dict[str, list[str]] = {}
+        self._exact_launch_telemetry: dict[str, dict[str, int]] = {}
 
     @property
     def piloted(self) -> list[str]:
@@ -168,6 +172,7 @@ class FakeRunner:
         self.simulated.append(schedule.schedule_id)
         self.by_stage.setdefault(stage, []).append(schedule.schedule_id)
         if schedule.schedule_id in self.failures:
+            self._bump_exact_attempt(stage, launched=0)
             return CandidateEvidence(
                 candidate_id=schedule.schedule_id,
                 hard_failures=("no_viable_detour",),
@@ -186,6 +191,7 @@ class FakeRunner:
                     matched_baseline_id="baseline",
                     provenance_key="provenance",
                 ))
+        self._bump_exact_attempt(stage, launched=len(observations))
         return CandidateEvidence(
             candidate_id=schedule.schedule_id,
             observations=tuple(observations),
@@ -199,6 +205,24 @@ class FakeRunner:
             self.prices[candidate_id],
             no_detour=1 if candidate_id in self.no_detour else 0,
         )
+
+    def _bump_exact_attempt(self, stage: str, *, launched: int) -> None:
+        """Mirror of `ArchivedDemandSumoRunner.launch_telemetry` for tests.
+
+        One real (variant, seed) SUMO launch per generated observation; a
+        candidate that hard-fails before any SUMO call launches zero. Optional
+        — `timing_snapshot` below is the only thing that reads this.
+        """
+        bucket = self._exact_launch_telemetry.setdefault(
+            stage, {"attempts": 0, "timeouts": 0, "other_outcomes": 0})
+        bucket["attempts"] += launched
+        bucket["other_outcomes"] += launched
+
+    def timing_snapshot(self):
+        """Optional S0 hook: exact-launch telemetry only, nothing else."""
+        return {"exact_launch_telemetry": {
+            stage: dict(counts)
+            for stage, counts in self._exact_launch_telemetry.items()}}
 
 
 def _screen_builder(spec, ids):
@@ -251,6 +275,74 @@ def _run(spec, policy, root, *, prices, runner=None, no_detour=(),
         cost_source=source,
     )
     return result, runner, source, ids
+
+
+def _priced(candidate_id="closure-a"):
+    cost = ClosureCost(
+        candidate_id=candidate_id,
+        added_vehicle_hours=12.0,
+        added_metres_total=500.0,
+        vehicles_affected=8,
+        vehicles_no_detour=0,
+    )
+    per_variant = tuple({
+        "demand_variant": variant,
+        "vehicles_affected": 8,
+        "vehicles_considered": 8,
+        "vehicles_no_detour": 0,
+        "added_vehicle_hours": 12.0,
+        "added_metres_total": 500.0,
+    } for variant in ("q10", "q50", "q90"))
+    return coe.ParentCost(
+        candidate_id=candidate_id, cost=cost, per_variant=per_variant)
+
+
+class TestReconcileDisruption:
+    """Regression coverage for the timeout_undecided passthrough.
+
+    cost-order v5's ledger fallback already restored disruption on a runner
+    that returned none; it must also carry the runner's undecided-timeout
+    identity forward rather than losing it, or the search-level fail-closed
+    gate in pilot_selection could not see it.
+    """
+
+    def test_ledger_fallback_preserves_an_undecided_timeout(self):
+        priced = _priced()
+        identity = TimeoutIdentity(
+            schema=TIMEOUT_IDENTITY_SCHEMA,
+            candidate_id="closure-a",
+            work_date="2027-09-16",
+            search_content_key="0123456789abcdef0123",
+            variant="q50",
+            seed=1000,
+            attempt=1,
+            threshold_s=300.0,
+            retry_protocol=RETRY_PROTOCOL_SINGLE_ATTEMPT_FIXED_THRESHOLD,
+            search_provenance_key="provenance",
+        )
+        evidence = CandidateEvidence(
+            candidate_id="closure-a",
+            hard_failures=(
+                "sumo_execution_failure:q50:1000:sumo timed out after 300s "
+                "(seed 1000)",
+            ),
+            timeout_undecided=(identity,),
+        )
+        reconciled = coe.reconcile_disruption(evidence, priced)
+        assert reconciled.disruption == priced.per_variant
+        assert reconciled.timeout_undecided == (identity,)
+        assert reconciled.has_undecided_timeout
+
+    def test_field_identical_disruption_returns_the_original_evidence(self):
+        priced = _priced()
+        evidence = CandidateEvidence(
+            candidate_id="closure-a",
+            disruption=priced.per_variant,
+            timeout_undecided=(),
+        )
+        reconciled = coe.reconcile_disruption(evidence, priced)
+        assert reconciled is evidence
+        assert reconciled.timeout_undecided == ()
 
 
 class TestRealCostFirstExecution:

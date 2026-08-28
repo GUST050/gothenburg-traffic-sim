@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from traffic_sim.simulation.closure_ranking import ClosureCost, rank_closures
@@ -84,6 +84,22 @@ def _canonical(payload: Any) -> str:
 
 def _digest(payload: Any) -> str:
     return hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
+
+
+def decision_evidence_payload(evidence: CandidateEvidence) -> dict[str, Any]:
+    """Canonical, complete evidence consumed by pilot/finalist decisions."""
+    return {
+        "candidate_id": evidence.candidate_id,
+        "eligible": evidence.eligible,
+        "hard_failures": sorted(evidence.hard_failures),
+        "observations": sorted(
+            (asdict(item) for item in evidence.observations), key=_canonical),
+        "disruption": sorted(
+            (dict(item) for item in evidence.disruption), key=_canonical),
+        "timeout_undecided": sorted(
+            (item.to_dict() for item in evidence.timeout_undecided),
+            key=_canonical),
+    }
 
 
 @dataclass(frozen=True)
@@ -241,12 +257,19 @@ def identity_key(
     practical_equivalence_vehicle_hours: float,
     provider_identity: Mapping[str, Any],
     ordered_costs: Sequence[ClosureCost],
+    disable_early_stop: bool = False,
 ) -> str:
     """What a resume must not survive.
 
     The cost ledger is included as its actual numbers, not merely as an ID
     list: a resumed scan whose costs moved would continue from a cursor that
     means nothing, and the stop proof would be about a different search.
+
+    `disable_early_stop` is part of the bound identity so a cursor produced
+    while stopping was disabled (the ordered-exhaustive reference arm) can
+    never be silently resumed as if it were a normal, boundary-stopping scan,
+    or vice versa — the two describe different searches even over the same
+    ledger and policy.
     """
     return _digest({
         "schema": SCHEMA,
@@ -262,6 +285,7 @@ def identity_key(
         "practical_equivalence_vehicle_hours": float(
             practical_equivalence_vehicle_hours),
         "provider_identity": dict(provider_identity),
+        "disable_early_stop": bool(disable_early_stop),
         "cost_ledger": [
             {
                 "candidate_id": cost.candidate_id,
@@ -286,6 +310,7 @@ def run_cost_ordered_search(
     state: CostOrderedState | None = None,
     verified_evidence: Mapping[str, CandidateEvidence] | None = None,
     progress: Callable[[Mapping[str, Any]], None] | None = None,
+    disable_early_stop: bool = False,
 ) -> CostOrderedResult:
     """Verify in cost order, stop when nothing unexamined can be retained.
 
@@ -296,6 +321,26 @@ def run_cost_ordered_search(
     `state` resumes a previous scan; `verified_evidence` carries the evidence
     that scan already produced. A resume whose `identity_key` no longer matches
     is refused rather than continued.
+
+    `disable_early_stop=True` verifies every viable candidate in the SAME
+    cost order, using the SAME ledger, policy and verify callback, but never
+    stops at the band — this is what makes an ORDERED-EXHAUSTIVE reference
+    arm possible: identical inputs and code path to the real cost-ordered
+    exact run, with only the stopping decision removed, so any measured
+    difference in attempts or wall time is attributable to early stopping
+    and nothing else.
+
+    Independently of that flag, an unresolved SUMO timeout (`evidence.
+    has_undecided_timeout`) ALSO disables band-based early stopping for the
+    remainder of THIS scan, permanently, once it is seen: the recorded
+    cutoff and band are only trustworthy if every candidate that shaped them
+    was actually decided, and a timed-out candidate is neither known-viable
+    nor known-disqualified. Continuing to full exhaustion is the fail-closed
+    response — `select_pilot_finalists` already forces `status=inconclusive`
+    whenever any verified candidate carries `timeout_undecided`, so nothing
+    here can turn an undecided candidate into a false selection; this only
+    prevents the STOP ITSELF from being justified by evidence that was never
+    actually resolved.
     """
     if not candidates:
         raise ValueError("cost-ordered search requires candidates")
@@ -313,6 +358,7 @@ def run_cost_ordered_search(
         practical_equivalence_vehicle_hours=practical_equivalence_vehicle_hours,
         provider_identity=provider_identity,
         ordered_costs=ordered,
+        disable_early_stop=disable_early_stop,
     )
     order = tuple(cost.candidate_id for cost in ordered)
     by_id = {item.candidate_id: item for item in candidates}
@@ -362,8 +408,18 @@ def run_cost_ordered_search(
     cache_hits = 0
     stop_reason = "search_space_exhausted"
     cutoff: float | None = None
+    # Once true, band-based early stopping is off for the REST of this scan,
+    # permanently — a cutoff computed while some evidence is still undecided
+    # cannot be trusted to justify skipping anything, and one resolved
+    # candidate later cannot retroactively make an earlier gap safe again.
+    any_undecided = any(
+        evidence_by_id[candidate_id].has_undecided_timeout
+        for candidate_id in verified
+    )
 
     def band() -> float | None:
+        if disable_early_stop or any_undecided:
+            return None
         if len(viable) < policy.minimum_finalists:
             return None
         kth = cost_by_id[viable[policy.minimum_finalists - 1]]
@@ -395,6 +451,8 @@ def run_cost_ordered_search(
             cache_hits += 1
         evidence_by_id[candidate_id] = result
         verified.append(candidate_id)
+        if result.has_undecided_timeout:
+            any_undecided = True
         if result.eligible:
             viable.append(candidate_id)
             if (cutoff is None
@@ -412,6 +470,20 @@ def run_cost_ordered_search(
                 "cutoff": cutoff,
                 "cache_hits": cache_hits,
             })
+
+    undecided_candidate_ids = tuple(sorted(
+        candidate_id for candidate_id in verified
+        if evidence_by_id[candidate_id].has_undecided_timeout
+    ))
+    if stop_reason == "band_exhausted" and undecided_candidate_ids:
+        # Defensive: `band()` already refuses to return a limit once
+        # `any_undecided` is set, so the loop itself cannot reach this
+        # combination. Kept as a hard invariant rather than trusted silently,
+        # because this is exactly the claim a stop proof exists to make
+        # checkable.
+        raise ValueError(
+            "cost-ordered search stopped at the band with unresolved timeout "
+            "evidence still present; the stop cannot be justified")
 
     final_state = CostOrderedState(
         identity_key=key,
@@ -462,6 +534,9 @@ def run_cost_ordered_search(
             policy=policy,
             practical_equivalence_vehicle_hours=(
                 practical_equivalence_vehicle_hours),
+            disable_early_stop=disable_early_stop,
+            undecided_candidate_ids=undecided_candidate_ids,
+            evidence_by_id=evidence_by_id,
         ),
     )
 
@@ -472,6 +547,9 @@ def stop_proof(
     state: CostOrderedState,
     policy: PilotPolicy,
     practical_equivalence_vehicle_hours: float,
+    disable_early_stop: bool = False,
+    undecided_candidate_ids: Sequence[str] = (),
+    evidence_by_id: Mapping[str, CandidateEvidence],
 ) -> dict[str, Any]:
     """Machine-readable: why no unexamined candidate could be selected.
 
@@ -487,6 +565,7 @@ def stop_proof(
         None if state.cutoff is None
         else float(state.cutoff) + float(practical_equivalence_vehicle_hours)
     )
+    undecided_ids = tuple(sorted(set(undecided_candidate_ids)))
     proof = {
         "schema": SCHEMA,
         "stop_reason": state.stop_reason,
@@ -503,6 +582,22 @@ def stop_proof(
             None if first_unexamined is None
             else float(cost_by_id[first_unexamined].added_vehicle_hours)
         ),
+        # `identity_key` already commits to the full ledger, the policy, the
+        # equivalence band and `disable_early_stop` together (see
+        # `identity_key()`); republishing it here is what makes this proof
+        # independently recomputable without needing the raw ledger and
+        # policy objects alongside it.
+        "identity_key": state.identity_key,
+        "disable_early_stop": bool(disable_early_stop),
+        "undecided_candidate_ids": list(undecided_ids),
+        "verified_prefix_digest": _digest(list(state.verified)),
+        # Full decision evidence for every verified candidate. This binds
+        # observations, disruption, failures, timeout identities and
+        # provenance rather than reducing the proof to one viability bit.
+        "evidence_digest": _digest([
+            decision_evidence_payload(evidence_by_id[candidate_id])
+            for candidate_id in state.verified
+        ]),
     }
     if state.stop_reason == "band_exhausted":
         proof["argument"] = (
